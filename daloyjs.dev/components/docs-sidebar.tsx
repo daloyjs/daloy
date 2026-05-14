@@ -54,6 +54,7 @@ export const docsNav: DocsNavSection[] = [
     title: "Production",
     items: [
       { title: "Security", href: "/docs/security" },
+      { title: "Supply-chain security", href: "/docs/security/supply-chain" },
       { title: "Adapters & runtimes", href: "/docs/adapters" },
       { title: "Deployment", href: "/docs/deployment" },
     ],

@@ -79,4 +79,5 @@ A Vercel Edge API bootstrap using `@daloyjs/core/vercel` with:
 - Templates are copied verbatim from this package's `templates/` directory.
 - Files prefixed with `_` are renamed (`_gitignore` → `.gitignore`, `_npmrc` → `.npmrc`) to survive npm packing.
 - pnpm-specific `.npmrc` hardening is kept only when you choose `pnpm`; other package managers get a clean project without unsupported config warnings.
+- pnpm projects ship with `ignore-scripts=true`, `minimum-release-age=1440`, `verify-store-integrity=true`, `prefer-frozen-lockfile=true`, and `strict-peer-dependencies=true` by default.
 - The CLI never executes template scripts and never makes network calls beyond the package manager you select.

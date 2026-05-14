@@ -25,7 +25,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Better supply-chain security** than npm | [pnpm](https://pnpm.io/motivation) | Strict, content-addressable installs; reproducible lockfile; per-project `.npmrc` hardening. |
 
 ```
-115/115 tests passing · 100% line + function coverage · clean strict TypeScript 6
+119/119 framework tests passing · 100% line + function coverage · clean strict TypeScript 6
 runs on Node, Bun, Deno, Cloudflare, Vercel
 ~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
 ```
@@ -67,16 +67,17 @@ Zod 4 is the recommended validator for new DaloyJS apps because it is modern, sm
 The repo ships an [`.npmrc`](.npmrc) with hardened defaults:
 
 ```ini
-auto-install-peers=true
+ignore-scripts=true
+minimum-release-age=1440
 strict-peer-dependencies=true
 prefer-frozen-lockfile=true
 verify-store-integrity=true
-# Optional: pnpm 10+ supply-chain controls
-# minimum-release-age=1440        # wait 24h before installing fresh releases
-# ignore-scripts=true             # whitelist install scripts via approve-builds
+provenance=true
 ```
 
-Run `pnpm audit --prod` regularly (or `pnpm run audit` in this repo) — and `pnpm install --frozen-lockfile` in CI.
+These defaults block transitive lifecycle scripts, wait 24 hours before resolving freshly published versions, verify the pnpm store, and require provenance on publish. The few dependencies that truly need install-time builds are allowlisted in `package.json` under `pnpm.onlyBuiltDependencies`.
+
+Run `pnpm audit --prod` regularly (or `pnpm run audit` in this repo) — and `pnpm install --frozen-lockfile --ignore-scripts` in CI.
 
 ---
 
@@ -197,7 +198,9 @@ Mount at `/docs` and the UI is always contract-accurate — never stale.
 | **Method confusion** | Real **405** with `Allow` header, not a misleading 404. |
 | **CORS misconfig** | Explicit allowlist; never `*` with credentials. |
 | **Request correlation** | Cryptographic `randomId()` request ids on every response. |
-| **Supply chain** | Distributed via pnpm with hardening `.npmrc`; reproducible lockfile; opt-in `ignore-scripts` + `minimum-release-age`. |
+| **Supply chain** | pnpm `ignore-scripts=true`, `minimum-release-age=1440`, verified store, reproducible lockfile, provenance publishing, and CI/CD hardening against cache poisoning and OIDC token abuse. |
+
+The publish pipeline is also hardened: no `pull_request_target`, no GitHub Actions cache in CI, top-level `permissions: {}`, `step-security/harden-runner`, a separate protected `release.yml` workflow, npm trusted publishing with `--provenance`, CodeQL, OpenSSF Scorecard, zizmor workflow linting, Dependabot, and CODEOWNERS on workflow/package files. See [SECURITY.md](SECURITY.md) and the [supply-chain security docs](https://daloyjs.dev/docs/security/supply-chain).
 
 ---
 

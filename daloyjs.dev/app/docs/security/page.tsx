@@ -5,7 +5,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Security",
   description:
-    "DaloyJS is secure by default: strict body limits, request timeouts, secure headers, rate limiting, and CSRF helpers — all wired into the contract-first runtime.",
+    "DaloyJS is secure by default: strict body limits, request timeouts, secure headers, rate limiting, supply-chain hardening, and production-safe errors.",
   path: "/docs/security",
   keywords: ["DaloyJS security", "secure HTTP defaults", "rate limiting", "secure headers", "OWASP TypeScript"],
   type: "article",
@@ -89,28 +89,39 @@ app.route({
       <h2>Supply-chain</h2>
       <p>
         DaloyJS is distributed via <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">pnpm</a>{" "}
-        for a stronger install model than npm:
+        for a stronger install model than npm, and the project&apos;s own CI/CD pipeline is hardened against
+        the cache-poisoning, maintainer-phishing, and OIDC token-abuse patterns seen in recent npm incidents.
       </p>
       <ul>
         <li><strong>Strict isolation</strong> — packages cannot reach phantom dependencies.</li>
         <li><strong>Content-addressable store</strong> — every byte is hashed and verified.</li>
-        <li><strong>Frozen lockfile in CI</strong> — reproducible installs.</li>
+        <li><strong>Frozen lockfile in CI</strong> with <code>--ignore-scripts</code> — reproducible installs without transitive lifecycle execution.</li>
         <li><strong><code>verify-store-integrity</code></strong> — corruption-detecting reads.</li>
         <li><strong><code>strict-peer-dependencies</code></strong> — no silent peer mismatches.</li>
-        <li>(pnpm 10+) <strong><code>minimum-release-age=1440</code></strong> — wait 24h before installing fresh releases.</li>
-        <li>(pnpm 10+) <strong><code>ignore-scripts=true</code></strong> with <code>pnpm approve-builds</code> — manual whitelist for native install scripts.</li>
+        <li><strong><code>minimum-release-age=1440</code></strong> — wait 24h before installing fresh releases.</li>
+        <li><strong><code>ignore-scripts=true</code></strong> with explicit <code>pnpm.onlyBuiltDependencies</code> — reviewed allowlist for native install scripts.</li>
+        <li><strong>Protected npm publishing</strong> — tag-only release workflow, protected environment approval, OIDC trusted publishing, and <code>--provenance</code>.</li>
       </ul>
 
       <CodeBlock language="ini" code={`# .npmrc
-auto-install-peers=true
+ignore-scripts=true
+minimum-release-age=1440
 strict-peer-dependencies=true
 prefer-frozen-lockfile=true
-verify-store-integrity=true`} />
+verify-store-integrity=true
+provenance=true`} />
 
-      <p>Run <code>pnpm audit --prod</code> in CI and as a pre-commit hook.</p>
+      <p>
+        For the full CI/CD and maintainer playbook, read <a href="/docs/security/supply-chain">Supply-chain security</a>.
+        Run <code>pnpm audit --prod</code> in CI and before release.
+      </p>
 
       <h2>Reporting a vulnerability</h2>
-      <p>Please email <code>security@daloyjs.dev</code> with reproduction steps. Do not open a public issue.</p>
+      <p>
+        Use GitHub&apos;s private vulnerability reporting at{" "}
+        <a href="https://github.com/daloyjs/daloy/security/advisories/new" target="_blank" rel="noreferrer">github.com/daloyjs/daloy/security/advisories/new</a>{" "}
+        with reproduction steps. Do not open a public issue with exploit details.
+      </p>
     </>
   );
 }

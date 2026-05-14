@@ -1,0 +1,239 @@
+# Publish to npm.
+#
+# This workflow exists in isolation from `ci.yml` for one reason:
+# `id-token: write` is the credential the TanStack 2026-05-11 attackers
+# extracted from runner memory after poisoning a CI cache. By keeping
+# the token-minting workflow completely separate from anything triggered
+# by fork PRs, a cache-poisoning chain cannot reach it.
+#
+# Hard rules for this file:
+#   * Triggered ONLY by a tag push (`v*`) or manual dispatch by a maintainer.
+#   * Runs in a protected GitHub Environment (`npm-publish`) that REQUIRES
+#     a maintainer approval before any step executes.
+#   * `id-token: write` is granted on the publish job only — never to
+#     `verify`, never to anything that runs untrusted code.
+#   * Builds and tests run BEFORE the publish job, in a job with no token.
+#   * Publish uses `--provenance` (npm trusted publishing via OIDC). No
+#     long-lived NPM_TOKEN is stored in repo secrets.
+#   * No GitHub Actions cache is read or written. Cold installs only.
+#   * `actions/checkout` uses `persist-credentials: false`.
+#
+# To roll a release:
+#   1. Bump version in package.json and (if applicable) packages/*/package.json.
+#   2. `git tag v<version> -s` (signed) and `git push --tags`.
+#   3. Approve the pending workflow in the `npm-publish` environment.
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - "@daloyjs/core"
+          - "create-daloy"
+          - "all"
+        default: "@daloyjs/core"
+
+permissions: {}
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify before publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.1.2
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25.7.0
+
+      - name: Install (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Coverage
+        run: pnpm coverage
+
+      - name: Build
+        run: pnpm build
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
+
+  publish-core:
+    name: Publish @daloyjs/core
+    needs: verify
+    if: |
+      github.event_name == 'push' ||
+      github.event.inputs.package == '@daloyjs/core' ||
+      github.event.inputs.package == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ vars.NPM_PUBLISH_ENVIRONMENT || 'npm-publish' }}
+      url: https://www.npmjs.com/package/@daloyjs/core
+    permissions:
+      contents: read
+      # `id-token: write` is required by npm trusted publishing (OIDC).
+      # It is granted ONLY here, ONLY after the protected environment
+      # approval, and the job runs no third-party scripts.
+      id-token: write
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          # Lock egress to the registries we actually need. Anything else
+          # (Session/Oxen, attacker C2, npm metadata abuse) is dropped.
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+          disable-sudo: true
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.1.2
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25.7.0
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify tag matches package.json version
+        if: github.event_name == 'push'
+        run: |
+          set -eu
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
+            exit 1
+          fi
+
+      - name: Publish to npm with provenance
+        run: pnpm publish --access public --no-git-checks --provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+
+  publish-create-daloy:
+    name: Publish create-daloy
+    needs: verify
+    if: |
+      github.event.inputs.package == 'create-daloy' ||
+      github.event.inputs.package == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ vars.NPM_PUBLISH_ENVIRONMENT || 'npm-publish' }}
+      url: https://www.npmjs.com/package/create-daloy
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+          disable-sudo: true
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.1.2
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25.7.0
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Test create-daloy
+        run: pnpm --filter create-daloy test
+
+      - name: Publish create-daloy with provenance
+        working-directory: packages/create-daloy
+        run: pnpm publish --access public --no-git-checks --provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"

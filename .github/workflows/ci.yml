@@ -1,3 +1,21 @@
+# DaloyJS CI — hardened against supply-chain attack patterns.
+#
+# Hardening notes (see otherdocs/security-incidence.md and
+# https://tanstack.com/blog/incident-followup):
+#   * No `pull_request_target` anywhere — fork PRs run with the safe `pull_request`
+#     trigger and have no write access to repo secrets, caches, or the registry.
+#   * Top-level `permissions: {}` denies everything; jobs opt back in to the
+#     minimum they need.
+#   * `step-security/harden-runner` blocks unexpected egress and reports tampering.
+#   * `actions/checkout` is invoked with `persist-credentials: false` so the
+#     workflow's GITHUB_TOKEN is not left on disk for later steps to read.
+#   * Third-party actions are pinned by full version tag and managed by
+#     Dependabot (`.github/dependabot.yml`); `zizmor.yml` enforces SHA-pin policy
+#     incrementally — see issue tracker for the SHA-pin rollout.
+#   * The publish path is intentionally NOT in this workflow. Releases live in
+#     `release.yml` so that fork PRs cannot reach `id-token: write` or any npm
+#     credential, even via cache poisoning.
+
 name: CI
 
 on:
@@ -6,31 +24,57 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          disable-file-monitoring: false
+
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          show-progress: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 11.1.2
+          run_install: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 25.7.0
-          cache: pnpm
+          # NOTE: pnpm cache is intentionally disabled in this workflow.
+          # GitHub Actions cache scope is shared across `pull_request`
+          # runs and `push` to main, which is the cache-poisoning vector
+          # that bridged the TanStack 2026-05-11 attack into the release
+          # pipeline. Re-enable only with `actions/cache/restore` (no
+          # auto-write) plus a strict `key` that includes `github.ref`.
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          # Defense in depth: even if a dep declares a postinstall, npm/pnpm
+          # will refuse to run it under this env.
+          npm_config_ignore_scripts: "true"
 
       - name: Typecheck
         run: pnpm typecheck
@@ -46,3 +90,6 @@ jobs:
 
       - name: Audit production dependencies
         run: pnpm audit --prod
+
+      - name: Verify create-daloy package
+        run: pnpm --filter create-daloy test

@@ -105,5 +105,13 @@
     "tsx": "^4.22.0",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
+  },
+  "pnpm": {
+    "minimumReleaseAge": 1440,
+    "minimumReleaseAgeExclude": [],
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "neverBuiltDependencies": []
   }
 }

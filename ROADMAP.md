@@ -23,7 +23,7 @@ last at least one minor cycle before removal.
 
 ## Now — `0.1.x` (shipped)
 
-Published to npm as **`@daloyjs/core@0.1.0`**. All items below are live in main.
+Published to npm as **`@daloyjs/core@0.1.1`**. All items below are live in main.
 
 - [x] Trie router with static fast path, traversal guard, real `405 + Allow`.
 - [x] Contract-first `app.route()`, groups, encapsulated plugins, decorators.
@@ -41,7 +41,11 @@ Published to npm as **`@daloyjs/core@0.1.0`**. All items below are live in main.
 - [x] Mock mode.
 - [x] Scalar + Swagger UI handlers.
 - [x] pnpm-first distribution with hardened `.npmrc`.
+- [x] Supply-chain defaults for installs: `ignore-scripts=true`, `minimum-release-age=1440`, verified store integrity, reproducible lockfile preference, and explicit `pnpm.onlyBuiltDependencies` allowlisting.
+- [x] Supply-chain hardened CI/CD: no `pull_request_target`, no shared GitHub Actions cache in CI, top-level `permissions: {}`, `step-security/harden-runner`, isolated tag-only npm publish workflow, npm trusted publishing with `--provenance`, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, and CODEOWNERS on privileged files.
+- [x] Public maintainer/user guidance for supply-chain security in `SECURITY.md` and `daloyjs.dev/docs/security/supply-chain`.
 - [x] **100% line + function test coverage** enforced by the `coverage` script.
+- [x] Regression coverage for repo-level security posture and scaffolder `.npmrc` hardening.
 
 ---
 
@@ -53,10 +57,11 @@ None of these break the existing public API.
 - [ ] **`onSend` hook** symmetric to `beforeHandle` for response transformation.
 - [x] **GitHub Actions CI** running install, typecheck, tests, coverage, build, and audit.
 - [x] **Security policy** (`SECURITY.md`) and vulnerability disclosure process.
+- [x] **Release pipeline hardening**: protected npm publish environment, OIDC trusted publishing with provenance, blocked egress on publish jobs, and static workflow/security scanners.
 - [ ] **Branch coverage push** to `>= 98%` with a coverage gate where the Node runner supports it cleanly.
 - [x] **Project scaffolder** (`pnpm create daloy`) shipped as `packages/create-daloy` with `node-basic`, `vercel-edge`, and `cloudflare-worker` templates.
 - [x] **Docs discoverability + integration docs**: per-page metadata, sitemap, robots, OpenGraph image, and ORM guides in `daloyjs.dev`.
-- [ ] **Docs cleanup**: document the release checklist and keep package naming/examples aligned with `@daloyjs/core`.
+- [ ] **Docs cleanup**: publish a maintainer-facing release checklist and keep package naming/examples aligned with `@daloyjs/core`.
 
 **Exit criteria:** every item above either ships or is moved to a later milestone
 with an explicit reason. No silent dropouts.
