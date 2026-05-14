@@ -1,0 +1,117 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.13 0.028 261.69);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.13 0.028 261.69);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.13 0.028 261.69);
+  --primary: oklch(0.21 0.034 264.67);
+  --primary-foreground: oklch(0.985 0.002 247.84);
+  --secondary: oklch(0.967 0.003 264.54);
+  --secondary-foreground: oklch(0.21 0.034 264.67);
+  --muted: oklch(0.967 0.003 264.54);
+  --muted-foreground: oklch(0.55 0.02 264.36);
+  --accent: oklch(0.967 0.003 264.54);
+  --accent-foreground: oklch(0.21 0.034 264.67);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0.002 247.84);
+  --border: oklch(0.928 0.006 264.53);
+  --input: oklch(0.928 0.006 264.53);
+  --ring: oklch(0.71 0.024 264.36);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: oklch(0.13 0.028 261.69);
+  --foreground: oklch(0.985 0.002 247.84);
+  --card: oklch(0.16 0.03 261.69);
+  --card-foreground: oklch(0.985 0.002 247.84);
+  --popover: oklch(0.16 0.03 261.69);
+  --popover-foreground: oklch(0.985 0.002 247.84);
+  --primary: oklch(0.985 0.002 247.84);
+  --primary-foreground: oklch(0.21 0.034 264.67);
+  --secondary: oklch(0.27 0.034 256.85);
+  --secondary-foreground: oklch(0.985 0.002 247.84);
+  --muted: oklch(0.27 0.034 256.85);
+  --muted-foreground: oklch(0.71 0.02 264.36);
+  --accent: oklch(0.27 0.034 256.85);
+  --accent-foreground: oklch(0.985 0.002 247.84);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.985 0.002 247.84);
+  --border: oklch(0.27 0.034 256.85);
+  --input: oklch(0.27 0.034 256.85);
+  --ring: oklch(0.45 0.024 264.36);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Prose-ish styling for docs pages */
+.docs-prose h1 { font-size: 2.25rem; line-height: 2.5rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 1rem; }
+.docs-prose h2 { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -0.015em; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+.docs-prose h3 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.75rem; }
+.docs-prose p { line-height: 1.75; margin-bottom: 1rem; color: var(--foreground); }
+.docs-prose ul, .docs-prose ol { margin-bottom: 1rem; padding-left: 1.5rem; line-height: 1.75; }
+.docs-prose ul { list-style-type: disc; }
+.docs-prose ol { list-style-type: decimal; }
+.docs-prose li { margin-bottom: 0.25rem; }
+.docs-prose a { color: oklch(0.55 0.18 250); text-decoration: underline; text-underline-offset: 2px; }
+.docs-prose a:hover { color: oklch(0.45 0.2 250); }
+.docs-prose code:not(pre code) {
+  background-color: var(--muted);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+.docs-prose strong { font-weight: 600; color: var(--foreground); }
+.docs-prose blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  font-style: italic;
+  color: var(--muted-foreground);
+  margin: 1rem 0;
+}
+.docs-prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+.docs-prose th, .docs-prose td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+.docs-prose th { background-color: var(--muted); font-weight: 600; }

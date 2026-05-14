@@ -1,0 +1,20 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# Build artifacts from `pnpm gen`
+generated/
+
+# pnpm
+.pnpm-store/
+
+# Next.js docs site
+website/.next/
+website/out/
+website/.turbo/
+website/next-env.d.ts
