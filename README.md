@@ -166,14 +166,15 @@ const r = await client.getBookById({ params: { id: "1" } });
 
 ---
 
-## Built-in docs UI (Scalar / Swagger UI)
+## Built-in docs UI (Swagger UI / Scalar)
 
 ```ts
-import { scalarHtml, htmlResponse } from "@daloyjs/core/docs";
+import { swaggerUiHtml, htmlResponse } from "@daloyjs/core/docs";
 // returns a self-contained HTML page that loads /openapi.json
 ```
 
 Mount at `/docs` and the UI is always contract-accurate — never stale.
+`create-daloy@0.1.7` mounts Swagger UI at `/docs` and the live spec at `/openapi.json` by default.
 
 ---
 

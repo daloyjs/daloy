@@ -35,7 +35,7 @@ console.log(JSON.stringify(doc, null, 2));`} />
 });`} />
 
       <h2>Built-in docs UIs</h2>
-      <CodeBlock code={`import { scalarHtml, swaggerUiHtml, htmlResponse } from "@daloyjs/core/docs";
+      <CodeBlock code={`import { swaggerUiHtml, scalarHtml, htmlResponse } from "@daloyjs/core/docs";
 
 app.route({
   method: "GET",
@@ -43,14 +43,16 @@ app.route({
   operationId: "docs",
   responses: { 200: { description: "API reference" } },
   handler: async () => {
-    const res = htmlResponse(scalarHtml({ specUrl: "/openapi.json", title: "My API" }));
+    const html = swaggerUiHtml({ specUrl: "/openapi.json", title: "My API" });
+    const res = htmlResponse(html);
     return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
   },
 });`} />
 
       <p>
-        Both <code>scalarHtml</code> and <code>swaggerUiHtml</code> return self-contained HTML pages that load
-        their assets from jsDelivr with a strict CSP allowing only that origin.
+        Both <code>swaggerUiHtml</code> and <code>scalarHtml</code> return self-contained HTML pages that load
+        their assets from jsDelivr with a strict CSP allowing only that origin. The official starter uses
+        <code>swaggerUiHtml</code> for <code>/docs</code> by default.
       </p>
 
       <h2>Dump to disk for codegen</h2>

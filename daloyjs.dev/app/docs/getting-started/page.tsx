@@ -62,7 +62,7 @@ curl http://localhost:3000/greet/world
 
       <h2>3. Add OpenAPI &amp; docs UI</h2>
       <CodeBlock code={`import { generateOpenAPI } from "@daloyjs/core/openapi";
-import { scalarHtml, htmlResponse } from "@daloyjs/core/docs";
+    import { swaggerUiHtml, htmlResponse } from "@daloyjs/core/docs";
 
 app.route({
   method: "GET",
@@ -81,12 +81,13 @@ app.route({
   operationId: "docs",
   responses: { 200: { description: "API reference" } },
   handler: async () => {
-    const res = htmlResponse(scalarHtml({ specUrl: "/openapi.json", title: "Hello API" }));
+    const html = swaggerUiHtml({ specUrl: "/openapi.json", title: "Hello API" });
+    const res = htmlResponse(html);
     return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
   },
 });`} />
 
-      <p>Open <code>http://localhost:3000/docs</code> for an interactive Scalar UI.</p>
+      <p>Open <code>http://localhost:3000/docs</code> for interactive Swagger UI.</p>
 
       <h2>4. Use the typed in-process client</h2>
       <CodeBlock code={`import { createClient } from "@daloyjs/core/client";
