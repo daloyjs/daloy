@@ -35,6 +35,12 @@ export const docsNav: DocsNavSection[] = [
     ],
   },
   {
+    title: "Architecture",
+    items: [
+      { title: "Modular monolith", href: "/docs/architecture/modular-monolith" },
+    ],
+  },
+  {
     title: "Database & ORMs",
     items: [
       { title: "Overview", href: "/docs/orm" },

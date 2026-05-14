@@ -21,6 +21,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/errors", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/openapi", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/typed-client", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/architecture/modular-monolith", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/security", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/adapters", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/deployment", changeFrequency: "monthly", priority: 0.8 },
