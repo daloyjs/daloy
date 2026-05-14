@@ -25,7 +25,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Better supply-chain security** than npm | [pnpm](https://pnpm.io/motivation) | Strict, content-addressable installs; reproducible lockfile; per-project `.npmrc` hardening. |
 
 ```
-56/56 tests passing · clean strict TypeScript · runs on Node, Bun, Deno, Cloudflare, Vercel
+56/56 tests passing · clean strict TypeScript 6 · runs on Node, Bun, Deno, Cloudflare, Vercel
 ~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
 ```
 
