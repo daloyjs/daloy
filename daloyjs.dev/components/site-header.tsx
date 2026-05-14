@@ -33,7 +33,23 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-2">
           <ThemeSwitcher />
           <a
-            href="https://github.com/daloyjs/daloy"
+            href="https://x.com/daloyjs"
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            X
+          </a>
+          <a
+            href="https://bsky.app/profile/daloyjs.bsky.social"
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            Bluesky
+          </a>
+          <a
+            href="https://github.com/daloyjs"
             target="_blank"
             rel="noreferrer"
             className={buttonVariants({ variant: "ghost", size: "sm" })}

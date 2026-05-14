@@ -109,6 +109,17 @@ export default function HomePage() {
                 View create-daloy on npm
               </a>
             </div>
+            <div className="flex flex-col sm:flex-row gap-3 text-sm text-muted-foreground">
+              <a href="https://x.com/daloyjs" target="_blank" rel="noreferrer">
+                Follow DaloyJS on X
+              </a>
+              <a href="https://bsky.app/profile/daloyjs.bsky.social" target="_blank" rel="noreferrer">
+                Follow DaloyJS on Bluesky
+              </a>
+              <a href="https://github.com/daloyjs" target="_blank" rel="noreferrer">
+                Follow the GitHub org
+              </a>
+            </div>
           </div>
         </div>
       </section>
