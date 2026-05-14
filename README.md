@@ -2,10 +2,10 @@
 
 > A **runtime-portable TypeScript web framework** with built-in **contract-first routing**, **validation**, **OpenAPI (Hey API)**, **typed client generation**, **large-scale maintainability**, and **highly secured by default (pnpm)**.
 
-📚 **Documentation site:** [`./website`](./website) — a Next.js 16 + shadcn/ui + Tailwind v4 site with the landing page, getting-started guide, tutorials, security docs, and full API reference. Run it with:
+📚 **Documentation site:** [`./daloyjs.dev`](./daloyjs.dev) — a Next.js 16 + shadcn/ui + Tailwind v4 site with the landing page, getting-started guide, tutorials, security docs, and full API reference. Run it with:
 
 ```bash
-cd website
+cd daloyjs.dev
 pnpm install
 pnpm dev      # http://localhost:3000
 pnpm build    # static prerender of every docs route
