@@ -202,7 +202,7 @@ export default function HomePage() {
               rel="noreferrer"
               className={buttonVariants({ size: "lg", variant: "outline" })}
             >
-              View source <GithubLogoIcon className="size-4" />
+              View source
             </a>
           </div>
         </div>
