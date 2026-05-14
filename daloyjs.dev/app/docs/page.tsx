@@ -31,9 +31,9 @@ export default function Page() {
 
       <h2>The 30-second taste</h2>
       <CodeBlock
-        code={`import { App } from "daloy";
+        code={`import { App } from "@daloyjs/core";
 import { z } from "zod";
-import { serve } from "daloy/node";
+import { serve } from "@daloyjs/core/node";
 
 const app = new App();
 

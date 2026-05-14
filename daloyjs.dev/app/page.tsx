@@ -15,8 +15,8 @@ import { Badge } from "../components/ui/badge";
 import { CodeBlock } from "../components/code-block";
 
 const HELLO_WORLD = `import { z } from "zod";
-import { App, secureHeaders, rateLimit, requestId } from "daloy";
-import { serve } from "daloy/node";
+import { App, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
 
 const app = new App({ bodyLimitBytes: 1 << 20, requestTimeoutMs: 5_000 });
 
@@ -100,7 +100,7 @@ export default function HomePage() {
                 Read the docs
               </Link>
             </div>
-            <code className="mt-4 rounded-md bg-muted px-3 py-2 text-sm">$ pnpm add daloy</code>
+            <code className="mt-4 rounded-md bg-muted px-3 py-2 text-sm">$ pnpm add @daloyjs/core</code>
           </div>
         </div>
       </section>

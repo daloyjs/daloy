@@ -12,11 +12,15 @@ export default function Page() {
       </p>
 
       <h2>Defining a plugin</h2>
-      <CodeBlock code={`import type { Plugin } from "daloy";
+      <p>
+        A plugin is any object with an optional <code>name</code> and a <code>register(app)</code>{" "}
+        function — or a plain function with the same shape. No imports required.
+      </p>
+      <CodeBlock code={`import type { App } from "@daloyjs/core";
 
-export const usersPlugin: Plugin = {
+export const usersPlugin = {
   name: "users",
-  register(app) {
+  register(app: App) {
     app.use(/* plugin-scoped middleware */);
 
     app.route({
@@ -33,9 +37,7 @@ export const usersPlugin: Plugin = {
       <CodeBlock code={`app.register(usersPlugin, {
   prefix: "/users",
   tags: ["Users"],
-  hooks: {
-    beforeHandle: [bearerAuth({ validate: t => t === process.env.TOKEN })],
-  },
+  hooks: bearerAuth({ validate: t => t === process.env.TOKEN }),
 });
 
 await app.ready();`} />

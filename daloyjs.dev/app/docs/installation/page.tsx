@@ -23,8 +23,7 @@ corepack prepare pnpm@9.15.0 --activate
 pnpm --version`} />
 
       <h2>Install DaloyJS</h2>
-      <CodeBlock language="bash" code={`pnpm add daloy
-# optional — only if you want to generate a typed SDK
+      <CodeBlock language="bash" code={`pnpm add @daloyjs/core# optional — only if you want to generate a typed SDK
 pnpm add -D @hey-api/openapi-ts
 # pick your validator (any Standard Schema implementation works)
 pnpm add zod`} />
@@ -47,7 +46,7 @@ verify-store-integrity=true
       </p>
 
       <h2>Verify</h2>
-      <CodeBlock language="bash" code={`pnpm exec node -e "import('daloy').then(m => console.log('DaloyJS ok →', Object.keys(m).slice(0, 6)))"`} />
+      <CodeBlock language="bash" code={`pnpm exec node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok →', Object.keys(m).slice(0, 6)))"`} />
 
       <h2>Next</h2>
       <p>

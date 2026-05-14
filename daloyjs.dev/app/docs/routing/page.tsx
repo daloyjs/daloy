@@ -45,8 +45,15 @@ export default function Page() {
       <p>Conflicting parameter names (e.g. <code>/a/:x</code> and <code>/a/:y</code>) throw at registration. Path traversal segments (<code>..</code>) and empty segments <code>{"//"}</code> are rejected by the router before your handler sees them.</p>
 
       <h2>Groups</h2>
-      <CodeBlock code={`const v1 = app.group({ prefix: "/api/v1", tags: ["v1"] });
-v1.route({ method: "GET", path: "/health", operationId: "health", responses: { 200: { description: "ok" } }, handler: async () => ({ status: 200, body: { ok: true } }) });
+      <CodeBlock code={`app.group("/api/v1", { tags: ["v1"] }, (v1) => {
+  v1.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: { 200: { description: "ok" } },
+    handler: async () => ({ status: 200, body: { ok: true } }),
+  });
+});
 // final path: /api/v1/health`} />
       <p>Groups merge prefixes, tags, and hooks. They are encapsulated — middleware added inside a group does not leak out.</p>
 
@@ -63,9 +70,7 @@ v1.route({ method: "GET", path: "/health", operationId: "health", responses: { 2
   method: "POST",
   path: "/admin/purge",
   operationId: "adminPurge",
-  hooks: {
-    beforeHandle: [bearerAuth({ validate: t => t === process.env.ADMIN_TOKEN })],
-  },
+  hooks: bearerAuth({ validate: t => t === process.env.ADMIN_TOKEN }),
   responses: { 200: { description: "ok" }, 401: { description: "denied" } },
   handler: async () => ({ status: 200, body: { purged: true } }),
 });`} />

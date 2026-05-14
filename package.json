@@ -1,8 +1,20 @@
 {
-  "name": "daloy",
+  "name": "@daloyjs/core",
   "version": "0.1.0",
   "description": "DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI (Hey API), typed client generation, large-scale maintainability, and security-first defaults. Hono-grade portability, Elysia-grade DX, FastAPI-grade docs, Fastify-grade ops — distributed via pnpm.",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daloyjs/daloy.git"
+  },
+  "homepage": "https://github.com/daloyjs/daloy#readme",
+  "bugs": {
+    "url": "https://github.com/daloyjs/daloy/issues"
+  },
+  "author": "DaloyJS",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "packageManager": "pnpm@11.1.2",
@@ -66,7 +78,8 @@
     "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
     "gen:client": "openapi-ts",
     "gen": "pnpm gen:openapi && pnpm gen:client",
-    "audit": "pnpm audit --prod"
+    "audit": "pnpm audit --prod",
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "framework",

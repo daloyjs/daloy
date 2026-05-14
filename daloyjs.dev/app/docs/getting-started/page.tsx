@@ -12,7 +12,7 @@ export default function Page() {
       <h2>1. Scaffold</h2>
       <CodeBlock language="bash" code={`mkdir hello-daloy && cd hello-daloy
 pnpm init
-pnpm add daloy zod
+pnpm add @daloyjs/core zod
 pnpm add -D typescript tsx @types/node`} />
 
       <CodeBlock language="json" code={`// package.json — add these
@@ -26,8 +26,8 @@ pnpm add -D typescript tsx @types/node`} />
       <h2>2. Write your first route</h2>
       <CodeBlock code={`// src/server.ts
 import { z } from "zod";
-import { App, requestId, secureHeaders } from "daloy";
-import { serve } from "daloy/node";
+import { App, requestId, secureHeaders } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
 
 const app = new App({
   bodyLimitBytes: 64 * 1024,
@@ -61,8 +61,8 @@ curl http://localhost:3000/greet/world
 # → {"msg":"Hello, world!"}`} />
 
       <h2>3. Add OpenAPI &amp; docs UI</h2>
-      <CodeBlock code={`import { generateOpenAPI } from "daloy/openapi";
-import { scalarHtml, htmlResponse } from "daloy/docs";
+      <CodeBlock code={`import { generateOpenAPI } from "@daloyjs/core/openapi";
+import { scalarHtml, htmlResponse } from "@daloyjs/core/docs";
 
 app.route({
   method: "GET",
@@ -89,7 +89,7 @@ app.route({
       <p>Open <code>http://localhost:3000/docs</code> for an interactive Scalar UI.</p>
 
       <h2>4. Use the typed in-process client</h2>
-      <CodeBlock code={`import { createClient } from "daloy/client";
+      <CodeBlock code={`import { createClient } from "@daloyjs/core/client";
 
 const client = createClient(app, { baseUrl: "http://localhost:3000" });
 const r = await client.greet({ params: { name: "DaloyJS" } });

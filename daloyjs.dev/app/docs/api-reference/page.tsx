@@ -8,7 +8,7 @@ export default function Page() {
       <h1>API reference</h1>
       <p>The complete public surface of DaloyJS v0.1, organized by import path.</p>
 
-      <h2><code>daloy</code> (root)</h2>
+      <h2><code>@daloyjs/core</code> (root)</h2>
       <h3><code>class App</code></h3>
       <CodeBlock code={`new App(options?: {
   bodyLimitBytes?:        number; // default 1 MiB
@@ -20,7 +20,7 @@ export default function Page() {
 })
 
 app.route(def): App
-app.group(opts): App                    // returns a child App with prefix/tags/hooks merged
+app.group(prefix, opts, register): App  // mount routes under a prefix with shared tags/hooks/auth
 app.use(middleware): App
 app.register(plugin, opts?): App
 app.decorate(key, value): App
@@ -74,14 +74,14 @@ interface Logger {
   child(bindings): Logger;
 }`} />
 
-      <h2><code>daloy/openapi</code></h2>
+      <h2><code>@daloyjs/core/openapi</code></h2>
       <CodeBlock code={`generateOpenAPI(app, {
   info: { title: string; version: string; description?: string };
   servers?: { url: string; description?: string }[];
   securitySchemes?: Record<string, SecurityScheme>;
 }): OpenAPIDocument`} />
 
-      <h2><code>daloy/client</code></h2>
+      <h2><code>@daloyjs/core/client</code></h2>
       <CodeBlock code={`createClient<App>(app, {
   baseUrl: string;
   fetch?:  typeof fetch;
@@ -91,18 +91,18 @@ interface Logger {
 // { params?, query?, headers?, body? } and returns
 // { status, body, headers } as a discriminated union by status.`} />
 
-      <h2><code>daloy/contract</code></h2>
+      <h2><code>@daloyjs/core/contract</code></h2>
       <CodeBlock code={`runContractTests(app, opts?: {
   requireOperationId?:    boolean; // default true
   allowBodyOnSafeMethods?: boolean; // default false
 }): Promise<{ ok: boolean; checked: number; issues: Issue[] }>`} />
 
-      <h2><code>daloy/docs</code></h2>
+      <h2><code>@daloyjs/core/docs</code></h2>
       <CodeBlock code={`scalarHtml({ specUrl, title }): string
 swaggerUiHtml({ specUrl, title }): string
 htmlResponse(html): Response`} />
 
-      <h2><code>daloy/node</code></h2>
+      <h2><code>@daloyjs/core/node</code></h2>
       <CodeBlock code={`serve(app, opts?: {
   port?:                number; // default 3000
   hostname?:            string; // default "0.0.0.0"
@@ -112,11 +112,21 @@ htmlResponse(html): Response`} />
   maxHeaderBytes?:      number;  // default 16 KiB
 }): { port: number; close(): Promise<void> }`} />
 
-      <h2><code>daloy/bun</code> · <code>daloy/deno</code></h2>
-      <p>Same shape as <code>daloy/node</code> — thin wrappers around <code>app.fetch</code>.</p>
+      <h2><code>@daloyjs/core/bun</code></h2>
+      <CodeBlock code={`serve(app, opts?: {
+  port?:               number; // default 3000
+  hostname?:           string; // default "0.0.0.0"
+  maxRequestBodySize?: number; // default 16 MiB
+}): { port: number; stop(): Promise<void> }`} />
 
-      <h2><code>daloy/cloudflare</code> · <code>daloy/vercel</code></h2>
-      <CodeBlock code={`toFetchHandler(app): (req: Request) => Promise<Response>
+      <h2><code>@daloyjs/core/deno</code></h2>
+      <CodeBlock code={`serve(app, opts?: {
+  port?:     number; // default 3000
+  hostname?: string; // default "0.0.0.0"
+}): { shutdown(): Promise<void> }`} />
+
+      <h2><code>@daloyjs/core/cloudflare</code> · <code>@daloyjs/core/vercel</code></h2>
+      <CodeBlock code={`toFetchHandler(app): { fetch(req: Request, env?: unknown, ctx?: unknown): Promise<Response> }
 toEdgeHandler (app): (req: Request) => Promise<Response>`} />
 
       <h2>Schema utilities</h2>

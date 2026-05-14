@@ -12,7 +12,7 @@ export default function Page() {
       </p>
 
       <h2>Node.js</h2>
-      <CodeBlock code={`import { serve } from "daloy/node";
+      <CodeBlock code={`import { serve } from "@daloyjs/core/node";
 
 const { port, close } = serve(app, {
   port: 3000,
@@ -32,23 +32,25 @@ await close();`} />
       </p>
 
       <h2>Bun</h2>
-      <CodeBlock code={`import { serve } from "daloy/bun";
+      <CodeBlock code={`import { serve } from "@daloyjs/core/bun";
 serve(app, { port: 3000 });`} />
 
       <h2>Deno</h2>
-      <CodeBlock code={`import { serve } from "daloy/deno";
+      <CodeBlock code={`import { serve } from "@daloyjs/core/deno";
 serve(app, { port: 3000 });`} />
 
       <h2>Cloudflare Workers</h2>
       <CodeBlock code={`// worker.ts
-import { toFetchHandler } from "daloy/cloudflare";
+import { toFetchHandler } from "@daloyjs/core/cloudflare";
 import { app } from "./src/server.js";
 
-export default { fetch: toFetchHandler(app) };`} />
+// toFetchHandler returns an object with a \`fetch\` method —
+// exactly the shape Cloudflare Workers expect as the default export.
+export default toFetchHandler(app);`} />
 
       <h2>Vercel Edge / Next.js Route Handlers</h2>
       <CodeBlock code={`// app/api/[[...slug]]/route.ts
-import { toEdgeHandler } from "daloy/vercel";
+import { toEdgeHandler } from "@daloyjs/core/vercel";
 import { app } from "@/server";
 
 export const runtime = "edge";

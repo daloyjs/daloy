@@ -13,7 +13,7 @@ export default function Page() {
 
       <h2>1. In-process typed client (zero codegen)</h2>
       <p>For TypeScript consumers in the same monorepo (tests, internal tools, Next.js server actions):</p>
-      <CodeBlock code={`import { createClient } from "daloy/client";
+      <CodeBlock code={`import { createClient } from "@daloyjs/core/client";
     import { app } from "./server.js"; // your App instance
 
 const client = createClient(app, { baseUrl: "http://localhost:3000" });

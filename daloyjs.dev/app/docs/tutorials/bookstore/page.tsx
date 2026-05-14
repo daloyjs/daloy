@@ -15,7 +15,7 @@ export default function Page() {
       <h2>1. Scaffold</h2>
       <CodeBlock language="bash" code={`mkdir bookstore && cd bookstore
 pnpm init
-pnpm add daloy zod
+pnpm add @daloyjs/core zod
 pnpm add -D typescript tsx @types/node @hey-api/openapi-ts`} />
 
       <CodeBlock language="json" code={`// package.json — replace with this
@@ -41,7 +41,7 @@ verify-store-integrity=true`} />
       <p>Sharing the App between server, codegen, and tests is the secret to never having spec drift:</p>
       <CodeBlock code={`// src/build-app.ts
 import { z } from "zod";
-import { App, requestId, secureHeaders, cors, rateLimit, bearerAuth, NotFoundError } from "daloy";
+import { App, requestId, secureHeaders, cors, rateLimit, bearerAuth, NotFoundError } from "@daloyjs/core";
 
 export const BookSchema = z.object({
   id:    z.string(),
@@ -69,7 +69,11 @@ export function buildApp() {
     tags: ["Books"],
     request: { params: z.object({ id: z.string() }) },
     responses: {
-      200: { description: "Found", body: BookSchema, example: { id: "1", title: "Foundation", year: 1951 } },
+      200: {
+        description: "Found",
+        body: BookSchema,
+        examples: { default: { id: "1", title: "Foundation", year: 1951 } },
+      },
       404: { description: "Not found" },
     },
     handler: async ({ params }) => {
@@ -84,7 +88,7 @@ export function buildApp() {
     path: "/books",
     operationId: "createBook",
     tags: ["Books"],
-    hooks: { beforeHandle: [bearerAuth({ validate: (t) => t === "demo-token" })] },
+    hooks: bearerAuth({ validate: (t) => t === "demo-token" }),
     request: { body: BookSchema.omit({ id: true }) },
     responses: {
       201: { description: "Created", body: BookSchema },
@@ -105,7 +109,7 @@ export function buildApp() {
       <h2>3. Start the server</h2>
       <CodeBlock code={`// src/server.ts
 import { buildApp } from "./build-app.js";
-import { serve }    from "daloy/node";
+import { serve }    from "@daloyjs/core/node";
 
 const app = buildApp();
 const { port } = serve(app, { port: 3000 });
@@ -125,7 +129,7 @@ curl -X POST http://localhost:3000/books \\
       <CodeBlock code={`// scripts/dump-openapi.ts
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname }          from "node:path";
-import { generateOpenAPI }  from "daloy/openapi";
+import { generateOpenAPI }  from "@daloyjs/core/openapi";
 import { buildApp }         from "../src/build-app.js";
 
 const app  = buildApp();
@@ -167,7 +171,7 @@ console.log(data?.title); // string | undefined — fully typed`} />
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../src/build-app.js";
-import { runContractTests } from "daloy/contract";
+import { runContractTests } from "@daloyjs/core/contract";
 
 test("contract is clean", async () => {
   const report = await runContractTests(buildApp());

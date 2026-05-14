@@ -12,7 +12,7 @@ export default function Page() {
       </p>
 
       <h2>Generate a spec</h2>
-      <CodeBlock code={`import { generateOpenAPI } from "daloy/openapi";
+      <CodeBlock code={`import { generateOpenAPI } from "@daloyjs/core/openapi";
 
 const doc = generateOpenAPI(app, {
   info: { title: "My API", version: "1.0.0" },
@@ -35,7 +35,7 @@ console.log(JSON.stringify(doc, null, 2));`} />
 });`} />
 
       <h2>Built-in docs UIs</h2>
-      <CodeBlock code={`import { scalarHtml, swaggerUiHtml, htmlResponse } from "daloy/docs";
+      <CodeBlock code={`import { scalarHtml, swaggerUiHtml, htmlResponse } from "@daloyjs/core/docs";
 
 app.route({
   method: "GET",
@@ -57,7 +57,7 @@ app.route({
       <CodeBlock language="ts" code={`// scripts/dump-openapi.ts
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { generateOpenAPI } from "daloy/openapi";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
 import { buildApp } from "../src/build-app.js";
 
 const app = buildApp();

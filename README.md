@@ -58,7 +58,7 @@ DaloyJS combines the wins:
 DaloyJS is distributed via **pnpm** for [supply-chain hygiene](https://pnpm.io/motivation) — strict isolation, content-addressable store, deterministic lockfile, no phantom dependencies.
 
 ```bash
-pnpm add daloy zod@^4
+pnpm add @daloyjs/core zod@^4
 ```
 
 Zod 4 is the recommended validator for new DaloyJS apps because it is modern, smaller, and Standard-Schema-compatible. DaloyJS still accepts any Standard Schema validator, so teams can use Valibot, ArkType, TypeBox, or another compatible schema library when that better fits their stack.
@@ -83,8 +83,8 @@ Run `pnpm audit --prod` regularly (or `pnpm run audit` in this repo) — and `pn
 
 ```ts
 import { z } from "zod";
-import { App, NotFoundError, secureHeaders, rateLimit, requestId } from "daloy";
-import { serve } from "daloy/node";
+import { App, NotFoundError, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
 
 const app = new App({ bodyLimitBytes: 1024 * 1024, requestTimeoutMs: 5_000 });
 
@@ -147,7 +147,7 @@ export default defineConfig({
 For TypeScript consumers in the same monorepo you can skip codegen entirely and use the **in-process typed client**:
 
 ```ts
-import { createClient } from "daloy/client";
+import { createClient } from "@daloyjs/core/client";
 const client = createClient(app, { baseUrl: "http://localhost:3000" });
 const r = await client.getBookById({ params: { id: "1" } });
 //    ^? { status: 200; body: { id: string; title: string } } | { status: 404; ... }
@@ -158,7 +158,7 @@ const r = await client.getBookById({ params: { id: "1" } });
 ## Built-in docs UI (Scalar / Swagger UI)
 
 ```ts
-import { scalarHtml, htmlResponse } from "daloy/docs";
+import { scalarHtml, htmlResponse } from "@daloyjs/core/docs";
 // returns a self-contained HTML page that loads /openapi.json
 ```
 
@@ -210,7 +210,7 @@ miss                        4,763,878 ops/sec
 ```ts
 const res = await app.request("/books/1");
 
-import { runContractTests } from "daloy/contract";
+import { runContractTests } from "@daloyjs/core/contract";
 const report = await runContractTests(app);
 if (!report.ok) process.exit(1);
 ```
@@ -239,11 +239,11 @@ await app.ready();
 ## Multi-runtime
 
 ```ts
-import { serve } from "daloy/node";          // Node
-import { serve } from "daloy/bun";           // Bun
-import { serve } from "daloy/deno";          // Deno
-import { toFetchHandler } from "daloy/cloudflare"; // Cloudflare Workers
-import { toEdgeHandler }  from "daloy/vercel";     // Vercel Edge / Next.js
+import { serve } from "@daloyjs/core/node";          // Node
+import { serve } from "@daloyjs/core/bun";           // Bun
+import { serve } from "@daloyjs/core/deno";          // Deno
+import { toFetchHandler } from "@daloyjs/core/cloudflare"; // Cloudflare Workers
+import { toEdgeHandler }  from "@daloyjs/core/vercel";     // Vercel Edge / Next.js
 ```
 
 The core only ever sees `Request → Response`. Adapters live at the edge.

@@ -25,10 +25,10 @@ export default function Page() {
   RequestTimeoutError,        // 408
   TooManyRequestsError,       // 429 + Retry-After
   InternalError,              // 500 (detail redacted in production)
-} from "daloy";`} />
+} from "@daloyjs/core";`} />
 
       <h2>Throwing in a handler</h2>
-      <CodeBlock code={`import { NotFoundError } from "daloy";
+      <CodeBlock code={`import { NotFoundError } from "@daloyjs/core";
 
 app.route({
   method: "GET",
@@ -64,12 +64,11 @@ x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
       </p>
 
       <h2>Custom error classes</h2>
-      <CodeBlock code={`import { HttpError } from "daloy";
+      <CodeBlock code={`import { HttpError } from "@daloyjs/core";
 
 export class QuotaExceededError extends HttpError {
   constructor(resource: string) {
-    super({
-      status: 429,
+    super(429, {
       title: "Quota exceeded",
       type: "https://api.example.com/errors/quota-exceeded",
       detail: \`Quota exceeded for \${resource}\`,
@@ -78,14 +77,12 @@ export class QuotaExceededError extends HttpError {
 }`} />
 
       <h2>Custom <code>onError</code></h2>
-      <CodeBlock code={`app.use(() => ({
-  onError: [
-    async ({ error, requestId, set }) => {
-      logger.error({ err: error, requestId }, "request failed");
-      // return a Response to override; otherwise DaloyJS serializes problem+json
-    },
-  ],
-}));`} />
+      <CodeBlock code={`app.use({
+  onError: async (error, ctx) => {
+    logger.error({ err: error, requestId: ctx?.requestId }, "request failed");
+    // return a Response to override; otherwise DaloyJS serializes problem+json
+  },
+});`} />
     </>
   );
 }

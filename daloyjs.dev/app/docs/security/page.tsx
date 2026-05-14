@@ -36,7 +36,7 @@ export default function Page() {
   rateLimit,
   bearerAuth,
   timing,
-} from "daloy";
+} from "@daloyjs/core";
 
 app.use(requestId());           // x-request-id propagation
 app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff …
@@ -63,20 +63,16 @@ cross-origin-resource-policy: same-origin
 x-xss-protection: 0`} />
 
       <h2>Auth</h2>
-      <CodeBlock code={`import { bearerAuth, timingSafeEqual } from "daloy";
+      <CodeBlock code={`import { bearerAuth, timingSafeEqual } from "@daloyjs/core";
 
 app.route({
   method: "POST",
   path: "/admin/purge",
   operationId: "adminPurge",
-  hooks: {
-    beforeHandle: [
-      bearerAuth({
-        validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
-        realm: "admin",
-      }),
-    ],
-  },
+  hooks: bearerAuth({
+    validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+    realm: "admin",
+  }),
   responses: { 204: { description: "ok" }, 401: { description: "denied" } },
   handler: async () => ({ status: 204 as const, body: undefined }),
 });`} />

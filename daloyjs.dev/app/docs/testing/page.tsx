@@ -31,7 +31,7 @@ test("POST /books rejects unauthorized", async () => {
       <h2>Mock mode</h2>
       <p>
         For pure-contract testing (no DB, no side effects), enable <code>mockMode</code>. DaloyJS will return the first
-        declared <code>example</code> from your response schema without ever invoking your handler:
+        declared <code>examples</code> entry from your response schema without ever invoking your handler:
       </p>
       <CodeBlock code={`const app = new App({ mockMode: true });
 
@@ -43,7 +43,7 @@ app.route({
     200: {
       description: "ok",
       body: z.object({ id: z.string(), name: z.string() }),
-      example: { id: "u_1", name: "Alice" },
+      examples: { default: { id: "u_1", name: "Alice" } },
     },
   },
   handler: async () => { throw new Error("not called in mock mode"); },
@@ -54,7 +54,7 @@ app.route({
         <code>runContractTests</code> walks your registered routes and verifies that every declared example
         validates against its schema, every operationId is unique, and there are no obvious anti-patterns:
       </p>
-      <CodeBlock code={`import { runContractTests } from "daloy/contract";
+      <CodeBlock code={`import { runContractTests } from "@daloyjs/core/contract";
 
 const report = await runContractTests(app, {
   requireOperationId: true,
