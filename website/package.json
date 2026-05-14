@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/ensure-next-manifests.mjs",
     "start": "next start",
     "lint": "eslint"
   },
