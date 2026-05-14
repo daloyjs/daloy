@@ -3,7 +3,7 @@
  *
  * Built-in (not a plugin afterthought) — that's the whole point.
  *
- * If a schema exposes a `toJSONSchema()` method (Zod 3.23+, Valibot, etc.)
+ * If a schema exposes a `toJSONSchema()` method (Zod 4, Valibot, etc.)
  * we use it. Otherwise we emit a permissive `{}` placeholder rather than
  * fail — codegen and docs still work, just with looser types for that field.
  */
@@ -151,7 +151,7 @@ function buildOperation(route: RouteDefinition<any, any, any, any>): Record<stri
 function toJsonSchema(schema: StandardSchemaV1 | undefined): unknown | undefined {
   if (!schema) return undefined;
   const anySchema = schema as any;
-  // Zod 3.23+ has `.toJSONSchema()` via its standard interop; Valibot/TypeBox vary.
+  // Zod 4 has `.toJSONSchema()`; Valibot/TypeBox vary by adapter/version.
   if (typeof anySchema.toJSONSchema === "function") {
     try {
       return anySchema.toJSONSchema();
@@ -176,16 +176,20 @@ function extractPropertySchema(
 }
 
 function zodFallback(z: any): unknown {
-  const t = z._def?.typeName;
+  const t = z._def?.typeName ?? z._def?.type;
   switch (t) {
     case "ZodString":
+    case "string":
       return { type: "string" };
     case "ZodNumber":
+    case "number":
       return { type: "number" };
     case "ZodBoolean":
+    case "boolean":
       return { type: "boolean" };
+    case "object":
     case "ZodObject": {
-      const shape = z._def.shape();
+      const shape = typeof z._def.shape === "function" ? z._def.shape() : z._def.shape;
       const properties: Record<string, unknown> = {};
       const required: string[] = [];
       for (const [k, v] of Object.entries<any>(shape)) {
@@ -195,9 +199,12 @@ function zodFallback(z: any): unknown {
       return { type: "object", properties, required };
     }
     case "ZodArray":
-      return { type: "array", items: zodFallback(z._def.type) };
+    case "array":
+      return { type: "array", items: zodFallback(z._def.element ?? z._def.type) };
     case "ZodOptional":
+    case "optional":
     case "ZodNullable":
+    case "nullable":
       return zodFallback(z._def.innerType);
     default:
       return {};

@@ -45,7 +45,7 @@ Each existing stack is excellent at one thing and forces tradeoffs everywhere el
 DaloyJS combines the wins:
 
 1. **Explicit contracts, minimal ceremony.** One `app.route({...})` is the source of truth for validation, types, OpenAPI, the typed client, and contract tests.
-2. **One source of truth for validation, typing, and docs** via [Standard Schema](https://github.com/standard-schema/standard-schema) — Zod / Valibot / ArkType / TypeBox all work, no lock-in.
+2. **One source of truth for validation, typing, and docs** via [Standard Schema](https://github.com/standard-schema/standard-schema) — Zod 4 / Valibot / ArkType / TypeBox all work, no lock-in.
 3. **Portable core, optional runtime optimizations** — the only thing the core knows is `Request → Response`. Adapters live at the edge.
 4. **Secure by default — bad defaults are bugs.** Body limits, prototype-pollution-safe JSON, path-traversal rejection, request timeouts, Helmet-grade headers, RFC 9457 problem+json errors with prod-mode redaction.
 5. **Tooling and inspectability over magic.** `app.introspect()` is a public API; contract-test runner is built in.
@@ -58,8 +58,10 @@ DaloyJS combines the wins:
 DaloyJS is distributed via **pnpm** for [supply-chain hygiene](https://pnpm.io/motivation) — strict isolation, content-addressable store, deterministic lockfile, no phantom dependencies.
 
 ```bash
-pnpm add daloy
+pnpm add daloy zod@^4
 ```
+
+Zod 4 is the recommended validator for new DaloyJS apps because it is modern, smaller, and Standard-Schema-compatible. DaloyJS still accepts any Standard Schema validator, so teams can use Valibot, ArkType, TypeBox, or another compatible schema library when that better fits their stack.
 
 The repo ships an [`.npmrc`](.npmrc) with hardened defaults:
 
@@ -137,7 +139,7 @@ That single command runs the two scripts:
 import { defineConfig } from "@hey-api/openapi-ts";
 export default defineConfig({
   input:  "./generated/openapi.json",
-  output: { path: "./generated/client", format: "prettier" },
+  output: { path: "./generated/client", postProcess: ["prettier"] },
   plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
 });
 ```
@@ -266,7 +268,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 - [x] Trie router with static fast path + 405 with `Allow` + traversal guard
 - [x] Contract-first `app.route()`, groups, encapsulated plugins, decorators
-- [x] Standard Schema validation (Zod / Valibot / ArkType / TypeBox)
+- [x] Standard Schema validation (Zod 4 / Valibot / ArkType / TypeBox)
 - [x] Problem+json error model with prod-mode redaction
 - [x] OpenAPI 3.1 generator (built-in)
 - [x] In-process test client + contract-test runner

@@ -1,4 +1,5 @@
 node_modules/
+*/node_modules/
 dist/
 coverage/
 .DS_Store
@@ -13,11 +14,7 @@ generated/
 # pnpm
 .pnpm-store/
 
-# Next.js docs site
-.next
-website/.next/
-website/out/
-website/.turbo/
-website/next-env.d.ts
 
 PROJECT_HISTORY.md
+
+otherdocs
