@@ -18,6 +18,17 @@ export default function Page() {
         Use the official generator — it sets up a hardened <code>.npmrc</code>, strict TypeScript,
         and a working route in one command.
       </p>
+      <p>
+        Package links: {" "}
+        <a href="https://www.npmjs.com/package/create-daloy" target="_blank" rel="noreferrer">
+          create-daloy on npm
+        </a>{" "}
+        and{" "}
+        <a href="https://www.npmjs.com/package/@daloyjs/core" target="_blank" rel="noreferrer">
+          @daloyjs/core on npm
+        </a>
+        .
+      </p>
       <CodeBlock
         language="bash"
         code={`pnpm create daloy@latest my-api
@@ -46,6 +57,13 @@ pnpm --version`} />
 pnpm add -D @hey-api/openapi-ts
 # pick your validator (any Standard Schema implementation works)
 pnpm add zod`} />
+      <p>
+        The framework package published to npm is{" "}
+        <a href="https://www.npmjs.com/package/@daloyjs/core" target="_blank" rel="noreferrer">
+          @daloyjs/core
+        </a>
+        .
+      </p>
 
       <h2>Hardened <code>.npmrc</code></h2>
       <p>

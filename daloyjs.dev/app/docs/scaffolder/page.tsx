@@ -11,6 +11,17 @@ export default function Page() {
         <code>create-daloy</code> is the official project generator. It scaffolds a working DaloyJS app
         in seconds — no copy-pasting from the docs.
       </p>
+      <p>
+        Package link:{" "}
+        <a href="https://www.npmjs.com/package/create-daloy" target="_blank" rel="noreferrer">
+          create-daloy on npm
+        </a>
+        . The generated apps install the framework from{" "}
+        <a href="https://www.npmjs.com/package/@daloyjs/core" target="_blank" rel="noreferrer">
+          @daloyjs/core on npm
+        </a>
+        .
+      </p>
 
       <h2>Quick start</h2>
       <CodeBlock

@@ -101,6 +101,14 @@ export default function HomePage() {
               </Link>
             </div>
             <code className="mt-4 rounded-md bg-muted px-3 py-2 text-sm">$ pnpm add @daloyjs/core</code>
+            <div className="flex flex-col sm:flex-row gap-3 text-sm text-muted-foreground">
+              <a href="https://www.npmjs.com/package/@daloyjs/core" target="_blank" rel="noreferrer">
+                View @daloyjs/core on npm
+              </a>
+              <a href="https://www.npmjs.com/package/create-daloy" target="_blank" rel="noreferrer">
+                View create-daloy on npm
+              </a>
+            </div>
           </div>
         </div>
       </section>
