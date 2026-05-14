@@ -37,6 +37,7 @@ Published to npm as **`@daloyjs/core@0.1.0`**. All items below are live in main.
 - [x] Security middleware: `secureHeaders`, `cors`, `rateLimit`, `requestId`, `bearerAuth`, `timing`, `timingSafeEqual`.
 - [x] Pluggable structured logger + request id propagation.
 - [x] Graceful shutdown.
+- [x] `app.onClose()` lifecycle hook and augmentable `AppState` for plugin-typed context.
 - [x] Mock mode.
 - [x] Scalar + Swagger UI handlers.
 - [x] pnpm-first distribution with hardened `.npmrc`.
@@ -54,7 +55,8 @@ None of these break the existing public API.
 - [x] **Security policy** (`SECURITY.md`) and vulnerability disclosure process.
 - [ ] **Branch coverage push** to `>= 98%` with a coverage gate where the Node runner supports it cleanly.
 - [x] **Project scaffolder** (`pnpm create daloy`) shipped as `packages/create-daloy` with `node-basic`, `vercel-edge`, and `cloudflare-worker` templates.
-- [ ] **Docs cleanup**: normalize package naming around `@daloyjs/core` and document the release checklist.
+- [x] **Docs discoverability + integration docs**: per-page metadata, sitemap, robots, OpenGraph image, and ORM guides in `daloyjs.dev`.
+- [ ] **Docs cleanup**: document the release checklist and keep package naming/examples aligned with `@daloyjs/core`.
 
 **Exit criteria:** every item above either ships or is moved to a later milestone
 with an explicit reason. No silent dropouts.

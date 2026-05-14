@@ -2,7 +2,7 @@
 
 > A **runtime-portable TypeScript web framework** with built-in **contract-first routing**, **validation**, **OpenAPI (Hey API)**, **typed client generation**, **large-scale maintainability**, and **highly secured by default (pnpm)**.
 
-📚 **Documentation site:** [`./daloyjs.dev`](./daloyjs.dev) — a Next.js 16 + shadcn/ui + Tailwind v4 site with the landing page, getting-started guide, tutorials, security docs, and full API reference. Run it with:
+📚 **Documentation site:** [`./daloyjs.dev`](./daloyjs.dev) — a Next.js 16 + shadcn/ui + Tailwind v4 site with the landing page, getting-started guide, ORM integration guides, tutorials, security docs, and full API reference. Run it with:
 
 ```zsh
 cd daloyjs.dev
@@ -25,7 +25,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Better supply-chain security** than npm | [pnpm](https://pnpm.io/motivation) | Strict, content-addressable installs; reproducible lockfile; per-project `.npmrc` hardening. |
 
 ```
-114/114 tests passing · 100% line + function coverage · clean strict TypeScript 6
+115/115 tests passing · 100% line + function coverage · clean strict TypeScript 6
 runs on Node, Bun, Deno, Cloudflare, Vercel
 ~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
 ```
@@ -292,6 +292,7 @@ Full, versioned plan: [ROADMAP.md](./ROADMAP.md).
 - [x] Security middleware: `secureHeaders` / `cors` / `rateLimit` / `requestId` / `bearerAuth` / `timing` / `timingSafeEqual`
 - [x] Pluggable structured logger + request id propagation
 - [x] Graceful shutdown
+- [x] `app.onClose()` lifecycle hook + augmentable `AppState` for plugin-typed context
 - [x] Mock mode
 - [x] Scalar + Swagger UI handlers
 - [x] **pnpm-first distribution with hardened `.npmrc`**
@@ -303,8 +304,9 @@ Full, versioned plan: [ROADMAP.md](./ROADMAP.md).
 - [x] GitHub Actions CI for install, typecheck, tests, coverage, build, and audit
 - [x] `SECURITY.md` and vulnerability disclosure process
 - [x] `pnpm create daloy` project scaffolder (Node + Vercel Edge + Cloudflare templates)
+- [x] Docs site discoverability pass: page metadata, sitemap, robots, OpenGraph image, ORM guides
 - [ ] Branch coverage push to `>= 98%`
-- [ ] Release and package-name docs cleanup
+- [ ] Release checklist and publishing docs cleanup
 
 **On deck (`0.3.0` and beyond):** SSE/NDJSON streaming, OpenTelemetry,
 multipart/form-data ergonomics, CSRF helper, scaffolder, Redis rate-limit store,
