@@ -1,12 +1,13 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import { generateOpenAPI } from "@daloyjs/core/openapi";
-import { App } from "@daloyjs/core";
+import { buildApp } from "../src/build-app.js";
 
-// Re-import the app definition, then write the spec.
-// Keep this script deterministic so codegen output is stable in CI.
+// Build a fresh app from the factory so the spec dump never starts the HTTP
+// listener as a side effect. Keep this script deterministic so codegen output
+// is stable in CI.
 
 async function main() {
-  const { default: app } = (await import("../src/index.js")) as { default: App };
+  const app = buildApp();
   const doc = generateOpenAPI(app, {
     info: { title: "My Daloy API", version: "0.0.1" },
     servers: [{ url: "http://localhost:3000" }],

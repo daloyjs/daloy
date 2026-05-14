@@ -92,7 +92,11 @@ verify-store-integrity=true
       </p>
 
       <h2>Verify</h2>
-      <CodeBlock language="bash" code={`pnpm exec node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok →', Object.keys(m).slice(0, 6)))"`} />
+      <p>
+        Run this from the project root after installing — it works the same under pnpm,
+        npm, yarn, or bun because it shells straight to <code>node</code>:
+      </p>
+      <CodeBlock language="bash" code={`node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok →', Object.keys(m).slice(0, 6)))"`} />
 
       <h2>Next</h2>
       <p>

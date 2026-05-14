@@ -28,12 +28,19 @@ pnpm add -D typescript tsx @types/node`} />
 {
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx src/server.ts"
+    "dev": "node --import tsx --watch src/index.ts",
+    "start": "node --import tsx src/index.ts"
   }
 }`} />
 
+      <p>
+        We use <code>src/index.ts</code> and <code>--watch</code> here so the layout matches
+        what <Link href="/docs/scaffolder">create-daloy</Link> emits — copy/paste between this
+        guide and a scaffolded project without renaming files.
+      </p>
+
       <h2>2. Write your first route</h2>
-      <CodeBlock code={`// src/server.ts
+      <CodeBlock code={`// src/index.ts
 import { z } from "zod";
 import { App, requestId, secureHeaders } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";

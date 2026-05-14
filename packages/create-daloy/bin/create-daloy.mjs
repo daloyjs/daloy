@@ -185,13 +185,68 @@ async function copyTemplate(src, dest) {
   }
 }
 
-async function patchPackageJson(dir, projectName) {
+async function patchPackageJson(dir, projectName, packageManager) {
   const file = path.join(dir, "package.json");
   if (!existsSync(file)) return;
   const raw = await readFile(file, "utf8");
   const json = JSON.parse(raw);
   json.name = projectName.startsWith("@") ? projectName : projectName.toLowerCase();
+  if (json.scripts && packageManager && packageManager !== "pnpm") {
+    json.scripts = rewriteScriptsForPackageManager(json.scripts, packageManager);
+  }
   await writeFile(file, JSON.stringify(json, null, 2) + "\n", "utf8");
+}
+
+async function patchReadme(dir, packageManager) {
+  if (packageManager === "pnpm") return;
+  const file = path.join(dir, "README.md");
+  if (!existsSync(file)) return;
+  const raw = await readFile(file, "utf8");
+  const next = raw
+    .replace(/\bpnpm install\b/g, `${packageManager} install`)
+    .replace(/\bpnpm dev\b/g, `${packageManager} run dev`)
+    .replace(/\bpnpm gen\b/g, `${packageManager} run gen`)
+    .replace(/\bpnpm build\b/g, `${packageManager} run build`)
+    .replace(
+      "- Hardened `.npmrc` for safer installs.",
+      `- Package-manager scripts adjusted for ${packageManager}.`,
+    )
+    .replace(
+      "- Hey API codegen wired to `pnpm gen`.",
+      `- Hey API codegen wired to \`${packageManager} run gen\`.`,
+    );
+  await writeFile(file, next, "utf8");
+}
+
+/**
+ * Rewrite scaffolded package.json scripts so they work under the user's
+ * chosen package manager. Templates are authored with `pnpm` because that
+ * is the recommended manager, but `pnpm <subscript>` and `pnpm audit` will
+ * fail under npm/yarn/bun. We rewrite both forms to the equivalent that
+ * the chosen manager understands.
+ */
+function rewriteScriptsForPackageManager(scripts, pm) {
+  // `pnpm audit` → `<pm> audit`. yarn/bun also expose an `audit` command;
+  // npm of course does too. Keep flags intact.
+  // `pnpm <subscript>` (where subscript is another script in the same
+  // package.json) → `<pm> run <subscript>` so cross-script chains work
+  // everywhere. Both yarn and bun also accept `<pm> run <name>`.
+  const out = {};
+  const subscriptNames = new Set(Object.keys(scripts));
+  for (const [name, command] of Object.entries(scripts)) {
+    if (typeof command !== "string") {
+      out[name] = command;
+      continue;
+    }
+    let next = command.replace(/\bpnpm\s+audit\b/g, `${pm} audit`);
+    next = next.replace(/\bpnpm\s+([a-zA-Z0-9_:-]+)/g, (match, sub) => {
+      if (sub === "audit") return match; // already handled above
+      if (!subscriptNames.has(sub)) return match;
+      return `${pm} run ${sub}`;
+    });
+    out[name] = next;
+  }
+  return out;
 }
 
 async function normalizePackageManagerFiles(dir, packageManager) {
@@ -387,8 +442,9 @@ async function main() {
     await mkdir(targetDir, { recursive: true });
     await copyTemplate(templateDir, targetDir);
     logStep("Template copied", template);
-    await patchPackageJson(targetDir, projectName);
+    await patchPackageJson(targetDir, projectName, packageManager);
     logStep("Package metadata written", projectName);
+    await patchReadme(targetDir, packageManager);
     await normalizePackageManagerFiles(targetDir, packageManager);
     if (packageManager !== "pnpm") {
       logStep("Package-manager config normalized", packageManager);

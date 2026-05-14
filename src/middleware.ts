@@ -102,6 +102,23 @@ export interface CorsOptions {
 }
 
 export function cors(opts: CorsOptions): Hooks {
+  // Reject the classic CORS footgun up front. Browsers will refuse to attach
+  // credentials to a wildcard origin (the spec literally forbids
+  // `Access-Control-Allow-Origin: *` together with
+  // `Access-Control-Allow-Credentials: true`), so silently configuring it
+  // produces broken-but-not-obviously-broken behavior in production. Fail
+  // closed at construction time instead.
+  if (opts.credentials) {
+    const includesWildcard =
+      opts.origin === "*" ||
+      (Array.isArray(opts.origin) && opts.origin.includes("*"));
+    if (includesWildcard) {
+      throw new Error(
+        "cors(): origin: \"*\" cannot be combined with credentials: true. " +
+          "Pass an explicit origin string, an array of allowed origins, or a predicate function instead.",
+      );
+    }
+  }
   const allow = (origin: string | null): string | null => {
     if (!origin) return null;
     if (typeof opts.origin === "string") return opts.origin === "*" || opts.origin === origin ? opts.origin : null;

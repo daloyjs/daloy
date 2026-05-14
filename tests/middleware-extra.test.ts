@@ -49,6 +49,23 @@ test("cors rejects disallowed origins and never emits credentials with wildcard 
   assert.equal(denied.headers.get("access-control-allow-origin"), null);
 });
 
+test("cors throws when origin '*' is combined with credentials: true", () => {
+  // Browsers refuse this combination per the CORS spec; failing closed at
+  // construction prevents silently broken auth in production.
+  assert.throws(
+    () => cors({ origin: "*", credentials: true }),
+    /origin: "\*" cannot be combined with credentials: true/,
+  );
+  assert.throws(
+    () => cors({ origin: ["*", "https://app.example.com"], credentials: true }),
+    /origin: "\*" cannot be combined with credentials: true/,
+  );
+  // Wildcard alone is still allowed.
+  assert.doesNotThrow(() => cors({ origin: "*" }));
+  // Wildcard in array without credentials is still allowed.
+  assert.doesNotThrow(() => cors({ origin: ["*"] }));
+});
+
 test("rateLimit supports custom stores and can suppress Retry-After", async () => {
   const hits: string[] = [];
   const app = new App({ logger: false });
