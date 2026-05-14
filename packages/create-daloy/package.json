@@ -30,7 +30,7 @@
     "node": ">=20.10.0"
   },
   "bin": {
-    "create-daloy": "./bin/create-daloy.mjs"
+    "create-daloy": "bin/create-daloy.mjs"
   },
   "files": [
     "bin",
