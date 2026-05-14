@@ -74,6 +74,7 @@
     "example": "node --import tsx examples/basic.ts",
     "bench": "node --import tsx bench/router.bench.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
+    "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=100 --test-coverage-functions=100 tests/**/*.test.ts",
     "typecheck": "tsc --noEmit",
     "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
     "gen:client": "openapi-ts",

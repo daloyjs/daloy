@@ -41,7 +41,6 @@ export interface AppOptions {
 
   /** Production mode hides 5xx detail in error responses. Default: NODE_ENV === "production". */
   production?: boolean;
-
   /** Pluggable logger. Default: structured JSON logger at "info" (or noop in test). */
   logger?: Logger | { level?: "trace" | "debug" | "info" | "warn" | "error" | "fatal" } | false;
 

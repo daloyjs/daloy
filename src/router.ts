@@ -37,14 +37,9 @@ export class Router<T> {
   private staticTable = new Map<string, Partial<Record<HttpMethod, T>>>();
 
   add(method: HttpMethod, path: string, handler: T, operationId?: string): void {
-    if (operationId) {
-      if (this.operationIds.has(operationId)) {
-        throw new Error(`Duplicate operationId: "${operationId}"`);
-      }
-      this.operationIds.add(operationId);
-    }
-
     const segments = splitPath(path);
+    if (operationId && this.operationIds.has(operationId)) throw new Error(`Duplicate operationId: "${operationId}"`);
+    if (operationId) this.operationIds.add(operationId);
     const isStatic = segments.every((s) => !s.startsWith(":") && !s.startsWith("*"));
     const normalized = "/" + segments.join("/");
 
