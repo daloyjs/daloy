@@ -119,7 +119,9 @@ bun  create daloy           my-api`}
         The CLI itself ships with{" "}
         <strong>zero runtime dependencies</strong> — only Node built-ins — so the supply-chain story
         stays clean. Templates are copied verbatim from the package&apos;s <code>templates/</code>{" "}
-        directory and never run scripts during scaffolding.
+        directory and never run scripts during scaffolding. When you choose <code>pnpm</code>, the
+        generated app keeps the hardened <code>.npmrc</code>; when you choose another package manager,
+        the CLI removes pnpm-specific config so installs stay warning-free.
       </p>
 
       <h2>Next</h2>

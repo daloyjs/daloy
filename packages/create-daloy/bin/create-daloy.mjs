@@ -4,7 +4,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile, copyFile, rm } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import path from "node:path";
@@ -192,6 +192,13 @@ async function patchPackageJson(dir, projectName) {
   const json = JSON.parse(raw);
   json.name = projectName.startsWith("@") ? projectName : projectName.toLowerCase();
   await writeFile(file, JSON.stringify(json, null, 2) + "\n", "utf8");
+}
+
+async function normalizePackageManagerFiles(dir, packageManager) {
+  if (packageManager === "pnpm") return;
+  const npmrcPath = path.join(dir, ".npmrc");
+  if (!existsSync(npmrcPath)) return;
+  await rm(npmrcPath, { force: true });
 }
 
 function run(cmd, args, cwd) {
@@ -382,6 +389,10 @@ async function main() {
     logStep("Template copied", template);
     await patchPackageJson(targetDir, projectName);
     logStep("Package metadata written", projectName);
+    await normalizePackageManagerFiles(targetDir, packageManager);
+    if (packageManager !== "pnpm") {
+      logStep("Package-manager config normalized", packageManager);
+    }
 
     if (initGit) {
       const code = await run("git", ["init", "--quiet"], targetDir);

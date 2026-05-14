@@ -26,7 +26,7 @@ app.route({
   },
   handler: async () => ({
     status: 200,
-    body: { ok: true, runtime: "vercel-edge" as const },
+    body: { ok: true as const, runtime: "vercel-edge" as const },
   }),
 });
 

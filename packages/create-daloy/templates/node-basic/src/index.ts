@@ -31,7 +31,7 @@ app.route({
   },
   handler: async () => ({
     status: 200,
-    body: { ok: true, uptime: process.uptime() },
+    body: { ok: true as const, uptime: process.uptime() },
   }),
 });
 
