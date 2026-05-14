@@ -7,6 +7,8 @@ import {
   secureHeaders,
 } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+import { htmlResponse, swaggerUiHtml } from "@daloyjs/core/docs";
 
 const app = new App({
   bodyLimitBytes: 1024 * 1024,
@@ -59,5 +61,45 @@ app.route({
 });
 
 const port = Number(process.env.PORT ?? 3000);
+
+// --- API documentation -----------------------------------------------------
+// `/openapi.json` returns the live OpenAPI 3.1 spec generated from the routes
+// defined above. `/docs` serves a Swagger UI page that loads that spec.
+
+app.route({
+  method: "GET",
+  path: "/openapi.json",
+  operationId: "getOpenAPI",
+  tags: ["Docs"],
+  responses: { 200: { description: "OpenAPI 3.1 document" } },
+  handler: async () => ({
+    status: 200 as const,
+    body: generateOpenAPI(app, {
+      info: { title: "My Daloy API", version: "0.0.1" },
+      servers: [{ url: `http://localhost:${port}` }],
+    }),
+  }),
+});
+
+app.route({
+  method: "GET",
+  path: "/docs",
+  operationId: "docs",
+  tags: ["Docs"],
+  responses: { 200: { description: "API reference UI" } },
+  handler: async () => {
+    const html = swaggerUiHtml({ specUrl: "/openapi.json", title: "My Daloy API" });
+    const res = htmlResponse(html);
+    return {
+      status: 200 as const,
+      body: html,
+      headers: Object.fromEntries(res.headers),
+    };
+  },
+});
+
 serve(app, { port });
 console.log(`DaloyJS listening on http://localhost:${port}`);
+console.log(`  Swagger UI:  http://localhost:${port}/docs`);
+console.log(`  OpenAPI JSON: http://localhost:${port}/openapi.json`);
+console.log(`  Health:       http://localhost:${port}/healthz`);

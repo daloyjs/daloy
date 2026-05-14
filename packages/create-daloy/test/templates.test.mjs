@@ -19,6 +19,22 @@ test("vercel-edge health route preserves literal true type", async () => {
   assert.match(source, /body:\s*\{ ok: true as const, runtime: "vercel-edge" as const \}/);
 });
 
+test("node-basic template exposes /docs and /openapi.json", async () => {
+  const source = await readFile(path.join(pkgRoot, "templates/node-basic/src/index.ts"), "utf8");
+  assert.match(source, /path:\s*"\/docs"/);
+  assert.match(source, /path:\s*"\/openapi\.json"/);
+  assert.match(source, /swaggerUiHtml\(/);
+  assert.match(source, /generateOpenAPI\(app/);
+});
+
+test("vercel-edge template exposes /docs and /openapi.json", async () => {
+  const source = await readFile(path.join(pkgRoot, "templates/vercel-edge/api/[...path].ts"), "utf8");
+  assert.match(source, /path:\s*"\/docs"/);
+  assert.match(source, /path:\s*"\/openapi\.json"/);
+  assert.match(source, /swaggerUiHtml\(/);
+  assert.match(source, /generateOpenAPI\(app/);
+});
+
 test("non-pnpm scaffolds do not keep pnpm-specific .npmrc", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   const projectName = "npm-clean";

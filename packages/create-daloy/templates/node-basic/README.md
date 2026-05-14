@@ -16,6 +16,13 @@ curl http://localhost:3000/healthz
 curl http://localhost:3000/books/1
 ```
 
+## API documentation
+
+- Swagger UI: <http://localhost:3000/docs>
+- OpenAPI 3.1 JSON: <http://localhost:3000/openapi.json>
+
+The spec is generated live from your routes, so it stays in sync with what is actually deployed.
+
 ## Generate OpenAPI + typed client
 
 ```bash

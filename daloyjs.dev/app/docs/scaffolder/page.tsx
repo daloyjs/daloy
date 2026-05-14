@@ -78,6 +78,12 @@ bun  create daloy           my-api`}
         <code>GET /books/:id</code> route with Zod validation, and Hey API codegen wired to{" "}
         <code>pnpm gen</code>.
       </p>
+      <p>
+        Like FastAPI, every scaffolded project also exposes API documentation out of the box:{" "}
+        <code>/docs</code> serves Swagger UI and <code>/openapi.json</code> serves the live
+        OpenAPI 3.1 spec generated from your route definitions. The dev server logs both URLs at
+        startup.
+      </p>
 
       <h3><code>cloudflare-worker</code></h3>
       <p>
@@ -91,6 +97,10 @@ bun  create daloy           my-api`}
         A Vercel Edge API using <code>@daloyjs/core/vercel</code> with a catch-all{" "}
         <code>api/[...path].ts</code> route, <code>vercel dev</code> / <code>vercel deploy</code>{" "}
         scripts, secure defaults, and the same health and bookstore examples as the Node starter.
+      </p>
+      <p>
+        The Vercel template also ships <code>/docs</code> (Swagger UI) and <code>/openapi.json</code>
+        wired to the same app, so the deployed Edge URL serves API documentation automatically.
       </p>
 
       <h2>Which template should I choose?</h2>

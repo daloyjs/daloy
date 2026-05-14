@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { App, NotFoundError, requestId, secureHeaders } from "@daloyjs/core";
 import { toEdgeHandler } from "@daloyjs/core/vercel";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
+import { htmlResponse, swaggerUiHtml } from "@daloyjs/core/docs";
 
 export const config = { runtime: "edge" };
 
@@ -49,6 +51,41 @@ app.route({
     const book = books.get(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
     return { status: 200, body: book };
+  },
+});
+
+// --- API documentation -----------------------------------------------------
+// `/openapi.json` returns the OpenAPI 3.1 spec generated from the routes above.
+// `/docs` serves a Swagger UI page that loads that spec.
+
+app.route({
+  method: "GET",
+  path: "/openapi.json",
+  operationId: "getOpenAPI",
+  tags: ["Docs"],
+  responses: { 200: { description: "OpenAPI 3.1 document" } },
+  handler: async () => ({
+    status: 200 as const,
+    body: generateOpenAPI(app, {
+      info: { title: "My Daloy Edge API", version: "0.0.1" },
+    }),
+  }),
+});
+
+app.route({
+  method: "GET",
+  path: "/docs",
+  operationId: "docs",
+  tags: ["Docs"],
+  responses: { 200: { description: "API reference UI" } },
+  handler: async () => {
+    const html = swaggerUiHtml({ specUrl: "/openapi.json", title: "My Daloy Edge API" });
+    const res = htmlResponse(html);
+    return {
+      status: 200 as const,
+      body: html,
+      headers: Object.fromEntries(res.headers),
+    };
   },
 });
 
