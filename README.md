@@ -4,7 +4,7 @@
 
 📚 **Documentation site:** [`./daloyjs.dev`](./daloyjs.dev) — a Next.js 16 + shadcn/ui + Tailwind v4 site with the landing page, getting-started guide, tutorials, security docs, and full API reference. Run it with:
 
-```bash
+```zsh
 cd daloyjs.dev
 pnpm install
 pnpm dev      # http://localhost:3000
