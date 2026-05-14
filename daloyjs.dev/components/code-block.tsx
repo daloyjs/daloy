@@ -1,3 +1,5 @@
+import { bundledLanguages, codeToHtml, type BundledLanguage } from "shiki/bundle/full";
+
 import { cn } from "../lib/utils";
 
 interface CodeBlockProps {
@@ -6,15 +8,57 @@ interface CodeBlockProps {
   className?: string;
 }
 
-export function CodeBlock({ code, language = "ts", className }: CodeBlockProps) {
+const LANGUAGE_ALIASES: Record<string, BundledLanguage | "text"> = {
+  bash: "bash",
+  dockerfile: "dockerfile",
+  http: "http",
+  ini: "ini",
+  javascript: "js",
+  json: "json",
+  plain: "text",
+  plaintext: "text",
+  sh: "bash",
+  shell: "bash",
+  text: "text",
+  ts: "ts",
+  txt: "text",
+  typescript: "ts",
+};
+
+function resolveLanguage(language: string): BundledLanguage | "text" {
+  const normalizedLanguage = language.trim().toLowerCase();
+
+  if (normalizedLanguage in LANGUAGE_ALIASES) {
+    return LANGUAGE_ALIASES[normalizedLanguage];
+  }
+
+  if (normalizedLanguage in bundledLanguages) {
+    return normalizedLanguage as BundledLanguage;
+  }
+
+  return "text";
+}
+
+export async function CodeBlock({ code, language = "ts", className }: CodeBlockProps) {
+  const highlightedCode = await codeToHtml(code, {
+    lang: resolveLanguage(language),
+    themes: {
+      light: "github-light-default",
+      dark: "github-dark-default",
+      dim: "github-dark-dimmed",
+    },
+    defaultColor: false,
+  });
+
   return (
-    <div className={cn("relative my-4 overflow-hidden rounded-lg border border-border bg-muted/40", className)}>
-      <div className="flex items-center justify-between border-b border-border bg-muted/60 px-4 py-1.5 text-xs text-muted-foreground">
+    <div className={cn("code-editor relative my-4 overflow-hidden rounded-xl border", className)}>
+      <div className="code-editor__toolbar flex items-center justify-between border-b px-3 py-2 text-[11px] sm:px-4 sm:text-xs">
         <span className="font-mono">{language}</span>
       </div>
-      <pre className="overflow-x-auto p-4 text-sm leading-relaxed">
-        <code className="font-mono text-foreground whitespace-pre">{code}</code>
-      </pre>
+      <div
+        className="code-editor__content overflow-x-auto text-xs leading-relaxed sm:text-sm"
+        dangerouslySetInnerHTML={{ __html: highlightedCode }}
+      />
     </div>
   );
 }

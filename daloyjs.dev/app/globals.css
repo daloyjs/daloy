@@ -163,6 +163,148 @@
 }
 
 @layer components {
+  .mobile-nav__trigger {
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      border-color 180ms ease,
+      transform 180ms ease;
+  }
+
+  .mobile-nav__panel {
+    transform-origin: top right;
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.98);
+    pointer-events: none;
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease;
+  }
+
+  .mobile-nav[open] .mobile-nav__trigger {
+    background: color-mix(in oklab, var(--foreground) 8%, var(--background));
+  }
+
+  .mobile-nav[open] .mobile-nav__panel {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+
+  .docs-nav-disclosure {
+    transition:
+      box-shadow 180ms ease,
+      border-color 180ms ease;
+  }
+
+  .docs-nav-disclosure__panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    overflow: hidden;
+    transition: grid-template-rows 220ms ease;
+  }
+
+  .docs-nav-disclosure__panel > * {
+    min-height: 0;
+  }
+
+  .docs-nav-disclosure[open] {
+    box-shadow: 0 18px 40px rgb(15 23 42 / 8%);
+  }
+
+  .docs-nav-disclosure[open] .docs-nav-disclosure__panel {
+    grid-template-rows: 1fr;
+  }
+
+  .code-editor {
+    border-color: #d0d7de;
+    background: #ffffff;
+    box-shadow: 0 1px 0 rgb(27 31 36 / 4%);
+  }
+
+  .code-editor__toolbar {
+    border-color: #d0d7de;
+    background: #f6f8fa;
+    color: #57606a;
+  }
+
+  .code-editor__content .shiki {
+    margin: 0;
+    min-width: 100%;
+    padding: 0.75rem;
+    background-color: var(--shiki-light-bg) !important;
+    color: var(--shiki-light) !important;
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+
+  @media (min-width: 40rem) {
+    .code-editor__content .shiki {
+      padding: 1rem;
+    }
+  }
+
+  .code-editor__content .shiki code {
+    display: grid;
+    min-width: max-content;
+    background: transparent;
+    padding: 0;
+  }
+
+  .code-editor__content .shiki .line {
+    display: inline-block;
+    min-height: 1.7em;
+  }
+
+  .code-editor__content .shiki span {
+    color: var(--shiki-light) !important;
+    background-color: var(--shiki-light-bg) !important;
+  }
+
+  .dark .code-editor {
+    border-color: #30363d;
+    background: #0d1117;
+    box-shadow: none;
+  }
+
+  .dark .code-editor__toolbar {
+    border-color: #30363d;
+    background: #161b22;
+    color: #8b949e;
+  }
+
+  .dark .code-editor__content .shiki {
+    background-color: var(--shiki-dark-bg) !important;
+    color: var(--shiki-dark) !important;
+  }
+
+  .dark .code-editor__content .shiki span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+
+  .dim .code-editor {
+    border-color: #444c56;
+    background: #22272e;
+    box-shadow: none;
+  }
+
+  .dim .code-editor__toolbar {
+    border-color: #444c56;
+    background: #2d333b;
+    color: #adbac7;
+  }
+
+  .dim .code-editor__content .shiki {
+    background-color: var(--shiki-dim-bg) !important;
+    color: var(--shiki-dim) !important;
+  }
+
+  .dim .code-editor__content .shiki span {
+    color: var(--shiki-dim) !important;
+    background-color: var(--shiki-dim-bg) !important;
+  }
+
   .docs-prose {
     @apply max-w-3xl text-base leading-8 text-foreground;
   }
@@ -179,20 +321,20 @@
   }
 
   .docs-prose h1 {
-    @apply mt-0 text-4xl leading-tight sm:text-5xl;
+    @apply mt-0 text-3xl leading-tight sm:text-4xl lg:text-5xl;
   }
 
   .docs-prose h2 {
-    @apply mt-14 text-2xl leading-tight sm:text-3xl;
+    @apply mt-12 text-xl leading-tight sm:mt-14 sm:text-2xl lg:text-3xl;
   }
 
   .docs-prose h3 {
-    @apply mt-10 text-xl leading-snug;
+    @apply mt-8 text-lg leading-snug sm:mt-10 sm:text-xl;
   }
 
   .docs-prose p,
   .docs-prose li {
-    @apply text-base leading-8 text-foreground/92;
+    @apply text-[15px] leading-7 text-foreground/92 sm:text-base sm:leading-8;
   }
 
   .docs-prose ul,
@@ -231,6 +373,8 @@
 
   .docs-prose table {
     @apply my-8 w-full border-collapse text-left text-sm leading-7;
+    display: block;
+    overflow-x: auto;
   }
 
   .docs-prose th,

@@ -34,11 +34,6 @@ export function ThemeSwitcher() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="hidden items-center gap-2 border border-border bg-background/80 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground backdrop-blur sm:flex lg:hidden">
-        <ActiveThemeIcon className="size-3.5 text-foreground" />
-        <span>{THEME_LABELS[activeTheme]}</span>
-      </div>
-
       <div
         aria-label="Theme switcher"
         className="relative grid grid-cols-3 items-center rounded-none border border-border bg-background/80 p-1 backdrop-blur"
@@ -64,14 +59,14 @@ export function ThemeSwitcher() {
               onClick={() => setTheme(themeOption)}
               className={cn(
                 buttonVariants({ variant: "ghost", size: "xs" }),
-                "relative z-10 min-w-0 gap-1.5 border-transparent bg-transparent px-2 text-[10px] transition-colors duration-300 ease-out hover:bg-transparent sm:min-w-16",
+                "relative z-10 min-w-0 gap-1 border-transparent bg-transparent px-1.5 text-[10px] transition-colors duration-300 ease-out hover:bg-transparent sm:min-w-12 sm:px-2 lg:min-w-16",
                 isActive
                   ? "text-background hover:bg-transparent hover:text-background"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               <ThemeIcon className="size-3.5" />
-              <span className="hidden sm:inline">{THEME_LABELS[themeOption]}</span>
+              <span className="hidden lg:inline">{THEME_LABELS[themeOption]}</span>
             </button>
           )
         })}

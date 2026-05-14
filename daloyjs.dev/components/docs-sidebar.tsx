@@ -67,7 +67,7 @@ export const docsNav: DocsNavSection[] = [
 export function DocsSidebar() {
   const pathname = usePathname();
   return (
-    <nav className="space-y-8 pr-4 text-sm">
+    <nav className="space-y-8 text-sm lg:pr-4">
       {docsNav.map((section) => (
         <div key={section.title} className="space-y-3">
           <h4 className="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
