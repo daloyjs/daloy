@@ -27,6 +27,8 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  packages/create-daloy: {}
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.0':

@@ -25,7 +25,8 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Better supply-chain security** than npm | [pnpm](https://pnpm.io/motivation) | Strict, content-addressable installs; reproducible lockfile; per-project `.npmrc` hardening. |
 
 ```
-56/56 tests passing · clean strict TypeScript 6 · runs on Node, Bun, Deno, Cloudflare, Vercel
+114/114 tests passing · 100% line + function coverage · clean strict TypeScript 6
+runs on Node, Bun, Deno, Cloudflare, Vercel
 ~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
 ```
 
@@ -78,6 +79,16 @@ verify-store-integrity=true
 Run `pnpm audit --prod` regularly (or `pnpm run audit` in this repo) — and `pnpm install --frozen-lockfile` in CI.
 
 ---
+
+## Quick start
+
+```bash
+pnpm create daloy@latest my-api
+# or
+npm  create daloy@latest my-api
+```
+
+See [Scaffold a project](https://daloyjs.dev/docs/scaffolder) for templates and flags.
 
 ## Hello world
 
@@ -264,6 +275,8 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status & roadmap
 
+Full, versioned plan: [ROADMAP.md](./ROADMAP.md).
+
 **Implemented (v0.1):**
 
 - [x] Trie router with static fast path + 405 with `Allow` + traversal guard
@@ -281,15 +294,20 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 - [x] Mock mode
 - [x] Scalar + Swagger UI handlers
 - [x] **pnpm-first distribution with hardened `.npmrc`**
+- [x] **100% line + function coverage** enforced by `pnpm coverage`
 
-**Next:**
+**Next (`0.2.0` — see [ROADMAP.md](./ROADMAP.md) for the full plan):**
 
-- [ ] WebSocket primitives + adapter coverage
-- [ ] Streaming response helpers (SSE, NDJSON)
-- [ ] CSRF helper
-- [ ] CLI: route inspector, schema inspector, dead-route detector
-- [ ] OpenTelemetry tracing hook
-- [ ] HTTP/2 + HTTP/3 adapters
+- [ ] `onSend` hook for response transformation
+- [x] GitHub Actions CI for install, typecheck, tests, coverage, build, and audit
+- [x] `SECURITY.md` and vulnerability disclosure process
+- [x] `pnpm create daloy` project scaffolder (Node + Cloudflare templates)
+- [ ] Branch coverage push to `>= 98%`
+- [ ] Release and package-name docs cleanup
+
+**On deck (`0.3.0` and beyond):** SSE/NDJSON streaming, OpenTelemetry,
+multipart/form-data ergonomics, CSRF helper, scaffolder, Redis rate-limit store,
+CLI route and schema inspector, WebSockets, and HTTP/2 + HTTP/3 adapters.
 
 ## License
 
