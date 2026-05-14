@@ -2,6 +2,7 @@
   "name": "next-app",
   "version": "0.0.1",
   "type": "module",
+  "packageManager": "pnpm@11.1.2",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
