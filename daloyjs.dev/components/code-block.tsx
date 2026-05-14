@@ -8,12 +8,12 @@ interface CodeBlockProps {
 
 export function CodeBlock({ code, language = "ts", className }: CodeBlockProps) {
   return (
-    <div className={cn("relative my-4 overflow-hidden rounded-lg border bg-zinc-950", className)}>
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-xs text-zinc-400">
+    <div className={cn("relative my-4 overflow-hidden rounded-lg border border-border bg-muted/40", className)}>
+      <div className="flex items-center justify-between border-b border-border bg-muted/60 px-4 py-1.5 text-xs text-muted-foreground">
         <span className="font-mono">{language}</span>
       </div>
       <pre className="overflow-x-auto p-4 text-sm leading-relaxed">
-        <code className="font-mono text-zinc-100 whitespace-pre">{code}</code>
+        <code className="font-mono text-foreground whitespace-pre">{code}</code>
       </pre>
     </div>
   );

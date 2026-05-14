@@ -3,6 +3,15 @@
 import * as React from "react"
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes"
 
+const THEMES = ["light", "dark", "dim"] as const
+
+function getNextTheme(theme: string | undefined) {
+  const currentIndex = THEMES.indexOf((theme ?? "light") as (typeof THEMES)[number])
+  const safeIndex = currentIndex === -1 ? 0 : currentIndex
+
+  return THEMES[(safeIndex + 1) % THEMES.length]
+}
+
 function ThemeProvider({
   children,
   ...props
@@ -10,8 +19,9 @@ function ThemeProvider({
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
+      defaultTheme="light"
+      enableSystem={false}
+      themes={[...THEMES]}
       disableTransitionOnChange
       {...props}
     >
@@ -35,7 +45,7 @@ function isTypingTarget(target: EventTarget | null) {
 }
 
 function ThemeHotkey() {
-  const { resolvedTheme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -55,7 +65,7 @@ function ThemeHotkey() {
         return
       }
 
-      setTheme(resolvedTheme === "dark" ? "light" : "dark")
+      setTheme(getNextTheme(theme))
     }
 
     window.addEventListener("keydown", onKeyDown)
@@ -63,9 +73,9 @@ function ThemeHotkey() {
     return () => {
       window.removeEventListener("keydown", onKeyDown)
     }
-  }, [resolvedTheme, setTheme])
+  }, [setTheme, theme])
 
   return null
 }
 
-export { ThemeProvider }
+export { THEMES, ThemeProvider }

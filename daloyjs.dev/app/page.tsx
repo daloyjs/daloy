@@ -85,10 +85,10 @@ export default function HomePage() {
               <span className="size-1.5 rounded-full bg-emerald-500" />
               v0.1 — public preview
             </Badge>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight max-w-4xl">
+            <h1 className="max-w-4xl text-4xl font-bold tracking-tight leading-tight sm:text-5xl lg:text-6xl">
               The runtime-portable TypeScript web framework
             </h1>
-            <p className="max-w-2xl text-lg text-muted-foreground">
+            <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
               Contract-first routing, validation, OpenAPI (Hey API), typed client generation,
               large-scale maintainability, and highly secured by default — distributed via pnpm.
             </p>
@@ -110,7 +110,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl px-6 py-16">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold tracking-tight">Hello, contract</h2>
-            <p className="text-muted-foreground mt-2">
+            <p className="mt-3 text-muted-foreground leading-8">
               One route — types, validation, OpenAPI, and the typed client all generated from it.
             </p>
           </div>
@@ -123,7 +123,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-6 py-16">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight">Why DaloyJS</h2>
-            <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">
+            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground leading-8">
               Take the best ideas from each modern stack — without the trade-offs.
             </p>
           </div>
@@ -149,7 +149,7 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold tracking-tight text-center mb-2">
             One framework. Best of every other.
           </h2>
-          <p className="text-muted-foreground text-center mb-10">
+          <p className="mb-10 text-center text-muted-foreground leading-8">
             We&apos;re standing on the shoulders of giants — and stitching their wins together.
           </p>
           <div className="overflow-x-auto rounded-lg border">
@@ -186,7 +186,7 @@ export default function HomePage() {
       <section>
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
           <h2 className="text-3xl font-bold tracking-tight mb-4">Ready to ship?</h2>
-          <p className="text-muted-foreground mb-8">
+          <p className="mb-8 text-muted-foreground leading-8">
             Install in seconds, scale for years. Read the docs, then write your first contract.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">

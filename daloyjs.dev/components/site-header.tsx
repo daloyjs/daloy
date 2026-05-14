@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GithubLogoIcon, PackageIcon } from "@phosphor-icons/react/ssr";
 import { buttonVariants } from "./ui/button";
+import { ThemeSwitcher } from "./theme-switcher";
 
 export function SiteHeader() {
   return (
@@ -30,6 +31,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <ThemeSwitcher />
           <a
             href="https://github.com/daloyjs/daloy"
             target="_blank"

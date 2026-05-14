@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .dim *));
 
 :root {
     --background: oklch(1 0 0);
@@ -73,6 +73,40 @@
     --sidebar-ring: oklch(0.547 0.021 43.1);
 }
 
+  .dim {
+    --background: oklch(0.3 0.012 255);
+    --foreground: oklch(0.92 0.014 250);
+    --card: oklch(0.34 0.012 255);
+    --card-foreground: oklch(0.92 0.014 250);
+    --popover: oklch(0.33 0.012 255);
+    --popover-foreground: oklch(0.92 0.014 250);
+    --primary: oklch(0.85 0.02 84);
+    --primary-foreground: oklch(0.27 0.012 255);
+    --secondary: oklch(0.39 0.014 255);
+    --secondary-foreground: oklch(0.92 0.014 250);
+    --muted: oklch(0.37 0.013 255);
+    --muted-foreground: oklch(0.78 0.016 248);
+    --accent: oklch(0.42 0.016 255);
+    --accent-foreground: oklch(0.95 0.01 250);
+    --destructive: oklch(0.7 0.19 25);
+    --border: oklch(0.5 0.015 255 / 42%);
+    --input: oklch(0.47 0.015 255 / 55%);
+    --ring: oklch(0.73 0.018 250);
+    --chart-1: oklch(0.76 0.04 238);
+    --chart-2: oklch(0.7 0.05 190);
+    --chart-3: oklch(0.75 0.07 120);
+    --chart-4: oklch(0.8 0.04 74);
+    --chart-5: oklch(0.71 0.06 30);
+    --sidebar: oklch(0.33 0.012 255);
+    --sidebar-foreground: oklch(0.92 0.014 250);
+    --sidebar-primary: oklch(0.67 0.12 248);
+    --sidebar-primary-foreground: oklch(0.96 0.01 250);
+    --sidebar-accent: oklch(0.39 0.014 255);
+    --sidebar-accent-foreground: oklch(0.95 0.01 250);
+    --sidebar-border: oklch(0.5 0.015 255 / 42%);
+    --sidebar-ring: oklch(0.73 0.018 250);
+  }
+
 @theme inline {
     --font-sans: var(--font-sans);
     --font-heading: var(--font-heading);
@@ -121,9 +155,94 @@
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground leading-7;
     }
   html {
     @apply font-sans;
     }
+}
+
+@layer components {
+  .docs-prose {
+    @apply max-w-3xl text-base leading-8 text-foreground;
+  }
+
+  .docs-prose > * + * {
+    @apply mt-6;
+  }
+
+  .docs-prose h1,
+  .docs-prose h2,
+  .docs-prose h3,
+  .docs-prose h4 {
+    @apply font-semibold tracking-tight text-foreground scroll-mt-24;
+  }
+
+  .docs-prose h1 {
+    @apply mt-0 text-4xl leading-tight sm:text-5xl;
+  }
+
+  .docs-prose h2 {
+    @apply mt-14 text-2xl leading-tight sm:text-3xl;
+  }
+
+  .docs-prose h3 {
+    @apply mt-10 text-xl leading-snug;
+  }
+
+  .docs-prose p,
+  .docs-prose li {
+    @apply text-base leading-8 text-foreground/92;
+  }
+
+  .docs-prose ul,
+  .docs-prose ol {
+    @apply space-y-3 pl-6;
+  }
+
+  .docs-prose ul {
+    @apply list-disc marker:text-muted-foreground;
+  }
+
+  .docs-prose ol {
+    @apply list-decimal marker:text-muted-foreground;
+  }
+
+  .docs-prose li > ul,
+  .docs-prose li > ol {
+    @apply mt-3;
+  }
+
+  .docs-prose a {
+    @apply font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary hover:decoration-primary;
+  }
+
+  .docs-prose strong {
+    @apply font-semibold text-foreground;
+  }
+
+  .docs-prose code {
+    @apply rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.95em] text-foreground;
+  }
+
+  .docs-prose pre {
+    @apply leading-relaxed;
+  }
+
+  .docs-prose table {
+    @apply my-8 w-full border-collapse text-left text-sm leading-7;
+  }
+
+  .docs-prose th,
+  .docs-prose td {
+    @apply border-b border-border px-4 py-3 align-top;
+  }
+
+  .docs-prose th {
+    @apply bg-muted/60 font-semibold text-foreground;
+  }
+
+  .docs-prose blockquote {
+    @apply border-l-2 border-border pl-4 text-muted-foreground italic;
+  }
 }

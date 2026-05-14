@@ -13,7 +13,25 @@ export default function Page() {
         hygiene. Bun and Deno can install via their package managers using the npm registry.
       </p>
 
-      <h2>Prerequisites</h2>
+      <h2>Fastest path: scaffold a project</h2>
+      <p>
+        Use the official generator — it sets up a hardened <code>.npmrc</code>, strict TypeScript,
+        and a working route in one command.
+      </p>
+      <CodeBlock
+        language="bash"
+        code={`pnpm create daloy@latest my-api
+npm  create daloy@latest my-api
+yarn create daloy           my-api
+bun  create daloy           my-api`}
+      />
+      <p>
+        See <Link href="/docs/scaffolder">Scaffold a project</Link> for templates and flags.
+      </p>
+
+      <h2>Or install into an existing project</h2>
+
+      <h3>Prerequisites</h3>
       <ul>
         <li><strong>Node.js</strong> 20.10 or newer (LTS recommended).</li>
         <li><strong>pnpm</strong> 9.x or newer. Enable via <a href="https://nodejs.org/api/corepack.html" target="_blank" rel="noreferrer">Corepack</a>:</li>
@@ -22,8 +40,9 @@ export default function Page() {
 corepack prepare pnpm@9.15.0 --activate
 pnpm --version`} />
 
-      <h2>Install DaloyJS</h2>
-      <CodeBlock language="bash" code={`pnpm add @daloyjs/core# optional — only if you want to generate a typed SDK
+      <h3>Install DaloyJS</h3>
+      <CodeBlock language="bash" code={`pnpm add @daloyjs/core
+# optional — only if you want to generate a typed SDK
 pnpm add -D @hey-api/openapi-ts
 # pick your validator (any Standard Schema implementation works)
 pnpm add zod`} />

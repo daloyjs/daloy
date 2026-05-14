@@ -13,6 +13,7 @@ export const docsNav: DocsNavSection[] = [
     items: [
       { title: "Introduction", href: "/docs" },
       { title: "Installation", href: "/docs/installation" },
+      { title: "Scaffold a project", href: "/docs/scaffolder" },
       { title: "Getting started", href: "/docs/getting-started" },
     ],
   },
@@ -56,11 +57,13 @@ export const docsNav: DocsNavSection[] = [
 export function DocsSidebar() {
   const pathname = usePathname();
   return (
-    <nav className="text-sm">
+    <nav className="space-y-8 pr-4 text-sm">
       {docsNav.map((section) => (
-        <div key={section.title} className="pb-6">
-          <h4 className="mb-2 px-2 text-sm font-semibold tracking-tight">{section.title}</h4>
-          <ul className="space-y-1">
+        <div key={section.title} className="space-y-3">
+          <h4 className="px-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+            {section.title}
+          </h4>
+          <ul className="space-y-1.5 border-l border-border/70 pl-3">
             {section.items.map((item) => {
               const active = pathname === item.href;
               return (
@@ -68,10 +71,10 @@ export function DocsSidebar() {
                   <Link
                     href={item.href}
                     className={cn(
-                      "block rounded-md px-2 py-1.5 transition-colors",
+                      "relative block rounded-r-lg border-l-2 px-3 py-2 leading-6 transition-[color,background-color,border-color] duration-200",
                       active
-                        ? "bg-muted font-medium text-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                        ? "border-primary bg-muted/80 font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                        : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground"
                     )}
                   >
                     {item.title}
