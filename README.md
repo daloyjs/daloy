@@ -301,7 +301,7 @@ Full, versioned plan: [ROADMAP.md](./ROADMAP.md).
 - [ ] `onSend` hook for response transformation
 - [x] GitHub Actions CI for install, typecheck, tests, coverage, build, and audit
 - [x] `SECURITY.md` and vulnerability disclosure process
-- [x] `pnpm create daloy` project scaffolder (Node + Cloudflare templates)
+- [x] `pnpm create daloy` project scaffolder (Node + Vercel Edge + Cloudflare templates)
 - [ ] Branch coverage push to `>= 98%`
 - [ ] Release and package-name docs cleanup
 

@@ -53,7 +53,7 @@ None of these break the existing public API.
 - [x] **GitHub Actions CI** running install, typecheck, tests, coverage, build, and audit.
 - [x] **Security policy** (`SECURITY.md`) and vulnerability disclosure process.
 - [ ] **Branch coverage push** to `>= 98%` with a coverage gate where the Node runner supports it cleanly.
-- [x] **Project scaffolder** (`pnpm create daloy`) shipped as `packages/create-daloy` with `node-basic` and `cloudflare-worker` templates.
+- [x] **Project scaffolder** (`pnpm create daloy`) shipped as `packages/create-daloy` with `node-basic`, `vercel-edge`, and `cloudflare-worker` templates.
 - [ ] **Docs cleanup**: normalize package naming around `@daloyjs/core` and document the release checklist.
 
 **Exit criteria:** every item above either ships or is moved to a later milestone
@@ -81,7 +81,7 @@ design issue before implementation.
 
 ## Then — `0.5.0` ("project ops")
 
-- [ ] **More scaffolder templates** (Bun, Deno, Vercel Edge) and a `--minimal` flag.
+- [ ] **More scaffolder templates** (Bun, Deno) and a `--minimal` flag.
 - [ ] **Rate-limit Redis store** as `@daloyjs/rate-limit-redis` sub-export.
 - [ ] **CLI inspector**: `daloy inspect` for routes, schemas, dead routes, missing operationIds.
 

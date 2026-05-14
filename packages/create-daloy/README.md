@@ -13,7 +13,8 @@ bun  create daloy           my-api
 The CLI is interactive when arguments are missing. It will ask you for:
 
 - A project directory name (defaults to `my-daloy-app`)
-- A template (`node-basic` or `cloudflare-worker`)
+- A template (`node-basic`, `vercel-edge`, or `cloudflare-worker`)
+- A package manager (`pnpm`, `npm`, `yarn`, or `bun`)
 - Whether to install dependencies
 - Whether to initialize a git repository
 
@@ -31,8 +32,9 @@ pnpm create daloy@latest my-api \
 
 | Flag | Description |
 | --- | --- |
-| `--template <name>` | `node-basic` (default) or `cloudflare-worker`. |
+| `--template <name>` | `node-basic` (default), `vercel-edge`, or `cloudflare-worker`. |
 | `--package-manager <pm>` | `pnpm` (default), `npm`, `yarn`, or `bun`. |
+| `--list-templates` | Print available templates with descriptions. |
 | `--install` / `--no-install` | Install dependencies after scaffolding. Defaults to interactive. |
 | `--git` / `--no-git` | Initialize a git repository. Defaults to interactive. |
 | `--force` | Overwrite an existing non-empty directory. |
@@ -41,6 +43,8 @@ pnpm create daloy@latest my-api \
 | `--version` | Print version and exit. |
 
 ## Templates
+
+Use `create-daloy --list-templates` to inspect available templates without creating a project.
 
 ### `node-basic`
 
@@ -59,6 +63,15 @@ A minimal Cloudflare Worker bootstrap using `@daloyjs/core/cloudflare` with:
 - `wrangler.toml` ready to deploy.
 - Zod-validated route exposed as `fetch`.
 - A sample test that exercises `app.request(...)`.
+
+### `vercel-edge`
+
+A Vercel Edge API bootstrap using `@daloyjs/core/vercel` with:
+
+- `api/[...path].ts` catch-all routing so DaloyJS owns the API surface.
+- `export const config = { runtime: "edge" }` ready for Vercel Edge.
+- `vercel dev` / `vercel deploy` scripts.
+- A health route and bookstore route mirroring the Node starter.
 
 ## What the CLI guarantees
 

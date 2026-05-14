@@ -68,7 +68,22 @@ await app.shutdown(15_000);`} />
       </ul>
 
       <h2>Edge / serverless</h2>
-      <p>Cloudflare Workers, Vercel Edge, and Deno Deploy all consume <code>app.fetch</code> directly. See <a href="/docs/adapters">Adapters</a>.</p>
+      <p>
+        DaloyJS can run on Vercel Edge, Cloudflare Workers, and Deno Deploy because the core is
+        Web-standard <code>Request → Response</code>. Vercel is a first-class target; use the
+        scaffolder when starting from scratch:
+      </p>
+      <CodeBlock language="bash" code={`pnpm create daloy@latest my-api --template vercel-edge`} />
+      <p>
+        The Vercel template creates a catch-all <code>api/[...path].ts</code> route and exports
+        <code>toEdgeHandler(app)</code> from <code>@daloyjs/core/vercel</code>. Cloudflare is only
+        another supported runtime option; you do not need it unless you deploy to Workers.
+      </p>
+      <CodeBlock language="ts" code={`import { toEdgeHandler } from "@daloyjs/core/vercel";
+
+export const config = { runtime: "edge" };
+export default toEdgeHandler(app);`} />
+      <p>See <a href="/docs/adapters">Adapters</a> for runtime-specific entry points.</p>
     </>
   );
 }

@@ -24,7 +24,7 @@ bun  create daloy           my-api`}
 
       <p>
         The CLI is interactive when arguments are missing. It will ask for a project name, a template,
-        whether to install dependencies, and whether to initialize a git repository.
+        a package manager, whether to install dependencies, and whether to initialize a git repository.
       </p>
 
       <h2>Non-interactive usage</h2>
@@ -40,12 +40,15 @@ bun  create daloy           my-api`}
       <h3>Flags</h3>
       <ul>
         <li>
-          <code>--template &lt;name&gt;</code> — <code>node-basic</code> (default) or{" "}
-          <code>cloudflare-worker</code>.
+          <code>--template &lt;name&gt;</code> — <code>node-basic</code> (default),{" "}
+          <code>vercel-edge</code>, or <code>cloudflare-worker</code>.
         </li>
         <li>
           <code>--package-manager &lt;pm&gt;</code> — <code>pnpm</code> (default), <code>npm</code>,{" "}
           <code>yarn</code>, or <code>bun</code>.
+        </li>
+        <li>
+          <code>--list-templates</code> — print available templates with descriptions.
         </li>
         <li>
           <code>--install</code> / <code>--no-install</code> — install dependencies after scaffolding.
@@ -62,6 +65,10 @@ bun  create daloy           my-api`}
       </ul>
 
       <h2>Templates</h2>
+      <p>
+        Run <code>create-daloy --list-templates</code> to inspect the available starters without
+        creating a project.
+      </p>
 
       <h3><code>node-basic</code></h3>
       <p>
@@ -78,6 +85,29 @@ bun  create daloy           my-api`}
         <code>wrangler.toml</code> ready to deploy and a Zod-validated route exposed as{" "}
         <code>fetch</code>.
       </p>
+
+      <h3><code>vercel-edge</code></h3>
+      <p>
+        A Vercel Edge API using <code>@daloyjs/core/vercel</code> with a catch-all{" "}
+        <code>api/[...path].ts</code> route, <code>vercel dev</code> / <code>vercel deploy</code>{" "}
+        scripts, secure defaults, and the same health and bookstore examples as the Node starter.
+      </p>
+
+      <h2>Which template should I choose?</h2>
+      <ul>
+        <li>
+          Choose <code>node-basic</code> for a traditional REST API on Node, Docker, Fly.io,
+          Railway, Render, or any VM/container host.
+        </li>
+        <li>
+          Choose <code>vercel-edge</code> when Vercel is your deployment target and you want an
+          Edge API route from the first commit.
+        </li>
+        <li>
+          Choose <code>cloudflare-worker</code> only when your deployment target is Cloudflare Workers.
+          It exists because DaloyJS is runtime-portable, not because Cloudflare is required.
+        </li>
+      </ul>
 
       <h2>Why a generator?</h2>
       <p>

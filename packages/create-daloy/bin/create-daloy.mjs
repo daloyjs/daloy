@@ -4,7 +4,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, stat, writeFile, copyFile, rename } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile, copyFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import path from "node:path";
@@ -14,8 +14,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
 const TEMPLATES_DIR = path.join(PKG_ROOT, "templates");
 
-const TEMPLATES = ["node-basic", "cloudflare-worker"];
-const PACKAGE_MANAGERS = ["pnpm", "npm", "yarn", "bun"];
+const TEMPLATE_OPTIONS = [
+  {
+    value: "node-basic",
+    title: "Node API",
+    description: "Traditional REST API with secure defaults and Hey API codegen",
+  },
+  {
+    value: "vercel-edge",
+    title: "Vercel Edge",
+    description: "Catch-all Edge API route using @daloyjs/core/vercel",
+  },
+  {
+    value: "cloudflare-worker",
+    title: "Cloudflare Workers",
+    description: "Worker entrypoint with wrangler dev/deploy scripts",
+  },
+];
+
+const PACKAGE_MANAGER_OPTIONS = [
+  { value: "pnpm", title: "pnpm", description: "Recommended for DaloyJS projects" },
+  { value: "npm", title: "npm", description: "Use the npm client you already have" },
+  { value: "yarn", title: "Yarn", description: "Classic create workflow" },
+  { value: "bun", title: "Bun", description: "Fast install and runtime tooling" },
+];
+
+const TEMPLATES = TEMPLATE_OPTIONS.map((option) => option.value);
+const PACKAGE_MANAGERS = PACKAGE_MANAGER_OPTIONS.map((option) => option.value);
 
 const RENAME_ON_COPY = new Map([
   ["_gitignore", ".gitignore"],
@@ -40,7 +65,7 @@ function color(code, s) {
 }
 
 function printHelp() {
-  console.log(`${color(COLORS.bold, "create-daloy")} — scaffold a DaloyJS project
+  console.log(`${color(COLORS.bold, "create-daloy")} - scaffold a DaloyJS project
 
 Usage:
   pnpm create daloy@latest [project-name] [options]
@@ -49,6 +74,7 @@ Usage:
 Options:
   --template <name>          ${TEMPLATES.join(" | ")}  (default: node-basic)
   --package-manager <pm>     ${PACKAGE_MANAGERS.join(" | ")}  (default: pnpm)
+  --list-templates           Print available templates and exit.
   --install / --no-install   Install dependencies after scaffolding.
   --git / --no-git           Initialize a git repository.
   --force                    Overwrite an existing non-empty directory.
@@ -56,6 +82,14 @@ Options:
   --help, -h                 Print this help.
   --version, -v              Print version.
 `);
+}
+
+function printTemplates() {
+  console.log(color(COLORS.bold, "Available DaloyJS templates\n"));
+  for (const option of TEMPLATE_OPTIONS) {
+    console.log(`  ${color(COLORS.cyan, option.value.padEnd(18))} ${option.title}`);
+    console.log(color(COLORS.dim, `  ${" ".repeat(18)} ${option.description}\n`));
+  }
 }
 
 async function readPkgVersion() {
@@ -78,12 +112,14 @@ function parseArgs(argv) {
     yes: false,
     help: false,
     version: false,
+    listTemplates: false,
   };
   const args = [...argv];
   while (args.length) {
     const a = args.shift();
     if (a === "--help" || a === "-h") out.help = true;
     else if (a === "--version" || a === "-v") out.version = true;
+    else if (a === "--list-templates") out.listTemplates = true;
     else if (a === "--yes" || a === "-y") out.yes = true;
     else if (a === "--force") out.force = true;
     else if (a === "--install") out.install = true;
@@ -181,20 +217,61 @@ async function askYesNo(rl, question, defaultYes) {
   return answer === "y" || answer === "yes";
 }
 
+function optionValue(option) {
+  return typeof option === "string" ? option : option.value;
+}
+
+function optionLabel(option) {
+  return typeof option === "string" ? option : `${option.title} ${color(COLORS.dim, `(${option.value})`)}`;
+}
+
 async function askChoice(rl, question, choices, defaultChoice) {
+  const nameWidth = Math.max(...choices.map((choice) => optionLabel(choice).replace(/\x1b\[[0-9;]*m/g, "").length));
   const list = choices
-    .map((c, i) => `  ${color(COLORS.dim, `${i + 1})`)} ${c}${c === defaultChoice ? color(COLORS.dim, " (default)") : ""}`)
+    .map((choice, i) => {
+      const value = optionValue(choice);
+      const label = optionLabel(choice).padEnd(nameWidth);
+      const description = typeof choice === "string" ? "" : color(COLORS.dim, `  ${choice.description}`);
+      const defaultMarker = value === defaultChoice ? color(COLORS.green, "  recommended") : "";
+      return `  ${color(COLORS.dim, `${i + 1})`)} ${label}${description}${defaultMarker}`;
+    })
     .join("\n");
   console.log(`${color(COLORS.cyan, "?")} ${question}\n${list}`);
   const raw = (await rl.question(`  > `)).trim();
   if (raw.length === 0) return defaultChoice;
   const asNumber = Number.parseInt(raw, 10);
   if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= choices.length) {
-    return choices[asNumber - 1];
+    return optionValue(choices[asNumber - 1]);
   }
-  if (choices.includes(raw)) return raw;
-  console.error(color(COLORS.red, `Invalid choice. Pick one of: ${choices.join(", ")}`));
+  if (choices.some((choice) => optionValue(choice) === raw)) return raw;
+  console.error(color(COLORS.red, `Invalid choice. Pick one of: ${choices.map(optionValue).join(", ")}`));
   return askChoice(rl, question, choices, defaultChoice);
+}
+
+function logStep(message, detail) {
+  const suffix = detail ? color(COLORS.dim, ` ${detail}`) : "";
+  console.log(`${color(COLORS.green, "  [ok]")} ${message}${suffix}`);
+}
+
+function logWarn(message) {
+  console.warn(`${color(COLORS.yellow, "  [warn]")} ${message}`);
+}
+
+function printSummary({ projectName, template, packageManager, installDeps }) {
+  console.log(color(COLORS.green, "\nCreated a new DaloyJS project."));
+  console.log(`\n  ${color(COLORS.bold, "Project")}   ${projectName}`);
+  console.log(`  ${color(COLORS.bold, "Template")}  ${template}`);
+  console.log(`  ${color(COLORS.bold, "Manager")}   ${packageManager}`);
+  console.log(`\n  ${color(COLORS.bold, "Next steps")}`);
+  console.log(`    cd ${projectName}`);
+  if (!installDeps) console.log(`    ${packageManager} install`);
+  console.log(`    ${packageManager} run dev`);
+  console.log(`\n  ${color(COLORS.bold, "Useful commands")}`);
+  console.log(`    ${packageManager} run typecheck`);
+  console.log(`    ${packageManager} test`);
+  if (template === "node-basic") console.log(`    ${packageManager} run gen`);
+  console.log(`\n  ${color(COLORS.dim, "Docs: https://daloyjs.dev/docs")}`);
+  console.log(color(COLORS.dim, "  Issues: https://github.com/daloyjs/daloy/issues\n"));
 }
 
 async function main() {
@@ -208,9 +285,14 @@ async function main() {
     console.log(await readPkgVersion());
     process.exit(0);
   }
+  if (opts.listTemplates) {
+    printTemplates();
+    process.exit(0);
+  }
 
-  console.log(color(COLORS.bold, "\n  create-daloy"));
-  console.log(color(COLORS.dim, `  https://daloyjs.dev\n`));
+  console.log(color(COLORS.bold, "\ncreate-daloy"));
+  console.log(color(COLORS.dim, "Contract-first REST APIs for Node, Vercel Edge, and Workers"));
+  console.log(color(COLORS.dim, "https://daloyjs.dev\n"));
 
   const detectedPm = detectPackageManager();
   const interactive = !opts.yes && process.stdin.isTTY && process.stdout.isTTY;
@@ -241,7 +323,7 @@ async function main() {
 
     let template = opts.template;
     if (!template) {
-      template = rl ? await askChoice(rl, "Pick a template:", TEMPLATES, "node-basic") : "node-basic";
+      template = rl ? await askChoice(rl, "Choose a starter template:", TEMPLATE_OPTIONS, "node-basic") : "node-basic";
     }
     if (!TEMPLATES.includes(template)) {
       console.error(color(COLORS.red, `Unknown template "${template}". Available: ${TEMPLATES.join(", ")}`));
@@ -268,7 +350,12 @@ async function main() {
       }
     }
 
-    let packageManager = opts.packageManager ?? detectedPm;
+    let packageManager = opts.packageManager;
+    if (!packageManager) {
+      packageManager = rl
+        ? await askChoice(rl, "Choose a package manager:", PACKAGE_MANAGER_OPTIONS, detectedPm)
+        : detectedPm;
+    }
     if (!PACKAGE_MANAGERS.includes(packageManager)) {
       console.error(
         color(COLORS.red, `Unknown --package-manager "${packageManager}". Use one of: ${PACKAGE_MANAGERS.join(", ")}`),
@@ -288,18 +375,20 @@ async function main() {
 
     rl?.close();
 
-    console.log(color(COLORS.dim, `\n  Scaffolding ${color(COLORS.bold, projectName)} from template ${color(COLORS.bold, template)}...`));
+    console.log(color(COLORS.bold, "\nScaffolding"));
 
     await mkdir(targetDir, { recursive: true });
     await copyTemplate(templateDir, targetDir);
+    logStep("Template copied", template);
     await patchPackageJson(targetDir, projectName);
+    logStep("Package metadata written", projectName);
 
     if (initGit) {
       const code = await run("git", ["init", "--quiet"], targetDir);
       if (code === 0) {
-        console.log(color(COLORS.green, "  ✓ git repository initialized"));
+        logStep("Git repository initialized");
       } else {
-        console.warn(color(COLORS.yellow, "  ! git init failed; continuing"));
+        logWarn("git init failed; continuing");
       }
     }
 
@@ -307,22 +396,13 @@ async function main() {
       console.log(color(COLORS.dim, `  Installing dependencies with ${packageManager}...`));
       const code = await run(packageManager, ["install"], targetDir);
       if (code !== 0) {
-        console.warn(
-          color(COLORS.yellow, `  ! ${packageManager} install exited with code ${code}; you can retry inside ${projectName}.`),
-        );
+        logWarn(`${packageManager} install exited with code ${code}; you can retry inside ${projectName}.`);
       } else {
-        console.log(color(COLORS.green, "  ✓ dependencies installed"));
+        logStep("Dependencies installed", packageManager);
       }
     }
 
-    console.log(color(COLORS.green, `\n  Done.`));
-    console.log(`\n  Next steps:\n`);
-    console.log(`    cd ${projectName}`);
-    if (!installDeps) console.log(`    ${packageManager} install`);
-    console.log(`    ${packageManager} run dev`);
-    console.log("");
-    console.log(color(COLORS.dim, "  Docs: https://daloyjs.dev/docs"));
-    console.log(color(COLORS.dim, "  Issues: https://github.com/daloyjs/daloy/issues\n"));
+    printSummary({ projectName, template, packageManager, installDeps });
   } catch (err) {
     rl?.close();
     console.error(color(COLORS.red, `\n  Failed: ${(err && err.message) || err}`));
