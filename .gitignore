@@ -18,3 +18,5 @@ website/.next/
 website/out/
 website/.turbo/
 website/next-env.d.ts
+
+PROJECT_HISTORY.md
