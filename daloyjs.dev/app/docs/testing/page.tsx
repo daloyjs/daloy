@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Testing & contract tests" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Testing & contract tests",
+  description:
+    "Write fast, in-process tests for DaloyJS handlers and generate contract tests from your OpenAPI spec to guarantee server and client stay in sync.",
+  path: "/docs/testing",
+  keywords: ["DaloyJS testing", "contract testing", "OpenAPI contract tests", "TypeScript API testing"],
+  type: "article",
+});
 
 export default function Page() {
   return (

@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "OpenAPI generation" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "OpenAPI generation",
+  description:
+    "Auto-generate OpenAPI 3.1 specs from your DaloyJS routes. Powered by Hey API, the spec stays in sync with your contracts and powers the typed client.",
+  path: "/docs/openapi",
+  keywords: ["OpenAPI 3.1", "OpenAPI generator TypeScript", "Hey API", "DaloyJS OpenAPI", "automatic API docs"],
+  type: "article",
+});
 
 export default function Page() {
   return (

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GithubLogoIcon, PackageIcon } from "@phosphor-icons/react/ssr";
+import { ButterflyIcon, GithubLogoIcon, PackageIcon } from "@phosphor-icons/react/ssr";
 import { buttonVariants } from "./ui/button";
 import { ThemeSwitcher } from "./theme-switcher";
 
@@ -44,9 +44,10 @@ export function SiteHeader() {
             href="https://bsky.app/profile/daloyjs.bsky.social"
             target="_blank"
             rel="noreferrer"
+            aria-label="Bluesky"
             className={buttonVariants({ variant: "ghost", size: "sm" })}
           >
-            Bluesky
+            <ButterflyIcon className="size-4" />
           </a>
           <a
             href="https://github.com/daloyjs"

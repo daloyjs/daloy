@@ -11,6 +11,7 @@ export type {
   AuthSpec,
   Hooks,
   BaseContext,
+  AppState,
   HandlerReturn,
   InferRequest,
   ParamsOf,

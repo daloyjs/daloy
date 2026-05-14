@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Plugins & encapsulation" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Plugins & encapsulation",
+  description:
+    "Compose DaloyJS apps with encapsulated plugins — scoped middleware, decorators, and route prefixes — for large-scale, maintainable TypeScript services.",
+  path: "/docs/plugins",
+  keywords: ["DaloyJS plugins", "plugin encapsulation", "middleware composition", "scalable TypeScript framework"],
+  type: "article",
+});
 
 export default function Page() {
   return (

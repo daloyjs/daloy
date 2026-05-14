@@ -88,6 +88,11 @@ export interface AuthSpec {
 
 // ---------- Context ----------
 
+/**
+ * Augment this interface from application code to type plugin-provided state.
+ */
+export interface AppState {}
+
 export interface BaseContext<P extends string, R extends RequestSchemas | undefined> {
   request: Request;
   /** Validated request data (or raw fallbacks if no schema). */
@@ -96,7 +101,7 @@ export interface BaseContext<P extends string, R extends RequestSchemas | undefi
   headers: InferRequest<R, P>["headers"];
   body: InferRequest<R, P>["body"];
   /** Mutable per-request state. Plugin-augmented context lives here. */
-  state: Record<string, unknown>;
+  state: AppState & Record<string, unknown>;
   /** Convenience response helpers (do not bypass schema validation). */
   set: {
     status?: number;

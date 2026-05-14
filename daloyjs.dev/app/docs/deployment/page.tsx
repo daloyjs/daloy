@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Deployment" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Deployment",
+  description:
+    "Deploy DaloyJS apps to Node.js servers, Cloudflare Workers, Vercel Edge, Bun, or Deno Deploy. Production-ready guides for each target platform.",
+  path: "/docs/deployment",
+  keywords: ["deploy DaloyJS", "Cloudflare Workers deployment", "Vercel Edge deployment", "Node.js deployment", "Bun deployment"],
+  type: "article",
+});
 
 export default function Page() {
   return (

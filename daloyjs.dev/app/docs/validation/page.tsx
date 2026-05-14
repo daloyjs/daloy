@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Validation" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Validation with Zod",
+  description:
+    "Validate request params, query, headers, and bodies in DaloyJS using Zod schemas. Errors are returned as RFC 9457 problem+json with full type inference.",
+  path: "/docs/validation",
+  keywords: ["Zod validation", "DaloyJS validation", "request validation TypeScript", "problem+json"],
+  type: "article",
+});
 
 export default function Page() {
   return (

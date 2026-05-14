@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "API reference" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "API reference",
+  description:
+    "Complete API reference for DaloyJS: App, route, middleware, plugins, errors, security helpers, and runtime adapters — with TypeScript signatures.",
+  path: "/docs/api-reference",
+  keywords: ["DaloyJS API reference", "DaloyJS docs", "TypeScript framework API"],
+  type: "article",
+});
 
 export default function Page() {
   return (

@@ -96,6 +96,8 @@ export class App {
   /** Decorator bag merged into ctx.state on every request. */
   private decorations: Record<string, unknown> = {};
   private installedPlugins = new Set<string>();
+  private closeHooks: Array<() => void | Promise<void>> = [];
+  private closeHooksRun = false;
   /** In-flight request count for graceful shutdown. */
   private inflight = 0;
   private draining = false;
@@ -150,6 +152,7 @@ export class App {
     (child as any).groupTags = [...this.groupTags, ...(config.tags ?? [])];
     (child as any).groupAuth = config.auth ?? this.groupAuth;
     (child as any).decorations = this.decorations;
+    (child as any).closeHooks = this.closeHooks;
     register(child);
     this.routes.push(...child.routes);
     return this;
@@ -167,6 +170,12 @@ export class App {
    */
   decorate<K extends string, V>(key: K, value: V): this {
     this.decorations[key] = value;
+    return this;
+  }
+
+  /** Register cleanup to run once during graceful shutdown. */
+  onClose(hook: () => void | Promise<void>): this {
+    this.closeHooks.push(hook);
     return this;
   }
 
@@ -374,6 +383,12 @@ export class App {
     const start = Date.now();
     while (this.inflight > 0 && Date.now() - start < timeoutMs) {
       await new Promise((r) => setTimeout(r, 25));
+    }
+    if (!this.closeHooksRun) {
+      this.closeHooksRun = true;
+      for (const hook of this.closeHooks) {
+        await hook();
+      }
     }
     this.log.info({ inflight: this.inflight }, "DaloyJS shutdown complete");
   }

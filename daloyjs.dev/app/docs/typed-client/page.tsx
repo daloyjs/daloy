@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Typed clients" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Typed API clients",
+  description:
+    "Generate fully typed TypeScript clients from your DaloyJS OpenAPI spec with Hey API. Get end-to-end type safety between server and client with no drift.",
+  path: "/docs/typed-client",
+  keywords: ["typed API client", "OpenAPI client TypeScript", "Hey API client", "end-to-end type safety"],
+  type: "article",
+});
 
 export default function Page() {
   return (

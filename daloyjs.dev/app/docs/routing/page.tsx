@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Routing" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Routing",
+  description:
+    "Define type-safe HTTP routes in DaloyJS with a contract-first API: path params, query, body, and response schemas inferred end-to-end from a single declaration.",
+  path: "/docs/routing",
+  keywords: ["DaloyJS routing", "type-safe routes", "contract-first routing", "HTTP router TypeScript"],
+  type: "article",
+});
 
 export default function Page() {
   return (

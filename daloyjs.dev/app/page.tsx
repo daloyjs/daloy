@@ -13,6 +13,22 @@ import { buttonVariants } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { CodeBlock } from "../components/code-block";
+import { buildMetadata, SITE_URL } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Runtime-portable TypeScript web framework",
+  description:
+    "DaloyJS is a runtime-portable TypeScript web framework with contract-first routing, Zod validation, OpenAPI 3.1 generation, a typed client, and secure defaults. Run on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge.",
+  path: "/",
+  keywords: [
+    "DaloyJS",
+    "runtime-portable framework",
+    "TypeScript HTTP framework",
+    "contract-first TypeScript",
+    "OpenAPI framework",
+    "edge framework",
+  ],
+});
 
 const HELLO_WORLD = `import { z } from "zod";
 import { App, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
@@ -75,8 +91,35 @@ const FEATURES = [
 ];
 
 export default function HomePage() {
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "DaloyJS",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Cross-platform",
+      description:
+        "Runtime-portable TypeScript web framework with contract-first routing, Zod validation, OpenAPI generation, and a typed client.",
+      url: SITE_URL,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      programmingLanguage: "TypeScript",
+      license: "https://opensource.org/licenses/MIT",
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "DaloyJS",
+      url: SITE_URL,
+    },
+  ];
+
   return (
     <main className="flex-1">
+      <script
+        type="application/ld+json"
+         
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Hero */}
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-20 lg:py-28">

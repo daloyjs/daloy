@@ -1,7 +1,16 @@
 import { CodeBlock } from "../../../../components/code-block";
 import Link from "next/link";
 
-export const metadata = { title: "Tutorial: Bookstore API" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Tutorial: build a Bookstore API",
+  description:
+    "Step-by-step DaloyJS tutorial: build a typed Bookstore REST API with contract-first routes, Zod validation, OpenAPI docs, and a generated TypeScript client.",
+  path: "/docs/tutorials/bookstore",
+  keywords: ["DaloyJS tutorial", "Bookstore API tutorial", "TypeScript REST API tutorial", "OpenAPI tutorial"],
+  type: "article",
+});
 
 export default function Page() {
   return (

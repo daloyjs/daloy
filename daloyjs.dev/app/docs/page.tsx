@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { CodeBlock } from "../../components/code-block";
 
-export const metadata = { title: "Introduction" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Introduction to DaloyJS",
+  description:
+    "DaloyJS is a runtime-portable TypeScript web framework built around contract-first routing, Zod validation, OpenAPI generation, and a typed client. Learn what makes it different.",
+  path: "/docs",
+  keywords: ["DaloyJS introduction", "TypeScript framework overview", "contract-first framework"],
+  type: "article",
+});
 
 export default function Page() {
   return (

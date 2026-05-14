@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Security" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Security",
+  description:
+    "DaloyJS is secure by default: strict body limits, request timeouts, secure headers, rate limiting, and CSRF helpers — all wired into the contract-first runtime.",
+  path: "/docs/security",
+  keywords: ["DaloyJS security", "secure HTTP defaults", "rate limiting", "secure headers", "OWASP TypeScript"],
+  type: "article",
+});
 
 export default function Page() {
   return (

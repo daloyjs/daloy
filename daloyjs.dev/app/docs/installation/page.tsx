@@ -1,7 +1,16 @@
 import { CodeBlock } from "../../../components/code-block";
 import Link from "next/link";
 
-export const metadata = { title: "Installation" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Installation",
+  description:
+    "Install DaloyJS with pnpm, npm, yarn, or bun. Set up the framework on Node.js, Bun, Deno, Cloudflare Workers, or Vercel Edge in minutes.",
+  path: "/docs/installation",
+  keywords: ["install DaloyJS", "pnpm add daloyjs", "DaloyJS setup", "TypeScript framework install"],
+  type: "article",
+});
 
 export default function Page() {
   return (

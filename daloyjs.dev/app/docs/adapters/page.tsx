@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Adapters & runtimes" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Adapters & runtimes",
+  description:
+    "Run the same DaloyJS app on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge. One codebase, multiple runtimes, zero rewrites.",
+  path: "/docs/adapters",
+  keywords: ["runtime adapters", "Cloudflare Workers TypeScript", "Vercel Edge framework", "Bun framework", "Deno HTTP framework"],
+  type: "article",
+});
 
 export default function Page() {
   return (

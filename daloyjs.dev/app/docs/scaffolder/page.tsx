@@ -1,7 +1,16 @@
 import { CodeBlock } from "../../../components/code-block";
 import Link from "next/link";
 
-export const metadata = { title: "Scaffold a project" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Scaffold a DaloyJS project",
+  description:
+    "Use create-daloy to scaffold a production-ready DaloyJS project with templates for Node.js, Cloudflare Workers, and Vercel Edge — preconfigured with TypeScript, Zod, and OpenAPI.",
+  path: "/docs/scaffolder",
+  keywords: ["create-daloy", "scaffold DaloyJS", "DaloyJS template", "Cloudflare Worker template", "Vercel Edge template"],
+  type: "article",
+});
 
 export default function Page() {
   return (

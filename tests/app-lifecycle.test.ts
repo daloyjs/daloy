@@ -184,6 +184,33 @@ test("async plugins are awaited by ready before their routes are available", asy
   assert.deepEqual(await res.json(), { ready: true });
 });
 
+test("onClose hooks registered by apps and plugins run once during shutdown", async () => {
+  const events: string[] = [];
+  const app = new App({ logger: false });
+
+  app.onClose(() => events.push("root"));
+  app.register({
+    name: "cleanup-plugin",
+    register(child) {
+      child.onClose(async () => events.push("plugin"));
+      child.route({
+        method: "GET",
+        path: "/ok",
+        operationId: "ok",
+        responses: { 200: { description: "ok" } },
+        handler: async () => ({ status: 200 as const, body: { ok: true } }),
+      });
+    },
+  });
+
+  await app.shutdown();
+  await app.shutdown();
+
+  assert.deepEqual(events, ["root", "plugin"]);
+  const res = await app.request("/ok");
+  assert.equal(res.status, 503);
+});
+
 test("response schema validation failures become redacted production 500s", async () => {
   const app = new App({ logger: false, production: true });
   app.route({

@@ -1,6 +1,15 @@
 import { CodeBlock } from "../../../components/code-block";
 
-export const metadata = { title: "Errors & problem+json" };
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Errors & problem+json",
+  description:
+    "Throw typed errors in DaloyJS and have them serialized as RFC 9457 problem+json responses by default. Customize, extend, and document errors in OpenAPI.",
+  path: "/docs/errors",
+  keywords: ["problem+json", "RFC 9457", "DaloyJS errors", "HTTP error responses", "typed errors TypeScript"],
+  type: "article",
+});
 
 export default function Page() {
   return (
