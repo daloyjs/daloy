@@ -60,7 +60,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
-          node-version: 25.7.0
+          node-version: 22
           # NOTE: pnpm cache is intentionally disabled in this workflow.
           # GitHub Actions cache scope is shared across `pull_request`
           # runs and `push` to main, which is the cache-poisoning vector
