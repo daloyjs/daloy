@@ -415,6 +415,7 @@ When you add a feature:
 
 Append entries here whenever you ship something. Newest at the top.
 
+- _2026-05-15_ — documented the release workflow split more explicitly in `SECURITY.md`: signed `v*` tag pushes auto-publish `@daloyjs/core` after approval, while `create-daloy` remains a manual `workflow_dispatch` release so the CLI is not published unintentionally on every core tag.
 - _2026-05-15_ — drafted repo-local GitHub release notes for `@daloyjs/core@0.1.3` and `create-daloy@0.1.9`, and fixed the last public README reference that still mentioned `create-daloy@0.1.8`.
 - _2026-05-15_ — swept the remaining docs-site security copy to remove pnpm-only overstatements. Intro, installation, security, and tutorial pages now describe DaloyJS supply-chain posture as pnpm plus enforced project defaults and hardened publishing controls, which keeps the marketing claim strong while making it defensible.
 - _2026-05-15_ — tightened the homepage and README supply-chain wording so the security claim stays promotional but precise: DaloyJS now explicitly credits pnpm plus the repo's enforced controls (blocked lifecycle scripts, release-age cooldowns, verified installs, SHA-pinned Actions, provenance publishing) instead of implying the framework alone inherits stronger guarantees just by using pnpm.

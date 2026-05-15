@@ -95,6 +95,11 @@ chalk/debug/node-ipc phishing campaigns.
   (`.github/workflows/release.yml`) is triggered only by a signed tag push or
   manual maintainer dispatch. It never runs from a PR, never runs from a
   branch, and never shares a runner with code that came from a fork.
+- **Core and CLI releases are intentionally split.** Pushing a signed `v*` tag
+  publishes `@daloyjs/core` after verification and protected-environment
+  approval. `create-daloy` is published by manually dispatching
+  `release.yml` with `package=create-daloy` (or `package=all`) so the CLI is
+  not released accidentally on every core tag.
 - **`id-token: write` is granted only to the publish job**, only after a
   protected GitHub Environment (`npm-publish`) requires explicit maintainer
   approval. There is no long-lived `NPM_TOKEN` in repo secrets.
@@ -115,6 +120,13 @@ chalk/debug/node-ipc phishing campaigns.
 - **No publishing from a developer machine.** All published artifacts come
   from `release.yml`.
 - **Signed commits and signed tags** for every release.
+
+### Release checklist
+
+1. Commit the prepared version/docs changes to `main`.
+2. Create and push a signed `v*` tag for the core package version.
+3. Approve the pending `npm-publish` environment for the tag-triggered core release.
+4. Manually dispatch `release.yml` with `package=create-daloy` when the CLI version also needs publishing.
 
 ### Indicators of compromise — what to watch for
 
