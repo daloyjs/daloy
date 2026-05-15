@@ -42,7 +42,7 @@ Published to npm as **`@daloyjs/core@0.1.1`**. All items below are live in main.
 - [x] Scalar + Swagger UI handlers.
 - [x] pnpm-first distribution with hardened `.npmrc`.
 - [x] Supply-chain defaults for installs: `ignore-scripts=true`, `minimum-release-age=1440`, verified store integrity, reproducible lockfile preference, and explicit `pnpm.onlyBuiltDependencies` allowlisting.
-- [x] Supply-chain hardened CI/CD: no `pull_request_target`, no shared GitHub Actions cache in CI, top-level `permissions: {}`, `step-security/harden-runner`, isolated tag-only npm publish workflow, npm trusted publishing with `--provenance`, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, and CODEOWNERS on privileged files.
+- [x] Supply-chain hardened CI/CD: no `pull_request_target`, no shared GitHub Actions cache in CI, top-level `permissions: {}`, SHA-pinned third-party actions, `step-security/harden-runner`, isolated tag-only npm publish workflow, npm trusted publishing with `--provenance`, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, and CODEOWNERS on privileged files.
 - [x] Public maintainer/user guidance for supply-chain security in `SECURITY.md` and `daloyjs.dev/docs/security/supply-chain`.
 - [x] **100% line + function test coverage** enforced by the `coverage` script.
 - [x] Regression coverage for repo-level security posture and scaffolder `.npmrc` hardening.

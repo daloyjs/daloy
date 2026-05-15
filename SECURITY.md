@@ -69,6 +69,9 @@ chalk/debug/node-ipc phishing campaigns.
   minimum scopes they need.
 - **`actions/checkout` runs with `persist-credentials: false`** so the workflow
   token is not left on disk for later steps to scrape.
+- **Third-party GitHub Actions are SHA-pinned.** Workflows execute immutable
+  commits instead of mutable version tags, which removes the retagging class of
+  supply-chain attack from CI.
 - **`step-security/harden-runner`** monitors and (on the publish job) blocks
   egress to anything other than the npm registry, GitHub, and the Sigstore
   endpoints needed for provenance.
