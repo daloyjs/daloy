@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { CodeBlock } from "../../../components/code-block";
 
 import { buildMetadata } from "@/lib/seo";
@@ -88,6 +90,12 @@ else console.log(data.title);`} />
           <tr><td>Public SDK for third parties</td><td>Hey API SDK, published as its own package</td></tr>
         </tbody>
       </table>
+
+      <p>
+        Need a bigger contract to validate your generator output? Use the{" "}
+        <Link href="/docs/tutorials/fake-rest-api">large fake REST demo</Link> as the stress case instead of a
+        minimal tutorial app.
+      </p>
     </>
   );
 }

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { CodeBlock } from "../../../components/code-block";
 
 import { buildMetadata } from "@/lib/seo";
@@ -62,6 +64,12 @@ app.route({
         Both <code>swaggerUiHtml</code> and <code>scalarHtml</code> return self-contained HTML pages that load
         their assets from jsDelivr with a strict CSP allowing only that origin. The official starter uses
         <code>swaggerUiHtml</code> for <code>/docs</code> by default.
+      </p>
+
+      <p>
+        If you want to test your docs UX against a much larger contract, see the{" "}
+        <Link href="/docs/tutorials/fake-rest-api">large fake REST demo</Link>. It is a better benchmark than
+        a toy CRUD sample when you need to validate search, grouping, and render performance.
       </p>
 
       <h2>Dump to disk for codegen</h2>

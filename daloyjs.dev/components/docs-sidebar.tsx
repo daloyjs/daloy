@@ -63,6 +63,7 @@ export const docsNav: DocsNavSection[] = [
     title: "Tutorials",
     items: [
       { title: "Build a bookstore API", href: "/docs/tutorials/bookstore" },
+      { title: "Large fake REST demo", href: "/docs/tutorials/fake-rest-api" },
     ],
   },
   {
