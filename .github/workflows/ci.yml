@@ -9,9 +9,8 @@
 #   * `step-security/harden-runner` blocks unexpected egress and reports tampering.
 #   * `actions/checkout` is invoked with `persist-credentials: false` so the
 #     workflow's GITHUB_TOKEN is not left on disk for later steps to read.
-#   * Third-party actions are pinned by full version tag and managed by
-#     Dependabot (`.github/dependabot.yml`); `zizmor.yml` enforces SHA-pin policy
-#     incrementally — see issue tracker for the SHA-pin rollout.
+#   * Third-party actions are pinned to immutable commit SHAs and managed by
+#     Dependabot (`.github/dependabot.yml`).
 #   * The publish path is intentionally NOT in this workflow. Releases live in
 #     `release.yml` so that fork PRs cannot reach `id-token: write` or any npm
 #     credential, even via cache poisoning.
@@ -40,26 +39,26 @@ jobs:
 
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2
         with:
           egress-policy: audit
           disable-sudo: true
           disable-file-monitoring: false
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
           show-progress: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a # v6
         with:
           version: 11.1.2
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 25.7.0
           # NOTE: pnpm cache is intentionally disabled in this workflow.

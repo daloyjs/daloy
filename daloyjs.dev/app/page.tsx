@@ -38,7 +38,7 @@ const app = new App({ bodyLimitBytes: 1 << 20, requestTimeoutMs: 5_000 });
 
 app.use(requestId());
 app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+app.use(rateLimit({ windowMs: 60_000, max: 120 })); // global unless you configure keyGenerator or trustProxyHeaders
 
 app.route({
   method: "GET",

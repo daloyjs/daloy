@@ -33,7 +33,10 @@ test("ci workflow avoids privileged fork-pr and cache-poisoning patterns", async
   assert.match(workflow, /permissions:\s*\{\}/);
   assert.match(workflow, /persist-credentials:\s*false/);
   assert.match(workflow, /pnpm install --frozen-lockfile --ignore-scripts/);
-  assert.match(workflow, /step-security\/harden-runner@v2/);
+  assert.match(workflow, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+  assert.match(workflow, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+  assert.match(workflow, /pnpm\/action-setup@[0-9a-f]{40}\s+# v6/);
+  assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}\s+# v6/);
 });
 
 test("release workflow isolates npm publish permissions", async () => {
@@ -46,6 +49,10 @@ test("release workflow isolates npm publish permissions", async () => {
   assert.match(workflow, /id-token:\s*write/);
   assert.match(workflow, /pnpm publish --access public --no-git-checks --provenance/);
   assert.match(workflow, /egress-policy:\s*block/);
+  assert.match(workflow, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+  assert.match(workflow, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+  assert.match(workflow, /pnpm\/action-setup@[0-9a-f]{40}\s+# v6/);
+  assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}\s+# v6/);
   assert.doesNotMatch(workflow, /\$\{\{\s*secrets\.NPM_TOKEN\s*\}\}/);
   assert.doesNotMatch(workflow, /^\s*NODE_AUTH_TOKEN:/m);
 

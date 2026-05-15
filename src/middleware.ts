@@ -173,6 +173,12 @@ export interface RateLimitOptions {
   max: number;
   keyGenerator?: (ctx: BaseContext<any, any>) => string;
   store?: RateLimitStore;
+  /**
+   * Trust x-forwarded-for / x-real-ip when deriving the default key.
+   * Off by default because those headers are client-spoofable unless your
+   * reverse proxy strips and rewrites them.
+   */
+  trustProxyHeaders?: boolean;
   /** When true, set Retry-After header on 429. Default: true. */
   retryAfter?: boolean;
 }
@@ -200,10 +206,16 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   const store = opts.store ?? new MemoryStore();
   const keyOf =
     opts.keyGenerator ??
-    ((ctx: BaseContext<any, any>) =>
-      ctx.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      ctx.request.headers.get("x-real-ip") ||
-      "global");
+    ((ctx: BaseContext<any, any>) => {
+      if (opts.trustProxyHeaders) {
+        return (
+          ctx.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+          ctx.request.headers.get("x-real-ip") ||
+          "global"
+        );
+      }
+      return "global";
+    });
 
   return {
     async beforeHandle(ctx) {

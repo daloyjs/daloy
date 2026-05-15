@@ -468,7 +468,7 @@ test("rateLimit cleans up expired entries when buckets grow past the watermark",
 
 test("rateLimit falls back through key generators when proxy headers are missing", async () => {
   const app = new App({ logger: false });
-  app.use(rateLimit({ windowMs: 1000, max: 1 }));
+  app.use(rateLimit({ windowMs: 1000, max: 1, trustProxyHeaders: true }));
   app.route({
     method: "GET",
     path: "/k",

@@ -69,7 +69,7 @@ export function buildApp() {
   app.use(requestId());
   app.use(secureHeaders());
   app.use(cors({ origin: ["http://localhost:5173"] }));
-  app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+  app.use(rateLimit({ windowMs: 60_000, max: 120 })); // global unless you configure keyGenerator or trustProxyHeaders
 
   app.route({
     method: "GET",

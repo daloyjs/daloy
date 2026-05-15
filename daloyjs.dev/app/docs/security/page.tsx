@@ -54,7 +54,7 @@ app.use(cors({                  // explicit allowlist; never * with credentials
   credentials: true,
   methods: ["GET", "POST"],
 }));
-app.use(rateLimit({             // token bucket, per-IP by default, 429 + Retry-After
+app.use(rateLimit({             // global by default; add keyGenerator or trusted proxy headers for per-client limits
   windowMs: 60_000,
   max: 120,
 }));
@@ -100,8 +100,43 @@ app.route({
         <li><strong><code>strict-peer-dependencies</code></strong> — no silent peer mismatches.</li>
         <li><strong><code>minimum-release-age=1440</code></strong> — wait 24h before installing fresh releases.</li>
         <li><strong><code>ignore-scripts=true</code></strong> with explicit <code>pnpm.onlyBuiltDependencies</code> — reviewed allowlist for native install scripts.</li>
+        <li><strong>SHA-pinned GitHub Actions</strong> — CI/CD actions are pinned to immutable commits, not mutable tags.</li>
         <li><strong>Protected npm publishing</strong> — tag-only release workflow, protected environment approval, OIDC trusted publishing, and <code>--provenance</code>.</li>
       </ul>
+
+      <h2>Trusted proxies and rate limiting</h2>
+      <p>
+        DaloyJS no longer trusts <code>X-Forwarded-For</code> or <code>X-Real-IP</code> by default when deriving a
+        rate-limit key. Those headers are client-spoofable unless your reverse proxy strips and rewrites them.
+        The default limiter is therefore global until you provide an explicit <code>keyGenerator</code> or opt in
+        to <code>trustProxyHeaders: true</code> behind a trusted proxy.
+      </p>
+
+      <h2>Self-hosted docs assets</h2>
+      <p>
+        The built-in docs helpers no longer force a jsDelivr-shaped CSP. You can self-host the Swagger UI or Scalar
+        assets, add a nonce to the bootstrap script, and emit a same-origin CSP for your docs route.
+      </p>
+      <CodeBlock code={`import {
+  swaggerUiHtml,
+  htmlResponse,
+} from "@daloyjs/core/docs";
+
+const nonce = crypto.randomUUID();
+const html = swaggerUiHtml({
+  specUrl: "/openapi.json",
+  scriptNonce: nonce,
+  assets: {
+    swaggerUiCssUrl: "/docs-assets/swagger-ui.css",
+    swaggerUiBundleUrl: "/docs-assets/swagger-ui.js",
+  },
+});
+
+return htmlResponse(html, {
+  assetOrigins: [],
+  scriptNonce: nonce,
+  allowInlineStyles: false,
+});`} />
 
       <CodeBlock language="ini" code={`# .npmrc
 ignore-scripts=true

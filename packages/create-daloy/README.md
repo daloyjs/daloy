@@ -52,7 +52,7 @@ A production-ready Node.js HTTP server using `@daloyjs/core` with:
 
 - Strict TypeScript and `tsx` for instant dev runs.
 - Hardened `.npmrc` for safer installs.
-- `secureHeaders`, `requestId`, and `rateLimit` enabled by default.
+- `secureHeaders`, `requestId`, and `rateLimit` enabled by default (`rateLimit` is global until you configure `keyGenerator` or trusted proxy headers).
 - A sample `GET /healthz` and contract-first `GET /books/:id` route with Zod validation.
 - `pnpm gen` wired to emit OpenAPI 3.1 + a typed Hey API client.
 

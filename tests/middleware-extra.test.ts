@@ -95,6 +95,23 @@ test("rateLimit supports custom stores and can suppress Retry-After", async () =
   assert.deepEqual(hits, ["custom-key:1000"]);
 });
 
+test("rateLimit ignores spoofable proxy headers unless trustProxyHeaders is enabled", async () => {
+  const app = new App({ logger: false });
+  app.use(rateLimit({ windowMs: 1000, max: 1 }));
+  app.route({
+    method: "GET",
+    path: "/global-limit",
+    operationId: "globalLimit",
+    responses: { 200: { description: "ok" } },
+    handler: async () => ({ status: 200 as const, body: undefined }),
+  });
+
+  const first = await app.request("/global-limit", { headers: { "x-forwarded-for": "1.1.1.1" } });
+  const second = await app.request("/global-limit", { headers: { "x-forwarded-for": "2.2.2.2" } });
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 429);
+});
+
 test("secureHeaders respects disabled and overridden options", async () => {
   const app = new App({ logger: false });
   app.use(secureHeaders({

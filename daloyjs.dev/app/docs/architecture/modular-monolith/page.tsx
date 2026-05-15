@@ -293,7 +293,7 @@ export const app = new App({ bodyLimitBytes: 1 << 20 });
 
 app.use(requestId());
 app.use(secureHeaders());
-app.use(rateLimit({ windowMs: 60_000, max: 600 }));
+app.use(rateLimit({ windowMs: 60_000, max: 600 })); // global unless you configure keyGenerator or trustProxyHeaders
 
 app.decorate("db",     await openDatabase(env.DATABASE_URL));
 app.decorate("logger", createLogger({ level: env.LOG_LEVEL }));

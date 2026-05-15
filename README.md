@@ -22,7 +22,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | Mature **Swagger / docs / ops** in Node | [Fastify](https://fastify.dev/docs/latest/Reference/) | Encapsulated plugins, structured logger, graceful shutdown, request ids, hooks. |
 | Modern **TS-first DX**, Bun acceptable | [Elysia](https://elysiajs.com/at-glance.html) | End-to-end typed handlers, typed context, typed client. |
 | Best-in-class **typed client codegen** for any consumer | [Hey API](https://heyapi.dev/openapi-ts/get-started) | One command (`pnpm gen`) emits a fully-typed fetch SDK from your spec. |
-| **Better supply-chain security** than npm | [pnpm](https://pnpm.io/motivation) | Strict, content-addressable installs; reproducible lockfile; per-project `.npmrc` hardening. |
+| **Supply-chain-hardened installs and publishing** | [pnpm](https://pnpm.io/motivation) + hardened CI/CD | `ignore-scripts`, release-age cooldown, explicit build allowlist, SHA-pinned actions, isolated OIDC publish with provenance. |
 
 ```
 119/119 framework tests passing · 100% line + function coverage · clean strict TypeScript 6
@@ -56,7 +56,7 @@ DaloyJS combines the wins:
 
 ## Install
 
-DaloyJS is distributed via **pnpm** for [supply-chain hygiene](https://pnpm.io/motivation) — strict isolation, content-addressable store, deterministic lockfile, no phantom dependencies.
+DaloyJS is distributed via **pnpm** for [supply-chain hygiene](https://pnpm.io/motivation) and backed by a hardened release pipeline — strict isolation, content-addressable store, deterministic lockfile, no phantom dependencies, SHA-pinned CI actions, and provenance publishing.
 
 ```bash
 pnpm add @daloyjs/core zod@^4

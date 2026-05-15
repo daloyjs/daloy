@@ -62,6 +62,10 @@ export default function Page() {
           if anyone ever adds it.
         </li>
         <li>
+          <strong>Third-party GitHub Actions are SHA-pinned</strong> so a retargeted
+          version tag cannot silently change what CI executes.
+        </li>
+        <li>
           <strong>CodeQL, OpenSSF Scorecard, Dependabot</strong> all run continuously,
           and <code>CODEOWNERS</code> blocks any change to <code>.github/</code>,
           <code>package.json</code>, the lockfile, or <code>.npmrc</code> without a

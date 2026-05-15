@@ -65,7 +65,7 @@ randomId(): string`} />
       <CodeBlock code={`requestId({ header?, trustIncoming?, generator? })
 secureHeaders({ csp?, hsts?, frameOptions?, referrerPolicy?, permissionsPolicy?, coop?, corp?, noSniff?, xssProtection? })
 cors({ origin, methods?, allowedHeaders?, exposedHeaders?, credentials?, maxAgeSeconds? })
-rateLimit({ windowMs, max, keyGenerator?, store?, retryAfter? })
+rateLimit({ windowMs, max, keyGenerator?, store?, trustProxyHeaders?, retryAfter? })
 timing(headerName?)
 bearerAuth({ validate, realm? })`} />
 
@@ -107,9 +107,10 @@ interface Logger {
 }): Promise<{ ok: boolean; checked: number; issues: Issue[] }>`} />
 
       <h2><code>@daloyjs/core/docs</code></h2>
-      <CodeBlock code={`scalarHtml({ specUrl, title }): string
-swaggerUiHtml({ specUrl, title }): string
-htmlResponse(html): Response`} />
+      <CodeBlock code={`scalarHtml({ specUrl, title, assets?, scriptNonce? }): string
+swaggerUiHtml({ specUrl, title, assets?, scriptNonce? }): string
+docsContentSecurityPolicy({ assetOrigins?, scriptNonce?, allowInlineStyles? }): string
+htmlResponse(html, { assetOrigins?, scriptNonce?, allowInlineStyles?, contentSecurityPolicy? }): Response`} />
 
       <h2><code>@daloyjs/core/node</code></h2>
       <CodeBlock code={`serve(app, opts?: {

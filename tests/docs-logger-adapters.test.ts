@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { App } from "../src/index.js";
-import { scalarHtml, swaggerUiHtml, htmlResponse } from "../src/docs.js";
+import { scalarHtml, swaggerUiHtml, htmlResponse, docsContentSecurityPolicy } from "../src/docs.js";
 import { createLogger } from "../src/logger.js";
 import { toFetchHandler } from "../src/adapters/cloudflare.js";
 import { toEdgeHandler } from "../src/adapters/vercel.js";
@@ -19,12 +19,53 @@ test("docs HTML escapes untrusted title and spec URL", () => {
   assert.doesNotMatch(swagger, /";alert\(1\)\/\//);
 });
 
+test("docs helpers support self-hosted assets and nonce-based scripts", () => {
+  const scalar = scalarHtml({
+    specUrl: "/openapi.json",
+    scriptNonce: "nonce-123",
+    assets: { scalarScriptUrl: "/docs-assets/scalar.js" },
+  });
+  assert.match(scalar, /src="\/docs-assets\/scalar\.js"/);
+  assert.match(scalar, /nonce="nonce-123"/);
+
+  const swagger = swaggerUiHtml({
+    specUrl: "/openapi.json",
+    scriptNonce: "nonce-123",
+    assets: {
+      swaggerUiCssUrl: "/docs-assets/swagger-ui.css",
+      swaggerUiBundleUrl: "/docs-assets/swagger-ui.js",
+    },
+  });
+  assert.match(swagger, /href="\/docs-assets\/swagger-ui\.css"/);
+  assert.match(swagger, /src="\/docs-assets\/swagger-ui\.js"/);
+  assert.match(swagger, /nonce="nonce-123"/);
+});
+
 test("htmlResponse sets HTML content type and strict docs headers", async () => {
   const res = htmlResponse("<p>ok</p>");
   assert.equal(res.headers.get("content-type"), "text/html; charset=utf-8");
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
   assert.match(res.headers.get("content-security-policy") ?? "", /cdn\.jsdelivr\.net/);
   assert.equal(await res.text(), "<p>ok</p>");
+});
+
+test("htmlResponse can emit a self-hosted nonce-based docs CSP", () => {
+  const nonce = "nonce-123";
+  const res = htmlResponse("<p>ok</p>", {
+    assetOrigins: [],
+    scriptNonce: nonce,
+    allowInlineStyles: false,
+  });
+  const csp = res.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /script-src 'self' 'nonce-nonce-123'/);
+  assert.doesNotMatch(csp, /cdn\.jsdelivr\.net/);
+  assert.doesNotMatch(csp, /'unsafe-inline'/);
+});
+
+test("docsContentSecurityPolicy can target custom asset origins", () => {
+  const csp = docsContentSecurityPolicy({ assetOrigins: ["https://docs.example.com"], scriptNonce: "abc" });
+  assert.match(csp, /script-src 'self' https:\/\/docs\.example\.com 'nonce-abc'/);
+  assert.match(csp, /style-src 'self' https:\/\/docs\.example\.com 'unsafe-inline'/);
 });
 
 test("structured logger respects level, child bindings, and string messages", () => {

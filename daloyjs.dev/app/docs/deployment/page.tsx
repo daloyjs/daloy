@@ -72,6 +72,7 @@ await app.shutdown(15_000);`} />
       <p>If you sit behind nginx / Caddy / an LB, set:</p>
       <ul>
         <li><code>X-Forwarded-For</code> / <code>X-Forwarded-Proto</code> propagation for accurate logs.</li>
+        <li>If you use <code>rateLimit()</code>, either pass an explicit <code>keyGenerator</code> or enable <code>trustProxyHeaders: true</code> only after the proxy strips client-supplied forwarding headers.</li>
         <li>Make the LB&apos;s idle timeout <strong>greater</strong> than DaloyJS&apos;s <code>requestTimeoutMs</code>.</li>
         <li>Make DaloyJS&apos;s <code>keepAliveTimeout</code> <strong>greater</strong> than the LB&apos;s — Node adapter does this for you.</li>
       </ul>

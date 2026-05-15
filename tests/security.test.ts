@@ -90,7 +90,7 @@ test("router rejects path traversal", async () => {
 
 test("rateLimit returns 429 when exceeded", async () => {
   const app = new App();
-  app.use(rateLimit({ windowMs: 1000, max: 2 }));
+  app.use(rateLimit({ windowMs: 1000, max: 2, trustProxyHeaders: true }));
   app.route({
     method: "GET",
     path: "/r",
