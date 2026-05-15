@@ -23,7 +23,7 @@ last at least one minor cycle before removal.
 
 ## Now — `0.1.x` (shipped)
 
-Published to npm as **`@daloyjs/core@0.1.1`**. All items below are live in main.
+Published to npm as **`@daloyjs/core@0.1.2`**. Main is prepared for **`0.1.3`** with the latest security-default updates.
 
 - [x] Trie router with static fast path, traversal guard, real `405 + Allow`.
 - [x] Contract-first `app.route()`, groups, encapsulated plugins, decorators.
