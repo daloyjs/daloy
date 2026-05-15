@@ -39,15 +39,6 @@ jobs:
           show-progress: false
 
       - name: Run zizmor
-        shell: bash
-        run: |
-          docker run --rm \
-            -v "$PWD:/work" \
-            -w /work \
-            ghcr.io/zizmorcore/zizmor:v1.25.0 \
-            --format=sarif . > results.sarif
-
-      - name: Upload to code-scanning
-        uses: github/codeql-action/upload-sarif@52485aec7be33610227643b0fe83936b8b5f061a # v3
+        uses: zizmorcore/zizmor-action@b572f7b1a1c2d41efaab43d504f68d215c3cd727 # v0.5.4
         with:
-          sarif_file: results.sarif
+          version: v1.25.0
