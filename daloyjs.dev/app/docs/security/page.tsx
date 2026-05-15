@@ -89,8 +89,8 @@ app.route({
       <h2>Supply-chain</h2>
       <p>
         DaloyJS is distributed via <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">pnpm</a>{" "}
-        for a stronger install model than npm, and the project&apos;s own CI/CD pipeline is hardened against
-        the cache-poisoning, maintainer-phishing, and OIDC token-abuse patterns seen in recent npm incidents.
+        for a stricter install model, and the project&apos;s own defaults add hardened install and CI/CD controls
+        against the cache-poisoning, maintainer-phishing, and OIDC token-abuse patterns seen in recent npm incidents.
       </p>
       <ul>
         <li><strong>Strict isolation</strong> — packages cannot reach phantom dependencies.</li>

@@ -86,7 +86,7 @@ const FEATURES = [
   {
     icon: LockIcon,
     title: "Supply-chain hardened",
-    body: "Distributed via pnpm with strict isolation, content-addressable store, frozen lockfiles, and an .npmrc that says no to phantom deps.",
+    body: "Backed by pnpm plus hardened repo defaults: blocked lifecycle scripts, release-age cooldowns, verified installs, SHA-pinned CI actions, and provenance publishing.",
   },
 ];
 
@@ -133,7 +133,7 @@ export default function HomePage() {
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
               Contract-first routing, validation, OpenAPI (Hey API), typed client generation,
-              large-scale maintainability, and highly secured by default — distributed via pnpm.
+              large-scale maintainability, and secure-by-default runtime plus supply-chain controls.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 mt-4">
               <Link href="/docs/getting-started" className={buttonVariants({ size: "lg" })}>
@@ -230,7 +230,11 @@ export default function HomePage() {
                   ["Mature Node ops & docs", "Fastify", "Encapsulated plugins, structured logs, graceful shutdown"],
                   ["Modern TS-first DX, Bun OK", "Elysia", "End-to-end typed handlers, typed context, typed client"],
                   ["Best typed client codegen", "Hey API", "pnpm gen → fully typed fetch SDK"],
-                  ["Better supply-chain security", "pnpm", "Strict, content-addressable installs by default"],
+                  [
+                    "Supply-chain-hardened installs and publishing",
+                    "pnpm + hardened CI/CD",
+                    "Blocked scripts, release-age cooldowns, SHA-pinned actions, and provenance publishing",
+                  ],
                 ].map(([want, best, give]) => (
                   <tr key={want} className="border-t">
                     <td className="p-3 font-medium">{want}</td>

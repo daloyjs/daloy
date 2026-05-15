@@ -208,7 +208,7 @@ test("POST /books rejects without token", async () => {
         <li>A typed, validated, secured HTTP API.</li>
         <li>A real OpenAPI 3.1 document and a generated typed SDK — both staying in sync forever.</li>
         <li>Contract tests guarding against drift in CI.</li>
-        <li>A pnpm install pipeline with strict isolation and frozen lockfile.</li>
+        <li>A hardened install pipeline using pnpm plus a locked-down <code>.npmrc</code>.</li>
       </ul>
 
       <p>

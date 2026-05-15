@@ -18,8 +18,9 @@ export default function Page() {
       <h1>Installation</h1>
       <p>
         DaloyJS targets <strong>Node.js ≥ 20.10</strong> and is distributed via{" "}
-        <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">pnpm</a> for supply-chain
-        hygiene. Bun and Deno can install via their package managers using the npm registry.
+        <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">pnpm</a>, with the
+        recommended install path layered on top of hardened <code>.npmrc</code> defaults. Bun and Deno can
+        install via their package managers using the npm registry.
       </p>
 
       <h2>Fastest path: scaffold a project</h2>

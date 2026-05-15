@@ -1,6 +1,6 @@
 # DaloyJS
 
-> A **runtime-portable TypeScript web framework** with built-in **contract-first routing**, **validation**, **OpenAPI (Hey API)**, **typed client generation**, **large-scale maintainability**, and **highly secured by default (pnpm)**.
+> A **runtime-portable TypeScript web framework** with built-in **contract-first routing**, **validation**, **OpenAPI (Hey API)**, **typed client generation**, **large-scale maintainability**, and **secure-by-default runtime and supply-chain posture**.
 
 📚 **Documentation site:** [`./daloyjs.dev`](./daloyjs.dev) — a Next.js 16 + shadcn/ui + Tailwind v4 site with the landing page, getting-started guide, ORM integration guides, tutorials, security docs, and full API reference. Run it with:
 
@@ -175,7 +175,7 @@ import { swaggerUiHtml, htmlResponse } from "@daloyjs/core/docs";
 ```
 
 Mount at `/docs` and the UI is always contract-accurate — never stale.
-`create-daloy@0.1.8` mounts Swagger UI at `/docs` and the live spec at `/openapi.json` by default.
+`create-daloy@0.1.9` mounts Swagger UI at `/docs` and the live spec at `/openapi.json` by default.
 
 ---
 

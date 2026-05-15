@@ -20,8 +20,8 @@ export default function Page() {
         <strong>DaloyJS</strong> is a runtime-portable TypeScript web framework with built-in
         contract-first routing, validation, OpenAPI (via{" "}
         <a href="https://heyapi.dev/openapi-ts/get-started" target="_blank" rel="noreferrer">Hey API</a>),
-        typed client generation, large-scale maintainability, and security-first defaults — distributed
-        via <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">pnpm</a>.
+        typed client generation, large-scale maintainability, and security-first defaults — backed by
+        <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer"> pnpm</a> plus hardened install and release controls.
       </p>
 
       <h2>Why another framework?</h2>
@@ -35,7 +35,7 @@ export default function Page() {
         <li>Mature plugin/lifecycle/ops story on par with <a href="https://fastify.dev/docs/latest/Reference/" target="_blank" rel="noreferrer">Fastify</a>.</li>
         <li>TS-first DX on par with <a href="https://elysiajs.com/at-glance.html" target="_blank" rel="noreferrer">Elysia</a> — without forcing you onto Bun.</li>
         <li>Hey API typed client generation as a first-class workflow.</li>
-        <li>Better supply-chain security than npm thanks to pnpm.</li>
+        <li>Supply-chain-hardened installs and publishing via pnpm plus hardened repo defaults.</li>
       </ul>
 
       <h2>The 30-second taste</h2>
