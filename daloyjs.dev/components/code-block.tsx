@@ -1,6 +1,7 @@
 import { bundledLanguages, codeToHtml, type BundledLanguage } from "shiki/bundle/full";
 
 import { cn } from "../lib/utils";
+import { CodeCopyButton } from "./code-copy-button";
 
 interface CodeBlockProps {
   code: string;
@@ -52,8 +53,9 @@ export async function CodeBlock({ code, language = "ts", className }: CodeBlockP
 
   return (
     <div className={cn("code-editor relative my-4 overflow-hidden rounded-xl border", className)}>
-      <div className="code-editor__toolbar flex items-center justify-between border-b px-3 py-2 text-[11px] sm:px-4 sm:text-xs">
-        <span className="font-mono">{language}</span>
+      <div className="code-editor__toolbar flex items-center justify-between gap-3 border-b px-3 py-2 text-[11px] sm:px-4 sm:text-xs">
+        <span className="min-w-0 truncate font-mono">{language}</span>
+        <CodeCopyButton code={code} />
       </div>
       <div
         className="code-editor__content overflow-x-auto text-xs leading-relaxed sm:text-sm"
