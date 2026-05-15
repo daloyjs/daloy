@@ -108,7 +108,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   pnpm
                 </a>
               </p>
-              <p>© {new Date().getFullYear()} DaloyJS contributors</p>
+              <p className="text-center sm:text-right">
+                <a className="underline underline-offset-4" href="mailto:daloyjs@gmail.com">
+                  daloyjs@gmail.com
+                </a>
+                {" "}· © {new Date().getFullYear()} DaloyJS contributors
+              </p>
             </div>
           </footer>
         </ThemeProvider>
