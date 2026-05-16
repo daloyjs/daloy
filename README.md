@@ -308,6 +308,7 @@ What works today, at a glance:
 - `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel Edge templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening.
 - Plugin encapsulation, decorators, structured logging, request-id propagation, lifecycle events (`onPluginInstalled`, `onShutdown`, `onClose`), and graceful shutdown.
 - Integration guides for transactional email providers — AWS SES, SendGrid, Resend, Postmark, Mailgun, and Mailtrap — with a common `EmailSender` plugin pattern and runtime-compatibility matrix.
+- Authentication & authorization guides for AWS Cognito, Microsoft Entra ID (MSAL), Auth0, Okta, and Clerk — with a common bearer-auth plugin, scope/role enforcement, and runtime-compatibility matrix.
 
 Roadmap, version-by-version plan, and shipped/in-progress checklists live in [ROADMAP.md](./ROADMAP.md).
 

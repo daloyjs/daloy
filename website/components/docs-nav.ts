@@ -76,6 +76,17 @@ export const docsNav: DocsNavSection[] = [
     ],
   },
   {
+    title: "Authentication",
+    items: [
+      { title: "Overview", href: "/docs/auth" },
+      { title: "AWS Cognito", href: "/docs/auth/aws-cognito" },
+      { title: "Microsoft Entra ID", href: "/docs/auth/entra-id" },
+      { title: "Auth0", href: "/docs/auth/auth0" },
+      { title: "Okta", href: "/docs/auth/okta" },
+      { title: "Clerk", href: "/docs/auth/clerk" },
+    ],
+  },
+  {
     title: "Production",
     items: [
       { title: "Security", href: "/docs/security" },

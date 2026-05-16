@@ -54,6 +54,12 @@ const STATIC_PATHS: Array<{
   { path: "/docs/email/postmark", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/email/mailgun", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/email/mailtrap", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/auth", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/auth/aws-cognito", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/auth/entra-id", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/auth/auth0", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/auth/okta", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/auth/clerk", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/tutorials/bookstore", changeFrequency: "monthly", priority: 0.7 },
 ];
 

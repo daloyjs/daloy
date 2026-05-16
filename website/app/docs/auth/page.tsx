@@ -1,0 +1,231 @@
+import Link from "next/link";
+
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Authentication & authorization for DaloyJS",
+  description:
+    "Protect a DaloyJS API with JWT-based authentication and authorization from AWS Cognito, Microsoft Entra ID (MSAL), Auth0, Okta, or Clerk. Compares SDKs, runtime support, and the common bearer-auth plugin pattern.",
+  path: "/docs/auth",
+  keywords: [
+    "DaloyJS authentication",
+    "DaloyJS authorization",
+    "AWS Cognito DaloyJS",
+    "Entra ID DaloyJS",
+    "Auth0 DaloyJS",
+    "Okta DaloyJS",
+    "Clerk DaloyJS",
+    "JWT bearer auth",
+  ],
+  type: "article",
+});
+
+export default function Page() {
+  return (
+    <>
+      <h1>Authentication &amp; authorization</h1>
+      <p>
+        DaloyJS doesn&apos;t bundle a user database or login UI — instead, it
+        ships primitives that make it easy to plug in a hosted identity provider
+        (IdP). Your API receives a bearer token, verifies it with the
+        provider&apos;s JWKS or SDK, and gates routes by scope, role, or
+        organization. The pages in this section show how to wire up the five
+        most common IdPs.
+      </p>
+
+      <h2>Supported providers</h2>
+      <ul>
+        <li>
+          <Link href="/docs/auth/aws-cognito">AWS Cognito</Link> — pay-as-you-go
+          user pools with hosted sign-in. Use{" "}
+          <code>aws-jwt-verify</code> to verify access and ID tokens with zero
+          runtime dependencies; runs on Node, edge, and Lambda.
+        </li>
+        <li>
+          <Link href="/docs/auth/entra-id">Microsoft Entra ID (MSAL)</Link> —
+          enterprise SSO for Microsoft 365 / Azure AD users. Verify tokens with
+          the OIDC JWKS using <code>jose</code>; acquire downstream tokens with{" "}
+          <code>@azure/msal-node</code> when needed.
+        </li>
+        <li>
+          <Link href="/docs/auth/auth0">Auth0</Link> — developer-friendly IdP
+          with universal login, MFA, and rich rule engine. Verify access tokens
+          with <code>jose</code> against your tenant&apos;s issuer URL.
+        </li>
+        <li>
+          <Link href="/docs/auth/okta">Okta</Link> — workforce identity with
+          custom authorization servers and granular policies. Use the official{" "}
+          <code>@okta/jwt-verifier</code> for access and ID tokens.
+        </li>
+        <li>
+          <Link href="/docs/auth/clerk">Clerk</Link> — modern, embeddable
+          authentication with user, organization, and billing primitives. Use{" "}
+          <code>@clerk/backend</code> <code>authenticateRequest()</code> to
+          authenticate any <code>Request</code>.
+        </li>
+      </ul>
+
+      <h2>Runtime compatibility at a glance</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Node / Bun / Deno</th>
+            <th>Cloudflare Workers</th>
+            <th>Vercel Edge</th>
+            <th>AWS Lambda</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>AWS Cognito (<code>aws-jwt-verify</code>)</td>
+            <td>Yes</td>
+            <td>Yes (Web Crypto)</td>
+            <td>Yes</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td>Entra ID (<code>jose</code>)</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td>Auth0 (<code>jose</code>)</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td>Okta (<code>@okta/jwt-verifier</code>)</td>
+            <td>Yes</td>
+            <td>No (Node-only)</td>
+            <td>No</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td>Clerk (<code>@clerk/backend</code>)</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Yes</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Common pattern</h2>
+      <p>
+        Each provider page implements the same three steps: install the
+        verifier SDK, register a DaloyJS plugin that decorates the request
+        context with an <code>auth</code> object, then guard routes with a
+        small middleware that requires a token (and optional scopes).
+      </p>
+      <pre>
+        <code>{`// src/plugins/auth.ts
+import type { App, Middleware } from "@daloyjs/core";
+
+export interface Principal {
+  sub: string;
+  scopes?: string[];
+  claims: Record<string, unknown>;
+}
+
+export interface TokenVerifier {
+  verify(token: string): Promise<Principal>;
+}
+
+export function authPlugin(verifier: TokenVerifier) {
+  return {
+    name: "auth",
+    register(app: App) {
+      app.decorate("verifier", verifier);
+    },
+  };
+}
+
+export function requireAuth(...requiredScopes: string[]): Middleware {
+  return async (ctx, next) => {
+    const header = ctx.request.headers.get("authorization") ?? "";
+    const [scheme, token] = header.split(" ");
+    if (scheme?.toLowerCase() !== "bearer" || !token) {
+      return ctx.problem(401, "unauthorized", "Missing bearer token");
+    }
+    try {
+      const principal = await ctx.state.verifier.verify(token);
+      if (requiredScopes.length) {
+        const scopes = principal.scopes ?? [];
+        const ok = requiredScopes.every((s) => scopes.includes(s));
+        if (!ok) return ctx.problem(403, "forbidden", "Insufficient scope");
+      }
+      ctx.state.principal = principal;
+      return next();
+    } catch {
+      return ctx.problem(401, "unauthorized", "Invalid or expired token");
+    }
+  };
+}
+
+declare module "@daloyjs/core" {
+  interface AppState {
+    verifier: TokenVerifier;
+    principal?: Principal;
+  }
+}`}</code>
+      </pre>
+      <p>
+        Each provider page implements <code>TokenVerifier</code> with the
+        official SDK so the rest of your application stays IdP-agnostic.
+      </p>
+
+      <h2>Security checklist</h2>
+      <ul>
+        <li>
+          <strong>Always verify the signature.</strong> Never trust an
+          unverified JWT — decode-only utilities are for debugging. Use the
+          provider&apos;s JWKS endpoint with key caching and automatic rotation
+          (every SDK on the following pages handles this).
+        </li>
+        <li>
+          <strong>Check <code>iss</code> and <code>aud</code>.</strong> Pin the
+          expected issuer URL and audience/client ID. A correct signature on
+          the wrong audience is still a token confusion attack.
+        </li>
+        <li>
+          <strong>Authorize, don&apos;t just authenticate.</strong> A valid
+          token only proves the caller is who they say they are. Enforce
+          scopes, roles, or organization membership for every privileged
+          action.
+        </li>
+        <li>
+          <strong>Use TLS everywhere.</strong> Bearer tokens are
+          plaintext-equivalent. Require HTTPS and set the{" "}
+          <Link href="/docs/security">
+            <code>secureHeaders</code>
+          </Link>{" "}
+          middleware (<code>Strict-Transport-Security</code>).
+        </li>
+        <li>
+          <strong>Rate-limit token-issuing routes.</strong> Login redirects,
+          token-exchange endpoints, and any introspection passthroughs should
+          go through{" "}
+          <Link href="/docs/security">
+            <code>rateLimit</code>
+          </Link>{" "}
+          (or the{" "}
+          <Link href="/docs/security/rate-limit-redis">Redis store</Link>) so
+          abuse can&apos;t drive cost or lock out users.
+        </li>
+        <li>
+          <strong>Protect cookies and CSRF.</strong> If you also use
+          session cookies (for an admin panel, say), enable{" "}
+          <Link href="/docs/security/csrf">CSRF</Link> and use{" "}
+          <code>SameSite=Lax</code> + <code>Secure</code> + <code>HttpOnly</code>{" "}
+          via the built-in{" "}
+          <Link href="/docs/security/session">session middleware</Link>.
+        </li>
+      </ul>
+    </>
+  );
+}
