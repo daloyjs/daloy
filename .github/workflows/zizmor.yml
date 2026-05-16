@@ -1,0 +1,44 @@
+# zizmor — static analysis for GitHub Actions workflows.
+# https://github.com/woodruffw/zizmor
+#
+# Catches the exact class of bug behind the TanStack 2026-05-11 incident:
+# `pull_request_target` + checkout of fork code, missing permissions blocks,
+# unpinned third-party actions, secret leakage via cache, etc.
+name: Zizmor
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 7 * * *"
+
+permissions: {}
+
+jobs:
+  zizmor:
+    name: Lint workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@b572f7b1a1c2d41efaab43d504f68d215c3cd727 # v0.5.4
+        with:
+          version: v1.25.0

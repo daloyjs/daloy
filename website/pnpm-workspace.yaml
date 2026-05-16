@@ -1,0 +1,11 @@
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+strictDepBuilds: true
+
+allowBuilds:
+  msw: true
+  sharp: true
+  unrs-resolver: true
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

@@ -1,0 +1,39 @@
+packages:
+  - "packages/*"
+  - "!website"
+
+# ──────────────────────────────────────────────────────────────────────────
+# Supply-chain hardening (pnpm 11+ workspace-level keys).
+#
+# These complement `.npmrc` (the legacy mirror) and `package.json#pnpm` (the
+# pre-v11 build allowlist). They block the install-time attack paths used in
+# the 2025–2026 npm worm campaigns (chalk/debug, node-ipc, Shai-Hulud,
+# TanStack). See otherdocs/security-claims-briefing.md and SECURITY.md.
+#
+# Settings intentionally NOT enabled at the root today:
+#   * trustPolicy: no-downgrade — needs a clean cold-install validation
+#     across the full dep graph before we turn it on globally. Track in the
+#     security briefing's "to do before the talk" list.
+# ──────────────────────────────────────────────────────────────────────────
+
+# Wait 24h (1440 minutes) before resolving a freshly published version.
+# Most worm campaigns are detected and unpublished within hours.
+minimumReleaseAge: 1440
+
+# Only direct dependencies may use exotic sources (git, tarball URLs).
+# Transitive deps must resolve from the configured registry.
+blockExoticSubdeps: true
+
+# Refuse to install any dependency with an unreviewed lifecycle script.
+# Packages that genuinely need builds must be listed in `allowBuilds` below.
+strictDepBuilds: true
+
+# Re-check dependency state before `pnpm run`/`pnpm exec` so scripts never
+# execute against a stale node_modules.
+verifyDepsBeforeRun: install
+
+# Explicit allowlist of packages permitted to run install scripts. Add a new
+# entry only with a PR that names *why* the package needs to build at install
+# time. `package.json#pnpm.onlyBuiltDependencies` is the legacy mirror.
+allowBuilds:
+  esbuild: true

@@ -1,0 +1,27 @@
+node_modules/
+*/node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# Build artifacts from `pnpm gen`
+generated/
+
+# pnpm
+.pnpm-store/
+
+
+PROJECT_HISTORY.md
+
+otherdocs
+
+
+test_output.txt
+
+honojs-large-fakerestapi
+daloyjs-large-fakerestapi
+coverage_output.txt

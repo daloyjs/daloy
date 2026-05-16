@@ -1,0 +1,27 @@
+{
+  "name": "my-daloy-bun-app",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "gen:openapi": "bun run scripts/dump-openapi.ts",
+    "gen:client": "openapi-ts",
+    "gen": "pnpm gen:openapi && pnpm gen:client"
+  },
+  "dependencies": {
+    "@daloyjs/core": "^0.5.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.97.1",
+    "@types/bun": "^1.1.0",
+    "typescript": "^6.0.3"
+  }
+}

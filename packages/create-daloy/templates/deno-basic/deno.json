@@ -1,0 +1,22 @@
+{
+  "name": "my-daloy-deno-app",
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read --watch src/main.ts",
+    "start": "deno run --allow-net --allow-env --allow-read src/main.ts",
+    "typecheck": "deno check src/main.ts",
+    "test": "deno test --allow-net --allow-env tests/",
+    "gen:openapi": "deno run --allow-net --allow-env --allow-read --allow-write scripts/dump-openapi.ts"
+  },
+  "imports": {
+    "@daloyjs/core": "npm:@daloyjs/core@^0.5.0",
+    "@daloyjs/core/": "npm:@daloyjs/core@^0.5.0/",
+    "zod": "npm:zod@^4.4.3"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.window", "deno.unstable"]
+  },
+  "fmt": {
+    "lineWidth": 100
+  }
+}

@@ -1,0 +1,25 @@
+# pnpm workspace-level supply-chain settings.
+#
+# This file is here even though the default package manager for this
+# template is Bun, because users can switch to pnpm with
+# `pnpm create daloy --package-manager pnpm`. When that happens, the
+# scaffolder keeps this file so pnpm 11+ picks up the workspace-level
+# supply-chain controls below. If you keep using Bun, you can delete it.
+#
+# pnpm 11+ reads `pnpm-workspace.yaml` as a settings file even when no
+# `packages:` list is declared. It is the only file format that accepts
+# the v11 keys below (`.npmrc` cannot express them).
+#
+# See the DaloyJS supply-chain notes and the 2026-05-11 TanStack
+# postmortem (https://tanstack.com/blog/npm-supply-chain-compromise-postmortem)
+# for why every setting below is on by default.
+
+# Wait 24h (1440 minutes) before resolving a freshly published version.
+# Most npm worm campaigns are detected and unpublished within hours.
+# Set to 0 only for a real hotfix.
+minimumReleaseAge: 1440
+
+# Only direct dependencies may use exotic sources (git, tarball URLs).
+# Transitive deps must resolve from the configured registry, which makes
+# typosquatted-tarball and compromised-fork attacks much harder to land.
+blockExoticSubdeps: true

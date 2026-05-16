@@ -1,0 +1,145 @@
+{
+  "name": "@daloyjs/core",
+  "version": "0.7.5",
+  "description": "DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI (Hey API), typed client generation, large-scale maintainability, and security-first defaults. Hono-grade portability, Elysia-grade DX, FastAPI-grade docs, Fastify-grade ops — distributed via pnpm.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daloyjs/daloy.git"
+  },
+  "homepage": "https://daloyjs.dev",
+  "bugs": {
+    "url": "https://github.com/daloyjs/daloy/issues"
+  },
+  "author": "DaloyJS",
+  "license": "MIT",
+  "keywords": [
+    "framework",
+    "http",
+    "openapi",
+    "hey-api",
+    "contract-first",
+    "typescript",
+    "hono",
+    "elysia",
+    "fastify",
+    "fastapi",
+    "standard-schema",
+    "security",
+    "pnpm"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "daloy": "bin/daloy.mjs"
+  },
+  "engines": {
+    "node": ">=20.10.0",
+    "pnpm": ">=9.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/adapters/node.d.ts",
+      "import": "./dist/adapters/node.js"
+    },
+    "./bun": {
+      "types": "./dist/adapters/bun.d.ts",
+      "import": "./dist/adapters/bun.js"
+    },
+    "./deno": {
+      "types": "./dist/adapters/deno.d.ts",
+      "import": "./dist/adapters/deno.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/adapters/cloudflare.d.ts",
+      "import": "./dist/adapters/cloudflare.js"
+    },
+    "./vercel": {
+      "types": "./dist/adapters/vercel.d.ts",
+      "import": "./dist/adapters/vercel.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./openapi": {
+      "types": "./dist/openapi.d.ts",
+      "import": "./dist/openapi.js"
+    },
+    "./docs": {
+      "types": "./dist/docs.d.ts",
+      "import": "./dist/docs.js"
+    },
+    "./contract": {
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    },
+    "./streaming": {
+      "types": "./dist/streaming.d.ts",
+      "import": "./dist/streaming.js"
+    },
+    "./tracing": {
+      "types": "./dist/tracing.d.ts",
+      "import": "./dist/tracing.js"
+    },
+    "./multipart": {
+      "types": "./dist/multipart.d.ts",
+      "import": "./dist/multipart.js"
+    },
+    "./rate-limit-redis": {
+      "types": "./dist/rate-limit-redis.d.ts",
+      "import": "./dist/rate-limit-redis.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "import": "./dist/session.js"
+    }
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.97.1",
+    "@types/node": "^25.7.0",
+    "prettier": "^3.8.3",
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "example": "node --import tsx examples/basic.ts",
+    "bench": "node --import tsx bench/router.bench.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=100 --test-coverage-functions=100 tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
+    "gen:client": "openapi-ts",
+    "gen": "pnpm gen:openapi && pnpm gen:client",
+    "verify:lockfile": "node --import tsx scripts/verify-lockfile-sources.ts",
+    "audit": "pnpm audit --prod",
+    "prepublishOnly": "pnpm build"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "packageManager": "pnpm@11.1.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "neverBuiltDependencies": []
+  },
+  "dependencies": {}
+}

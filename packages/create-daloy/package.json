@@ -1,0 +1,46 @@
+{
+  "name": "create-daloy",
+  "version": "0.1.21",
+  "description": "Scaffold a new DaloyJS project. Run with `pnpm create daloy`, `npm create daloy@latest`, `yarn create daloy`, or `bun create daloy`.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daloyjs/daloy.git",
+    "directory": "packages/create-daloy"
+  },
+  "homepage": "https://github.com/daloyjs/daloy/tree/main/packages/create-daloy#readme",
+  "bugs": {
+    "url": "https://github.com/daloyjs/daloy/issues"
+  },
+  "keywords": [
+    "daloy",
+    "daloyjs",
+    "scaffold",
+    "create",
+    "init",
+    "starter",
+    "template",
+    "cli",
+    "rest",
+    "api",
+    "openapi"
+  ],
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "bin": {
+    "create-daloy": "bin/create-daloy.mjs"
+  },
+  "files": [
+    "bin",
+    "templates",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test test/**/*.test.mjs"
+  }
+}
