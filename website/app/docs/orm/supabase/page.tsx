@@ -209,6 +209,15 @@ if (error) throw new HttpError(500, { title: error.message });`}
         Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
         <Link href="/docs/orm/drizzle">Drizzle</Link>, <Link href="/docs/orm/sequelize">Sequelize</Link>, or the <Link href="/docs/odm">ODM overview</Link> if you are on a document database.
       </p>
+      <p>
+        For other managed Postgres / MySQL hosts —{" "}
+        <Link href="/docs/databases/neon">Neon</Link>,{" "}
+        <Link href="/docs/databases/planetscale">PlanetScale</Link>,{" "}
+        <Link href="/docs/databases/turso">Turso</Link>,{" "}
+        <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>, and{" "}
+        <Link href="/docs/databases/aurora-dsql">Aurora DSQL</Link> — see the{" "}
+        <Link href="/docs/databases">database hosting overview</Link>.
+      </p>
     </>
   );
 }

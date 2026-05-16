@@ -41,6 +41,12 @@ const STATIC_PATHS: Array<{
   { path: "/docs/odm", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/odm/mongoose", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/odm/ottoman", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/databases", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/databases/neon", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/databases/planetscale", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/databases/turso", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/databases/cloudflare-d1", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/databases/aurora-dsql", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/tutorials/bookstore", changeFrequency: "monthly", priority: 0.7 },
 ];
 

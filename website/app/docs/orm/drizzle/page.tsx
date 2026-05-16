@@ -194,6 +194,14 @@ export default {
         Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
         <Link href="/docs/orm/typeorm">TypeORM</Link>, <Link href="/docs/orm/sequelize">Sequelize</Link>, or the <Link href="/docs/odm">ODM overview</Link> if you are working with document databases.
       </p>
+      <p>
+        Drizzle pairs cleanly with every host in the{" "}
+        <Link href="/docs/databases">database hosting overview</Link>, including{" "}
+        <Link href="/docs/databases/neon">Neon</Link>,{" "}
+        <Link href="/docs/databases/planetscale">PlanetScale</Link>,{" "}
+        <Link href="/docs/databases/turso">Turso</Link>, and{" "}
+        <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>.
+      </p>
     </>
   );
 }

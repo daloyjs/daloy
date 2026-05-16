@@ -181,10 +181,8 @@ serve(app, { port: 3000 });`}
       <CodeBlock
         code={`import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { Pool } from "@neondatabase/serverless";
 
-const pool = new Pool({ connectionString: env.DATABASE_URL });
-const adapter = new PrismaNeon(pool);
+    const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
 export const prisma = new PrismaClient({ adapter });`}
       />
 
@@ -206,6 +204,13 @@ try {
       <p>
         Continue with <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
         <Link href="/docs/orm/typeorm">TypeORM</Link>, <Link href="/docs/orm/sequelize">Sequelize</Link>, or the <Link href="/docs/odm">ODM overview</Link> for document databases.
+      </p>
+      <p>
+        For serverless or edge deployments, see the{" "}
+        <Link href="/docs/databases">database hosting overview</Link> — Prisma supports{" "}
+        <Link href="/docs/databases/neon">Neon</Link>,{" "}
+        <Link href="/docs/databases/planetscale">PlanetScale</Link>, and{" "}
+        <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link> through Driver Adapters.
       </p>
     </>
   );

@@ -53,6 +53,17 @@ export const docsNav: DocsNavSection[] = [
     ],
   },
   {
+    title: "Database hosting",
+    items: [
+      { title: "Overview", href: "/docs/databases" },
+      { title: "Neon", href: "/docs/databases/neon" },
+      { title: "PlanetScale", href: "/docs/databases/planetscale" },
+      { title: "Turso (libSQL)", href: "/docs/databases/turso" },
+      { title: "Cloudflare D1", href: "/docs/databases/cloudflare-d1" },
+      { title: "AWS Aurora DSQL", href: "/docs/databases/aurora-dsql" },
+    ],
+  },
+  {
     title: "Production",
     items: [
       { title: "Security", href: "/docs/security" },
