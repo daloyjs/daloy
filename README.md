@@ -24,7 +24,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Supply-chain-hardened installs and publishing** | [pnpm](https://pnpm.io/motivation) + hardened CI/CD | `ignore-scripts`, release-age cooldown, explicit build allowlist, SHA-pinned actions, isolated OIDC publish with provenance. |
 
 ```
-320/320 framework tests passing · 100% line + function coverage · clean strict TypeScript 6
+framework test suite passing · 100% line + function coverage · clean strict TypeScript 6
 runs on Node, Bun, Deno, Cloudflare, Vercel
 ~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
 ```
@@ -61,9 +61,12 @@ For a new DaloyJS project, the recommended path is the official scaffolder:
 pnpm create daloy@latest my-api
 # or
 npm  create daloy@latest my-api
+
+# add GitHub Actions + governance files for a company repo
+pnpm create daloy@latest my-api --with-ci --code-owner @acme/security
 ```
 
-`create-daloy` gives you a working project structure, runtime template selection, docs routes, OpenAPI wiring, and production-oriented defaults without copying code out of the README.
+`create-daloy` gives you a working project structure, runtime template selection, docs routes, OpenAPI wiring, production-oriented defaults, and an optional hardened GitHub security bundle without copying code out of the README.
 
 See [Scaffold a project](https://daloyjs.dev/docs/scaffolder) for templates and flags.
 
@@ -178,7 +181,7 @@ import { swaggerUiHtml, htmlResponse } from "@daloyjs/core/docs";
 ```
 
 Mount at `/docs` and the UI is always contract-accurate — never stale.
-`create-daloy@0.1.21` mounts Swagger UI at `/docs` and the live spec at `/openapi.json` by default.
+`create-daloy@0.1.22` mounts Swagger UI at `/docs` and the live spec at `/openapi.json` by default.
 
 ---
 
@@ -296,7 +299,7 @@ What works today, at a glance:
 - Built-in security primitives (body limits, prototype-pollution-safe JSON, path-traversal guard, request timeouts, header injection guards) plus first-party middleware (`secureHeaders`, `cors`, `rateLimit`, `requestId`, `bearerAuth`, `csrf`, `session`, `timing` / `timingSafeEqual`).
 - Streaming helpers (SSE + NDJSON), multipart ergonomics, OpenTelemetry-compatible tracing, signed-cookie sessions with pluggable stores, and a Redis-backed rate-limit store at `@daloyjs/core/rate-limit-redis`.
 - In-process test client (`app.request()`), contract-test runner, in-process typed client, and Hey API codegen via `pnpm gen`.
-- `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel Edge templates.
+- `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel Edge templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening.
 - Plugin encapsulation, decorators, structured logging, request-id propagation, lifecycle events (`onPluginInstalled`, `onShutdown`, `onClose`), and graceful shutdown.
 
 Roadmap, version-by-version plan, and shipped/in-progress checklists live in [ROADMAP.md](./ROADMAP.md).

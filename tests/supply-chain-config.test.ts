@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { findForbiddenLockfileSources } from "../scripts/verify-lockfile-sources.ts";
@@ -80,6 +80,22 @@ test("ci workflow avoids privileged fork-pr and cache-poisoning patterns", async
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
   assert.match(workflow, /pnpm\/action-setup@[0-9a-f]{40}\s+# v6/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}\s+# v6/);
+});
+
+test("all workflows avoid pull_request_target and zizmor is enforced", async () => {
+  const workflowDir = new URL("../.github/workflows/", import.meta.url);
+  const workflowFiles = (await readdir(workflowDir)).filter((file) => /\.ya?ml$/.test(file));
+
+  for (const file of workflowFiles) {
+    const workflow = await readWorkspaceFile(`.github/workflows/${file}`);
+    assert.doesNotMatch(workflow, /^\s*pull_request_target:/m, `${file} must not use pull_request_target`);
+  }
+
+  const zizmor = await readWorkspaceFile(".github/workflows/zizmor.yml");
+  assert.match(zizmor, /^\s*pull_request:\s*$/m);
+  assert.match(zizmor, /permissions:\s*\{\}/);
+  assert.match(zizmor, /zizmorcore\/zizmor-action@[0-9a-f]{40}\s+# v0\.5\.4/);
+  assert.match(zizmor, /version:\s*v1\.25\.0/);
 });
 
 test("release workflow isolates npm publish permissions", async () => {

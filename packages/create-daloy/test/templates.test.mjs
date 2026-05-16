@@ -152,6 +152,260 @@ test("non-pnpm scaffolds do not keep pnpm-specific .npmrc or pnpm-workspace.yaml
   }
 });
 
+test("--with-ci scaffolds hardened GitHub security files for pnpm projects", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "pnpm-ci";
+  try {
+    const exitCode = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          projectName,
+          "--template",
+          "node-basic",
+          "--package-manager",
+          "pnpm",
+          "--with-ci",
+          "--code-owner",
+          "@acme/security",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.equal(exitCode, 0);
+
+    const projectDir = path.join(tmpDir, projectName);
+    await access(path.join(projectDir, ".github/workflows/ci.yml"));
+    await access(path.join(projectDir, ".github/workflows/release.yml"));
+    await access(path.join(projectDir, ".github/workflows/codeql.yml"));
+    await access(path.join(projectDir, ".github/workflows/scorecard.yml"));
+    await access(path.join(projectDir, ".github/workflows/zizmor.yml"));
+    await access(path.join(projectDir, ".github/dependabot.yml"));
+    await access(path.join(projectDir, "SECURITY.md"));
+    await access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs"));
+
+    const pkg = JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8"));
+    assert.equal(pkg.scripts["verify:lockfile"], "node scripts/verify-lockfile-sources.mjs");
+
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(ci, /permissions:\s*\{\}/);
+    assert.doesNotMatch(ci, /^\s*pull_request_target:/m);
+    assert.doesNotMatch(ci, /cache:\s*pnpm/);
+    assert.match(ci, /pnpm install --frozen-lockfile --ignore-scripts/);
+    assert.match(ci, /pnpm verify:lockfile/);
+    assert.match(ci, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+    assert.match(ci, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(ci, /pnpm\/action-setup@[0-9a-f]{40}\s+# v6/);
+    assert.match(ci, /actions\/setup-node@[0-9a-f]{40}\s+# v6/);
+    assert.doesNotMatch(ci, /__[A-Z_]+__/);
+
+    const release = await readFile(path.join(projectDir, ".github/workflows/release.yml"), "utf8");
+    assert.match(release, /NPM_PUBLISH_ENABLED/);
+    assert.match(release, /id-token:\s*write/);
+    assert.match(release, /npm publish --access public --provenance/);
+    assert.doesNotMatch(release, /secrets\.NPM_TOKEN/);
+    assert.doesNotMatch(release, /^\s*NODE_AUTH_TOKEN:/m);
+    assert.doesNotMatch(release, /__[A-Z_]+__/);
+
+    const codeowners = await readFile(path.join(projectDir, ".github/CODEOWNERS"), "utf8");
+    assert.match(codeowners, /\* @acme\/security/);
+    assert.match(codeowners, /\/\.github\/workflows\/release\.yml\s+@acme\/security/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI commands", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "npm-ci";
+  try {
+    const exitCode = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          projectName,
+          "--template",
+          "node-basic",
+          "--package-manager",
+          "npm",
+          "--with-ci",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.equal(exitCode, 0);
+
+    const projectDir = path.join(tmpDir, projectName);
+    await assert.rejects(access(path.join(projectDir, ".npmrc")));
+    await assert.rejects(access(path.join(projectDir, "pnpm-workspace.yaml")));
+
+    const pkg = JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8"));
+    assert.equal(pkg.scripts.gen, "npm run gen:openapi && npm run gen:client");
+    assert.equal(pkg.scripts["verify:lockfile"], "node scripts/verify-lockfile-sources.mjs");
+
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(ci, /npm ci --ignore-scripts/);
+    assert.match(ci, /npm run verify:lockfile/);
+    assert.match(ci, /npm run typecheck/);
+    assert.match(ci, /npm test/);
+    assert.doesNotMatch(ci, /pnpm\/action-setup/);
+    assert.doesNotMatch(ci, /__[A-Z_]+__/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("--with-ci adds Bun runtime setup when bun-basic uses pnpm", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "bun-ci";
+  try {
+    const exitCode = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [path.join(pkgRoot, "bin/create-daloy.mjs"), projectName, "--template", "bun-basic", "--package-manager", "pnpm", "--with-ci", "--no-install", "--no-git", "--yes"],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.equal(exitCode, 0);
+    const ci = await readFile(path.join(tmpDir, projectName, ".github/workflows/ci.yml"), "utf8");
+    assert.match(ci, /pnpm install --frozen-lockfile --ignore-scripts/);
+    assert.match(ci, /oven-sh\/setup-bun@[0-9a-f]{40}\s+# v2/);
+    assert.match(ci, /pnpm test/);
+    assert.doesNotMatch(ci, /__[A-Z_]+__/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("--with-ci composes with --minimal and rejects an invalid --code-owner", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const okProject = "ci-minimal";
+  const badProject = "ci-bad-owner";
+  try {
+    // Happy path: --with-ci + --minimal should still produce hardened CI plus a
+    // stripped scaffold with no leftover sentinel comments.
+    const okExit = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          okProject,
+          "--template",
+          "node-basic",
+          "--package-manager",
+          "pnpm",
+          "--with-ci",
+          "--minimal",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.equal(okExit, 0);
+    const projectDir = path.join(tmpDir, okProject);
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(ci, /pnpm install --frozen-lockfile --ignore-scripts/);
+    assert.doesNotMatch(ci, /__[A-Z_]+__/);
+    const buildApp = await readFile(path.join(projectDir, "src/build-app.ts"), "utf8");
+    assert.doesNotMatch(buildApp, /\/books\/:id/);
+    assert.doesNotMatch(buildApp, /daloy-minimal:strip-/);
+    assert.match(buildApp, /\/healthz/);
+
+    // Unhappy path: an obviously broken --code-owner must fail fast and not
+    // leave a half-finished project on disk that would silently land in CI.
+    const badExit = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          badProject,
+          "--template",
+          "node-basic",
+          "--package-manager",
+          "pnpm",
+          "--with-ci",
+          "--code-owner",
+          "not a handle",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.notEqual(badExit, 0);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("--with-ci scaffolds runtime-native security files for deno-basic", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "deno-ci";
+  try {
+    const exitCode = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          projectName,
+          "--template",
+          "deno-basic",
+          "--with-ci",
+          "--code-owner=@acme/security",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.equal(exitCode, 0);
+
+    const projectDir = path.join(tmpDir, projectName);
+    await assert.rejects(access(path.join(projectDir, "package.json")));
+    await assert.rejects(access(path.join(projectDir, ".github/workflows/release.yml")));
+    await assert.rejects(access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs")));
+
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(ci, /denoland\/setup-deno@[0-9a-f]{40}\s+# v2\.0\.4/);
+    assert.match(ci, /deno task typecheck/);
+    assert.match(ci, /deno task test/);
+    assert.doesNotMatch(ci, /pull_request_target/);
+
+    const dependabot = await readFile(path.join(projectDir, ".github/dependabot.yml"), "utf8");
+    assert.match(dependabot, /package-ecosystem: github-actions/);
+    assert.doesNotMatch(dependabot, /package-ecosystem: npm/);
+
+    const codeowners = await readFile(path.join(projectDir, ".github/CODEOWNERS"), "utf8");
+    assert.match(codeowners, /\* @acme\/security/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test("npm scaffold rewrites pnpm-prefixed scripts so `npm run gen` works", async () => {
   // The node-basic template intentionally authors scripts with `pnpm <sub>`
   // because pnpm is the recommended manager. When a user opts into npm we
@@ -300,6 +554,8 @@ test("--help documents the create flow across package managers", async () => {
   assert.match(out, /yarn create daloy/);
   assert.match(out, /bun\s+create daloy/);
   assert.match(out, /--minimal/);
+  assert.match(out, /--with-ci/);
+  assert.match(out, /--code-owner/);
   assert.match(out, /https:\/\/daloyjs\.dev\/docs/);
 });
 

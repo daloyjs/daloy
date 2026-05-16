@@ -18,6 +18,7 @@ The CLI is interactive when arguments are missing. It will ask you for:
   `deno-basic` runtime template
 - Whether to install dependencies
 - Whether to initialize a git repository
+- Whether to add hardened GitHub Actions and security/governance files
 
 Interactive runs use a polished terminal UI with a DaloyJS welcome banner,
 arrow-key template and package-manager pickers, progress indicators, and a
@@ -30,6 +31,8 @@ script-friendly transcript with the same decisions and next steps.
 pnpm create daloy@latest my-api \
   --template node-basic \
   --package-manager pnpm \
+  --with-ci \
+  --code-owner @acme/security \
   --install \
   --git
 ```
@@ -44,6 +47,8 @@ pnpm create daloy@latest my-api \
 | `--install` / `--no-install` | Install dependencies after scaffolding. Defaults to interactive. |
 | `--git` / `--no-git` | Initialize a git repository. Defaults to interactive. |
 | `--minimal` | Strip the bookstore demo route and the built-in `/docs` + `/openapi.json` routes so only the framework bootstrap and `/healthz` ship. |
+| `--with-ci` / `--no-ci` | Add the hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, and lockfile-source verification bundle. |
+| `--code-owner <owner>` | Replace the CODEOWNERS placeholder when `--with-ci` is used, for example `@acme/security`. |
 | `--force` | Overwrite an existing non-empty directory. |
 | `--yes` | Accept all defaults; never prompt. |
 | `--help` | Print usage and exit. |
@@ -118,14 +123,50 @@ Sentinel comments (`// daloy-minimal:strip-start <tag>` /
 `// daloy-minimal:strip-end <tag>`) survive a default scaffold so you can
 re-run with `--minimal`, or delete the marked blocks by hand later.
 
+## Hardened GitHub security bundle
+
+Pass `--with-ci` when you want the generated project to start with the same
+security posture as a serious company repo:
+
+```bash
+pnpm create daloy@latest my-api \
+  --template node-basic \
+  --package-manager pnpm \
+  --with-ci \
+  --code-owner @acme/security
+```
+
+For Node-style templates, the bundle adds:
+
+- `.github/workflows/ci.yml` with top-level `permissions: {}`, pinned actions,
+  `harden-runner`, `persist-credentials: false`, no package-manager cache, and
+  install scripts disabled.
+- `.github/workflows/release.yml` as a disabled-by-default npm trusted publishing
+  skeleton. It only publishes when `NPM_PUBLISH_ENABLED=true`, the package is no
+  longer private, and the protected `npm-publish` environment is configured.
+- CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, and `SECURITY.md`.
+- `scripts/verify-lockfile-sources.mjs` plus a `verify:lockfile` package script
+  that rejects git dependencies and non-registry tarball URLs in text lockfiles.
+
+For `deno-basic`, `--with-ci` generates a Deno-native CI workflow plus CodeQL,
+Scorecard, zizmor, Dependabot for GitHub Actions, CODEOWNERS, and `SECURITY.md`.
+It does not generate an npm release workflow because the Deno template has no
+`package.json`.
+
+If you omit `--code-owner`, the generated CODEOWNERS file uses
+`@your-org/security-team` as a placeholder. Replace it before relying on branch
+protection. You should also enable GitHub secret scanning, push protection, and
+required status checks in the repository settings.
+
 ## What the CLI guarantees
 
 - Zero runtime dependencies (uses only Node built-ins) for a clean supply-chain footprint.
 - A modern terminal experience with Unicode/color capability detection and ASCII fallbacks.
 - Templates are copied verbatim from this package's `templates/` directory.
-- Files and folders prefixed with `_` are renamed on copy (`_gitignore` → `.gitignore`, `_npmrc` → `.npmrc`, `_agents/` → `.agents/`) to survive npm packing.
+- Files and folders prefixed with `_` are renamed on copy (`_gitignore` → `.gitignore`, `_npmrc` → `.npmrc`, `_github/` → `.github`, `_agents/` → `.agents/`) to survive npm packing.
 - pnpm-specific `.npmrc` hardening is kept only when you choose `pnpm`; other package managers get a clean project without unsupported config warnings.
 - pnpm projects ship with `ignore-scripts=true`, `minimum-release-age=1440`, `verify-store-integrity=true`, `prefer-frozen-lockfile=true`, and `strict-peer-dependencies=true` by default.
+- `--with-ci` projects ship with pinned GitHub Actions workflows, CODEOWNERS, Dependabot, SECURITY.md, and lockfile-source verification.
 - The CLI never executes template scripts and never makes network calls beyond the package manager you select.
 
 ## AI agent helper files

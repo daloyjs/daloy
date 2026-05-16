@@ -92,7 +92,8 @@ export default function Page() {
       <h2>Defaults you get from <code>pnpm create daloy</code></h2>
       <p>
         Every project scaffolded with <code>create-daloy</code> ships with an
-        <code>.npmrc</code> that turns on the install-time controls below. Keep them on.
+        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code> that turn on the install-time
+        controls below when you choose <code>pnpm</code>. Keep them on.
       </p>
       <CodeBlock
         language="ini"
@@ -111,6 +112,26 @@ prefer-frozen-lockfile=true
 verify-store-integrity=true
 strict-peer-dependencies=true`}
       />
+
+      <h2>Optional CI bundle for user projects</h2>
+      <p>
+        <code>create-daloy --with-ci</code> adds the GitHub-side controls that do not come from a
+        package install: CI with top-level <code>{"permissions: {}"}</code>, SHA-pinned actions,
+        <code>harden-runner</code>, no package-manager cache, disabled lifecycle scripts,
+        lockfile-source verification, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS,
+        and <code>SECURITY.md</code>. Node-style templates also get a disabled-by-default npm trusted
+        publishing skeleton that only runs after you set <code>NPM_PUBLISH_ENABLED=true</code> and
+        configure a protected publish environment.
+      </p>
+      <CodeBlock
+        language="bash"
+        code="pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security"
+      />
+      <p>
+        GitHub settings are still your responsibility: replace the CODEOWNERS owner if needed, enable
+        branch protection, require the generated checks, and turn on secret scanning plus push
+        protection.
+      </p>
 
       <h2>If you legitimately need a postinstall</h2>
       <p>

@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Scaffold a DaloyJS project",
   description:
-    "Use create-daloy to scaffold a production-ready DaloyJS project with templates for Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge — preconfigured with TypeScript, Zod, and OpenAPI.",
+    "Use create-daloy to scaffold a production-ready DaloyJS project with templates for Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge, plus optional hardened GitHub CI.",
   path: "/docs/scaffolder",
   keywords: ["create-daloy", "scaffold DaloyJS", "DaloyJS template", "Cloudflare Worker template", "Vercel Edge template"],
   type: "article",
@@ -44,17 +44,14 @@ bun  create daloy           my-api`}
 
       <p>
         The CLI is interactive when arguments are missing. It will ask for a project name, a template,
-        a package manager, whether to install dependencies, and whether to initialize a git repository.
+        a package manager, whether to install dependencies, whether to initialize a git repository, and
+        whether to add the GitHub security bundle.
       </p>
 
       <h2>Non-interactive usage</h2>
       <CodeBlock
         language="bash"
-        code={`pnpm create daloy@latest my-api \\
-  --template node-basic \\
-  --package-manager pnpm \\
-  --install \\
-  --git`}
+        code="pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security --install --git"
       />
 
       <h3>Flags</h3>
@@ -82,6 +79,14 @@ bun  create daloy           my-api`}
           <code>/docs</code> + <code>/openapi.json</code> Swagger UI routes so the
           scaffold only ships the framework bootstrap and a health route. Useful
           when you want to start from the smallest possible app.
+        </li>
+        <li>
+          <code>--with-ci</code> / <code>--no-ci</code> — add hardened GitHub Actions,
+          Dependabot, CODEOWNERS, <code>SECURITY.md</code>, and lockfile-source verification.
+        </li>
+        <li>
+          <code>--code-owner &lt;owner&gt;</code> — replace the CODEOWNERS placeholder when{" "}
+          <code>--with-ci</code> is used, for example <code>@acme/security</code>.
         </li>
         <li>
           <code>--force</code> — overwrite an existing non-empty directory.
@@ -172,6 +177,27 @@ bun  create daloy           my-api`}
         re-run the generator with <code>--minimal</code> later, or delete the marked blocks by hand.
       </p>
 
+      <h2>Hardened CI/security bundle</h2>
+      <p>
+        Pass <code>--with-ci</code> when the new project should start with GitHub-side supply-chain
+        guardrails as well as runtime defaults. Node-style templates get CI, a disabled-by-default
+        npm trusted publishing skeleton, CodeQL, OpenSSF Scorecard, zizmor, Dependabot,
+        CODEOWNERS, <code>SECURITY.md</code>, and a lockfile-source verification script. The Deno
+        template gets the same governance and scanning files with a Deno-native CI workflow, but no
+        npm publish workflow because it has no <code>package.json</code>.
+      </p>
+      <CodeBlock
+        language="bash"
+        code="pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security"
+      />
+      <p>
+        The generated workflows use top-level <code>{"permissions: {}"}</code>, pinned third-party
+        actions, <code>harden-runner</code>, <code>persist-credentials: false</code>, disabled install
+        scripts, and no package-manager cache. Replace the CODEOWNERS placeholder if you did not pass{" "}
+        <code>--code-owner</code>, then enable branch protection, required status checks, secret
+        scanning, and push protection in GitHub settings.
+      </p>
+
       <h2>Which template should I choose?</h2>
       <ul>
         <li>
@@ -212,8 +238,10 @@ bun  create daloy           my-api`}
         <strong>zero runtime dependencies</strong> — only Node built-ins — so the supply-chain story
         stays clean. Templates are copied verbatim from the package&apos;s <code>templates/</code>{" "}
         directory and never run scripts during scaffolding. When you choose <code>pnpm</code>, the
-        generated app keeps the hardened <code>.npmrc</code>; when you choose another package manager,
-        the CLI removes pnpm-specific config so installs stay warning-free.
+        generated app keeps the hardened <code>.npmrc</code> and <code>pnpm-workspace.yaml</code>;
+        when you choose another package manager, the CLI removes pnpm-specific config so installs stay
+        warning-free. When you choose <code>--with-ci</code>, it also adds the GitHub-side security
+        files that a company repo normally has to assemble by hand.
       </p>
 
       <h2>Next</h2>

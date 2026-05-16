@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
 const TEMPLATES_DIR = path.join(PKG_ROOT, "templates");
+const CI_TEMPLATES_DIR = path.join(TEMPLATES_DIR, "_ci");
 
 const TEMPLATE_OPTIONS = [
   {
@@ -56,6 +57,7 @@ const RENAME_ON_COPY = new Map([
   ["_gitignore", ".gitignore"],
   ["_npmrc", ".npmrc"],
   ["_env.example", ".env.example"],
+  ["_github", ".github"],
   // Directory: holds skill files for AI coding agents under
   // `.agents/skills/<skill-name>/SKILL.md`. Templates author this as
   // `_agents/` so npm pack does not drop the dotfolder during publish.
@@ -72,6 +74,8 @@ const NO_PACKAGE_JSON_TEMPLATES = new Set(["deno-basic"]);
 // `daloy-minimal:strip-start <tag>` / `daloy-minimal:strip-end <tag>`
 // sentinels.
 const MINIMAL_STRIP_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".md"]);
+const CI_PLACEHOLDER_EXTENSIONS = new Set([".json", ".md", ".mjs", ".yaml", ".yml"]);
+const CI_PLACEHOLDER_FILES = new Set(["CODEOWNERS"]);
 
 // ----------------------------------------------------------------------------
 // Terminal capability detection + style primitives.
@@ -308,6 +312,8 @@ ${heading("Options")}
   ${color(COLORS.green, "--install / --no-install")}   Install dependencies after scaffolding.
   ${color(COLORS.green, "--git / --no-git")}           Initialize a git repository.
   ${color(COLORS.green, "--minimal")}                  Strip the bookstore + Swagger/OpenAPI demo routes.
+  ${color(COLORS.green, "--with-ci / --no-ci")}         Add hardened GitHub Actions + governance files.
+  ${color(COLORS.green, "--code-owner <owner>")}        CODEOWNERS owner for --with-ci, e.g. @acme/security.
   ${color(COLORS.green, "--force")}                    Overwrite an existing non-empty directory.
   ${color(COLORS.green, "--yes, -y")}                  Accept all defaults; never prompt.
   ${color(COLORS.green, "--help, -h")}                 Print this help.
@@ -353,6 +359,8 @@ function parseArgs(argv) {
     version: false,
     listTemplates: false,
     minimal: false,
+    ci: undefined,
+    codeOwner: undefined,
   };
   const args = [...argv];
   while (args.length) {
@@ -363,6 +371,10 @@ function parseArgs(argv) {
     else if (a === "--yes" || a === "-y") out.yes = true;
     else if (a === "--force") out.force = true;
     else if (a === "--minimal") out.minimal = true;
+    else if (a === "--with-ci") out.ci = true;
+    else if (a === "--no-ci") out.ci = false;
+    else if (a === "--code-owner") out.codeOwner = args.shift();
+    else if (a?.startsWith("--code-owner=")) out.codeOwner = a.slice("--code-owner=".length);
     else if (a === "--install") out.install = true;
     else if (a === "--no-install") out.install = false;
     else if (a === "--git") out.git = true;
@@ -391,6 +403,11 @@ function detectPackageManager() {
 }
 
 const VALID_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+// Match the GitHub CODEOWNERS owner grammar: a personal handle (@user), an
+// organization team (@org/team), or an email address. Anything else is
+// rejected so the scaffolded CODEOWNERS stays meaningful for branch protection.
+const VALID_CODE_OWNER =
+  /^(?:@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38})(?:\/[a-zA-Z0-9][a-zA-Z0-9._-]*)?|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})$/;
 
 function validateProjectName(name) {
   if (!name || !name.trim()) return "Project name cannot be empty.";
@@ -530,6 +547,167 @@ async function normalizePackageManagerFiles(dir, packageManager) {
       await rm(target, { force: true });
     }
   }
+}
+
+function hasPackageScript(packageJson, scriptName) {
+  return typeof packageJson?.scripts?.[scriptName] === "string";
+}
+
+function runScriptCommand(packageManager, scriptName) {
+  if (packageManager === "pnpm") return `pnpm ${scriptName}`;
+  if (packageManager === "npm") return scriptName === "test" ? "npm test" : `npm run ${scriptName}`;
+  if (packageManager === "yarn") return scriptName === "test" ? "yarn test" : `yarn run ${scriptName}`;
+  if (packageManager === "bun") return scriptName === "test" ? "bun test" : `bun run ${scriptName}`;
+  return `${packageManager} run ${scriptName}`;
+}
+
+function installCommand(packageManager) {
+  if (packageManager === "pnpm") return "pnpm install --frozen-lockfile --ignore-scripts";
+  if (packageManager === "npm") return "npm ci --ignore-scripts";
+  if (packageManager === "yarn") return "yarn install --frozen-lockfile --ignore-scripts";
+  if (packageManager === "bun") return "bun install --frozen-lockfile --ignore-scripts";
+  return `${packageManager} install`;
+}
+
+function auditCommand(packageManager) {
+  if (packageManager === "pnpm") return "pnpm audit --prod";
+  if (packageManager === "npm") return "npm audit --omit=dev";
+  if (packageManager === "yarn") return "yarn audit --groups dependencies";
+  if (packageManager === "bun") return "bun audit";
+  return "";
+}
+
+function setupPackageManagerStep(packageManager) {
+  if (packageManager === "pnpm") {
+    return `      - name: Set up pnpm
+        uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a # v6
+        with:
+          version: 11.1.2
+          run_install: false`;
+  }
+  if (packageManager === "yarn") {
+    return `      - name: Enable Corepack
+        run: corepack enable`;
+  }
+  if (packageManager === "bun") return setupBunStep();
+  return "";
+}
+
+function setupBunStep() {
+  return `      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest`;
+}
+
+function workflowStep(name, command) {
+  return `      - name: ${name}
+        run: ${command}`;
+}
+
+function multilineWorkflowStep(name, command) {
+  return `      - name: ${name}
+        run: |
+${command
+  .split("\n")
+  .map((line) => `          ${line}`)
+  .join("\n")}`;
+}
+
+async function readPackageJsonIfPresent(dir) {
+  const file = path.join(dir, "package.json");
+  if (!existsSync(file)) return null;
+  return JSON.parse(await readFile(file, "utf8"));
+}
+
+async function writePackageJson(dir, packageJson) {
+  await writeFile(path.join(dir, "package.json"), JSON.stringify(packageJson, null, 2) + "\n", "utf8");
+}
+
+async function addLockfileVerifyScript(dir) {
+  const packageJson = await readPackageJsonIfPresent(dir);
+  if (!packageJson) return;
+  packageJson.scripts ??= {};
+  packageJson.scripts["verify:lockfile"] = "node scripts/verify-lockfile-sources.mjs";
+  await writePackageJson(dir, packageJson);
+}
+
+function renderCiReplacements({ packageManager, template, packageJson, codeOwner }) {
+  const setupPm = setupPackageManagerStep(packageManager);
+  const needsBunRuntime = template === "bun-basic" && packageManager !== "bun";
+  const audit = auditCommand(packageManager);
+  const buildStep = hasPackageScript(packageJson, "build") ? workflowStep("Build", runScriptCommand(packageManager, "build")) : "";
+  const auditStep = audit ? workflowStep("Audit production dependencies", audit) : "";
+  const tagVersionCheck = `set -eu
+tag_version="\${GITHUB_REF_NAME#v}"
+pkg_version="$(node -p "require('./package.json').version")"
+if [ "$tag_version" != "$pkg_version" ]; then
+  echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
+  exit 1
+fi`;
+
+  return new Map([
+    ["__CODE_OWNER__", codeOwner],
+    ["__SETUP_PACKAGE_MANAGER_STEP__", setupPm],
+    ["__SETUP_BUN_RUNTIME_STEP__", needsBunRuntime ? setupBunStep() : ""],
+    ["__INSTALL_COMMAND__", installCommand(packageManager)],
+    ["__VERIFY_LOCKFILE_COMMAND__", runScriptCommand(packageManager, "verify:lockfile")],
+    ["__TYPECHECK_COMMAND__", runScriptCommand(packageManager, "typecheck")],
+    ["__TEST_COMMAND__", runScriptCommand(packageManager, "test")],
+    ["__BUILD_STEP__", buildStep],
+    ["__AUDIT_STEP__", auditStep],
+    ["__TAG_VERSION_CHECK_STEP__", multilineWorkflowStep("Verify tag matches package.json version", tagVersionCheck)],
+  ]);
+}
+
+async function replacePlaceholdersInTree(dir, replacements) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      await replacePlaceholdersInTree(full, replacements);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (!CI_PLACEHOLDER_EXTENSIONS.has(path.extname(entry.name)) && !CI_PLACEHOLDER_FILES.has(entry.name)) {
+      continue;
+    }
+    const raw = await readFile(full, "utf8");
+    let next = raw;
+    for (const [placeholder, value] of replacements) {
+      next = next.replaceAll(placeholder, value);
+    }
+    if (next !== raw) await writeFile(full, next, "utf8");
+  }
+}
+
+async function copyCiBundle(targetDir, template, packageManager, skipPackageManager, codeOwner) {
+  const flavor = skipPackageManager ? "deno" : "node";
+  const sourceDir = path.join(CI_TEMPLATES_DIR, flavor);
+  if (!existsSync(sourceDir)) {
+    throw new Error(`CI template bundle "${flavor}" is missing from this CLI build.`);
+  }
+  await copyTemplate(sourceDir, targetDir);
+
+  const candidate = codeOwner?.trim() ?? "";
+  if (candidate && !VALID_CODE_OWNER.test(candidate)) {
+    throw new Error(
+      `Invalid --code-owner "${candidate}". Use a GitHub handle (@user), a team (@org/team), or an email address.`,
+    );
+  }
+  const owner = candidate || "@your-org/security-team";
+  if (skipPackageManager) {
+    await replacePlaceholdersInTree(targetDir, new Map([["__CODE_OWNER__", owner]]));
+    return;
+  }
+
+  await addLockfileVerifyScript(targetDir);
+  const packageJson = await readPackageJsonIfPresent(targetDir);
+  await replacePlaceholdersInTree(
+    targetDir,
+    renderCiReplacements({ packageManager, template, packageJson, codeOwner: owner }),
+  );
 }
 
 /**
@@ -864,7 +1042,7 @@ function createSpinner(initialMessage) {
   };
 }
 
-function printSummary({ projectName, template, packageManager, installDeps, skipPackageManager }) {
+function printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi }) {
   const templateMeta = TEMPLATE_OPTIONS.find((option) => option.value === template);
   const templateLabel = templateMeta ? `${templateMeta.title} ${color(COLORS.dim, `(${template})`)}` : template;
   const summaryLines = [
@@ -877,6 +1055,9 @@ function printSummary({ projectName, template, packageManager, installDeps, skip
     summaryLines.push(`${color(COLORS.gray, "Runtime   ")} ${color(COLORS.cyan, template === "deno-basic" ? "Deno" : "runtime")}`);
   } else {
     summaryLines.push(`${color(COLORS.gray, "Manager   ")} ${color(COLORS.cyan, packageManager)}`);
+  }
+  if (withCi) {
+    summaryLines.push(`${color(COLORS.gray, "Security  ")} ${color(COLORS.cyan, "GitHub CI bundle")}`);
   }
   console.log("");
   console.log(renderBox(summaryLines, { accent: COLORS.green }));
@@ -1016,6 +1197,11 @@ async function main() {
       initGit = rl ? await askYesNo(rl, "Initialize a git repository?", true) : false;
     }
 
+    let withCi = opts.ci;
+    if (withCi === undefined) {
+      withCi = rl ? await askYesNo(rl, "Add hardened GitHub Actions and security files?", false) : false;
+    }
+
     rl?.close();
 
     if (interactive) {
@@ -1040,6 +1226,11 @@ async function main() {
       if (packageManager !== "pnpm") {
         logStep("Package-manager config normalized", packageManager);
       }
+    }
+
+    if (withCi) {
+      await copyCiBundle(targetDir, template, packageManager, skipPackageManager, opts.codeOwner);
+      logStep("GitHub security bundle added", skipPackageManager ? "deno" : packageManager);
     }
 
     if (initGit) {
@@ -1068,7 +1259,7 @@ async function main() {
       }
     }
 
-    printSummary({ projectName, template, packageManager, installDeps, skipPackageManager });
+    printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi });
   } catch (err) {
     rl?.close();
     if (err && err.message === "Cancelled") {
