@@ -31,7 +31,7 @@ export default function Page() {
       <h2>Quick start</h2>
       <CodeBlock
         language="bash"
-        code={`pnpm daloy inspect             # tries ./src/app.ts, ./src/app.js, ./app.ts, ./app.js
+        code={`pnpm daloy inspect             # also tries build-app/createApp-style factories
 pnpm daloy inspect ./src/server.ts
 pnpm daloy inspect --schemas
 pnpm daloy inspect --check        # exit 1 on contract errors
@@ -43,7 +43,8 @@ pnpm daloy inspect --method post --json`}
       <h2>Loading the App</h2>
       <p>
         The entry file must export an <code>App</code> instance, either as the default export or as
-        a named export called <code>app</code>:
+        a named export called <code>app</code>. It can also export a zero-argument <code>buildApp</code>
+        or <code>createApp</code> factory that returns an <code>App</code>:
       </p>
       <CodeBlock
         language="ts"
@@ -53,7 +54,14 @@ export const app = new App();
 app.route({ /* ... */ });
 
 // Or:
-// export default app;`}
+// export default app;
+
+// Or:
+export function buildApp() {
+  const app = new App();
+  app.route({ /* ... */ });
+  return app;
+}`}
       />
       <p>
         TypeScript entry files are loaded via <code>tsx</code>. <code>create-daloy</code>{" "}

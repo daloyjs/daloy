@@ -18,7 +18,7 @@
     "audit": "pnpm audit --prod"
   },
   "dependencies": {
-    "@daloyjs/core": "^0.9.0",
+    "@daloyjs/core": "^0.9.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

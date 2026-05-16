@@ -59,8 +59,10 @@ Options:
 
 Entry:
   A path to a JS or TS file that exports an App instance, either as the
-  default export or as a named export called "app". Defaults to
-  ./src/app.ts, then ./src/app.js, then ./app.ts, then ./app.js.
+  default export or as a named export called "app". Modules may also
+  export a zero-argument buildApp() or createApp() factory. Defaults to
+  ./src/app.ts, ./src/app.js, ./src/build-app.ts, ./src/build-app.js,
+  ./app.ts, ./app.js, ./build-app.ts, then ./build-app.js.
 
 Examples:
   daloy inspect
@@ -69,7 +71,16 @@ Examples:
   daloy inspect --openapi > openapi.json
 `;
 
-const DEFAULT_ENTRIES: string[] = ["src/app.ts", "src/app.js", "app.ts", "app.js"];
+const DEFAULT_ENTRIES: string[] = [
+  "src/app.ts",
+  "src/app.js",
+  "src/build-app.ts",
+  "src/build-app.js",
+  "app.ts",
+  "app.js",
+  "build-app.ts",
+  "build-app.js",
+];
 
 export function parseArgs(argv: readonly string[]): { command: string; opts: CliOptions } {
   const opts: CliOptions = {
@@ -257,7 +268,7 @@ async function loadApp(entry: string | undefined, io: CliIO): Promise<App> {
       if (app) return app;
       lastErr = new Error(
         `Loaded "${candidate}" but it did not export an App instance ` +
-          `(expected default export or "app" named export).`
+          `or a zero-argument buildApp()/createApp() factory.`
       );
     } catch (err) {
       lastErr = err;
@@ -279,11 +290,36 @@ function pickApp(mod: Record<string, unknown>): App | undefined {
     const candidate = mod[key];
     if (isApp(candidate)) return candidate;
   }
+  const factory = pickAppFactory(mod);
+  if (factory) {
+    const candidate = factory();
+    if (isApp(candidate)) return candidate;
+  }
   // Fallback: scan all named exports.
   for (const value of Object.values(mod)) {
     if (isApp(value)) return value;
   }
   return undefined;
+}
+
+function pickAppFactory(mod: Record<string, unknown>): (() => unknown) | undefined {
+  for (const key of ["buildApp", "createApp"]) {
+    const candidate = mod[key];
+    if (isZeroArgFactory(candidate)) return candidate;
+  }
+  const defaultExport = mod.default;
+  if (isNamedFactory(defaultExport, ["buildApp", "createApp"])) {
+    return defaultExport;
+  }
+  return undefined;
+}
+
+function isZeroArgFactory(value: unknown): value is () => unknown {
+  return typeof value === "function" && value.length === 0;
+}
+
+function isNamedFactory(value: unknown, names: readonly string[]): value is () => unknown {
+  return isZeroArgFactory(value) && names.includes((value as Function).name);
 }
 
 function isApp(value: unknown): value is App {

@@ -4,13 +4,21 @@ import { z } from "zod";
 import { App } from "../src/index.js";
 import { runCli, parseArgs, type CliIO } from "../src/cli.js";
 
-function buildIO(app: App | undefined, opts: { failEntry?: boolean } = {}) {
+function buildIO(
+  app: App | undefined,
+  opts: { failEntry?: boolean; modulesByEntry?: Record<string, unknown> } = {}
+) {
   const out: string[] = [];
   const err: string[] = [];
   const io: CliIO = {
     stdout: (c) => out.push(c),
     stderr: (c) => err.push(c),
-    importEntry: async () => {
+    importEntry: async (specifier) => {
+      if (opts.modulesByEntry) {
+        const hit = opts.modulesByEntry[specifier];
+        if (hit !== undefined) return hit;
+        throw new Error("ENOENT: no such file");
+      }
       if (opts.failEntry) throw new Error("ENOENT: no such file");
       return { default: app };
     },
@@ -206,6 +214,21 @@ test("runCli: one-route table includes header separator", async () => {
   assert.equal(r.exitCode, 0);
   assert.match(out.join(""), /------/);
   assert.match(out.join(""), /1 route\./);
+});
+
+test("runCli: inspect auto-discovers src/build-app.ts factories", async () => {
+  const buildApp = () => buildAppFixture();
+  const { io, out } = buildIO(undefined, {
+    modulesByEntry: {
+      "src/build-app.ts": { buildApp, default: buildApp },
+    },
+  });
+  const r = await runCli(["inspect"], io);
+  assert.equal(r.exitCode, 0);
+  const text = out.join("");
+  assert.match(text, /METHOD/);
+  assert.match(text, /\/users\/:id/);
+  assert.match(text, /2 routes\./);
 });
 
 test("runCli: --method filters routes", async () => {
