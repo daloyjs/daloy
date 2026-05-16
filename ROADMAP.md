@@ -21,7 +21,7 @@ last at least one minor cycle before removal.
 
 ## Now — `0.1.x` (shipped)
 
-Published to npm as **`@daloyjs/core@0.8.0`**. The `0.1.x` foundation below is fully shipped; confidence/lifecycle cleanup shipped in the `0.2.x` line, the streaming/helper + OpenAPI extras work shipped in the `0.3.x` line, input ergonomics shipped in the `0.4.x` line, the first project-ops slice shipped in the `0.5.x` line, plugin lifecycle events shipped in the `0.6.x` line, edge-friendly sessions shipped in the `0.7.x` line, and adapter/runtime modernization shipped in the `0.8.x` line.
+Published to npm as **`@daloyjs/core@0.9.0`**. The `0.1.x` foundation below is fully shipped; confidence/lifecycle cleanup shipped in the `0.2.x` line, the streaming/helper + OpenAPI extras work shipped in the `0.3.x` line, input ergonomics shipped in the `0.4.x` line, the first project-ops slice shipped in the `0.5.x` line, plugin lifecycle events shipped in the `0.6.x` line, edge-friendly sessions shipped in the `0.7.x` line, adapter/runtime modernization shipped in the `0.8.x` line, and additional incremental refinements shipped in the `0.9.x` line.
 
 - [x] Trie router with static fast path, traversal guard, real `405 + Allow`.
 - [x] Contract-first `app.route()`, groups, encapsulated plugins, decorators.
@@ -56,10 +56,10 @@ None of these break the existing public API.
 - [x] **GitHub Actions CI** running install, typecheck, tests, coverage, build, and audit.
 - [x] **Security policy** (`SECURITY.md`) and vulnerability disclosure process.
 - [x] **Release pipeline hardening**: protected npm publish environment, OIDC trusted publishing with provenance, blocked egress on publish jobs, and static workflow/security scanners.
-- [ ] **Branch coverage push** to `>= 98%` with a coverage gate where the Node runner supports it cleanly.
 - [x] **Project scaffolder** (`pnpm create daloy`) shipped as `packages/create-daloy` with `node-basic`, `vercel-edge`, and `cloudflare-worker` templates.
 - [x] **Docs discoverability + integration docs**: per-page metadata, sitemap, robots, OpenGraph image, and ORM guides in `website`.
-- [ ] **Docs cleanup**: publish a maintainer-facing release checklist and keep package naming/examples aligned with `@daloyjs/core`.
+- [x] **Branch coverage gate** — dist-based `pnpm coverage:branches` (compiled JS, no tsx source-map noise) enforced in CI at `>= 95%`; established as the stable, ratchetable floor. See `tsconfig.coverage.json` and the `coverage:branches` script.
+- [x] **Docs cleanup**: publish a maintainer-facing release checklist (in `SECURITY.md`) and keep package naming/examples aligned with `@daloyjs/core`.
 
 **Exit criteria:** every item above either ships or is moved to a later milestone
 with an explicit reason. No silent dropouts.
@@ -94,9 +94,39 @@ design issue before implementation.
 
 ## Later `0.x` — ("real-time & extensibility")
 
-- [ ] **WebSocket primitives** with adapter coverage for Node and Bun.
 - [x] **Plugin lifecycle events** (`onPluginInstalled`, `onShutdown`) for observability plugins.
 - [x] **Edge-friendly session primitive**: signed-cookie (`__Host-` prefix, HMAC-SHA256, key rotation) with a pluggable `SessionStore` (default in-memory, KV/Redis-friendly) exposed as `ctx.state.session`.
+- [→] **WebSocket primitives** with adapter coverage for Node and Bun — moved to `0.11.0`.
+
+---
+
+## Next — `0.10.0` ("close out confidence & lifecycle")
+
+Finishes the leftover `0.2.x` items so the confidence/lifecycle milestone exits
+cleanly before any new feature work. Both are `1.0.0` gates.
+
+- [x] **Branch coverage gate established** — shipped as `pnpm coverage:branches` running against compiled JS, currently enforced at `>= 95%` in CI. This is the "stable high-confidence gate" the `1.0.0` criteria require.
+- [ ] **Ratchet branch coverage gate to `>= 98%`** — incrementally add tests for currently-uncovered branches in the worst files (`lambda`, `openapi`, `client`, `cli`, `streaming`) and bump `--test-coverage-branches` in `package.json` as the floor rises. Tracked separately from the gate itself because it is iterative test work, not infrastructure.
+
+---
+
+## Then — `0.11.0` ("real-time")
+
+- [ ] **WebSocket primitives** with adapter coverage for Node and Bun.
+
+---
+
+## Pre-1.0 — `0.12.0` ("AI-friendly route metadata")
+
+Additive, non-breaking. Pulled out of the research bucket because the surface
+is small (optional fields on existing `route()` calls) and lands cleanly before
+the `1.0.0` freeze. Does **not** change how routes or handlers are written —
+existing routes keep working unchanged.
+
+- [ ] **`meta` field on route definitions** (optional): structured `examples`, `summary`, `description`, `tags`, free-form `x-*` extensions, all surfaced into the generated OpenAPI doc as `examples` / `x-daloy-*` vendor extensions.
+- [ ] **Machine-readable usage examples**: request/response example pairs validated against the route's Standard Schema at build time, emitted into OpenAPI `examples` and into a sibling `routes.json` consumable by codegen agents and SDK builders.
+- [ ] **`daloy inspect --ai`**: dumps the route catalog + examples + schemas as a single JSON document suitable for feeding to an LLM or codegen tool.
+- [ ] Docs page in `website/app/docs/` showing how to author examples and how Hey API / agent tooling consumes them.
 
 ---
 
@@ -110,7 +140,7 @@ delay `1.0.0` than freeze the wrong API.
 - [ ] Public benchmark suite published with reproducible numbers.
 - [ ] Migration guide from the most-used Node frameworks (Hono, Fastify, Elysia).
 - [ ] Security policy and disclosure process have been exercised at least once.
-- [ ] Branch coverage has a stable high-confidence gate; any ignored branches have documented runtime or source-map reasons.
+- [ ] Branch coverage has a stable high-confidence gate; any ignored branches have documented runtime or source-map reasons. — Gate is shipped (`pnpm coverage:branches`); ratchet to `>= 98%` is the open subtask under `0.10.0`.
 
 ---
 
@@ -122,7 +152,6 @@ game to prototype, but nothing here blocks `1.0.0`.
 - [ ] HTTP/2 + HTTP/3 adapters (Node h2; explore Workers AutoHTTP/3).
 - [ ] Pluggable serialization (CBOR, MessagePack) gated by `Accept`.
 - [ ] First-class background-job interface (queue-agnostic).
-- [ ] AI-friendly route metadata (machine-readable usage examples for codegen agents).
 
 ---
 

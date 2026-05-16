@@ -87,6 +87,9 @@ jobs:
       - name: Coverage
         run: pnpm coverage
 
+      - name: Branch coverage gate (compiled JS)
+        run: pnpm coverage:branches
+
       - name: Build
         run: pnpm build
 
