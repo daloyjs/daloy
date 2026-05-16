@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { addTransitionType, startTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
@@ -30,21 +31,20 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") {
-        return;
-      }
-
-      if (isTypingTarget(event.target)) {
-        return;
-      }
-
-      event.preventDefault();
-      setOpen((currentOpen) => !currentOpen);
+  const handleKeyDown = React.useEffectEvent((event: KeyboardEvent) => {
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") {
+      return;
     }
 
+    if (isTypingTarget(event.target)) {
+      return;
+    }
+
+    event.preventDefault();
+    setOpen((currentOpen) => !currentOpen);
+  });
+
+  React.useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
@@ -54,7 +54,10 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
 
   function handleSelect(href: string) {
     setOpen(false);
-    router.push(href);
+    startTransition(() => {
+      addTransitionType("nav-forward");
+      router.push(href);
+    });
   }
 
   return (

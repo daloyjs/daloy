@@ -46,34 +46,33 @@ function isTypingTarget(target: EventTarget | null) {
 
 function ThemeHotkey() {
   const { theme, setTheme } = useTheme()
-
-  React.useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented || event.repeat) {
-        return
-      }
-
-      if (event.metaKey || event.ctrlKey || event.altKey) {
-        return
-      }
-
-      if (event.key.toLowerCase() !== "d") {
-        return
-      }
-
-      if (isTypingTarget(event.target)) {
-        return
-      }
-
-      setTheme(getNextTheme(theme))
+  const onKeyDown = React.useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.repeat) {
+      return
     }
 
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return
+    }
+
+    if (event.key.toLowerCase() !== "d") {
+      return
+    }
+
+    if (isTypingTarget(event.target)) {
+      return
+    }
+
+    setTheme(getNextTheme(theme))
+  })
+
+  React.useEffect(() => {
     window.addEventListener("keydown", onKeyDown)
 
     return () => {
       window.removeEventListener("keydown", onKeyDown)
     }
-  }, [setTheme, theme])
+  }, [])
 
   return null
 }

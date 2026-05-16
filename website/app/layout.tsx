@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Noto_Sans, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { RouteTransition } from "@/components/route-transition";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
@@ -99,8 +100,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-screen bg-background font-sans antialiased flex flex-col">
         <ThemeProvider>
           <SiteHeader />
-          <div className="flex-1 flex flex-col">{children}</div>
-          <footer className="border-t py-6 px-6 text-sm text-muted-foreground">
+          <RouteTransition>{children}</RouteTransition>
+          <footer className="border-t py-6 px-6 text-sm text-muted-foreground" style={{ viewTransitionName: "site-footer" }}>
             <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-2">
               <p className="text-center sm:text-left">
                 Built with DaloyJS · MIT licensed · Distributed via{" "}

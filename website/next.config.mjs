@@ -24,6 +24,9 @@ function getPublishedCorePackageVersion() {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    viewTransition: true,
+  },
   // Pin the workspace root to this site so Next.js doesn't walk up into the
   // framework's `src/` (which has a `middleware.ts` that is NOT a Next.js
   // edge middleware).

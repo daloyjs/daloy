@@ -36,6 +36,24 @@ export function SiteHeader() {
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const mobileNavButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const mobileNavPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const handleKeyDown = React.useEffectEvent((event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      setMobileNavOpen(false);
+    }
+  });
+  const handlePointerDown = React.useEffectEvent((event: PointerEvent) => {
+    const target = event.target;
+
+    if (!(target instanceof Node)) {
+      return;
+    }
+
+    if (mobileNavPanelRef.current?.contains(target) || mobileNavButtonRef.current?.contains(target)) {
+      return;
+    }
+
+    setMobileNavOpen(false);
+  });
 
   React.useEffect(() => {
     if (!mobileNavOpen) {
@@ -47,35 +65,13 @@ export function SiteHeader() {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setMobileNavOpen(false);
-      }
-    }
-
-    function handlePointerDown(event: MouseEvent | TouchEvent) {
-      const target = event.target;
-
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (mobileNavPanelRef.current?.contains(target) || mobileNavButtonRef.current?.contains(target)) {
-        return;
-      }
-
-      setMobileNavOpen(false);
-    }
-
     window.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
 
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, [mobileNavOpen]);
 
@@ -84,7 +80,10 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/60">
+    <header
+      className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/60"
+      style={{ viewTransitionName: "site-header" }}
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex h-14 items-center gap-3">
           <Link href="/" className="flex min-w-0 items-center gap-2 font-semibold">
@@ -97,7 +96,12 @@ export function SiteHeader() {
 
           <nav className="ml-8 hidden items-center gap-5 text-sm xl:flex">
             {primaryNav.map((item) => (
-              <Link key={item.href} href={item.href} className="text-muted-foreground transition-colors hover:text-foreground">
+              <Link
+                key={item.href}
+                href={item.href}
+                transitionTypes={["nav-forward"]}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
                 {item.label}
               </Link>
             ))}
@@ -106,6 +110,7 @@ export function SiteHeader() {
           <div className="ml-auto flex items-center gap-2">
             <Link
               href="/docs/installation"
+              transitionTypes={["nav-forward"]}
               aria-label="Installation"
               onClick={closeMobileNav}
               className={buttonVariants({ variant: "ghost", size: "sm" }) + " hidden sm:inline-flex xl:hidden"}
@@ -134,7 +139,12 @@ export function SiteHeader() {
                 );
               })}
 
-              <Link href="/docs/installation" aria-label="Installation" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              <Link
+                href="/docs/installation"
+                transitionTypes={["nav-forward"]}
+                aria-label="Installation"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
                 <PackageIcon className="size-4" />
               </Link>
             </div>
@@ -177,6 +187,7 @@ export function SiteHeader() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      transitionTypes={["nav-forward"]}
                       onClick={closeMobileNav}
                       className="rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
                     >
@@ -186,6 +197,7 @@ export function SiteHeader() {
 
                   <Link
                     href="/docs/installation"
+                    transitionTypes={["nav-forward"]}
                     onClick={closeMobileNav}
                     className="rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
                   >

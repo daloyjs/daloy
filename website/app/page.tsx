@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowRightIcon,
@@ -13,10 +14,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Badge } from "../components/ui/badge";
 import { CodeBlock } from "../components/code-block";
 import { CodeCopyButton } from "../components/code-copy-button";
-import { ContractFlowVisual } from "../components/contract-flow-visual";
-import { FlowHeroScene } from "../components/flow-hero-scene";
 import { Reveal } from "../components/reveal";
 import { buildMetadata, CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
+
+const FlowHeroScene = dynamic(
+  () => import("../components/flow-hero-scene").then((module) => module.FlowHeroScene),
+  { ssr: false }
+);
+
+const ContractFlowVisual = dynamic(
+  () => import("../components/contract-flow-visual").then((module) => module.ContractFlowVisual),
+  {
+    ssr: false,
+    loading: () => <div className="w-full max-w-5xl min-h-[18rem] rounded-lg border border-border/70 bg-muted/30" aria-hidden />,
+  }
+);
 
 export const metadata = buildMetadata({
   title: "Runtime-portable TypeScript web framework",
@@ -172,11 +184,11 @@ export default function HomePage() {
               </Link>
             </p>
             <div className="flex flex-col sm:flex-row gap-3 mt-4 float-up" style={{ animationDelay: "320ms" }}>
-              <Link href="/docs/getting-started" className={buttonVariants({ size: "lg" }) + " group"}>
+              <Link href="/docs/getting-started" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg" }) + " group"}>
                 Get started
                 <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </Link>
-              <Link href="/docs" className={buttonVariants({ size: "lg", variant: "outline" })}>
+              <Link href="/docs" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg", variant: "outline" })}>
                 Read the docs
               </Link>
             </div>
@@ -295,10 +307,10 @@ export default function HomePage() {
             runs on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/docs/installation" className={buttonVariants({ size: "lg" })}>
+            <Link href="/docs/installation" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg" })}>
               Install DaloyJS
             </Link>
-            <Link href="/docs/tutorials/bookstore" className={buttonVariants({ size: "lg", variant: "outline" })}>
+            <Link href="/docs/tutorials/bookstore" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg", variant: "outline" })}>
               Build a bookstore API
             </Link>
             <a

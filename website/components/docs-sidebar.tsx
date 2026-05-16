@@ -21,6 +21,7 @@ export function DocsSidebar() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    transitionTypes={["nav-forward"]}
                     className={cn(
                       "relative block rounded-r-lg border-l-2 px-3 py-2 leading-6 transition-[color,background-color,border-color] duration-200",
                       active

@@ -9,8 +9,8 @@ export default async function DocsLayout({ children }: { children: React.ReactNo
   return (
     <div className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 lg:px-8">
       <div className="pt-6 lg:pt-8">
-        <div className="flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-stretch">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="w-full max-w-xl">
             <DocsSearch sections={searchSections} />
           </div>
           <DocsPageCopyButton />
