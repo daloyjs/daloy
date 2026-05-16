@@ -1,4 +1,3 @@
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowRightIcon,
@@ -14,21 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Badge } from "../components/ui/badge";
 import { CodeBlock } from "../components/code-block";
 import { CodeCopyButton } from "../components/code-copy-button";
+import { HomepageContractFlowVisual, HomepageHeroBackground } from "../components/homepage-hero-visuals";
 import { Reveal } from "../components/reveal";
 import { buildMetadata, CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
-
-const FlowHeroScene = dynamic(
-  () => import("../components/flow-hero-scene").then((module) => module.FlowHeroScene),
-  { ssr: false }
-);
-
-const ContractFlowVisual = dynamic(
-  () => import("../components/contract-flow-visual").then((module) => module.ContractFlowVisual),
-  {
-    ssr: false,
-    loading: () => <div className="w-full max-w-5xl min-h-[18rem] rounded-lg border border-border/70 bg-muted/30" aria-hidden />,
-  }
-);
 
 export const metadata = buildMetadata({
   title: "Runtime-portable TypeScript web framework",
@@ -152,7 +139,7 @@ export default function HomePage() {
       />
       {/* Hero */}
       <section className="relative isolate overflow-hidden border-b bg-background">
-        <FlowHeroScene />
+        <HomepageHeroBackground />
         <div className="relative z-10 mx-auto max-w-7xl px-6 py-12 lg:py-16">
           <div className="flex flex-col items-center text-center gap-5">
             <Badge variant="outline" className="gap-2 float-up" style={{ animationDelay: "0ms" }}>
@@ -168,7 +155,7 @@ export default function HomePage() {
             >
               The runtime-portable TypeScript web framework
             </h1>
-            <ContractFlowVisual />
+            <HomepageContractFlowVisual />
             <p className="max-w-2xl text-lg leading-8 text-muted-foreground float-up" style={{ animationDelay: "180ms" }}>
               Contract-first routing, Standard Schema validation, OpenAPI 3.1 with Hey API typed
               client codegen, streaming and OpenTelemetry tracing, edge-friendly sessions, a
