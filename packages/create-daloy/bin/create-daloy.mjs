@@ -587,7 +587,7 @@ function setupPackageManagerStep(packageManager) {
     return `      - name: Set up pnpm
         uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a # v6
         with:
-          version: 11.1.2
+          version: 11.1.3
           run_install: false`;
   }
   if (packageManager === "yarn") {
