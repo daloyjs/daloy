@@ -17,6 +17,101 @@ const STATIC_PATHS: Array<{
     changeFrequency: "monthly",
     priority: 0.7,
   },
+  {
+    path: "/blog/introducing-daloyjs",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/secure-by-default",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/contract-first-without-the-codegen-dance",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/same-app-five-runtimes-verified",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/csrf-in-2026-double-submit-and-fetch-metadata",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/csp-nonces-and-trusted-types-without-tears",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/sessions-on-the-edge",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/supply-chain-hardening-for-typescript-libraries",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/problem-details-done-right-rfc-9457-errors",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/building-a-bookstore-api-with-daloyjs-from-scratch",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/middleware-without-mystery-hooks-ordering-response-transformation",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/openapi-3-1-extras-webhooks-callbacks-discriminators",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/file-uploads-without-framework-lock-in-multipart-in-daloyjs",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/rate-limiting-that-survives-multiple-instances",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/observability-without-lock-in-structured-logs-and-otel-tracing",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/plugin-lifecycle-events-for-large-team-framework-code",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs", changeFrequency: "weekly", priority: 0.9 },
   { path: "/docs/installation", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/scaffolder", changeFrequency: "monthly", priority: 0.8 },
