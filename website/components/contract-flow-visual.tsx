@@ -1,6 +1,4 @@
-"use client";
-
-import { useEffect, useRef, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 
 const FLOW_STEPS = [
   { label: "route", detail: "GET /books/:id" },
@@ -14,47 +12,8 @@ type FlowVisualStyle = CSSProperties & {
 };
 
 export function ContractFlowVisual() {
-  const visualRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const visual = visualRef.current;
-    if (!visual) return;
-
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (prefersReducedMotion.matches) return;
-
-    const onPointerMove = (event: PointerEvent) => {
-      const rect = visual.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / rect.width - 0.5;
-      const y = (event.clientY - rect.top) / rect.height - 0.5;
-      const clampedX = Math.max(-0.5, Math.min(0.5, x));
-      const clampedY = Math.max(-0.5, Math.min(0.5, y));
-
-      visual.style.setProperty("--visual-tilt-x", `${(-clampedY * 6).toFixed(2)}deg`);
-      visual.style.setProperty("--visual-tilt-y", `${(clampedX * 8).toFixed(2)}deg`);
-      visual.style.setProperty("--visual-glow-x", `${(event.clientX - rect.left).toFixed(1)}px`);
-      visual.style.setProperty("--visual-glow-y", `${(event.clientY - rect.top).toFixed(1)}px`);
-    };
-
-    const onPointerLeave = () => {
-      visual.style.setProperty("--visual-tilt-x", "0deg");
-      visual.style.setProperty("--visual-tilt-y", "0deg");
-      visual.style.setProperty("--visual-glow-x", "50%");
-      visual.style.setProperty("--visual-glow-y", "50%");
-    };
-
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
-    window.addEventListener("pointerleave", onPointerLeave);
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerleave", onPointerLeave);
-    };
-  }, []);
-
   return (
     <div
-      ref={visualRef}
       className="contract-flow-visual float-up w-full max-w-5xl"
       style={
         {

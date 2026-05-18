@@ -12,10 +12,8 @@ import { buttonVariants } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { CodeBlock } from "../components/code-block";
-import { CodeCopyButton } from "../components/code-copy-button";
 import { ContractFlowVisual } from "../components/contract-flow-visual";
 import { FlowHeroScene } from "../components/flow-hero-scene";
-import { Reveal } from "../components/reveal";
 import { buildMetadata, CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -182,7 +180,6 @@ export default function HomePage() {
             </div>
             <div className="float-up flex items-center gap-2 rounded-md border bg-muted/70 px-3 py-2" style={{ animationDelay: "380ms" }}>
               <code className="text-sm">$ {CREATE_COMMAND}</code>
-              <CodeCopyButton code={CREATE_COMMAND} />
             </div>
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
               <span>320/320 tests passing</span>
@@ -200,15 +197,15 @@ export default function HomePage() {
       {/* Hello world */}
       <section className="border-b">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          <Reveal className="text-center mb-8">
+          <div className="mb-8 text-center float-up" style={{ animationDelay: "80ms" }}>
             <h2 className="text-3xl font-bold tracking-tight">Hello, contract</h2>
             <p className="mt-3 text-muted-foreground leading-8">
               One route — types, validation, OpenAPI, and the typed client all generated from it.
             </p>
-          </Reveal>
-          <Reveal delayMs={120}>
-            <CodeBlock code={HELLO_WORLD} language="ts" />
-          </Reveal>
+          </div>
+          <div className="float-up" style={{ animationDelay: "120ms" }}>
+            <CodeBlock code={HELLO_WORLD} language="ts" showCopyButton={false} />
+          </div>
         </div>
       </section>
 

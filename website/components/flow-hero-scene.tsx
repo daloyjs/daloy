@@ -1,70 +1,12 @@
-"use client";
-
-import { useEffect, useRef, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 
 type FlowStyle = CSSProperties & {
   [key: `--${string}`]: string;
 };
 
 export function FlowHeroScene() {
-  const sceneRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (prefersReducedMotion.matches) return;
-
-    const pointer = { x: 0, y: 0 };
-    const eased = { x: 0, y: 0 };
-    let frame = 0;
-
-    const update = () => {
-      eased.x += (pointer.x - eased.x) * 0.08;
-      eased.y += (pointer.y - eased.y) * 0.08;
-
-      const rect = scene.getBoundingClientRect();
-      const scrollProgress = Math.max(-1, Math.min(1, (window.innerHeight / 2 - rect.top) / window.innerHeight));
-
-      scene.style.setProperty("--flow-x", eased.x.toFixed(3));
-      scene.style.setProperty("--flow-y", eased.y.toFixed(3));
-      scene.style.setProperty("--flow-rotate", `${(eased.x * 5).toFixed(3)}deg`);
-      scene.style.setProperty("--flow-rotate-inverse", `${(eased.x * -5).toFixed(3)}deg`);
-      scene.style.setProperty("--flow-scroll", `${(scrollProgress * -18).toFixed(3)}px`);
-      scene.style.setProperty("--flow-scroll-grid", `${(scrollProgress * -42).toFixed(3)}px`);
-      scene.style.setProperty("--flow-scroll-river", `${(scrollProgress * -34).toFixed(3)}px`);
-      scene.style.setProperty("--flow-x-strong", `${(eased.x * 28).toFixed(3)}px`);
-      scene.style.setProperty("--flow-y-strong", `${(eased.y * 18).toFixed(3)}px`);
-      scene.style.setProperty("--flow-x-medium", `${(eased.x * 18).toFixed(3)}px`);
-      scene.style.setProperty("--flow-y-medium", `${(eased.y * 10).toFixed(3)}px`);
-      scene.style.setProperty("--flow-x-inverse", `${(eased.x * -24).toFixed(3)}px`);
-      scene.style.setProperty("--flow-y-inverse", `${(eased.y * -16).toFixed(3)}px`);
-      scene.style.setProperty("--flow-x-river", `${(eased.x * -22).toFixed(3)}px`);
-      scene.style.setProperty("--flow-y-river", `${(eased.y * -12).toFixed(3)}px`);
-      scene.style.setProperty("--flow-x-back", `${(eased.x * -12).toFixed(3)}px`);
-      scene.style.setProperty("--flow-y-back", `${(eased.y * -8).toFixed(3)}px`);
-
-      frame = window.requestAnimationFrame(update);
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      pointer.x = (event.clientX / window.innerWidth - 0.5) * 2;
-      pointer.y = (event.clientY / window.innerHeight - 0.5) * 2;
-    };
-
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
-    frame = window.requestAnimationFrame(update);
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.cancelAnimationFrame(frame);
-    };
-  }, []);
-
   return (
     <div
-      ref={sceneRef}
       aria-hidden
       className="interactive-flow pointer-events-none absolute inset-0 overflow-hidden"
       style={{
