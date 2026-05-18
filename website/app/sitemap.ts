@@ -11,6 +11,12 @@ const STATIC_PATHS: Array<{
   priority: number
 }> = [
   { path: "/", changeFrequency: "weekly", priority: 1.0 },
+  { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
+  {
+    path: "/blog/the-flow-i-wished-i-had",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs", changeFrequency: "weekly", priority: 0.9 },
   { path: "/docs/installation", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/scaffolder", changeFrequency: "monthly", priority: 0.8 },
