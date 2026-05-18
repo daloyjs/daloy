@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel Edge**. **Contract-first**: routes are defined with Zod schemas and OpenAPI 3.1 is generated from them.
+A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel Edge**. **Contract-first**: routes are defined with Zod schemas and OpenAPI 3.1 is generated from them. When `docs: true` is set in `new App({...})`, three routes are auto-mounted: `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
 
 - Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).
 - Runtime: Vercel Edge (Web Standard `Request`/`Response`).

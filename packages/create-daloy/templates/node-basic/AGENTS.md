@@ -2,6 +2,8 @@
 
 A [DaloyJS](https://daloyjs.dev) Node.js REST API. **Contract-first**:
 routes are defined with Zod schemas and OpenAPI 3.1 is generated from them.
+When `docs: true` is set in `new App({...})`, three routes are auto-mounted:
+`GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
 
 - Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).
 - Runtime: Node.js >= 24.15 (active LTS).

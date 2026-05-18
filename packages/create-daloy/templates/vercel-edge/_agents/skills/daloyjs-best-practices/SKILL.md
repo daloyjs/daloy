@@ -56,6 +56,24 @@ pnpm audit        # supply-chain audit
 
 Always run `pnpm typecheck` and `pnpm test` before declaring a task done.
 
+## OpenAPI & docs routes
+
+When `docs: true` is set on `new App({...})` (the default in this template),
+three routes are auto-mounted off the spec generated from your route
+definitions:
+
+- `GET /openapi.json` — OpenAPI 3.1 spec as JSON.
+- `GET /openapi.yaml` — OpenAPI 3.1 spec as YAML (served inline as
+  `text/yaml; charset=utf-8`, since `@daloyjs/core` 0.13.1).
+- `GET /docs` — Scalar API reference UI that loads the spec.
+
+Customize via `docs: { openapiPath, openapiYamlPath, path, ui }`. Set
+`openapiYamlPath: false` to disable just the YAML route, `docs: "auto"` to
+mount only outside production, or `docs: false` to disable all three.
+On Vercel Edge the YAML serializer is pure-string (no Node deps) and
+adds <1KB to the bundle. For hand-rolled mounting, `openapiToYAML` is
+exported from `@daloyjs/core/openapi`.
+
 ## Workflow: add a new route
 
 1. **Open `api/[...path].ts`.**

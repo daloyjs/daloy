@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A [DaloyJS](https://daloyjs.dev) REST API for the [Deno](https://deno.com) runtime. **Contract-first**: routes are defined with Zod schemas and OpenAPI 3.1 is generated from them.
+A [DaloyJS](https://daloyjs.dev) REST API for the [Deno](https://deno.com) runtime. **Contract-first**: routes are defined with Zod schemas and OpenAPI 3.1 is generated from them. When `docs: true` is set in `new App({...})`, three routes are auto-mounted: `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
 
 - Runtime: Deno (no Node package manager). Dependencies are loaded via `npm:` and `jsr:` specifiers in `deno.json`.
 

@@ -1,6 +1,6 @@
 {
   "name": "create-daloy",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Scaffold a new DaloyJS project. Run with `pnpm create daloy`, `npm create daloy@latest`, `yarn create daloy`, or `bun create daloy`.",
   "type": "module",
   "license": "MIT",

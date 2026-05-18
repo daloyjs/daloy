@@ -72,6 +72,28 @@ Always run `pnpm typecheck` and `pnpm test` before declaring a task done.
 If a change touches route shapes, also run `pnpm gen` so the client stays
 in sync.
 
+## OpenAPI & docs routes
+
+When `docs: true` is set on `new App({...})` (the default in this template),
+three routes are auto-mounted off the spec generated from your route
+definitions:
+
+- `GET /openapi.json` — OpenAPI 3.1 spec as JSON.
+- `GET /openapi.yaml` — OpenAPI 3.1 spec as YAML (served inline as
+  `text/yaml; charset=utf-8`, since `@daloyjs/core` 0.13.1).
+- `GET /docs` — Scalar API reference UI that loads the spec.
+
+Customize via `docs: { openapiPath, openapiYamlPath, path, ui }`. Set
+`openapiYamlPath: false` to disable just the YAML route, `docs: "auto"` to
+mount only outside production, or `docs: false` to disable all three.
+
+For hand-rolled mounting (when `docs: false`), the YAML serializer is
+exported from the openapi subpath:
+
+```ts
+import { generateOpenAPI, openapiToYAML } from "@daloyjs/core/openapi";
+```
+
 ## Workflow: add a new route
 
 Follow these steps in order. Skipping any of them is a common source of

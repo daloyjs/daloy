@@ -12,9 +12,10 @@ const app = new App({
   requestTimeoutMs: 5_000,
   production: process.env.NODE_ENV === "production",
   // daloy-minimal:strip-start docs
-  // Auto-mounted docs:
-  //   GET /openapi.json — live OpenAPI 3.1 spec generated from your routes
-  //   GET /docs         — Scalar API reference UI that loads it
+  // Auto-mounted docs (when `docs: true`):
+  //   GET /openapi.json — OpenAPI 3.1 spec (JSON)
+  //   GET /openapi.yaml — OpenAPI 3.1 spec (YAML, served inline as text/yaml)
+  //   GET /docs         — Scalar API reference UI that loads the spec
   openapi: {
     info: { title: "My Daloy Edge API", version: "0.0.1" },
   },

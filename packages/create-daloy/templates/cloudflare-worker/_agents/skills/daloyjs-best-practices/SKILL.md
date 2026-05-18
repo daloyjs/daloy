@@ -59,6 +59,24 @@ pnpm audit        # supply-chain audit
 
 Always run `pnpm typecheck` and `pnpm test` before declaring a task done.
 
+## OpenAPI & docs routes (opt-in)
+
+This Worker starter omits `docs: true` to keep the bundle small (Workers
+have a hard size limit). When you opt in via `new App({ docs: true })`,
+three routes are auto-mounted off the spec generated from your route
+definitions:
+
+- `GET /openapi.json` — OpenAPI 3.1 spec as JSON.
+- `GET /openapi.yaml` — OpenAPI 3.1 spec as YAML (served inline as
+  `text/yaml; charset=utf-8`, since `@daloyjs/core` 0.13.1).
+- `GET /docs` — Scalar API reference UI that loads the spec.
+
+On Workers the Scalar UI adds the most weight; consider
+`docs: { ui: "swagger" }` or `docs: "auto"` (off in production), or pass
+`docs: { openapiYamlPath: false }` to drop the YAML route only.
+For hand-rolled mounting, `openapiToYAML` is exported from
+`@daloyjs/core/openapi`.
+
 ## Workflow: add a new route
 
 1. **Open `src/index.ts`.**
