@@ -139,14 +139,23 @@ primitives. Full plan with risk matrix, breaking-change boundaries, and per-wave
 test surface in [`otherdocs/secure-by-default-plan.md`](./otherdocs/secure-by-default-plan.md).
 Awaiting owner sign-off before implementation begins.
 
-- [ ] **Wave 1 — additive (target `0.13.x` patch line):** default log redaction (authorization / cookie / set-cookie / x-api-key / password / token / JWT-shaped), strip `Server` and `X-Powered-By`, reject duplicate `Host` / `Content-Length`, `argon2id` helper, webhook HMAC verify helper, explicit `app({ env: "production" })` option with mismatch warning. **Non-breaking.**
-- [ ] **Wave 2 — flip defaults (target `0.14.0`, breaking):** auto-apply `secureHeaders`, secure cookie defaults, CORS deny-by-default for state-changing cross-origin, Content-Type allowlist enforced at the framework. Single master opt-out `app({ secureDefaults: false })` plus per-feature opt-outs. Migration guide + `create-daloy` template bump in the same release.
-- [ ] **Wave 3 — boot/first-request guards (target `0.14.0`):** refuse-to-boot on weak HMAC/JWT secrets in prod, refuse-to-boot on `session()` + state-changing route without `csrf()`, refuse-to-boot on `cors({ origin: "*" })` in prod, first-request 500 on unconfigured `X-Forwarded-*` (prevents IP spoofing through the rate limiter).
-- [ ] **Wave 4 — lifecycle & health (target `0.15.0`):** connection-draining graceful shutdown, crash-on-unhandled-rejection in prod, `app.health()` / `app.ready()` primitives rate-limited + auth-required by default.
-- [ ] **Wave 5 — opt-in one-liners (target `0.16.x`):** `wsRateLimit()` and `graphqlRateLimit()` adapters, `loginThrottle()` preset, `rotateSession()` helper, file-upload MIME + magic-byte + size guard.
+- [ ] **Wave 1 — additive (target `0.13.x` patch line):** default log redaction (authorization / cookie / set-cookie / x-api-key / password / token / JWT-shaped), strip `Server` and `X-Powered-By`, reject duplicate `Host` / `Content-Length`, `argon2id` helper, webhook HMAC verify helper, explicit `app({ env: "production" })` option with mismatch warning, **constructor-poisoning rejection** at parity with `__proto__` rejection in the JSON parser, **default `maxParamLength: 100`** on parametric routes + **refuse unsafe regex routes** by default (ReDoS guard, consistent with established JS framework best practices), **cooperative `AbortSignal` on request timeout** so handlers can cancel DB/`fetch()` work, **request-id input hardening** (length cap, reject control chars and CR/LF — header-injection guard), **rate-limit `ban` escalation** (N×429 ⇒ 403) and **IETF draft `ratelimit-*` headers** default-on, **CSRF user-bound tokens** (cookie-tossing defense) when an authenticated identity is on the request, **bearer-auth strict RFC 6750** matching + per-instance `verifyErrorLogLevel` (so brute-force noise doesn't flood `error` logs), **`[Symbol.asyncDispose]`** on `App` for `await using app = daloy()` ergonomics in TS 5.2+ tests. **Non-breaking.**
+- [ ] **Wave 2 — flip defaults (target `0.14.0`, breaking):** auto-apply `secureHeaders`, secure cookie defaults, CORS deny-by-default for state-changing cross-origin, Content-Type allowlist enforced at the framework, **CSP nonces default-on when CSP is enabled**, **multipart hard cap on `parts` count** enforced at the framework (not the route). Single master opt-out `app({ secureDefaults: false })` plus per-feature opt-outs. Migration guide + `create-daloy` template bump in the same release.
+- [ ] **Wave 3 — boot/first-request guards (target `0.14.0`):** refuse-to-boot on weak HMAC/JWT secrets in prod, refuse-to-boot on `session()` + state-changing route without `csrf()`, refuse-to-boot on `cors({ origin: "*" })` in prod, **refuse-to-boot on `requestTimeout: 0` in production unless an explicit reverse-proxy / load-balancer is declared** (a well-known DoS surface; Daloy refuses), first-request 500 on unconfigured `X-Forwarded-*` (prevents IP spoofing through the rate limiter).
+- [ ] **Wave 4 — lifecycle & health (target `0.15.0`):** connection-draining graceful shutdown with **`forceCloseConnections: "idle"` semantics** (kill idle keep-alives, let in-flight requests drain) and **`Connection: close` + `503` on requests arriving during shutdown**, crash-on-unhandled-rejection in prod, `app.health()` / `app.ready()` primitives rate-limited + auth-required by default, **`loadShedding()` primitive** (event-loop delay / heap / RSS / event-loop-utilization thresholds ⇒ auto-503 with `Retry-After` — opt-in but a one-line default in templates).
+- [ ] **Wave 5 — opt-in one-liners (target `0.16.x`):** `wsRateLimit()` and `graphqlRateLimit()` adapters, `loginThrottle()` preset (login-bucket + slow-down), **`rotateSession()` helper** with auto-rotation on privilege change (key rotation array support), file-upload MIME + magic-byte + size guard, **`rateLimit({ groupId })`** for shared buckets across related routes (OTP/login/password-reset).
 
 Out of scope for this initiative (policy decisions, kept as documented recipes):
 JWT/JWK/OAuth/OIDC strategies, RBAC/ABAC models, AES recipe, DI guards/interceptors model.
+
+### Feature-comparison provenance
+
+The wave items above are derived from a head-to-head review of established JS
+frameworks and their security plugin ecosystems, recorded in
+[`otherdocs/security_task.txt`](./otherdocs/security_task.txt).
+The rule of inclusion is unchanged: a feature only becomes a default when
+exactly one correct value exists and DaloyJS can pick it without removing
+developer choice on policy questions.
 
 ---
 
@@ -158,7 +167,7 @@ delay `1.0.0` than freeze the wrong API.
 - [ ] No breaking change in two consecutive `0.x` minors.
 - [ ] At least three production users on file (internal + external).
 - [ ] Public benchmark suite published with reproducible numbers.
-- [ ] Migration guide from the most-used Node frameworks (Hono, Fastify, Elysia).
+- [ ] Migration guide from the most-used Node frameworks.
 - [ ] Security policy and disclosure process have been exercised at least once.
 - [ ] Branch coverage has a stable high-confidence gate; any ignored branches have documented runtime or source-map reasons. — Gate is shipped (`pnpm coverage:branches`); ratchet to `>= 98%` is the open subtask under `0.10.0`.
 
