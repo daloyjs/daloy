@@ -315,6 +315,51 @@ test("signWebhookPayload rejects unsupported runtime algorithms", async () => {
   );
 });
 
+test("verifyWebhookSignature rejects Uint8Array signatures of wrong length", async () => {
+  assert.equal(
+    await verifyWebhookSignature({
+      payload: "x",
+      signature: new Uint8Array(8),
+      secret: "k",
+    }),
+    false,
+  );
+});
+
+test("verifyWebhookSignature rejects empty signature strings", async () => {
+  assert.equal(
+    await verifyWebhookSignature({ payload: "x", signature: "", secret: "k" }),
+    false,
+  );
+  assert.equal(
+    await verifyWebhookSignature({
+      payload: "x",
+      signature: "sha256=",
+      secret: "k",
+    }),
+    false,
+  );
+});
+
+test("verifyWebhookSignature rejects base64 strings with invalid padding length", async () => {
+  assert.equal(
+    await verifyWebhookSignature({ payload: "x", signature: "AAAAA", secret: "k" }),
+    false,
+  );
+});
+
+test("verifyWebhookSignature returns false on bogus runtime algorithm value", async () => {
+  assert.equal(
+    await verifyWebhookSignature({
+      payload: "x",
+      signature: "00",
+      secret: "k",
+      algorithm: "md5" as any,
+    }),
+    false,
+  );
+});
+
 // ---------- env option + NODE_ENV mismatch ----------
 
 test("App.env: 'production' takes precedence over NODE_ENV", async () => {

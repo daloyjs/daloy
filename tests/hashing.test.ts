@@ -53,3 +53,44 @@ test("passwordVerify rejects hashes with downgraded scrypt parameters", async ()
   const lowCostHash = "$scrypt$N=2,r=1,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
   assert.equal(await passwordVerify("p", lowCostHash), false);
 });
+
+test("passwordVerify rejects PHC with non-default r or p even when N matches", async () => {
+  const salt = "AAAAAAAAAAAAAAAAAAAAAA";
+  const hash = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  assert.equal(
+    await passwordVerify("p", `$scrypt$N=131072,r=1,p=1$${salt}$${hash}`),
+    false,
+  );
+  assert.equal(
+    await passwordVerify("p", `$scrypt$N=131072,r=8,p=2$${salt}$${hash}`),
+    false,
+  );
+});
+
+test("passwordVerify rejects PHC where base64 length is invalid (length % 4 === 1)", async () => {
+  assert.equal(
+    await passwordVerify(
+      "p",
+      "$scrypt$N=131072,r=8,p=1$AAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    ),
+    false,
+  );
+});
+
+test("passwordVerify rejects PHC with default params but wrong salt length", async () => {
+  const shortSalt = "AAAAAAAAAAAAAAAA";
+  const hash = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  assert.equal(
+    await passwordVerify("p", `$scrypt$N=131072,r=8,p=1$${shortSalt}$${hash}`),
+    false,
+  );
+});
+
+test("passwordVerify rejects PHC with default params but wrong hash length", async () => {
+  const salt = "AAAAAAAAAAAAAAAAAAAAAA";
+  const shortHash = "AAAAAAAAAAAAAAAAAAAAAA";
+  assert.equal(
+    await passwordVerify("p", `$scrypt$N=131072,r=8,p=1$${salt}$${shortHash}`),
+    false,
+  );
+});
