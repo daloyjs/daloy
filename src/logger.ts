@@ -27,11 +27,144 @@ const LEVELS: Record<LogLevel, number> = {
   fatal: 60,
 };
 
+/**
+ * Redaction configuration for {@link createLogger}. Keys are matched
+ * case-insensitively at any depth. Pass `false` to disable the safe
+ * defaults. When omitted, the secure-by-default set
+ * ({@link DEFAULT_REDACT_KEYS}) is used and string values shaped like a JWT
+ * (`eyJ...`) are also replaced.
+ *
+ * @since 0.15.0
+ */
+export interface LoggerRedactionOptions {
+  /** Additional case-insensitive keys to redact. Merged with the defaults unless `useDefaults` is `false`. */
+  keys?: readonly string[];
+  /** Replacement string. Default: `"[REDACTED]"`. */
+  censor?: string;
+  /** Include the {@link DEFAULT_REDACT_KEYS} list. Default: `true`. */
+  useDefaults?: boolean;
+  /** Replace string values shaped like a JWT (`eyJ...`) regardless of key. Default: `true`. */
+  redactJwtLikeStrings?: boolean;
+  /** Maximum recursion depth when walking nested objects. Default: 6. */
+  maxDepth?: number;
+}
+
+/**
+ * Default set of header / field names redacted from every structured log
+ * record. These are the keys most commonly observed leaking credentials
+ * into log aggregators in real-world incidents. Matched case-insensitively.
+ *
+ * @since 0.15.0
+ */
+export const DEFAULT_REDACT_KEYS: readonly string[] = Object.freeze([
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "api-key",
+  "apikey",
+  "password",
+  "passwd",
+  "secret",
+  "token",
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "client_secret",
+]);
+
 export interface ConsoleLoggerOptions {
   level?: LogLevel;
   bindings?: Record<string, unknown>;
   /** Where to write. Defaults to process.stdout.write or console.log. */
   write?: (line: string) => void;
+  /**
+   * Redact sensitive fields from log records before serialization. Pass
+   * `false` to disable the default redaction; pass an options object to
+   * extend it. Default: on, with {@link DEFAULT_REDACT_KEYS}.
+   *
+   * @since 0.15.0
+   */
+  redact?: LoggerRedactionOptions | false;
+}
+
+const JWT_LIKE_RE = /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+interface ResolvedRedaction {
+  keys: Set<string>;
+  censor: string;
+  redactJwt: boolean;
+  maxDepth: number;
+}
+
+function resolveRedaction(
+  opt: LoggerRedactionOptions | false | undefined,
+): ResolvedRedaction | null {
+  if (opt === false) return null;
+  const cfg = opt ?? {};
+  const useDefaults = cfg.useDefaults ?? true;
+  const keys = new Set<string>();
+  if (useDefaults) for (const k of DEFAULT_REDACT_KEYS) keys.add(k.toLowerCase());
+  if (cfg.keys) for (const k of cfg.keys) keys.add(k.toLowerCase());
+  return {
+    keys,
+    censor: cfg.censor ?? "[REDACTED]",
+    redactJwt: cfg.redactJwtLikeStrings ?? true,
+    maxDepth: cfg.maxDepth ?? 6,
+  };
+}
+
+/**
+ * Walk `record` in place, replacing any value whose key (case-insensitive)
+ * matches `cfg.keys` and any string value shaped like a JWT (when
+ * `cfg.redactJwt` is on) with `cfg.censor`. Exported for direct use by
+ * custom logger implementations that want the same defaults.
+ *
+ * @since 0.15.0
+ */
+export function redactRecord(
+  record: Record<string, unknown>,
+  cfg: ResolvedRedaction,
+): Record<string, unknown> {
+  walkRedact(record, cfg, 0, new WeakSet());
+  return record;
+}
+
+function walkRedact(
+  node: unknown,
+  cfg: ResolvedRedaction,
+  depth: number,
+  seen: WeakSet<object>,
+): void {
+  if (depth > cfg.maxDepth) return;
+  if (node === null || typeof node !== "object") return;
+  if (seen.has(node as object)) return;
+  seen.add(node as object);
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) {
+      const v = node[i];
+      if (cfg.redactJwt && typeof v === "string" && JWT_LIKE_RE.test(v)) {
+        node[i] = cfg.censor;
+      } else {
+        walkRedact(v, cfg, depth + 1, seen);
+      }
+    }
+    return;
+  }
+  const obj = node as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    const lower = key.toLowerCase();
+    if (cfg.keys.has(lower)) {
+      obj[key] = cfg.censor;
+      continue;
+    }
+    const v = obj[key];
+    if (cfg.redactJwt && typeof v === "string" && JWT_LIKE_RE.test(v)) {
+      obj[key] = cfg.censor;
+    } else {
+      walkRedact(v, cfg, depth + 1, seen);
+    }
+  }
 }
 
 /**
@@ -57,6 +190,7 @@ export function createLogger(opts: ConsoleLoggerOptions = {}): Logger {
   const level = opts.level ?? "info";
   const threshold = LEVELS[level];
   const bindings = opts.bindings ?? {};
+  const redaction = resolveRedaction(opts.redact);
   const write =
     opts.write ??
     (typeof process !== "undefined" && process.stdout?.write
@@ -78,6 +212,7 @@ export function createLogger(opts: ConsoleLoggerOptions = {}): Logger {
       Object.assign(base, obj);
       if (msg !== undefined) base.msg = msg;
     }
+    if (redaction) redactRecord(base, redaction);
     try {
       write(JSON.stringify(base));
     } catch {
@@ -94,7 +229,12 @@ export function createLogger(opts: ConsoleLoggerOptions = {}): Logger {
     error: (o, m) => emit("error", o, m),
     fatal: (o, m) => emit("fatal", o, m),
     child(extra) {
-      return createLogger({ level, bindings: { ...bindings, ...extra }, write });
+      return createLogger({
+        level,
+        bindings: { ...bindings, ...extra },
+        write,
+        redact: opts.redact,
+      });
     },
   };
   return logger;

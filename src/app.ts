@@ -12,7 +12,7 @@ import {
   ValidationError,
 } from "./errors.js";
 import { validate } from "./schema.js";
-import { readBodyLimited, safeJsonParse, randomId } from "./security.js";
+import { readBodyLimited, safeJsonParse, randomId, assertNoDuplicateSingletonHeaders } from "./security.js";
 import { createLogger, noopLogger, type Logger } from "./logger.js";
 import type {
   BaseContext,
@@ -78,6 +78,28 @@ export interface AppOptions {
 
   /** Production mode hides 5xx detail in error responses. Default: NODE_ENV === "production". */
   production?: boolean;
+
+  /**
+   * Explicit runtime environment. Takes precedence over `NODE_ENV` and
+   * {@link AppOptions.production}. When set, a one-time `warn` is logged if
+   * the value disagrees with `process.env.NODE_ENV` so deploy mismatches
+   * surface loudly instead of silently shipping a misconfigured production
+   * build. Accepted values mirror the canonical Node ecosystem strings.
+   *
+   * @since 0.15.0
+   */
+  env?: "development" | "production" | "test";
+
+  /**
+   * Strip the `Server` and `X-Powered-By` response headers from every
+   * response (including those produced by user middleware). Defaults to
+   * `true` — fingerprinting parity with the rest of the secure-by-default
+   * surface. Set `false` only when you need the headers for downstream
+   * observability tooling.
+   *
+   * @since 0.15.0
+   */
+  stripServerHeaders?: boolean;
   /** Pluggable logger. Default: structured JSON logger at "info" (or noop in test). */
   logger?:
     | Logger
@@ -346,15 +368,38 @@ export class App {
           ? (options.logger as Logger)
           : createLogger({ level: (options.logger as any)?.level ?? "info" });
 
+    this.warnOnEnvMismatch();
     this.maybeMountDocs();
   }
 
   /**
+   * Emit a one-time `warn` when the explicit {@link AppOptions.env} option
+   * disagrees with `process.env.NODE_ENV`. Silent when either signal is
+   * missing — surfacing only real misconfiguration.
+   */
+  private warnOnEnvMismatch(): void {
+    const env = this.options.env;
+    if (env === undefined) return;
+    const nodeEnv =
+      typeof process !== "undefined" && typeof process.env !== "undefined"
+        ? process.env.NODE_ENV
+        : undefined;
+    if (nodeEnv && nodeEnv !== env) {
+      this.log.warn(
+        { event: "env.mismatch", env, nodeEnv },
+        `app({ env: "${env}" }) disagrees with NODE_ENV="${nodeEnv}"`,
+      );
+    }
+  }
+
+  /**
    * Resolve whether the app is running in production. Honours the explicit
-   * `production` option first, then falls back to `NODE_ENV === "production"`.
-   * Used by the docs auto-mount and error response detail stripping.
+   * {@link AppOptions.env} option first, then {@link AppOptions.production},
+   * then falls back to `NODE_ENV === "production"`. Used by the docs
+   * auto-mount and error response detail stripping.
    */
   private isProduction(): boolean {
+    if (this.options.env !== undefined) return this.options.env === "production";
     if (this.options.production !== undefined) return this.options.production;
     return (
       typeof process !== "undefined" &&
@@ -861,6 +906,7 @@ export class App {
       method: request.method,
       url: request.url,
     });
+    const stripFingerprint = this.options.stripServerHeaders !== false;
     let ctx: BaseContext<any, any> | undefined;
     const globalHooks = mergeHooks([this.options.hooks ?? {}]);
     let activeErrorHook = globalHooks.onError;
@@ -868,6 +914,7 @@ export class App {
     let activeSendHook = globalHooks.onSend;
 
     try {
+      assertNoDuplicateSingletonHeaders(request.headers);
       await globalHooks.onRequest?.(request);
 
       const url = new URL(request.url);
@@ -913,6 +960,7 @@ export class App {
                 intercepted,
                 synthCtx,
                 preflightHooks,
+                stripFingerprint,
               );
             }
             const res = new Response(null, {
@@ -921,7 +969,7 @@ export class App {
             });
             copyContextHeaders(synthCtx, res);
             res.headers.set("x-request-id", requestId);
-            return await finalizeResponse(res, synthCtx, preflightHooks);
+            return await finalizeResponse(res, synthCtx, preflightHooks, stripFingerprint);
           }
           throw new MethodNotAllowedError(allowed);
         }
@@ -945,7 +993,7 @@ export class App {
       const before = await allHooks.beforeHandle?.(ctx);
       if (before instanceof Response) {
         copyContextHeaders(ctx, before);
-        return await finalizeResponse(before, ctx, allHooks);
+        return await finalizeResponse(before, ctx, allHooks, stripFingerprint);
       }
 
       let result: any = this.options.mockMode
@@ -966,7 +1014,7 @@ export class App {
         });
       }
       copyContextHeaders(ctx, response);
-      return await finalizeResponse(response, ctx, allHooks);
+      return await finalizeResponse(response, ctx, allHooks, stripFingerprint);
     } catch (err) {
       const handled = await activeErrorHook?.(err, ctx);
       if (handled instanceof Response) {
@@ -976,7 +1024,7 @@ export class App {
         return finalizeResponse(handled, ctx, {
           onSend: activeSendHook,
           onResponse: activeResponseHook,
-        });
+        }, stripFingerprint);
       }
       const httpErr: HttpError =
         err instanceof HttpError
@@ -989,7 +1037,7 @@ export class App {
       if (httpErr.status < 500)
         log.warn({ status: httpErr.status }, httpErr.problem.title);
       const res = httpErr.toResponse({
-        production: this.options.production,
+        production: this.isProduction(),
         requestId,
       });
       if (ctx) copyContextHeaders(ctx, res);
@@ -998,7 +1046,7 @@ export class App {
       return finalizeResponse(res, ctx, {
         onSend: activeSendHook,
         onResponse: activeResponseHook,
-      });
+      }, stripFingerprint);
     } finally {
       this.inflight--;
     }
@@ -1146,9 +1194,14 @@ async function finalizeResponse(
   res: Response,
   ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onSend" | "onResponse">,
+  stripFingerprint: boolean = true,
 ): Promise<Response> {
   const sent = await hooks.onSend?.(res, ctx);
   const final = sent instanceof Response ? sent : res;
+  if (stripFingerprint) {
+    final.headers.delete("server");
+    final.headers.delete("x-powered-by");
+  }
   await hooks.onResponse?.(final);
   return final;
 }

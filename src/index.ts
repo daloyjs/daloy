@@ -58,7 +58,12 @@ export {
   sanitizeHeaderValue,
   timingSafeEqual,
   randomId,
+  assertNoDuplicateSingletonHeaders,
+  SMUGGLING_SINGLETON_HEADERS,
+  verifyWebhookSignature,
+  signWebhookPayload,
 } from "./security.js";
+export type { WebhookHmacAlgorithm } from "./security.js";
 
 export {
   requestId,
@@ -82,8 +87,13 @@ export type {
   BasicAuthOptions,
 } from "./middleware.js";
 
-export { createLogger, noopLogger } from "./logger.js";
-export type { Logger, LogLevel, ConsoleLoggerOptions } from "./logger.js";
+export { createLogger, noopLogger, DEFAULT_REDACT_KEYS } from "./logger.js";
+export type {
+  Logger,
+  LogLevel,
+  ConsoleLoggerOptions,
+  LoggerRedactionOptions,
+} from "./logger.js";
 
 export type {
   ScalarJsonPrimitive,
