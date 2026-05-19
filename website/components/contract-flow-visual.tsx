@@ -14,7 +14,7 @@ type FlowVisualStyle = CSSProperties & {
 export function ContractFlowVisual() {
   return (
     <div
-      className="contract-flow-visual float-up w-full max-w-5xl"
+      className="contract-flow-visual float-up @container-size/flow w-full max-w-5xl min-h-[20rem] zoom-[0.94] sm:min-h-[22rem] sm:zoom-100 lg:min-h-[24rem]"
       style={
         {
           "--visual-tilt-x": "0deg",
@@ -25,14 +25,14 @@ export function ContractFlowVisual() {
         } as FlowVisualStyle
       }
     >
-      <div className="contract-flow-visual__shell">
+      <div className="contract-flow-visual__shell min-h-full">
         <div className="contract-flow-visual__glow" />
         <div className="contract-flow-visual__topline">
           <span>contract flow</span>
           <span>Request -&gt; Response</span>
         </div>
 
-        <div className="contract-flow-visual__stage">
+        <div className="contract-flow-visual__stage min-h-[68cqb]">
           <svg className="contract-flow-visual__paths" viewBox="0 0 900 220" preserveAspectRatio="none" fill="none">
             <defs>
               <linearGradient id="contract-flow-main" x1="0" x2="1" y1="0" y2="0">

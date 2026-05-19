@@ -76,7 +76,7 @@ export async function CodeBlock({
         {showCopyButton ? <CodeCopyButton code={code} /> : null}
       </div>
       <div
-        className="code-editor__content overflow-x-auto text-xs leading-relaxed sm:text-sm"
+        className="code-editor__content code-tab overflow-x-auto scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent text-xs leading-relaxed sm:text-sm"
         dangerouslySetInnerHTML={{ __html: highlightedCode }}
       />
     </div>

@@ -15,6 +15,30 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
+      <div className="not-prose mb-8 rounded-2xl border border-mist-200/80 bg-[radial-gradient(circle_at_top_left,theme(colors.mist.100/.85),transparent_48%),linear-gradient(135deg,theme(colors.background),theme(colors.mist.50/.72))] p-5 shadow-sm dark:border-mist-900/70 dark:bg-[radial-gradient(circle_at_top_left,theme(colors.mist.950/.55),transparent_48%),linear-gradient(135deg,theme(colors.background),theme(colors.mist.950/.18))] dim:border-mist-900/60 dim:bg-[radial-gradient(circle_at_top_left,theme(colors.mist.950/.5),transparent_48%),linear-gradient(135deg,theme(colors.background),theme(colors.mist.950/.16))] sm:p-6">
+        <div className="flex flex-wrap gap-2 text-[11px] font-semibold tracking-[0.22em] text-mist-950 uppercase dark:text-mist-100">
+          <span className="rounded-full border border-mauve-300/80 bg-mauve-100/80 px-3 py-1 dark:border-mauve-800/70 dark:bg-mauve-950/35">Contract-first</span>
+          <span className="rounded-full border border-olive-300/80 bg-olive-100/80 px-3 py-1 dark:border-olive-800/70 dark:bg-olive-950/35">Runtime-portable</span>
+          <span className="rounded-full border border-taupe-300/80 bg-taupe-100/80 px-3 py-1 dark:border-taupe-800/70 dark:bg-taupe-950/35">OpenAPI 3.1</span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Link href="/docs/installation" className="rounded-xl border border-mist-200/80 bg-background/80 p-4 transition-colors hover:border-mist-300 hover:bg-white/80 dark:border-mist-900/70 dark:bg-background/70 dark:hover:bg-mist-950/20">
+            <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">Start here</div>
+            <div className="mt-2 text-base font-semibold text-foreground">Installation</div>
+            <div className="mt-1 text-sm leading-6 text-muted-foreground">Set up DaloyJS without wandering through ten setup guides.</div>
+          </Link>
+          <Link href="/docs/getting-started" className="rounded-xl border border-mist-200/80 bg-background/80 p-4 transition-colors hover:border-olive-300 hover:bg-white/80 dark:border-mist-900/70 dark:bg-background/70 dark:hover:bg-olive-950/20">
+            <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">Quick path</div>
+            <div className="mt-2 text-base font-semibold text-foreground">Getting started</div>
+            <div className="mt-1 text-sm leading-6 text-muted-foreground">Build the first route and see the contract shape immediately.</div>
+          </Link>
+          <Link href="/docs/tutorials/bookstore" className="rounded-xl border border-mist-200/80 bg-background/80 p-4 transition-colors hover:border-taupe-300 hover:bg-white/80 dark:border-mist-900/70 dark:bg-background/70 dark:hover:bg-taupe-950/20">
+            <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">Hands-on</div>
+            <div className="mt-2 text-base font-semibold text-foreground">Bookstore tutorial</div>
+            <div className="mt-1 text-sm leading-6 text-muted-foreground">Route-by-route walkthrough without the usual fake-app sadness.</div>
+          </Link>
+        </div>
+      </div>
       <h1>Introduction to DaloyJS</h1>
       <p>
         <strong>DaloyJS</strong> is a runtime-portable TypeScript web framework with built-in

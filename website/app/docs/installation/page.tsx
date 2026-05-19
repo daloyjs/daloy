@@ -22,7 +22,7 @@ export default function Page() {
     <>
       <h1>Installation</h1>
       <p>
-        DaloyJS targets <strong>Node.js ≥ 24.15 (active LTS)</strong> and is
+        DaloyJS targets <strong>Node.js ≥ 24.0.0 (active LTS)</strong> and is
         distributed on the public npm registry as <code>@daloyjs/core</code>.
         The package has <strong>no peer dependencies</strong>, so{" "}
         <code>npm</code>, <code>yarn</code>, <code>pnpm</code>, and{" "}
@@ -79,7 +79,7 @@ bun  create daloy           my-api`}
       <h3>Prerequisites</h3>
       <ul>
         <li>
-          <strong>Node.js</strong> 24.15 or newer (active LTS).
+          <strong>Node.js</strong> 24.0.0 or newer (active LTS).
         </li>
         <li>
           A package manager. Any of these works — pnpm 11.x or newer is

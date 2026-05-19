@@ -95,18 +95,18 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
         type="button"
         variant="outline"
         size="sm"
-        className="h-11 w-full justify-between rounded-xl border-border bg-background/80 px-4 text-[11px] tracking-[0.22em] text-muted-foreground hover:bg-muted/60 sm:text-xs"
+        className="h-11 w-full justify-between rounded-xl border border-mist-200/80 bg-mist-50/75 px-4 text-[11px] tracking-[0.22em] text-mist-950 shadow-sm hover:bg-mist-100/70 dark:border-mist-900/70 dark:bg-mist-950/20 dark:text-mist-100 dark:hover:bg-mist-950/35 dim:border-mist-900/60 dim:bg-mist-950/18 dim:text-mist-100 sm:text-xs"
         onClick={() => setOpen(true)}
       >
         <span className="flex min-w-0 items-center gap-2">
           <MagnifyingGlassIcon className="size-4" />
           <span className="truncate">Search documentation</span>
         </span>
-        <span className="hidden items-center gap-1 text-[10px] text-muted-foreground/90 sm:inline-flex">
-          <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono tracking-normal text-foreground/80 uppercase">
+        <span className="hidden items-center gap-1 text-[10px] text-mist-900/80 dark:text-mist-100/80 sm:inline-flex">
+          <span className="rounded-md border border-mist-300/80 bg-white/75 px-1.5 py-0.5 font-mono tracking-normal text-mist-950 uppercase dark:border-mist-800/80 dark:bg-mist-950/40 dark:text-mist-100">
             Cmd
           </span>
-          <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono tracking-normal text-foreground/80 uppercase">
+          <span className="rounded-md border border-mist-300/80 bg-white/75 px-1.5 py-0.5 font-mono tracking-normal text-mist-950 uppercase dark:border-mist-800/80 dark:bg-mist-950/40 dark:text-mist-100">
             K
           </span>
         </span>
@@ -117,7 +117,7 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
         onOpenChange={setOpen}
         title="Search docs"
         description="Jump between documentation pages."
-        className="max-w-2xl rounded-2xl border border-border bg-background/95 p-0 shadow-2xl"
+        className="max-w-2xl rounded-2xl border border-mist-200/80 bg-background/95 p-0 shadow-2xl dark:border-mist-900/70 dim:border-mist-900/60"
       >
         <Command filter={scoreDocsItem}>
           <CommandInput placeholder="Search docs, topics, and routes..." />

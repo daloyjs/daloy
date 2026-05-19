@@ -9,7 +9,13 @@ import {
   ShieldCheckIcon,
 } from "@phosphor-icons/react/ssr";
 import { buttonVariants } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { CodeBlock } from "../components/code-block";
 import { ContractFlowVisual } from "../components/contract-flow-visual";
@@ -106,6 +112,25 @@ const FEATURES = [
   },
 ];
 
+const FEATURE_ACCENTS = [
+  {
+    card: "border border-mauve-200/70 bg-mauve-50/60 dark:border-mauve-900/70 dark:bg-mauve-950/18 dim:border-mauve-900/60 dim:bg-mauve-950/15",
+    icon: "bg-mauve-100 text-mauve-700 ring-1 ring-mauve-200/80 dark:bg-mauve-950/40 dark:text-mauve-200 dark:ring-mauve-800/70 dim:bg-mauve-950/35 dim:text-mauve-100",
+  },
+  {
+    card: "border border-olive-200/70 bg-olive-50/55 dark:border-olive-900/70 dark:bg-olive-950/18 dim:border-olive-900/60 dim:bg-olive-950/15",
+    icon: "bg-olive-100 text-olive-700 ring-1 ring-olive-200/80 dark:bg-olive-950/40 dark:text-olive-200 dark:ring-olive-800/70 dim:bg-olive-950/35 dim:text-olive-100",
+  },
+  {
+    card: "border border-mist-200/75 bg-mist-50/65 dark:border-mist-900/70 dark:bg-mist-950/18 dim:border-mist-900/60 dim:bg-mist-950/15",
+    icon: "bg-mist-100 text-mist-700 ring-1 ring-mist-200/80 dark:bg-mist-950/40 dark:text-mist-200 dark:ring-mist-800/70 dim:bg-mist-950/35 dim:text-mist-100",
+  },
+  {
+    card: "border border-taupe-200/70 bg-taupe-50/60 dark:border-taupe-900/70 dark:bg-taupe-950/18 dim:border-taupe-900/60 dim:bg-taupe-950/15",
+    icon: "bg-taupe-100 text-taupe-700 ring-1 ring-taupe-200/80 dark:bg-taupe-950/40 dark:text-taupe-200 dark:ring-taupe-800/70 dim:bg-taupe-950/35 dim:text-taupe-100",
+  },
+] as const;
+
 export default function HomePage() {
   const jsonLd = [
     {
@@ -133,64 +158,90 @@ export default function HomePage() {
     <main className="flex-1">
       <script
         type="application/ld+json"
-         
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       {/* Hero */}
       <section className="relative isolate overflow-hidden border-b bg-background">
         <FlowHeroScene />
         <div className="relative z-10 mx-auto max-w-7xl px-6 py-12 lg:py-16">
-          <div className="flex flex-col items-center text-center gap-5">
-            <Badge variant="outline" className="gap-2 float-up" style={{ animationDelay: "0ms" }}>
+          <div className="flex flex-col items-center gap-5 text-center">
+            <Badge
+              variant="outline"
+              className="float-up dim:border-mauve-900/60 dim:bg-mauve-950/20 dim:text-mauve-100 gap-2 border border-mauve-200/80 bg-mauve-50/85 px-3 py-1 text-mauve-950 shadow-sm dark:border-mauve-800/70 dark:bg-mauve-950/25 dark:text-mauve-100"
+              style={{ animationDelay: "0ms" }}
+            >
               <span className="relative inline-flex size-1.5 items-center justify-center">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
               </span>
-              {`@daloyjs/core ${CORE_PACKAGE_VERSION}`}
+              <span className='font-features-["tnum"]'>
+                {`@daloyjs/core ${CORE_PACKAGE_VERSION}`}
+              </span>
             </Badge>
             <h1
-              className="max-w-4xl text-4xl font-bold tracking-tight leading-tight sm:text-5xl lg:text-6xl float-up"
+              className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
               The runtime-portable TypeScript web framework
             </h1>
             <ContractFlowVisual />
-            <p className="max-w-2xl text-lg leading-8 text-muted-foreground float-up" style={{ animationDelay: "180ms" }}>
-              Contract-first routing, Standard Schema validation, OpenAPI 3.1 with Hey API typed
-              client codegen, streaming and OpenTelemetry tracing, edge-friendly sessions, a
-              security-focused runtime by default, and a supply-chain-hardened release pipeline
-              for the framework itself. One line on the <code>App</code> constructor —{" "}
-              <code>docs: true</code> — auto-mounts a Scalar API reference at <code>/docs</code> and
-              the live OpenAPI 3.1 spec at <code>/openapi.json</code>, the same DX as FastAPI.
+            <p
+              className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
+              style={{ animationDelay: "180ms" }}
+            >
+              Contract-first routing, Standard Schema validation, OpenAPI 3.1
+              with Hey API typed client codegen, streaming and OpenTelemetry
+              tracing, edge-friendly sessions, a security-focused runtime by
+              default, and a supply-chain-hardened release pipeline for the
+              framework itself. One line on the <code>App</code> constructor —{" "}
+              <code>docs: true</code> — auto-mounts a Scalar API reference at{" "}
+              <code>/docs</code> and the live OpenAPI 3.1 spec at{" "}
+              <code>/openapi.json</code>, the same DX as FastAPI.
             </p>
             <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-              <span className="font-medium text-foreground">ᜇᜎᜓᜌ᜔</span> Daloy means{" "}
-              <span className="text-foreground">flow</span> in Tagalog, pronounced{" "}
+              <span className="font-medium text-foreground">ᜇᜎᜓᜌ᜔</span> Daloy
+              means <span className="text-foreground">flow</span> in Tagalog,
+              pronounced{" "}
               <span className="whitespace-nowrap text-foreground">da-loy</span>.{" "}
-              <Link href="/about-the-name" className="underline underline-offset-4">
+              <Link
+                href="/about-the-name"
+                className="underline underline-offset-4"
+              >
                 About the name
               </Link>
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 mt-4 float-up" style={{ animationDelay: "320ms" }}>
-              <Link href="/docs/getting-started" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg" }) + " group"}>
+            <div
+              className="float-up mt-4 flex flex-col gap-3 sm:flex-row"
+              style={{ animationDelay: "320ms" }}
+            >
+              <Link
+                href="/docs/getting-started"
+                transitionTypes={["nav-forward"]}
+                className={buttonVariants({ size: "lg" }) + " group"}
+              >
                 Get started
                 <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </Link>
-              <Link href="/docs" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg", variant: "outline" })}>
+              <Link
+                href="/docs"
+                transitionTypes={["nav-forward"]}
+                className={buttonVariants({ size: "lg", variant: "outline" })}
+              >
                 Read the docs
               </Link>
             </div>
-            <div className="float-up flex items-center gap-2 rounded-md border bg-muted/70 px-3 py-2" style={{ animationDelay: "380ms" }}>
+            <div
+              className="float-up dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100 flex items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100"
+              style={{ animationDelay: "380ms" }}
+            >
               <code className="text-sm">$ {CREATE_COMMAND}</code>
             </div>
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <div className='flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'>
               <span>443/443 tests passing</span>
               <span aria-hidden>·</span>
               <span>100% line + function coverage</span>
               <span aria-hidden>·</span>
-              <span>strict TypeScript 6</span>
-              <span aria-hidden>·</span>
-              <span>Node 24.15+, Bun, Deno, Cloudflare, Vercel</span>
+              <span>Node 24+, Bun, Deno, Cloudflare, Vercel</span>
             </div>
           </div>
         </div>
@@ -199,14 +250,24 @@ export default function HomePage() {
       {/* Hello world */}
       <section className="border-b">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          <div className="mb-8 text-center float-up" style={{ animationDelay: "80ms" }}>
-            <h2 className="text-3xl font-bold tracking-tight">Hello, contract</h2>
-            <p className="mt-3 text-muted-foreground leading-8">
-              One route — types, validation, OpenAPI, and the typed client all generated from it.
+          <div
+            className="float-up mb-8 text-center"
+            style={{ animationDelay: "80ms" }}
+          >
+            <h2 className="text-3xl font-bold tracking-tight">
+              Hello, contract
+            </h2>
+            <p className="mt-3 leading-8 text-muted-foreground">
+              One route — types, validation, OpenAPI, and the typed client all
+              generated from it.
             </p>
           </div>
           <div className="float-up" style={{ animationDelay: "120ms" }}>
-            <CodeBlock code={HELLO_WORLD} language="ts" showCopyButton={false} />
+            <CodeBlock
+              code={HELLO_WORLD}
+              language="ts"
+              showCopyButton={false}
+            />
           </div>
         </div>
       </section>
@@ -214,29 +275,42 @@ export default function HomePage() {
       {/* Features */}
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-16">
-          <div className="text-center mb-12">
+          <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold tracking-tight">Why DaloyJS</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground leading-8">
-              Take the best ideas from each modern stack without having to choose only one axis:
-              OpenAPI ergonomics, runtime portability, typed clients, Node ops, and real security guardrails.
+            <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
+              Take the best ideas from each modern stack without having to
+              choose only one axis: OpenAPI ergonomics, runtime portability,
+              typed clients, Node ops, and real security guardrails.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f, i) => (
-              <Card
-                key={f.title}
-                className="group float-up transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40"
-                style={{ animationDelay: `${i * 60}ms` }}
-              >
-                <CardHeader>
-                  <f.icon className="size-6 text-primary mb-2 transition-transform duration-300 group-hover:scale-110" />
-                  <CardTitle>{f.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-sm leading-relaxed">{f.body}</CardDescription>
-                </CardContent>
-              </Card>
-            ))}
+            {FEATURES.map((f, i) =>
+              (() => {
+                const accent = FEATURE_ACCENTS[i % FEATURE_ACCENTS.length];
+
+                return (
+                  <Card
+                    key={f.title}
+                    className={`${accent.card} group float-up transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg`}
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  >
+                    <CardHeader>
+                      <span
+                        className={`${accent.icon} mb-2 inline-flex size-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110`}
+                      >
+                        <f.icon className="size-6" />
+                      </span>
+                      <CardTitle>{f.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <CardDescription className="text-sm leading-relaxed">
+                        {f.body}
+                      </CardDescription>
+                    </CardContent>
+                  </Card>
+                );
+              })()
+            )}
           </div>
         </div>
       </section>
@@ -244,29 +318,49 @@ export default function HomePage() {
       {/* Comparison */}
       <section className="border-b">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          <h2 className="text-3xl font-bold tracking-tight text-center mb-2">
+          <h2 className="mb-2 text-center text-3xl font-bold tracking-tight">
             Proven ideas, one contract
           </h2>
-          <p className="mb-10 text-center text-muted-foreground leading-8">
-            DaloyJS is inspired by the strongest parts of modern web stacks and makes the route
-            definition the place where they meet.
+          <p className="mb-10 text-center leading-8 text-muted-foreground">
+            DaloyJS is inspired by the strongest parts of modern web stacks and
+            makes the route definition the place where they meet.
           </p>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="dim:scrollbar-thumb-mist-800 scrollbar-thin scrollbar-thumb-mist-300 scrollbar-track-transparent overflow-x-auto rounded-lg border dark:scrollbar-thumb-mist-700">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  <th className="text-left p-3">You want</th>
-                  <th className="text-left p-3">Today&apos;s best-of</th>
-                  <th className="text-left p-3">What DaloyJS gives you</th>
+                  <th className="p-3 text-left">You want</th>
+                  <th className="p-3 text-left">Today&apos;s best-of</th>
+                  <th className="p-3 text-left">What DaloyJS gives you</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  ["Best OpenAPI ergonomics", "FastAPI", "Built-in OpenAPI 3.1 from one route definition"],
-                  ["Vercel / serverless / edge fit", "Hono", "Web-standard core, multi-runtime adapters"],
-                  ["Mature Node ops & docs", "Fastify", "Encapsulated plugins, structured logs, graceful shutdown"],
-                  ["Modern TS-first DX, Bun OK", "Elysia", "End-to-end typed handlers, typed context, typed client"],
-                  ["Best typed client codegen", "Hey API", "pnpm gen → fully typed fetch SDK"],
+                  [
+                    "Best OpenAPI ergonomics",
+                    "FastAPI",
+                    "Built-in OpenAPI 3.1 from one route definition",
+                  ],
+                  [
+                    "Vercel / serverless / edge fit",
+                    "Hono",
+                    "Web-standard core, multi-runtime adapters",
+                  ],
+                  [
+                    "Mature Node ops & docs",
+                    "Fastify",
+                    "Encapsulated plugins, structured logs, graceful shutdown",
+                  ],
+                  [
+                    "Modern TS-first DX, Bun OK",
+                    "Elysia",
+                    "End-to-end typed handlers, typed context, typed client",
+                  ],
+                  [
+                    "Best typed client codegen",
+                    "Hey API",
+                    "pnpm gen → fully typed fetch SDK",
+                  ],
                   [
                     "Supply-chain-hardened installs and publishing",
                     "pnpm + hardened CI/CD",
@@ -288,16 +382,27 @@ export default function HomePage() {
       {/* CTA */}
       <section>
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Ready to ship?</h2>
-          <p className="mb-8 text-muted-foreground leading-8">
-            Scaffold a project in seconds, then keep the contract as the app grows. The same app
-            runs on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
+          <h2 className="mb-4 text-3xl font-bold tracking-tight">
+            Ready to ship?
+          </h2>
+          <p className="mb-8 leading-8 text-muted-foreground">
+            Scaffold a project in seconds, then keep the contract as the app
+            grows. The same app runs on Node, Bun, Deno, Cloudflare Workers, and
+            Vercel Edge.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/docs/installation" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg" })}>
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            <Link
+              href="/docs/installation"
+              transitionTypes={["nav-forward"]}
+              className={buttonVariants({ size: "lg" })}
+            >
               Install DaloyJS
             </Link>
-            <Link href="/docs/tutorials/bookstore" transitionTypes={["nav-forward"]} className={buttonVariants({ size: "lg", variant: "outline" })}>
+            <Link
+              href="/docs/tutorials/bookstore"
+              transitionTypes={["nav-forward"]}
+              className={buttonVariants({ size: "lg", variant: "outline" })}
+            >
               Build a bookstore API
             </Link>
             <a

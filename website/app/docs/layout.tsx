@@ -35,7 +35,7 @@ export default async function DocsLayout({
 
       <div className="flex gap-10 pb-8 lg:gap-14 lg:py-12">
         <aside className="hidden w-60 shrink-0 lg:block">
-          <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2">
+          <div className="sticky top-20 max-block-[calc(100vh-6rem)] overflow-y-auto pe-2 scrollbar-gutter-stable scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent">
             <DocsSidebar />
           </div>
         </aside>

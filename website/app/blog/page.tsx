@@ -243,9 +243,15 @@ export default function BlogIndexPage() {
     <main className="flex-1">
       <section className="mx-auto max-w-3xl px-6 py-16 lg:py-20">
         <div className="mb-6 flex flex-wrap gap-2 text-[11px] font-semibold tracking-[0.22em] uppercase">
-          <span className="rounded-full border border-mauve-300/80 bg-mauve-100/80 px-3 py-1 text-mauve-950 dark:border-mauve-800/70 dark:bg-mauve-950/35 dark:text-mauve-100">Field notes</span>
-          <span className="rounded-full border border-olive-300/80 bg-olive-100/80 px-3 py-1 text-olive-950 dark:border-olive-800/70 dark:bg-olive-950/35 dark:text-olive-100">Shipping stories</span>
-          <span className="rounded-full border border-taupe-300/80 bg-taupe-100/80 px-3 py-1 text-taupe-950 dark:border-taupe-800/70 dark:bg-taupe-950/35 dark:text-taupe-100">Dry humor included</span>
+          <span className="rounded-full border border-mauve-300/80 bg-mauve-100/80 px-3 py-1 text-mauve-950 dark:border-mauve-800/70 dark:bg-mauve-950/35 dark:text-mauve-100">
+            Field notes
+          </span>
+          <span className="rounded-full border border-olive-300/80 bg-olive-100/80 px-3 py-1 text-olive-950 dark:border-olive-800/70 dark:bg-olive-950/35 dark:text-olive-100">
+            Shipping stories
+          </span>
+          <span className="rounded-full border border-taupe-300/80 bg-taupe-100/80 px-3 py-1 text-taupe-950 dark:border-taupe-800/70 dark:bg-taupe-950/35 dark:text-taupe-100">
+            Dry humor included
+          </span>
         </div>
         <h1 className="text-4xl font-bold tracking-tight">Blog</h1>
         <p className="mt-4 text-lg leading-8 text-muted-foreground">

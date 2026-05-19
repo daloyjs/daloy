@@ -582,10 +582,10 @@ export default function BlogPostPage() {
             non-breaking: every existing route keeps working with zero changes.
             The 0.14.2 patch keeps that default JSON shape and adds{" "}
             <code>--yaml</code> / <code>--format yaml</code> for the same dump
-            when the reader is a human or an LLM context window.
-            This is the &quot;AI-friendly route metadata&quot; milestone from
-            the roadmap, and it is the last pre-1.0 milestone before the
-            secure-by-default initiative takes over.
+            when the reader is a human or an LLM context window. This is the
+            &quot;AI-friendly route metadata&quot; milestone from the roadmap,
+            and it is the last pre-1.0 milestone before the secure-by-default
+            initiative takes over.
           </p>
 
           <h2>The failure mode this fixes</h2>

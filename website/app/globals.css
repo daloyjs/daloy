@@ -153,6 +153,10 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+@utility code-tab-* {
+  tab-size: --value(integer, --default(4));
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -172,6 +176,17 @@
       color 180ms ease,
       border-color 180ms ease,
       transform 180ms ease;
+
+    @variant hover, focus-visible {
+      background: color-mix(in oklab, var(--foreground) 8%, var(--background));
+      color: var(--foreground);
+      border-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+      transform: translateY(-1px);
+    }
+
+    @variant dark:hover, dark:focus-visible {
+      border-color: color-mix(in oklab, white 14%, transparent);
+    }
   }
 
   .mobile-nav__panel {
@@ -198,6 +213,11 @@
     transition:
       box-shadow 180ms ease,
       border-color 180ms ease;
+
+    @variant hover, focus-within {
+      border-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+      box-shadow: 0 18px 40px rgb(15 23 42 / 8%);
+    }
   }
 
   .docs-nav-disclosure__panel {
