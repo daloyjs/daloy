@@ -373,6 +373,31 @@ export interface RouteDefinition<
   accepts?: string[];
 
   /**
+   * Mark a route as internal. Requests reaching the route via the public
+   * `app.fetch(...)` entry point (i.e. any deployed adapter) receive a
+   * `404 Not Found` so existence cannot be probed, while in-process callers
+   * that go through `app.inject(...)` execute the handler normally. Pair
+   * with admin/cron endpoints, debugging shims, or platform-specific
+   * health probes that should never be reachable from the network.
+   *
+   * @example
+   * ```ts
+   * app.route({
+   *   method: "POST",
+   *   path: "/__admin/reindex",
+   *   internal: true,
+   *   responses: { 204: { description: "Started" } },
+   *   handler: () => ({ status: 204 }),
+   * });
+   *
+   * await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));
+   * ```
+   *
+   * @since 0.19.0
+   */
+  internal?: boolean;
+
+  /**
    * Optional OpenAPI 3.1 callbacks (out-of-band requests this operation may
    * trigger on the consumer). Each callback name maps to one or more runtime
    * expressions (e.g. `"{$request.body#/callbackUrl}"`); each expression maps

@@ -106,6 +106,14 @@ export interface OpenAPIOptions {
   servers?: Array<{ url: string; description?: string }>;
   securitySchemes?: SecuritySchemeMap;
   /**
+   * Include routes marked `internal: true` in the generated document.
+   * Defaults to `false` so public docs and SDKs do not leak in-process-only
+   * admin, cron, or test endpoints.
+   *
+   * @since 0.19.0
+   */
+  includeInternal?: boolean;
+  /**
    * Optional OpenAPI 3.1 webhooks. Each key is a webhook name; the value is
    * one or more webhook operations (one per HTTP method).
    */
@@ -147,6 +155,7 @@ export interface OpenAPIOptions {
 export function generateOpenAPI(app: App, options: OpenAPIOptions): Record<string, unknown> {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const route of app.routes) {
+    if (route.internal === true && options.includeInternal !== true) continue;
     const oasPath = route.path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
     (paths[oasPath] ??= {})[route.method.toLowerCase()] = buildOperation(route, route.path);
   }

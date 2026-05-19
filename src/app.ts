@@ -1565,7 +1565,23 @@ export class App {
     return response;
   };
 
-  private dispatch = async (request: Request): Promise<Response> => {
+  /**
+   * In-process entry point that bypasses the public `404` shield for
+   * routes declared with `internal: true`. Use it for cron jobs, admin
+   * scripts, and integration tests that need to exercise privileged
+   * handlers without exposing them to the network. All other security
+   * middleware (CORS, CSRF, rate limit, etc.) still runs normally.
+   *
+   * @since 0.19.0
+   */
+  inject = async (request: Request): Promise<Response> => {
+    return this.dispatch(request, { allowInternal: true });
+  };
+
+  private dispatch = async (
+    request: Request,
+    opts: { allowInternal?: boolean } = {},
+  ): Promise<Response> => {
     if (this.draining) {
       return new Response(
         JSON.stringify({
@@ -1613,18 +1629,40 @@ export class App {
         this.router.find(method, url.pathname) ??
         (headFallback ? this.router.find("GET", url.pathname) : undefined);
 
+      // Hide internal routes from the public adapter surface. The router
+      // still finds them so app.inject() can dispatch normally, but
+      // app.fetch() responds 404 to avoid leaking existence.
+      const internalHidden =
+        match?.handler.def.internal === true && opts.allowInternal !== true;
+
       this.assertCrossOriginAllowed(
         request,
         url,
         method,
         [
           ...corsOriginAllowsFromHooks([this.options.hooks ?? {}]),
-          ...(match ? match.handler.corsOriginAllows : this.corsOriginAllows),
+          ...(match && !internalHidden ? match.handler.corsOriginAllows : this.corsOriginAllows),
         ],
       );
 
-      if (!match) {
-        const allowed = this.router.allowedMethods(url.pathname);
+      if (!match || internalHidden) {
+        if (internalHidden) {
+          // Don't leak existence via 405/Allow header. Always 404.
+          throw new NotFoundError(
+            `No route for ${request.method} ${url.pathname}`,
+          );
+        }
+        const rawAllowed = this.router.allowedMethods(url.pathname);
+        // Filter out methods whose route definitions are marked
+        // `internal: true` unless the caller explicitly opted in via
+        // app.inject(). This prevents 405/Allow from leaking the
+        // existence of hidden admin/cron endpoints.
+        const allowed = opts.allowInternal
+          ? rawAllowed
+          : rawAllowed.filter((m) => {
+              const candidate = this.router.find(m, url.pathname);
+              return candidate?.handler.def.internal !== true;
+            });
         ctx = {
           request,
           params: {},

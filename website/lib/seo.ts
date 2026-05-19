@@ -11,7 +11,7 @@ export const SITE_URL = (
 export const SITE_NAME = "DaloyJS"
 
 export const CORE_PACKAGE_VERSION =
-  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "0.18.0"
+  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "0.19.0"
 
 export const SITE_TAGLINE =
   "Runtime-portable TypeScript web framework with contract-first routing, validation, OpenAPI, and a typed client."

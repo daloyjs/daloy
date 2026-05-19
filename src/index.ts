@@ -84,7 +84,12 @@ export {
   basicAuth,
   csrf,
   CSRF_HOOK_MARKER,
+  _resetSharedRateLimitStoresForTests,
 } from "./middleware.js";
+export { every, some, except } from "./combine.js";
+export type { ExceptPredicate } from "./combine.js";
+export { ipRestriction } from "./ip-restriction.js";
+export type { IpRestrictionOptions } from "./ip-restriction.js";
 export type {
   RequestIdOptions,
   SecureHeadersOptions,

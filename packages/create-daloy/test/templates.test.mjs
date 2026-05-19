@@ -790,10 +790,10 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
   );
   assert.match(denoJson.tasks.dev, /^deno run.*--watch src\/main\.ts$/);
   assert.match(denoJson.tasks.test, /^deno test\b/);
-  assert.equal(denoJson.imports["@daloyjs/core"], "npm:@daloyjs/core@^0.18.0");
+  assert.equal(denoJson.imports["@daloyjs/core"], "npm:@daloyjs/core@^0.19.0");
   assert.equal(
     denoJson.imports["@daloyjs/core/"],
-    "npm:@daloyjs/core@^0.18.0/",
+    "npm:@daloyjs/core@^0.19.0/",
   );
 });
 

@@ -439,6 +439,36 @@ export interface RateLimitOptions {
   trustProxyHeaders?: boolean;
   /** When true, set Retry-After header on 429. Default: true. */
   retryAfter?: boolean;
+  /**
+   * Share a single bucket across every `rateLimit()` call that declares the
+   * same `groupId`. Use this to enforce one combined limit across related
+   * routes (e.g. `/login`, `/login/otp`, and `/password-reset` all spend
+   * from the same per-IP "auth" bucket). Without `groupId`, each
+   * `rateLimit()` call gets its own independent in-memory store.
+   *
+   * Cooperation is only meaningful for the default in-memory store; when
+   * an explicit `store` is supplied the developer is responsible for
+   * keying it. The framework prepends the `groupId` to the derived key so
+   * two groups never collide in a shared store either.
+   *
+   * @since 0.19.0
+   */
+  groupId?: string;
+}
+
+/**
+ * Shared in-memory store registry for {@link RateLimitOptions.groupId}. Two
+ * `rateLimit({ groupId: "auth" })` calls receive the same bucket map so the
+ * limit is enforced across every route the same `groupId` is mounted on.
+ *
+ * Exposed only for tests; not part of the documented public API.
+ *
+ * @internal
+ */
+const SHARED_RATE_LIMIT_STORES = new Map<string, MemoryStore>();
+
+export function _resetSharedRateLimitStoresForTests(): void {
+  SHARED_RATE_LIMIT_STORES.clear();
 }
 
 class MemoryStore implements RateLimitStore {
@@ -493,7 +523,20 @@ class MemoryStore implements RateLimitStore {
  * @since 0.1.0
  */
 export function rateLimit(opts: RateLimitOptions): Hooks {
-  const store = opts.store ?? new MemoryStore();
+  let store: RateLimitStore;
+  if (opts.store) {
+    store = opts.store;
+  } else if (opts.groupId) {
+    let shared = SHARED_RATE_LIMIT_STORES.get(opts.groupId);
+    if (!shared) {
+      shared = new MemoryStore();
+      SHARED_RATE_LIMIT_STORES.set(opts.groupId, shared);
+    }
+    store = shared;
+  } else {
+    store = new MemoryStore();
+  }
+  const groupPrefix = opts.groupId ? `${opts.groupId}:` : "";
   const keyOf =
     opts.keyGenerator ??
     ((ctx: BaseContext<any, any>) => {
@@ -507,7 +550,7 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
 
   return {
     async beforeHandle(ctx) {
-      const key = keyOf(ctx);
+      const key = `${groupPrefix}${keyOf(ctx)}`;
       const { count, resetMs } = await store.hit(key, opts.windowMs);
       const remaining = Math.max(0, opts.max - count);
       ctx.set.headers.set("x-ratelimit-limit", String(opts.max));
@@ -1008,3 +1051,4 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
 }
 
 export { timingSafeEqual };
+
