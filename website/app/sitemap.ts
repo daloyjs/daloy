@@ -129,6 +129,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/getting-started", changeFrequency: "monthly", priority: 0.9 },
   { path: "/docs/routing", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/validation", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/validation/zod", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/validation/valibot", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/plugins", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/errors", changeFrequency: "monthly", priority: 0.7 },

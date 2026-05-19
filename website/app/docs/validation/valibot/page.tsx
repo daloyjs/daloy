@@ -29,17 +29,13 @@ export default function Page() {
         so DaloyJS picks it up the same way it picks up Zod — no adapter, no wrapper, no extra deps.
       </p>
       <p>
-        The fork at{" "}
-        <a href="https://github.com/open-circle/valibot" target="_blank" rel="noreferrer">open-circle/valibot</a>{" "}
-        tracks upstream and works as a drop-in replacement; everything on this page applies to both.
+        Valibot is developed in the open at{" "}
+        <a href="https://github.com/open-circle/valibot" target="_blank" rel="noreferrer">github.com/open-circle/valibot</a>{" "}
+        and published to npm as <code>valibot</code> — that&apos;s the package you install below.
       </p>
 
       <h2>Install</h2>
       <CodeBlock code={`pnpm add @daloyjs/core valibot`} />
-      <p>
-        If you prefer the open-circle fork, install it under the same import name with your
-        package manager&apos;s alias support, e.g. <code>pnpm add valibot@npm:@open-circle/valibot</code>.
-      </p>
 
       <h2>Why Valibot</h2>
       <ul>
@@ -97,8 +93,9 @@ app.route({
 
       <h2>Params, query, and headers</h2>
       <p>
-        Path params and query strings arrive as strings. Use <code>v.pipe</code> with
-        <code> v.transform</code> (or <code>v.coerce</code> in newer Valibot) to convert before validating:
+        Path params and query strings arrive as strings. Drop a <code>v.transform</code> (or one of
+        the built-in <code>v.toNumber</code>/<code>v.toBoolean</code>/<code>v.toDate</code> actions)
+        into the pipe to convert before further validation:
       </p>
       <CodeBlock code={`import * as v from "valibot";
 
@@ -208,7 +205,10 @@ export type BookInput = v.InferInput<typeof Book>;`} />
       <h2>See also</h2>
       <ul>
         <li>
-          <a href="/docs/validation">Validation overview</a> — Zod example and how validation works in DaloyJS.
+          <a href="/docs/validation">Validation overview</a> — how validators plug in via Standard Schema.
+        </li>
+        <li>
+          <a href="/docs/validation/zod">Validation with Zod</a> — the chainable alternative.
         </li>
         <li>
           <a href="/docs/openapi">OpenAPI generation</a> — how schemas become a spec.
