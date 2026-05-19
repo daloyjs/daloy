@@ -29,7 +29,7 @@ const socialLinks = [
     icon: XIcon,
   },
   {
-    href: "https://bsky.app/profile/daloyjs.bsky.social",
+    href: "https://bsky.app/profile/daloyjs.dev",
     label: "Bluesky",
     icon: ButterflyIcon,
   },
