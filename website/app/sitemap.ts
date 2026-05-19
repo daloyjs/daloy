@@ -108,7 +108,17 @@ const STATIC_PATHS: Array<{
     priority: 0.7,
   },
   {
+    path: "/blog/branded-api-docs-without-losing-the-contract-customizing-scalar-in-daloyjs",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/ai-friendly-route-metadata-machine-readable-examples-for-codegen-agents",
     changeFrequency: "monthly",
     priority: 0.7,
   },

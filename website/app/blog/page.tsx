@@ -13,6 +13,26 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
+    slug: "ai-friendly-route-metadata-machine-readable-examples-for-codegen-agents",
+    title:
+      "AI-Friendly Route Metadata: Machine-Readable Examples for Codegen Agents",
+    description:
+      "DaloyJS 0.14.1 adds an optional meta field on every route() \u2014 structured examples, extra description copy, and free-form x-* extensions \u2014 validated against your Standard Schema at build time and surfaced into OpenAPI 3.1 (examples, x-daloy-*) plus a sibling routes.json via daloy inspect --ai. Additive, non-breaking, and built so Hey API, Claude, GPT, and home-grown codegen agents can write correct call sites on the first try.",
+    date: "2026-06-07",
+    readingTime: "11 min read",
+    author: "Devlin Duldulao",
+  },
+  {
+    slug: "branded-api-docs-without-losing-the-contract-customizing-scalar-in-daloyjs",
+    title:
+      "Branded API Docs Without Losing the Contract: Customizing Scalar in DaloyJS",
+    description:
+      "DaloyJS 0.14 adds docs.scalar \u2014 a JSON-only knob that lets you theme the Scalar API reference, hide the Try-it button, drop in a brand stylesheet, and pick a layout, without forking the docs route. And because Daloy locks the spec URL to your live OpenAPI path at serialize time, the prettiest docs page in the company can't drift away from the contract.",
+    date: "2026-06-07",
+    readingTime: "10 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills",
     title:
       "Designing for Coding Agents: Why DaloyJS Scaffolds AGENTS.md and Skills",
