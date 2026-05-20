@@ -151,6 +151,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/security/lifecycle-health", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/security/composition-network", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/security/wave-4-leftovers", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/security/wave-5-auth", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/security/session", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/adapters", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/deployment", changeFrequency: "monthly", priority: 0.8 },

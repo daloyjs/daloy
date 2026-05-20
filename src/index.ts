@@ -105,6 +105,14 @@ export type {
   JwtVerifierOptions,
   JwtVerified,
 } from "./jwt.js";
+export { jwk } from "./jwk.js";
+export type {
+  JwkAlgorithm,
+  JwkOptions,
+  JwkSet,
+  JwkSource,
+  JwkVerifyHook,
+} from "./jwk.js";
 export { every, some, except } from "./combine.js";
 export type { ExceptPredicate } from "./combine.js";
 export { ipRestriction } from "./ip-restriction.js";
@@ -131,6 +139,7 @@ export type {
   CsrfCookieOptions,
   BasicAuthOptions,
 } from "./middleware.js";
+export type { BearerAuthOptions, BearerAuthVerifyHook } from "./middleware.js";
 
 export { createLogger, noopLogger, DEFAULT_REDACT_KEYS } from "./logger.js";
 export type {

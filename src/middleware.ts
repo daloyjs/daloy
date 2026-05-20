@@ -703,10 +703,76 @@ export function timing(headerName = "server-timing"): Hooks {
  * @returns A {@link Hooks} bundle ready for `app.use(...)`.
  * @since 0.1.0
  */
-export function bearerAuth(opts: {
+/**
+ * Per-request revalidation hook for {@link bearerAuth}. Runs after `validate`
+ * has accepted the raw token, and is the integration point for
+ * **revocation lists**, **token-version counters** ("user changed password
+ * since this token was issued"), and "this token was issued before the
+ * tenant was disabled" checks. Returning `false` rejects the request with
+ * `403`; returning `true` or `undefined` accepts.
+ *
+ * @since 0.22.0
+ */
+export type BearerAuthVerifyHook<TCredentials = string> = (
+  credentials: TCredentials,
+  ctx: BaseContext<any, any>,
+) => boolean | void | Promise<boolean | void>;
+
+export interface BearerAuthOptions {
+  /** Cheap, stateless token check (signature / format). */
   validate: (token: string) => boolean | Promise<boolean>;
+  /** WWW-Authenticate realm. Default: `"api"`. */
   realm?: string;
-}): Hooks {
+  /**
+   * Optional per-request revalidation hook (Wave 5). Called after `validate`
+  * accepts the token. Returning `false` rejects the request with `403`;
+  * returning `true` or `undefined` accepts. Use for revocation lists,
+  * token-version counters, etc.
+   *
+   * @since 0.22.0
+   */
+  verify?: BearerAuthVerifyHook<string>;
+}
+
+/**
+ * Minimal Bearer-token authentication middleware. Rejects requests with no
+ * `Authorization: Bearer ...` header with `401` (and a `WWW-Authenticate`
+ * challenge), and requests whose token fails `validate(token)` (or the
+ * optional per-request `verify(token, ctx)` revalidation hook) with `403`.
+ *
+ * The `validate` callback is the integration point with whatever JWT
+ * verifier, opaque-token introspector, or in-memory test stub you use. The
+ * optional `verify` hook (Wave 5) is the integration point for revocation
+ * lists, token-version counters, and other per-request invalidation checks
+ * that `validate` cannot answer statelessly.
+ *
+ * @example
+ * ```ts
+ * import { bearerAuth } from "@daloyjs/core";
+ * import { jwtVerify } from "jose";
+ *
+ * app.use(bearerAuth({
+ *   realm: "books-api",
+ *   validate: async (token) => {
+ *     try { await jwtVerify(token, jwks); return true; } catch { return false; }
+ *   },
+ *   verify: async (token, _ctx) => !(await revoked.has(hash(token))),
+ * }));
+ * ```
+ *
+ * @param opts - Token validator, optional revalidation hook, and realm.
+ * @returns A {@link Hooks} bundle ready for `app.use(...)`.
+ * @since 0.1.0
+ */
+export function bearerAuth(opts: BearerAuthOptions): Hooks {
+  const options = opts as BearerAuthOptions | undefined;
+  if (!options || typeof options.validate !== "function") {
+    throw new Error("bearerAuth(): validate must be a function.");
+  }
+  const realm = options.realm ?? "api";
+  if (/["\r\n\0]/.test(realm)) {
+    throw new Error("bearerAuth(): realm must not contain quotes, CR, LF, or NUL bytes.");
+  }
   return {
     async beforeHandle(ctx) {
       const h = ctx.request.headers.get("authorization") ?? "";
@@ -722,13 +788,18 @@ export function bearerAuth(opts: {
             status: 401,
             headers: {
               "content-type": "application/problem+json",
-              "www-authenticate": `Bearer realm="${opts.realm ?? "api"}"`,
+              "www-authenticate": `Bearer realm="${realm}"`,
+              "cache-control": "no-store",
             },
           }
         );
       }
-      const ok = await opts.validate(m[1]!);
+      const ok = await options.validate(m[1]!);
       if (!ok) throw new ForbiddenError("Invalid token");
+      if (options.verify) {
+        const verified = await options.verify(m[1]!, ctx);
+        if (verified === false) throw new ForbiddenError("Token revoked");
+      }
       return undefined;
     },
   };
@@ -1023,6 +1094,18 @@ export interface BasicAuthOptions {
    * without invoking `verify`.
    */
   maxCredentialBytes?: number;
+  /**
+   * Typed-context callback fired after `verify` accepts the credentials and
+   * after the framework has stamped `ctx.state.user`. Use this to decorate
+   * `ctx.state` with extra fields (typed via `AppState`) so handlers do not
+   * re-parse the `Authorization` header in every route.
+   *
+   * @since 0.22.0
+   */
+  onAuthSuccess?: (
+    creds: { username: string; password: string },
+    ctx: BaseContext<any, any>,
+  ) => void | Promise<void>;
 }
 
 const BASIC_AUTH_TOKEN_RE = /^Basic\s+([A-Za-z0-9+/=]+)$/i;
@@ -1064,6 +1147,7 @@ function basicAuthChallenge(realm: string): Response {
       headers: {
         "content-type": "application/problem+json",
         "www-authenticate": `Basic realm="${realm}", charset="UTF-8"`,
+        "cache-control": "no-store",
       },
     },
   );
@@ -1122,6 +1206,12 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
       if (!result) return basicAuthChallenge(realm);
       (ctx.state as Record<string, unknown>).user =
         typeof result === "object" ? result : { username: creds.user };
+      if (options.onAuthSuccess) {
+        await options.onAuthSuccess(
+          { username: creds.user, password: creds.pass },
+          ctx,
+        );
+      }
       return undefined;
     },
   };
