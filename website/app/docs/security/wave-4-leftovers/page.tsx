@@ -143,12 +143,12 @@ app.cspReportRoute({
       <p>
         Bad content-types receive <code>415</code>, oversize payloads{" "}
         <code>413</code>, malformed JSON <code>400</code>, and rate-limited
-        callers <code>429</code>. The default logger sink omits the parsed report
-        body in production unless <code>logCspReportBodies: true</code> is set
-        explicitly; CSP reports include violated URLs, and URLs are where PII
-        likes to hide when nobody is looking. Sink errors are caught and logged
-        at <code>error</code> through the pluggable redacted logger without
-        breaking the <code>204</code> response.
+        callers <code>429</code>. The default logger sink omits the parsed
+        report body in production unless <code>logCspReportBodies: true</code>{" "}
+        is set explicitly; CSP reports include violated URLs, and URLs are where
+        PII likes to hide when nobody is looking. Sink errors are caught and
+        logged at <code>error</code> through the pluggable redacted logger
+        without breaking the <code>204</code> response.
       </p>
 
       <h2>

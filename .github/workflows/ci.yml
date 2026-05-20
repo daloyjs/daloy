@@ -95,6 +95,9 @@ jobs:
       - name: Verify Wave 11 multi-runtime parity bake-ins (Wave 11 governance gate)
         run: pnpm verify:wave11-audits
 
+      - name: Verify Wave 12 mature-Node second-pass bake-ins (Wave 12 governance gate)
+        run: pnpm verify:wave12-audits
+
       - name: Typecheck
         run: pnpm typecheck
 

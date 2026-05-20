@@ -113,6 +113,26 @@ const DISABLED_BY_INSECURE_DEFAULTS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Wave 12 item 11: the exact RFC 7231 + RFC 5789 HTTP-method allowlist.
+ * The framework refuses any other method at route-registration time so
+ * `TRACE`, `CONNECT`, and WebDAV verbs (`MKCOL`, `COPY`, `PROPFIND`,
+ * `MOVE`, etc.) cannot bypass the strict Content-Type / body-on-GET /
+ * TRACE-and-CONNECT-refusal defaults. The set mirrors the `HttpMethod`
+ * union exported from `./types.ts`.
+ *
+ * @internal
+ */
+const CANONICAL_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set<HttpMethod>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+]);
+
+/**
  * Configuration accepted by {@link App}'s constructor. Every field is
  * optional; sensible production defaults are applied.
  *
@@ -1298,6 +1318,22 @@ export class App {
     Req extends RequestSchemas | undefined,
     Res extends ResponsesMap,
   >(def: RouteDefinition<P, M, Req, Res>): this {
+    // Wave 12 item 11: refuse non-canonical HTTP methods at runtime.
+    // The TypeScript `HttpMethod` union already constrains the public
+    // surface, but an unsafe cast (or a runtime caller in plain JS)
+    // could bypass it. Closes the "framework silently routes WebDAV /
+    // TRACE / CONNECT" class of bypass-via-extended-method bugs at the
+    // framework boundary.
+    if (!CANONICAL_HTTP_METHODS.has(def.method as HttpMethod)) {
+      throw new Error(
+        `app.route(): HTTP method "${String(def.method)}" is not on ` +
+          `the RFC 7231 + RFC 5789 allowlist. Allowed: ` +
+          `${[...CANONICAL_HTTP_METHODS].join(", ")}. Custom methods ` +
+          `(TRACE, CONNECT, WebDAV verbs, etc.) bypass the strict ` +
+          `Content-Type, body-on-GET, and TRACE/CONNECT refusal ` +
+          `defaults and are not supported.`,
+      );
+    }
     if (def.hooks) this.assertSecureHookConfig(def.hooks);
     const fullPath = joinPath(this.prefix, def.path) as PathString;
     const merged: RouteDefinition<any, any, any, any> = {

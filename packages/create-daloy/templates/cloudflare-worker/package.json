@@ -10,7 +10,7 @@
     "test": "node --import tsx/esm --test tests/**/*.test.ts"
   },
   "dependencies": {
-    "@daloyjs/core": "^0.30.0",
+    "@daloyjs/core": "^0.31.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
