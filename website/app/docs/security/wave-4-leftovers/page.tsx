@@ -103,10 +103,11 @@ app.use(
         Registers a rate-limited <code>POST</code> receiver for browser CSP
         violation reports. Defaults: path <code>/__csp-report</code>, per-IP
         rate limit <code>60</code> requests / <code>60s</code>, body cap{" "}
-        <code>8 KiB</code>, accepted content types{" "}
-        <code>application/csp-report</code>,{" "}
-        <code>application/reports+json</code>, and <code>application/json</code>
-        .
+        <code>8 KiB</code> (hard-capped at <code>64 KiB</code> since{" "}
+        <code>0.30.0</code>), accepted content types{" "}
+        <code>application/csp-report</code> and{" "}
+        <code>application/reports+json</code>. <code>application/json</code> is
+        refused with <code>415</code>.
       </p>
       <CodeBlock
         code={`import { App, secureHeaders } from "@daloyjs/core";
@@ -130,6 +131,7 @@ app.cspReportRoute({
   path: "/__csp-report",       // default
   rateLimit: { limit: 60, windowMs: 60_000 }, // default; pass false to disable
   maxBodyBytes: 8 * 1024,      // default
+  logCspReportBodies: false,   // production default; set true only after log review
   // Optional structured sink; defaults to log.warn through the redacted logger.
   onReport: (report, { ip, userAgent }) => {
     const body = report as { "csp-report"?: { "blocked-uri"?: string } };
@@ -139,9 +141,12 @@ app.cspReportRoute({
         language="ts"
       />
       <p>
-        Bad content-types receive <code>415</code> with <code>Accept</code>,
-        oversize payloads <code>413</code>, malformed JSON <code>400</code>, and
-        rate-limited callers <code>429</code>. Sink errors are caught and logged
+        Bad content-types receive <code>415</code>, oversize payloads{" "}
+        <code>413</code>, malformed JSON <code>400</code>, and rate-limited
+        callers <code>429</code>. The default logger sink omits the parsed report
+        body in production unless <code>logCspReportBodies: true</code> is set
+        explicitly; CSP reports include violated URLs, and URLs are where PII
+        likes to hide when nobody is looking. Sink errors are caught and logged
         at <code>error</code> through the pluggable redacted logger without
         breaking the <code>204</code> response.
       </p>

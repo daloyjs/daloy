@@ -458,7 +458,7 @@ test("cors preflight from an unknown origin omits allow-origin and still respond
   const res = await app.request("/pre", { method: "OPTIONS", headers: { origin: "https://unknown.test" } });
   assert.equal(res.status, 204);
   assert.equal(res.headers.get("access-control-allow-origin"), null);
-  assert.equal(res.headers.get("access-control-allow-methods"), "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  assert.equal(res.headers.get("access-control-allow-methods"), "GET, HEAD, POST");
 });
 
 test("rateLimit cleans up expired entries when buckets grow past the watermark", async () => {

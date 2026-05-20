@@ -526,7 +526,9 @@ export interface CspReportRouteOptions {
   rateLimit?: { limit?: number; windowMs?: number } | false;
   /**
    * Maximum accepted request body size, in bytes. Default `8192`. Larger
-   * bodies are rejected with `413`.
+   * bodies are rejected with `413`. Hard upper bound is 65536 bytes
+   * (Wave 11) — CSP / Reporting API reports are small; a cap above 64 KiB
+   * is rejected at construction time as a DoS-via-report-flood defense.
    */
   maxBodyBytes?: number;
   /**
@@ -539,6 +541,18 @@ export interface CspReportRouteOptions {
     report: unknown,
     ctx: { ip: string | null; userAgent: string | null },
   ) => void | Promise<void>;
+  /**
+   * Wave 11 — when `false` (the default in production), the default logger
+   * sink omits the parsed report body and logs only `{ ip, userAgent }`.
+   * CSP reports include the URL that violated CSP, which may contain PII
+   * (e.g. a session-id query parameter on a navigation that triggered the
+   * report). Opt in only when the operator has reviewed their logging
+   * pipeline. Ignored when `onReport` is supplied — custom sinks own their
+   * own redaction policy.
+   *
+   * @since 0.30.0
+   */
+  logCspReportBodies?: boolean;
 }
 
 /**
@@ -1503,14 +1517,22 @@ export class App {
    * when omitted). Returns `204 No Content` so browsers stop retrying.
    *
    * Combine with `secureHeaders({ reportingEndpoints, reportTo })` to wire
-   * the browser to this endpoint. The route is registered as `internal:
-  * false` (i.e. publicly reachable); that is required for the browser
+  * the browser to this endpoint. The route is registered as publicly
+  * reachable; that is required for the browser
    * Reporting API to send to it.
    *
    */
   cspReportRoute(opts: CspReportRouteOptions = {}): this {
     const path = (opts.path ?? "/__csp-report") as PathString;
     const maxBytes = opts.maxBodyBytes ?? 8192;
+    // Wave 11 — refuse a configured cap above 64 KiB so a misconfigured
+    // policy cannot turn the receiver into a DoS-via-report-flood amplifier.
+    const HARD_MAX = 65536;
+    if (!Number.isInteger(maxBytes) || maxBytes <= 0 || maxBytes > HARD_MAX) {
+      throw new Error(
+        `cspReportRoute(): maxBodyBytes must be a positive integer <= ${HARD_MAX}.`,
+      );
+    }
     const rateLimitConfig =
       opts.rateLimit === false
         ? null
@@ -1519,6 +1541,11 @@ export class App {
       ? new Map<string, { count: number; resetMs: number }>()
       : null;
     const log = this.log;
+    // Wave 11 — only log report bodies when explicitly enabled. In
+    // production this is opt-in; in development the body is included by
+    // default so violations are debuggable.
+    const includeReportBody =
+      opts.logCspReportBodies ?? !this.isProduction();
 
     this.route({
       method: "POST",
@@ -1548,13 +1575,11 @@ export class App {
           .toLowerCase();
         if (
           contentType !== "application/csp-report" &&
-          contentType !== "application/reports+json" &&
-          contentType !== "application/json"
+          contentType !== "application/reports+json"
         ) {
           throw new UnsupportedMediaTypeError(contentType || "<none>", [
             "application/csp-report",
             "application/reports+json",
-            "application/json",
           ]);
         }
         const rawBytes = await readBodyLimited(request, maxBytes);
@@ -1578,7 +1603,9 @@ export class App {
             });
           } else {
             log.warn(
-              { event: "csp.report", ip, userAgent, report: parsed },
+              includeReportBody
+                ? { event: "csp.report", ip, userAgent, report: parsed }
+                : { event: "csp.report", ip, userAgent },
               "CSP violation report received",
             );
           }

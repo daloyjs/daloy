@@ -375,7 +375,12 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
   return hooks;
 }
 
-const DEFAULT_CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+// Wave 11 — `cors()` default `allowMethods` narrowed to the read-only set.
+// State-changing methods (PUT / PATCH / DELETE) require explicit opt-in.
+// POST stays because it remains a non-CORS-preflighted "simple method" with
+// form-submittable content types (already covered by CSRF). OPTIONS is the
+// preflight method itself and is always accepted, no need to advertise it.
+const DEFAULT_CORS_METHODS = ["GET", "HEAD", "POST"];
 const DEFAULT_CORS_ALLOWED_HEADERS = ["content-type", "authorization"];
 
 /**
@@ -492,6 +497,18 @@ export function cors(opts: CorsOptions): Hooks {
           "Pass an explicit origin string, an array of allowed origins, or a predicate function instead.",
       );
     }
+  }
+  // Wave 11 — refuse wildcard `methods` at construction. CORS `allowMethods`
+  // takes an explicit token list per the Fetch standard; `"*"` is a special
+  // value only in the response header, never in the developer-facing API.
+  // Shipping it as a configured allowlist would cross-origin-expose every
+  // HTTP verb (including TRACE/CONNECT on runtimes that route them) with no
+  // safe way to roll it back.
+  if (opts.methods?.some((m) => m === "*" || m.trim() === "*")) {
+    throw new Error(
+      'cors(): methods cannot include "*". Declare each verb explicitly ' +
+        '(e.g. ["GET", "HEAD", "POST"]).',
+    );
   }
   const allow = (origin: string | null): string | null => {
     if (!origin) return null;

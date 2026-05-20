@@ -209,11 +209,17 @@ export class NotFoundError extends HttpError {
  */
 export class UnauthorizedError extends HttpError {
   constructor(detail?: string) {
-    super(401, {
-      type: "https://daloyjs.dev/errors/unauthorized",
-      title: "Unauthorized",
-      ...(detail ? { detail } : {}),
-    });
+    super(
+      401,
+      {
+        type: "https://daloyjs.dev/errors/unauthorized",
+        title: "Unauthorized",
+        ...(detail ? { detail } : {}),
+      },
+      // Wave 11 — auth-failure responses must never be cached. `no-store`
+      // already forbids both shared and private caches per RFC 9111 §5.2.2.5.
+      { "cache-control": "no-store" },
+    );
     this.name = "UnauthorizedError";
   }
 }
@@ -228,11 +234,16 @@ export class UnauthorizedError extends HttpError {
  */
 export class ForbiddenError extends HttpError {
   constructor(detail?: string) {
-    super(403, {
-      type: "https://daloyjs.dev/errors/forbidden",
-      title: "Forbidden",
-      ...(detail ? { detail } : {}),
-    });
+    super(
+      403,
+      {
+        type: "https://daloyjs.dev/errors/forbidden",
+        title: "Forbidden",
+        ...(detail ? { detail } : {}),
+      },
+      // Wave 11 — authorization-failure responses must never be cached.
+      { "cache-control": "no-store" },
+    );
     this.name = "ForbiddenError";
   }
 }
@@ -317,9 +328,11 @@ export class TooManyRequestsError extends HttpError {
         type: "https://daloyjs.dev/errors/too-many-requests",
         title: "Too Many Requests",
       },
+      // Wave 11 — rate-limit responses must never be cached so a 429 from a
+      // private cache cannot extend the throttle window past `Retry-After`.
       retryAfterSeconds !== undefined
-        ? { "retry-after": String(retryAfterSeconds) }
-        : undefined
+        ? { "retry-after": String(retryAfterSeconds), "cache-control": "no-store" }
+        : { "cache-control": "no-store" }
     );
     this.name = "TooManyRequestsError";
   }

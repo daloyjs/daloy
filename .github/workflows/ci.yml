@@ -92,6 +92,9 @@ jobs:
       - name: Verify Wave 10 zero-runtime-deps + governance audits (Wave 10 governance gate)
         run: pnpm verify:wave10-audits
 
+      - name: Verify Wave 11 multi-runtime parity bake-ins (Wave 11 governance gate)
+        run: pnpm verify:wave11-audits
+
       - name: Typecheck
         run: pnpm typecheck
 
