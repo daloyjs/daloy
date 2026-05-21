@@ -350,6 +350,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     await access(path.join(projectDir, ".github/workflows/codeql.yml"));
     await access(path.join(projectDir, ".github/workflows/scorecard.yml"));
     await access(path.join(projectDir, ".github/workflows/zizmor.yml"));
+    await access(path.join(projectDir, ".github/workflows/container-scan.yml"));
     await access(path.join(projectDir, ".github/dependabot.yml"));
     await access(path.join(projectDir, "SECURITY.md"));
     await access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs"));
@@ -387,6 +388,23 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.doesNotMatch(release, /secrets\.NPM_TOKEN/);
     assert.doesNotMatch(release, /^\s*NODE_AUTH_TOKEN:/m);
     assert.doesNotMatch(release, /__[A-Z_]+__/);
+
+    const containerScan = await readFile(
+      path.join(projectDir, ".github/workflows/container-scan.yml"),
+      "utf8",
+    );
+    assert.match(containerScan, /hadolint\/hadolint-action@[0-9a-f]{40}\s+# v3/);
+    assert.match(containerScan, /aquasecurity\/trivy-action@[0-9a-f]{40}\s+# v0/);
+    assert.match(containerScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+    assert.match(containerScan, /scan-type: fs/);
+    assert.match(containerScan, /image-ref: local\/app:scan/);
+    assert.doesNotMatch(containerScan, /__[A-Z_]+__/);
+
+    const dependabotConfig = await readFile(
+      path.join(projectDir, ".github/dependabot.yml"),
+      "utf8",
+    );
+    assert.match(dependabotConfig, /package-ecosystem: docker/);
 
     const codeowners = await readFile(
       path.join(projectDir, ".github/CODEOWNERS"),

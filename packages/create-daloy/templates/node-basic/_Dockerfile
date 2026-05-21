@@ -10,10 +10,22 @@
 #   - `HEALTHCHECK` wired to `app.healthcheck()` / `app.readinesscheck()`
 #     (mount the routes via `app.healthcheck()` / `app.readinesscheck()`).
 #   - `tini` as PID 1 for proper signal forwarding and zombie reaping.
+#   - Minimal runner surface: no `curl` / no extra OS packages. The
+#     healthcheck uses BusyBox `wget` already in `node:*-alpine`.
+#   - Base image is consumed through the `NODE_IMAGE` ARG so you can
+#     pin to an immutable digest (recommended for production):
+#       docker build --build-arg \
+#         NODE_IMAGE=node:24-alpine@sha256:<digest> .
+#     Dependabot's `docker` ecosystem (see `.github/dependabot.yml`)
+#     keeps the digest fresh. The companion `container-scan.yml`
+#     workflow lints this file with hadolint and scans the built
+#     image with Trivy on every PR.
 
-ARG NODE_VERSION=24-alpine
+# Override at build time to pin a specific digest:
+#   NODE_IMAGE=node:24-alpine@sha256:<digest>
+ARG NODE_IMAGE=node:24-alpine
 
-FROM node:${NODE_VERSION} AS builder
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 COPY package.json pnpm-lock.yaml* ./
 RUN corepack enable && corepack prepare pnpm@latest --activate && \
@@ -21,11 +33,12 @@ RUN corepack enable && corepack prepare pnpm@latest --activate && \
 COPY . .
 RUN pnpm build
 
-FROM node:${NODE_VERSION} AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# tini for clean signal handling at PID 1.
-RUN apk add --no-cache tini curl && \
+# tini only — no curl, no extra packages. BusyBox `wget` (already in
+# alpine) is enough for the HEALTHCHECK below.
+RUN apk add --no-cache tini && \
     addgroup -S app -g 1001 && \
     adduser -S app -G app -u 1001
 COPY --from=builder --chown=app:app /app/dist ./dist
@@ -35,6 +48,6 @@ USER app
 EXPOSE 3000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:3000/readyz || exit 1
+  CMD wget -q -O /dev/null --spider http://127.0.0.1:3000/readyz || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/index.js"]

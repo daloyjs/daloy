@@ -25,6 +25,31 @@ The `--with-ci` bundle adds these defaults:
 - CodeQL, OpenSSF Scorecard, zizmor, Dependabot, and CODEOWNERS are generated.
 - npm publishing is disabled until `NPM_PUBLISH_ENABLED=true` is set and npm trusted publishing is configured.
 
+## Container hardening
+
+If you scaffolded the `node-basic` template (the only one that ships a
+`Dockerfile`), the following defaults are also enabled. They cover the same
+ground the Snyk container-security guidance recommends, using only free,
+SHA-pinned open-source tooling:
+
+- Runtime stage is `node:24-alpine` with `tini` as PID 1 and **no `curl`** —
+  the `HEALTHCHECK` uses BusyBox `wget` already shipped in the image.
+- Base image is consumed through `ARG NODE_IMAGE`, so production builds can
+  pin to an immutable digest: `docker build --build-arg NODE_IMAGE=node:24-alpine@sha256:<digest> .`.
+- App runs as a non-root user (uid 1001) with `STOPSIGNAL SIGTERM`; the
+  framework's graceful-shutdown drain fires on container stop.
+- `Dockerfile` is monitored by Dependabot's `docker` ecosystem so the base
+  image gets bumped automatically when CVEs land.
+- The `.github/workflows/container-scan.yml` workflow runs on every PR
+  and weekly on `main`:
+  - **hadolint** lints the `Dockerfile` (CIS Docker Benchmark coverage).
+  - **Trivy** scans the source tree for secrets, config issues, and
+    vulnerable lockfile entries.
+  - **Trivy** builds the image and scans it for OS + language CVEs
+    (`HIGH`/`CRITICAL`, `--ignore-unfixed`); merges block on CRITICAL.
+  - All findings are uploaded as SARIF to the GitHub **Code Scanning**
+    tab alongside CodeQL.
+
 ## Required repository settings
 
 Before relying on these files for a company project:
