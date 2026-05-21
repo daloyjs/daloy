@@ -107,6 +107,9 @@ jobs:
       - name: Verify no runtime registry-exfiltration primitives (Socket GemStuffer gate)
         run: pnpm verify:no-registry-exfiltration
 
+      - name: Verify GitHub Actions are SHA-pinned (Socket tj-actions/changed-files CVE-2025-30066 gate)
+        run: pnpm verify:actions-pinned
+
       - name: Verify no vulnerable JS sandbox dependencies (Socket vm2 CVE-2026-26956 gate)
         run: pnpm verify:no-vulnerable-sandboxes
 
