@@ -1,0 +1,56 @@
+# syntax=docker/dockerfile:1.7
+# Containerized local-dev / CI environment for a DaloyJS Cloudflare Worker.
+#
+# Production deploys go through `wrangler deploy` to Cloudflare's edge —
+# **this Dockerfile is not a production runtime**. Ship the Worker to
+# Cloudflare; use this image for:
+#   - Reproducible local dev (devcontainers, GitHub Codespaces).
+#   - CI smoke tests that exercise the Worker against `wrangler dev`'s
+#     local workerd runtime without installing Node/pnpm on the runner.
+#   - Air-gapped review apps that need to host `wrangler dev` behind a
+#     reverse proxy.
+#
+# Hardening shipped out of the box:
+#   - Non-root runtime user (uid 1001).
+#   - Read-only-root-filesystem friendly: writes are confined to the
+#     working dir; mount `/tmp` as tmpfs (`--read-only --tmpfs /tmp`).
+#   - `STOPSIGNAL SIGTERM` so wrangler's child workerd process gets a
+#     clean shutdown signal.
+#   - Minimal runner surface: no `curl`, no `bash` extras beyond what
+#     `node:*-alpine` already ships. BusyBox `wget` powers the
+#     HEALTHCHECK.
+#   - `tini` as PID 1 for proper signal forwarding and zombie reaping
+#     (important because wrangler spawns workerd as a child process).
+#   - `pnpm install --frozen-lockfile --ignore-scripts` matches the
+#     supply-chain defaults in `.npmrc` (no lifecycle scripts run).
+#   - Base image is consumed through the `NODE_IMAGE` ARG so builds
+#     can pin to an immutable digest:
+#       docker build --build-arg \
+#         NODE_IMAGE=node:24-alpine@sha256:<digest> .
+
+# Override at build time to pin a specific digest.
+ARG NODE_IMAGE=node:24-alpine
+
+FROM ${NODE_IMAGE} AS builder
+WORKDIR /app
+COPY package.json pnpm-lock.yaml* ./
+RUN corepack enable && corepack prepare pnpm@latest --activate && \
+    pnpm install --frozen-lockfile --ignore-scripts
+COPY . .
+
+FROM ${NODE_IMAGE} AS runner
+WORKDIR /app
+ENV NODE_ENV=development
+# tini only — no curl, no extra packages.
+RUN apk add --no-cache tini && \
+    addgroup -S app -g 1001 && \
+  adduser -S app -G app -u 1001
+COPY --from=builder --chown=app:app /app /app
+USER app
+EXPOSE 8787
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -q -O /dev/null --spider http://127.0.0.1:8787/healthz || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+# Bind to 0.0.0.0 so the container can be reached from the host network.
+CMD ["./node_modules/.bin/wrangler", "dev", "--ip", "0.0.0.0", "--port", "8787"]

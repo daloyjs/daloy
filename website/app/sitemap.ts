@@ -166,6 +166,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/orm/prisma", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/orm/drizzle", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/orm/typeorm", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/orm/mikro-orm", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/orm/sequelize", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/orm/supabase", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/odm", changeFrequency: "monthly", priority: 0.8 },

@@ -25,6 +25,16 @@ When `docs: true` is set in `new App({...})`, three routes are auto-mounted:
 - `generated/` — machine-written by `pnpm gen`. Do not edit by hand.
 - `tests/` — `*.test.ts` files run with `node --test` (via `tsx`).
 
+## Imports
+
+This project uses TypeScript with `"module": "NodeNext"` (ESM). Relative imports **must include a `.js` extension**, even when the source file is `.ts`:
+
+```ts
+import { buildApp } from "./build-app.js"; // resolves to build-app.ts at typecheck, build-app.js at runtime
+```
+
+This is the official Node.js ESM convention — TypeScript rewrites the specifier during typecheck, and the compiled output really is `.js`. Bare-specifier imports from packages (`@daloyjs/core`, `zod`, …) do not need an extension.
+
 ## Core rules
 
 1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.route({...})`.

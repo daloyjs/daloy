@@ -14,18 +14,27 @@
 import type { App } from "./app.js";
 import { validate } from "./schema.js";
 
+/** A single problem surfaced by {@link runContractTests}. */
 export interface ContractIssue {
+  /** `"error"` blocks publishing; `"warning"` is informational. */
   level: "error" | "warning";
+  /** Identifier for the offending route (e.g. `"GET /books/{id}"`). */
   route: string;
+  /** Human-readable description of the problem. */
   message: string;
 }
 
+/** Result of {@link runContractTests}. CI should treat `ok === false` as a failure. */
 export interface ContractReport {
+  /** `true` when no `"error"`-level issues were reported. */
   ok: boolean;
+  /** Number of routes that were inspected. */
   checked: number;
+  /** All collected issues, in route-declaration order. */
   issues: ContractIssue[];
 }
 
+/** Options for {@link runContractTests}. */
 export interface ContractTestOptions {
   /** Require every route to have an operationId. Default: true. */
   requireOperationId?: boolean;
@@ -33,6 +42,16 @@ export interface ContractTestOptions {
   allowBodyOnSafeMethods?: boolean;
 }
 
+/**
+ * Run contract checks against every route registered on `app`.
+ *
+ * Verifies that declared response/request examples validate against their
+ * schemas, that `operationId`s are present and unique, that GET/HEAD/DELETE
+ * routes don't carry body schemas by accident, and that `meta.examples`
+ * reference declared response statuses.
+ *
+ * @returns A {@link ContractReport}. In CI, exit non-zero when `report.ok` is `false`.
+ */
 export async function runContractTests(
   app: App,
   opts: ContractTestOptions = {}

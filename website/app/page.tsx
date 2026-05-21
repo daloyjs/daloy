@@ -26,11 +26,16 @@ import { buildMetadata, CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "The runtime-portable framework for a Zero-Trust supply chain",
   description:
-    "DaloyJS is a contract-first TypeScript web framework with blocked install scripts, SHA-pinned CI actions, and OIDC provenance \u2014 runtime-portable across Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge. Typed end-to-end with Standard Schema validation, OpenAPI 3.1, and Hey API typed clients.",
+    "DaloyJS is a secure-by-default TypeScript/JavaScript web framework for LLM-era supply-chain risk. create-daloy scaffolds projects with blocked install scripts, a 24h pnpm release-age cooldown, lockfile source verification, pinned CI, Dependabot, CODEOWNERS, and SECURITY.md; DaloyJS itself ships through a hardened provenance-backed release pipeline. Runtime-portable across Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge. Typed end-to-end with Standard Schema validation, OpenAPI 3.1, and Hey API typed clients.",
   path: "/",
   keywords: [
     "DaloyJS",
+    "secure by default",
+    "secure-by-default framework",
     "zero-trust supply chain",
+    "supply-chain attack protection",
+    "slopsquatting protection",
+    "AI-era supply chain security",
     "runtime-portable framework",
     "TypeScript HTTP framework",
     "contract-first TypeScript",
@@ -40,6 +45,7 @@ export const metadata = buildMetadata({
     "SSE NDJSON streaming",
     "supply-chain hardened",
     "OIDC provenance",
+    "create-daloy",
   ],
 });
 
@@ -74,6 +80,21 @@ const CREATE_COMMAND = "pnpm create daloy@latest my-api";
 
 const FEATURES = [
   {
+    icon: LockIcon,
+    title: "Supply-chain hardened by default",
+    body: "The default pnpm scaffold ships a hardened .npmrc: ignore-scripts=true blocks malicious post-install payloads, minimum-release-age=1440 waits out fresh-package attacks, and verify-store-integrity keeps installs honest. The generated CI bundle adds lockfile source checks so git deps and non-registry tarballs cannot quietly sneak in.",
+  },
+  {
+    icon: ShieldCheckIcon,
+    title: "Secure-by-default runtime",
+    body: "The core starts with production guardrails: body limits, prototype-pollution-safe JSON, path-traversal rejection, request timeouts, content-type checks, RFC 9457 errors with prod 5xx redaction, secure headers, stripped Server / X-Powered-By, and structured-log redaction for credentials and JWT-shaped values.",
+  },
+  {
+    icon: RobotIcon,
+    title: "Hardened against LLM-era attacks",
+    body: "Attackers can use LLMs to scale package impersonation, slopsquatting, dependency reconnaissance, and vulnerability hunting. DaloyJS answers with boring but sharp defaults: blocked lifecycle scripts, delayed fresh-package resolution, source-verified lockfiles, and a zero-runtime-dependency core.",
+  },
+  {
     icon: FileCodeIcon,
     title: "Contract-first by design",
     body: "One route definition is the source of truth for validation, types, OpenAPI 3.1, the typed client, and contract tests, so drift has fewer places to hide.",
@@ -89,11 +110,6 @@ const FEATURES = [
     body: "Run pnpm gen and get a fully typed fetch SDK — for any consumer, in any TS project — generated from your real spec. Or skip codegen with the in-process typed client.",
   },
   {
-    icon: ShieldCheckIcon,
-    title: "Security guardrails built in",
-    body: "The core enforces body limits, prototype-pollution-safe JSON, path-traversal rejection, request timeouts, content-type checks, and production 5xx redaction. First-party middleware adds secure headers, CSRF, rate limits, and signed-cookie sessions.",
-  },
-  {
     icon: LightningIcon,
     title: "Faster than you'd expect",
     body: "Static routes resolve via a single Map.get (~12.3M ops/sec). Dynamic routes walk a trie in O(segments) regardless of route count.",
@@ -104,19 +120,9 @@ const FEATURES = [
     body: "Backpressure-safe SSE and NDJSON helpers, plus an OpenTelemetry tracing hook that emits HTTP server spans with semantic-convention attributes.",
   },
   {
-    icon: RobotIcon,
-    title: "AI-native for coding agents",
-    body: "Routes carry machine-readable metadata, and every scaffold ships an AGENTS.md plus skills so Copilot, Claude, and Cursor pick up your conventions without a prompt-engineering ritual.",
-  },
-  {
     icon: CubeIcon,
-    title: "Project ops included",
-    body: "pnpm create daloy scaffolder (Node, Bun, Deno, Vercel Edge, Cloudflare Worker), a daloy inspect CLI, multipart with typed file fields, and a Redis rate-limit store.",
-  },
-  {
-    icon: LockIcon,
-    title: "Supply-chain hardened",
-    body: "Backed by pnpm plus hardened repo defaults: blocked lifecycle scripts, release-age cooldowns, verified installs, SHA-pinned CI actions, and OIDC trusted publishing with provenance.",
+    title: "Hardened scaffolds, batteries included",
+    body: "create-daloy's security bundle ships hardened GitHub Actions (top-level permissions:{}, persist-credentials:false, pinned actions, harden-runner), Dependabot, CODEOWNERS, SECURITY.md, lockfile verification, container templates with non-root + tini PID 1, and a daloy doctor production-posture validator.",
   },
 ];
 
@@ -148,7 +154,7 @@ export default function HomePage() {
       applicationCategory: "DeveloperApplication",
       operatingSystem: "Cross-platform",
       description:
-        "The runtime-portable TypeScript web framework for a Zero-Trust supply chain: blocked install scripts, SHA-pinned CI actions, OIDC provenance, contract-first routing, Standard Schema validation, OpenAPI 3.1 generation, typed clients, streaming, OpenTelemetry tracing, edge-friendly sessions, and core-enforced security guardrails.",
+        "The secure-by-default, runtime-portable TypeScript web framework for a Zero-Trust supply chain. create-daloy scaffolds projects with blocked install scripts, a 24h pnpm release-age cooldown, lockfile source verification, pinned CI, Dependabot, CODEOWNERS, and SECURITY.md; DaloyJS itself ships through a hardened provenance-backed release pipeline. Built for the LLM-era surge in supply-chain attacks, with contract-first routing, Standard Schema validation, OpenAPI 3.1 generation, typed clients, streaming, OpenTelemetry tracing, edge-friendly sessions, and core-enforced security guardrails.",
       url: SITE_URL,
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       programmingLanguage: "TypeScript",
@@ -196,19 +202,27 @@ export default function HomePage() {
               className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              Blocked install scripts. SHA-pinned actions. OIDC provenance.
-              Typed end-to-end.
+              Secure by default. Blocked install scripts. 24h release-age
+              cooldown. Pinned CI. Provenance-backed releases. Typed end-to-end.
             </p>
             <ContractFlowVisual />
             <p
               className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
               style={{ animationDelay: "180ms" }}
             >
-              Contract-first routing, Standard Schema validation, OpenAPI 3.1
-              with Hey API typed client codegen, streaming and OpenTelemetry
-              tracing, edge-friendly sessions, a security-focused runtime by
-              default, and a supply-chain-hardened release pipeline for the
-              framework itself. One line on the <code>App</code> constructor —{" "}
+              DaloyJS is the JS framework that treats{" "}
+              <strong>secure by default</strong> as a feature, not a checklist.
+              Supply-chain attacks are surging as bad actors use LLMs to scale
+              typosquatting, slopsquatting, dependency reconnaissance, and
+              exploit discovery. A default <code>create-daloy</code> project
+              starts with pnpm hardening, blocked lifecycle scripts, a 24-hour
+              release-age cooldown, lockfile source verification, pinned CI,
+              Dependabot, CODEOWNERS, and SECURITY.md. DaloyJS itself keeps the
+              framework supply chain tight with zero runtime dependencies and
+              provenance-backed releases. You still get contract-first routing,
+              Standard Schema validation, OpenAPI 3.1 with Hey API typed client
+              codegen, streaming, OpenTelemetry tracing, and edge-friendly
+              sessions. One line on the <code>App</code> constructor —{" "}
               <code>docs: true</code> — auto-mounts a Scalar API reference at{" "}
               <code>/docs</code> and the live OpenAPI 3.1 spec at{" "}
               <code>/openapi.json</code>, the same DX as FastAPI.
@@ -254,7 +268,7 @@ export default function HomePage() {
             <div className='flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'>
               <span>443/443 tests passing</span>
               <span aria-hidden>·</span>
-              <span>100% line + function coverage</span>
+              <span>≥90% line, function, and branch coverage gates</span>
               <span aria-hidden>·</span>
               <span>Node 24+, Bun, Deno, Cloudflare, Vercel</span>
             </div>
@@ -293,9 +307,11 @@ export default function HomePage() {
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold tracking-tight">Why DaloyJS</h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
-              Take the best ideas from each modern stack without having to
-              choose only one axis: OpenAPI ergonomics, runtime portability,
-              typed clients, Node ops, and real security guardrails.
+              The JS framework that is <strong>secure by default</strong> — and
+              hands that same protection to every project scaffolded with{" "}
+              <code>create-daloy</code>, so your supply chain is hardened
+              against LLM-era attacks from day one, without giving up OpenAPI
+              ergonomics, runtime portability, typed clients, or Node ops.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -379,7 +395,7 @@ export default function HomePage() {
                   [
                     "Supply-chain-hardened installs and publishing",
                     "pnpm + hardened CI/CD",
-                    "Blocked scripts, release-age cooldowns, SHA-pinned actions, and provenance publishing",
+                    "Blocked scripts, release-age cooldowns, lockfile source checks, pinned actions, and provenance-backed framework releases",
                   ],
                 ].map(([want, best, give]) => (
                   <tr key={want} className="border-t">
@@ -398,12 +414,14 @@ export default function HomePage() {
       <section>
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
           <h2 className="mb-4 text-3xl font-bold tracking-tight">
-            Ready to ship?
+            Ready to ship — secure by default?
           </h2>
           <p className="mb-8 leading-8 text-muted-foreground">
-            Scaffold a project in seconds, then keep the contract as the app
-            grows. The same app runs on Node, Bun, Deno, Cloudflare Workers, and
-            Vercel Edge.
+            Scaffold a project in seconds with pnpm hardening, blocked install
+            scripts, a 24h release-age cooldown, pinned CI, Dependabot,
+            CODEOWNERS, and lockfile source verification. Then keep the contract
+            as the app grows — the same app runs on Node, Bun, Deno, Cloudflare
+            Workers, and Vercel Edge.
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Link

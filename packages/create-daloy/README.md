@@ -153,17 +153,21 @@ For Node-style templates, the bundle adds:
 - `.github/workflows/ci.yml` with top-level `permissions: {}`, pinned actions,
   `harden-runner`, `persist-credentials: false`, no package-manager cache, and
   install scripts disabled.
-- `.github/workflows/release.yml` as a disabled-by-default npm trusted publishing
-  skeleton. It only publishes when `NPM_PUBLISH_ENABLED=true`, the package is no
-  longer private, and the protected `npm-publish` environment is configured.
+- `.github/workflows/vuln-scan.yml` — a daily scheduled SCA cron that runs the
+  package manager's audit against the committed lockfile. Catches CVEs disclosed
+  *after* the last PR or push and provides SOC 2 CC7.1
+  ([continuous vulnerability management](https://www.aikido.dev/blog/a-guide-to-automating-technical-vulnerability-management-for-soc-2))
+  evidence even when developers are not touching the repo.
 - CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, and `SECURITY.md`.
 - `scripts/verify-lockfile-sources.mjs` plus a `verify:lockfile` package script
   that rejects git dependencies and non-registry tarball URLs in text lockfiles.
 
+The bundle deliberately does **not** generate an npm publish workflow.
+`create-daloy` scaffolds REST API services, not libraries; if you later carve
+out a reusable package, opt into npm trusted publishing yourself.
+
 For `deno-basic`, `--with-ci` generates a Deno-native CI workflow plus CodeQL,
 Scorecard, zizmor, Dependabot for GitHub Actions, CODEOWNERS, and `SECURITY.md`.
-It does not generate an npm release workflow because the Deno template has no
-`package.json`.
 
 If you omit `--code-owner`, the generated CODEOWNERS file uses
 `@your-org/security-team` as a placeholder. Replace it before relying on branch

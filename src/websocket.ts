@@ -74,8 +74,11 @@ export const WS_CLOSE_CODE = {
 
 /** Maximum payload length permitted on a single control frame (RFC 6455 §5.5). */
 export const WS_MAX_CONTROL_PAYLOAD = 125;
+/** Default ceiling for queued outbound bytes before backpressure handling triggers (1 MiB). */
 export const DEFAULT_WS_BACKPRESSURE_LIMIT = 1024 * 1024;
+/** Default maximum inbound frame/message payload length (1 MiB). */
 export const DEFAULT_WS_MAX_PAYLOAD_LENGTH = 1024 * 1024;
+/** Default idle timeout applied to WebSocket routes (seconds). */
 export const DEFAULT_WS_IDLE_TIMEOUT_SECONDS = 120;
 
 // ---------- Public types ----------
@@ -235,6 +238,7 @@ export interface WebSocketHandler<
   drain?(conn: WebSocketConnection<TData>): void | Promise<void>;
 }
 
+/** Result of {@link normalizeWebSocketOptions}: fully resolved limits applied by the adapter. */
 export interface NormalizedWebSocketOptions {
   closeOnBackpressureLimit: boolean;
   backpressureLimit: number;
@@ -292,6 +296,11 @@ function declaredSchemaMaxBytes(schema: StandardSchemaV1 | undefined): number | 
   return undefined;
 }
 
+/**
+ * Resolve a user-supplied {@link WebSocketHandler} into the strict
+ * {@link NormalizedWebSocketOptions} the adapter consumes. Applies defaults,
+ * runs production safety checks, and throws on invalid values.
+ */
 export function normalizeWebSocketOptions(
   handler: WebSocketHandler<any, any, any>,
   context: { production: boolean; secureDefaults: boolean },
@@ -393,6 +402,7 @@ export function defineWebSocket<
 
 // ---------- WebSocket route registry ----------
 
+/** Entry stored inside {@link WebSocketRegistry} for a single WS route. */
 export interface WebSocketRouteEntry {
   path: PathString;
   handler: WebSocketHandler<any, any, any>;

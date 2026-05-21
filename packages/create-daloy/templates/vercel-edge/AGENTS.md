@@ -19,6 +19,16 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel Edge**. **Contrac
 - `vercel.json` — Vercel build/runtime configuration.
 - `tests/` — test files.
 
+## Imports
+
+This project uses TypeScript with `"module": "NodeNext"` (ESM). Relative imports **must include a `.js` extension**, even when the source file is `.ts`:
+
+```ts
+import handler from "../api/[...path].js"; // resolves to the .ts source at typecheck, .js at runtime
+```
+
+This is the official Node.js ESM convention — TypeScript rewrites the specifier during typecheck, and the deployed output really is `.js`. Bare-specifier imports from packages (`@daloyjs/core`, `zod`, …) do not need an extension.
+
 ## Core rules
 
 1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.route({...})`.

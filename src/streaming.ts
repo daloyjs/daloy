@@ -42,11 +42,13 @@ export interface SSEMessage {
   comment?: string;
 }
 
+/** Common options shared by every streaming helper in this module. */
 export interface StreamOptions {
   /** Abort the stream when this signal fires. */
   signal?: AbortSignal;
 }
 
+/** Options for {@link sseStream}. */
 export interface SSEStreamOptions extends StreamOptions {
   /**
    * Send a comment (`:keep-alive`) every N milliseconds to keep the
@@ -55,13 +57,19 @@ export interface SSEStreamOptions extends StreamOptions {
   keepAliveMs?: number;
 }
 
+/** Options for {@link sseResponse}. */
 export interface SSEResponseOptions extends SSEStreamOptions {
+  /** HTTP status (default `200`). */
   status?: number;
+  /** Response headers merged with SSE defaults; caller-supplied values win. */
   headers?: HeadersInit;
 }
 
+/** Options for {@link ndjsonResponse}. */
 export interface NDJSONResponseOptions extends StreamOptions {
+  /** HTTP status (default `200`). */
   status?: number;
+  /** Response headers merged with NDJSON defaults; caller-supplied values win. */
   headers?: HeadersInit;
 }
 

@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1.7
+# Container-first defaults for a DaloyJS app running on Bun.
+#
+# Hardening shipped out of the box:
+#   - Non-root runtime user (`bun`, uid 1000 — created by the official
+#     `oven/bun` image).
+#   - Read-only-root-filesystem friendly: no runtime writes outside the
+#     ephemeral working dir. Run with `--read-only --tmpfs /tmp` or set
+#     `readOnlyRootFilesystem: true` in your orchestrator.
+#   - `STOPSIGNAL SIGTERM` so DaloyJS's graceful-shutdown drain fires
+#     when the container is stopped.
+#   - `HEALTHCHECK` wired to the `/healthz` route registered in
+#     `src/build-app.ts`. The healthcheck uses BusyBox `wget` already
+#     present in the alpine base — no `curl`, no extra packages, no
+#     `exec`-ing shell scripts.
+#   - `tini` as PID 1 for proper signal forwarding and zombie reaping
+#     in case the app spawns subprocesses.
+#   - `pnpm install --frozen-lockfile --ignore-scripts` matches the
+#     supply-chain defaults in `.npmrc` (no lifecycle scripts run).
+#   - Base images are consumed through ARGs so production builds can
+#     pin to immutable digests:
+#       docker build --build-arg \
+#         NODE_IMAGE=node:24-alpine@sha256:<digest> \
+#         BUN_IMAGE=oven/bun:1-alpine@sha256:<digest> .
+#     Dependabot's `docker` ecosystem (see `.github/dependabot.yml`)
+#     keeps the digest fresh. The companion `container-scan.yml`
+#     workflow lints this file with hadolint and scans the built image
+#     with Trivy on every PR.
+
+# Override at build time to pin a specific digest.
+ARG NODE_IMAGE=node:24-alpine
+ARG BUN_IMAGE=oven/bun:1-alpine
+
+FROM ${NODE_IMAGE} AS builder
+WORKDIR /app
+# Install deps in a layer that only invalidates when manifests change.
+COPY package.json pnpm-lock.yaml* ./
+RUN corepack enable && corepack prepare pnpm@latest --activate && \
+  pnpm install --frozen-lockfile --ignore-scripts
+COPY . .
+
+FROM ${BUN_IMAGE} AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+# tini only — no curl, no extra packages. BusyBox `wget` (already in
+# alpine) is enough for the HEALTHCHECK below.
+RUN apk add --no-cache tini
+COPY --from=builder --chown=bun:bun /app/node_modules ./node_modules
+COPY --from=builder --chown=bun:bun /app/src ./src
+COPY --from=builder --chown=bun:bun /app/package.json ./package.json
+USER bun
+EXPOSE 3000
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null --spider http://127.0.0.1:3000/healthz || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["bun", "run", "src/index.ts"]

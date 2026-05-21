@@ -65,9 +65,13 @@ export type {
   CallbackOperation,
 } from "./types.js";
 
+/** OpenAPI [Info Object](https://spec.openapis.org/oas/v3.1.0#info-object) header fields. */
 export interface OpenAPIInfo {
+  /** Human-readable API title shown by Swagger UI / Scalar. */
   title: string;
+  /** Semantic API version (independent of your package version). */
   version: string;
+  /** Optional CommonMark long description rendered at the top of the docs. */
   description?: string;
 }
 
@@ -102,9 +106,13 @@ export interface WebhookDefinition {
   callbacks?: CallbackMap;
 }
 
+/** Options for {@link generateOpenAPI}. */
 export interface OpenAPIOptions {
+  /** Required `info` block (title + version). */
   info: OpenAPIInfo;
+  /** Optional list of servers exposed in the document. */
   servers?: Array<{ url: string; description?: string }>;
+  /** Named security schemes referenced by route `auth` declarations. */
   securitySchemes?: SecuritySchemeMap;
   /**
    * Include routes marked `internal: true` in the generated document.
@@ -618,6 +626,11 @@ function yamlEmit(value: unknown, indent: string): string {
  * consumed by Swagger UI's `/swagger.yaml` style endpoints.
  *
  * @since 0.13.1
+ */
+/**
+ * Serialize an OpenAPI document (from {@link generateOpenAPI}) to YAML using a
+ * minimal built-in emitter. No external dependencies; suitable for build-time
+ * artifacts. Reads/writes nothing; pure transform.
  */
 export function openapiToYAML(doc: Record<string, unknown>): string {
   const result = yamlEmit(doc, "");

@@ -295,7 +295,6 @@ function printBanner(version) {
     console.log(color(COLORS.dim, "https://daloyjs.dev\n"));
     return;
   }
-  console.log("");
   for (let i = 0; i < LOGO_WAVE_LINES.length; i += 1) {
     const { start, end } = LOGO_WAVE_GRADIENTS[i];
     console.log(`  ${gradientLine(LOGO_WAVE_LINES[i], start, end)}`);
@@ -570,6 +569,73 @@ async function normalizePackageManagerFiles(dir, packageManager) {
   }
 }
 
+function dockerInstallSnippet(packageManager) {
+  if (packageManager === "npm") {
+    return {
+      copy: "COPY package.json package-lock.json* npm-shrinkwrap.json* ./",
+      run: "RUN npm ci --ignore-scripts",
+      text: "npm ci --ignore-scripts",
+    };
+  }
+  if (packageManager === "yarn") {
+    return {
+      copy: "COPY package.json yarn.lock* ./",
+      run: "RUN corepack enable && yarn install --frozen-lockfile --ignore-scripts",
+      text: "yarn install --frozen-lockfile --ignore-scripts",
+    };
+  }
+  if (packageManager === "bun") {
+    return {
+      copy: "COPY package.json bun.lock* bun.lockb* ./",
+      run: "RUN bun install --frozen-lockfile --ignore-scripts",
+      text: "bun install --frozen-lockfile --ignore-scripts",
+    };
+  }
+  return {
+    copy: "COPY package.json pnpm-lock.yaml* ./",
+    run: "RUN corepack enable && corepack prepare pnpm@latest --activate && \\\n    pnpm install --frozen-lockfile --ignore-scripts",
+    text: "pnpm install --frozen-lockfile --ignore-scripts",
+  };
+}
+
+async function patchDockerfileForPackageManager(dir, packageManager) {
+  const file = path.join(dir, "Dockerfile");
+  if (!existsSync(file)) return;
+
+  const raw = await readFile(file, "utf8");
+  const install = dockerInstallSnippet(packageManager);
+  const defaultPnpmInstallBlock = [
+    "COPY package.json pnpm-lock.yaml* ./",
+    "RUN corepack enable && corepack prepare pnpm@latest --activate && \\",
+    "    pnpm install --frozen-lockfile --ignore-scripts",
+  ].join("\n");
+  let next = raw.replace(
+    "COPY package.json pnpm-lock.yaml* ./\nRUN corepack enable && corepack prepare pnpm@latest --activate && \\\n    pnpm install --frozen-lockfile --ignore-scripts",
+    `${install.copy}\n${install.run}`,
+  );
+  next = next.replace(defaultPnpmInstallBlock, `${install.copy}\n${install.run}`);
+
+  if (packageManager !== "pnpm") {
+    next = next.replaceAll(
+      "pnpm install --frozen-lockfile --ignore-scripts",
+      install.text,
+    );
+    next = next.replaceAll("pnpm build", runScriptCommand(packageManager, "build"));
+  }
+
+  if (packageManager === "bun" && next.includes("FROM ${NODE_IMAGE} AS builder")) {
+    if (!next.includes("ARG BUN_IMAGE=")) {
+      next = next.replace(
+        "ARG NODE_IMAGE=node:24-alpine\n",
+        "ARG NODE_IMAGE=node:24-alpine\nARG BUN_IMAGE=oven/bun:1-alpine\n",
+      );
+    }
+    next = next.replace("FROM ${NODE_IMAGE} AS builder", "FROM ${BUN_IMAGE} AS builder");
+  }
+
+  if (next !== raw) await writeFile(file, next, "utf8");
+}
+
 function hasPackageScript(packageJson, scriptName) {
   return typeof packageJson?.scripts?.[scriptName] === "string";
 }
@@ -595,6 +661,21 @@ function auditCommand(packageManager) {
   if (packageManager === "npm") return "npm audit --omit=dev";
   if (packageManager === "yarn") return "yarn audit --groups dependencies";
   if (packageManager === "bun") return "bun audit";
+  return "";
+}
+
+function auditStepName(packageManager, suffix = "") {
+  const baseName = packageManager === "bun" ? "Audit dependencies" : "Audit production dependencies";
+  return suffix ? `${baseName} ${suffix}` : baseName;
+}
+
+// Extra full-tree audit (includes devDependencies) for package managers that
+// expose separate prod/full scopes. Surfaced for triage but non-blocking so a
+// low-severity dev-tool advisory does not page the on-call.
+function auditFullCommand(packageManager) {
+  if (packageManager === "pnpm") return "pnpm audit";
+  if (packageManager === "npm") return "npm audit";
+  if (packageManager === "yarn") return "yarn audit";
   return "";
 }
 
@@ -626,15 +707,6 @@ function workflowStep(name, command) {
         run: ${command}`;
 }
 
-function multilineWorkflowStep(name, command) {
-  return `      - name: ${name}
-        run: |
-${command
-  .split("\n")
-  .map((line) => `          ${line}`)
-  .join("\n")}`;
-}
-
 async function readPackageJsonIfPresent(dir) {
   const file = path.join(dir, "package.json");
   if (!existsSync(file)) return null;
@@ -657,15 +729,18 @@ function renderCiReplacements({ packageManager, template, packageJson, codeOwner
   const setupPm = setupPackageManagerStep(packageManager);
   const needsBunRuntime = template === "bun-basic" && packageManager !== "bun";
   const audit = auditCommand(packageManager);
+  const auditFull = auditFullCommand(packageManager);
   const buildStep = hasPackageScript(packageJson, "build") ? workflowStep("Build", runScriptCommand(packageManager, "build")) : "";
-  const auditStep = audit ? workflowStep("Audit production dependencies", audit) : "";
-  const tagVersionCheck = `set -eu
-tag_version="\${GITHUB_REF_NAME#v}"
-pkg_version="$(node -p "require('./package.json').version")"
-if [ "$tag_version" != "$pkg_version" ]; then
-  echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
-  exit 1
-fi`;
+  const auditStep = audit ? workflowStep(auditStepName(packageManager), audit) : "";
+  // vuln-scan.yml: production-tree audit is blocking, full-tree audit is
+  // advisory (continue-on-error) so a low-severity dev-tool advisory does
+  // not page the on-call on a daily cron.
+  const auditProdStep = audit
+    ? workflowStep(auditStepName(packageManager, "(blocking)"), audit)
+    : workflowStep("No package-manager audit available", "echo 'No audit command available for this package manager; consider switching to npm/pnpm/yarn/bun.'");
+  const auditFullStep = auditFull
+    ? `      - name: Audit full dependency tree (advisory)\n        run: ${auditFull}\n        continue-on-error: true`
+    : "";
 
   return new Map([
     ["__CODE_OWNER__", codeOwner],
@@ -677,7 +752,8 @@ fi`;
     ["__TEST_COMMAND__", runScriptCommand(packageManager, "test")],
     ["__BUILD_STEP__", buildStep],
     ["__AUDIT_STEP__", auditStep],
-    ["__TAG_VERSION_CHECK_STEP__", multilineWorkflowStep("Verify tag matches package.json version", tagVersionCheck)],
+    ["__AUDIT_PROD_STEP__", auditProdStep],
+    ["__AUDIT_FULL_STEP__", auditFullStep],
   ]);
 }
 
@@ -1319,6 +1395,9 @@ async function main() {
       await patchPackageJson(targetDir, projectName, packageManager);
       logStep("Package metadata written", projectName);
       await patchTemplateTextFiles(targetDir, packageManager);
+      if (packageManager !== "pnpm") {
+        await patchDockerfileForPackageManager(targetDir, packageManager);
+      }
       await normalizePackageManagerFiles(targetDir, packageManager);
       if (packageManager !== "pnpm") {
         logStep("Package-manager config normalized", packageManager);

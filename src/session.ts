@@ -544,6 +544,7 @@ export function session(opts: SessionOptions): Hooks {
 
 // ---------- Privilege-change rotation helper ----------
 
+/** Options for {@link rotateSession}. */
 export interface RotateSessionOptions {
   /**
    * Session data keys to watch, or a custom selector. When the watched value
@@ -686,5 +687,5 @@ export async function verifySignedValue(signed: string, secret: string | string[
   return null;
 }
 
-// Re-export for downstream type augmentation.
+/** Type-augmentation helper: `interface AppState extends SessionState {}`. */
 export type SessionState = { session: SessionContext };

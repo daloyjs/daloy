@@ -20,7 +20,11 @@ The `--with-ci` bundle adds these defaults:
 - Third-party actions are pinned to commit SHAs.
 - `actions/checkout` uses `persist-credentials: false`.
 - Deno CI runs `deno task typecheck` and `deno task test` with the template's narrow permission flags.
-- CodeQL, OpenSSF Scorecard, zizmor, Dependabot for GitHub Actions, and CODEOWNERS are generated.
+- If the generated project keeps the `Dockerfile`, container scanning lints it
+	with hadolint, scans the source tree and built image with Trivy, and warns
+	when `FROM` lines are not pinned to an immutable `@sha256:` digest.
+- CodeQL, OpenSSF Scorecard, zizmor, Dependabot for GitHub Actions and Docker
+	base images, and CODEOWNERS are generated.
 
 ## Required repository settings
 

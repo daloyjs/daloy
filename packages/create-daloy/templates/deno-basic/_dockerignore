@@ -1,0 +1,10 @@
+coverage
+.git
+.github
+.vscode
+*.log
+.env
+.env.*
+!.env.example
+generated
+otherdocs

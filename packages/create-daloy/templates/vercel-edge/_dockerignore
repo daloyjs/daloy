@@ -1,0 +1,13 @@
+node_modules
+.vercel
+dist
+coverage
+.git
+.github
+.vscode
+*.log
+.env
+.env.*
+!.env.example
+generated
+otherdocs

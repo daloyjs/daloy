@@ -19,9 +19,14 @@ import type {
   RouteDefinition,
 } from "./types.js";
 
-// Map an `App` to a record of routes keyed by operationId.
+/** Union of every {@link RouteDefinition} registered on an `App`. */
 export type RoutesOf<A extends App> = A["routes"][number];
 
+/**
+ * Typed client surface generated from an `App`. The result is a record keyed
+ * by each route's `operationId` whose values are async methods inferred from
+ * the route's request and response schemas.
+ */
 export type ClientFor<A extends App> = {
   [R in Extract<RoutesOf<A>, { operationId: string }> as R["operationId"]]: ClientMethod<R>;
 };
@@ -43,9 +48,13 @@ type ClientInput<P extends string, Req extends RequestSchemas | undefined> = {
 
 type ClientOutput<Res extends ResponsesMap> = HandlerReturn<Res>;
 
+/** Options for {@link createClient}. */
 export interface ClientOptions {
+  /** Absolute base URL prepended to every request path. */
   baseUrl: string;
+  /** Custom `fetch` implementation (default: global `fetch`). Useful for mocking or proxies. */
   fetch?: typeof fetch;
+  /** Default headers merged into every request (per-call `input.headers` wins). */
   headers?: Record<string, string>;
 }
 

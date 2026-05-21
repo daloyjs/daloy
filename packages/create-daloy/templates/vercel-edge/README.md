@@ -57,6 +57,16 @@ export default toFetchHandler(app);
 
 That catch-all API route lets DaloyJS own routing while Vercel handles the runtime.
 
+## Imports
+
+This project uses TypeScript with `"module": "NodeNext"` (ESM). Relative imports must include a `.js` extension, even when the source file is `.ts`:
+
+```ts
+import handler from "../api/[...path].js"; // ../api/[...path].ts on disk
+```
+
+TypeScript resolves the `.js` specifier to the matching `.ts` file at typecheck, and the deployed output really is `.js`. This is the official Node ESM convention — not a typo.
+
 ## What's included
 
 - `@daloyjs/core/vercel` with starter security middleware: `secureHeaders` and `requestId`.

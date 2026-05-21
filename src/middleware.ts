@@ -12,18 +12,20 @@ import { randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
 
 // ---------- Request ID ----------
 
+/** Options for {@link requestId}. */
 export interface RequestIdOptions {
+  /** Header name to read/write. Default: `"x-request-id"`. */
   header?: string;
   /** Trust an incoming header value (e.g. from a proxy). Default: false. */
   trustIncoming?: boolean;
+  /** Override the random id generator. Default: 16-byte URL-safe base64. */
   generator?: () => string;
 }
 
 /**
  * Generate or accept a stable `X-Request-ID` for every request. The id is
- * stamped on `ctx.state.requestId`, mirrored on every outgoing response
- * header, and threaded into the per-request structured logger so every log
- * line for one request shares the same `requestId` field.
+ * stamped on `ctx.state.requestId`, mirrored on outgoing response headers,
+ * and available to handlers/middleware for log correlation.
  *
  * Pass `trustIncoming: true` only when the upstream proxy is trusted to
  * sanitize/replace the header — otherwise a client could pollute your logs
@@ -94,11 +96,12 @@ export interface CspDirectivesOptions {
    * Pair with {@link SecureHeadersOptions.reportingEndpoints} (or
    * {@link App.cspReportRoute}) to register the receiver.
    *
-  * @since 0.20.0
+    * @since 0.20.0
    */
   reportTo?: string;
 }
 
+/** Options for {@link secureHeaders}. Every field can be disabled with `false`. */
 export interface SecureHeadersOptions {
   contentSecurityPolicy?: string | false | CspDirectivesOptions;
   hsts?: { maxAgeSeconds: number; includeSubDomains?: boolean; preload?: boolean } | false;
@@ -118,7 +121,7 @@ export interface SecureHeadersOptions {
    * `reportTo: "csp-endpoint"` here as a shortcut) to direct CSP
    * violation reports there.
    *
-  * @since 0.20.0
+    * @since 0.20.0
    */
   reportingEndpoints?: Record<string, string>;
   /**
@@ -127,7 +130,7 @@ export interface SecureHeadersOptions {
    * header so violation reports land at the matching
    * `reportingEndpoints` URL.
    *
-  * @since 0.20.0
+    * @since 0.20.0
    */
   reportTo?: string;
 }
@@ -443,8 +446,10 @@ export const CSRF_HOOK_MARKER: unique symbol = Symbol.for(
   "daloyjs.middleware.csrf",
 );
 
+/** Predicate stamped on a CORS `Hooks` object that returns `true` for allowed origins. */
 export type CorsOriginAllow = (origin: string) => boolean;
 
+/** Options for {@link cors}. */
 export interface CorsOptions {
   origin: string | string[] | ((origin: string) => boolean);
   methods?: string[];
@@ -566,14 +571,25 @@ export function cors(opts: CorsOptions): Hooks {
 
 // ---------- Rate limit ----------
 
+/**
+ * Pluggable backend for {@link rateLimit}. Implementations must increment
+ * `key`'s counter inside the current `windowMs` window and return the new
+ * `{ count, resetMs }`. Built-in stores: in-memory (default) and Redis
+ * (`@daloyjs/core/rate-limit-redis`).
+ */
 export interface RateLimitStore {
   hit(key: string, windowMs: number): Promise<{ count: number; resetMs: number }>;
 }
 
+/** Options for {@link rateLimit}. */
 export interface RateLimitOptions {
+  /** Rolling-window width in milliseconds (e.g. `60_000` for one minute). */
   windowMs: number;
+  /** Maximum allowed requests per `windowMs` per key. */
   max: number;
+  /** Derive the bucket key from `ctx`. Default returns `"global"`. */
   keyGenerator?: (ctx: BaseContext<any, any>) => string;
+  /** Custom backend (default: shared in-memory store). */
   store?: RateLimitStore;
   /**
    * Trust x-forwarded-for / x-real-ip when deriving the default key.
@@ -612,6 +628,11 @@ export interface RateLimitOptions {
 const SHARED_RATE_LIMIT_STORES = new Map<string, MemoryStore>();
 const SHARED_LOGIN_THROTTLE_BUCKETS = new Map<string, Map<string, { count: number; resetMs: number }>>();
 
+/**
+ * Test-only helper that clears the process-wide shared buckets used by
+ * `rateLimit({ groupId })` and {@link loginThrottle}. Not for production use.
+ * @internal
+ */
 export function _resetSharedRateLimitStoresForTests(): void {
   SHARED_RATE_LIMIT_STORES.clear();
   SHARED_LOGIN_THROTTLE_BUCKETS.clear();
@@ -713,6 +734,7 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
 
 // ---------- Login throttle ----------
 
+/** Options for {@link loginThrottle}. All fields are optional with safe defaults. */
 export interface LoginThrottleOptions {
   /** Fixed-window length in ms. Default: 15 minutes. */
   windowMs?: number;
@@ -911,6 +933,7 @@ export type BearerAuthVerifyHook<TCredentials = string> = (
   ctx: BaseContext<any, any>,
 ) => boolean | void | Promise<boolean | void>;
 
+/** Options for {@link bearerAuth}. */
 export interface BearerAuthOptions {
   /** Cheap, stateless token check (signature / format). */
   validate: (token: string) => boolean | Promise<boolean>;
@@ -1020,6 +1043,7 @@ export interface CsrfCookieOptions {
   partitioned?: boolean;
 }
 
+/** Options for {@link csrf}. See {@link CsrfOptions.strategy} for mode details. */
 export interface CsrfOptions {
   /**
    * Validation strategy.
@@ -1222,6 +1246,7 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
 
 // ---------- Basic auth ----------
 
+/** Options for {@link basicAuth}. */
 export interface BasicAuthOptions {
   /**
    * Verify the supplied credentials. Must use a constant-time password

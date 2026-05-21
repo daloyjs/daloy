@@ -26,9 +26,10 @@ export default function Page() {
         <a href="https://www.prisma.io" target="_blank" rel="noreferrer">
           Prisma
         </a>{" "}
-        is a schema-first ORM with first-class migrations and a generated, fully typed client. It pairs well
-        with DaloyJS&apos;s <Link href="/docs/routing">contract-first routes</Link>: Zod validates the wire,
-        Prisma validates the database.
+        is a schema-first ORM with first-class migrations and a generated, fully
+        typed client. It pairs well with DaloyJS&apos;s{" "}
+        <Link href="/docs/routing">contract-first routes</Link>: Zod validates
+        the wire, Prisma validates the database.
       </p>
 
       <h2>1. Install</h2>
@@ -78,15 +79,20 @@ export default defineConfig({
         >
           <code>prisma-client</code>
         </a>{" "}
-        generator writes the client to the configured output path. Connection URLs live in{" "}
-        <code>prisma.config.ts</code>, and application code imports <code>PrismaClient</code> from the generated path instead of <code>@prisma/client</code>.
+        generator writes the client to the configured output path. Connection
+        URLs live in <code>prisma.config.ts</code>, and application code imports{" "}
+        <code>PrismaClient</code> from the generated path instead of{" "}
+        <code>@prisma/client</code>.
       </p>
-      <CodeBlock code={`pnpm prisma migrate dev --name init
-pnpm prisma generate`} />
+      <CodeBlock
+        code={`pnpm prisma migrate dev --name init
+pnpm prisma generate`}
+      />
 
       <h2>3. Create a Prisma plugin</h2>
       <p>
-        Instantiate one <code>PrismaClient</code> per process, decorate the app, and disconnect on shutdown.
+        Instantiate one <code>PrismaClient</code> per process, decorate the app,
+        and disconnect on shutdown.
       </p>
       <CodeBlock
         code={`// src/db/prisma.ts
@@ -178,8 +184,8 @@ serve(app, { port: 3000 });`}
 
       <h2>Transactions</h2>
       <p>
-        Use <code>$transaction</code> for atomic units of work. Throwing inside the callback rolls back; a
-        successful return commits.
+        Use <code>$transaction</code> for atomic units of work. Throwing inside
+        the callback rolls back; a successful return commits.
       </p>
       <CodeBlock
         code={`handler: async ({ body, state }) => {
@@ -197,7 +203,8 @@ serve(app, { port: 3000 });`}
 
       <h2>Edge runtimes</h2>
       <p>
-        For Cloudflare Workers and Vercel Edge, set the generated client runtime for your target and use the appropriate{" "}
+        For Cloudflare Workers and Vercel Edge, set the generated client runtime
+        for your target and use the appropriate{" "}
         <a
           href="https://www.prisma.io/docs/orm/overview/databases/database-drivers"
           target="_blank"
@@ -240,14 +247,18 @@ try {
 
       <p>
         Continue with <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/typeorm">TypeORM</Link>, <Link href="/docs/orm/sequelize">Sequelize</Link>, or the <Link href="/docs/odm">ODM overview</Link> for document databases.
+        <Link href="/docs/orm/typeorm">TypeORM</Link>,{" "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>,{" "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
+        <Link href="/docs/odm">ODM overview</Link> for document databases.
       </p>
       <p>
         For serverless or edge deployments, see the{" "}
-        <Link href="/docs/databases">database hosting overview</Link> — Prisma supports{" "}
-        <Link href="/docs/databases/neon">Neon</Link>,{" "}
+        <Link href="/docs/databases">database hosting overview</Link> — Prisma
+        supports <Link href="/docs/databases/neon">Neon</Link>,{" "}
         <Link href="/docs/databases/planetscale">PlanetScale</Link>, and{" "}
-        <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link> through Driver Adapters.
+        <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link> through
+        Driver Adapters.
       </p>
     </>
   );

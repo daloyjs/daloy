@@ -11,7 +11,7 @@ export const SITE_URL = (
 export const SITE_NAME = "DaloyJS"
 
 export const CORE_PACKAGE_VERSION =
-  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "0.33.0"
+  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "0.34.0"
 
 export const SITE_TAGLINE =
   "The runtime-portable framework for a Zero-Trust supply chain. Blocked install scripts. SHA-pinned actions. OIDC provenance. Typed end-to-end."

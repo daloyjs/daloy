@@ -44,6 +44,16 @@ bun run gen:client
 bun test
 ```
 
+## Imports
+
+This project uses TypeScript with `"moduleResolution": "Bundler"` and `"allowImportingTsExtensions": true`. Relative imports use the **`.ts` extension** directly:
+
+```ts
+import { buildApp } from "./build-app.ts";
+```
+
+Do not use `.js` here — that's the Node NodeNext convention and will not resolve under Bun's setup.
+
 ## What's included
 
 - `@daloyjs/core` with starter security middleware: `secureHeaders`, `requestId`, and `rateLimit`.

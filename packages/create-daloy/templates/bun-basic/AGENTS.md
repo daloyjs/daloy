@@ -21,6 +21,16 @@ A [DaloyJS](https://daloyjs.dev) REST API for the [Bun](https://bun.sh) runtime.
 - `generated/` — machine-written. Do not edit by hand.
 - `tests/` — Bun test files.
 
+## Imports
+
+This project uses TypeScript with `"moduleResolution": "Bundler"` and `"allowImportingTsExtensions": true`. Relative imports use the **`.ts` extension** directly, since Bun executes TypeScript natively:
+
+```ts
+import { buildApp } from "./build-app.ts";
+```
+
+Do not write `.js` here — that's the Node NodeNext convention and will fail to resolve under Bun's setup. Bare-specifier imports from packages (`@daloyjs/core`, `zod`, …) do not need an extension.
+
 ## Core rules
 
 1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.route({...})`.

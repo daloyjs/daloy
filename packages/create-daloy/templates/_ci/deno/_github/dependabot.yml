@@ -13,3 +13,14 @@ updates:
           - "*"
     commit-message:
       prefix: "chore(actions)"
+
+  # Keep the Deno runtime base image (Dockerfile `FROM`) patched. Combined
+  # with the `container-scan.yml` workflow, this catches base-image CVEs early.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(docker)"

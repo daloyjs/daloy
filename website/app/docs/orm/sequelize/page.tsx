@@ -26,9 +26,9 @@ export default function Page() {
         <a href="https://sequelize.org" target="_blank" rel="noreferrer">
           Sequelize
         </a>{" "}
-        is a mature ORM for SQL databases with model definitions, associations, transactions, and broad driver
-        support. It is a strong fit when your team prefers an Active Record style API and deploys DaloyJS on
-        Node.js.
+        is a mature ORM for SQL databases with model definitions, associations,
+        transactions, and broad driver support. It is a strong fit when your
+        team prefers an Active Record style API and deploys DaloyJS on Node.js.
       </p>
 
       <h2>1. Install</h2>
@@ -36,7 +36,10 @@ export default function Page() {
         code={`pnpm add sequelize pg pg-hstore
 pnpm add -D @types/validator @types/node typescript`}
       />
-      <p>Swap the driver package if you target MySQL, MariaDB, MSSQL, or SQLite instead of Postgres.</p>
+      <p>
+        Swap the driver package if you target MySQL, MariaDB, MSSQL, or SQLite
+        instead of Postgres.
+      </p>
 
       <h2>2. Define a model</h2>
       <CodeBlock
@@ -153,7 +156,8 @@ serve(app, { port: 3000 });`}
 
       <h2>Transactions</h2>
       <p>
-        Use managed transactions so DaloyJS can map one handler invocation to one atomic unit of work.
+        Use managed transactions so DaloyJS can map one handler invocation to
+        one atomic unit of work.
       </p>
       <CodeBlock
         code={`handler: async ({ body, state }) => {
@@ -173,9 +177,11 @@ serve(app, { port: 3000 });`}
 
       <h2>Migrations</h2>
       <p>
-        Sequelize supports migrations via the CLI, but many teams keep model definitions in TypeScript and run
-        explicit migration files through <code>sequelize-cli</code> or Umzug. Keep that workflow outside your
-        request path and initialize models before calling <code>app.ready()</code>.
+        Sequelize supports migrations via the CLI, but many teams keep model
+        definitions in TypeScript and run explicit migration files through{" "}
+        <code>sequelize-cli</code> or Umzug. Keep that workflow outside your
+        request path and initialize models before calling{" "}
+        <code>app.ready()</code>.
       </p>
       <CodeBlock
         code={`pnpm add -D sequelize-cli
@@ -185,13 +191,20 @@ pnpm sequelize-cli db:migrate`}
 
       <h2>Runtime constraints</h2>
       <p>
-        Sequelize depends on Node-oriented drivers, so it is best on the Node.js adapter. For edge runtimes,
-        prefer <Link href="/docs/orm/drizzle">Drizzle</Link>, <Link href="/docs/orm/prisma">Prisma with Driver Adapters</Link>, or <Link href="/docs/orm/supabase">Supabase</Link>.
+        Sequelize depends on Node-oriented drivers, so it is best on the Node.js
+        adapter. For edge runtimes, prefer{" "}
+        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
+        <Link href="/docs/orm/prisma">Prisma with Driver Adapters</Link>, or{" "}
+        <Link href="/docs/orm/supabase">Supabase</Link>.
       </p>
 
       <p>
-        Compare with <Link href="/docs/orm/prisma">Prisma</Link>, <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/typeorm">TypeORM</Link>, or the <Link href="/docs/odm">ODM overview</Link> if you are working with document databases.
+        Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
+        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
+        <Link href="/docs/orm/typeorm">TypeORM</Link>,{" "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>, or the{" "}
+        <Link href="/docs/odm">ODM overview</Link> if you are working with
+        document databases.
       </p>
     </>
   );

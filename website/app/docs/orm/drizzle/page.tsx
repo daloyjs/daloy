@@ -26,8 +26,9 @@ export default function Page() {
         <a href="https://orm.drizzle.team" target="_blank" rel="noreferrer">
           Drizzle ORM
         </a>{" "}
-        is a lightweight, TypeScript-native ORM with a SQL-like API. It runs everywhere DaloyJS does — including
-        Cloudflare Workers and Vercel Edge — and infers result types directly from your schema.
+        is a lightweight, TypeScript-native ORM with a SQL-like API. It runs
+        everywhere DaloyJS does — including Cloudflare Workers and Vercel Edge —
+        and infers result types directly from your schema.
       </p>
 
       <h2>1. Install</h2>
@@ -59,8 +60,10 @@ export default defineConfig({
   dbCredentials: { url: process.env.DATABASE_URL! },
 });`}
       />
-      <CodeBlock code={`pnpm drizzle-kit generate
-pnpm drizzle-kit migrate`} />
+      <CodeBlock
+        code={`pnpm drizzle-kit generate
+pnpm drizzle-kit migrate`}
+      />
 
       <h2>3. Create a Drizzle plugin</h2>
       <CodeBlock
@@ -165,16 +168,21 @@ serve(app, { port: 3000 });`}
       />
 
       <h2>Edge runtimes</h2>
-      <p>Drizzle is the easiest path to running DaloyJS against a real database on the edge. Pick a driver:</p>
+      <p>
+        Drizzle is the easiest path to running DaloyJS against a real database
+        on the edge. Pick a driver:
+      </p>
       <ul>
         <li>
           <strong>Cloudflare Workers + D1:</strong> <code>drizzle-orm/d1</code>
         </li>
         <li>
-          <strong>Neon (Postgres) on any edge:</strong> <code>drizzle-orm/neon-http</code>
+          <strong>Neon (Postgres) on any edge:</strong>{" "}
+          <code>drizzle-orm/neon-http</code>
         </li>
         <li>
-          <strong>PlanetScale (MySQL):</strong> <code>drizzle-orm/planetscale-serverless</code>
+          <strong>PlanetScale (MySQL):</strong>{" "}
+          <code>drizzle-orm/planetscale-serverless</code>
         </li>
       </ul>
       <CodeBlock
@@ -192,7 +200,11 @@ export default {
 
       <p>
         Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
-        <Link href="/docs/orm/typeorm">TypeORM</Link>, <Link href="/docs/orm/sequelize">Sequelize</Link>, or the <Link href="/docs/odm">ODM overview</Link> if you are working with document databases.
+        <Link href="/docs/orm/typeorm">TypeORM</Link>,{" "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>,{" "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
+        <Link href="/docs/odm">ODM overview</Link> if you are working with
+        document databases.
       </p>
       <p>
         Drizzle pairs cleanly with every host in the{" "}

@@ -26,8 +26,9 @@ export default function Page() {
         <a href="https://typeorm.io" target="_blank" rel="noreferrer">
           TypeORM
         </a>{" "}
-        gives you decorator-based entities and the active-record / data-mapper patterns familiar to Java and
-        .NET teams. It runs best on the <Link href="/docs/adapters">Node.js adapter</Link>.
+        gives you decorator-based entities and the active-record / data-mapper
+        patterns familiar to Java and .NET teams. It runs best on the{" "}
+        <Link href="/docs/adapters">Node.js adapter</Link>.
       </p>
 
       <h2>1. Install</h2>
@@ -36,8 +37,8 @@ export default function Page() {
 pnpm add -D @types/node`}
       />
       <p>
-        TypeORM relies on <code>reflect-metadata</code> and decorator metadata. Make sure your{" "}
-        <code>tsconfig.json</code> enables them:
+        TypeORM relies on <code>reflect-metadata</code> and decorator metadata.
+        Make sure your <code>tsconfig.json</code> enables them:
       </p>
       <CodeBlock
         code={`{
@@ -194,23 +195,27 @@ pnpm typeorm migration:run -d src/db/data-source.ts`}
       <h2>Runtime notes</h2>
       <ul>
         <li>
-          TypeORM uses Node-only APIs (filesystem, native drivers). It does <strong>not</strong> run on
-          Cloudflare Workers or Vercel Edge — use{" "}
-          <Link href="/docs/orm/drizzle">Drizzle</Link> or <Link href="/docs/orm/supabase">Supabase</Link>{" "}
-          there.
+          TypeORM uses Node-only APIs (filesystem, native drivers). It does{" "}
+          <strong>not</strong> run on Cloudflare Workers or Vercel Edge — use{" "}
+          <Link href="/docs/orm/drizzle">Drizzle</Link> or{" "}
+          <Link href="/docs/orm/supabase">Supabase</Link> there.
         </li>
         <li>
-          On Bun and Deno, prefer <code>drizzle</code>-style postgres clients unless you need TypeORM&apos;s
-          decorators.
+          On Bun and Deno, prefer <code>drizzle</code>-style postgres clients
+          unless you need TypeORM&apos;s decorators.
         </li>
         <li>
-          Always import <code>reflect-metadata</code> once at the entrypoint, before anything else.
+          Always import <code>reflect-metadata</code> once at the entrypoint,
+          before anything else.
         </li>
       </ul>
 
       <p>
         Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
-        <Link href="/docs/orm/drizzle">Drizzle</Link>, <Link href="/docs/orm/sequelize">Sequelize</Link>, or the <Link href="/docs/odm">ODM overview</Link> if you need document models.
+        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>,{" "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
+        <Link href="/docs/odm">ODM overview</Link> if you need document models.
       </p>
     </>
   );

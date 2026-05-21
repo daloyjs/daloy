@@ -7,8 +7,8 @@
 #     `readOnlyRootFilesystem: true` in your orchestrator).
 #   - `STOPSIGNAL SIGTERM` so the framework's graceful-shutdown drain
 #     fires on container stop.
-#   - `HEALTHCHECK` wired to `app.healthcheck()` / `app.readinesscheck()`
-#     (mount the routes via `app.healthcheck()` / `app.readinesscheck()`).
+#   - `HEALTHCHECK` wired to the `/healthz` route registered in
+#     `src/build-app.ts`.
 #   - `tini` as PID 1 for proper signal forwarding and zombie reaping.
 #   - Minimal runner surface: no `curl` / no extra OS packages. The
 #     healthcheck uses BusyBox `wget` already in `node:*-alpine`.
@@ -48,6 +48,6 @@ USER app
 EXPOSE 3000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -q -O /dev/null --spider http://127.0.0.1:3000/readyz || exit 1
+  CMD wget -q -O /dev/null --spider http://127.0.0.1:3000/healthz || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/index.js"]

@@ -46,6 +46,16 @@ pnpm build
 node dist/index.js
 ```
 
+## Imports
+
+This project uses Node.js **ESM** with `"module": "NodeNext"`. Relative imports must include a `.js` extension, even when the source file is `.ts`:
+
+```ts
+import { buildApp } from "./build-app.js"; // ./build-app.ts on disk
+```
+
+TypeScript resolves the `.js` specifier to the matching `.ts` file at typecheck, and the compiled output really is `.js`. This is the official Node ESM convention — not a typo.
+
 ## What's included
 
 - `@daloyjs/core` with starter security middleware: `secureHeaders`, `requestId`, and `rateLimit`.

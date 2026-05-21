@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Using SQL ORMs with DaloyJS",
   description:
-    "Connect DaloyJS to SQL databases with Prisma, Drizzle ORM, TypeORM, or Sequelize. Learn the recommended pattern for injecting clients, managing lifecycle, and keeping handlers type-safe.",
+    "Connect DaloyJS to SQL databases with Prisma, Drizzle ORM, TypeORM, MikroORM, or Sequelize. Learn the recommended pattern for injecting clients, managing lifecycle, and keeping handlers type-safe.",
   path: "/docs/orm",
   keywords: [
     "DaloyJS ORM",
@@ -15,6 +15,7 @@ export const metadata = buildMetadata({
     "Prisma DaloyJS",
     "Drizzle ORM DaloyJS",
     "TypeORM DaloyJS",
+    "MikroORM DaloyJS",
     "Sequelize DaloyJS",
   ],
   type: "article",
@@ -25,9 +26,10 @@ export default function Page() {
     <>
       <h1>Using SQL ORMs with DaloyJS</h1>
       <p>
-        DaloyJS is database-agnostic. Any SQL client that runs on your target runtime works, so pick the ORM
-        or query layer that fits your team. The framework gives you two primitives that make integration
-        boring (in a good way):
+        DaloyJS is database-agnostic. Any SQL client that runs on your target
+        runtime works, so pick the ORM or query layer that fits your team. The
+        framework gives you two primitives that make integration boring (in a
+        good way):
       </p>
       <ul>
         <li>
@@ -46,8 +48,9 @@ export default function Page() {
 
       <h2>The recommended pattern</h2>
       <p>
-        Wrap the database client in a plugin and register it once at the root of your app. Handlers read it
-        from <code>state</code> with full type-safety.
+        Wrap the database client in a plugin and register it once at the root of
+        your app. Handlers read it from <code>state</code> with full
+        type-safety.
       </p>
       <CodeBlock
         code={`// src/db/plugin.ts
@@ -87,38 +90,49 @@ app.route({
       <h2>Pick your ORM</h2>
       <ul>
         <li>
-          <Link href="/docs/orm/prisma">Prisma</Link> — schema-first, mature migrations, great DX.
+          <Link href="/docs/orm/prisma">Prisma</Link> — schema-first, mature
+          migrations, great DX.
         </li>
         <li>
-          <Link href="/docs/orm/drizzle">Drizzle ORM</Link> — TypeScript-first, edge-friendly, SQL-like API.
+          <Link href="/docs/orm/drizzle">Drizzle ORM</Link> — TypeScript-first,
+          edge-friendly, SQL-like API.
         </li>
         <li>
-          <Link href="/docs/orm/typeorm">TypeORM</Link> — decorator-based entities for object-oriented teams.
+          <Link href="/docs/orm/typeorm">TypeORM</Link> — decorator-based
+          entities for object-oriented teams.
         </li>
         <li>
-          <Link href="/docs/orm/sequelize">Sequelize</Link> — mature Active Record style models with broad SQL dialect support.
+          <Link href="/docs/orm/mikro-orm">MikroORM</Link> — Data Mapper, Unit
+          of Work, and Identity Map with first-class TypeScript.
+        </li>
+        <li>
+          <Link href="/docs/orm/sequelize">Sequelize</Link> — mature Active
+          Record style models with broad SQL dialect support.
         </li>
       </ul>
 
       <h2>Need a platform client instead?</h2>
       <p>
-        Supabase is not an ORM. It is a hosted Postgres platform with a fetch-based JavaScript client, auth,
-        storage, realtime, and edge-friendly APIs. If that is the shape you need, use{" "}
+        Supabase is not an ORM. It is a hosted Postgres platform with a
+        fetch-based JavaScript client, auth, storage, realtime, and
+        edge-friendly APIs. If that is the shape you need, use{" "}
         <Link href="/docs/orm/supabase">Supabase with DaloyJS</Link>.
       </p>
 
       <ul>
         <li>
-          <Link href="/docs/orm/supabase">Supabase</Link> — platform client for hosted Postgres + auth via{" "}
-          <code>@supabase/supabase-js</code>.
+          <Link href="/docs/orm/supabase">Supabase</Link> — platform client for
+          hosted Postgres + auth via <code>@supabase/supabase-js</code>.
         </li>
       </ul>
 
       <h2>Keep ORM and ODM separate</h2>
       <p>
-        This section is intentionally SQL-focused. If you are using MongoDB or Couchbase, jump to the{" "}
-        <Link href="/docs/odm">ODM overview</Link> and use <Link href="/docs/odm/mongoose">Mongoose</Link>
-        or <Link href="/docs/odm/ottoman">Ottoman</Link> instead of forcing document models into an ORM-shaped abstraction.
+        This section is intentionally SQL-focused. If you are using MongoDB or
+        Couchbase, jump to the <Link href="/docs/odm">ODM overview</Link> and
+        use <Link href="/docs/odm/mongoose">Mongoose</Link>
+        or <Link href="/docs/odm/ottoman">Ottoman</Link> instead of forcing
+        document models into an ORM-shaped abstraction.
       </p>
 
       <h2>Runtime compatibility cheat sheet</h2>
@@ -159,6 +173,14 @@ app.route({
             <td>No</td>
           </tr>
           <tr>
+            <td>MikroORM</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Partial</td>
+            <td>No</td>
+            <td>No</td>
+          </tr>
+          <tr>
             <td>Sequelize</td>
             <td>Yes</td>
             <td>Partial</td>
@@ -177,17 +199,23 @@ app.route({
         </tbody>
       </table>
       <p>
-        For edge runtimes (Cloudflare Workers, Vercel Edge), prefer Drizzle or Supabase, or use Prisma with{" "}
-        <a href="https://www.prisma.io/docs/orm/overview/databases/database-drivers" target="_blank" rel="noreferrer">
+        For edge runtimes (Cloudflare Workers, Vercel Edge), prefer Drizzle or
+        Supabase, or use Prisma with{" "}
+        <a
+          href="https://www.prisma.io/docs/orm/overview/databases/database-drivers"
+          target="_blank"
+          rel="noreferrer"
+        >
           Driver Adapters
         </a>
-        . TypeORM and Sequelize both rely on Node-centric drivers and are best on the Node.js adapter.
+        . TypeORM, MikroORM, and Sequelize all lean on Node-centric runtime
+        assumptions and are best on the Node.js adapter.
       </p>
 
       <h2>Typing the decorated client</h2>
       <p>
-        Use the exported <code>AppState</code> augmentation point to make decorated clients available on{" "}
-        <code>state</code> in every handler:
+        Use the exported <code>AppState</code> augmentation point to make
+        decorated clients available on <code>state</code> in every handler:
       </p>
       <CodeBlock
         code={`// src/types/state.d.ts
@@ -202,8 +230,9 @@ declare module "@daloyjs/core" {
 
       <h2>Transactions</h2>
       <p>
-        Don&apos;t open transactions in middleware. Open them inside the handler that owns the unit of work, so
-        your contract response (success or error) maps cleanly onto commit / rollback.
+        Don&apos;t open transactions in middleware. Open them inside the handler
+        that owns the unit of work, so your contract response (success or error)
+        maps cleanly onto commit / rollback.
       </p>
       <CodeBlock
         code={`handler: async ({ body, state }) => {
@@ -249,6 +278,9 @@ try {
         </li>
         <li>
           <Link href="/docs/orm/typeorm">TypeORM guide</Link>
+        </li>
+        <li>
+          <Link href="/docs/orm/mikro-orm">MikroORM guide</Link>
         </li>
         <li>
           <Link href="/docs/orm/sequelize">Sequelize guide</Link>

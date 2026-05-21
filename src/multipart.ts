@@ -55,6 +55,7 @@ export const MULTIPART_SCHEMA_MARKER = "~daloy.multipart" as const;
 /** Marker key for individual file fields. */
 export const FILE_FIELD_MARKER = "~daloy.file" as const;
 
+/** Magic-bytes signature spec for {@link FileFieldOptions.magicBytes}. */
 export interface FileMagicBytesSignature {
   /** Byte sequence that must appear in the file. */
   bytes: readonly number[] | Uint8Array;
@@ -66,6 +67,10 @@ export interface FileMagicBytesSignature {
   label?: string;
 }
 
+/**
+ * Magic-bytes verification config. Pass `true` to use the bundled
+ * signatures derived from `accept`, or supply your own signature(s).
+ */
 export type FileMagicBytesOption =
   | true
   | FileMagicBytesSignature
@@ -112,6 +117,11 @@ export interface FileFieldOptions {
 /** A `Blob`-shaped value plus an optional `name` (matches `File`). */
 export type UploadedFile = Blob & { readonly name?: string };
 
+/**
+ * Standard-Schema validator returned by {@link fileField}. Carries a
+ * `[FILE_FIELD_MARKER]` so OpenAPI generation can detect file fields and
+ * emit `format: binary`/`byte` accordingly.
+ */
 export interface FileFieldSchema<Output = UploadedFile>
   extends StandardSchemaV1<unknown, Output> {
   readonly [FILE_FIELD_MARKER]: Required<Pick<FileFieldOptions, "format">> &
@@ -456,6 +466,7 @@ export interface MultipartObjectOptions {
   strict?: boolean;
 }
 
+/** Record mapping field names to per-field Standard-Schema validators for {@link multipartObject}. */
 export type MultipartShape = Record<string, StandardSchemaV1>;
 
 type MultipartOutput<S extends MultipartShape> = {

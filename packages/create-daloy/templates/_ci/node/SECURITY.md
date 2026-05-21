@@ -23,7 +23,8 @@ The `--with-ci` bundle adds these defaults:
 - Package-manager caches are disabled in CI to avoid cache-poisoning bridges.
 - Lockfile source verification rejects git dependencies and non-registry tarball URLs.
 - CodeQL, OpenSSF Scorecard, zizmor, Dependabot, and CODEOWNERS are generated.
-- npm publishing is disabled until `NPM_PUBLISH_ENABLED=true` is set and npm trusted publishing is configured.
+- A daily scheduled `vuln-scan.yml` runs the package manager's audit against the committed lockfile so newly-disclosed CVEs are surfaced even when no PR or push has run CI (SOC 2 CC7.1 continuous-vulnerability-management evidence).
+- No npm publish workflow is generated: this scaffold is a REST API service, not a published package. If you later carve out a reusable library you can opt into npm trusted publishing yourself.
 
 ## Container hardening
 
@@ -62,5 +63,4 @@ Before relying on these files for a company project:
 1. Replace `@your-org/security-team` in `.github/CODEOWNERS` or pass `--code-owner` when scaffolding.
 2. Protect the `main` branch and require the CI, CodeQL, Scorecard, and zizmor checks.
 3. Enable GitHub secret scanning and push protection.
-4. Configure a protected `npm-publish` Environment before enabling npm publish.
-5. Keep `ignore-scripts=true` and the `pnpm-workspace.yaml` supply-chain settings on when using pnpm.
+4. Keep `ignore-scripts=true` and the `pnpm-workspace.yaml` supply-chain settings on when using pnpm.

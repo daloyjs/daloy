@@ -18,8 +18,11 @@
 
 import type { StandardSchemaV1 } from "./schema.js";
 
+/** OpenAPI 3.1 [Discriminator Object](https://spec.openapis.org/oas/v3.1.0#discriminator-object). */
 export interface DiscriminatorObject {
+  /** Name of the request/response property that selects the variant schema. */
   propertyName: string;
+  /** Optional explicit value-to-$ref map; clients otherwise infer by literal match. */
   mapping?: Record<string, string>;
 }
 
@@ -38,6 +41,7 @@ export function discriminator(
   return mapping ? { propertyName, mapping } : { propertyName };
 }
 
+/** Options for {@link discriminatedUnion}. */
 export interface DiscriminatedUnionOptions {
   /**
    * Optional explicit OpenAPI mapping from discriminator value to schema $ref.
@@ -59,6 +63,11 @@ type VariantInputs<V extends Record<string, StandardSchemaV1>> = {
   [K in keyof V]: StandardSchemaV1.InferInput<V[K]>;
 }[keyof V];
 
+/**
+ * Standard Schema validator returned by {@link discriminatedUnion}. Doubles
+ * as a runtime validator (`~standard.validate`) and an OpenAPI emitter
+ * (`toJSONSchema()` returns `{ oneOf, discriminator }`).
+ */
 export type DiscriminatedUnion<
   V extends Record<string, StandardSchemaV1>
 > = StandardSchemaV1<VariantInputs<V>, VariantOutputs<V>> & {

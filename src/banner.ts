@@ -41,6 +41,7 @@ const GLYPHS_ASCII = {
 
 const ANSI_REGEX = /\u001b\[[0-9;]*m/g;
 
+/** Extra link row rendered in the startup banner (label + URL). */
 export interface StartupBannerLink {
   /** Short label shown left-aligned, e.g. `"Swagger UI"`. */
   label: string;
@@ -48,6 +49,7 @@ export interface StartupBannerLink {
   url: string;
 }
 
+/** Options for {@link formatStartupBanner} and {@link printStartupBanner}. */
 export interface StartupBannerOptions {
   /** App name shown in the header. Defaults to `"DaloyJS"`. */
   name?: string;

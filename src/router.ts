@@ -14,8 +14,11 @@
 
 import type { HttpMethod } from "./types.js";
 
+/** Result of {@link Router.find}: the matched handler plus extracted path params. */
 export interface RouteMatch<T> {
+  /** The handler registered for the matched `method` + `path`. */
   handler: T;
+  /** Decoded path parameter values keyed by the segment name (`:id`, `*rest`, ...). */
   params: Record<string, string>;
 }
 
@@ -30,6 +33,12 @@ function createNode<T>(): Node<T> {
   return { children: new Map(), handlers: {} };
 }
 
+/**
+ * Trie/radix router with a static-route fast path. Registers handlers via
+ * {@link Router.add} and resolves them with {@link Router.find}. Rejects
+ * duplicate routes, duplicate operationIds, conflicting param names, and
+ * path-traversal lookups.
+ */
 export class Router<T> {
   private root = createNode<T>();
   private operationIds = new Set<string>();

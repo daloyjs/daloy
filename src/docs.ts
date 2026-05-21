@@ -1,18 +1,22 @@
 /**
  * Built-in API documentation handlers.
  *
- * Both serve a single self-contained HTML page that loads the spec at
- * `specUrl` from a CDN. No build step, no extra deps.
+ * Scalar and Swagger UI helpers serve a single HTML page that loads the spec
+ * at `specUrl` and fetches UI assets from a CDN by default. No build step,
+ * no extra deps.
  *
  * (You can self-host the assets if your CSP forbids CDNs.)
  */
 
+/** JSON primitive accepted by {@link ScalarReferenceConfiguration}. */
 export type ScalarJsonPrimitive = string | number | boolean | null;
+/** Recursive JSON value accepted by Scalar configuration fields. */
 export type ScalarJsonValue =
   | ScalarJsonPrimitive
   | ScalarJsonValue[]
   | { [key: string]: ScalarJsonValue | undefined };
 
+/** Built-in Scalar API Reference color theme names. */
 export type ScalarTheme =
   | "alternate"
   | "default"
@@ -27,6 +31,13 @@ export type ScalarTheme =
   | "laserwave"
   | "none";
 
+/**
+ * Subset of Scalar API Reference configuration safe to serialize from the
+ * server (function callbacks and inline `spec` are intentionally excluded).
+ *
+ * Forwarded verbatim as the `data-configuration` attribute on the Scalar
+ * script tag.
+ */
 export interface ScalarReferenceConfiguration {
   [key: string]: ScalarJsonValue | undefined;
   theme?: ScalarTheme;
@@ -88,28 +99,41 @@ export interface ScalarReferenceConfiguration {
   url?: never;
 }
 
+/** Shared options for {@link scalarHtml} and {@link swaggerUiHtml}. */
 export interface DocsOptions {
+  /** Absolute or relative URL of the OpenAPI document to render. */
   specUrl: string;
+  /** `<title>` of the generated HTML page. */
   title?: string;
+  /** Override CDN URLs for the docs UI assets (useful for self-hosting). */
   assets?: {
     scalarScriptUrl?: string;
     swaggerUiCssUrl?: string;
     swaggerUiBundleUrl?: string;
   };
+  /** CSP `nonce` to apply to inline/script tags; must match the response CSP. */
   scriptNonce?: string;
 }
 
+/** Options for {@link scalarHtml}; adds Scalar-specific UI configuration. */
 export interface ScalarHtmlOptions extends DocsOptions {
+  /** Forwarded to the Scalar `<script id="api-reference">` tag. */
   configuration?: ScalarReferenceConfiguration;
 }
 
+/** Options for {@link docsContentSecurityPolicy}. */
 export interface DocsContentSecurityPolicyOptions {
+  /** Extra origins to allow for `script-src` / `style-src` (defaults to jsDelivr). */
   assetOrigins?: string[];
+  /** When set, allows nonce-protected inline scripts instead of `'unsafe-inline'`. */
   scriptNonce?: string;
+  /** When `false`, omits `'unsafe-inline'` from `style-src`. Defaults to `true`. */
   allowInlineStyles?: boolean;
 }
 
+/** Options for {@link htmlResponse}. */
 export interface HtmlResponseOptions extends DocsContentSecurityPolicyOptions {
+  /** Override the computed `content-security-policy` header verbatim. */
   contentSecurityPolicy?: string;
 }
 
@@ -119,6 +143,13 @@ function nonceAttr(nonce: string | undefined): string {
   return nonce ? ` nonce="${escapeHtml(nonce)}"` : "";
 }
 
+/**
+ * Render a Scalar API Reference HTML page that loads `opts.specUrl`.
+ *
+ * The output is a single HTML document with configurable external assets;
+ * pair it with {@link htmlResponse} (or your own `Response`) and serve from
+ * any route.
+ */
 export function scalarHtml(opts: ScalarHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Reference");
   const url = escapeHtml(opts.specUrl);
@@ -142,6 +173,10 @@ export function scalarHtml(opts: ScalarHtmlOptions): string {
 </body></html>`;
 }
 
+/**
+ * Render a Swagger UI HTML page that loads `opts.specUrl`. Same usage as
+ * {@link scalarHtml} but emits the classic Swagger UI bundle.
+ */
 export function swaggerUiHtml(opts: DocsOptions): string {
   const title = escapeHtml(opts.title ?? "API Docs");
   const url = escapeHtml(opts.specUrl);
@@ -167,6 +202,13 @@ export function swaggerUiHtml(opts: DocsOptions): string {
 </body></html>`;
 }
 
+/**
+ * Build a Content-Security-Policy string compatible with the docs HTML
+ * produced by {@link scalarHtml} / {@link swaggerUiHtml}.
+ *
+ * Allows `'self'` plus the listed `assetOrigins` (default: jsDelivr) and
+ * either `'unsafe-inline'` or the provided `scriptNonce` for scripts.
+ */
 export function docsContentSecurityPolicy(
   opts: DocsContentSecurityPolicyOptions = {},
 ): string {
@@ -187,6 +229,11 @@ export function docsContentSecurityPolicy(
   ].join("; ");
 }
 
+/**
+ * Wrap a docs HTML string in a `Response` with safe defaults:
+ * `text/html` content type, `nosniff`, `no-referrer`, and a CSP from
+ * {@link docsContentSecurityPolicy} (or a caller-supplied override).
+ */
 export function htmlResponse(
   html: string,
   opts: HtmlResponseOptions = {},

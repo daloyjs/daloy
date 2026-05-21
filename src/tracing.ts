@@ -44,6 +44,7 @@ export const TRACING_SPAN_STATUS_ERROR = 2;
 /** Attribute value accepted by OTel `Span.setAttribute`. */
 export type TracingAttributeValue = string | number | boolean | string[] | number[] | boolean[];
 
+/** Record of attribute key/value pairs passed to {@link TracingSpan.setAttributes}. */
 export type TracingAttributes = Record<string, TracingAttributeValue>;
 
 /**
@@ -58,8 +59,11 @@ export interface TracingSpan {
   end(endTime?: number): void;
 }
 
+/** Options passed to {@link TracingTracer.startSpan}. */
 export interface TracingStartSpanOptions {
+  /** OTel `SpanKind` (e.g. {@link TRACING_SPAN_KIND_SERVER}). */
   kind?: number;
+  /** Initial attributes attached to the span at creation. */
   attributes?: TracingAttributes;
 }
 
@@ -68,6 +72,7 @@ export interface TracingTracer {
   startSpan(name: string, options?: TracingStartSpanOptions, context?: unknown): TracingSpan;
 }
 
+/** Options for {@link otelTracing}. */
 export interface OtelTracingOptions {
   /** OTel-compatible tracer (e.g. `trace.getTracer("my-service")`). */
   tracer: TracingTracer;
@@ -137,6 +142,11 @@ function endOnce(entry: TracingEntry, attrs?: TracingAttributes): void {
   entry.span.end();
 }
 
+/**
+ * Middleware that wraps every request in an OpenTelemetry-compatible span.
+ * Pass any tracer that matches the {@link TracingTracer} surface; DaloyJS
+ * does not import `@opentelemetry/api` itself.
+ */
 export function otelTracing(opts: OtelTracingOptions): Hooks {
   const stateKey = opts.stateKey ?? "otelSpan";
 

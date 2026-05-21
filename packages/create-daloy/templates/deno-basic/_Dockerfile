@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1.7
+# Container-first defaults for a DaloyJS app running on Deno.
+#
+# Hardening shipped out of the box:
+#   - Non-root runtime user (`deno`, uid 1993 — created by the official
+#     `denoland/deno` image).
+#   - **Deno's capability-based permission model is the primary
+#     defense.** The runtime CMD passes only `--allow-net`,
+#     `--allow-env`, and scoped `--allow-read` — no `--allow-write`, no
+#     `--allow-run`, no `--allow-ffi`, no `--allow-sys`, no `--allow-all`.
+#     Network and env permissions are constrained to the server port and
+#     expected env vars so a compromised dependency cannot silently open
+#     arbitrary outbound sockets or read every secret in the environment.
+#   - `--cached-only` refuses any module that was not baked into the
+#     image at build time. A malicious republish of a transitive dep
+#     cannot ride in via a runtime `import("https://…")`.
+#   - Read-only-root-filesystem friendly: no runtime writes. Run with
+#     `--read-only --tmpfs /tmp` or set `readOnlyRootFilesystem: true`
+#     in your orchestrator.
+#   - `STOPSIGNAL SIGTERM` so DaloyJS's graceful-shutdown drain fires
+#     when the container is stopped.
+#   - `HEALTHCHECK` uses BusyBox `wget` already present in the alpine
+#     base — no `curl`, no extra packages.
+#   - `tini` as PID 1 for proper signal forwarding and zombie reaping.
+#   - Base image is consumed through the `DENO_IMAGE` ARG so production
+#     builds can pin to an immutable digest:
+#       docker build --build-arg \
+#         DENO_IMAGE=denoland/deno:alpine@sha256:<digest> .
+#     Dependabot's `docker` ecosystem (see `.github/dependabot.yml`)
+#     keeps the digest fresh.
+
+# Override at build time to pin a specific digest.
+ARG DENO_IMAGE=denoland/deno:alpine
+
+FROM ${DENO_IMAGE} AS builder
+WORKDIR /app
+# Cache deps in a layer that only invalidates when imports change.
+COPY deno.json deno.lock* ./
+COPY src ./src
+# `deno cache` resolves and verifies every import against the lockfile
+# and bakes them into Deno's module cache. The resulting image cannot
+# resolve any module that was not present at build time.
+RUN deno cache --lock=deno.lock src/main.ts || deno cache src/main.ts
+
+FROM ${DENO_IMAGE} AS runner
+WORKDIR /app
+ENV DENO_DIR=/deno-dir
+ENV DENO_ENV=production
+# tini only — no curl, no extra packages. BusyBox `wget` (already in
+# alpine) is enough for the HEALTHCHECK below.
+USER root
+RUN apk add --no-cache tini
+COPY --from=builder --chown=deno:deno /deno-dir /deno-dir
+COPY --from=builder --chown=deno:deno /app/deno.json /app/deno.json
+COPY --from=builder --chown=deno:deno /app/src /app/src
+USER deno
+EXPOSE 3000
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null --spider http://127.0.0.1:3000/healthz || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+# Minimum permissions for a DaloyJS HTTP server. Add more only if your
+# app genuinely needs them — every flag widens the blast radius of a
+# compromised dependency. If you change `PORT`, update `--allow-net` to
+# match the exposed listen address.
+CMD ["deno", "run", "--cached-only", "--allow-net=0.0.0.0:3000,127.0.0.1:3000,localhost:3000", "--allow-env=PORT,DENO_ENV", "--allow-read=/app/deno.json,/app/src", "src/main.ts"]

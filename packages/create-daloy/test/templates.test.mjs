@@ -174,6 +174,108 @@ test("vercel-edge template opts into the auto-mounted /docs and /openapi.json", 
   assert.match(source, /info:\s*\{\s*title:\s*"My Daloy Edge API"/);
 });
 
+test("every template ships a hardened _Dockerfile and _dockerignore", async () => {
+  const templates = [
+    "node-basic",
+    "vercel-edge",
+    "cloudflare-worker",
+    "bun-basic",
+    "deno-basic",
+  ];
+
+  for (const template of templates) {
+    const dockerfile = await readFile(
+      path.join(pkgRoot, "templates", template, "_Dockerfile"),
+      "utf8",
+    );
+    const dockerignore = await readFile(
+      path.join(pkgRoot, "templates", template, "_dockerignore"),
+      "utf8",
+    );
+
+    // BuildKit syntax pin enables reproducible, modern builder features.
+    assert.match(
+      dockerfile,
+      /^#\s*syntax=docker\/dockerfile:/m,
+      `${template} Dockerfile must pin the BuildKit syntax`,
+    );
+    // Base image must flow through an ARG so consumers can pin to an
+    // immutable @sha256 digest at build time. The container-scan workflow
+    // also warns when a FROM is not digest-pinned.
+    assert.match(
+      dockerfile,
+      /^ARG\s+(NODE_IMAGE|BUN_IMAGE|DENO_IMAGE)=/m,
+      `${template} Dockerfile must accept a base-image ARG for digest pinning`,
+    );
+    assert.match(
+      dockerfile,
+      /^FROM\s+\$\{(NODE_IMAGE|BUN_IMAGE|DENO_IMAGE)\}/m,
+      `${template} Dockerfile must consume the base image via the ARG`,
+    );
+    // Non-root runtime user is non-negotiable.
+    assert.match(
+      dockerfile,
+      /^USER\s+(app|bun|deno)\b/m,
+      `${template} Dockerfile must drop to a non-root user`,
+    );
+    // STOPSIGNAL lets the framework's graceful-shutdown drain fire.
+    assert.match(
+      dockerfile,
+      /^STOPSIGNAL\s+SIGTERM\b/m,
+      `${template} Dockerfile must set STOPSIGNAL SIGTERM`,
+    );
+    // HEALTHCHECK must be present and must hit the local loopback (not a
+    // remote host) so a compromised DNS does not turn the healthcheck
+    // into an outbound oracle.
+    assert.match(
+      dockerfile,
+      /^HEALTHCHECK\s/m,
+      `${template} Dockerfile must declare a HEALTHCHECK`,
+    );
+    assert.match(
+      dockerfile,
+      /http:\/\/127\.0\.0\.1:/,
+      `${template} HEALTHCHECK must target 127.0.0.1`,
+    );
+    assert.match(
+      dockerfile,
+      /\/healthz/,
+      `${template} HEALTHCHECK must use the scaffolded health route`,
+    );
+    assert.doesNotMatch(
+      dockerfile,
+      /\/readyz/,
+      `${template} Dockerfile must not reference an unmounted readiness route`,
+    );
+    // No curl, no bash extras — keeps the runtime surface minimal and
+    // denies attackers a convenient exfiltration / dropper tool.
+    assert.doesNotMatch(
+      dockerfile,
+      /\bapk\s+add\b[^\n]*\bcurl\b/,
+      `${template} Dockerfile must not install curl in the runner`,
+    );
+    // Lockfile-frozen, lifecycle-script-free dependency install matches
+    // the .npmrc supply-chain defaults.
+    assert.match(
+      dockerfile,
+      /(--frozen-lockfile|deno cache|--cached-only)/,
+      `${template} Dockerfile must use a reproducible dependency install`,
+    );
+    // .dockerignore must keep secrets, VCS metadata, and CI config out
+    // of the build context.
+    assert.match(
+      dockerignore,
+      /^\.git$/m,
+      `${template} .dockerignore must exclude .git`,
+    );
+    assert.match(
+      dockerignore,
+      /^\.env$/m,
+      `${template} .dockerignore must exclude .env`,
+    );
+  }
+});
+
 test("pnpm templates ship hardened supply-chain .npmrc defaults", async () => {
   const templates = [
     "node-basic",
@@ -346,7 +448,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
 
     const projectDir = path.join(tmpDir, projectName);
     await access(path.join(projectDir, ".github/workflows/ci.yml"));
-    await access(path.join(projectDir, ".github/workflows/release.yml"));
+    await access(path.join(projectDir, ".github/workflows/vuln-scan.yml"));
     await access(path.join(projectDir, ".github/workflows/codeql.yml"));
     await access(path.join(projectDir, ".github/workflows/scorecard.yml"));
     await access(path.join(projectDir, ".github/workflows/zizmor.yml"));
@@ -354,6 +456,13 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     await access(path.join(projectDir, ".github/dependabot.yml"));
     await access(path.join(projectDir, "SECURITY.md"));
     await access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs"));
+
+    // create-daloy scaffolds REST API services, not libraries. The npm
+    // publish workflow is intentionally omitted so fork PRs cannot reach
+    // `id-token: write` or any npm credential by accident.
+    await assert.rejects(
+      access(path.join(projectDir, ".github/workflows/release.yml")),
+    );
 
     const pkg = JSON.parse(
       await readFile(path.join(projectDir, "package.json"), "utf8"),
@@ -378,16 +487,19 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(ci, /actions\/setup-node@[0-9a-f]{40}\s+# v6/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
 
-    const release = await readFile(
-      path.join(projectDir, ".github/workflows/release.yml"),
+    const vulnScan = await readFile(
+      path.join(projectDir, ".github/workflows/vuln-scan.yml"),
       "utf8",
     );
-    assert.match(release, /NPM_PUBLISH_ENABLED/);
-    assert.match(release, /id-token:\s*write/);
-    assert.match(release, /npm publish --access public --provenance/);
-    assert.doesNotMatch(release, /secrets\.NPM_TOKEN/);
-    assert.doesNotMatch(release, /^\s*NODE_AUTH_TOKEN:/m);
-    assert.doesNotMatch(release, /__[A-Z_]+__/);
+    assert.match(vulnScan, /name: Vuln scan/);
+    assert.match(vulnScan, /pnpm install --frozen-lockfile --ignore-scripts/);
+    assert.match(vulnScan, /pnpm audit --prod/);
+    assert.match(vulnScan, /Audit full dependency tree \(advisory\)/);
+    assert.match(vulnScan, /continue-on-error: true/);
+    assert.match(vulnScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+    assert.match(vulnScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(vulnScan, /cron: "13 6 \* \* \*"/);
+    assert.doesNotMatch(vulnScan, /__[A-Z_]+__/);
 
     const containerScan = await readFile(
       path.join(projectDir, ".github/workflows/container-scan.yml"),
@@ -417,8 +529,9 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(codeowners, /\* @acme\/security/);
     assert.match(
       codeowners,
-      /\/\.github\/workflows\/release\.yml\s+@acme\/security/,
+      /\/\.github\/workflows\/vuln-scan\.yml\s+@acme\/security/,
     );
+    assert.doesNotMatch(codeowners, /release\.yml/);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -473,6 +586,75 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
     assert.match(ci, /npm test/);
     assert.doesNotMatch(ci, /pnpm\/action-setup/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
+
+    const vulnScan = await readFile(
+      path.join(projectDir, ".github/workflows/vuln-scan.yml"),
+      "utf8",
+    );
+    assert.match(vulnScan, /npm ci --ignore-scripts/);
+    assert.match(vulnScan, /npm audit --omit=dev/);
+    assert.match(vulnScan, /Audit full dependency tree \(advisory\)/);
+    assert.match(vulnScan, /run: npm audit/);
+    assert.match(vulnScan, /continue-on-error: true/);
+    assert.doesNotMatch(vulnScan, /pnpm\/action-setup/);
+    assert.doesNotMatch(vulnScan, /__[A-Z_]+__/);
+
+    const dockerfile = await readFile(path.join(projectDir, "Dockerfile"), "utf8");
+    assert.match(
+      dockerfile,
+      /COPY package\.json package-lock\.json\* npm-shrinkwrap\.json\* \./,
+    );
+    assert.match(dockerfile, /RUN npm ci --ignore-scripts/);
+    assert.match(dockerfile, /RUN npm run build/);
+    assert.doesNotMatch(
+      dockerfile,
+      /pnpm install --frozen-lockfile --ignore-scripts/,
+    );
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("Dockerfile scaffolding follows the selected bun package manager", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "bun-pm-docker";
+  try {
+    const exitCode = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          projectName,
+          "--template",
+          "node-basic",
+          "--package-manager",
+          "bun",
+          "--no-ci",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.equal(exitCode, 0);
+
+    const dockerfile = await readFile(
+      path.join(tmpDir, projectName, "Dockerfile"),
+      "utf8",
+    );
+    assert.match(dockerfile, /^ARG BUN_IMAGE=oven\/bun:1-alpine$/m);
+    assert.match(dockerfile, /^FROM \$\{BUN_IMAGE\} AS builder$/m);
+    assert.match(dockerfile, /COPY package\.json bun\.lock\* bun\.lockb\* \./);
+    assert.match(dockerfile, /RUN bun install --frozen-lockfile --ignore-scripts/);
+    assert.match(dockerfile, /RUN bun run build/);
+    assert.match(dockerfile, /^FROM \$\{NODE_IMAGE\} AS runner$/m);
+    assert.doesNotMatch(
+      dockerfile,
+      /pnpm install --frozen-lockfile --ignore-scripts/,
+    );
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -511,6 +693,14 @@ test("--with-ci adds Bun runtime setup when bun-basic uses pnpm", async () => {
     assert.match(ci, /oven-sh\/setup-bun@[0-9a-f]{40}\s+# v2/);
     assert.match(ci, /pnpm test/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
+
+    const dockerfile = await readFile(
+      path.join(tmpDir, projectName, "Dockerfile"),
+      "utf8",
+    );
+    assert.match(dockerfile, /^FROM \$\{NODE_IMAGE\} AS builder$/m);
+    assert.match(dockerfile, /^FROM \$\{BUN_IMAGE\} AS runner$/m);
+    assert.match(dockerfile, /pnpm install --frozen-lockfile --ignore-scripts/);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -590,6 +780,47 @@ test("--with-ci composes with --minimal and rejects an invalid --code-owner", as
   }
 });
 
+test("--with-ci emits one Bun audit step when Bun is the package manager", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "bun-audit-ci";
+  try {
+    const exitCode = await new Promise((resolve) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          projectName,
+          "--template",
+          "bun-basic",
+          "--package-manager",
+          "bun",
+          "--with-ci",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: "ignore" },
+      );
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
+    assert.equal(exitCode, 0);
+
+    const vulnScan = await readFile(
+      path.join(tmpDir, projectName, ".github/workflows/vuln-scan.yml"),
+      "utf8",
+    );
+    assert.match(vulnScan, /oven-sh\/setup-bun@[0-9a-f]{40}\s+# v2/);
+    assert.match(vulnScan, /bun install --frozen-lockfile --ignore-scripts/);
+    assert.match(vulnScan, /Audit dependencies \(blocking\)/);
+    assert.match(vulnScan, /run: bun audit/);
+    assert.doesNotMatch(vulnScan, /Audit full dependency tree \(advisory\)/);
+    assert.doesNotMatch(vulnScan, /__[A-Z_]+__/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test("--with-ci scaffolds runtime-native security files for deno-basic", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   const projectName = "deno-ci";
@@ -623,6 +854,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     await assert.rejects(
       access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs")),
     );
+    await access(path.join(projectDir, ".github/workflows/container-scan.yml"));
 
     const ci = await readFile(
       path.join(projectDir, ".github/workflows/ci.yml"),
@@ -638,7 +870,18 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
       "utf8",
     );
     assert.match(dependabot, /package-ecosystem: github-actions/);
+    assert.match(dependabot, /package-ecosystem: docker/);
     assert.doesNotMatch(dependabot, /package-ecosystem: npm/);
+
+    const containerScan = await readFile(
+      path.join(projectDir, ".github/workflows/container-scan.yml"),
+      "utf8",
+    );
+    assert.match(
+      containerScan,
+      /DENO_IMAGE=denoland\/deno:alpine@sha256:<digest>/,
+    );
+    assert.match(containerScan, /aquasecurity\/trivy-action@[0-9a-f]{40}\s+# v0/);
 
     const codeowners = await readFile(
       path.join(projectDir, ".github/CODEOWNERS"),
@@ -826,10 +1069,10 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
   );
   assert.match(denoJson.tasks.dev, /^deno run.*--watch src\/main\.ts$/);
   assert.match(denoJson.tasks.test, /^deno test\b/);
-  assert.equal(denoJson.imports["@daloyjs/core"], "npm:@daloyjs/core@^0.33.0");
+  assert.equal(denoJson.imports["@daloyjs/core"], "npm:@daloyjs/core@^0.34.0");
   assert.equal(
     denoJson.imports["@daloyjs/core/"],
-    "npm:@daloyjs/core@^0.33.0/",
+    "npm:@daloyjs/core@^0.34.0/",
   );
 });
 

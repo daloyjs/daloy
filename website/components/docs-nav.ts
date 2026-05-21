@@ -54,6 +54,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "Prisma", href: "/docs/orm/prisma" },
       { title: "Drizzle ORM", href: "/docs/orm/drizzle" },
       { title: "TypeORM", href: "/docs/orm/typeorm" },
+      { title: "MikroORM", href: "/docs/orm/mikro-orm" },
       { title: "Sequelize", href: "/docs/orm/sequelize" },
       { title: "Supabase platform", href: "/docs/orm/supabase" },
       { title: "ODM overview", href: "/docs/odm" },

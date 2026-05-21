@@ -11,6 +11,23 @@ const app = new App({
 app.use(requestId());
 app.use(secureHeaders());
 
+app.route({
+  method: "GET",
+  path: "/healthz",
+  operationId: "healthz",
+  tags: ["Ops"],
+  responses: {
+    200: {
+      description: "Service is healthy",
+      body: z.object({ ok: z.literal(true), runtime: z.literal("cloudflare-worker") }),
+    },
+  },
+  handler: async () => ({
+    status: 200,
+    body: { ok: true as const, runtime: "cloudflare-worker" as const },
+  }),
+});
+
 // daloy-minimal:strip-start books
 const Book = z.object({ id: z.string(), title: z.string() });
 const books = new Map<string, z.infer<typeof Book>>([
