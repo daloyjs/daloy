@@ -92,6 +92,9 @@ jobs:
       - name: Verify no unsafe Buffer APIs (Snyk "exploiting Buffer" gate)
         run: pnpm verify:no-unsafe-buffer
 
+      - name: Verify no runtime remote-exec primitives (Aikido BlokTrooper gate)
+        run: pnpm verify:no-remote-exec
+
       - name: Verify Wave 9 pattern-agnostic parity audits (Wave 9 governance gate)
         run: pnpm verify:wave9-audits
 
