@@ -363,6 +363,57 @@ What this **does not** defend against, and we say so explicitly:
   lists `npm audit signatures`, SLSA build-level-3 attestations, and a
   CycloneDX SBOM as planned work.
 
+### Socket "limitations of CVE-based scanners" mapping (no-CVE supply-chain class)
+
+Socket's 2023 write-up
+["Limitations of CVE-Based Security Scanners: A Deep Dive into 3 Notable Supply
+Chain Attacks"](https://socket.dev/blog/limitations-of-cve-based-security-scanners)
+makes the case that NVD/CVE-style scanners are structurally blind to three
+canonical npm incidents because none of them had a CVE at the time of impact:
+**`ua-parser-js`** (hijacked maintainer account, `preinstall` hook that fetched
+and ran an XMRig miner + credential stealer), **`event-source-polyfill`**
+(protestware — a maintainer-introduced runtime behavioral change targeting
+users in specific time zones, still live on npm), and **`event-stream`** (the
+original maintainer handed the package to a new "maintainer" who added a
+heavily obfuscated payload that stole Bitcoin-wallet credentials from a
+downstream dependent). Each one would have passed a green `pnpm audit` at the
+moment of compromise. DaloyJS's daily `pnpm audit --prod`
+([`.github/workflows/vuln-scan.yml`](.github/workflows/vuln-scan.yml)) is the
+known-CVE baseline; the controls below are the framework's answer to each
+incident class so operators get explicit traceability rather than guessing
+which gate covers which scenario.
+
+| Incident in the Socket article | DaloyJS control |
+| --- | --- |
+| **`ua-parser-js` (hijacked maintainer account + `preinstall` miner / credential stealer, Oct 2021)** — attacker pushed `0.7.29` / `0.8.0` / `1.0.0` containing a `preinstall` hook that `curl`'d a remote payload and ran `chmod +x ./jsextension && ./jsextension …` (XMRig miner + Windows credential stealer). Pure CVE scanners had no entry to match against at install time. | Defense-in-depth: (a) **`ignore-scripts=true`** in the root [`.npmrc`](.npmrc) **and** in every scaffolded template `_npmrc` blocks every transitive `preinstall` / `install` / `postinstall` / `prepare` hook on Daloy CI, on maintainer machines, and on any application a developer scaffolds with `create-daloy` — the `ua-parser-js` payload could not detonate on install. (b) **`minimum-release-age=1440` (24 h)** in the same `.npmrc` files refuses to install any dependency whose published age is below the window in which freshly-published hijacks (`ua-parser-js` was unpublished within hours, as were Shai-Hulud, BlokTrooper, TanStack 2026-05-11, and `node-ipc` 9.1.6 / 9.2.3 / 12.0.1) are typically detected and yanked. (c) `pnpm verify:no-lifecycle-scripts` ([`scripts/verify-no-lifecycle-scripts.ts`](scripts/verify-no-lifecycle-scripts.ts)) refuses any forbidden hook in the published manifest of `@daloyjs/core` or `create-daloy`, so a hijacked Daloy publish account cannot ship the `ua-parser-js`-shaped carrier through us either. (d) `pnpm verify:no-remote-exec` refuses any `src/**` file that imports `child_process` / `vm`, calls bare `eval(...)`, constructs `new Function(...)` from a string, or dynamically `import("https://...")` of remote code — the exact `curl … \| sh`-equivalent primitives the `ua-parser-js` shell payload would need to land at runtime if the `preinstall` channel were unavailable. (e) `@daloyjs/core` declares **zero runtime dependencies** ([`pnpm verify:no-runtime-deps`](scripts/verify-no-runtime-deps.ts)), so consumers of `@daloyjs/core` carry no transitive `npm install` surface that an analogous hijack could ride into via the framework. |
+| **`event-source-polyfill` (protestware / runtime behavioral change, Mar 2022 onward — still live on npm)** — maintainer added code that runs `setTimeout(…, 15000)` after import, checks `Intl.DateTimeFormat().resolvedOptions().timeZone` against a hard-coded list of Russian time zones, and only then `alert(…)`'s a political message and `window.open`'s a `change.org` URL. There is no CVE because there is no traditional "vulnerability" — only an intentional, maintainer-introduced behavioral change. | This class is the hardest of the three to detect generically, and DaloyJS deliberately shrinks the surface rather than trying to classify behavior at runtime. (a) **Zero runtime dependencies** in `@daloyjs/core` ([`pnpm verify:no-runtime-deps`](scripts/verify-no-runtime-deps.ts)) means there is no transitive runtime tree through which protestware in some upstream package can change Daloy's behavior — a consumer who installs `@daloyjs/core` and nothing else is not exposed via us. (b) The framework runs **server-side only** (Node / Bun / Deno / Cloudflare Workers / Vercel Edge); `window.open` / `alert` / browser `Intl.DateTimeFormat` have no surface in core. The `event-source-polyfill` payload as written cannot execute inside a Daloy handler because the global APIs it depends on are not present in any of Daloy's runtime adapters. (c) `pnpm verify:no-remote-exec` refuses bare `eval(...)`, `new Function(...)` from a string, and dynamic remote `import(...)` in `src/**`, so a protestware-style maintainer who later took over `@daloyjs/core` itself could not introduce a deferred-execution carrier through these primitives. (d) `pnpm verify:no-invisible-unicode` refuses Unicode-Tag / zero-width / bidi-override / Private-Use-Area / mid-file BOM characters in every published file, so a protestware author cannot hide a region-targeting check from PR reviewers using the GlassWorm / Trojan Source carriers. (e) The `minimum-release-age=1440` cooldown plus daily Scorecard/CodeQL/Socket-style external monitoring (operators are encouraged to enable Socket / Aikido / Snyk on their **own** application tree — `@daloyjs/core` is not the entire dependency graph) gives the community time to flag a region-targeting behavioral change before it ships in any package a Daloy consumer installs. We are explicit (§ Explicitly out of scope) that DaloyJS cannot police behavioral changes in packages **outside** `@daloyjs/core` and `create-daloy`; the framework's contribution to that risk is zero. |
+| **`event-stream` (malicious-maintainer handoff + obfuscated payload, Nov 2018)** — original maintainer transferred ownership to a new account that added `flatmap-stream` as a dep and shipped an encrypted payload that decrypted with the `npm_package_description` of a specific Bitcoin-wallet downstream (`copay-dash`) and patched `./node_modules/@zxing/library/.../ReedSolomonDecoder.js` at runtime to exfiltrate private keys. No CVE; bypassed every CVE-based scanner. | Four independent layers each break a different step of the `event-stream` chain. (a) **No malicious-handoff risk for `@daloyjs/core` / `create-daloy` itself:** publishing is gated on the `<!-- BEGIN ACTIVE -->` block of [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md) — the pre-publish `verify` job in [`release.yml`](.github/workflows/release.yml) refuses to publish unless `github.actor` is in that block, hardware-backed 2FA is mandatory at both the GitHub-org and npm-registry level, the `npm-publish` GitHub Environment requires a per-publish maintainer approval click, publishing uses npm Trusted Publishing (OIDC) with **no long-lived `NPM_TOKEN`** anywhere, and the quarterly disclosure exercise (§ Maintainer accounts) re-verifies the active rotation and the account-recovery-email domains so a dormant-maintainer takeover is checkable rather than assumed. A silent ownership transfer in the `event-stream` style cannot reach `pnpm publish` without surfacing on at least one of those checks. (b) **Obfuscation carriers are refused at the gate:** `pnpm verify:no-invisible-unicode` ([`scripts/verify-no-invisible-unicode.ts`](scripts/verify-no-invisible-unicode.ts)) refuses Unicode-Tag, zero-width, bidi-override, Private-Use-Area, and mid-file BOM characters in every published file **and** every in-repo source root; `pnpm verify:no-remote-exec` refuses `eval(...)`, `new Function(...)` from a string, dynamic remote `import("https://...")`, and `child_process` / `vm` imports in `src/**` — the exact primitives a `flatmap-stream`-style encrypted-payload decryptor needs (`createDecipher` + dynamic `require` + `writeFileSync` of decrypted JS) to land. The published tarball is also restricted by `package.json#files` to `dist/` + `bin/` + `README.md`, and every tarball ships `npm provenance` (Sigstore + OIDC) bound to the public `release.yml` workflow run, closing the "npm bytes ≠ GitHub bytes" gap that hid the `event-stream` payload from human review. (c) **No registry-exfiltration channel from runtime code:** `pnpm verify:no-registry-exfiltration` refuses TLS-verification bypass (`rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED` mutation), `process.env.HOME` mutation, references to host credential files (`~/.npmrc`, `~/.netrc`, `~/.gem/credentials`, `~/.yarnrc[.yml]`), and string literals naming registry publish endpoints — the GemStuffer-class primitives an `event-stream`-shaped payload would chain after stealing Bitcoin keys. (d) **24 h cooldown narrows the window for the rest of the consumer's tree:** even outside `@daloyjs/core`, `minimum-release-age=1440` in every scaffolded template `_npmrc` means an `event-stream`-style malicious republish of any dep cannot land on a consumer's machine inside the window where these payloads are typically detected and yanked. |
+
+What this **does not** defend against, said explicitly so operators do not
+mis-scope the claim:
+
+- **Protestware in a package the consumer installs directly that is not
+  `@daloyjs/core` / `create-daloy`.** The framework contributes zero
+  transitive runtime tree, but it cannot stop a downstream application from
+  installing a future `event-source-polyfill`-style package directly. Pair
+  Daloy with a behavioral scanner (Socket / Aikido / Snyk Reachability) on
+  the **application's** dependency tree, as recommended in the Socket
+  article.
+- **A maintainer-introduced behavioral change inside `@daloyjs/core` itself
+  that does not trip `verify:no-remote-exec` / `verify:no-invisible-unicode`
+  / `verify:no-registry-exfiltration` / `verify:no-unsafe-buffer` / the
+  release-author allowlist.** The mitigation here is process, not code: the
+  `npm-publish` Environment approval, the SECURITY-CONTACTS active-rotation
+  gate, the public Sigstore-attested workflow run, and the published
+  source-to-tarball binding via `npm provenance` make any such change
+  publicly auditable per release. Anyone running a green `pnpm audit` should
+  still review the diff between Daloy releases when the security-sensitive
+  surface (`src/router.ts`, `src/middleware.ts`, `src/jwt.ts`, the
+  `secureHeaders`/`csrf`/`session`/`rateLimit` modules, the adapter
+  bindings, and the `scripts/verify-*.ts` gates themselves) changes. That
+  reviewability is the property the CVE-based-scanner model lacks; it is
+  why this section exists.
+
 ### npm publishing
 
 - **Releases are isolated.** The publish workflow
