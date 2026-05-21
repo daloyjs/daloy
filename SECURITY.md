@@ -252,6 +252,12 @@ chalk/debug/node-ipc phishing campaigns.
   (`.github/workflows/codeql.yml`).
 - **OpenSSF Scorecard** publishes a continuous scorecard
   (`.github/workflows/scorecard.yml`).
+- **Daily SCA** runs `pnpm audit --prod` against the committed lockfile on a
+  fixed schedule, independent of PR/push activity, so newly-disclosed CVEs in
+  pinned dependencies are surfaced even on quiet days
+  (`.github/workflows/vuln-scan.yml`). This is the continuous-scanning
+  cadence required by SOC 2 CC7.1 and described in the Aikido write-up
+  ["A Guide to Automating Technical Vulnerability Management for SOC 2"](https://www.aikido.dev/blog/a-guide-to-automating-technical-vulnerability-management-for-soc-2).
 - **Dependabot** keeps actions and npm dependencies up to date weekly
   (`.github/dependabot.yml`).
 - **`CODEOWNERS`** requires a maintainer to approve any change under
