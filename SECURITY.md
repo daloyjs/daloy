@@ -257,6 +257,36 @@ chalk/debug/node-ipc phishing campaigns.
 - **`CODEOWNERS`** requires a maintainer to approve any change under
   `.github/`, `package.json`, the lockfile, or `.npmrc`.
 
+### CI/CD platform compromise (Aikido "prevent fallout" mapping)
+
+A CI/CD provider being breached is treated as an in-scope threat for the
+framework's own publishing pipeline. The Aikido write-up
+["Preventing fallout from your CI/CD platform being hacked"](https://www.aikido.dev/blog/prevent-fallout-when-cicd-platform-hacked)
+enumerates the controls that contain the blast radius when the CI/CD provider
+itself (or a transitively compromised action) is the attacker. Daloy's
+existing controls map 1:1:
+
+| Aikido recommendation | DaloyJS control |
+| --- | --- |
+| **Restrict the credentials the CI runner can mint** (don't hand a long-lived cloud admin role to every pipeline; restrict by IP / OIDC subject claim) | No long-lived `NPM_TOKEN` is stored anywhere in the repo or GitHub org. Publishing uses **npm Trusted Publishing (OIDC)** with `id-token: write` granted **only** on the two publish jobs in [`.github/workflows/release.yml`](.github/workflows/release.yml), **only after** the protected `npm-publish` GitHub Environment requires explicit maintainer approval. Maintainers should pin the npm Trusted Publishing configuration on the registry side to the specific workflow filename (`release.yml`) and ref pattern (`refs/tags/v*`) so that a stolen OIDC token from any other workflow cannot publish. |
+| **Minimal access / split accounts** (no shared admin; least privilege per job) | Top-level `permissions: {}` in every workflow; jobs opt in to `contents: read` only; `id-token: write` lives on the publish job alone. Core and CLI are split into two separate publish jobs so a compromise of one job cannot republish the other. |
+| **SSO / MFA on the CI/CD platform and the registry** | Hardware-backed 2FA is **mandatory** on both GitHub org membership and npm publish accounts (see [Maintainer accounts](#maintainer-accounts)). The `npm-publish` GitHub Environment requires a separate maintainer approval click for every publish, and that approver is gated by the SECURITY-CONTACTS active rotation check inside `release.yml`. |
+| **Automate security checks at every stage of the pipeline** | The `verify` job in [`release.yml`](.github/workflows/release.yml) runs **before** the publish jobs and gates them on: `verify:lockfile`, `verify:no-runtime-deps`, `verify:no-lifecycle-scripts`, `verify:secret-comparisons`, `verify:no-unsafe-buffer`, `verify:no-remote-exec`, `verify:wave9-audits` through `verify:wave12-audits`, `typecheck`, `test`, `coverage`, `coverage:branches`, `build`, `verify:no-leaked-credentials`, `verify:no-invisible-unicode`, and `pnpm audit --prod`. The same gates run on every PR and every push to `main` via [`ci.yml`](.github/workflows/ci.yml), plus `zizmor`, CodeQL, and OpenSSF Scorecard out-of-band. |
+| **Protect against malware in the package manager** (Aikido Safe Chain class: malicious npm/pnpm/pip packages installed during build) | Defense-in-depth: (a) the published package has **zero runtime dependencies** (`verify:no-runtime-deps`) so consumers of `@daloyjs/core` carry no transitive risk; (b) `ignore-scripts=true` in both root [`.npmrc`](.npmrc) and every scaffolded template `_npmrc` blocks `postinstall` / `preinstall` malware on every machine that installs Daloy or anything Daloy scaffolds; (c) `minimum-release-age=1440` (24 h) in the same `.npmrc` files refuses to install any dependency that was published less than a day ago, which is the window in which freshly-published worm versions (Shai-Hulud, BlokTrooper, the TanStack 2026-05-11 worm) are typically yanked; (d) `verify:no-remote-exec` refuses any `src/**` file that imports `child_process` / `vm`, calls bare `eval`, constructs `new Function` from a string, or dynamically imports a remote URL, so a compromised dev dependency cannot land a `curl … \| sh` carrier inside Daloy itself; (e) `verify:no-leaked-credentials` and `verify:no-invisible-unicode` run on the assembled tarball **inside** the publish job after `pnpm build`, so a GlassWorm-class worm that injected a payload during install would still be caught before `pnpm publish`. |
+| **Egress-restrict the runner so a compromised step cannot exfiltrate** | The two publish jobs run `step-security/harden-runner` with `egress-policy: block` and an explicit allowlist of `registry.npmjs.org`, `api.github.com`, `github.com`, `objects.githubusercontent.com`, and the three Sigstore endpoints. Anything else — Session/Oxen, attacker C2, the npm metadata-abuse endpoints used by TanStack-class worms — is dropped at the runner. The `verify` job and the CI workflow run in `audit` mode so unexpected egress is recorded for review. |
+| **No shared cache / cold installs on publish** | The publish workflow uses no GitHub Actions cache. The CI workflow likewise has the pnpm cache disabled; cache scope is shared between fork PRs and pushes to `main`, which is the exact bridge the TanStack 2026-05-11 worm used to reach the release pipeline. |
+| **Audit who approved each release** | Every publish run records the GitHub actor and the `npm-publish` Environment approver. The release script refuses to publish if `github.actor` is not in the `<!-- BEGIN ACTIVE -->` block of [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md). |
+
+If GitHub Actions itself is breached at the platform level, the worst-case
+exposure for a Daloy release is: an attacker who has bypassed both `harden-runner`'s
+egress block **and** the `npm-publish` Environment approval **and** GitHub's
+OIDC issuer would still produce a tarball that carries a valid Sigstore
+provenance attestation bound to the malicious workflow run — visible publicly
+on the npm package page and on the Rekor transparency log, and rejectable by
+consumer-side OIDC subject-claim policies. That is the residual risk; we
+deliberately accept it in exchange for not running a self-hosted publish
+runner (which has its own larger threat model).
+
 ### npm publishing
 
 - **Releases are isolated.** The publish workflow
