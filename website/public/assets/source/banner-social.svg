@@ -37,8 +37,11 @@
   </text>
 
   <!-- Tagline -->
-  <text x="465" y="710" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="56" font-weight="500" fill="#cbd5e1" letter-spacing="-0.5">
-    Contract-first REST APIs &#8212; Node &#183; Bun &#183; Deno &#183; Workers &#183; Edge
+  <text x="465" y="710" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="52" font-weight="500" fill="#cbd5e1" letter-spacing="-0.5">
+    The runtime-portable framework for a Zero-Trust supply chain
+  </text>
+  <text x="465" y="782" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="400" fill="#94a3b8" letter-spacing="-0.25">
+    Blocked install scripts &#183; SHA-pinned actions &#183; OIDC provenance &#183; Typed end-to-end
   </text>
 
   <!-- URL pill bottom-right -->

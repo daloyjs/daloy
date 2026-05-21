@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "DaloyJS - runtime-portable TypeScript web framework";
+export const alt =
+  "DaloyJS — the runtime-portable framework for a Zero-Trust supply chain";
 export const size = {
   width: 1200,
   height: 630,
@@ -79,24 +80,24 @@ export default function Image() {
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         <div
           style={{
-            fontSize: "72px",
+            fontSize: "68px",
             fontWeight: 800,
             lineHeight: 1.05,
             letterSpacing: 0,
           }}
         >
-          Runtime-portable TypeScript APIs
+          Runtime-portable. Zero-Trust supply chain.
         </div>
         <div
           style={{
-            maxWidth: "940px",
+            maxWidth: "980px",
             color: "#d4d4d4",
-            fontSize: "34px",
+            fontSize: "32px",
             lineHeight: 1.35,
           }}
         >
-          Contract-first routing, Standard Schema validation, OpenAPI 3.1, typed
-          clients, and core security guardrails.
+          Blocked install scripts. SHA-pinned actions. OIDC provenance. Typed
+          end-to-end.
         </div>
       </div>
       <div style={{ color: "#a3a3a3", fontSize: "28px" }}>daloyjs.dev</div>

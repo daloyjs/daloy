@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
 import { DEFAULT_KEYWORDS, SITE_NAME, SITE_URL } from "@/lib/seo";
 import { GoogleAnalytics } from "@next/third-parties/google";
 
-const DEFAULT_TITLE = "DaloyJS — runtime-portable TypeScript web framework";
+const DEFAULT_TITLE =
+  "DaloyJS — the runtime-portable framework for a Zero-Trust supply chain";
 const DEFAULT_DESCRIPTION =
-  "DaloyJS is a runtime-portable TypeScript web framework with contract-first routing, Standard Schema validation, OpenAPI 3.1 generation via Hey API, typed clients, core-enforced security guardrails, and first-party security middleware. Run on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge.";
+  "DaloyJS is a contract-first TypeScript web framework with blocked install scripts, SHA-pinned CI actions, and OIDC provenance — runtime-portable across Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge. Typed end-to-end with Standard Schema validation, OpenAPI 3.1, and Hey API typed clients.";
 const COPYRIGHT_YEAR = 2026;
 
 export const metadata: Metadata = {

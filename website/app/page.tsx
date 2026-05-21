@@ -24,12 +24,13 @@ import { FlowHeroScene } from "../components/flow-hero-scene";
 import { buildMetadata, CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Runtime-portable TypeScript web framework",
+  title: "The runtime-portable framework for a Zero-Trust supply chain",
   description:
-    "DaloyJS is a runtime-portable TypeScript web framework with contract-first routing, Standard Schema validation, OpenAPI 3.1 generation, a typed client, streaming and OpenTelemetry tracing, edge-friendly sessions, core-enforced security guardrails, and supply-chain controls. Run on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge.",
+    "DaloyJS is a contract-first TypeScript web framework with blocked install scripts, SHA-pinned CI actions, and OIDC provenance \u2014 runtime-portable across Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge. Typed end-to-end with Standard Schema validation, OpenAPI 3.1, and Hey API typed clients.",
   path: "/",
   keywords: [
     "DaloyJS",
+    "zero-trust supply chain",
     "runtime-portable framework",
     "TypeScript HTTP framework",
     "contract-first TypeScript",
@@ -38,6 +39,7 @@ export const metadata = buildMetadata({
     "OpenTelemetry tracing",
     "SSE NDJSON streaming",
     "supply-chain hardened",
+    "OIDC provenance",
   ],
 });
 
@@ -146,7 +148,7 @@ export default function HomePage() {
       applicationCategory: "DeveloperApplication",
       operatingSystem: "Cross-platform",
       description:
-        "Runtime-portable TypeScript web framework with contract-first routing, Standard Schema validation, OpenAPI 3.1 generation, typed clients, streaming, OpenTelemetry tracing, edge-friendly sessions, core-enforced security guardrails, and first-party security middleware.",
+        "The runtime-portable TypeScript web framework for a Zero-Trust supply chain: blocked install scripts, SHA-pinned CI actions, OIDC provenance, contract-first routing, Standard Schema validation, OpenAPI 3.1 generation, typed clients, streaming, OpenTelemetry tracing, edge-friendly sessions, and core-enforced security guardrails.",
       url: SITE_URL,
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       programmingLanguage: "TypeScript",
@@ -188,8 +190,15 @@ export default function HomePage() {
               className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
-              The runtime-portable TypeScript web framework
+              The runtime-portable framework for a Zero-Trust supply chain
             </h1>
+            <p
+              className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
+              style={{ animationDelay: "120ms" }}
+            >
+              Blocked install scripts. SHA-pinned actions. OIDC provenance.
+              Typed end-to-end.
+            </p>
             <ContractFlowVisual />
             <p
               className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
