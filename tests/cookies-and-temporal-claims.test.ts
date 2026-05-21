@@ -205,6 +205,29 @@ test("readRequestCookie returns null for missing or absent input", () => {
   assert.equal(readRequestCookie("a=1; b=2", "missing"), null);
 });
 
+test("readRequestCookie rejects duplicate cookies (cookie-tossing defense)", () => {
+  // Cookie-tossing scenario: an attacker has injected a shadow cookie
+  // (e.g. via subdomain XSS or a misconfigured parent-domain Set-Cookie)
+  // that arrives in the same `Cookie` header alongside the legitimate
+  // one. Browsers list path-specific cookies first, so a naive "first
+  // wins" reader would authenticate as the attacker. We refuse both.
+  assert.equal(
+    readRequestCookie("sid=attacker; sid=legit", "sid"),
+    null,
+  );
+  assert.equal(
+    readRequestCookie("sid=legit; other=ok; sid=attacker", "sid"),
+    null,
+  );
+  // A single occurrence is still returned normally.
+  assert.equal(readRequestCookie("sid=legit; other=ok", "sid"), "legit");
+  // Duplicates of a *different* name do not poison unrelated reads.
+  assert.equal(
+    readRequestCookie("other=a; sid=legit; other=b", "sid"),
+    "legit",
+  );
+});
+
 // ---------- time-claims.ts ----------
 
 test("assertTemporalClaims accepts a valid token window", () => {

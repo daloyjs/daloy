@@ -204,26 +204,45 @@ export function serializeClearCookie(name: string, attributes: CookieAttributes 
  * cannot disagree about whitespace handling between `session()` and
  * `csrf()`.
  *
+ * Cookie-tossing defense (RFC 6265 §5.4 / RFC 6265bis §5.7): when the same
+ * cookie name appears more than once in the `Cookie` header, this helper
+ * returns `null` rather than guessing which copy is authentic. Browsers
+ * order shadowed cookies by path-specificity (more specific first), which
+ * means an attacker who can set a sibling cookie via a subdomain XSS or a
+ * misconfigured parent-domain `Set-Cookie` would otherwise win against the
+ * legitimate session cookie. Refusing both copies forces the request to
+ * re-authenticate instead of impersonating the attacker.
+ *
+ * The `__Host-` prefix already prevents this attack at the browser level
+ * (and is the Daloy default for `session()` and `csrf()`), but this
+ * parser-level guard is defense-in-depth for developers who customize the
+ * cookie name or read other cookies through this helper.
+ *
  * @since 0.27.0
  */
 export function readRequestCookie(header: string | null | undefined, name: string): string | null {
   if (!header) return null;
   const parts = header.split(";");
+  let found: string | null = null;
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
     const eq = part.indexOf("=");
     if (eq < 0) continue;
     const k = part.slice(0, eq).trim();
     if (k === name) {
+      // Cookie-tossing defense: a second copy means we cannot safely
+      // distinguish the legitimate cookie from an attacker-injected
+      // shadow. Reject the entire read.
+      if (found !== null) return null;
       const v = part.slice(eq + 1).trim();
       try {
-        return decodeURIComponent(v);
+        found = decodeURIComponent(v);
       } catch {
-        return v;
+        found = v;
       }
     }
   }
-  return null;
+  return found;
 }
 
 /** @internal Re-exported for tests. */
