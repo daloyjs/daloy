@@ -119,6 +119,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
+        run: pnpm verify:no-leaked-credentials
+
       - name: Audit production dependencies
         run: pnpm audit --prod
 

@@ -175,6 +175,7 @@
     "verify:no-lifecycle-scripts": "node --import tsx scripts/verify-no-lifecycle-scripts.ts",
     "verify:secret-comparisons": "node --import tsx scripts/verify-secret-comparisons.ts",
     "verify:no-unsafe-buffer": "node --import tsx scripts/verify-no-unsafe-buffer.ts",
+    "verify:no-leaked-credentials": "node --import tsx scripts/verify-no-leaked-credentials.ts",
     "verify:wave9-audits": "node --import tsx scripts/verify-wave9-audits.ts",
     "verify:wave10-audits": "node --import tsx scripts/verify-wave10-audits.ts",
     "verify:wave11-audits": "node --import tsx scripts/verify-wave11-audits.ts",

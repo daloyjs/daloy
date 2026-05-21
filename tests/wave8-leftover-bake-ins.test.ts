@@ -34,6 +34,12 @@ import { csrf } from "../src/middleware.js";
 import { findForbiddenRuntimeDependencies } from "../scripts/verify-no-runtime-deps.js";
 import { findForbiddenSecretComparisons } from "../scripts/verify-secret-comparisons.js";
 import { findForbiddenBufferCalls } from "../scripts/verify-no-unsafe-buffer.js";
+import {
+  CREDENTIAL_CONTENT_PATTERNS,
+  findCredentialLeaks,
+  PUBLISHABLE_PACKAGES,
+  scanFileContentForCredentials,
+} from "../scripts/verify-no-leaked-credentials.js";
 
 // ---------- cookie.ts ----------
 
@@ -430,3 +436,131 @@ test("verify-no-unsafe-buffer accepts the live src/ tree", async () => {
     "src/ must remain free of `new Buffer(...)` and `Buffer.allocUnsafe*`; see https://snyk.io/blog/exploiting-buffer/",
   );
 });
+
+// ---------- verify-no-leaked-credentials ----------
+
+test("scanFileContentForCredentials catches every documented secret pattern", () => {
+  const samples: { line: string; expect: RegExp }[] = [
+    { line: "AKIA0123456789ABCDEF", expect: /AWS access key id/ },
+    {
+      line: "token: ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+      expect: /GitHub personal access token/,
+    },
+    {
+      line: "GITHUB_TOKEN=github_pat_" + "A".repeat(82),
+      expect: /GitHub fine-grained PAT/,
+    },
+    {
+      line: "//registry.npmjs.org/:_authToken=npm_abcdefghijklmnopqrstuvwxyz0123456789",
+      expect: /npm access token/,
+    },
+    {
+      // Split prefix so GitHub push protection doesn't flag this test sample
+      // as a real Slack token; the concatenation reassembles at runtime so
+      // the scanFileContentForCredentials regex still matches.
+      line: "SLACK=" + "xox" + "b-1234567890-ABCDEFGHIJKLMNOPQRST",
+      expect: /Slack token/,
+    },
+    {
+      line: "STRIPE=sk_live_" + "A".repeat(30),
+      expect: /Stripe live secret key/,
+    },
+    {
+      line: "MAPS=AIza" + "B".repeat(35),
+      expect: /Google API key/,
+    },
+    {
+      line: "-----BEGIN OPENSSH PRIVATE KEY-----",
+      expect: /PEM private-key block/,
+    },
+    {
+      line: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijklmno",
+      expect: /JWT-shaped string/,
+    },
+  ];
+  for (const { line, expect } of samples) {
+    const hits = scanFileContentForCredentials(line);
+    assert.ok(
+      hits.some((h) => expect.test(h.detail)),
+      `pattern ${expect} should match ${line}`,
+    );
+  }
+});
+
+test("scanFileContentForCredentials does not flag harmless content", () => {
+  const clean = [
+    "// A comment about how AKIA-style strings are not real here.",
+    'const greeting = "hello world";',
+    "const port = process.env.PORT ?? 3000;",
+    "// JWT example: eyJ truncated, not a full token",
+    "const aws = 'AKIA'; // bare prefix only",
+  ].join("\n");
+  assert.equal(scanFileContentForCredentials(clean).length, 0);
+});
+
+test("CREDENTIAL_CONTENT_PATTERNS export is non-empty and frozen", () => {
+  assert.ok(CREDENTIAL_CONTENT_PATTERNS.length > 5);
+  assert.ok(Object.isFrozen(CREDENTIAL_CONTENT_PATTERNS));
+});
+
+test("verify-no-leaked-credentials accepts the live publishable packages", async () => {
+  // Each publishable package must report zero findings on the live tree.
+  // Missing paths (e.g. `dist/` before a fresh build) are silently skipped
+  // by the gate, so this test passes whether or not `pnpm build` has run.
+  for (const pkg of PUBLISHABLE_PACKAGES) {
+    const findings = await findCredentialLeaks(pkg);
+    assert.deepEqual(
+      [...findings],
+      [],
+      `${pkg.name} must not ship any secret-shaped filename or credential-shaped string ` +
+        "(see https://snyk.io/blog/leaked-credentials-in-packages/)",
+    );
+  }
+});
+
+test("findCredentialLeaks flags secret-shaped filenames added to a package", async () => {
+  const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const dir = await mkdtemp(path.join(tmpdir(), "daloy-credleak-"));
+  await writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify({ name: "leaky", version: "0.0.0", files: ["dist"] }),
+  );
+  await mkdir(path.join(dir, "dist"));
+  await writeFile(path.join(dir, "dist", ".env"), "OPENAI_API_KEY=sk-redacted");
+  await writeFile(
+    path.join(dir, "dist", "ok.js"),
+    "export const ok = true; // " + "AKIA" + "ABCDEFGHIJKLMNOP",
+  );
+  const findings = await findCredentialLeaks(
+    { name: "leaky", packageDir: "." },
+    dir,
+  );
+  // Both: the `.env` filename AND the AWS-key-shaped string in ok.js.
+  assert.equal(findings.length, 2);
+  assert.ok(findings.some((f) => f.kind === "filename" && /\.env/.test(f.file)));
+  assert.ok(findings.some((f) => f.kind === "content" && /AWS access key id/.test(f.detail)));
+});
+
+test("findCredentialLeaks allows .env.example as a published placeholder", async () => {
+  const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const dir = await mkdtemp(path.join(tmpdir(), "daloy-credleak-ok-"));
+  await writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify({ name: "examples", version: "0.0.0", files: ["templates"] }),
+  );
+  await mkdir(path.join(dir, "templates"));
+  await writeFile(
+    path.join(dir, "templates", ".env.example"),
+    "OPENAI_API_KEY=your-key-here\n",
+  );
+  const findings = await findCredentialLeaks(
+    { name: "examples", packageDir: "." },
+    dir,
+  );
+  assert.deepEqual([...findings], []);
+});
+

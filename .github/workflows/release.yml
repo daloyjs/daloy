@@ -125,6 +125,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
+        run: pnpm verify:no-leaked-credentials
+
       - name: Audit production dependencies
         run: pnpm audit --prod
 
@@ -208,6 +211,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
+        run: pnpm verify:no-leaked-credentials
 
       - name: Verify tag matches package.json version
         if: github.event_name == 'push'
@@ -299,6 +305,9 @@ jobs:
 
       - name: Test create-daloy
         run: pnpm --filter create-daloy test
+
+      - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
+        run: pnpm verify:no-leaked-credentials
 
       - name: Publish create-daloy with provenance
         working-directory: packages/create-daloy
