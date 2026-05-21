@@ -68,6 +68,24 @@ const JOBS = [
     height: 1000,
   },
 
+  // ── README banners (light theme, 3:1) ──────────────────────────────────
+  // GitHub READMEs default to a light surface, so we ship a light variant at
+  // a README-friendly width (~1280 displays crisply on retina without
+  // ballooning page weight). The 1500-wide variant doubles as a generic
+  // light social banner for marketing pages.
+  {
+    src: "banner-social-light.svg",
+    out: "banner-light-1280x426.png",
+    width: 1280,
+    height: 426,
+  },
+  {
+    src: "banner-social-light.svg",
+    out: "banner-light-1500x500.png",
+    width: 1500,
+    height: 500,
+  },
+
   // ── Static OG image fallback (some crawlers prefer a static URL) ───────
   { src: "og-image.svg", out: "og-image.png", width: 1200, height: 630 },
 ];

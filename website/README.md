@@ -1,3 +1,12 @@
+<p align="center">
+  <a href="https://daloyjs.dev">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://daloyjs.dev/assets/banner-x-1500x500.png">
+      <img alt="DaloyJS — Contract-first REST APIs for Node · Bun · Deno · Workers · Edge" src="https://daloyjs.dev/assets/banner-light-1280x426.png" width="100%">
+    </picture>
+  </a>
+</p>
+
 # DaloyJS docs site
 
 The official documentation site for **DaloyJS** — built with Next.js 16, Tailwind CSS v4, and shadcn/ui.

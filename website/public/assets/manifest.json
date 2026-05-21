@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-21T15:51:34.705Z",
+  "generatedAt": "2026-05-21T16:01:16.256Z",
   "generator": "scripts/render-assets.mjs",
   "source": "public/assets/source/",
   "files": [
@@ -54,6 +54,14 @@
     {
       "name": "banner-bluesky-3000x1000.png",
       "bytes": 194991
+    },
+    {
+      "name": "banner-light-1280x426.png",
+      "bytes": 95796
+    },
+    {
+      "name": "banner-light-1500x500.png",
+      "bytes": 68935
     },
     {
       "name": "og-image.png",

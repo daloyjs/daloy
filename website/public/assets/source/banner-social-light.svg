@@ -1,0 +1,44 @@
+<!-- Light-theme social banner (3:1). Same wave geometry as banner-social.svg
+     but with a cream/white gradient backdrop, deeper sky-blue waves, and
+     near-black wordmark. Used in GitHub READMEs (light-mode default) and
+     light-themed marketing surfaces. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3000 1000">
+  <defs>
+    <linearGradient id="banner-bg-light" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#e0f2fe" />
+    </linearGradient>
+  </defs>
+
+  <rect width="3000" height="1000" fill="url(#banner-bg-light)" />
+
+  <!-- Layered horizontal waves spanning the full canvas, brand sky-blue. -->
+  <g fill="none" stroke-linecap="round" stroke-width="6" opacity="0.55">
+    <path d="M -50 320 C 600 120 1100 520 1700 320 C 2300 120 2700 520 3100 320" stroke="#7dd3fc" />
+    <path d="M -50 200 C 600 0 1100 400 1700 200 C 2300 0 2700 400 3100 200" stroke="#bae6fd" />
+    <path d="M -50 800 C 600 600 1100 1000 1700 800 C 2300 600 2700 1000 3100 800" stroke="#0284c7" />
+  </g>
+
+  <!-- Primary triple-wave mark, anchored on the left. -->
+  <g transform="translate(180 380)" fill="none" stroke-linecap="round" stroke-width="14">
+    <path d="M 0 24 C 64 -32 128 80 192 24" stroke="#7dd3fc" />
+    <path d="M 0 120 C 64 64 128 176 192 120" stroke="#0ea5e9" />
+    <path d="M 0 216 C 64 160 128 272 192 216" stroke="#0369a1" />
+  </g>
+
+  <!-- Wordmark -->
+  <text x="460" y="600" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="220" font-weight="800" letter-spacing="-6">
+    <tspan fill="#0f172a">Daloy</tspan><tspan fill="#0ea5e9">JS</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="465" y="710" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="56" font-weight="500" fill="#475569" letter-spacing="-0.5">
+    Contract-first REST APIs &#8212; Node &#183; Bun &#183; Deno &#183; Workers &#183; Edge
+  </text>
+
+  <!-- URL pill bottom-right -->
+  <g transform="translate(2480 880)">
+    <rect x="0" y="-46" width="430" height="64" rx="32" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+    <text x="32" y="-4" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="34" font-weight="600" fill="#0369a1">daloyjs.dev</text>
+  </g>
+</svg>
