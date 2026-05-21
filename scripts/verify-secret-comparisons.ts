@@ -1,12 +1,26 @@
 /**
  * Single-source-of-truth secret-comparison CI grep gate.
  *
- * Scans the security-sensitive source files and refuses any `===` or `!==`
- * against a value that was clearly derived from a request `Authorization`,
- * `Cookie`, `X-API-Key`, or `X-*-Signature*` header. Every such comparison
- * MUST go through {@link timingSafeEqual} (from `src/security.ts`) so the
- * framework's secret-comparison surface is internally self-consistent and
- * resistant to timing attacks.
+ * Scans the security-sensitive source files and refuses any non-constant-time
+ * comparison against a value that was clearly derived from a request
+ * `Authorization`, `Cookie`, `X-API-Key`, or `X-*-Signature*` header. Every
+ * such comparison MUST go through {@link timingSafeEqual} (from
+ * `src/security.ts`) so the framework's secret-comparison surface is
+ * internally self-consistent and resistant to timing attacks.
+ *
+ * The gate catches the full family of short-circuiting string operations
+ * that the Snyk "Node.js timing attack from the CCC CTF" write-up exploits
+ * (<https://snyk.io/blog/node-js-timing-attack-ccc-ctf/>):
+ *
+ *   - Strict and loose equality: `===`, `!==`, `==`, `!=`
+ *   - Prefix / suffix / substring probes: `.startsWith()`, `.endsWith()`,
+ *     `.includes()`, `.indexOf()`
+ *   - Locale-aware compares: `.localeCompare()`
+ *
+ * V8 returns early on the first differing byte (and on length mismatch) for
+ * every one of these, which leaks the secret one character at a time over a
+ * remote timing channel. `timingSafeEqual()` is the only acceptable
+ * primitive for comparing a request-supplied secret to an expected value.
  *
  * Files in scope:
  *   - src/session.ts
@@ -65,7 +79,8 @@ export interface ForbiddenComparison {
   readonly text: string;
 }
 
-const COMPARISON_RE = /(?:===|!==)/;
+const COMPARISON_RE =
+  /(?:===|!==|(?<![=!<>])==(?!=)|(?<![=!<>])!=(?!=)|\.(?:startsWith|endsWith|includes|indexOf|localeCompare)\s*\()/;
 
 export function findForbiddenSecretComparisons(
   file: string,
@@ -111,7 +126,11 @@ async function main(): Promise<void> {
   if (total > 0) {
     console.error(
       `verify-secret-comparisons: ${total} forbidden comparison${total === 1 ? "" : "s"} found. ` +
-        "Replace `===` / `!==` against header-derived values with `timingSafeEqual()`.",
+        "Replace `===` / `!==` / `==` / `!=` / `.startsWith()` / `.endsWith()` / " +
+        "`.includes()` / `.indexOf()` / `.localeCompare()` against header-derived " +
+        "values with `timingSafeEqual()` — these short-circuit on the first " +
+        "differing byte and leak secrets via remote timing channels " +
+        "(see https://snyk.io/blog/node-js-timing-attack-ccc-ctf/).",
     );
     process.exitCode = 1;
   }

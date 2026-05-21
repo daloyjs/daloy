@@ -319,15 +319,43 @@ test("verify-secret-comparisons flags forbidden equality on header-derived value
     "",
     "// unsafe: cookie value",
     "if (cookieValue !== expectedCsrfToken) reject();",
+    "",
+    "// unsafe: loose equality on a secret",
+    "if (apiKey == provided) ok();",
+    "",
+    "// unsafe: loose inequality on a secret",
+    "if (apiKey != expected) reject();",
+    "",
+    "// unsafe: prefix probe leaks the secret one byte at a time (CCC CTF class)",
+    'if (authorizationHeader.startsWith("Bearer " + expectedToken)) return true;',
+    "",
+    "// unsafe: substring probe",
+    "if (cookieValue.includes(expectedCsrfToken)) ok();",
+    "",
+    "// unsafe: indexOf probe",
+    "if (apiKey.indexOf(prefix) === 0) ok();",
+    "",
+    "// unsafe: endsWith probe",
+    "if (sessionToken.endsWith(suffix)) ok();",
+    "",
+    "// unsafe: localeCompare also short-circuits",
+    "if (bearerToken.localeCompare(expected) === 0) ok();",
   ].join("\n");
   const findings = findForbiddenSecretComparisons("sample.ts", sample);
-  // The static `"Bearer"` and OpenAPI enum lines are allowed; the four
-  // actual secret comparisons fail.
-  assert.equal(findings.length, 4);
+  // The static `"Bearer"` and OpenAPI enum lines are allowed; everything
+  // else (strict, loose, and short-circuiting string probes) must fail.
+  assert.equal(findings.length, 11);
   assert.match(findings[0]!.text, /authorizationToken/);
   assert.match(findings[1]!.text, /apiKey/);
   assert.match(findings[2]!.text, /headers\.get/);
   assert.match(findings[3]!.text, /cookieValue/);
+  assert.match(findings[4]!.text, /apiKey == provided/);
+  assert.match(findings[5]!.text, /apiKey != expected/);
+  assert.match(findings[6]!.text, /startsWith/);
+  assert.match(findings[7]!.text, /includes/);
+  assert.match(findings[8]!.text, /indexOf/);
+  assert.match(findings[9]!.text, /endsWith/);
+  assert.match(findings[10]!.text, /localeCompare/);
 });
 
 test("verify-secret-comparisons accepts the audited source files", async () => {
