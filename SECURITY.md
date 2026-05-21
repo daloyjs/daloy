@@ -117,6 +117,74 @@ every HTTP client (browser, mobile, CLI, attacker) are untrusted.
         [ Trusted data store ]   <- caller's responsibility
 ```
 
+### AI-accelerated attackers
+
+Modern attackers increasingly use LLMs and agentic tooling to read source,
+enumerate routes, generate exploit payloads, and iterate variants at a pace a
+human reviewer cannot match (see Aikido's
+["How Security Teams Fight Back Against AI-Powered Hackers"](https://www.aikido.dev/blog/hacker-superpower-ai)
+and the public reports it cites). DaloyJS does not treat "AI on the other end"
+as a separate threat class — the same classes of bug (parser confusion, auth
+bypass, header injection, timing leaks, SSRF, supply chain) are still what
+gets exploited. What changes is that **every** bug in those classes is more
+likely to be found, and **subtle** variants (case-mutated paths, padded
+base64 signatures, `Content-Length` games, scriptable image formats disguised
+as PNGs) now get tried by default. Our response is to shrink the surface and
+make the remaining surface default-deny rather than to bolt on an AI
+"WAF" at request time:
+
+- **No string-eval / no template engine in core.** There is no `eval`, no
+  `new Function`, no template compiler, and no shell helper in `src/`. SSTI
+  and the Thymeleaf / CVE-2026-40478 class have no surface to land on.
+- **Default-deny on the request path.** Body cap, header CRLF/NUL rejection,
+  router path-traversal rejection, real `405`, and per-handler timeout all
+  run in core before user code; an LLM-generated variant has to bypass the
+  check, not just find a forgotten branch.
+- **Constant-time secret handling, enforced by CI.** `timingSafeEqual()` is
+  the only sanctioned primitive; `pnpm verify:secret-comparisons` rejects the
+  full short-circuiting comparison family against any header-derived value in
+  `src/` (`===`, `!==`, `.startsWith`, `.endsWith`, `.includes`, `.indexOf`,
+  `.localeCompare`, …). Variant-generation against secret checks has nowhere
+  to land that compiles.
+- **Auth/router parity.** The `except()` matcher consumes the same
+  `url.pathname` the router sees (no double-decode, no case folding), so the
+  Qinglong CVE-2026-3965 / CVE-2026-4047 class of "case-mutated path skips
+  auth but still reaches the handler" is blocked in core. Regression-tested
+  in [`tests/path-auth-bypass-regression.test.ts`](tests/path-auth-bypass-regression.test.ts).
+- **Cross-origin WebSocket hijacking blocked at registration.** `app.ws()`
+  refuses-at-registration in production unless the route opts in to an
+  origin policy, so drive-by upgrade attempts get `403` before any
+  cookie-bearing handler runs.
+- **Magic-byte file validation that rejects scriptable image formats.**
+  `fileField()` refuses SVG / MVG / MSL / PostScript / EPS by default when
+  `magicBytes` is enabled, closing the ImageTragick (CVE-2016-3714) class
+  against renderers that an attacker would otherwise try to exploit via a
+  PNG-shaped wrapper.
+- **No legacy `Buffer` API in source.** `pnpm verify:no-unsafe-buffer`
+  refuses `new Buffer(...)` and `Buffer.allocUnsafe*(...)`, so an LLM-suggested
+  "speed" patch that ships uninitialized memory through a response cannot be
+  merged.
+- **Webhook signature parsing is prefix-locked.** HMAC helpers parse only
+  known algorithm prefixes (`sha256=…`) and never strip on bare `=`, so
+  padded-base64 signatures aren't truncated into a forged match.
+- **Supply chain treated as part of the request path.** pnpm strict isolation,
+  `ignore-scripts`, `minimum-release-age`, SHA-pinned CI actions, OIDC publish
+  with provenance, and the three-layer leaked-credentials gate
+  (`package.json#files` whitelist + filename gate + content gate in
+  `scripts/verify-no-leaked-credentials.ts`) close the path an AI-assisted
+  worm uses to ship a poisoned dependency or a tarball containing a `.env`.
+- **Documented operator boundary.** This file states explicitly what core
+  does **not** defend (network DoS, insecure handler code, integrated
+  template engines, credential storage, TLS termination, runtime
+  compromise), so operators who deploy DaloyJS can place the right controls
+  at the right layer instead of assuming an "AI shield" exists where it
+  does not.
+
+If you find a class of bug that an AI-augmented attacker would obviously
+try and that core does not already refuse, please report it via the
+private-disclosure channel above. The framework's posture is to add the
+check to core and the CI gate, not to add a runtime classifier.
+
 ### Hardening roadmap (tracked, not yet shipped)
 
 These improvements are on the security roadmap. They are listed publicly so
