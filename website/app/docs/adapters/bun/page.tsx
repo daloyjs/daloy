@@ -1,0 +1,122 @@
+import Link from "next/link";
+
+import { CodeBlock } from "@/components/code-block";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Bun adapter",
+  description:
+    "Run a DaloyJS app on Bun 1.2+ with native Bun.serve, TLS, Unix sockets, WebSocket upgrade, and hot reload.",
+  path: "/docs/adapters/bun",
+  keywords: [
+    "DaloyJS Bun adapter",
+    "Bun.serve",
+    "Bun TLS",
+    "Bun WebSocket upgrade",
+    "Bun unix socket",
+    "Bun idleTimeout",
+  ],
+  type: "article",
+});
+
+export default function Page() {
+  return (
+    <>
+      <h1>Bun</h1>
+      <p>
+        The Bun adapter wraps the native <code>Bun.serve</code> API. You get fast startup, a smaller
+        memory footprint, and first-class TLS and Unix-socket support without extra middleware.
+      </p>
+
+      <h2>When to choose Bun</h2>
+      <ul>
+        <li>You want startup measured in milliseconds and lower per-request overhead than Node.</li>
+        <li>You ship a single self-contained binary or a small container.</li>
+        <li>You&apos;re fine with Bun 1.2+ (matches the adapter&apos;s expectations).</li>
+      </ul>
+
+      <h2>Install</h2>
+      <CodeBlock language="bash" code={`bun add @daloyjs/core`} />
+
+      <h2>Minimal server</h2>
+      <CodeBlock
+        language="ts"
+        code={`// src/server.ts
+import { serve } from "@daloyjs/core/bun";
+import { app } from "./app.ts";
+
+const handle = serve(app, {
+  port: 3000,
+  hostname: "0.0.0.0",
+  idleTimeout: 30,          // seconds; Bun default is 10
+  development: false,       // disables Bun's dev error pages in prod
+  // unix: "/tmp/daloy.sock",
+  // tls: { cert, key },    // HTTPS
+});
+
+console.log("listening on " + handle.url);`}
+      />
+
+      <h2>Hot reload in dev</h2>
+      <CodeBlock language="bash" code={`bun --hot src/server.ts`} />
+
+      <h2>WebSocket upgrade</h2>
+      <p>
+        Bun&apos;s upgrade API hasn&apos;t changed: <code>server.upgrade(req)</code> returns a
+        boolean. DaloyJS&apos;s WebSocket primitives use it under the hood; you don&apos;t need to
+        call it directly unless you&apos;re building a custom adapter.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`// inside a route handler
+if (server.upgrade(req)) {
+  return; // upgraded; do not send a response
+}
+return new Response("Expected upgrade", { status: 426 });`}
+      />
+
+      <h2>Dockerfile</h2>
+      <CodeBlock
+        language="docker"
+        code={`FROM oven/bun:1.2-slim AS build
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bun build --target=bun src/server.ts --outdir dist
+
+FROM oven/bun:1.2-distroless
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+EXPOSE 3000
+CMD ["dist/server.js"]`}
+      />
+
+      <h2>Gotchas</h2>
+      <ul>
+        <li>
+          <code>idleTimeout</code> is in <strong>seconds</strong>, capped at 255. Pass{" "}
+          <code>0</code> to disable.
+        </li>
+        <li>
+          Some npm packages with native bindings still need Node — test before committing to Bun in
+          production.
+        </li>
+        <li>
+          Bun&apos;s built-in <code>routes</code> option is not used by the adapter; routing is
+          owned by DaloyJS so the same app stays portable across runtimes.
+        </li>
+      </ul>
+
+      <h2>See also</h2>
+      <ul>
+        <li>
+          <Link href="/docs/adapters">Adapters overview</Link>
+        </li>
+        <li>
+          <Link href="/docs/adapters/node">Node.js adapter</Link>
+        </li>
+      </ul>
+    </>
+  );
+}

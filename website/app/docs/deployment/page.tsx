@@ -1,20 +1,95 @@
-import { CodeBlock } from "../../../components/code-block";
+import Link from "next/link";
+import type { Route } from "next";
+
+import { CodeBlock } from "@/components/code-block";
 
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Deployment",
   description:
-    "Deploy DaloyJS apps to Node.js servers, Cloudflare Workers, Vercel Edge, Bun, or Deno Deploy. Production-ready guides for each target platform.",
+    "Deploy DaloyJS apps to containers, Node PaaS platforms, and edge or serverless providers. Production-ready guides for Docker, Fly.io, Render, Railway, Heroku, Vercel, Cloudflare Workers, Bun, and Deno.",
   path: "/docs/deployment",
-  keywords: ["deploy DaloyJS", "Cloudflare Workers deployment", "Vercel Edge deployment", "Node.js deployment", "Bun deployment"],
+  keywords: [
+    "deploy DaloyJS",
+    "DaloyJS Docker deployment",
+    "Fly.io deployment",
+    "Render deployment",
+    "Railway deployment",
+    "Heroku deployment",
+    "Cloudflare Workers deployment",
+    "Vercel deployment",
+  ],
   type: "article",
 });
+
+type Target = {
+  name: string;
+  href: Route;
+  blurb: string;
+};
+
+const NODE_PLATFORMS: Target[] = [
+  {
+    name: "Fly.io",
+    href: "/docs/deployment/fly-io" as Route,
+    blurb:
+      "Containerized Node service with fly.toml, health checks, and scale-to-zero machines.",
+  },
+  {
+    name: "Render",
+    href: "/docs/deployment/render" as Route,
+    blurb:
+      "Blueprint-based Node web service with healthCheckPath and autoscaling.",
+  },
+  {
+    name: "Railway",
+    href: "/docs/deployment/railway" as Route,
+    blurb:
+      "Auto-detected Node app with optional railway.json or railway.toml for start, health, and migrations.",
+  },
+  {
+    name: "Heroku",
+    href: "/docs/deployment/heroku" as Route,
+    blurb:
+      "Procfile-based Node dyno on heroku-24 or heroku-26 with the heroku/nodejs buildpack.",
+  },
+];
+
+function Grid({ items }: { items: Target[] }) {
+  return (
+    <div className="not-prose my-6 grid gap-3 sm:grid-cols-2">
+      {items.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          className="rounded-lg border bg-card p-4 transition-colors hover:border-foreground/40 hover:bg-muted/40"
+        >
+          <div className="font-medium text-foreground">{item.name}</div>
+          <p className="mt-1 text-sm text-muted-foreground">{item.blurb}</p>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export default function Page() {
   return (
     <>
       <h1>Deployment</h1>
+
+      <p>
+        Deployment answers a different question from adapters. The adapter docs explain which
+        runtime contract DaloyJS plugs into. This page explains how to package, configure, and run
+        that app on a platform you&apos;re shipping to.
+      </p>
+
+      <h2>Node platforms</h2>
+      <p>
+        These providers all run the <Link href="/docs/adapters/node">Node adapter</Link>. What
+        changes is the platform config, health checks, and rollout mechanics.
+      </p>
+      <Grid items={NODE_PLATFORMS} />
 
       <h2>Production checklist</h2>
       <ul>
@@ -29,14 +104,14 @@ export default function Page() {
 
       <h2>Docker (Node, distroless)</h2>
       <CodeBlock language="dockerfile" code={`# syntax=docker/dockerfile:1
-FROM node:20-bookworm AS deps
+    FROM node:24-bookworm AS deps
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \\
     pnpm install --frozen-lockfile --prod
 
-FROM node:20-bookworm AS build
+    FROM node:24-bookworm AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml .npmrc ./
@@ -45,7 +120,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \\
 COPY . .
 RUN pnpm build
 
-FROM gcr.io/distroless/nodejs20-debian12 AS runtime
+    FROM gcr.io/distroless/nodejs24-debian12 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps  /app/node_modules ./node_modules
@@ -85,15 +160,15 @@ await app.shutdown(15_000);`} />
       </p>
       <CodeBlock language="bash" code={`pnpm create daloy@latest my-api --template vercel-edge`} />
       <p>
-        The Vercel template creates a catch-all <code>api/[...path].ts</code> route and exports
-        <code>toEdgeHandler(app)</code> from <code>@daloyjs/core/vercel</code>. Cloudflare is only
-        another supported runtime option; you do not need it unless you deploy to Workers.
+        The Vercel template creates a catch-all route and uses the current Edge export shape from{" "}
+        <code>@daloyjs/core/vercel</code>. See <Link href="/docs/adapters/vercel">Vercel</Link>,{" "}
+        <Link href="/docs/adapters/cloudflare-workers">Cloudflare Workers</Link>, and{" "}
+        <Link href="/docs/adapters/deno">Deno</Link> for runtime-specific handler variants.
       </p>
-      <CodeBlock language="ts" code={`import { toEdgeHandler } from "@daloyjs/core/vercel";
+      <CodeBlock language="ts" code={`import { toWebHandler } from "@daloyjs/core/vercel";
 
-export const config = { runtime: "edge" };
-export default toEdgeHandler(app);`} />
-      <p>See <a href="/docs/adapters">Adapters</a> for runtime-specific entry points.</p>
+export const runtime = "edge";
+export default toWebHandler(app);`} />
     </>
   );
 }

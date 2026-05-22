@@ -1,0 +1,98 @@
+import Link from "next/link";
+
+import { CodeBlock } from "@/components/code-block";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Deploy to Heroku",
+  description:
+    "Deploy DaloyJS to Heroku as a Node web dyno. Procfile, heroku-24 or heroku-26 stack, and the heroku/nodejs buildpack.",
+  path: "/docs/deployment/heroku",
+  keywords: [
+    "Deploy DaloyJS to Heroku",
+    "Heroku Procfile",
+    "heroku-24 stack",
+    "heroku/nodejs buildpack",
+  ],
+  type: "article",
+});
+
+export default function Page() {
+  return (
+    <>
+      <h1>Heroku</h1>
+      <p>
+        Heroku still runs DaloyJS happily as a Node web dyno. Use the{" "}
+        <Link href="/docs/adapters/node">Node adapter</Link>, declare a <code>Procfile</code>, and
+        pin to a supported stack.
+      </p>
+
+      <h2>When to choose Heroku</h2>
+      <ul>
+        <li>You already have Heroku add-ons and pipelines and don&apos;t want to migrate.</li>
+        <li>You want a known, stable deploy story without a YAML file.</li>
+      </ul>
+
+      <h2>Server entrypoint</h2>
+      <CodeBlock
+        language="ts"
+        code={`// src/server.ts
+import { serve } from "@daloyjs/core/node";
+import { app } from "./app.js";
+
+serve(app, {
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+});`}
+      />
+
+      <h2>Procfile</h2>
+      <CodeBlock language="text" code={`web: node dist/server.js`} />
+
+      <h2>Stack</h2>
+      <p>
+        Use <code>heroku-24</code> or <code>heroku-26</code>. <code>heroku-22</code> is deprecated.
+      </p>
+      <CodeBlock language="bash" code={`heroku stack:set heroku-24 --app my-daloy-api`} />
+
+      <h2>Buildpack</h2>
+      <p>
+        The <code>heroku/nodejs</code> buildpack is auto-detected from <code>package.json</code>.
+      </p>
+      <CodeBlock
+        language="bash"
+        code={`heroku buildpacks:set heroku/nodejs --app my-daloy-api`}
+      />
+
+      <h2>Deploy</h2>
+      <CodeBlock
+        language="bash"
+        code={`heroku create my-daloy-api --stack heroku-24
+heroku config:set SESSION_SECRET=...
+git push heroku main`}
+      />
+
+      <h2>Gotchas</h2>
+      <ul>
+        <li>
+          Heroku sends <code>SIGTERM</code> and then <code>SIGKILL</code> after 30 seconds. Set the
+          Node adapter&apos;s <code>shutdownTimeoutMs</code> to something well under 30,000.
+        </li>
+        <li>
+          Bind to <code>0.0.0.0</code> on the <code>PORT</code> env var or the routing layer
+          won&apos;t reach the process.
+        </li>
+      </ul>
+
+      <h2>See also</h2>
+      <ul>
+        <li>
+          <Link href="/docs/deployment">Deployment overview</Link>
+        </li>
+        <li>
+          <Link href="/docs/adapters/node">Node adapter</Link>
+        </li>
+      </ul>
+    </>
+  );
+}
