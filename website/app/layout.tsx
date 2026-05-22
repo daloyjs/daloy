@@ -11,6 +11,8 @@ import { BackToTop } from "@/components/back-to-top";
 import { cn } from "@/lib/utils";
 import { DEFAULT_KEYWORDS, SITE_NAME, SITE_URL } from "@/lib/seo";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 
 const DEFAULT_TITLE =
   "DaloyJS — the runtime-portable framework for a Zero-Trust supply chain";
@@ -184,6 +186,8 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
       <GoogleAnalytics gaId="G-DSBFBZT7RQ" />
+      <SpeedInsights />
+      <Analytics />
     </html>
   );
 }
