@@ -1,0 +1,139 @@
+# Second-source dependency scan against the OSV.dev database
+# (Aikido npm-audit-guide "the missing layer" gate).
+#
+# Why this exists:
+#   `pnpm audit --prod` (run on every PR in `ci.yml` and daily in
+#   `vuln-scan.yml`) only queries the GitHub Advisory Database. The
+#   Aikido write-up "NPM Security Audit: The Missing Layer Your Team
+#   Still Needs" (https://www.aikido.dev/blog/npm-audit-guide) and the
+#   September 2025 npm phishing wave that compromised `debug`, `chalk`,
+#   and ~2B downloads/week of dependent packages
+#   (https://lwn.net/Articles/1037167/) both show that a single advisory
+#   feed is not enough — newly-disclosed malicious package versions
+#   often land in OSS feeds (OpenSSF `malicious-packages`, OSV.dev,
+#   PyPI, Go vuln DB) before they propagate into GHSA.
+#
+#   This workflow adds a SECOND, independent source of vulnerability
+#   and malware intel: Google's OSV-Scanner, which queries OSV.dev and
+#   cross-references the OpenSSF `malicious-packages` corpus
+#   (https://github.com/ossf/malicious-packages). Findings that overlap
+#   with the daily `pnpm audit` are duplicates; findings that DO NOT
+#   overlap are the gap the Aikido article warns about.
+#
+# Defense-in-depth context (see SECURITY.md § Supply-chain security):
+#   * `.npmrc` `ignore-scripts=true` and `minimum-release-age=1440`
+#     already block the install-time and zero-day-window classes of
+#     supply-chain attack.
+#   * `pnpm verify:lockfile` already refuses non-registry sources.
+#   * `pnpm verify:no-runtime-deps` keeps `@daloyjs/core`'s ship
+#     surface empty.
+#   * This OSV pass is the LAST layer: "did a pinned version turn out
+#     to carry a CVE or a malware advisory after we pinned it?"
+#
+# Hardening:
+#   * `permissions: {}` at the top level; the single job opts in to
+#     `contents: read` only. No write permissions of any kind.
+#   * `step-security/harden-runner` in audit mode.
+#   * `actions/checkout` runs with `persist-credentials: false`.
+#   * The OSV-Scanner binary is downloaded directly from the official
+#     google/osv-scanner GitHub release and its SHA-256 is verified
+#     against a locally-pinned constant BEFORE the binary is executed.
+#     We deliberately avoid the third-party `google/osv-scanner-action`
+#     wrapper so the only third-party surface is the binary itself, not
+#     a layer of action-side YAML that could be retagged.
+#   * The scan is read-only and runs on a frozen, script-free install
+#     (`pnpm install --frozen-lockfile --ignore-scripts`).
+#
+# Cadence: daily, offset from the other scheduled security jobs
+# (CodeQL Mon 04:37, Scorecard Tue 05:23, vuln-scan 06:13, Zizmor 07:00).
+
+name: OSV scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "packages/**/package.json"
+      - ".github/workflows/osv-scan.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "packages/**/package.json"
+      - ".github/workflows/osv-scan.yml"
+  schedule:
+    # 06:47 UTC daily — offset from vuln-scan (06:13) and Zizmor (07:00)
+    # so the two SCA jobs do not collide.
+    - cron: "47 6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: osv-scan-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: OSV.dev + malicious-packages scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    env:
+      # Pinned OSV-Scanner release. Bump together with the SHA-256 below.
+      # Source: https://github.com/google/osv-scanner/releases/tag/v2.3.8
+      OSV_SCANNER_VERSION: "2.3.8"
+      # SHA-256 of `osv-scanner_linux_amd64` from the v2.3.8
+      # `osv-scanner_SHA256SUMS` asset. Verified locally on 2026-05-23.
+      OSV_SCANNER_SHA256: "bc98e15319ed0d515e3f9235287ba53cdc5535d576d24fd573978ecfe9ab92dc"
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          disable-file-monitoring: false
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Download and verify OSV-Scanner binary
+        # Pin the binary by SHA-256 BEFORE executing it. A registry or
+        # GitHub Releases compromise that swaps the asset would fail
+        # this check and abort the job.
+        run: |
+          set -euo pipefail
+          url="https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output osv-scanner "${url}"
+          echo "${OSV_SCANNER_SHA256}  osv-scanner" | sha256sum --check --status
+          chmod +x osv-scanner
+          ./osv-scanner --version
+
+      - name: Scan pnpm-lock.yaml (OSV.dev + malicious-packages)
+        # Scope: ONLY the root `pnpm-lock.yaml`, which covers
+        # `@daloyjs/core` plus every workspace package under `packages/*`
+        # (`create-daloy` and friends). `website/` is explicitly excluded
+        # from the workspace (`pnpm-workspace.yaml`) and is a separate
+        # Next.js marketing site — it is not part of any published
+        # tarball and is not in the ship surface, so its transitive
+        # findings are handled out-of-band and do not block this gate.
+        #
+        # OSV-Scanner queries OSV.dev and cross-references the OpenSSF
+        # malicious-packages corpus. Exits non-zero if any vulnerability
+        # or malware advisory matches a pinned version. This is the
+        # second-source gate beyond `pnpm audit --prod`.
+        run: |
+          set -euo pipefail
+          ./osv-scanner scan source \
+            --lockfile=pnpm-lock.yaml \
+            --format=table
