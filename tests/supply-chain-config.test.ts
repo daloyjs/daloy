@@ -195,6 +195,85 @@ test("lockfile scanner allows the legitimate is-buffer package (exact-match bloc
   assert.deepEqual(findForbiddenLockfileSources(lockfile), []);
 });
 
+test("lockfile scanner rejects every Qix / DuckDB Sep 2025 crypto-clipper version", () => {
+  // Socket 2025-09-08 (https://socket.dev/blog/npm-author-qix-compromised-in-major-supply-chain-attack)
+  // and the Aikido DuckDB follow-up (https://www.aikido.dev/blog/duckdb-npm-packages-compromised):
+  // the maintainer "Qix" was phished and trojanised versions of 19 foundational
+  // packages were published with a browser crypto-clipper payload. The legit
+  // package names remain safe — only these exact versions are blocked.
+  const lockfile = [
+    "packages:",
+    "  ansi-regex@6.2.1:",
+    "  ansi-styles@6.2.2:",
+    "  backslash@0.2.1:",
+    "  chalk@5.6.1:",
+    "  chalk-template@1.1.1:",
+    "  color-convert@3.1.1:",
+    "  color-name@2.0.1:",
+    "  color-string@2.1.1:",
+    "  debug@4.4.2:",
+    "  error-ex@1.3.3:",
+    "  has-ansi@6.0.1:",
+    "  is-arrayish@0.3.3:",
+    "  proto-tinker-wc@1.8.7:",
+    "  proto-tinker-wc@0.1.87:",
+    "  simple-swizzle@0.2.3:",
+    "  slice-ansi@7.1.1:",
+    "  strip-ansi@7.1.1:",
+    "  supports-color@10.2.1:",
+    "  supports-hyperlinks@4.1.1:",
+    "  wrap-ansi@9.0.1:",
+  ].join("\n");
+
+  const findings = findForbiddenLockfileSources(lockfile);
+  assert.equal(findings.length, 20, JSON.stringify(findings, null, 2));
+  for (const finding of findings) {
+    assert.equal(
+      finding.reason,
+      "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)",
+    );
+  }
+});
+
+test("lockfile scanner allows safe (non-compromised) versions of Qix-maintained packages", () => {
+  // The blocklist is version-pinned: chalk, debug, ansi-styles etc. remain
+  // legitimate packages — only the trojanised Sep-2025 versions are blocked.
+  // Any earlier or later untainted release must continue to install cleanly.
+  const lockfile = [
+    "packages:",
+    "  chalk@5.6.0:",
+    "    resolution: {integrity: sha512-aaa}",
+    "  chalk@5.6.2:",
+    "    resolution: {integrity: sha512-bbb}",
+    "  debug@4.4.1:",
+    "  debug@4.4.3:",
+    "  ansi-styles@6.2.1:",
+    "  strip-ansi@7.1.0:",
+  ].join("\n");
+
+  assert.deepEqual(findForbiddenLockfileSources(lockfile), []);
+});
+
+test("lockfile scanner flags compromised versions even with pnpm peer-dep suffix", () => {
+  // pnpm v9+ disambiguates a package built against multiple peer-dep versions
+  // by appending `(peer@version)` to the lockfile key — e.g.
+  // `debug@4.4.2(supports-color@10.2.1)`. The version match must strip that
+  // suffix before comparing, otherwise a real-world poisoned lockfile would
+  // slip past the gate.
+  const lockfile = [
+    "packages:",
+    "  debug@4.4.2(supports-color@10.2.1):",
+    "    resolution: {integrity: sha512-zzz}",
+  ].join("\n");
+
+  const findings = findForbiddenLockfileSources(lockfile);
+  assert.equal(findings.length, 1);
+  assert.equal(
+    findings[0]!.reason,
+    "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)",
+  );
+});
+
 test("ci workflow avoids privileged fork-pr and cache-poisoning patterns", async () => {
   const workflow = await readWorkspaceFile(".github/workflows/ci.yml");
 
