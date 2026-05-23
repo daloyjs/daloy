@@ -6,6 +6,7 @@
 # Workflow / CI / CD.
 /.github/                         __CODE_OWNER__
 /.github/workflows/               __CODE_OWNER__
+/.github/workflows/secret-scan.yml __CODE_OWNER__
 /.github/dependabot.yml           __CODE_OWNER__
 /.github/CODEOWNERS               __CODE_OWNER__
 

@@ -165,6 +165,15 @@ For Node-style templates, the bundle adds:
   *after* the last PR or push and provides SOC 2 CC7.1
   ([continuous vulnerability management](https://www.aikido.dev/blog/a-guide-to-automating-technical-vulnerability-management-for-soc-2))
   evidence even when developers are not touching the repo.
+- `.github/workflows/secret-scan.yml` — runs [gitleaks](https://github.com/gitleaks/gitleaks)
+  on every PR / push (working tree) and on a daily schedule across the **full
+  git history**, so a credential leaked anywhere in any commit, branch, or tag
+  is surfaced even if GitHub-native push protection missed it. The gitleaks
+  binary is downloaded from a pinned official release and verified by SHA-256
+  before execution — no third-party action is added to the supply chain just
+  for this scan. See Aikido's
+  [Secrets Detection guide](https://www.aikido.dev/blog/secret-detection-application-security)
+  for why history-aware scanning is the floor and not the ceiling.
 - CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, and `SECURITY.md`.
 - `scripts/verify-lockfile-sources.mjs` plus a `verify:lockfile` package script
   that rejects git dependencies and non-registry tarball URLs in text lockfiles.

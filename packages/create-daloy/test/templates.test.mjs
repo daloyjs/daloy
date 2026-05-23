@@ -466,6 +466,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     await access(path.join(projectDir, ".github/workflows/container-scan.yml"));
     await access(path.join(projectDir, ".github/workflows/dast.yml"));
     await access(path.join(projectDir, ".github/workflows/opengrep.yml"));
+    await access(path.join(projectDir, ".github/workflows/secret-scan.yml"));
     await access(path.join(projectDir, ".github/dependabot.yml"));
     await access(path.join(projectDir, "SECURITY.md"));
     await access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs"));
@@ -560,6 +561,28 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(containerScan, /\*\*\/\*\.tf/);
     assert.match(containerScan, /k8s\/\*\*/);
     assert.doesNotMatch(containerScan, /__[A-Z_]+__/);
+
+    const secretScan = await readFile(
+      path.join(projectDir, ".github/workflows/secret-scan.yml"),
+      "utf8",
+    );
+    // History-aware scan per Aikido "Secrets Detection: A Practical
+    // Guide" — scan the working tree on every PR and the full git
+    // history on a daily schedule.
+    assert.match(secretScan, /name: Secret scan/);
+    assert.match(secretScan, /permissions:\s*\{\}/);
+    assert.match(secretScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+    assert.match(secretScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(secretScan, /persist-credentials: false/);
+    assert.match(secretScan, /GITLEAKS_VERSION:/);
+    assert.match(secretScan, /GITLEAKS_SHA256:\s*"[0-9a-f]{64}"/);
+    assert.match(secretScan, /sha256sum --check --strict/);
+    assert.match(secretScan, /gitleaks dir --no-banner --redact --verbose --exit-code 1/);
+    assert.match(secretScan, /gitleaks git --no-banner --redact --verbose --exit-code 1/);
+    assert.match(secretScan, /github\.event_name == 'schedule'/);
+    assert.doesNotMatch(secretScan, /__[A-Z_]+__/);
+    // No third-party action introduced just for secret scanning.
+    assert.doesNotMatch(secretScan, /gitleaks\/gitleaks-action/);
 
     const dependabotConfig = await readFile(
       path.join(projectDir, ".github/dependabot.yml"),
@@ -913,6 +936,7 @@ test("--with-deploy --no-ci scaffolds deploy.yml without the rest of the securit
     const projectDir = path.join(tmpDir, projectName);
     await access(path.join(projectDir, ".github/workflows/deploy.yml"));
     await assert.rejects(access(path.join(projectDir, ".github/workflows/ci.yml")));
+    await assert.rejects(access(path.join(projectDir, ".github/workflows/secret-scan.yml")));
     await assert.rejects(access(path.join(projectDir, ".github/CODEOWNERS")));
     await assert.rejects(access(path.join(projectDir, ".github/dependabot.yml")));
     await assert.rejects(access(path.join(projectDir, "SECURITY.md")));
