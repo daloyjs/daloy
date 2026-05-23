@@ -1,9 +1,10 @@
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Compliance posture (SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS, NIS2)",
+  title:
+    "Compliance posture (SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS, NIS2, UK CSR Bill)",
   description:
-    "How DaloyJS's built-in security primitives map to the technical controls expected by the major cloud-compliance frameworks. The framework can't certify your deployment, but it can stop you from failing the easy audit findings.",
+    "How DaloyJS's built-in security primitives map to the technical controls expected by the major cloud-compliance frameworks, including the UK Cyber Security and Resilience Bill. The framework can't certify your deployment, but it can stop you from failing the easy audit findings.",
   path: "/docs/security/compliance",
   keywords: [
     "DaloyJS compliance",
@@ -14,6 +15,8 @@ export const metadata = buildMetadata({
     "PCI-DSS v4 software controls",
     "NIS2 Article 21",
     "EU CRA",
+    "UK Cyber Security and Resilience Bill",
+    "NCSC CAF",
   ],
   type: "article",
 });
@@ -24,12 +27,12 @@ export default function Page() {
       <h1>Compliance posture</h1>
       <p>
         DaloyJS is a backend framework, not a managed service, so it cannot
-        certify your deployment for SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS, or
-        NIS2 on its own. What it <em>can</em> do is provide the technical
-        controls each of those frameworks expects from the application layer so
-        that the controls live in source code where they are reviewed, tested,
-        and version-pinned &mdash; rather than in a checklist that drifts away
-        from production.
+        certify your deployment for SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS,
+        NIS2, or the UK Cyber Security and Resilience Bill on its own. What it{" "}
+        <em>can</em> do is provide the technical controls each of those
+        frameworks expects from the application layer so that the controls live
+        in source code where they are reviewed, tested, and version-pinned
+        &mdash; rather than in a checklist that drifts away from production.
       </p>
       <p>
         This page maps DaloyJS&apos;s built-in primitives to the control
@@ -720,6 +723,175 @@ export default function Page() {
           integrator&apos;s responsibility; the evidence above exists so the
           framework layer of that dossier does not have to be reconstructed from
           scratch.
+        </em>
+      </p>
+
+      <h2>UK Cyber Security and Resilience Bill (CSR Bill)</h2>
+      <p>
+        The UK government&apos;s{" "}
+        <a
+          href="https://www.gov.uk/government/publications/cyber-security-and-resilience-bill-policy-statement/cyber-security-and-resilience-bill-policy-statement"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Cyber Security and Resilience Bill
+        </a>{" "}
+        updates the UK&apos;s NIS Regulations 2018, brings managed service
+        providers (MSPs) and certain digital service providers into scope,
+        introduces supply-chain duties for operators of essential services (OES)
+        and relevant digital service providers (RDSPs), and tightens incident
+        reporting to a two-stage <strong>24 h early warning</strong> plus{" "}
+        <strong>72 h follow-up</strong> aligned with EU NIS2. Technical and
+        methodological requirements are expected to track the{" "}
+        <a
+          href="https://www.ncsc.gov.uk/collection/cyber-assessment-framework"
+          target="_blank"
+          rel="noreferrer"
+        >
+          NCSC Cyber Assessment Framework (CAF)
+        </a>{" "}
+        Basic and Enhanced profiles.
+      </p>
+      <p>
+        DaloyJS itself is open-source framework software &mdash; it is not an
+        MSP, OES, RDSP, or designated critical supplier &mdash; but apps built
+        on it routinely fall into scope. The table below maps each measure from
+        the April 2025 policy statement to the DaloyJS primitives a regulated
+        team can point at on day one. Because the CSR Bill is closely modeled on
+        NIS2 Article 21, the EU CRA evidence above also carries over almost
+        line-for-line.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>CSR Bill measure / CAF principle</th>
+            <th>DaloyJS evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Measure 1.2 &mdash; supply-chain security duties for OES / RDSPs
+              and designated critical suppliers
+            </td>
+            <td>
+              Zero runtime dependencies in <code>@daloyjs/core</code> (enforced
+              by <code>pnpm verify:no-runtime-deps</code>); npm provenance via
+              Sigstore; CycloneDX SBOM published with every release;{" "}
+              <code>verify:lockfile-sources</code> refuses non-npm registry
+              origins and known-bad <code>name@version</code> IOCs; SHA-pinned
+              third-party GitHub Actions audited by{" "}
+              <code>verify-actions-pinned</code>; scaffolded projects ship{" "}
+              <code>ignore-scripts=true</code> +{" "}
+              <code>minimum-release-age=1440</code> in <code>_npmrc</code> to
+              shrink the install-time blast radius from compromised upstream
+              suppliers.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Measure 2.1 &mdash; technical and methodological security
+              requirements (NCSC CAF Basic / Enhanced)
+            </td>
+            <td>
+              <strong>CAF B2 Identity &amp; access control</strong>:{" "}
+              <code>bearerAuth()</code>, <code>basicAuth()</code>, signed-
+              cookie <code>session()</code>, JWT with algorithm allow-listing,
+              IP allowlists. <strong>CAF B3 Data security</strong>:{" "}
+              <code>secureHeaders()</code> (HSTS, CSP nonce + Trusted Types,
+              COOP, CORP), prod-mode RFC 9457 redaction.{" "}
+              <strong>CAF B4 System security</strong>:{" "}
+              <code>bodyLimitBytes</code>, <code>requestTimeoutMs</code>,{" "}
+              <code>rateLimit()</code>, <code>fetchGuard()</code> default-deny
+              SSRF, prototype-pollution-safe parsers, CRLF/NUL header rejection,{" "}
+              <code>.strict()</code> schemas.{" "}
+              <strong>CAF B5 Resilient networks &amp; systems</strong>: graceful
+              shutdown, load shedding, plugin lifecycle events.{" "}
+              <strong>CAF B6 Staff awareness &amp; training</strong> remains an
+              organizational control.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Measure 2.2 &mdash; expanded incident reporting (24 h early
+              warning + 72 h report, confidentiality / availability / integrity)
+            </td>
+            <td>
+              Per-request structured logs with correlated request IDs and
+              Server-Timing; OpenTelemetry-shaped spans without taking a hard
+              dependency on <code>@opentelemetry/api</code>; plugin lifecycle
+              hooks (<code>onPluginInstalled</code>, <code>onShutdown</code>)
+              suitable for wiring rate-limit / auth-failure / SSRF-block /
+              body-limit / timeout events into the regulator + NCSC notification
+              pipeline within the statutory window.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Measure 2.2 &mdash; transparency duty toward affected customers of
+              a digital service
+            </td>
+            <td>
+              Coordinated vulnerability disclosure published at{" "}
+              <a
+                href="https://daloyjs.dev/.well-known/security.txt"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <code>/.well-known/security.txt</code>
+              </a>{" "}
+              (RFC 9116); every confirmed vulnerability published as a GitHub
+              Security Advisory with Discovered / Patch available / Fix deployed
+              timestamps; CVSS-keyed upstream patch SLAs in{" "}
+              <code>SECURITY.md</code> a downstream RDSP can quote verbatim in
+              their own customer notice.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Cross-cutting &mdash; secure software development lifecycle
+              expected of suppliers to OES / RDSPs
+            </td>
+            <td>
+              <code>create-daloy --with-ci</code> turns CodeQL, OSSF Scorecard,
+              zizmor, Dependabot, gitleaks, and CODEOWNERS on out of the box;
+              the repo&apos;s own <code>pnpm verify:*</code> bundle (parity,
+              governance, routing-hardening, secret comparisons, no-remote-exec,
+              no-registry-exfiltration, no-encoded-payloads,
+              no-invisible-unicode, no-weak-random, no-unsafe-buffer,
+              no-leaked-credentials, no-vulnerable-sandboxes,
+              no-lifecycle-scripts, lockfile-sources, no-runtime-deps,
+              dep-licenses, SBOM) gates every release.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Cross-cutting &mdash; secure-by-default posture so the
+              regulator&apos;s &ldquo;appropriate and proportionate&rdquo; test
+              is met from the first deploy
+            </td>
+            <td>
+              All hardening above is on by default. Per project policy (see{" "}
+              <code>AGENTS.md</code>), <code>secureHeaders</code>,{" "}
+              <code>requestId</code>, <code>rateLimit</code>,{" "}
+              <code>bodyLimitBytes</code>, <code>requestTimeoutMs</code>,{" "}
+              <code>fetchGuard</code>, JWT algorithm allowlists, timing-safe
+              credential comparisons, schema <code>.strict()</code>,
+              response-body validation, prod-mode error redaction, and the
+              scaffolded <code>_gitignore</code> / <code>_npmrc</code> defaults
+              must not be silently weakened.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        <em>
+          Status: the CSR Bill was outlined in the King&apos;s Speech 2024 and
+          the policy statement was presented to Parliament in April 2025; duties
+          will be set in secondary legislation and statutory instruments after
+          Royal Assent. This mapping reflects the policy statement as published
+          and will be updated when the Bill is enacted and the technical
+          requirements (expected to track NCSC CAF) are codified.
         </em>
       </p>
 
