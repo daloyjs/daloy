@@ -127,6 +127,11 @@ const STATIC_PATHS: Array<{
     changeFrequency: "monthly",
     priority: 0.7,
   },
+  {
+    path: "/blog/vibe-coding-security-what-daloyjs-already-blocks",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs", changeFrequency: "weekly", priority: 0.9 },
   { path: "/docs/installation", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/scaffolder", changeFrequency: "monthly", priority: 0.8 },

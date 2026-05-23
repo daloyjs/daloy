@@ -13,6 +13,16 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
+    slug: "vibe-coding-security-what-daloyjs-already-blocks",
+    title:
+      "Vibe Coding Security: What DaloyJS Already Blocks Before Your AI Even Ships",
+    description:
+      "Aikido's 'WTF is Vibe Coding Security' post lists the usual suspects: SQL injection, path traversal, hardcoded secrets, unlocked admin routes, missing input sanitization, dependency rot. Here's the honest mapping of which of those a DaloyJS app already blocks by default \u2014 even when the code is written by a sales rep at 1am with Claude \u2014 and the small list of things you still have to opt into.",
+    date: "2026-05-23",
+    readingTime: "10 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "cloud-security-architecture-mapped-to-daloyjs",
     title: "Cloud Security Architecture, Mapped to the DaloyJS App Layer",
     description:
