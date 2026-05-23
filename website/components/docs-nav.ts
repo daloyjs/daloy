@@ -115,6 +115,7 @@ export const docsNav: DocsNavSection[] = [
     title: "Production",
     items: [
       { title: "Security", href: "/docs/security" },
+      { title: "Runtime protections (portable)", href: "/docs/security/runtime-protections" as Route },
       { title: "Secure-by-default", href: "/docs/security/secure-defaults" },
       { title: "Boot guards", href: "/docs/security/boot-guards" },
       { title: "Lifecycle & health", href: "/docs/security/lifecycle-health" },

@@ -145,6 +145,7 @@ const STATIC_PATHS: Array<{
     priority: 0.8,
   },
   { path: "/docs/security", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/security/runtime-protections", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/security/csrf", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/security/sql-injection", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/security/fetch-guard", changeFrequency: "monthly", priority: 0.7 },
