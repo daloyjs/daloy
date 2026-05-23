@@ -98,6 +98,7 @@ export {
   SMUGGLING_SINGLETON_HEADERS,
   verifyWebhookSignature,
   signWebhookPayload,
+  WEBHOOK_DEFAULT_TOLERANCE_SECONDS,
   assertStrongSecret,
   MIN_PROD_SECRET_BYTES,
   WEAK_SECRET_STRINGS,

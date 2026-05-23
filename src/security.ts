@@ -470,6 +470,57 @@ function decodeWebhookSignature(
 export type WebhookHmacAlgorithm = "sha256" | "sha384" | "sha512";
 
 /**
+ * Default tolerance window (in seconds) for webhook timestamp verification.
+ * Matches Stripe / Standard Webhooks defaults — five minutes either side of
+ * the receiver's clock. Override per call via `toleranceSeconds`.
+ *
+ * @since 0.21.0
+ */
+export const WEBHOOK_DEFAULT_TOLERANCE_SECONDS = 300;
+
+/**
+ * Maximum plausible Unix-timestamp value we'll accept on the verifier
+ * side. Equal to seconds in `Number.MAX_SAFE_INTEGER` milliseconds — beyond
+ * this we treat the value as adversarial/malformed rather than as a real
+ * future date. Practically: caps timestamps somewhere around year 287000.
+ */
+const WEBHOOK_MAX_TIMESTAMP_SECONDS = Math.floor(Number.MAX_SAFE_INTEGER / 1000);
+
+function normalizeWebhookTimestamp(
+  ts: string | number | undefined,
+): { seconds: number; canonical: string } | null {
+  if (ts === undefined || ts === null) return null;
+  let seconds: number;
+  if (typeof ts === "number") {
+    if (!Number.isFinite(ts) || !Number.isInteger(ts)) return null;
+    seconds = ts;
+  } else if (typeof ts === "string") {
+    // Only accept the canonical integer-seconds form, no whitespace, no sign
+    // tricks, no decimals, no leading zeros (other than literal "0"). This
+    // keeps the signed payload string deterministic across producers.
+    if (!/^(0|[1-9][0-9]{0,18})$/.test(ts)) return null;
+    seconds = Number(ts);
+    if (!Number.isFinite(ts) && !Number.isFinite(seconds)) return null;
+  } else {
+    return null;
+  }
+  if (seconds < 0 || seconds > WEBHOOK_MAX_TIMESTAMP_SECONDS) return null;
+  return { seconds, canonical: String(seconds) };
+}
+
+function buildSignedPayloadBytes(
+  payload: Uint8Array,
+  timestamp: { canonical: string } | null,
+): Uint8Array {
+  if (!timestamp) return payload;
+  const prefix = new TextEncoder().encode(`${timestamp.canonical}.`);
+  const out = new Uint8Array(prefix.length + payload.length);
+  out.set(prefix, 0);
+  out.set(payload, prefix.length);
+  return out;
+}
+
+/**
  * Verify an HMAC signature for a webhook payload in constant time.
  *
  * Accepts the four common signature shapes seen in the wild:
@@ -510,9 +561,54 @@ export async function verifyWebhookSignature(opts: {
   signature: string | Uint8Array;
   secret: string | Uint8Array;
   algorithm?: WebhookHmacAlgorithm;
+  /**
+   * Optional event timestamp (Unix seconds; string or number). When
+   * supplied, the HMAC is computed over `"<timestamp>.<payload>"` instead
+   * of just `payload`, which binds the signature to a specific point in
+   * time and lets the verifier reject replays whose timestamp drifts
+   * outside `toleranceSeconds`. Matches the Stripe / Standard Webhooks
+   * convention. Pass the value extracted from the producer's signature
+   * header (e.g. the `t=` field of `Stripe-Signature`).
+   *
+   * @since 0.21.0
+   */
+  timestamp?: string | number;
+  /**
+   * Maximum drift (in seconds) between `timestamp` and `now()` before the
+   * signature is rejected as a likely replay. Only consulted when
+   * `timestamp` is supplied. Defaults to
+   * {@link WEBHOOK_DEFAULT_TOLERANCE_SECONDS} (5 minutes).
+   *
+   * @since 0.21.0
+   */
+  toleranceSeconds?: number;
+  /**
+   * Clock used for replay-window checks. Returns milliseconds since the
+   * Unix epoch. Defaults to {@link Date.now}; override in tests to make
+   * the clock deterministic.
+   *
+   * @since 0.21.0
+   */
+  now?: () => number;
 }): Promise<boolean> {
   const algo = resolveWebhookAlgorithm(opts.algorithm ?? "sha256");
   if (!algo) return false;
+
+  let timestamp: { seconds: number; canonical: string } | null = null;
+  if (opts.timestamp !== undefined) {
+    timestamp = normalizeWebhookTimestamp(opts.timestamp);
+    if (!timestamp) return false;
+    const tolerance =
+      opts.toleranceSeconds === undefined
+        ? WEBHOOK_DEFAULT_TOLERANCE_SECONDS
+        : opts.toleranceSeconds;
+    if (!Number.isFinite(tolerance) || tolerance < 0) return false;
+    const nowMs = (opts.now ?? Date.now)();
+    if (!Number.isFinite(nowMs)) return false;
+    const nowSeconds = Math.floor(nowMs / 1000);
+    if (Math.abs(nowSeconds - timestamp.seconds) > tolerance) return false;
+  }
+
   const payloadBytes =
     typeof opts.payload === "string"
       ? new TextEncoder().encode(opts.payload)
@@ -529,6 +625,8 @@ export async function verifyWebhookSignature(opts: {
   );
   if (!providedBytes) return false;
 
+  const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp);
+
   const c: Crypto | undefined = (globalThis as any).crypto;
   if (!c?.subtle) return false;
   const key = await c.subtle.importKey(
@@ -538,7 +636,7 @@ export async function verifyWebhookSignature(opts: {
     false,
     ["sign"],
   );
-  const computed = new Uint8Array(await c.subtle.sign("HMAC", key, payloadBytes as BufferSource));
+  const computed = new Uint8Array(await c.subtle.sign("HMAC", key, signedBytes as BufferSource));
   return timingSafeEqualBytes(computed, providedBytes);
 }
 
@@ -553,9 +651,27 @@ export async function signWebhookPayload(opts: {
   payload: Uint8Array | string;
   secret: string | Uint8Array;
   algorithm?: WebhookHmacAlgorithm;
+  /**
+   * Optional event timestamp (Unix seconds; string or number). When
+   * supplied, the HMAC is computed over `"<timestamp>.<payload>"` so the
+   * receiver can use {@link verifyWebhookSignature} with the same
+   * `timestamp` and a `toleranceSeconds` window to defeat replay attacks.
+   *
+   * @since 0.21.0
+   */
+  timestamp?: string | number;
 }): Promise<string> {
   const algo = resolveWebhookAlgorithm(opts.algorithm ?? "sha256");
   if (!algo) throw new TypeError("unsupported webhook HMAC algorithm");
+  let timestamp: { seconds: number; canonical: string } | null = null;
+  if (opts.timestamp !== undefined) {
+    timestamp = normalizeWebhookTimestamp(opts.timestamp);
+    if (!timestamp) {
+      throw new TypeError(
+        "signWebhookPayload(): timestamp must be a non-negative integer number of seconds",
+      );
+    }
+  }
   const payloadBytes =
     typeof opts.payload === "string"
       ? new TextEncoder().encode(opts.payload)
@@ -573,7 +689,8 @@ export async function signWebhookPayload(opts: {
     false,
     ["sign"],
   );
-  const computed = new Uint8Array(await c.subtle.sign("HMAC", key, payloadBytes as BufferSource));
+  const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp);
+  const computed = new Uint8Array(await c.subtle.sign("HMAC", key, signedBytes as BufferSource));
   return bytesToHex(computed);
 }
 

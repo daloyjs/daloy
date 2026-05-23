@@ -526,6 +526,185 @@ test("verifyWebhookSignature returns false on bogus runtime algorithm value", as
   );
 });
 
+// ---------- Webhook HMAC: timestamp / replay protection ----------
+
+test("sign + verify roundtrip binds the signature to the timestamp", async () => {
+  const secret = "shhh";
+  const payload = '{"event":"ping"}';
+  const ts = 1_715_000_000;
+  const sig = await signWebhookPayload({ payload, secret, timestamp: ts });
+  // Verifier within the default tolerance window accepts.
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: sig,
+      secret,
+      timestamp: ts,
+      now: () => ts * 1000,
+    }),
+    true,
+  );
+  // Same signature, but caller swapped the timestamp → reject (different
+  // signed payload string, even if math happens to line up they aren't equal).
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: sig,
+      secret,
+      timestamp: ts + 1,
+      now: () => (ts + 1) * 1000,
+    }),
+    false,
+  );
+});
+
+test("verifyWebhookSignature rejects timestamps outside the tolerance window (replay)", async () => {
+  const secret = "k";
+  const payload = "evt";
+  const ts = 1_700_000_000;
+  const sig = await signWebhookPayload({ payload, secret, timestamp: ts });
+  // 10 minutes later, with the default 5-minute tolerance → replay rejected.
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: sig,
+      secret,
+      timestamp: ts,
+      now: () => (ts + 600) * 1000,
+    }),
+    false,
+  );
+  // Same drift, but the receiver bumped tolerance to 15 minutes → accepted.
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: sig,
+      secret,
+      timestamp: ts,
+      toleranceSeconds: 900,
+      now: () => (ts + 600) * 1000,
+    }),
+    true,
+  );
+});
+
+test("verifyWebhookSignature also rejects timestamps that are too far in the future", async () => {
+  const secret = "k";
+  const payload = "evt";
+  const ts = 1_800_000_000;
+  const sig = await signWebhookPayload({ payload, secret, timestamp: ts });
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: sig,
+      secret,
+      timestamp: ts,
+      now: () => (ts - 600) * 1000, // receiver clock 10 min behind
+    }),
+    false,
+  );
+});
+
+test("verifyWebhookSignature without timestamp does not accept signatures bound to one", async () => {
+  const secret = "k";
+  const payload = "evt";
+  const ts = 1_715_000_000;
+  const signedWithTs = await signWebhookPayload({ payload, secret, timestamp: ts });
+  // Receiver forgot to pass timestamp → would have verified raw payload, not
+  // "<ts>.payload". Must reject so a bug in the receiver does not silently
+  // accept stale signatures.
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: signedWithTs,
+      secret,
+    }),
+    false,
+  );
+  // Symmetric: signature WITHOUT ts must not verify if receiver supplies one.
+  const signedWithoutTs = await signWebhookPayload({ payload, secret });
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: signedWithoutTs,
+      secret,
+      timestamp: ts,
+      now: () => ts * 1000,
+    }),
+    false,
+  );
+});
+
+test("verifyWebhookSignature accepts string timestamps in canonical integer-seconds form", async () => {
+  const secret = "k";
+  const payload = "evt";
+  const ts = 1_725_000_000;
+  const sig = await signWebhookPayload({ payload, secret, timestamp: String(ts) });
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: sig,
+      secret,
+      timestamp: String(ts),
+      now: () => ts * 1000,
+    }),
+    true,
+  );
+});
+
+test("verifyWebhookSignature rejects malformed timestamp strings", async () => {
+  const secret = "k";
+  const payload = "evt";
+  const sig = await signWebhookPayload({ payload, secret, timestamp: 1_730_000_000 });
+  for (const bad of ["  1730000000", "1730000000 ", "+1730000000", "-1", "1.5", "00123", "abc", ""]) {
+    assert.equal(
+      await verifyWebhookSignature({
+        payload,
+        signature: sig,
+        secret,
+        timestamp: bad,
+        now: () => 1_730_000_000 * 1000,
+      }),
+      false,
+      `timestamp ${JSON.stringify(bad)} must be rejected`,
+    );
+  }
+});
+
+test("verifyWebhookSignature rejects non-finite / negative tolerance", async () => {
+  const secret = "k";
+  const payload = "evt";
+  const ts = 1_740_000_000;
+  const sig = await signWebhookPayload({ payload, secret, timestamp: ts });
+  for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(
+      await verifyWebhookSignature({
+        payload,
+        signature: sig,
+        secret,
+        timestamp: ts,
+        toleranceSeconds: bad,
+        now: () => ts * 1000,
+      }),
+      false,
+    );
+  }
+});
+
+test("signWebhookPayload rejects malformed timestamp values", async () => {
+  for (const bad of [-1, 1.5, Number.NaN, "abc", "1.0", " 1 "] as const) {
+    await assert.rejects(
+      () =>
+        signWebhookPayload({
+          payload: "x",
+          secret: "k",
+          timestamp: bad as any,
+        }),
+      TypeError,
+    );
+  }
+});
+
 // ---------- env option + NODE_ENV mismatch ----------
 
 test("App.env: 'production' takes precedence over NODE_ENV", async () => {
