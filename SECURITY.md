@@ -276,6 +276,16 @@ chalk/debug/node-ipc phishing campaigns.
   (`.github/workflows/vuln-scan.yml`). This is the continuous-scanning
   cadence required by SOC 2 CC7.1 and described in the Aikido write-up
   ["A Guide to Automating Technical Vulnerability Management for SOC 2"](https://www.aikido.dev/blog/a-guide-to-automating-technical-vulnerability-management-for-soc-2).
+- **`gitleaks` secret scan** runs on every PR and push against the
+  working tree, plus a daily sweep of the full git history
+  (`.github/workflows/secret-scan.yml`). The gitleaks binary is
+  downloaded from the official GitHub release and verified by SHA-256
+  before execution, so the trust surface is a pinned hash rather than a
+  third-party Action. This is the pre-merge secret-detection gate
+  recommended by the Aikido write-up
+  ["Continuous Code Quality in CI/CD Pipelines"](https://www.aikido.dev/blog/continuous-code-quality-ci-cd)
+  and layers on top of GitHub-native push protection + the existing
+  `verify:no-leaked-credentials` tarball gate.
 - **Dependabot** keeps actions and npm dependencies up to date weekly
   (`.github/dependabot.yml`).
 - **`CODEOWNERS`** requires a maintainer to approve any change under
