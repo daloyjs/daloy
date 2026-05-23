@@ -23,7 +23,9 @@ The `--with-ci` bundle adds these defaults:
 - If the generated project keeps the `Dockerfile`, container scanning lints it
 	with hadolint, scans the source tree and built image with Trivy, and warns
 	when `FROM` lines are not pinned to an immutable `@sha256:` digest.
-- CodeQL, OpenSSF Scorecard, zizmor, Dependabot for GitHub Actions and Docker
+- CodeQL, Opengrep (second SAST engine, Aikido's LGPL-2.1 fork of
+  Semgrep, verified via sigstore cosign before execution), OpenSSF
+  Scorecard, zizmor, Dependabot for GitHub Actions and Docker
 	base images, and CODEOWNERS are generated.
 
 ## Cloud posture (operator checklist)
@@ -57,6 +59,6 @@ container and CI defaults above:
 Before relying on these files for a company project:
 
 1. Replace `@your-org/security-team` in `.github/CODEOWNERS` or pass `--code-owner` when scaffolding.
-2. Protect the `main` branch and require the CI, CodeQL, Scorecard, and zizmor checks.
+2. Protect the `main` branch and require the CI, CodeQL, Opengrep, Scorecard, and zizmor checks.
 3. Enable GitHub secret scanning and push protection.
 4. Keep Deno permissions narrow; do not switch tasks to `--allow-all`.

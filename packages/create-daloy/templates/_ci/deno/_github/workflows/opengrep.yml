@@ -1,0 +1,137 @@
+# Opengrep — second SAST engine, complementing CodeQL.
+#
+# Why this exists in your scaffolded Daloy (Deno) project:
+#   Daloy itself runs two SAST engines (CodeQL + Opengrep) because no
+#   single rule corpus catches everything. Opengrep is the LGPL-2.1
+#   community fork of Semgrep, ships Semgrep-compatible rules, and is
+#   backed by an open consortium. See Aikido's "Ultimate SAST Guide"
+#   (https://www.aikido.dev/blog/ultimate-sast-guide-static-application-security-testing)
+#   and "Launching Opengrep" (https://www.aikido.dev/blog/launching-opengrep-why-we-forked-semgrep).
+#
+#   Pairing CodeQL (semantic, dataflow-heavy) with Opengrep
+#   (pattern-based AST matching, community rule packs) gives
+#   defense-in-depth at the source layer — the same posture Daloy
+#   maintains on its own repository.
+#
+# Hardening (matches the rest of the scaffolded bundle):
+#   * Top-level `permissions: {}`; the job opts in only to the two
+#     scopes it needs (`security-events: write`, `contents: read`).
+#   * Third-party actions are SHA-pinned with version comments.
+#   * Opengrep itself is NOT installed via a third-party action;
+#     the binary is downloaded from a pinned GitHub release and its
+#     sigstore cosign signature is verified before execution.
+#   * `step-security/harden-runner` runs in audit mode.
+#   * `actions/checkout` runs with `persist-credentials: false`.
+#   * `set -euo pipefail` on every shell step.
+
+name: Opengrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "51 5 * * 4"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: opengrep-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Opengrep SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      contents: read
+
+    env:
+      OPENGREP_VERSION: "v1.22.0"
+      OPENGREP_ASSET: "opengrep_manylinux_x86"
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Download Opengrep release binary + signature
+        run: |
+          set -euo pipefail
+          mkdir -p .opengrep
+          base="https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/${OPENGREP_ASSET}"
+          echo "Fetching ${base}"
+          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 2 \
+            -o .opengrep/opengrep      "${base}"
+          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 2 \
+            -o .opengrep/opengrep.cert "${base}.cert"
+          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --retry-delay 2 \
+            -o .opengrep/opengrep.sig  "${base}.sig"
+          chmod +x .opengrep/opengrep
+
+      - name: Verify Opengrep signature (cosign / sigstore)
+        run: |
+          set -euo pipefail
+          if ! command -v cosign >/dev/null 2>&1; then
+            echo "::error::cosign is required but not available on the runner."
+            exit 1
+          fi
+          cosign version
+          cosign verify-blob \
+            --cert ".opengrep/opengrep.cert" \
+            --signature ".opengrep/opengrep.sig" \
+            --certificate-identity-regexp "https://github.com/opengrep/opengrep.+" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            ".opengrep/opengrep"
+          echo "Opengrep ${OPENGREP_VERSION} signature verified."
+
+      - name: Print Opengrep version
+        run: |
+          set -euo pipefail
+          .opengrep/opengrep --version
+
+      - name: Run Opengrep scan (SARIF)
+        # Curated security-focused rule packs from the Semgrep registry:
+        #   * p/security-audit / p/owasp-top-ten / p/cwe-top-25 — general
+        #   * p/javascript / p/typescript — language-specific
+        #   * p/secrets — hardcoded credentials / API keys
+        # `p/nodejs` is omitted on Deno because its sinks (e.g.
+        # `require()`, `process.*`) are not idiomatic on the Deno runtime.
+        run: |
+          set -euo pipefail
+          .opengrep/opengrep scan \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/cwe-top-25 \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/secrets \
+            --sarif-output opengrep.sarif \
+            --metrics off \
+            --timeout 120 \
+            --max-target-bytes 1500000 \
+            --exclude node_modules \
+            --exclude dist \
+            --exclude build \
+            --exclude coverage \
+            --exclude .opengrep \
+            .
+
+      - name: Upload SARIF to GitHub code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@52485aec7be33610227643b0fe83936b8b5f061a # v3
+        with:
+          sarif_file: opengrep.sarif
+          category: opengrep

@@ -1069,8 +1069,8 @@ async function replacePlaceholdersInTree(dir, replacements) {
 async function pruneCiBundle(targetDir, flavor, { includeSecurityBundle, includeDeployWorkflow }) {
   if (!includeSecurityBundle) {
     const workflowFiles = flavor === "deno"
-      ? ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "scorecard.yml", "zizmor.yml"]
-      : ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "scorecard.yml", "vuln-scan.yml", "zizmor.yml"];
+      ? ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "opengrep.yml", "scorecard.yml", "zizmor.yml"]
+      : ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "opengrep.yml", "scorecard.yml", "vuln-scan.yml", "zizmor.yml"];
     for (const file of workflowFiles) {
       await rm(path.join(targetDir, ".github", "workflows", file), { force: true });
     }
