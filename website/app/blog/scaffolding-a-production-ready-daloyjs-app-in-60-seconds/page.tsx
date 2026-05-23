@@ -161,8 +161,9 @@ src/
 .github/
   copilot-instructions.md              # points at AGENTS.md
   workflows/
-    ci.yml          codeql.yml         release.yml
-    zizmor.yml      scorecard.yml      lockfile-verify.yml
+    ci.yml          codeql.yml         deploy.yml
+    zizmor.yml      scorecard.yml      vuln-scan.yml
+    container-scan.yml                 dast.yml
   dependabot.yml
   CODEOWNERS
 SECURITY.md
@@ -233,6 +234,7 @@ const WITH_CI_FILES = `# pnpm create daloy@latest my-api --with-ci
   workflows/
     ci.yml            # pnpm install --frozen-lockfile --ignore-scripts; typecheck; test; verify lockfile
     codeql.yml        # TS/JS static analysis
+    deploy.yml        # manual-only app deployment starter
     scorecard.yml     # weekly OpenSSF Scorecard
     zizmor.yml        # workflow lint on every push/PR
     vuln-scan.yml     # checks for known vulnerabilities
@@ -623,18 +625,20 @@ export default function BlogPostPage() {
             <strong>
               <code>--with-ci</code> defaults to yes.
             </strong>{" "}
-            That&apos;s the whole supply-chain-hardening posture from
+            That&apos;s the application-safe supply-chain-hardening posture from
             yesterday&apos;s post (
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               Supply-Chain Hardening for TypeScript Libraries
             </Link>
-            ) dropped into your repo without you typing a single workflow line:
+            ) dropped into your repo without you typing a single workflow line.
+            The library publish workflow stays out because this scaffold is an
+            app, not an npm package release train:
           </p>
 
           <EditorFrame
             files={[".github/ · scaffolded contents"]}
             activeFile=".github/ · scaffolded contents"
-            status="--with-ci · the entire posture in one flag"
+            status="--with-ci · the app-safe posture in one flag"
           >
             <CodeBlock language="bash" code={WITH_CI_FILES} />
           </EditorFrame>
@@ -642,7 +646,8 @@ export default function BlogPostPage() {
           <p>
             Pass <code>--code-owner @your-team/security</code> and CODEOWNERS
             gets that team on every workflow file — small detail, big payoff the
-            first time someone tries to PR a change to <code>release.yml</code>.
+            first time someone tries to PR a change to <code>ci.yml</code> or{" "}
+            <code>deploy.yml</code>.
           </p>
 
           <h2>Where to go next</h2>

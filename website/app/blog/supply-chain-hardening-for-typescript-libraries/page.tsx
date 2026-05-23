@@ -11,7 +11,7 @@ const POST = {
   title:
     "Supply-Chain Hardening for TypeScript Libraries: Everything We Did and Why",
   description:
-    "A maintainer's field guide to the supply-chain posture we shipped for DaloyJS — .npmrc that says no by default, pnpm 11 workspace keys (blockExoticSubdeps / strictDepBuilds / verifyDepsBeforeRun), SHA-pinned actions, permissions: {}, no Actions cache on installs, zizmor + Scorecard + CodeQL, npm trusted publishing with provenance, and the create-daloy --with-ci bundle that drops the same posture into your project.",
+    "A maintainer's field guide to the supply-chain posture we shipped for DaloyJS — .npmrc that says no by default, pnpm 11 workspace keys (blockExoticSubdeps / strictDepBuilds / verifyDepsBeforeRun), SHA-pinned actions, permissions: {}, no Actions cache on installs, zizmor + Scorecard + CodeQL, npm trusted publishing with provenance, and the create-daloy --with-ci bundle that drops the app-safe parts into your project.",
   date: "2026-05-19",
   readingTime: "16 min read",
   author: "Devlin Duldulao",
@@ -237,7 +237,7 @@ if (offenders.length > 0) {
 }
 console.log("Lockfile sources OK.");`;
 
-const CREATE_DALOY_CI = `# Scaffold a new project with the same posture baked in.
+const CREATE_DALOY_CI = `# Scaffold a new app with the app-safe posture baked in.
 pnpm create daloy@latest my-api \\
   --template node-basic \\
   --with-ci \\
@@ -246,6 +246,7 @@ pnpm create daloy@latest my-api \\
 # What this drops into the new repo:
 #   .github/workflows/ci.yml         — pinned actions, no cache, --ignore-scripts
 #   .github/workflows/codeql.yml     — TS/JS static analysis
+#   .github/workflows/deploy.yml     — manual-only app deployment starter
 #   .github/workflows/container-scan.yml — runs Trivy scans on your dockerfile
 #   .github/workflows/scorecard.yml  — weekly OpenSSF Scorecard
 #   .github/workflows/vuln-scan.yml  — checks for known vulnerabilities
@@ -439,10 +440,10 @@ export default function BlogPostPage() {
           <p>
             So this post is the maintainer-facing writeup of every supply-chain
             control we shipped for DaloyJS, plus the
-            <code> create-daloy --with-ci</code> flag that drops the same
-            posture into a brand-new user project. Nothing here is
-            DaloyJS-specific — these are reusable defaults for any pnpm-based
-            TypeScript library in 2026. Steal what you need.
+            <code> create-daloy --with-ci</code> flag that drops the app-safe
+            pieces into a brand-new user project. Nothing here is
+            DaloyJS-specific — these are reusable defaults for pnpm-based
+            TypeScript projects in 2026. Steal what you need.
           </p>
 
           <h2>The mental model: deny by default, opt in deliberately</h2>
@@ -687,14 +688,15 @@ export default function BlogPostPage() {
 
           <p>
             <code>--with-ci</code> defaults to <em>yes</em>. The scaffolded
-            project starts with the exact same posture this post describes: the{" "}
-            <code>.npmrc</code>, the <code>pnpm-workspace.yaml</code> keys,
-            every workflow SHA-pinned with{" "}
-            <code>permissions: &#123;&#125;</code>, CODEOWNERS, Dependabot,
+            project starts with the application-safe posture this post
+            describes: the <code>.npmrc</code>, the{" "}
+            <code>pnpm-workspace.yaml</code> keys, every workflow SHA-pinned
+            with <code>permissions: &#123;&#125;</code>, CODEOWNERS, Dependabot,
             SECURITY.md, and <code>verify-lockfile-sources.mjs</code> as a{" "}
             <code>pnpm verify:lockfile</code> script. You don&apos;t opt into
             security; you opt out of it (with <code>--no-ci</code>) if you
-            insist.
+            insist. It does not generate an npm publish workflow, because a
+            scaffolded Daloy app is a service, not a library release train.
           </p>
 
           <h2>The attack-path map, in one screen</h2>
@@ -748,8 +750,9 @@ export default function BlogPostPage() {
             <em> what</em>. The best place to start is <code>.npmrc</code> +{" "}
             <code>pnpm-workspace.yaml</code>; the next best place is to copy{" "}
             <code>.github/workflows/release.yml</code> and adapt the package
-            name. Or just <code>pnpm create daloy@latest --with-ci</code> a new
-            repo and cherry-pick from it.
+            name if you are publishing a library. For an app, run{" "}
+            <code>pnpm create daloy@latest --with-ci</code> and cherry-pick from
+            the generated CI and deploy starters.
           </p>
 
           <p>

@@ -141,7 +141,7 @@ const POSTS = [
     title:
       "Supply-Chain Hardening for TypeScript Libraries: Everything We Did and Why",
     description:
-      "A maintainer's field guide to the supply-chain posture we shipped for DaloyJS \u2014 .npmrc that says no by default, pnpm 11 workspace keys (blockExoticSubdeps / strictDepBuilds / verifyDepsBeforeRun), SHA-pinned actions, permissions: {}, no Actions cache on installs, zizmor + Scorecard + CodeQL, npm trusted publishing with provenance, and the create-daloy --with-ci bundle that drops the same posture into your project.",
+      "A maintainer's field guide to the supply-chain posture we shipped for DaloyJS \u2014 .npmrc that says no by default, pnpm 11 workspace keys (blockExoticSubdeps / strictDepBuilds / verifyDepsBeforeRun), SHA-pinned actions, permissions: {}, no Actions cache on installs, zizmor + Scorecard + CodeQL, npm trusted publishing with provenance, and the create-daloy --with-ci bundle that drops the app-safe parts into your project.",
     date: "2026-05-19",
     readingTime: "16 min read",
     author: "Devlin Duldulao",

@@ -27,7 +27,7 @@ export const metadata = buildMetadata({
   title:
     "DaloyJS - The runtime-portable TypeScript framework with secure-by-default supply-chain hardening",
   description:
-    "DaloyJS is a secure-by-default TypeScript/JavaScript web framework with portable supply-chain hardening that works on any CI host. It combines FastAPI-grade docs, Hono-style portability, Fastify-style ops, Elysia-level typing, and Hey API clients, while create-daloy scaffolds projects with blocked install scripts, a 24h pnpm release-age cooldown, source-verified lockfiles, a zero-runtime-dependency core, and an optional hardened GitHub Actions bundle for teams on GitHub.",
+    "DaloyJS is a secure-by-default TypeScript/JavaScript web framework with portable runtime guardrails, pnpm supply-chain hardening, and package provenance you can verify on any CI host. It combines FastAPI-grade docs, Hono-style portability, Fastify-style ops, Elysia-level typing, and Hey API clients, while create-daloy pnpm scaffolds add blocked install scripts, a 24h release-age cooldown, source-verified lockfiles, a zero-runtime-dependency core, and an optional hardened GitHub Actions bundle for teams on GitHub.",
   path: "/",
   keywords: [
     "DaloyJS",
@@ -186,7 +186,7 @@ export default function HomePage() {
       applicationCategory: "DeveloperApplication",
       operatingSystem: "Cross-platform",
       description:
-        "The secure-by-default, runtime-portable TypeScript web framework with portable supply-chain hardening that works on any CI host. DaloyJS combines FastAPI-grade docs, Hono-style portability, Fastify-style ops, Elysia-level typing, and Hey API clients while create-daloy scaffolds projects with blocked install scripts, a 24h pnpm release-age cooldown, source-verified lockfiles, a zero-runtime-dependency core, and an optional hardened GitHub Actions bundle for teams on GitHub. Built for the LLM-era surge in supply-chain attacks, with contract-first routing, Standard Schema validation, OpenAPI 3.1 generation, typed clients, streaming, OpenTelemetry tracing, edge-friendly sessions, and core-enforced security guardrails.",
+        "The secure-by-default, runtime-portable TypeScript web framework with portable runtime guardrails, pnpm supply-chain hardening, and package provenance you can verify on any CI host. DaloyJS combines FastAPI-grade docs, Hono-style portability, Fastify-style ops, Elysia-level typing, and Hey API clients while create-daloy pnpm scaffolds add blocked install scripts, a 24h release-age cooldown, source-verified lockfiles, a zero-runtime-dependency core, and an optional hardened GitHub Actions bundle for teams on GitHub. Built for the LLM-era surge in supply-chain attacks, with contract-first routing, Standard Schema validation, OpenAPI 3.1 generation, typed clients, streaming, OpenTelemetry tracing, edge-friendly sessions, and core-enforced security guardrails.",
       url: SITE_URL,
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       programmingLanguage: "TypeScript",
@@ -465,7 +465,7 @@ export default function HomePage() {
                   [
                     "Portable supply-chain hardening for the apps you build",
                     "pnpm defaults + zero-runtime-dep core",
-                    "Blocked install scripts, 24h release-age cooldown, source-verified lockfiles, zero runtime deps, SBOM + npm provenance you can verify on any CI — plus an optional hardened GitHub Actions bundle for teams on GitHub",
+                    "pnpm scaffolds block install scripts, add a 24h release-age cooldown, and verify lockfile sources; every app gets a zero-runtime-dep core plus SBOM + npm provenance you can verify on any CI — with an optional hardened GitHub Actions bundle for teams on GitHub",
                   ],
                 ].map(([want, best, give]) => (
                   <tr key={want} className="border-t">
@@ -487,11 +487,11 @@ export default function HomePage() {
             Ready to ship — secure by default?
           </h2>
           <p className="mb-8 leading-8 text-muted-foreground">
-            Scaffold a project in seconds with pnpm hardening, blocked install
-            scripts, a 24h release-age cooldown, pinned CI, Dependabot,
-            CODEOWNERS, and lockfile source verification. Then keep the contract
-            as the app grows — the same app runs on Node, Bun, Deno, Cloudflare
-            Workers, and Vercel Edge.
+            Scaffold a project in seconds with pnpm hardening when you choose
+            pnpm, generated CI that blocks install scripts, pinned GitHub
+            Actions, Dependabot, CODEOWNERS, and lockfile source verification.
+            Then keep the contract as the app grows — the same app runs on Node,
+            Bun, Deno, Cloudflare Workers, and Vercel Edge.
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Link

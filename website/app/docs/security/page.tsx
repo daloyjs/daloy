@@ -354,10 +354,11 @@ app.use(basicAuth({
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">
           pnpm
         </a>{" "}
-        for a stricter install model, and the project&apos;s own defaults add
-        hardened install and CI/CD controls against the cache-poisoning,
-        maintainer-phishing, and OIDC token-abuse patterns seen in recent npm
-        incidents.
+        for a stricter install model. Scaffolded pnpm apps inherit the
+        install-time controls, while DaloyJS&apos;s own repository and the
+        optional GitHub Actions bundle add CI/CD controls against the
+        cache-poisoning, maintainer-phishing, and OIDC token-abuse patterns seen
+        in recent npm incidents.
       </p>
       <ul>
         <li>
@@ -399,15 +400,23 @@ app.use(basicAuth({
           allowlist for native install scripts.
         </li>
         <li>
-          <strong>SHA-pinned GitHub Actions</strong> — CI/CD actions are pinned
-          to immutable commits, not mutable tags.
+          <strong>SHA-pinned GitHub Actions</strong> — the optional generated
+          GitHub workflows pin third-party actions to immutable commits, not
+          mutable tags.
         </li>
         <li>
-          <strong>Protected npm publishing</strong> — tag-only release workflow,
+          <strong>Protected DaloyJS npm publishing</strong> — the
+          framework&apos;s own packages use a tag-only release workflow,
           protected environment approval, OIDC trusted publishing, and{" "}
           <code>--provenance</code>.
         </li>
       </ul>
+      <p>
+        If your generated app lives outside GitHub, carry over the portable
+        parts directly and translate the GitHub workflow rules to your CI host.
+        The framework cannot enforce branch protection or runner egress in a
+        private GitLab, Bitbucket, Azure DevOps, or on-prem installation.
+      </p>
 
       <h2>Trusted proxies and rate limiting</h2>
       <p>

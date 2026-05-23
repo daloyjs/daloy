@@ -24,56 +24,66 @@ export default function Page() {
     <>
       <h1>Supply-chain security</h1>
       <p>
-        npm worm campaigns ship in waves &mdash; <code>chalk</code>/<code>debug</code> in
-        September 2025, <code>node-ipc</code> in May 2026, the @tanstack/* compromise on
-        2026-05-11. The pattern is consistent: a single phished maintainer or one CI
-        cache-poisoning bug becomes thousands of downstream installs in minutes. DaloyJS
-        is built and shipped with that threat model in mind, and we recommend the same
+        npm worm campaigns ship in waves &mdash; <code>chalk</code>/
+        <code>debug</code> in September 2025, <code>node-ipc</code> in May 2026,
+        the @tanstack/* compromise on 2026-05-11. The pattern is consistent: a
+        single phished maintainer or one CI cache-poisoning bug becomes
+        thousands of downstream installs in minutes. DaloyJS is built and
+        shipped with that threat model in mind, and we recommend the same
         defaults for your project.
       </p>
 
       <h2>How DaloyJS itself is published</h2>
       <ul>
         <li>
-          <strong>Releases run in a separate workflow</strong> (<code>release.yml</code>)
-          that is triggered <em>only</em> by a signed tag push and gated by a protected
-          GitHub Environment requiring maintainer approval. Fork PRs cannot touch it.
+          <strong>Releases run in a separate workflow</strong> (
+          <code>release.yml</code>) that is triggered <em>only</em> by a signed
+          tag push and gated by a protected GitHub Environment requiring
+          maintainer approval. Fork PRs cannot touch it.
         </li>
         <li>
-          <strong>npm trusted publishing (OIDC) with <code>--provenance</code></strong>:
-          every <code>@daloyjs/core</code> tarball is bound to its source commit and
-          workflow run via Sigstore. There is no long-lived <code>NPM_TOKEN</code> in
-          repo secrets to steal.
+          <strong>
+            npm trusted publishing (OIDC) with <code>--provenance</code>
+          </strong>
+          : every <code>@daloyjs/core</code> tarball is bound to its source
+          commit and workflow run via Sigstore. There is no long-lived{" "}
+          <code>NPM_TOKEN</code> in repo secrets to steal.
         </li>
         <li>
-          <strong><code>id-token: write</code> is granted only to the publish job</strong>,
-          on the post-approval runner, with egress blocked to everything except npm,
-          GitHub, and Sigstore (via <code>step-security/harden-runner</code>).
+          <strong>
+            <code>id-token: write</code> is granted only to the publish job
+          </strong>
+          , on the post-approval runner, with egress blocked to everything
+          except npm, GitHub, and Sigstore (via{" "}
+          <code>step-security/harden-runner</code>).
         </li>
         <li>
-          <strong>No GitHub Actions cache</strong> in the standard CI workflow. Cache
-          scope bridges fork PRs and pushes to <code>main</code>, which is the
-          poisoning channel that bridged TanStack&apos;s PR pipeline into its release
-          pipeline.
+          <strong>No GitHub Actions cache</strong> in the standard CI workflow.
+          Cache scope bridges fork PRs and pushes to <code>main</code>, which is
+          the poisoning channel that bridged TanStack&apos;s PR pipeline into
+          its release pipeline.
         </li>
         <li>
-          <strong>No <code>pull_request_target</code></strong> &mdash; ever. The
-          repository has a <code>zizmor</code> check on every PR that fails the build
-          if anyone ever adds it.
+          <strong>
+            No <code>pull_request_target</code>
+          </strong>{" "}
+          &mdash; ever. The repository has a <code>zizmor</code> check on every
+          PR that fails the build if anyone ever adds it.
         </li>
         <li>
-          <strong>Third-party GitHub Actions are SHA-pinned</strong> so a retargeted
-          version tag cannot silently change what CI executes.
+          <strong>Third-party GitHub Actions are SHA-pinned</strong> so a
+          retargeted version tag cannot silently change what CI executes.
         </li>
         <li>
-          <strong>CodeQL, OpenSSF Scorecard, Dependabot</strong> all run continuously,
-          and <code>CODEOWNERS</code> blocks any change to <code>.github/</code>,
-          <code>package.json</code>, the lockfile, or <code>.npmrc</code> without a
-          maintainer review.
+          <strong>CodeQL, OpenSSF Scorecard, Dependabot</strong> all run
+          continuously, and <code>CODEOWNERS</code> blocks any change to{" "}
+          <code>.github/</code>,<code>package.json</code>, the lockfile, or{" "}
+          <code>.npmrc</code> without a maintainer review.
         </li>
         <li>
           <strong>Lockfile source verification</strong> runs in CI via
-          <code>pnpm verify:lockfile</code> and fails if <code>pnpm-lock.yaml</code>
+          <code>pnpm verify:lockfile</code> and fails if{" "}
+          <code>pnpm-lock.yaml</code>
           introduces git dependency sources or non-registry tarball URLs.
         </li>
       </ul>
@@ -89,11 +99,14 @@ export default function Page() {
         .
       </p>
 
-      <h2>Defaults you get from <code>pnpm create daloy</code></h2>
+      <h2>
+        Defaults you get from <code>pnpm create daloy</code>
+      </h2>
       <p>
         Every project scaffolded with <code>create-daloy</code> ships with an
-        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code> that turn on the install-time
-        controls below when you choose <code>pnpm</code>. Keep them on.
+        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code> that turn on
+        the install-time controls below when you choose <code>pnpm</code>. Keep
+        them on.
       </p>
       <CodeBlock
         language="ini"
@@ -115,29 +128,43 @@ strict-peer-dependencies=true`}
 
       <h2>Optional CI bundle for user projects</h2>
       <p>
-        <code>create-daloy --with-ci</code> adds the GitHub-side controls that do not come from a
-        package install: CI with top-level <code>{"permissions: {}"}</code>, SHA-pinned actions,
-        <code>harden-runner</code>, no package-manager cache, disabled lifecycle scripts,
-        lockfile-source verification, CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS,
-        and <code>SECURITY.md</code>. Node-style templates also get a disabled-by-default npm trusted
-        publishing skeleton that only runs after you set <code>NPM_PUBLISH_ENABLED=true</code> and
-        configure a protected publish environment.
+        <code>create-daloy --with-ci</code> adds the GitHub-side controls that
+        do not come from a package install: CI with top-level{" "}
+        <code>{"permissions: {}"}</code>, SHA-pinned actions,
+        <code>harden-runner</code>, no package-manager cache, disabled lifecycle
+        scripts, lockfile-source verification, CodeQL, OpenSSF Scorecard,
+        zizmor, Dependabot, CODEOWNERS, and <code>SECURITY.md</code>. Templates
+        can also get a manual-only <code>deploy.yml</code>
+        starter: container templates publish a Docker image to GHCR, while
+        Vercel and Cloudflare templates run their platform CLIs with credentials
+        from GitHub Actions secrets and variables. The scaffolder deliberately
+        omits npm publishing workflows because generated projects are REST API
+        services, not reusable libraries.
       </p>
       <CodeBlock
         language="bash"
         code="pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security"
       />
       <p>
-        GitHub settings are still your responsibility: replace the CODEOWNERS owner if needed, enable
-        branch protection, require the generated checks, and turn on secret scanning plus push
-        protection.
+        GitHub settings are still your responsibility: replace the CODEOWNERS
+        owner if needed, enable branch protection, require the generated checks,
+        and turn on secret scanning plus push protection.
+      </p>
+      <p>
+        On GitLab, Bitbucket, Azure DevOps, Jenkins, or an on-prem runner, you
+        still inherit the runtime guardrails, <code>@daloyjs/core</code>&apos;s
+        zero-runtime-dependency package, SBOM and npm provenance, and the pnpm
+        install-time controls if you choose pnpm. Translate the GitHub workflow
+        rules above into your CI host: start from no default write permissions,
+        avoid shared dependency caches for untrusted code, keep installs
+        reproducible, and isolate any job that can publish or deploy.
       </p>
 
       <h2>If you legitimately need a postinstall</h2>
       <p>
-        <code>ignore-scripts=true</code> is global. To allow a build script for a
-        package you actually trust (e.g. <code>esbuild</code>), allowlist it explicitly
-        in <code>package.json</code>:
+        <code>ignore-scripts=true</code> is global. To allow a build script for
+        a package you actually trust (e.g. <code>esbuild</code>), allowlist it
+        explicitly in <code>package.json</code>:
       </p>
       <CodeBlock
         language="json"
@@ -148,70 +175,92 @@ strict-peer-dependencies=true`}
 }`}
       />
       <p>
-        This is the same pattern DaloyJS uses in its own root <code>package.json</code>.
-        Each entry should be reviewed in PR.
+        This is the same pattern DaloyJS uses in its own root{" "}
+        <code>package.json</code>. Each entry should be reviewed in PR.
       </p>
 
       <h2>Avoid git and tarball dependencies</h2>
       <p>
-        DaloyJS also checks its root lockfile for dependency sources that bypass the
-        normal npm registry path. In this repo, <code>pnpm verify:lockfile</code> fails
-        on git dependencies and non-registry tarball URLs so a transitive source change
-        cannot slip through as ordinary version churn.
+        DaloyJS also checks its root lockfile for dependency sources that bypass
+        the normal npm registry path. In this repo,{" "}
+        <code>pnpm verify:lockfile</code> fails on git dependencies and
+        non-registry tarball URLs so a transitive source change cannot slip
+        through as ordinary version churn.
       </p>
 
       <h2>What to do if a maintainer account is phished</h2>
       <p>
         The September 2025 chalk/debug compromise started with a single fake{" "}
-        <code>npmjs.help</code> 2FA-reset email. If you suspect a maintainer (yours or
-        an upstream&apos;s) was phished:
+        <code>npmjs.help</code> 2FA-reset email. If you suspect a maintainer
+        (yours or an upstream&apos;s) was phished:
       </p>
       <ol>
         <li>
-          Pin every direct dependency that lists the affected maintainer to the last
-          known-good version in your lockfile.
+          Pin every direct dependency that lists the affected maintainer to the
+          last known-good version in your lockfile.
         </li>
         <li>
-          <code>pnpm audit --prod</code> and rotate any deployment credential the
-          install host had access to (npm token, GitHub token, AWS keys, SSH keys).
+          <code>pnpm audit --prod</code> and rotate any deployment credential
+          the install host had access to (npm token, GitHub token, AWS keys, SSH
+          keys).
         </li>
         <li>
-          Bump <code>minimum-release-age</code> in <code>.npmrc</code> further (e.g.
+          Bump <code>minimum-release-age</code> in <code>.npmrc</code> further
+          (e.g.
           <code>4320</code> for 72h) until the campaign settles.
         </li>
         <li>
-          Subscribe to <a href="https://github.com/advisories" target="_blank" rel="noreferrer">GitHub Security Advisories</a>{" "}
+          Subscribe to{" "}
+          <a
+            href="https://github.com/advisories"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub Security Advisories
+          </a>{" "}
           for your dependency tree.
         </li>
       </ol>
 
       <h2>Hardening your own GitHub Actions</h2>
-      <p>If you publish your own application&apos;s artifacts from CI, copy these rules:</p>
+      <p>
+        If you publish your own application&apos;s artifacts from CI, copy these
+        rules:
+      </p>
       <ul>
         <li>
-          <strong>Never use <code>pull_request_target</code></strong> to check out
-          fork code.
+          <strong>
+            Never use <code>pull_request_target</code>
+          </strong>{" "}
+          to check out fork code.
         </li>
         <li>
-          <strong>Top-level <code>permissions: {`{}`}</code></strong>; opt back in per job.
+          <strong>
+            Top-level <code>permissions: {`{}`}</code>
+          </strong>
+          ; opt back in per job.
         </li>
         <li>
-          <strong>Pin third-party actions to a commit SHA</strong> (Dependabot will
-          keep them updated). A retargeted tag has the same blast radius as cache
-          poisoning.
+          <strong>Pin third-party actions to a commit SHA</strong> (Dependabot
+          will keep them updated). A retargeted tag has the same blast radius as
+          cache poisoning.
         </li>
         <li>
-          <strong>Separate the publish job</strong>. Do not put <code>id-token: write</code>{" "}
-          on a workflow that runs untrusted code in any earlier step &mdash; OIDC
-          tokens have been pulled from runner memory in real attacks.
+          <strong>Separate the publish job</strong>. Do not put{" "}
+          <code>id-token: write</code> on a workflow that runs untrusted code in
+          any earlier step &mdash; OIDC tokens have been pulled from runner
+          memory in real attacks.
         </li>
         <li>
-          <strong>Use <code>step-security/harden-runner</code></strong> on the publish
-          job with <code>egress-policy: block</code> and an explicit allowlist.
+          <strong>
+            Use <code>step-security/harden-runner</code>
+          </strong>{" "}
+          on the publish job with <code>egress-policy: block</code> and an
+          explicit allowlist.
         </li>
         <li>
-          <strong>Use a protected GitHub Environment</strong> (required reviewers) for
-          any job that can publish.
+          <strong>Use a protected GitHub Environment</strong> (required
+          reviewers) for any job that can publish.
         </li>
       </ul>
 

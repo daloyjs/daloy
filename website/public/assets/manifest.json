@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-23T13:16:11.637Z",
+  "generatedAt": "2026-05-23T14:20:02.768Z",
   "generator": "scripts/render-assets.mjs",
   "source": "public/assets/source/",
   "files": [
@@ -49,23 +49,23 @@
     },
     {
       "name": "banner-x-1500x500.png",
-      "bytes": 86580
+      "bytes": 87809
     },
     {
       "name": "banner-bluesky-3000x1000.png",
-      "bytes": 216154
+      "bytes": 218986
     },
     {
       "name": "banner-light-1280x426.png",
-      "bytes": 108382
+      "bytes": 109935
     },
     {
       "name": "banner-light-1500x500.png",
-      "bytes": 78562
+      "bytes": 79834
     },
     {
       "name": "og-image.png",
-      "bytes": 73263
+      "bytes": 72896
     }
   ]
 }
