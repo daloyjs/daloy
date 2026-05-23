@@ -184,6 +184,7 @@
     "verify:no-invisible-unicode": "node --import tsx scripts/verify-no-invisible-unicode.ts",
     "verify:no-encoded-payloads": "node --import tsx scripts/verify-no-encoded-payloads.ts",
     "verify:no-registry-exfiltration": "node --import tsx scripts/verify-no-registry-exfiltration.ts",
+    "verify:no-polyfill-cdns": "node --import tsx scripts/verify-no-polyfill-cdns.ts",
     "verify:no-weak-random": "node --import tsx scripts/verify-no-weak-random.ts",
     "verify:dep-licenses": "node --import tsx scripts/verify-dep-licenses.ts",
     "verify:known-dep-names": "node --import tsx scripts/verify-known-dep-names.ts",

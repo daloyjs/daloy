@@ -110,6 +110,9 @@ jobs:
       - name: Verify no runtime registry-exfiltration primitives (Socket GemStuffer gate)
         run: pnpm verify:no-registry-exfiltration
 
+      - name: Verify no hijacked-CDN host references (Aikido / Sansec Funnull cluster gate)
+        run: pnpm verify:no-polyfill-cdns
+
       - name: Verify no weak-randomness primitives in core (Aikido Python Top 10 #10 gate)
         run: pnpm verify:no-weak-random
 
