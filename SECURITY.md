@@ -90,6 +90,122 @@ versions; the daily `pnpm audit --prod`
 ([`.github/workflows/vuln-scan.yml`](.github/workflows/vuln-scan.yml)) is
 the upstream continuous-monitoring signal.
 
+## EU Cyber Resilience Act (CRA) mapping
+
+Regulation (EU) 2024/2847 — the
+[Cyber Resilience Act](https://eur-lex.europa.eu/eli/reg/2024/2847/oj)
+— places binding cybersecurity obligations on the manufacturer of any
+"product with digital elements" placed on the EU market. The two
+deadlines that matter for downstream consumers of `@daloyjs/core` /
+`create-daloy` are:
+
+1. **2026-09-11** — mandatory 24-hour reporting of any actively
+   exploited vulnerability and any severe incident to ENISA and the
+   designated national CSIRT (CRA Article 14).
+2. **2027-12-11** — full conformity with the Annex I essential
+   cybersecurity requirements before a product may bear the CE mark
+   (CRA Article 13).
+
+DaloyJS is **free open-source software** distributed under the MIT
+license. The CRA's commercial-activity test (Recital 16 / Article
+3(18)) exempts non-commercial OSS development from "manufacturer"
+liability — but downstream commercial consumers who *integrate*
+`@daloyjs/core` into a CE-marked product inherit the obligation to
+demonstrate that the integrated framework meets the Annex I baseline.
+This section is the evidence pack a downstream conformity assessment
+can quote verbatim. See the [Aikido CRA write-up](https://www.aikido.dev/blog/cyber-resilience-act-compliance)
+for a plain-language summary of the requirements below.
+
+### Annex I, Part I — essential cybersecurity requirements
+
+The numbering tracks CRA Annex I, Part I (1)(a)–(l), and the
+abbreviated Aikido summary alongside each row.
+
+| CRA requirement | DaloyJS evidence |
+| --- | --- |
+| **(1)(a) Delivered without known exploitable vulnerabilities** | Every release is gated by `pnpm audit --audit-level=high` against the committed `pnpm-lock.yaml` in [`ci.yml`](.github/workflows/ci.yml) and the pre-publish `verify` job of [`release.yml`](.github/workflows/release.yml). The daily [`vuln-scan.yml`](.github/workflows/vuln-scan.yml) re-runs `pnpm audit --prod` against `main` so any newly-disclosed CVE against a transitive dep surfaces as a CI failure within 24 h. `@daloyjs/core` declares **zero** runtime dependencies (enforced by [`pnpm verify:no-runtime-deps`](scripts/verify-no-runtime-deps.ts)), shrinking the surface to "the framework's own source plus its peer adapter". |
+| **(1)(b) Secure-by-default configuration** | Documented end-to-end in § Threat model above. Body cap (1 MiB), per-handler `requestTimeoutMs` (30 s), `secureHeaders()` (HSTS, CSP nonce + Trusted Types, COOP, CORP, `X-Frame-Options`, `X-Content-Type-Options`, Permissions-Policy), `fetchGuard()` default-denying SSRF against every documented cloud-metadata IP, prototype-pollution stripping in every parser, real `405` with `Allow`, problem+json 5xx detail redaction in production mode, CRLF/NUL refusal in headers, reserved internal-header refusal (`x-daloy-internal-*`), CORS opt-in (no implicit `*`). Scaffolded projects (`create-daloy`) inherit the same defaults plus `ignore-scripts=true` + `minimum-release-age=1440` in `_npmrc`. |
+| **(1)(c) Security updates that can be installed automatically and separately from feature updates** | DaloyJS uses semantic versioning. Patch releases (`0.x.Y`) are reserved for security and regression fixes and ship on the same day as the GitHub Security Advisory (§ "Patch SLA" above). Consumers who pin with `^@daloyjs/core` and run `pnpm update --latest` (or Dependabot) receive security patches without opting into feature releases. The OpenAPI surface and route signatures are not changed in patch releases, so a consumer can deploy a security-only patch without code changes. |
+| **(1)(d) Protection from unauthorized access; appropriate authentication, identity, or access management** | First-party `bearerAuth`, `basicAuth`, `jwt()` (PS256 / RS256 / ES256 / EdDSA via [`src/jwt.ts`](src/jwt.ts) with `kid`-pinned JWKS rotation in [`src/jwk.ts`](src/jwk.ts)), signed-cookie `session()`, and `timingSafeEqual()` from [`src/security.ts`](src/security.ts). The `pnpm verify:secret-comparisons` gate refuses every short-circuiting comparison primitive against header-derived values in `src/**`. Routes are explicit and middleware runs unconditionally (no internal-header bypass — see the Next.js CVE-2025-29927 row in § Threat model). |
+| **(1)(e) Protection of confidentiality (encryption of stored or transmitted data)** | DaloyJS speaks plain HTTP at the Node adapter — TLS termination is delegated to the operator's reverse proxy / load balancer / CDN, with `secureHeaders()` emitting HSTS (`max-age=15552000; includeSubDomains; preload` by default) so the browser refuses to downgrade. Application secrets (session cookies, JWT signing keys) are processed with `timingSafeEqual()` and never logged (the `redactRecord()` walker in [`src/logger.ts`](src/logger.ts) removes documented secret-shaped fields and the structured logger emits no `Authorization` / `Cookie` header by default). At-rest encryption of databases and backups is below the framework layer. |
+| **(1)(f) Protection of integrity of stored, transmitted, or processed data, commands, programs, and configuration against unauthorized manipulation** | Contract-first Standard Schema (Zod 4 / Valibot / ArkType / TypeBox) validates `request.body` / `request.query` / `request.params` **before** the handler runs, and `responses[N].body` validates on the way out. JSON parsing strips `__proto__` / `constructor` / `prototype` via reviver. The router refuses `..` and `//` before walking. The webhook HMAC helpers parse only known algorithm prefixes (`sha256=`) and never strip on bare `=` (see [User memory](../../) — padded base64 signatures use `=` padding and would otherwise be truncated into a forged match). Published tarballs carry an npm `--provenance` Sigstore attestation binding the bytes to the `release.yml` workflow run on the Rekor transparency log. |
+| **(1)(g) Process only data that is adequate, relevant, and limited to what is necessary** | Response schemas (`responses[N].body`) validate on the way out, so a handler that forgets to project away a privileged field doesn't pass the framework boundary. The OpenAPI 3.1 spec generated from the same route definitions lists every documented field, making over-collection a review event rather than a silent default. The framework itself collects no telemetry — there is no phone-home, no metrics export, no error-reporting endpoint baked in. |
+| **(1)(h) Protect availability of essential and basic functions, including resilience against and mitigation of denial-of-service attacks** | Core-enforced body cap (`Content-Length` rejected pre-read when oversize), per-handler `requestTimeoutMs` (plus Node `requestTimeout` / `headersTimeout` / `maxHeaderSize`), first-party `rateLimit()` with custom key generators and optional Redis store ([`src/rate-limit-redis.ts`](src/rate-limit-redis.ts)), `loadShedding()` for concurrency caps under burst pressure, multipart per-field byte cap. Network-layer DoS (SYN floods, amplification) is explicitly delegated to the operator's WAF / CDN — documented under § "Explicitly out of scope". |
+| **(1)(i) Minimize negative impact on availability of services provided by other devices or networks** | `fetchGuard()` default-denies outbound requests to loopback, RFC1918, link-local (every documented cloud metadata IP), unique-local, CGNAT, Oracle `192.0.0.0/24`, IANA-reserved, multicast, and non-`http(s)` schemes — preventing a Daloy-built backend from being weaponized as an SSRF pivot against the wider network. Manual redirect-following re-validates at every hop; IPv4-mapped IPv6 is recursively re-checked. |
+| **(1)(j) Limit attack surfaces, including external interfaces** | The published `@daloyjs/core` tarball ships only `dist/` + `bin/` + `README.md` (whitelisted via `package.json#files`); everything else — tests, examples, scripts, internal docs — is excluded by npm before assembly. The runtime API surface is contract-first: there is no implicit "scaffold a route, get auth for free" surface, no template engine, no string-eval, no shell helper, no `child_process` / `vm` / `eval` / `new Function(...)` / dynamic remote `import(...)` in `src/**` (enforced by [`pnpm verify:no-remote-exec`](scripts/verify-no-remote-exec.ts)), no legacy `Buffer` API (enforced by [`pnpm verify:no-unsafe-buffer`](scripts/verify-no-unsafe-buffer.ts)), and no in-process JS sandbox with documented CVEs (enforced by [`pnpm verify:no-vulnerable-sandboxes`](scripts/verify-no-vulnerable-sandboxes.ts)). |
+| **(1)(k) Reduce impact of incidents using appropriate exploitation mitigation mechanisms and techniques** | Production mode redacts `detail` from 5xx problem+json automatically so an exception message does not leak stack traces, internal paths, or query strings to a probing attacker. Structured JSON logs are emitted with per-request correlation IDs so incident responders can pivot from a single complaint to every adjacent request. The reserved `x-daloy-internal-*` header namespace is rejected at the request boundary so an attacker cannot replay a header that the framework would treat as in-process trust. |
+| **(1)(l) Provide security-related information by recording and monitoring relevant internal activity, including the access to or modification of data, services, or functions, with an opt-out mechanism for the user** | The first-party structured logger emits one JSON record per request with method, path, status, duration, request ID, and any explicit `ctx.log.info(...)` fields the handler chooses to record. Logging is on by default (configurable via the `logger` option on `new App({...})`); operators can substitute their own sink (Pino, Bunyan, OpenTelemetry, etc.) without modifying core. The framework deliberately does not record request bodies or response bodies by default — that opt-in lives in the application code so personal data does not silently enter logs. |
+
+### Annex I, Part II — vulnerability-handling requirements
+
+| CRA requirement | DaloyJS evidence |
+| --- | --- |
+| **(2)(1) Identify and document vulnerabilities and components, including by drawing up a software bill of materials in a commonly used and machine-readable format covering at the very least the top-level dependencies of the product** | Every published tarball includes `dist/sbom.cdx.json` (CycloneDX 1.5) and `dist/sbom.spdx.json` (SPDX 2.3), generated by [`scripts/generate-sbom.ts`](scripts/generate-sbom.ts) and locked at release time by [`pnpm verify:sbom`](scripts/verify-sbom.ts). Both formats list every top-level dependency with name, version, license, and content hash; the SBOM ships under the `dist/` whitelist so it is present in the consumer's installed `node_modules/@daloyjs/core/dist/`. |
+| **(2)(2) Address and remediate vulnerabilities without delay, including by providing security updates; where technically feasible, security updates shall be provided separately from functionality updates** | The CVSS-keyed patch SLA in § "Patch SLA (for downstream NIS2 / EU CRA procurement clauses)" above commits to **48 h** for Critical, **7 d** for High, **30 d** for Medium, and **90 d** for Low, measured from the triage decision. Patch releases (`0.x.Y`) ship security fixes independently of minor/major feature releases. |
+| **(2)(3) Apply effective and regular tests and reviews of the security of the product** | The CI matrix runs full test + coverage on Node 22 / 24 / 26, Bun, and Deno on every push and PR; the `pnpm coverage` gate enforces 90% lines / 90% functions on the tsx run and 90% branches on the compiled-JS run. The static-analysis gates (`verify:no-remote-exec`, `verify:no-registry-exfiltration`, `verify:no-vulnerable-sandboxes`, `verify:no-unsafe-buffer`, `verify:secret-comparisons`, `verify:no-encoded-payloads`, `verify:no-invisible-unicode`, `verify:no-leaked-credentials`, `verify:lockfile-sources`, `verify:no-runtime-deps`, `verify:no-lifecycle-scripts`, `verify:dep-licenses`, `verify:sbom`, `verify:secret-comparisons`, `verify:no-bin-shadowing`) run in [`ci.yml`](.github/workflows/ci.yml) and in both publish jobs of [`release.yml`](.github/workflows/release.yml). The weekly DAST job ([`dast.yml`](.github/workflows/dast.yml)) runs OWASP ZAP baseline against the bookstore example on a real listening server. |
+| **(2)(4) Once a security update has been made available, share and publicly disclose information about fixed vulnerabilities** | Every confirmed vulnerability is published as a [GitHub Security Advisory](https://github.com/daloyjs/daloy/security/advisories) (GHSA) with a CVE requested through GitHub's CNA. The advisory carries the three timestamps NIS2-aligned procurement needs (Discovered / Patch available / Fix deployed), the CVSS v3.1 vector, the affected version range, the fixed version, and the `pnpm` / `npm` upgrade command — see § "Evidence produced per advisory" above. |
+| **(2)(5) Put in place and enforce a policy on coordinated vulnerability disclosure** | This file *is* the coordinated-disclosure policy. The discoverable entry point is the RFC 9116 [`security.txt`](https://daloyjs.dev/.well-known/security.txt) at `https://daloyjs.dev/.well-known/security.txt`, which points at the GitHub private-disclosure form (<https://github.com/daloyjs/daloy/security/advisories/new>) and back at this `SECURITY.md`. The disclosure rotation is named in [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md), tested quarterly (audit-gated by [`pnpm verify:governance-audits`](scripts/verify-governance-audits.ts)), and the response targets are in § "Response Target" above. |
+| **(2)(6) Take measures to facilitate the sharing of information about potential vulnerabilities in their product** | The same private-disclosure form accepts third-party reports about transitive dependencies; the maintainer rotation forwards confirmed transitive-dep vulnerabilities to the upstream maintainer via their published security channel, and links the upstream advisory from the DaloyJS GHSA when one is published downstream. The published SBOM lets reporters identify the exact dependency version chain without guessing. |
+| **(2)(7) Provide for mechanisms to securely distribute updates for products with digital elements to ensure that vulnerabilities are fixed or mitigated in a timely manner and, where applicable, for security updates, in an automatic manner** | Updates are distributed via the npm registry over HTTPS, signed with the npm `--provenance` Sigstore attestation bound to the `release.yml` workflow run on the Rekor transparency log. Consumers using Dependabot, Renovate, or `pnpm update --latest` receive patch releases automatically; the framework itself does not phone home or auto-update at runtime (auto-update of running services is the operator's deployment pipeline). |
+| **(2)(8) Ensure that, where security updates are available to address identified security issues, they are disseminated without delay and, unless otherwise agreed between a manufacturer and a business user in relation to a tailor-made product with digital elements, free of charge, accompanied by advisory messages providing users with the relevant information, including on potential action to be taken** | All `@daloyjs/core` and `create-daloy` security updates are published free of charge under the MIT license. The accompanying GHSA carries the "advisory message" (impact, affected versions, fixed version, upgrade command) referenced by the requirement. |
+
+### Article 14 — 24-hour reporting of actively exploited vulnerabilities and severe incidents
+
+From **2026-09-11** the manufacturer of a product with digital
+elements must notify ENISA and the designated national CSIRT within
+24 hours of becoming aware of any **actively exploited
+vulnerability** in the product or any **severe incident** affecting
+its security. For `@daloyjs/core` and `create-daloy`, the
+notification chain is:
+
+1. A confirmed report of active exploitation (private advisory, public
+   PoC weaponization, IOC seen in the wild) lands in the
+   private-disclosure inbox via the GitHub Security Advisory form.
+2. The rotation in [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md)
+   triages within 3 business days for the routine case; for an
+   **actively exploited** report the triage SLA collapses to
+   **best-effort within 24 h** to meet the CRA Article 14 deadline.
+3. Once triage confirms active exploitation, the maintainer files an
+   early-warning notification with ENISA via the
+   [Single Reporting Platform](https://www.enisa.europa.eu/topics/cra)
+   (the EU single point of entry mandated by CRA Article 16) within
+   the 24-hour window. The notification names the affected package
+   and version range, the exploitation evidence, and the
+   then-current mitigation status — even if a patch is not yet
+   available.
+4. A follow-up notification within 72 hours adds the CVSS score,
+   the assessed scope of impact, and the planned remediation
+   timeline keyed to the § "Patch SLA" table above.
+5. The published GitHub Security Advisory and the ENISA
+   notification ID are cross-linked so downstream commercial
+   consumers integrating `@daloyjs/core` into a CE-marked product
+   can reference both in their own conformity dossier.
+
+This is the maintainer's commitment as an upstream OSS author. A
+downstream commercial consumer remains responsible for their own
+Article 14 notifications about *their* product; the chain above
+exists so the upstream side of the dependency does not silently
+swallow the trigger.
+
+### Support lifetime
+
+CRA Article 13(8) requires the manufacturer to determine the
+"support period" during which security updates will be provided, and
+that period must reflect the time during which the product is
+expected to be in use — with **5 years** as the regulatory floor for
+most consumer products.
+
+DaloyJS commits to a **minimum 5-year security-update support
+period** for every major release line starting with `1.0`, measured
+from the date of that line's first GA release. The 0.x line that
+ships today is pre-1.0 and continues to roll forward
+(security-supported on the latest minor) until 1.0 ships; the
+5-year clock starts at 1.0 and resets on every subsequent major
+(2.0, 3.0, …). End-of-support dates will be published in this file
+and on the [`/docs/security/compliance`](https://daloyjs.dev/docs/security/compliance)
+page once 1.0 lands. Until then, downstream procurement may quote
+the 0.x rolling-latest commitment plus the 5-year post-1.0 floor.
+
 ## Scope
 
 Security reports are especially useful for:

@@ -1,0 +1,22 @@
+# DaloyJS — Public Coordinated Vulnerability Disclosure (CVD)
+#
+# This file follows RFC 9116 (`security.txt`) so security researchers,
+# automated scanners, and EU-CRA conformity-assessment auditors can
+# discover the disclosure channel without having to crawl GitHub.
+#
+# The framework's full vulnerability policy, response SLAs, and the
+# EU Cyber Resilience Act (CRA) mapping live in `SECURITY.md` at
+# https://github.com/daloyjs/daloy/blob/main/SECURITY.md
+#
+# This file is unsigned. The signed canonical reference is the
+# `SECURITY.md` file on the protected `main` branch (CODEOWNERS-gated)
+# and its `npm --provenance` Sigstore attestation on the published
+# `@daloyjs/core` tarball.
+
+Contact: https://github.com/daloyjs/daloy/security/advisories/new
+Expires: 2027-05-23T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://daloyjs.dev/.well-known/security.txt
+Policy: https://github.com/daloyjs/daloy/blob/main/SECURITY.md
+Acknowledgments: https://github.com/daloyjs/daloy/security/advisories
+Hiring: https://github.com/daloyjs/daloy

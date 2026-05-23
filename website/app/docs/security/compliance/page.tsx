@@ -494,6 +494,235 @@ export default function Page() {
         </li>
       </ul>
 
+      <h3>EU Cyber Resilience Act (Regulation (EU) 2024/2847)</h3>
+      <p>
+        The{" "}
+        <a
+          href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Cyber Resilience Act
+        </a>{" "}
+        places binding obligations on the manufacturer of any &ldquo;product
+        with digital elements&rdquo; sold into the EU. DaloyJS itself is free
+        open-source software (the CRA exempts non-commercial OSS development
+        from manufacturer liability under Recital 16 / Article 3(18)), but a
+        downstream commercial product that integrates <code>@daloyjs/core</code>{" "}
+        inherits the obligation to demonstrate Annex I conformity for the
+        integrated framework. The full requirement-by-requirement evidence pack
+        lives in{" "}
+        <a
+          href="https://github.com/daloyjs/daloy/blob/main/SECURITY.md#eu-cyber-resilience-act-cra-mapping"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <code>
+            SECURITY.md &rarr; &ldquo;EU Cyber Resilience Act mapping&rdquo;
+          </code>
+        </a>
+        ; the table below is the operator-friendly summary.
+      </p>
+      <p>
+        The two deadlines that matter for downstream consumers:{" "}
+        <strong>2026-09-11</strong> (24-hour reporting of actively exploited
+        vulnerabilities to ENISA and the national CSIRT, CRA Article 14) and{" "}
+        <strong>2027-12-11</strong> (full Annex I conformity before a product
+        may bear the CE mark, CRA Article 13). DaloyJS commits upstream to both.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>CRA requirement</th>
+            <th>DaloyJS evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Annex I (1)(a) — no known exploitable vulnerabilities on release
+            </td>
+            <td>
+              <code>pnpm audit --audit-level=high</code> in CI and pre-publish;
+              daily <code>pnpm audit --prod</code> against <code>main</code>;
+              zero runtime deps in <code>@daloyjs/core</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>Annex I (1)(b) — secure-by-default configuration</td>
+            <td>
+              Body cap (1 MiB), 30 s request timeout,{" "}
+              <code>secureHeaders()</code>, <code>fetchGuard()</code>{" "}
+              default-denying SSRF against cloud-metadata IPs,
+              prototype-pollution stripping in every parser, real{" "}
+              <code>405</code>, problem+json 5xx detail redaction in production.
+              Scaffolded projects inherit <code>ignore-scripts=true</code> +{" "}
+              <code>minimum-release-age=1440</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex I (1)(c) — security updates independent of feature updates
+            </td>
+            <td>
+              SemVer with patch releases (<code>0.x.Y</code>) reserved for
+              security and regression fixes; consumers pinned with{" "}
+              <code>^@daloyjs/core</code> get patches via{" "}
+              <code>pnpm update</code> or Dependabot without code changes.
+            </td>
+          </tr>
+          <tr>
+            <td>Annex I (1)(d) — authentication and access control</td>
+            <td>
+              First-party <code>bearerAuth</code>, <code>basicAuth</code>,{" "}
+              <code>jwt()</code> (PS256 / RS256 / ES256 / EdDSA, JWKS rotation
+              with <code>kid</code> pinning), signed-cookie{" "}
+              <code>session()</code>, <code>timingSafeEqual()</code>; the{" "}
+              <code>pnpm verify:secret-comparisons</code> gate rejects every
+              short-circuiting comparison against header-derived values.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex I (1)(h) — resilience against and mitigation of DoS attacks
+            </td>
+            <td>
+              Core body cap, per-handler timeouts, first-party{" "}
+              <code>rateLimit()</code> with optional Redis store,{" "}
+              <code>loadShedding()</code> for concurrency caps, multipart
+              per-field byte cap. Network-layer DoS is the operator&apos;s WAF /
+              CDN.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex I (1)(j) — limit attack surface and external interfaces
+            </td>
+            <td>
+              Tarball whitelist (<code>dist/</code> + <code>bin/</code> +{" "}
+              <code>README.md</code>); no template engine, no string-eval, no
+              shell helper in core; <code>pnpm verify:no-remote-exec</code>{" "}
+              refuses <code>child_process</code> / <code>vm</code> /{" "}
+              <code>eval</code> / <code>new Function</code> / remote dynamic{" "}
+              <code>import()</code> in <code>src/**</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex I Part II (2)(1) — SBOM in a commonly used, machine-readable
+              format covering at least top-level dependencies
+            </td>
+            <td>
+              Every published tarball ships <code>dist/sbom.cdx.json</code>{" "}
+              (CycloneDX 1.5) and <code>dist/sbom.spdx.json</code> (SPDX 2.3);
+              generated by <code>scripts/generate-sbom.ts</code> and locked at
+              release time by <code>pnpm verify:sbom</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex I Part II (2)(2) — remediate vulnerabilities without delay
+            </td>
+            <td>
+              CVSS-keyed upstream patch SLA: <strong>48 h</strong> Critical,{" "}
+              <strong>7 d</strong> High, <strong>30 d</strong> Medium,{" "}
+              <strong>90 d</strong> Low, measured from triage.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex I Part II (2)(4) — public disclosure of fixed
+              vulnerabilities
+            </td>
+            <td>
+              Every confirmed vulnerability is published as a{" "}
+              <a
+                href="https://github.com/daloyjs/daloy/security/advisories"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GitHub Security Advisory
+              </a>{" "}
+              with a CVE requested through GitHub&apos;s CNA, carrying the
+              Discovered / Patch available / Fix deployed timestamps NIS2 and
+              CRA conformity dossiers expect.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex I Part II (2)(5) — policy on coordinated vulnerability
+              disclosure (CVD)
+            </td>
+            <td>
+              Discoverable at{" "}
+              <a
+                href="https://daloyjs.dev/.well-known/security.txt"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <code>https://daloyjs.dev/.well-known/security.txt</code>
+              </a>{" "}
+              (RFC 9116); points at the GitHub private-disclosure form and back
+              at <code>SECURITY.md</code>. Disclosure rotation is named in{" "}
+              <code>SECURITY-CONTACTS.md</code> and tested quarterly
+              (audit-gated by <code>pnpm verify:governance-audits</code>).
+            </td>
+          </tr>
+          <tr>
+            <td>Annex I Part II (2)(7) — secure update distribution</td>
+            <td>
+              npm over HTTPS with <code>--provenance</code> Sigstore
+              attestations bound to the <code>release.yml</code> workflow run on
+              the Rekor transparency log; consumers can verify the provenance
+              without trusting any vendor portal.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 14 — 24-hour reporting of actively exploited
+              vulnerabilities to ENISA
+            </td>
+            <td>
+              From 2026-09-11 the maintainer rotation triages actively-exploited
+              reports best-effort within 24 h and files the early-warning
+              notification with ENISA via the Single Reporting Platform,
+              followed by a 72 h CVSS / scope update — even when a patch is not
+              yet available. See the{" "}
+              <a
+                href="https://github.com/daloyjs/daloy/blob/main/SECURITY.md#article-14--24-hour-reporting-of-actively-exploited-vulnerabilities-and-severe-incidents"
+                target="_blank"
+                rel="noreferrer"
+              >
+                full Article 14 notification chain
+              </a>{" "}
+              in <code>SECURITY.md</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 13(8) — declared support period (regulatory floor: 5
+              years)
+            </td>
+            <td>
+              DaloyJS commits to a{" "}
+              <strong>minimum 5-year security-update support period</strong> for
+              every major release line starting with 1.0, measured from that
+              line&apos;s first GA release. The current 0.x line is pre-1.0 and
+              rolls forward on the latest minor until 1.0 ships.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        <em>
+          This mapping is informational and is not a legal opinion. A downstream
+          conformity assessment for a CE-marked product remains the
+          integrator&apos;s responsibility; the evidence above exists so the
+          framework layer of that dossier does not have to be reconstructed from
+          scratch.
+        </em>
+      </p>
+
       <h2>Operator responsibilities the framework cannot cover</h2>
       <p>
         Be upfront about this when you talk to your auditor &mdash; conflating
