@@ -2218,3 +2218,44 @@ If a future incident report describes an attack step that any control in
 this section should have blocked, treat the gap as a release-blocking bug
 and open a private advisory via
 <https://github.com/daloyjs/daloy/security/advisories/new>.
+
+### Aikido Expansion Packs mapping (IDE-side defense-in-depth)
+
+Aikido's [Expansion Packs](https://www.aikido.dev/blog/introducing-aikido-expansion-packs)
+launch ships three IDE add-ons — a **Secrets Pre-Commit Hook**,
+**Safe Chain** (blocks installs of known-malicious npm / PyPI packages),
+and an **Aikido MCP server** that brings scanning into AI coding
+workflows. The write-up's underlying point is that some defenses are
+cheapest at the developer's keyboard, *before* a leaked credential
+reaches even a personal fork or a trojan package lands in `node_modules`.
+
+Each Expansion Pack feature maps to an existing DaloyJS control plus, in
+one case, a new local hook installer so a contributor can opt in to the
+same pre-commit gate without an Aikido account:
+
+| Aikido Expansion Pack | DaloyJS / template control |
+| --- | --- |
+| **Secrets Pre-Commit Hook** — detect hardcoded secrets before `git commit` completes. | [`pnpm scan:staged-secrets`](scripts/scan-staged-secrets.ts) runs the same credential-shaped-string + secret-shaped-filename patterns as the publish-time [`verify:no-leaked-credentials`](scripts/verify-no-leaked-credentials.ts) gate, but against `git diff --cached` instead of the assembled tarball. [`pnpm hooks:install`](scripts/install-git-hooks.ts) writes a `.git/hooks/pre-commit` shim that invokes the scan and exits non-zero on any finding; the installer refuses to overwrite an existing non-Daloy hook unless `--force` is passed. Already paired with the CI-side [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml) gitleaks gate (every PR + daily history sweep), the publish-time [`pnpm verify:no-leaked-credentials`](scripts/verify-no-leaked-credentials.ts) gate over tarball contents, the [`pnpm verify:secret-comparisons`](scripts/verify-secret-comparisons.ts) timing-safe-comparison single-source-of-truth, and GitHub-native push protection + secret scanning on the public repo. Bypass for a legitimate fake-credential commit (e.g. a test fixture) is the standard `git commit --no-verify`. |
+| **Safe Chain** — refuse to install npm/PyPI packages that match a known-malicious feed. | `minimum-release-age=1440` (24 h cooldown) in root [`.npmrc`](.npmrc) and every template `_npmrc` keeps the install off the early-installer hot path that worms exploit. `ignore-scripts=true` plus the [`pnpm verify:no-lifecycle-scripts`](scripts/verify-no-lifecycle-scripts.ts) gate close the `preinstall` / `postinstall` execution channel that drops the malicious payload. [`.github/workflows/osv-scan.yml`](.github/workflows/osv-scan.yml) queries [OSV.dev](https://osv.dev/) **plus** the OpenSSF [`malicious-packages`](https://github.com/ossf/malicious-packages) corpus on every PR / daily cron — the same second-source malicious-package feed Aikido aggregates — so a finding in either feed blocks merge. [`pnpm audit --audit-level=high`](.github/workflows/ci.yml) in `ci.yml` and the daily [`vuln-scan.yml`](.github/workflows/vuln-scan.yml) add the GHSA feed. [`pnpm verify:lockfile`](scripts/verify-lockfile-sources.ts) plus `blockExoticSubdeps: true` in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) refuse non-`registry.npmjs.org` lockfile entries. `@daloyjs/core` declares **zero runtime dependencies** (enforced by [`pnpm verify:no-runtime-deps`](scripts/verify-no-runtime-deps.ts)), so a consumer install never resolves a transitive dep through us at all. |
+| **Aikido MCP** — security scanning inside AI coding workflows. | Out of scope for a framework — this is an IDE / agent-side feature. The framework's posture against AI-coding-agent misuse is documented in the Aikido "vibe coders security checklist" and LiteLLM-blast-radius mappings above (provider-key redaction in [`DEFAULT_REDACT_KEYS`](src/logger.ts), refuse-to-boot on weak session secrets, schema validation before handler entry, …). The most useful framework-level companion to an MCP scanner is the `daloy doctor` CLI command, which audits a *loaded* app's secure-by-default posture and is safe to wire into an editor agent's "before-commit" or "before-merge" workflow. |
+
+What this section **does not** claim:
+
+- That `pnpm scan:staged-secrets` replaces the CI-side gitleaks workflow.
+  The local hook can be bypassed (`--no-verify`, hook uninstalled, fresh
+  clone without `pnpm hooks:install`); the CI gate is the always-on
+  enforcement point and the daily history sweep covers long-lived
+  secrets that pre-date the hook.
+- That the local hook is auto-installed on `pnpm install`. The framework
+  forbids install-time lifecycle scripts by policy
+  ([`pnpm verify:no-lifecycle-scripts`](scripts/verify-no-lifecycle-scripts.ts)),
+  so contributors opt in once via `pnpm hooks:install` after `git
+  clone`. The trade-off is intentional: silently rewriting a developer's
+  `.git/hooks/pre-commit` on `pnpm install` would be exactly the kind of
+  surprise behaviour our `ignore-scripts=true` template default exists
+  to prevent.
+- That Safe Chain's malicious-package feed is a strict superset of the
+  OSV `malicious-packages` corpus, or vice versa. Both feeds catch the
+  same major npm worm campaigns within hours; the 24 h
+  `minimum-release-age` cooldown is the layer that gives whichever feed
+  detects the package first enough time to land in the daily cron.
