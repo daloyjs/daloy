@@ -2,9 +2,9 @@ import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title:
-    "Compliance posture (SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS, NIS2, UK CSR Bill)",
+    "Compliance posture (SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS, NIS2, EU CRA, DORA, UK CSR Bill)",
   description:
-    "How DaloyJS's built-in security primitives map to the technical controls expected by the major cloud-compliance frameworks, including the UK Cyber Security and Resilience Bill. The framework can't certify your deployment, but it can stop you from failing the easy audit findings.",
+    "How DaloyJS's built-in security primitives map to the technical controls expected by the major cloud-compliance frameworks, including DORA (EU Regulation 2022/2554) and the UK Cyber Security and Resilience Bill. The framework can't certify your deployment, but it can stop you from failing the easy audit findings.",
   path: "/docs/security/compliance",
   keywords: [
     "DaloyJS compliance",
@@ -15,6 +15,9 @@ export const metadata = buildMetadata({
     "PCI-DSS v4 software controls",
     "NIS2 Article 21",
     "EU CRA",
+    "DORA Regulation 2022/2554",
+    "DORA technical requirements",
+    "ICT third-party risk",
     "UK Cyber Security and Resilience Bill",
     "NCSC CAF",
   ],
@@ -28,8 +31,8 @@ export default function Page() {
       <p>
         DaloyJS is a backend framework, not a managed service, so it cannot
         certify your deployment for SOC 2, ISO 27001, HIPAA, GDPR, PCI-DSS,
-        NIS2, or the UK Cyber Security and Resilience Bill on its own. What it{" "}
-        <em>can</em> do is provide the technical controls each of those
+        NIS2, DORA, or the UK Cyber Security and Resilience Bill on its own.
+        What it <em>can</em> do is provide the technical controls each of those
         frameworks expects from the application layer so that the controls live
         in source code where they are reviewed, tested, and version-pinned
         &mdash; rather than in a checklist that drifts away from production.
@@ -892,6 +895,264 @@ export default function Page() {
           Royal Assent. This mapping reflects the policy statement as published
           and will be updated when the Bill is enacted and the technical
           requirements (expected to track NCSC CAF) are codified.
+        </em>
+      </p>
+
+      <h2>DORA (Regulation (EU) 2022/2554)</h2>
+      <p>
+        The{" "}
+        <a
+          href="https://eur-lex.europa.eu/eli/reg/2022/2554/oj"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Digital Operational Resilience Act
+        </a>{" "}
+        has applied to EU financial entities and their ICT third-party service
+        providers since <strong>17 January 2025</strong>. It is built on five
+        pillars: ICT risk management (Chapter II), ICT-related incident
+        management, classification, and reporting (Chapter III), digital
+        operational resilience testing (Chapter IV), management of ICT
+        third-party risk (Chapter V), and information-sharing arrangements
+        (Chapter VI). The technical detail lives in the Commission&apos;s
+        Regulatory Technical Standards, most notably{" "}
+        <a
+          href="https://eur-lex.europa.eu/eli/reg_del/2024/1774/oj"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Delegated Regulation (EU) 2024/1774
+        </a>{" "}
+        on ICT risk-management tools and{" "}
+        <a
+          href="https://eur-lex.europa.eu/eli/reg_del/2024/1773/oj"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Delegated Regulation (EU) 2024/1773
+        </a>{" "}
+        on subcontracting arrangements.
+      </p>
+      <p>
+        DaloyJS itself is open-source framework software, not a regulated
+        financial entity and not (on its own) a designated &ldquo;critical ICT
+        third-party service provider&rdquo; under Article 31. But apps built on
+        DaloyJS routinely <em>are</em> the ICT systems that DORA applies to, and
+        the framework layer is something a financial-entity team or its ICT-TPP
+        supplier must be able to point at during a Joint Examination Team
+        review. Because DORA&apos;s technical control families overlap heavily
+        with NIS2 Article 21 and the EU CRA Annex I, most of the evidence above
+        carries over directly &mdash; the table below summarizes the
+        DORA-specific framing.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>DORA requirement</th>
+            <th>DaloyJS evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Article 6 &mdash; sound, comprehensive, and well-documented ICT
+              risk-management framework
+            </td>
+            <td>
+              Secure-by-default baseline (body cap, request timeout,{" "}
+              <code>secureHeaders()</code>, <code>fetchGuard()</code>, JWT
+              algorithm allow-listing, timing-safe credential comparisons,{" "}
+              <code>.strict()</code> schemas, RFC 9457 problem+json with prod
+              redaction) all live in source, are version-pinned, and are
+              enforced by the <code>pnpm verify:*</code> bundle so the control
+              evidence is reproducible at any commit.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 8 &mdash; identification of ICT-supported business
+              functions and their dependencies
+            </td>
+            <td>
+              <code>openapi.json</code> is the canonical, generated inventory of
+              every public route, its inputs, its response shape, and its auth
+              requirements. Combined with the CycloneDX{" "}
+              <code>dist/sbom.cdx.json</code> shipped in every release tarball,
+              it gives auditors a machine-readable dependency map for the
+              framework layer.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 9 &mdash; protection and prevention (including
+              authentication, access control, cryptography, network
+              segmentation)
+            </td>
+            <td>
+              First-party <code>bearerAuth</code>, <code>basicAuth</code>,{" "}
+              signed-cookie <code>session()</code>, <code>jwt()</code> with
+              algorithm allow-listing and JWKS rotation,{" "}
+              <code>ipRestriction()</code>, <code>fetchGuard()</code>{" "}
+              default-deny SSRF against cloud metadata IPs, HMAC algorithm
+              prefix parsing, and the <code>verify:secret-comparisons</code>{" "}
+              gate that rejects short-circuiting comparisons against
+              header-derived values.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 10 &mdash; detection of anomalous activities and
+              ICT-related incidents
+            </td>
+            <td>
+              Per-request structured logs with correlated request IDs and
+              Server-Timing; OpenTelemetry-shaped spans without a hard
+              dependency on <code>@opentelemetry/api</code>; plugin lifecycle
+              hooks (rate-limit, auth-failure, SSRF-block, body-limit, timeout,{" "}
+              <code>onShutdown</code>) that operators can wire into a SIEM or
+              the financial-entity SOC pipeline.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 11 &mdash; response and recovery (business continuity,
+              graceful degradation)
+            </td>
+            <td>
+              First-party graceful shutdown with in-flight request draining,{" "}
+              <code>loadShedding()</code> for concurrency caps,{" "}
+              <code>rateLimit()</code> with optional Redis store for shared
+              counters across replicas, multi-runtime adapters (Node, Bun, Deno,
+              Cloudflare Workers, Vercel) so the same app can fail over between
+              platforms without rewrites.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 17&ndash;19 &mdash; ICT-related incident management,
+              classification, and reporting (initial notification, intermediate
+              report, final report)
+            </td>
+            <td>
+              Structured logs and lifecycle events are the technical substrate
+              the financial entity needs to meet the regulatory timetable;{" "}
+              <code>SECURITY.md</code> publishes the upstream framework response
+              targets, the GHSA evidence pattern, and the rotation in{" "}
+              <code>SECURITY-CONTACTS.md</code> (audit-gated by{" "}
+              <code>pnpm verify:governance-audits</code>) so the financial
+              entity&apos;s own incident submission can quote the framework
+              layer verbatim.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 24&ndash;25 &mdash; digital operational resilience testing
+              programme; testing of ICT tools and systems
+            </td>
+            <td>
+              The repo itself runs <code>pnpm typecheck</code>,{" "}
+              <code>pnpm test</code>, and <code>pnpm coverage</code> (90% line /
+              90% function / 90% branch floor) on every change; the{" "}
+              <code>verify:parity-audits</code>,{" "}
+              <code>verify:runtime-parity-audits</code>,
+              <code>verify:routing-hardening-audits</code>, and{" "}
+              <code>verify:governance-audits</code> gates are reproducible by
+              any downstream resilience-testing programme. Bench harnesses under{" "}
+              <code>bench/</code> give a baseline for performance regression
+              testing.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 28 &mdash; general principles for sound management of ICT
+              third-party risk (including the register of contractual
+              arrangements in Article 28(3))
+            </td>
+            <td>
+              Zero runtime dependencies in <code>@daloyjs/core</code> (enforced
+              by <code>pnpm verify:no-runtime-deps</code>) keeps the third-party
+              register short; CycloneDX + SPDX SBOMs shipped per release;{" "}
+              <code>verify:lockfile-sources</code> refuses non-npm registry
+              origins and known-bad <code>name@version</code> IOCs;{" "}
+              <code>verify:dep-licenses</code> blocks copyleft drift. The
+              framework itself does not call any external network endpoint at
+              startup or runtime.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 30 &mdash; key contractual provisions (security, incident
+              reporting cooperation, audit rights, exit strategy)
+            </td>
+            <td>
+              Contractual / commercial terms are the financial entity&apos;s
+              responsibility. The framework layer makes the underlying evidence
+              feasible: npm provenance via Sigstore + Rekor transparency log
+              lets the entity verify exactly which CI run built a given version
+              without trusting a vendor portal; the published GHSA feed and
+              CVSS-keyed SLA table give the cooperation timetable a regulator
+              expects to see referenced.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Annex II of RTS 2024/1774 &mdash; ICT security policies,
+              procedures, protocols, and tools (including secure configuration,
+              vulnerability management, encryption, cryptographic-key
+              management, identity and access management)
+            </td>
+            <td>
+              Per project policy (see <code>AGENTS.md</code>),{" "}
+              <code>secureHeaders</code>, <code>requestId</code>,{" "}
+              <code>rateLimit</code>, <code>bodyLimitBytes</code>,{" "}
+              <code>requestTimeoutMs</code>, <code>fetchGuard</code>, JWT
+              algorithm allowlists, timing-safe credential comparisons, schema{" "}
+              <code>.strict()</code>, response-body validation, prod-mode error
+              redaction, and the scaffolded <code>_gitignore</code> /{" "}
+              <code>_npmrc</code> defaults must not be silently weakened. Key
+              material (JWKS, cookie keys) is rotated by configuration, not by
+              code change.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Article 45 &mdash; arrangements for the exchange of cyber-threat
+              information and intelligence
+            </td>
+            <td>
+              Every confirmed vulnerability is published as a{" "}
+              <a
+                href="https://github.com/daloyjs/daloy/security/advisories"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GitHub Security Advisory
+              </a>{" "}
+              with a CVE through GitHub&apos;s CNA, plus a coordinated
+              disclosure entry-point at{" "}
+              <a
+                href="https://daloyjs.dev/.well-known/security.txt"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <code>/.well-known/security.txt</code>
+              </a>{" "}
+              (RFC 9116). Financial-sector ISACs (e.g. FS-ISAC) can subscribe to
+              the GHSA feed directly.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        <em>
+          This mapping is informational and is not a legal opinion. DORA
+          conformity for a regulated financial entity or for a designated
+          critical ICT third-party service provider remains the operator&apos;s
+          responsibility; the evidence above exists so the framework layer of
+          that dossier does not have to be reconstructed from scratch. Critical
+          ICT third-party service provider designation (Article 31) and the
+          resulting Lead Overseer oversight regime are out of scope for an
+          open-source framework.
         </em>
       </p>
 
