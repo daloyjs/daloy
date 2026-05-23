@@ -24,6 +24,7 @@ The `--with-ci` bundle adds these defaults:
 - Lockfile source verification rejects git dependencies and non-registry tarball URLs.
 - CodeQL, OpenSSF Scorecard, zizmor, Dependabot, and CODEOWNERS are generated.
 - A daily scheduled `vuln-scan.yml` runs the package manager's audit against the committed lockfile so newly-disclosed CVEs are surfaced even when no PR or push has run CI (SOC 2 CC7.1 continuous-vulnerability-management evidence).
+- A weekly scheduled `dast.yml` boots the built application and runs an OWASP ZAP baseline scan against it. CodeQL + the `verify:*` family are the SAST half of the posture; this is the DAST half — see Aikido's [SAST vs DAST](https://www.aikido.dev/blog/sast-vs-dast-what-you-need-to-now) write-up for why both matter. Findings are summarized in the workflow log and the job fails on HIGH-risk alerts; MEDIUM / LOW / INFO are surfaced for triage but non-blocking.
 - No npm publish workflow is generated: this scaffold is a REST API service, not a published package. If you later carve out a reusable library you can opt into npm trusted publishing yourself.
 
 ## Container hardening

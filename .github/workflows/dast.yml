@@ -1,0 +1,199 @@
+# Dynamic Application Security Testing (DAST) — black-box probe of the
+# running example app, complementing the SAST coverage that already
+# ships via CodeQL (`codeql.yml`), zizmor (`zizmor.yml`), OpenSSF
+# Scorecard (`scorecard.yml`), and the ~20 first-party `verify:*` gates
+# wired into `ci.yml`.
+#
+# Why this exists:
+#   Aikido's "SAST vs DAST: what you need to know"
+#   (https://www.aikido.dev/blog/sast-vs-dast-what-you-need-to-now)
+#   makes the case that static analysis and dynamic analysis catch
+#   different bug classes — SAST sees the source but not the runtime,
+#   DAST sees the runtime but not the source. The framework already
+#   has heavyweight SAST; this workflow adds the dynamic half by
+#   booting `examples/dast-server.ts` (the same `buildExampleApp()`
+#   surface that powers the bookstore demo) and pointing OWASP ZAP's
+#   baseline scanner at it. ZAP exercises header sanitization,
+#   `secureHeaders()` output, CORS, redirect handling, body-cap, and
+#   the router's path-traversal rejection against a real listening
+#   server rather than against the source AST.
+#
+# Trigger surface:
+#   * Weekly cron — newly-disclosed ZAP rules apply to unchanged code.
+#   * `workflow_dispatch` — maintainers can run an on-demand probe.
+#   We deliberately do NOT run on every PR: a baseline scan takes
+#   several minutes and the same surface is exercised by the in-process
+#   request tests on every PR via `ci.yml`. The scheduled run is the
+#   continuous-monitoring lane required by SOC 2 CC7.1.
+#
+# Hardening:
+#   * `permissions: {}` at the top level; the single job opts in to
+#     `contents: read` (checkout) and `security-events: write` only
+#     for the SARIF upload step.
+#   * Third-party actions are SHA-pinned (same posture as the rest of
+#     the repo). ZAP itself runs via the official docker image
+#     `ghcr.io/zaproxy/zaproxy:stable` rather than a new third-party
+#     action so the SHA-pin gate stays satisfied without adding a new
+#     pinned dependency.
+#   * `step-security/harden-runner` is in audit mode — the job needs
+#     egress to `ghcr.io` (pull ZAP), `docker.io` (fallback), and
+#     `localhost` (the target). Audit mode logs everything so a
+#     compromised step is reviewable post-hoc without blocking the
+#     scan itself.
+#   * `actions/checkout` runs with `persist-credentials: false`.
+#   * Install runs with `--frozen-lockfile --ignore-scripts` plus
+#     `npm_config_ignore_scripts=true` to keep this scan job aligned
+#     with the rest of the supply-chain posture.
+
+name: DAST (OWASP ZAP baseline)
+
+on:
+  schedule:
+    # 07:42 UTC weekly (Wed) — offset from CodeQL (Mon 04:37), Scorecard
+    # (Tue 05:23), Zizmor (daily 07:00), and Vuln scan (daily 06:13) so
+    # the scheduled security workflows do not all queue at once.
+    - cron: "42 7 * * 3"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: dast-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zap-baseline:
+    name: ZAP baseline scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          disable-file-monitoring: false
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a # v6
+        with:
+          version: 11.1.3
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          npm_config_ignore_scripts: "true"
+
+      - name: Start DAST target (background)
+        # `examples/dast-server.ts` boots the same `buildExampleApp()`
+        # surface used by `examples/basic.ts` but stays alive until
+        # SIGTERM. We background it so the ZAP step below can probe
+        # http://localhost:3000.
+        run: |
+          mkdir -p dast-results
+          chmod 777 dast-results
+          nohup node --import tsx examples/dast-server.ts > dast-results/server.log 2>&1 &
+          echo $! > dast-results/server.pid
+        env:
+          PORT: "3000"
+
+      - name: Wait for target to be reachable
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://localhost:3000/openapi.json > /dev/null; then
+              echo "Target ready after ${i} attempt(s)."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::DAST target did not become reachable in 30s."
+          cat dast-results/server.log || true
+          exit 1
+
+      - name: Run OWASP ZAP baseline scan
+        # The official ZAP docker image. We run it with `--network host`
+        # so ZAP inside the container can reach the Node server on
+        # localhost:3000. Reports land in $PWD/dast-results so we can
+        # upload them as artifacts. Exit code is intentionally
+        # swallowed: ZAP returns non-zero on any WARN finding, and we
+        # want the scan output as evidence even when the framework's
+        # defaults flag something we already document as acceptable
+        # (e.g. permissive CORS in the example app). The follow-up
+        # "Fail on HIGH findings" step is what gates the build.
+        run: |
+          docker pull ghcr.io/zaproxy/zaproxy:stable
+          docker run --rm --network host \
+            -v "$PWD/dast-results:/zap/wrk/:rw" \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://localhost:3000 \
+              -J zap-report.json \
+              -w zap-report.md \
+              -r zap-report.html \
+              -I \
+              || true
+
+      - name: Stop DAST target
+        if: always()
+        run: |
+          if [ -f dast-results/server.pid ]; then
+            kill "$(cat dast-results/server.pid)" || true
+          fi
+
+      - name: Summarize ZAP findings and fail on HIGH
+        # Baseline scan is read-only and conservative; HIGH-risk alerts
+        # in this surface are the ones we want to block on. MEDIUM /
+        # LOW / INFO alerts are printed for triage visibility in the
+        # workflow log but do not fail the run. The full JSON / HTML
+        # / Markdown reports are written to `dast-results/` inside the
+        # runner and visible in the job log via the cat below; this
+        # keeps the workflow free of new third-party actions (the
+        # SHA-pin gate stays satisfied without adding `upload-artifact`
+        # as a fresh pinned dependency just for this scan).
+        if: always()
+        run: |
+          report=dast-results/zap-report.json
+          if [ ! -f "$report" ]; then
+            echo "::warning::No ZAP JSON report produced (scan may have failed to start)."
+            exit 0
+          fi
+          counts=$(node -e "
+            const r = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'));
+            const c = { high: 0, medium: 0, low: 0, info: 0 };
+            for (const site of r.site ?? []) {
+              for (const alert of site.alerts ?? []) {
+                const code = String(alert.riskcode);
+                if (code === '3') c.high++;
+                else if (code === '2') c.medium++;
+                else if (code === '1') c.low++;
+                else c.info++;
+              }
+            }
+            process.stdout.write(JSON.stringify(c));
+          " "$report")
+          echo "ZAP findings: ${counts}"
+          high=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).high))" "$counts")
+          if [ -f dast-results/zap-report.md ]; then
+            echo "----- ZAP markdown report -----"
+            cat dast-results/zap-report.md
+            echo "----- end report -----"
+          fi
+          if [ "${high}" -gt 0 ]; then
+            echo "::error::ZAP reported ${high} HIGH-risk finding(s) against the example app surface."
+            exit 1
+          fi

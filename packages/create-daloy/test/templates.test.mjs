@@ -464,6 +464,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     await access(path.join(projectDir, ".github/workflows/scorecard.yml"));
     await access(path.join(projectDir, ".github/workflows/zizmor.yml"));
     await access(path.join(projectDir, ".github/workflows/container-scan.yml"));
+    await access(path.join(projectDir, ".github/workflows/dast.yml"));
     await access(path.join(projectDir, ".github/dependabot.yml"));
     await access(path.join(projectDir, "SECURITY.md"));
     await access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs"));
