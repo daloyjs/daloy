@@ -545,6 +545,27 @@ mis-scope the claim:
   hadolint SARIF will still flag obvious anti-patterns (DL3008, DL3018)
   and Trivy will still see the added layers.
 
+### Aikido "Container Security — The Dev Guide" mapping
+
+The Aikido 2025 guide
+["Container Security — The Dev Guide"](https://www.aikido.dev/blog/container-security-guide)
+covers the same surface as the Root.io write-up above (scan images, use
+minimal up-to-date bases, enforce least-privilege at runtime) but adds an
+explicit **runtime configuration** layer: even with a clean image, a
+container launched with the default capability set, no resource limits, and
+a writable root filesystem turns a single handler RCE into a host
+compromise. The build-time controls (image scanning, base-image pinning,
+non-root user, minimal runner surface, secrets scanning, CIS Dockerfile
+lint) are all already covered by the **Aikido x Root.io** mapping above,
+so this row is the runtime-side complement.
+
+| Container Security Guide concern | DaloyJS / `create-daloy` control |
+| --- | --- |
+| **"Running as root", "`--privileged` mode", "excessive Linux capabilities", "mounted Docker socket", "no resource limits".** The guide ranks runtime misconfiguration alongside vulnerable base images as a top compromise vector. | [`packages/create-daloy/templates/_ci/node/SECURITY.md`](packages/create-daloy/templates/_ci/node/SECURITY.md) now ships a **Runtime hardening (`docker run`, Compose, Fly machines)** section that prescribes `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges:true`, `--security-opt=seccomp=default`, `--pids-limit=256`, `--memory` / `--memory-swap` / `--cpus` limits, and `--tmpfs /tmp:rw,noexec,nosuid,size=64m` — plus an equivalent `compose.yml` snippet and an explicit "never pass `--privileged` / `-v /var/run/docker.sock` / `--pid=host` / `--network=host`" callout. The Kubernetes equivalents (`runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, `capabilities: { drop: ["ALL"] }`, `automountServiceAccountToken: false`) are already documented under **Pod security on Kubernetes** in the same file. The image itself runs as non-root UID 1001 under `tini`, with no writable paths required at runtime, so all of these flags are drop-in. |
+| **"Untrusted or malicious images"** from public registries. | The shipped `_Dockerfile` `FROM`s only `node:*-alpine` (an official Docker Library image) with a `NODE_IMAGE` build-arg so consumers can swap to `cgr.dev/chainguard/node` / Wolfi / Root.io without touching the rest of the workflow. Trivy filesystem + image scans in [`container-scan.yml`](packages/create-daloy/templates/_ci/node/_github/workflows/container-scan.yml) catch known-bad layers regardless of which base the consumer chooses. The framework itself publishes nothing to a container registry and vends no Daloy-hosted base image, so the "did you pull a typosquat?" surface is consumer-owned. |
+| **"Secrets and sensitive data baked into images."** | Triple guard. **(a)** Every template ships a `_dockerignore` that excludes `.env` / `.env.*` (except `.env.example`), `.git`, `node_modules`, `coverage`, `dist`, and `*.log` so a `COPY . .` cannot accidentally pull a `.env` into the image. **(b)** The `container-scan.yml` workflow's Trivy filesystem step scans the build context for known secret shapes and uploads SARIF to Code Scanning. **(c)** The framework's own [`pnpm verify:no-leaked-credentials`](scripts/verify-no-leaked-credentials.ts) gate refuses to publish a tarball containing `.env*` / `*.pem` / `*.key` / AWS / GitHub PAT / npm / Slack / Stripe / Google / JWT / PEM / `_authToken=` shapes, so the published `@daloyjs/core` and `create-daloy` tarballs themselves cannot carry a secret into a downstream image's `node_modules`. |
+| **"Shifting left: scanning container images in CI/CD (and in registries)."** | Already covered three ways in the Aikido x Root.io mapping above: hadolint + Trivy fs + Trivy image on every PR / push / weekly cron in [`container-scan.yml`](packages/create-daloy/templates/_ci/node/_github/workflows/container-scan.yml), the `docker` Dependabot ecosystem opening digest-bump PRs, and the repo's daily [`vuln-scan.yml`](.github/workflows/vuln-scan.yml) running `pnpm audit --prod`. Registry-side scanning (ECR / GAR / Docker Hub) is operator territory and Daloy is registry-agnostic. |
+
 ### Aikido "vibe coders security checklist" mapping
 
 The Aikido 2025 write-up

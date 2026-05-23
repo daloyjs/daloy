@@ -57,6 +57,69 @@ SHA-pinned open-source tooling:
   - All findings are uploaded as SARIF to the GitHub **Code Scanning**
     tab alongside CodeQL.
 
+## Runtime hardening (`docker run`, Compose, Fly machines)
+
+The image build is only half the story. The Aikido
+["Container Security — The Dev Guide"](https://www.aikido.dev/blog/container-security-guide)
+write-up calls out that most container compromises chain a known
+software CVE with a permissive runtime configuration: a container
+launched with the default capability set, no resource limits, and a
+writable root filesystem turns a single RCE into a host compromise.
+Apply these flags wherever you launch the image outside of Kubernetes
+(the **Pod security on Kubernetes** entry below covers the equivalent
+`PodSpec` settings):
+
+- `--read-only` — root filesystem is read-only. The shipped image
+  needs no writable paths at runtime; pair with
+  `--tmpfs /tmp:rw,noexec,nosuid,size=64m` if your app writes
+  temp files.
+- `--cap-drop=ALL` — drop every Linux capability. The Node.js
+  runtime under `tini` needs none of the default set
+  (`CHOWN`, `DAC_OVERRIDE`, `NET_BIND_SERVICE`, …); rebind the
+  listening port to `>= 1024` (the shipped `EXPOSE 3000`
+  already does) so you do not need `NET_BIND_SERVICE` back.
+- `--security-opt=no-new-privileges:true` — block `setuid` /
+  `setgid` / file-capability escalation inside the container, so a
+  compromised handler cannot regain privileges the image dropped.
+- `--security-opt=seccomp=default` — keep Docker's default seccomp
+  profile (it is on by default, but some orchestrators disable it;
+  re-assert it explicitly).
+- `--pids-limit=256` — cap process count. Prevents fork-bomb style
+  DoS from a compromised handler.
+- `--memory=512m --memory-swap=512m --cpus=1.0` — enforce resource
+  limits. The framework's `loadShedding()` middleware refuses
+  requests under event-loop / RSS / heap pressure, but the
+  kernel-side limits are the backstop that makes a runaway
+  handler a `137 OOMKilled` instead of a noisy neighbour.
+- **Never** pass `--privileged`, `-v /var/run/docker.sock:…`, or
+  `--pid=host` / `--network=host` to this image. None of them are
+  needed by a stateless HTTP service and each one converts a
+  container escape into a host takeover.
+
+Equivalent `compose.yml` snippet (drop into the service block your
+deploy uses):
+
+```yaml
+services:
+  app:
+    image: ghcr.io/your-org/your-app:sha-<digest>
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: ["ALL"]
+    security_opt:
+      - "no-new-privileges:true"
+    pids_limit: 256
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    restart: unless-stopped
+```
+
+Fly.io, Render, Railway, and similar PaaS surfaces apply most of these
+defaults for you, but check the platform documentation — `--privileged`
+and host network are still escape hatches you should keep off.
+
 ## Cloud posture (operator checklist)
 
 The framework cannot author your cloud configuration for you, but the

@@ -552,6 +552,24 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     );
     assert.match(dependabotConfig, /package-ecosystem: docker/);
 
+    // Runtime hardening flags from the Aikido "Container Security — The
+    // Dev Guide" mapping. The build-time controls (image scan, base
+    // pin, non-root user) are tested above; this block guards the
+    // runtime-side `docker run` / Compose flags the scaffolded
+    // SECURITY.md prescribes so future edits cannot drop them.
+    const scaffoldedSecurity = await readFile(
+      path.join(projectDir, "SECURITY.md"),
+      "utf8",
+    );
+    assert.match(scaffoldedSecurity, /Runtime hardening/);
+    assert.match(scaffoldedSecurity, /--read-only/);
+    assert.match(scaffoldedSecurity, /--cap-drop=ALL/);
+    assert.match(scaffoldedSecurity, /no-new-privileges:true/);
+    assert.match(scaffoldedSecurity, /--pids-limit=256/);
+    assert.match(scaffoldedSecurity, /--memory=512m/);
+    assert.match(scaffoldedSecurity, /Never.*--privileged/);
+    assert.match(scaffoldedSecurity, /container-security-guide/);
+
     const codeowners = await readFile(
       path.join(projectDir, ".github/CODEOWNERS"),
       "utf8",
