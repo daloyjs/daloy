@@ -31,6 +31,19 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **
 8. Long-running work belongs in `ctx.waitUntil(...)`, not blocking the response.
 9. Every new route ships with a test that covers a happy path and at least one unhappy path.
 
+## Secure-by-default (do not let an AI strip these)
+
+Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development): *"If you tell an AI to make something work, it might remove the very security checks that protect you."* When a guard rejects a request, **satisfy it, do not delete it.**
+
+- Keep `secureHeaders()`, `requestId()`, `rateLimit()` registered, and `bodyLimitBytes` / `requestTimeoutMs` set on `new App({...})`. For production, add Cloudflare's native rate-limit binding **in addition to** the in-memory limiter, not instead of it.
+- Read secrets and bindings (KV, D1, R2) from the `env` argument; never hard-code, never log them.
+- Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
+- Every protected route attaches an auth `beforeHandle` and ships an unhappy-path test proving an unauthenticated request returns `401` (and wrong scope returns `403`) — the HTTP-boundary equivalent of Supabase's pgTAP policy tests.
+- JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
+- Credential / HMAC comparisons use `crypto.subtle.timingSafeEqual`, never `===`. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
+- Keep `compatibility_date` pinned; do not enable `nodejs_compat` unless a feature requires it.
+- `.env`, `.dev.vars`, secrets, private keys: never commit. Use `wrangler secret put` for production secrets.
+
 ## Process expectations
 
 - Quality gates must pass before declaring work done: `pnpm typecheck` and `pnpm test`.

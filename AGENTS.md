@@ -26,6 +26,20 @@
 - Any new features should be well documenbted in the `website` documentation, and the documentation should be updated to reflect any changes in behavior or new capabilities introduced by the feature
 - Making the repo and the app itself secure are top priorities; any change that has security implications must be carefully reviewed for potential vulnerabilities and should include updates to `SECURITY.md` or related documentation when relevant
 
+## Secure-by-default guardrails (do not weaken these to make a test pass)
+
+DaloyJS ships with strong defaults — body limits, request timeouts, header sanitization, JWT algorithm allowlists, `timingSafeEqual` credential comparisons, prototype-pollution-safe parsers, `fetchGuard()` SSRF defaults, `.strict()`-by-convention schemas, RFC 9457 problem+json with prod-mode redaction, and a 24h release-age + `ignore-scripts` posture on the supply-chain side. The Supabase + Aikido write-up [Secure-by-Default Development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development) captures the failure mode in one line: *"If you tell an AI to make something work, it might remove the very security checks that protect you."*
+
+That risk exists for human contributors and AI coding agents alike. When a test fails or a request is rejected by a security check, the answer is almost never to weaken the check. The framework's posture is:
+
+- Treat **bad defaults as bugs**. If a default actually blocks legitimate behavior, fix the default for everyone (per-route override, narrower scope, configurable knob) rather than removing it inline.
+- Never silently delete or weaken: `secureHeaders`, `requestId`, `rateLimit`, `bodyLimitBytes`, `requestTimeoutMs`, `fetchGuard`, `isForbiddenObjectKey`, JWT algorithm allowlists, `timingSafeEqual` credential comparisons, schema `.strict()`, response-body schema validation, `except()` path normalization, prod-mode error redaction, or the `_gitignore` / `_npmrc` defaults in templates.
+- Changes to `src/security.ts`, `src/hashing.ts`, `src/jwt.ts`, `src/fetch-guard.ts`, `src/jwk.ts`, the verify-* scripts, or `.github/` workflows must keep the existing CI gates green (`pnpm verify:parity-audits`, `verify:governance-audits`, `verify:runtime-parity-audits`, `verify:routing-hardening-audits`, `verify:secret-comparisons`, `verify:no-remote-exec`, `verify:no-registry-exfiltration`, `verify:no-encoded-payloads`, `verify:no-invisible-unicode`, `verify:no-weak-random`, `verify:no-unsafe-buffer`, `verify:no-leaked-credentials`, `verify:no-vulnerable-sandboxes`, `verify:no-lifecycle-scripts`, `verify:lockfile-sources`, `verify:no-runtime-deps`, `verify:dep-licenses`, `verify:sbom`). These gates exist precisely so an "easy" weakening cannot land silently.
+- Every change that touches an auth, header, parsing, or crypto code path ships with an **unhappy-path test** that proves the guard still rejects what it should — not just that the new happy path works.
+- Do not add runtime dependencies to `@daloyjs/core`; `verify:no-runtime-deps` is the floor. Do not bypass the 24h `minimum-release-age` cooldown without recording the reason in `PROJECT_HISTORY.md`.
+
+If a guardrail blocks a legitimate use case, raise it in the PR description and add a scoped knob — do not delete the guardrail to ship faster.
+
 ## Website and Blog Authoring
 
 The marketing/docs site lives in [`website/`](website) and has its own agent guide at [`website/AGENTS.md`](website/AGENTS.md). **Always read it before editing anything under `website/`** — it is the source of truth for:

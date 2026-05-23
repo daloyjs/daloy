@@ -40,6 +40,18 @@ This is the official Node.js ESM convention — TypeScript rewrites the specifie
 7. The catch-all `api/[...path].ts` must remain a catch-all so DaloyJS handles routing.
 8. Every new route ships with a test that covers a happy path and at least one unhappy path.
 
+## Secure-by-default (do not let an AI strip these)
+
+Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development): *"If you tell an AI to make something work, it might remove the very security checks that protect you."* When a guard rejects a request, **satisfy it, do not delete it.**
+
+- Keep `secureHeaders()`, `requestId()`, `rateLimit()` registered, and `bodyLimitBytes` / `requestTimeoutMs` set on `new App({...})`. For production, back the limiter with Vercel KV **in addition to** the in-memory limiter (which resets per instance).
+- Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
+- Every protected route attaches an auth `beforeHandle` and ships an unhappy-path test proving an unauthenticated request returns `401` (and wrong scope returns `403`) — the HTTP-boundary equivalent of Supabase's pgTAP policy tests.
+- JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
+- Credential / HMAC comparisons use `crypto.subtle.timingSafeEqual`, never `===`. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
+- Keep `api/[...path].ts` a catch-all so DaloyJS owns routing — do not split into per-path files that bypass the middleware chain.
+- `.env`, `.env.local`, secrets, private keys: never commit. Use `vercel env` for production secrets.
+
 ## Process expectations
 
 - Quality gates must pass before declaring work done: `pnpm typecheck` and `pnpm test`.
