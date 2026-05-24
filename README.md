@@ -83,7 +83,7 @@ See [Scaffold a project](https://daloyjs.dev/docs/scaffolder) for templates and 
 
 ## Install core manually
 
-DaloyJS is distributed via **pnpm** for [supply-chain hygiene](https://pnpm.io/motivation) and backed by a hardened release pipeline — strict isolation, content-addressable store, deterministic lockfile, no phantom dependencies, SHA-pinned CI actions, and provenance publishing.
+DaloyJS is distributed via **pnpm** for [supply-chain hygiene](https://pnpm.io/motivation) and backed by a hardened release pipeline — strict isolation, content-addressable store, deterministic lockfile, no phantom dependencies, SHA-pinned CI actions, npm staged publishing, and provenance attestations.
 
 ```bash
 pnpm add @daloyjs/core zod@^4
@@ -125,9 +125,10 @@ pnpm verify:sbom
 You do **not** need to remember to run those commands manually for CI or publish:
 
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `pnpm gen:sbom` and `pnpm verify:sbom` on every push to `main` and every PR.
-- [`.github/workflows/release.yml`](.github/workflows/release.yml) reruns `pnpm gen:sbom` and `pnpm verify:sbom` before either npm publish job is allowed to proceed.
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) reruns `pnpm gen:sbom` and `pnpm verify:sbom` before either npm staged-publish job is allowed to proceed.
 
 That means a release will fail before publish if the SBOMs are missing, stale, or inconsistent with `package.json`.
+The workflow stages releases on npm instead of making them installable immediately, so a maintainer still has to review the stage ID and approve it with npm MFA.
 
 For maintainers, the safe rule is: use one publish path per version. Either publish through the protected GitHub release workflow, or publish locally for an exceptional case, but do not do both for the same version.
 

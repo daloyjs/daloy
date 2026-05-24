@@ -539,9 +539,9 @@ existing controls map 1:1:
 | --- | --- |
 | **Restrict the credentials the CI runner can mint** (don't hand a long-lived cloud admin role to every pipeline; restrict by IP / OIDC subject claim) | No long-lived `NPM_TOKEN` is stored anywhere in the repo or GitHub org. Publishing uses **npm Trusted Publishing (OIDC)** with `id-token: write` granted **only** on the two publish jobs in [`.github/workflows/release.yml`](.github/workflows/release.yml), **only after** the protected `npm-publish` GitHub Environment requires explicit maintainer approval. Maintainers should pin the npm Trusted Publishing configuration on the registry side to the specific workflow filename (`release.yml`) and ref pattern (`refs/tags/v*`) so that a stolen OIDC token from any other workflow cannot publish. |
 | **Minimal access / split accounts** (no shared admin; least privilege per job) | Top-level `permissions: {}` in every workflow; jobs opt in to `contents: read` only; `id-token: write` lives on the publish job alone. Core and CLI are split into two separate publish jobs so a compromise of one job cannot republish the other. |
-| **SSO / MFA on the CI/CD platform and the registry** | Hardware-backed 2FA is **mandatory** on both GitHub org membership and npm publish accounts (see [Maintainer accounts](#maintainer-accounts)). The `npm-publish` GitHub Environment requires a separate maintainer approval click for every publish, and that approver is gated by the SECURITY-CONTACTS active rotation check inside `release.yml`. |
+| **SSO / MFA on the CI/CD platform and the registry** | Hardware-backed 2FA is **mandatory** on both GitHub org membership and npm publish accounts (see [Maintainer accounts](#maintainer-accounts)). The `npm-publish` GitHub Environment requires a separate maintainer approval click for every publish, and that approver is gated by the SECURITY-CONTACTS active rotation check inside `release.yml`. **Npm staged publishing** (`npm stage publish`, entered public preview 2026-05-20, [announced by npm](https://socket.dev/blog/npm-invalidates-tokens-mini-shai-hulud)) is a complementary registry-level gate that holds a version in staging until a human with interactive MFA runs `npm stage approve`; this makes even a fully-compromised CI/CD OIDC token insufficient to publish directly to the public registry. Maintainers should consider enabling staged publishing per-package on npmjs.com Trusted Publisher settings for an additional approval layer beyond the GitHub Environment click. |
 | **Automate security checks at every stage of the pipeline** | The `verify` job in [`release.yml`](.github/workflows/release.yml) runs **before** the publish jobs and gates them on: `verify:lockfile`, `verify:no-runtime-deps`, `verify:no-lifecycle-scripts`, `verify:no-bin-shadowing`, `verify:secret-comparisons`, `verify:no-unsafe-buffer`, `verify:no-remote-exec`, `verify:actions-pinned`, `verify:parity-audits` through `verify:routing-hardening-audits`, `typecheck`, `test`, `coverage`, `coverage:branches`, `build`, `verify:no-leaked-credentials`, `verify:no-invisible-unicode`, and `pnpm audit --prod`. The same gates run on every PR and every push to `main` via [`ci.yml`](.github/workflows/ci.yml), plus `zizmor`, CodeQL, and OpenSSF Scorecard out-of-band. |
-| **Protect against malware in the package manager** (Aikido Safe Chain class: malicious npm/pnpm/pip packages installed during build) | Defense-in-depth: (a) the published package has **zero runtime dependencies** (`verify:no-runtime-deps`) so consumers of `@daloyjs/core` carry no transitive risk; (b) `ignore-scripts=true` in both root [`.npmrc`](.npmrc) and every scaffolded template `_npmrc` blocks `postinstall` / `preinstall` malware on every machine that installs Daloy or anything Daloy scaffolds; (c) `minimum-release-age=1440` (24 h) in the same `.npmrc` files refuses to install any dependency that was published less than a day ago, which is the window in which freshly-published worm versions (Shai-Hulud, BlokTrooper, the TanStack 2026-05-11 worm) are typically yanked; (d) `verify:no-remote-exec` refuses any `src/**` file that imports `child_process` / `vm`, calls bare `eval`, constructs `new Function` from a string, or dynamically imports a remote URL, so a compromised dev dependency cannot land a `curl … \| sh` carrier inside Daloy itself; (e) `verify:no-leaked-credentials` and `verify:no-invisible-unicode` run on the assembled tarball **inside** the publish job after `pnpm build`, so a GlassWorm-class worm that injected a payload during install would still be caught before `pnpm publish`. |
+| **Protect against malware in the package manager** (Aikido Safe Chain class: malicious npm/pnpm/pip packages installed during build) | Defense-in-depth: (a) the published package has **zero runtime dependencies** (`verify:no-runtime-deps`) so consumers of `@daloyjs/core` carry no transitive risk; (b) `ignore-scripts=true` in both root [`.npmrc`](.npmrc) and every scaffolded template `_npmrc` blocks `postinstall` / `preinstall` malware on every machine that installs Daloy or anything Daloy scaffolds; (c) `minimum-release-age=1440` (24 h) in the same `.npmrc` files refuses to install any dependency that was published less than a day ago, which is the window in which freshly-published worm versions (Shai-Hulud, BlokTrooper, the TanStack 2026-05-11 worm, the @antv atool wave 2026-05-18) are typically yanked; (d) `verify:no-remote-exec` refuses any `src/**` file that imports `child_process` / `vm`, calls bare `eval`, constructs `new Function` from a string, or dynamically imports a remote URL, so a compromised dev dependency cannot land a `curl … \| sh` carrier inside Daloy itself; (e) `verify:no-leaked-credentials` and `verify:no-invisible-unicode` run on the assembled tarball **inside** the publish job after `pnpm build`, so a GlassWorm-class worm that injected a payload during install would still be caught before `pnpm publish`. |
 | **Egress-restrict the runner so a compromised step cannot exfiltrate** | The two publish jobs run `step-security/harden-runner` with `egress-policy: block` and an explicit allowlist of `registry.npmjs.org`, `api.github.com`, `github.com`, `objects.githubusercontent.com`, and the three Sigstore endpoints. Anything else — Session/Oxen, attacker C2, the npm metadata-abuse endpoints used by TanStack-class worms — is dropped at the runner. The `verify` job and the CI workflow run in `audit` mode so unexpected egress is recorded for review. |
 | **No shared cache / cold installs on publish** | The publish workflow uses no GitHub Actions cache. The CI workflow likewise has the pnpm cache disabled; cache scope is shared between fork PRs and pushes to `main`, which is the exact bridge the TanStack 2026-05-11 worm used to reach the release pipeline. |
 | **Audit who approved each release** | Every publish run records the GitHub actor and the `npm-publish` Environment approver. The release script refuses to publish if `github.actor` is not in the `<!-- BEGIN ACTIVE -->` block of [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md). |
@@ -958,17 +958,23 @@ not mis-scope the claim:
   (`.github/workflows/release.yml`) is triggered only by a signed tag push or
   manual maintainer dispatch. It never runs from a PR, never runs from a
   branch, and never shares a runner with code that came from a fork.
-- **Core and CLI releases are intentionally split.** Pushing a signed `v*` tag
-  publishes `@daloyjs/core` after verification and protected-environment
-  approval. `create-daloy` is published by manually dispatching
-  `release.yml` with `package=create-daloy` (or `package=all`) so the CLI is
-  not released accidentally on every core tag.
+- **Core and CLI releases are explicit.** A signed `v*` tag stages the
+  package set configured in `.github/workflows/release.yml`, and manual
+  `workflow_dispatch` can still stage `@daloyjs/core`, `create-daloy`, or
+  `all` explicitly when a follow-up release needs narrower scope.
 - **`id-token: write` is granted only to the publish job**, only after a
   protected GitHub Environment (`npm-publish`) requires explicit maintainer
   approval. There is no long-lived `NPM_TOKEN` in repo secrets.
-- **Publishes use `--provenance`.** Every tarball is bound to its source
-  commit and workflow run via npm trusted publishing (OIDC) and Sigstore.
-- **Tag/version match is verified** before `pnpm publish` runs.
+- **CI stages; npm MFA approves.** The workflow uses `npm stage publish`
+  rather than direct `npm publish`. CI can mint a provenance-bound staged
+  release, but the version is not installable until a maintainer runs
+  `npm stage approve <stage-id>` (or approves it on npmjs.com) with MFA.
+  The tarball still comes from `release.yml`; the registry-side approval only
+  promotes that staged artifact.
+- **Staged publishes use `--provenance`.** Every tarball is bound to its
+  source commit and workflow run via npm trusted publishing (OIDC) and
+  Sigstore.
+- **Tag/version match is verified** before `npm stage publish` runs.
 - **No third-party install scripts run during publish.** Install uses
   `--ignore-scripts`; the few packages that legitimately need to build are
   allowlisted via `allowBuilds` in [`pnpm-workspace.yaml`](pnpm-workspace.yaml).
@@ -992,8 +998,9 @@ not mis-scope the claim:
   before their last day.
 - **Granular npm access tokens only**, scoped to a single package, with IP
   allowlists where the maintainer's network supports it.
-- **No publishing from a developer machine.** All published artifacts come
-  from `release.yml`.
+- **No artifact creation from a developer machine.** All publishable tarballs
+  are built and staged by `release.yml`; a local `npm stage approve` only
+  promotes the already-staged artifact after MFA.
 - **Signed commits and signed tags** for every release.
 
 ### Release checklist
@@ -1001,7 +1008,9 @@ not mis-scope the claim:
 1. Commit the prepared version/docs changes to `main`.
 2. Create and push a signed `v*` tag for the core package version.
 3. Approve the pending `npm-publish` environment for the tag-triggered core release.
-4. Manually dispatch `release.yml` with `package=create-daloy` when the CLI version also needs publishing.
+4. Review each staged package with `npm stage list <package>` /
+  `npm stage view <stage-id>` and promote it with
+  `npm stage approve <stage-id>` using npm MFA.
 5. Confirm every contributor who approved the `npm-publish` Environment for
    this release has hardware-backed 2FA enabled at both the GitHub
    organization level and the npm registry level. (Mandatory-2FA

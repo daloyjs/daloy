@@ -13,8 +13,10 @@
 #   * `id-token: write` is granted on the publish job only — never to
 #     `verify`, never to anything that runs untrusted code.
 #   * Builds and tests run BEFORE the publish job, in a job with no token.
-#   * Publish uses `--provenance` (npm trusted publishing via OIDC). No
-#     long-lived NPM_TOKEN is stored in repo secrets.
+#   * Publish uses npm staged publishing + `--provenance` (npm trusted
+#     publishing via OIDC). CI can only stage a release; a separate npm
+#     MFA approval is required before the version becomes installable.
+#     No long-lived NPM_TOKEN is stored in repo secrets.
 #   * No GitHub Actions cache is read or written. Cold installs only.
 #   * `actions/checkout` uses `persist-credentials: false`.
 #
@@ -22,6 +24,7 @@
 #   1. Bump version in package.json and (if applicable) packages/*/package.json.
 #   2. `git tag v<version> -s` (signed) and `git push --tags`.
 #   3. Approve the pending workflow in the `npm-publish` environment.
+#   4. Approve the staged release in npm with MFA.
 
 name: Publish
 
@@ -268,8 +271,8 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to npm with provenance
-        run: pnpm publish --access public --no-git-checks --provenance
+      - name: Stage @daloyjs/core on npm with provenance
+        run: npm stage publish . --access public --provenance
         env:
           NPM_CONFIG_PROVENANCE: "true"
 
@@ -358,8 +361,8 @@ jobs:
       - name: Verify no leaked credentials in publishable tarball contents (Snyk "leaked credentials in packages" gate)
         run: pnpm verify:no-leaked-credentials
 
-      - name: Publish create-daloy with provenance
+      - name: Stage create-daloy on npm with provenance
         working-directory: packages/create-daloy
-        run: pnpm publish --access public --no-git-checks --provenance
+        run: npm stage publish . --access public --provenance
         env:
           NPM_CONFIG_PROVENANCE: "true"
