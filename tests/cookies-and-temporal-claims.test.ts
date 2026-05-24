@@ -948,6 +948,81 @@ test("verify-no-registry-exfiltration flags every Lazarus BeaverTail / Invisible
   }
 });
 
+test("verify-no-registry-exfiltration flags xlsx-to-json-lh codebase-wiper IOCs", async () => {
+  // Socket 2025-05-30 codebase-wiper campaign documented at
+  // https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger —
+  // the `xlsx-to-json-lh` typosquat opened a socket.io C2 channel to
+  // `informer-server.herokuapp.com` and, on receiving a `remise à zéro`
+  // message, recursively deleted the consumer's project root via
+  // `rmDir(projectRoot)` (fs.rmSync-shape recursive delete). None of
+  // these primitives are caught by the upstream child_process / TLS /
+  // raw-IPv4 / browser-stealer gates above on their own.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// unsafe: documented C2 host literal",
+    'const c2 = "https://informer-server.herokuapp.com";',
+    "",
+    "// unsafe: bare-literal trigger phrase (with accents)",
+    'if (data.type === "remise à zéro") wipe();',
+    "",
+    "// unsafe: trigger phrase without accents",
+    'if (data.type === "remise a zero") wipe();',
+    "",
+    "// unsafe: recursive directory delete (sync)",
+    'fs.rmSync(projectRoot, { recursive: true, force: true });',
+    "",
+    "// unsafe: legacy rmdirSync",
+    'fs.rmdirSync(projectRoot, { recursive: true });',
+    "",
+    "// unsafe: promise-based fs.rm()",
+    'await fsp.rm(projectRoot, { recursive: true, force: true });',
+    "",
+    "// unsafe: unlinkSync",
+    'fs.unlinkSync(envFile);',
+    "",
+    "// unsafe: destructured unlinkSync()",
+    "unlinkSync(keyFile);",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 8, JSON.stringify(findings, null, 2));
+  assert.match(findings[0]!.reason, /informer-server\.herokuapp\.com/);
+  assert.match(findings[1]!.reason, /remise à zéro/);
+  assert.match(findings[2]!.reason, /remise à zéro/);
+  for (const deletion of findings.slice(3)) {
+    assert.match(deletion.reason, /destructive filesystem-deletion API/);
+    assert.match(deletion.reason, /xlsx-to-json-lh/);
+  }
+});
+
+test("verify-no-registry-exfiltration ignores benign deletion-shaped tokens", async () => {
+  // Negative: doc-comment mentions of the wiper IOCs, property
+  // comparisons against `.rm`, non-destructive fs APIs, and mkdir
+  // with `{ recursive: true }` (which is a totally legitimate
+  // ensure-dir pattern) must NOT trip the wiper gate.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// safe: doc-comment mention of the C2 host",
+    "// the xlsx-to-json-lh malware C2 was informer-server.herokuapp.com",
+    "",
+    "// safe: doc-comment mention of the trigger phrase remise à zéro",
+    "",
+    "// safe: non-destructive fs API (mkdir with recursive flag)",
+    'await fsp.mkdir(target, { recursive: true });',
+    "",
+    "// safe: non-destructive fs API (readdir)",
+    'await fsp.readdir(target);',
+    "",
+    "// safe: equality comparison on a method name (not a call)",
+    "if (action.name === 'rmSync') skip();",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
+});
+
 test("verify-no-registry-exfiltration ignores benign IP-shaped tokens", async () => {
   // Negative: dotted-quad version strings, doc-comment mentions of
   // the IOC IP, and benign shell-name mentions inside line comments

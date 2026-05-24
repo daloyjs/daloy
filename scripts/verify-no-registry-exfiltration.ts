@@ -186,6 +186,55 @@
  *      would still need the shell name as a literal somewhere — and
  *      this gate refuses that.
  *
+ * ---
+ *
+ * **`xlsx-to-json-lh` remote-trigger codebase-wiper campaign (Socket
+ * 2025-05-30,
+ * https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger):**
+ *
+ * The malicious `xlsx-to-json-lh` package typosquatted the legitimate
+ * `xlsx-to-json-lc` Excel-to-JSON converter (one-letter substitution,
+ * `lc` → `lh`) and embedded a working conversion function alongside a
+ * hidden payload at `libs/support/index.js` that immediately opened a
+ * persistent socket.io WebSocket to
+ * `https://informer-server.herokuapp.com` on `require()`. The C2
+ * channel waited for a message of shape `{ type: "remise à zéro" }`
+ * (French for "reset to zero") and, on receipt, walked back from
+ * `__dirname` through `node_modules` to the consumer project root and
+ * called `rmDir(projectRoot)` to recursively delete the entire
+ * project — source, `.git/`, `node_modules`, configs, assets — then
+ * `socket.emit("message", { type: "removed-successfully" })` to
+ * confirm destruction. Recovery without external backups is
+ * impossible.
+ *
+ * The end-to-end defense for this attack class is layered:
+ *
+ *   - **Typosquatting**: `verify-known-dep-names` (explicit allowlist
+ *     of every top-level dep in the workspace) makes
+ *     `pnpm add xlsx-to-json-lh` fail in the same PR that introduces
+ *     it, even after the 24h `minimum-release-age=1440` cooldown.
+ *   - **Zero runtime deps**: `verify-no-runtime-deps` keeps
+ *     `@daloyjs/core` at zero runtime deps so a typosquat of one of
+ *     our transitive deps cannot exist.
+ *   - **Install-time silence**: `ignore-scripts=true` +
+ *     `verify-no-lifecycle-scripts` ensure even an installed
+ *     typosquat cannot run on `pnpm install`.
+ *   - **No C2 channel from core**: this gate refuses the documented
+ *     `informer-server.herokuapp.com` C2 host literal AND the
+ *     `remise à zéro` French trigger phrase as bare-literal IOCs.
+ *     The trigger phrase is rare enough in legitimate prose that
+ *     a hard-literal match in `src/**` is a high-signal indicator.
+ *   - **No wiper primitive in core**: this gate also refuses every
+ *     destructive filesystem-deletion API call
+ *     (`rmSync`, `rmdirSync`, `unlinkSync`, `fs.rm(`, `fs.rmdir(`,
+ *     `fs.unlink(`, and the `node:fs/promises` peers). A backend
+ *     HTTP framework's runtime source has zero legitimate reason
+ *     to delete a file or directory tree — combined with the
+ *     `verify-no-remote-exec` ban on `child_process` / `vm` /
+ *     `eval` / `new Function` / remote `import()`, there is no
+ *     in-process channel left for a wiper to land in
+ *     `@daloyjs/core`.
+ *
  * @since 0.50.0
  */
 
@@ -686,6 +735,68 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "a backend HTTP framework never reads OS-level keychain files — remove this literal",
     keepStrings: true,
   },
+  // ---- `xlsx-to-json-lh` remote-trigger codebase-wiper campaign
+  //      (Socket 2025-05-30,
+  //      https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger) ----
+  //
+  // A typosquat of `xlsx-to-json-lc` opened a socket.io WebSocket to
+  // `informer-server.herokuapp.com` on `require()` and, on receiving
+  // the message type `"remise à zéro"`, recursively deleted the
+  // consumer's entire project directory. None of the upstream gates
+  // catch this on their own: there is no `child_process` / `eval` /
+  // `vm` use, no TLS bypass, no HOME mutation, no raw-IPv4 URL, no
+  // browser-credential path. The IOCs below are the bare-literal
+  // tells, and the destructive-filesystem-API block is the wiper
+  // primitive itself.
+  {
+    re: /\binformer-server\.herokuapp\.com\b/i,
+    reason:
+      "`informer-server.herokuapp.com` is the documented C2 host for the `xlsx-to-json-lh` " +
+      "remote-trigger codebase-wiper campaign — the malicious typosquat opened a persistent " +
+      "socket.io WebSocket to this host on `require()` and waited for a `remise à zéro` " +
+      "message before recursively deleting the consumer's entire project directory " +
+      "(https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger); any " +
+      "reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // The French trigger phrase is rare enough in legitimate prose
+    // that a hard-literal match in `src/**` is a strong indicator of
+    // wiper-class malware. We match the exact phrase (with or
+    // without accents) and a few obvious obfuscations.
+    re: /remise\s+[àa]\s+z[ée]ro/i,
+    reason:
+      "`remise à zéro` (French: \"reset to zero\") is the destruction-trigger phrase the " +
+      "`xlsx-to-json-lh` codebase-wiper campaign listens for on its socket.io C2 channel " +
+      "before recursively deleting the consumer's project directory " +
+      "(https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger); any " +
+      "reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // Destructive filesystem-deletion APIs. Daloy core is a backend
+    // HTTP framework and never deletes a file or directory from
+    // runtime source. Catches:
+    //   - `fs.rm(`, `fs.rmSync(`, `fs.rmdir(`, `fs.rmdirSync(`,
+    //     `fs.unlink(`, `fs.unlinkSync(`
+    //   - the `node:fs/promises` peers (`fsp.rm(`, `fsPromises.rm(`,
+    //     destructured `rm(` / `rmdir(` / `unlink(` after a
+    //     `from "node:fs"` import)
+    //   - bare callable forms `rmSync(`, `rmdirSync(`, `unlinkSync(`
+    //     to catch destructured-then-renamed call sites
+    // Equality and property comparisons (`x.rm === ...`) are excluded
+    // by requiring an opening `(` after the API name.
+    re: /\b(?:rmSync|rmdirSync|unlinkSync)\s*\(|\.\s*(?:rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync)\s*\(/,
+    reason:
+      "destructive filesystem-deletion API call (`fs.rm` / `fs.rmSync` / `fs.rmdir` / " +
+      "`fs.rmdirSync` / `fs.unlink` / `fs.unlinkSync` / `node:fs/promises` peers) — a " +
+      "backend HTTP framework's runtime source has zero legitimate reason to delete a " +
+      "file or directory tree, and these are the wiper primitives the `xlsx-to-json-lh` " +
+      "codebase-wiper campaign uses to recursively destroy the consumer's project " +
+      "(https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger); remove " +
+      "this call",
+    keepStrings: false,
+  },
 ];
 
 const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
@@ -826,15 +937,19 @@ async function main(): Promise<void> {
         "`checkip.amazonaws.com`), or reference Lazarus BeaverTail / InvisibleFerret IOCs " +
         "(`172.86.84.38` C2 IP, `Login Data` / `Local Extension Settings` browser-stealer paths, " +
         "`.config/solana/id.json` / `exodus.wallet` crypto-wallet paths, `/Library/Keychains/` " +
-        "macOS keychain path). These are the runtime primitives the GemStuffer, Lazarus / Jade " +
+        "macOS keychain path), or reference `xlsx-to-json-lh` codebase-wiper IOCs " +
+        "(`informer-server.herokuapp.com` C2 host, `remise à zéro` French destruction-trigger " +
+        "phrase, or any destructive filesystem-deletion API call — `rmSync` / `rmdirSync` / " +
+        "`unlinkSync` / `fs.rm(` / `fs.rmdir(` / `fs.unlink(`). These are the runtime primitives the GemStuffer, Lazarus / Jade " +
         "Sleet, RATatouille / rand-user-agent, xrpl.js / Ripple-SDK, Telegram-bot SSH-backdoor, " +
-        "and Lazarus BeaverTail / InvisibleFerret classes of supply-chain attack use to scrape " +
-        "and exfiltrate data. See https://socket.dev/blog/gemstuffer, " +
+        "Lazarus BeaverTail / InvisibleFerret, and `xlsx-to-json-lh` codebase-wiper classes of " +
+        "supply-chain attack use to scrape, exfiltrate, or destroy data. See https://socket.dev/blog/gemstuffer, " +
         "https://socket.dev/blog/social-engineering-campaign-npm-malware, " +
         "https://www.aikido.dev/blog/catching-a-rat-remote-access-trojian-rand-user-agent-supply-chain-compromise, " +
         "https://www.aikido.dev/blog/xrp-supplychain-attack-official-npm-package-infected-with-crypto-stealing-backdoor, " +
         "https://socket.dev/blog/npm-malware-targets-telegram-bot-developers, " +
-        "and https://socket.dev/blog/lazarus-strikes-npm-again-with-a-new-wave-of-malicious-packages.",
+        "https://socket.dev/blog/lazarus-strikes-npm-again-with-a-new-wave-of-malicious-packages, " +
+        "and https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger.",
     );
     process.exitCode = 1;
   }
