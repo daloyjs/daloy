@@ -53,7 +53,7 @@ pnpm create daloy@latest my-api \
 | `--template <name>` | `node-basic` (default), `vercel-edge`, `cloudflare-worker`, `bun-basic`, or `deno-basic`. |
 | `--package-manager <pm>` | `pnpm` (default), `npm`, `yarn`, or `bun`. Ignored for `deno-basic`. |
 | `--list-templates` | Print available templates with descriptions. |
-| `--install` / `--no-install` | Install dependencies after scaffolding. Defaults to **Y** for npm/yarn/bun and **N** for pnpm (so first-time runs are not blocked by the 24h `minimumReleaseAge` embargo and so you can review the scaffold's hardened `.npmrc` and `pnpm-workspace.yaml` before the first install). |
+| `--install` / `--no-install` | Install dependencies after scaffolding. Defaults to **Y** for npm/yarn/bun and **N** for pnpm so you can review the hardened `.npmrc` / `pnpm-workspace.yaml` and aren't blocked by the 24h `minimumReleaseAge` embargo on the first run. |
 | `--git` / `--no-git` | Initialize a git repository. Defaults to interactive. |
 | `--minimal` | Strip the bookstore demo route and the built-in `/docs` + `/openapi.json` routes so only the framework bootstrap and `/healthz` ship. |
 | `--with-ci` / `--no-ci` | Add the hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, and lockfile-source verification bundle. **Defaults to Y** so scaffolded projects are secure by default. |
@@ -148,49 +148,56 @@ pnpm create daloy@latest my-api \
   --code-owner @acme/security
 ```
 
-For Node-style templates, the bundle adds:
+For Node-style templates, the bundle adds the following.
 
-- `.github/workflows/ci.yml` with top-level `permissions: {}`, pinned actions,
-  `harden-runner`, `persist-credentials: false`, no package-manager cache, and
+**CI and deploy**
+
+- `.github/workflows/ci.yml` — top-level `permissions: {}`, pinned actions,
+  `harden-runner`, `persist-credentials: false`, no package-manager cache,
   install scripts disabled.
-- `.github/workflows/deploy.yml` as a manual-only deployment starter. Container
-  templates publish a Docker image to GHCR with the repo-scoped `GITHUB_TOKEN`,
-  while Vercel and Cloudflare templates ship concrete CLI deploy steps that
-  read their platform credentials from GitHub Actions secrets/variables. The
-  deploy job is gated to `main` or a tag by default, and Node-style templates
-  re-run `verify:lockfile` before shipping.
-- `.github/workflows/vuln-scan.yml` — a daily scheduled SCA cron that runs the
-  package manager's audit against the committed lockfile. Catches CVEs disclosed
+- `.github/workflows/deploy.yml` — a manual-only deployment starter, gated to
+  `main` or a tag by default. Container templates publish a Docker image to
+  GHCR with the repo-scoped `GITHUB_TOKEN`. Vercel and Cloudflare templates
+  ship concrete CLI deploy steps that read platform credentials from GitHub
+  Actions secrets / variables. Node-style templates re-run `verify:lockfile`
+  before shipping.
+
+**Scheduled vulnerability scanning (SCA)**
+
+- `.github/workflows/vuln-scan.yml` — daily cron that runs the package
+  manager's audit against the committed lockfile. Catches CVEs disclosed
   *after* the last PR or push and provides SOC 2 CC7.1
   ([continuous vulnerability management](https://www.aikido.dev/blog/a-guide-to-automating-technical-vulnerability-management-for-soc-2))
-  evidence even when developers are not touching the repo.
-- `.github/workflows/osv-scan.yml` — a SECOND, independent SCA source.
+  evidence even when nobody is touching the repo.
+- `.github/workflows/osv-scan.yml` — a second, independent SCA source.
   `vuln-scan.yml` queries the package manager's audit feed (GHSA); this one
   runs Google's OSV-Scanner against the committed lockfile and cross-references
-  the OpenSSF
-  [malicious-packages](https://github.com/ossf/malicious-packages) corpus, so
-  a malware advisory that lands in OSV.dev before it propagates to GHSA still
-  fails the build. The binary is downloaded from a pinned official release and
-  verified by SHA-256 before execution — no third-party action is added to the
-  supply chain just for this scan. This is the missing layer the Aikido
-  [SAST vs SCA](https://www.aikido.dev/blog/sast-vs-sca) and
-  [npm-audit-guide](https://www.aikido.dev/blog/npm-audit-guide) write-ups
-  warn about, and the Deno scaffold gets it too (Deno has no `audit` built
-  in, so without OSV-Scanner a Deno scaffold would have no scheduled SCA at
-  all).
+  the OpenSSF [malicious-packages](https://github.com/ossf/malicious-packages)
+  corpus, so a malware advisory that lands in OSV.dev before it propagates to
+  GHSA still fails the build. The binary is downloaded from a pinned official
+  release and verified by SHA-256 before execution — no third-party action is
+  added to the supply chain just for this scan. This is the missing layer that
+  Aikido's [SAST vs SCA](https://www.aikido.dev/blog/sast-vs-sca) and
+  [npm-audit-guide](https://www.aikido.dev/blog/npm-audit-guide) write-ups warn
+  about, and the Deno scaffold gets it too (Deno has no `audit` built in, so
+  without OSV-Scanner a Deno scaffold would have no scheduled SCA at all).
+
+**Secret and static analysis**
+
 - `.github/workflows/secret-scan.yml` — runs [gitleaks](https://github.com/gitleaks/gitleaks)
   on every PR / push (working tree) and on a daily schedule across the **full
   git history**, so a credential leaked anywhere in any commit, branch, or tag
-  is surfaced even if GitHub-native push protection missed it. The gitleaks
-  binary is downloaded from a pinned official release and verified by SHA-256
-  before execution — no third-party action is added to the supply chain just
-  for this scan. See Aikido's
+  is surfaced even if GitHub-native push protection missed it. Binary is
+  pinned-release + SHA-256-verified before execution. See Aikido's
   [Secrets Detection guide](https://www.aikido.dev/blog/secret-detection-application-security)
-  for why history-aware scanning is the floor and not the ceiling.
+  for why history-aware scanning is the floor, not the ceiling.
 - `.github/workflows/opengrep.yml` — a second SAST source alongside CodeQL,
   using [Opengrep](https://github.com/opengrep/opengrep) (an open-source
-  Semgrep fork) with the same pinned-binary + SHA-256-verified pattern as the
-  OSV and gitleaks scans.
+  Semgrep fork) with the same pinned-binary + SHA-256-verified pattern.
+- CodeQL (built in via the GitHub bundle).
+
+**Container and runtime scanning**
+
 - `.github/workflows/container-scan.yml` — runs Trivy against the image
   produced by the template's `_Dockerfile` (filesystem scan on PR, full image
   scan on push to `main`) so a base-image CVE or a vulnerable layer is
@@ -198,9 +205,13 @@ For Node-style templates, the bundle adds:
 - `.github/workflows/dast.yml` — a manual-only dynamic-analysis workflow that
   boots the scaffolded API and runs an OWASP ZAP baseline scan against it,
   for teams that want a black-box check before promoting a release.
-- CodeQL, OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, and `SECURITY.md`.
+
+**Governance**
+
+- OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS, and `SECURITY.md`.
 - `scripts/verify-lockfile-sources.mjs` plus a `verify:lockfile` package script
-  that rejects git dependencies and non-registry tarball URLs in text lockfiles.
+  that rejects git dependencies and non-registry tarball URLs in text
+  lockfiles.
 
 The bundle deliberately does **not** generate an npm publish workflow.
 `create-daloy` scaffolds REST API services, not libraries; if you later carve
@@ -224,11 +235,11 @@ required status checks in the repository settings.
 ## Container-first scaffolds
 
 Every template (Node, Bun, Vercel Edge, Cloudflare Worker, and Deno) ships a
-production-oriented `Dockerfile` and `.dockerignore` with the secure-by-default
-posture from `@daloyjs/core` `0.24.0`: a non-root user, `STOPSIGNAL SIGTERM`,
-`tini` as PID 1, and a `HEALTHCHECK` pointed at `/readyz`. Node-style templates
-also ship an `.env.example`. None of this is required — delete or replace
-whatever you do not need.
+production-oriented `Dockerfile` and `.dockerignore` with secure-by-default
+posture: a non-root user, `STOPSIGNAL SIGTERM`, `tini` as PID 1, and a
+`HEALTHCHECK` pointed at `/readyz`. Node-style templates also ship an
+`.env.example`. None of this is required — delete or replace whatever you do
+not need.
 
 ## What the CLI guarantees
 
