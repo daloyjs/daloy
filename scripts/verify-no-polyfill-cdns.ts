@@ -190,6 +190,14 @@ const FORBIDDEN_HOSTS: readonly ForbiddenHost[] = [
       "`xhsbpza.com` is a documented Funnull-cluster C2 / ad-fraud host named in Silent Push and " +
       "Sansec IOC reporting on the polyfill.io campaign; never reference from any Daloy artifact.",
   },
+  {
+    host: "googie-anaiytics.com",
+    reason:
+      "`googie-anaiytics.com` is a fake-Google-Analytics typosquat (two `i`s instead of `l`s) used " +
+      "by the polyfill.io malware payload to redirect mobile visitors to sports-betting sites " +
+      "(Sansec 2024-06-25, Socket 2024-06-26 `namecheap-takes-down-polyfill-io-service-...`); " +
+      "any reference is a hard IOC of the Funnull / polyfill.io campaign.",
+  },
 ];
 
 /** Build a case-insensitive regex that matches a host as a DNS label
@@ -358,7 +366,7 @@ async function main(): Promise<void> {
         "blog posts, examples — must never reference a host from the Funnull / polyfill.io " +
         "hijacked-CDN cluster (`cdn.polyfill.io`, `polyfill.io`, `polyfill.com`, " +
         "`polyfillcache.com`, `polyfill-cdn.com`, `bootcss.com`, `bootcdn.net`, `staticfile.org`, " +
-        "`staticfile.net`, `unionadjs.com`, `xhsbpza.com`). All of these served live malware in " +
+        "`staticfile.net`, `unionadjs.com`, `xhsbpza.com`, `googie-anaiytics.com`). All of these served live malware in " +
         "the February–June 2024 polyfill.io supply-chain compromise or are documented " +
         "Funnull-cluster aliases / C2 hosts. Replace with Cloudflare's mirror at " +
         "`cdnjs.cloudflare.com/polyfill/`, Fastly's mirror at `polyfill-fastly.io`, or — " +

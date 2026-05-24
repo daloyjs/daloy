@@ -38,9 +38,11 @@ test("verify-no-polyfill-cdns flags every documented Funnull / polyfill.io IOC h
     'fetch("https://unionadjs.com/track");',
     "// unsafe: Funnull C2 / ad-fraud",
     'fetch("https://xhsbpza.com/beacon");',
+    "// unsafe: fake Google Analytics typosquat used by the polyfill payload",
+    'location.href = "https://googie-anaiytics.com/redirect";',
   ].join("\n");
   const findings = findForbiddenCdnReferences("fixture.html", sample);
-  assert.equal(findings.length, 11, JSON.stringify(findings, null, 2));
+  assert.equal(findings.length, 12, JSON.stringify(findings, null, 2));
   assert.equal(findings[0]!.host, "cdn.polyfill.io");
   assert.equal(findings[1]!.host, "polyfill.io");
   assert.equal(findings[2]!.host, "polyfill.com");
@@ -52,6 +54,7 @@ test("verify-no-polyfill-cdns flags every documented Funnull / polyfill.io IOC h
   assert.equal(findings[8]!.host, "staticfile.net");
   assert.equal(findings[9]!.host, "unionadjs.com");
   assert.equal(findings[10]!.host, "xhsbpza.com");
+  assert.equal(findings[11]!.host, "googie-anaiytics.com");
   for (const f of findings) {
     assert.match(
       f.reason,
