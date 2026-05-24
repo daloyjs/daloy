@@ -140,6 +140,23 @@ export interface UnknownDependency {
   readonly name: string;
 }
 
+/**
+ * An `"foo": "npm:bar@1.0.0"` dependency-aliasing entry. See
+ * {@link findAliasedDependencySpecifiers} for why this is gated.
+ *
+ * @since 0.34.4
+ */
+export interface AliasedDependency {
+  readonly source: string;
+  readonly block:
+    | "dependencies"
+    | "devDependencies"
+    | "peerDependencies"
+    | "optionalDependencies";
+  readonly name: string;
+  readonly specifier: string;
+}
+
 const DEP_BLOCKS = [
   "dependencies",
   "devDependencies",
@@ -169,9 +186,52 @@ export function findUnknownDependencyNames(
   return out;
 }
 
+/**
+ * Find every dependency entry in `pkg` whose specifier uses npm's
+ * package-aliasing syntax (`"foo": "npm:bar@1.0.0"`).
+ *
+ * Why this is gated: npm package aliasing is a documented
+ * dependency-confusion vector (Jain & Stathako, Snyk research,
+ * *"Exploring extensions of dependency confusion attacks via npm
+ * package aliasing"*, Nov 2021). When a published package declares
+ * `"x": "npm:y@1.0.0"`, the package's npmjs.com page lists `x` as a
+ * dependency — even though `x` does not exist on the registry. An
+ * attacker can then publish a malicious `x`, and developers who see
+ * the dependency listed on the published page and run
+ * `npm install x` get the squatted package. Daloy publishes
+ * `@daloyjs/core` and `create-daloy`; we never want the published
+ * dependency listing on npmjs.com to advertise a ghost name that
+ * downstream users might install by hand. The gate is `npm:`-prefix
+ * exact: a future legitimate alias would need to be added to an
+ * explicit allowlist (mirror of {@link ALLOWED_DEP_NAMES}) in the
+ * same PR that introduces it, providing the deliberate review
+ * checkpoint that the threat model requires.
+ *
+ * Pure / no I/O — safe to call from tests.
+ *
+ * @since 0.34.4
+ */
+export function findAliasedDependencySpecifiers(
+  source: string,
+  pkg: PackageJsonLike,
+): readonly AliasedDependency[] {
+  const out: AliasedDependency[] = [];
+  for (const block of DEP_BLOCKS) {
+    const map = pkg[block];
+    if (!map || typeof map !== "object") continue;
+    for (const [name, spec] of Object.entries(map)) {
+      if (typeof spec === "string" && spec.startsWith("npm:")) {
+        out.push({ source, block, name, specifier: spec });
+      }
+    }
+  }
+  return out;
+}
+
 async function main(): Promise<void> {
   const repoRoot = new URL("../", import.meta.url);
   const offending: UnknownDependency[] = [];
+  const aliased: AliasedDependency[] = [];
   for (const rel of SCANNED_PACKAGE_JSONS) {
     const url = new URL(rel, repoRoot);
     let text: string;
@@ -195,25 +255,48 @@ async function main(): Promise<void> {
       return;
     }
     offending.push(...findUnknownDependencyNames(rel, pkg));
+    aliased.push(...findAliasedDependencySpecifiers(rel, pkg));
   }
-  if (offending.length === 0) return;
-  console.error(
-    `verify-known-dep-names: ${offending.length} dependency name${
-      offending.length === 1 ? "" : "s"
-    } not on the slopsquatting allowlist:`,
-  );
-  for (const v of offending) {
-    console.error(`  - ${v.source} → ${v.block}["${v.name}"]`);
+  if (offending.length === 0 && aliased.length === 0) return;
+  if (offending.length > 0) {
+    console.error(
+      `verify-known-dep-names: ${offending.length} dependency name${
+        offending.length === 1 ? "" : "s"
+      } not on the slopsquatting allowlist:`,
+    );
+    for (const v of offending) {
+      console.error(`  - ${v.source} → ${v.block}["${v.name}"]`);
+    }
+    console.error(
+      "If this is a legitimate new dependency, double-check the package name " +
+        "against the upstream README / GitHub (slopsquat names like " +
+        "`request-promise-native2`, `@types/fastify-helmet`, or " +
+        "`huggingface-cli` often *sound* plausible) and then add the exact " +
+        "name to ALLOWED_DEP_NAMES in scripts/verify-known-dep-names.ts in " +
+        "the same PR. See SECURITY.md § Slopsquatting / AI package " +
+        "hallucination for the threat model.",
+    );
   }
-  console.error(
-    "If this is a legitimate new dependency, double-check the package name " +
-      "against the upstream README / GitHub (slopsquat names like " +
-      "`request-promise-native2`, `@types/fastify-helmet`, or " +
-      "`huggingface-cli` often *sound* plausible) and then add the exact " +
-      "name to ALLOWED_DEP_NAMES in scripts/verify-known-dep-names.ts in " +
-      "the same PR. See SECURITY.md § Slopsquatting / AI package " +
-      "hallucination for the threat model.",
-  );
+  if (aliased.length > 0) {
+    console.error(
+      `verify-known-dep-names: ${aliased.length} npm-alias dependency specifier${
+        aliased.length === 1 ? "" : "s"
+      } found (dependency-confusion-via-aliasing vector):`,
+    );
+    for (const v of aliased) {
+      console.error(
+        `  - ${v.source} → ${v.block}["${v.name}"] = "${v.specifier}"`,
+      );
+    }
+    console.error(
+      "An `\"x\": \"npm:y@…\"` alias causes npmjs.com to list `x` as a dependency " +
+        "on the published package page even though `x` is not a real registry entry — " +
+        "a documented dependency-confusion vector (Jain & Stathako, Snyk, Nov 2021). " +
+        "Inline the real package name instead. If a legitimate aliased dep is " +
+        "truly required, add an explicit allowlist entry in " +
+        "scripts/verify-known-dep-names.ts in the same PR.",
+    );
+  }
   process.exitCode = 1;
 }
 
