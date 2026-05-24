@@ -137,6 +137,7 @@ export const docsNav: DocsNavSection[] = [
         href: "/docs/security/rate-limit-redis",
       },
       { title: "Supply-chain security", href: "/docs/security/supply-chain" },
+      { title: "Scanning tools (Socket, Snyk, Aikido)", href: "/docs/security/scanning-tools" as Route },
       { title: "Compliance posture", href: "/docs/security/compliance" as Route },
       { title: "Deployment", href: "/docs/deployment" },
       { title: "Fly.io", href: "/docs/deployment/fly-io" as Route },
