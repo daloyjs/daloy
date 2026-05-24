@@ -276,6 +276,54 @@
  *     so the gate is scoped to URL-shaped occurrences only and the
  *     existing PSL entry continues to pass.
  *
+ * ---
+ *
+ * **`@crypto-exploit` BSC/Ethereum wallet-drainer campaign (Socket
+ * 2025-06-02,
+ * https://socket.dev/blog/malicious-npm-packages-target-bsc-and-ethereum):**
+ *
+ * Four malicious npm packages
+ * (`pancake_uniswap_validators_utils_snipe`,
+ * `pancakeswap-oracle-prediction`, `ethereum-smart-contract`,
+ * `env-process` — the last typosquats the legitimate `process`
+ * browser-shim) collectively pulled ~2,100 downloads. Each package
+ * required `web3`, read `process.env.YOUR_ACCOUNT_ADDRESS` and
+ * `process.env.YOUR_ACCOUNT_PRIVATE_KEY` from the victim's environment,
+ * built a transaction transferring 80–85 % of the wallet's balance
+ * to the hardcoded attacker address
+ * `0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02`, signed it via
+ * `web3.eth.accounts.signTransaction(...)`, and broadcast it via
+ * `web3.eth.sendSignedTransaction(...)`. RPC endpoints alternated
+ * between BSC (`https://bsc-dataseed1.defibit.io/`) and Ethereum
+ * (`https://cloudflare-eth.com/`). None of the primitives touch
+ * `child_process`, `vm`, `eval`, `new Function`, dynamic remote
+ * `import()`, TLS bypass, `HOME` mutation, raw-IPv4 URLs, or a
+ * postinstall hook — the entire drain runs at first `require()` of
+ * the malicious package using only the `web3` SDK and stdlib.
+ *
+ * `@daloyjs/core` is a backend HTTP framework with zero runtime
+ * dependencies (`pnpm verify:no-runtime-deps`) and never signs or
+ * broadcasts blockchain transactions from `src/**`. Any of the
+ * following in runtime source is a hard IOC of this attack class:
+ *
+ *   - The exact attacker wallet address
+ *     `0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02` as a bare literal.
+ *   - A web3-SDK transaction-signing primitive
+ *     (`eth.accounts.signTransaction(...)`) — the in-process key-use
+ *     step the drainer needs to authorize the outbound transfer.
+ *   - A web3-SDK signed-transaction broadcast primitive
+ *     (`eth.sendSignedTransaction(...)`) — the on-chain submission
+ *     step that actually drains the wallet.
+ *
+ * Combined with `ignore-scripts=true` (blocks the easier postinstall
+ * channel), `minimum-release-age=1440` (24 h cooldown closes the
+ * first-day install window), `verify-no-runtime-deps` (zero runtime
+ * deps means no `web3` can ride in transitively through us), and
+ * `verify-known-dep-names` (any direct addition of `web3` or one of
+ * the four flagged packages would fail the allowlist), a malicious
+ * republish of `@daloyjs/core` has no in-process channel to land
+ * the drainer.
+ *
  * @since 0.50.0
  */
 
@@ -873,6 +921,64 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "remove this URL or, if intentional, justify it in the PR description and add a " +
       "narrower allowlist",
     keepStrings: true,
+  },
+  // ---- `@crypto-exploit` BSC/Ethereum wallet-drainer campaign
+  //      (Socket 2025-06-02,
+  //      https://socket.dev/blog/malicious-npm-packages-target-bsc-and-ethereum) ----
+  //
+  // Four malicious npm packages
+  // (`pancake_uniswap_validators_utils_snipe`,
+  // `pancakeswap-oracle-prediction`, `ethereum-smart-contract`,
+  // `env-process`) all signed and broadcast a transaction draining
+  // 80–85 % of the victim's wallet to the same hardcoded attacker
+  // address. The IOCs below are the exact attacker wallet plus the
+  // two web3-SDK primitives the drainer chains — a backend HTTP
+  // framework's runtime source has zero reason to reference any of
+  // them.
+  {
+    re: /\b0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02\b/i,
+    reason:
+      "`0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02` is the documented attacker wallet " +
+      "address for the `@crypto-exploit` BSC/Ethereum wallet-drainer campaign — the four " +
+      "malicious npm packages (`pancake_uniswap_validators_utils_snipe`, " +
+      "`pancakeswap-oracle-prediction`, `ethereum-smart-contract`, `env-process`) all " +
+      "signed and broadcast a transaction transferring 80–85 % of the victim's wallet " +
+      "balance to this hardcoded address " +
+      "(https://socket.dev/blog/malicious-npm-packages-target-bsc-and-ethereum); any " +
+      "reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // web3-SDK transaction-signing primitive. Matches the documented
+    // `web3.eth.accounts.signTransaction(...)` call and the
+    // destructured-then-renamed variant `accounts.signTransaction(`.
+    // A backend HTTP framework never signs blockchain transactions
+    // from runtime source.
+    re: /\baccounts\s*\.\s*signTransaction\s*\(/,
+    reason:
+      "web3-SDK transaction-signing primitive (`web3.eth.accounts.signTransaction(...)`) — " +
+      "a backend HTTP framework's runtime source has zero legitimate reason to sign a " +
+      "blockchain transaction, and this is the in-process key-use step the " +
+      "`@crypto-exploit` BSC/Ethereum wallet-drainer campaign chains after reading the " +
+      "victim's `process.env.YOUR_ACCOUNT_PRIVATE_KEY` to authorize the outbound transfer " +
+      "(https://socket.dev/blog/malicious-npm-packages-target-bsc-and-ethereum); remove " +
+      "this call",
+    keepStrings: false,
+  },
+  {
+    // web3-SDK signed-transaction broadcast primitive. Matches the
+    // documented `web3.eth.sendSignedTransaction(...)` call and the
+    // destructured-then-renamed variant `eth.sendSignedTransaction(`.
+    re: /\bsendSignedTransaction\s*\(/,
+    reason:
+      "web3-SDK signed-transaction broadcast primitive " +
+      "(`web3.eth.sendSignedTransaction(...)`) — a backend HTTP framework's runtime " +
+      "source has zero legitimate reason to broadcast a blockchain transaction, and " +
+      "this is the on-chain submission step that actually drains the victim's wallet " +
+      "in the `@crypto-exploit` BSC/Ethereum wallet-drainer campaign " +
+      "(https://socket.dev/blog/malicious-npm-packages-target-bsc-and-ethereum); remove " +
+      "this call",
+    keepStrings: false,
   },
 ];
 

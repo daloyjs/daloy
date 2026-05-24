@@ -1054,6 +1054,70 @@ test("verify-no-registry-exfiltration ignores benign workers.dev mentions", asyn
   assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
 });
 
+test("verify-no-registry-exfiltration flags @crypto-exploit BSC/Ethereum wallet-drainer IOCs", async () => {
+  // Socket 2025-06-02 wallet-drainer campaign documented at
+  // https://socket.dev/blog/malicious-npm-packages-target-bsc-and-ethereum —
+  // four malicious npm packages (`pancake_uniswap_validators_utils_snipe`,
+  // `pancakeswap-oracle-prediction`, `ethereum-smart-contract`,
+  // `env-process`) all read the victim's wallet env vars, signed a
+  // transaction transferring 80–85 % of the balance to the same
+  // hardcoded attacker address via `web3.eth.accounts.signTransaction`,
+  // and broadcast it via `web3.eth.sendSignedTransaction`. None of
+  // the upstream child_process / TLS / postinstall gates catch this
+  // on their own.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// unsafe: documented attacker wallet address",
+    'const drain = "0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02";',
+    "",
+    "// unsafe: web3 transaction-signing primitive",
+    "const signed = await web3.eth.accounts.signTransaction(tx, key);",
+    "",
+    "// unsafe: destructured-then-renamed signing primitive",
+    "const out = await accounts.signTransaction(tx, key);",
+    "",
+    "// unsafe: web3 signed-transaction broadcast primitive",
+    "await web3.eth.sendSignedTransaction(signed.rawTransaction);",
+    "",
+    "// unsafe: bare sendSignedTransaction call site",
+    "await sendSignedTransaction(raw);",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 5, JSON.stringify(findings, null, 2));
+  assert.match(findings[0]!.reason, /0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02/);
+  assert.match(findings[1]!.reason, /signTransaction/);
+  assert.match(findings[2]!.reason, /signTransaction/);
+  assert.match(findings[3]!.reason, /sendSignedTransaction/);
+  assert.match(findings[4]!.reason, /sendSignedTransaction/);
+  for (const finding of findings) {
+    assert.match(finding.reason, /crypto-exploit|BSC\/Ethereum/);
+  }
+});
+
+test("verify-no-registry-exfiltration ignores benign wallet-drainer-shaped tokens", async () => {
+  // Negative: doc-comment mentions of the IOC wallet, the bare word
+  // `signTransaction` as a property name in an object literal (no
+  // call), and unrelated `sendSigned*`-prefixed identifiers must NOT
+  // trip the wallet-drainer gate.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// safe: doc-comment mention of the attacker wallet",
+    "// IOC: 0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02 is the drainer wallet",
+    "",
+    "// safe: property-equality comparison on the method name",
+    "if (api.name === 'signTransaction') skip();",
+    "",
+    "// safe: unrelated identifier (no `accounts.signTransaction(` shape)",
+    "const sendSignedTransactionLog = createLogger();",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
+});
+
 test("verify-no-registry-exfiltration ignores benign deletion-shaped tokens", async () => {
   // Negative: doc-comment mentions of the wiper IOCs, property
   // comparisons against `.rm`, non-destructive fs APIs, and mkdir
