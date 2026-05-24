@@ -1004,7 +1004,20 @@ not mis-scope the claim:
   `@npmjs.com`, and npm never asks a maintainer to "re-verify" or "log in
   here" via email; suspect anything else and report to the security
   contacts in [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md) before
-  clicking. Even if a phish succeeds, Daloy's publish flow has no
+  clicking. **Issue-comment spambots** are a parallel maintainer-credential
+  vector: starting in August 2024 and recurring in waves since, bot accounts
+  reply to open issues on public GitHub repos with "fix"/"crack"/"installer"
+  links pointing to MediaFire, Discord CDN, or other file-share archives
+  password-protected with `changeme` (Socket [2024-08-29 write-up](https://socket.dev/blog/github-users-targeted-by-new-wave-of-spambots-promoting-malicious-downloads)).
+  The payload is the **Lumma Stealer** family ([Triage analysis](https://tria.ge/240828-ry56astflp/behavioral1)),
+  which exfiltrates GitHub session cookies / OAuth tokens and then uses the
+  hijacked account to post the same spam to every repo the victim has
+  starred or watched. Treat any unsolicited download link in an issue
+  comment, PR description, or discussion reply as hostile by default; never
+  run an attached executable, never type a password from a comment into a
+  zip extractor. If you receive such a comment on a Daloy repo, hide it
+  (`Hide → Spam`), report the user to GitHub, and notify the active rotation
+  in [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md). Even if a phish succeeds, Daloy's publish flow has no
   long-lived `NPM_TOKEN` for an attacker to steal — releases run via
   npm trusted publishing (OIDC) from `release.yml` and require a second
   maintainer's approval on the protected `npm-publish` GitHub
