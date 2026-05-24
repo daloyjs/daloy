@@ -992,7 +992,22 @@ not mis-scope the claim:
   on each published package), so an account without 2FA cannot push to
   `main`, approve the `npm-publish` GitHub Environment, or run
   `npm publish`. Maintainers should rotate credentials immediately after any
-  ecosystem-wide phishing campaign (e.g. `npmjs.help`-style lookalikes).
+  ecosystem-wide phishing campaign and treat any "verify your account",
+  "2FA reset", or "log in here" email from a non-`npmjs.com` domain as
+  hostile by default. Documented npm-impersonation domains include
+  `npmjs.help` (used in the 2025-09-08 Qix / `debug` / `chalk` maintainer
+  takeover) and `npnjs.com` with a spoofed `support@npmjs.org` sender
+  (Socket [2025-07-18 write-up](https://socket.dev/blog/npm-phishing-email-targets-developers-with-typosquatted-domain),
+  a full-page clone of npmjs.com used to harvest credentials of high-reach
+  maintainers via tokenized login URLs). Real npm support emails come from
+  `@npmjs.com`, and npm never asks a maintainer to "re-verify" or "log in
+  here" via email; suspect anything else and report to the security
+  contacts in [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md) before
+  clicking. Even if a phish succeeds, Daloy's publish flow has no
+  long-lived `NPM_TOKEN` for an attacker to steal — releases run via
+  npm trusted publishing (OIDC) from `release.yml` and require a second
+  maintainer's approval on the protected `npm-publish` GitHub
+  Environment — so the blast radius of a stolen npm password is bounded.
 - **Removal of an account is part of the off-boarding checklist.** Whenever
   a contributor with publish access leaves rotation, the maintainer
   off-boarding step revokes their GitHub organization membership, their npm
