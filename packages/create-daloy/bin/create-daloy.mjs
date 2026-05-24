@@ -329,7 +329,7 @@ ${heading("Options")}
   ${color(COLORS.green, "--template <name>")}          ${TEMPLATES.join(" | ")}  ${color(COLORS.dim, "(default: node-basic)")}
   ${color(COLORS.green, "--package-manager <pm>")}     ${PACKAGE_MANAGERS.join(" | ")}  ${color(COLORS.dim, "(default: pnpm)")}
   ${color(COLORS.green, "--list-templates")}           Print available templates and exit.
-  ${color(COLORS.green, "--install / --no-install")}   Install dependencies after scaffolding. ${color(COLORS.dim, "(default: Y, except pnpm \u2014 N to respect minimumReleaseAge + onlyBuiltDependencies)")}
+  ${color(COLORS.green, "--install / --no-install")}   Install dependencies after scaffolding. ${color(COLORS.dim, "(default: Y, except pnpm \u2014 N to respect minimumReleaseAge + ignore-scripts review)")}
   ${color(COLORS.green, "--git / --no-git")}           Initialize a git repository.
   ${color(COLORS.green, "--minimal")}                  Strip the bookstore + OpenAPI docs demo routes.
   ${color(COLORS.green, "--with-ci / --no-ci")}         Add hardened GitHub Actions + governance files. ${color(COLORS.dim, "(default: Y)")}
@@ -1553,10 +1553,13 @@ function printSummary({ projectName, template, packageManager, installDeps, skip
       `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "(including a just-released @daloyjs/core) are embargoed for 24 h.")}`,
     );
     console.log(
-      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "Lifecycle scripts are blocked by default; allowlist trusted builds in")}`,
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "Lifecycle scripts stay blocked by default (ignore-scripts=true);")}`,
     );
     console.log(
-      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "package.json under pnpm.onlyBuiltDependencies if install complains.")}`,
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "if you later tighten build-script policy, keep exceptions in")}`,
+    );
+    console.log(
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "pnpm-workspace.yaml under allowBuilds instead of weakening .npmrc.")}`,
     );
   }
 
@@ -1677,18 +1680,17 @@ async function main() {
       } else if (packageManager === "pnpm") {
         // Deny-by-default for pnpm: the scaffolded `pnpm-workspace.yaml` ships
         // with `minimumReleaseAge: 1440` (24 h embargo on newly-published
-        // versions) and the `.npmrc` blocks lifecycle scripts unless they're
-        // allowlisted in `package.json` under `pnpm.onlyBuiltDependencies`.
-        // Both are security best practices, but they mean a fresh
-        // `pnpm install` can fail until the user (a) waits 24 h for newly
-        // published `@daloyjs/core` versions to clear the embargo, or (b)
-        // allowlists any dep that needs a build script. Defaulting to N
-        // makes that explicit instead of failing the install silently.
+        // versions), and the scaffolded `.npmrc` keeps `ignore-scripts=true`.
+        // Both are security best practices, but they mean the first install
+        // should be a deliberate user choice rather than something the CLI
+        // does implicitly. Defaulting to N makes that explicit, and it also
+        // avoids surprising users when a fresh `@daloyjs/core` release is
+        // still inside the 24 h embargo window.
         if (rl) {
           console.log(
             color(
               COLORS.gray,
-              "  (pnpm install may fail until you set pnpm.onlyBuiltDependencies in package.json and wait 24h for fresh @daloyjs/core releases \u2014 see pnpm-workspace.yaml)",
+              "  (pnpm install may wait out a fresh-release embargo and keeps lifecycle scripts blocked by default \u2014 see .npmrc + pnpm-workspace.yaml)",
             ),
           );
           installDeps = await askYesNo(rl, `Install dependencies with ${packageManager}?`, false);

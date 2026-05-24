@@ -2011,7 +2011,7 @@ test("--yes + pnpm defaults install to N and skips dependency installation", asy
     );
     // Post-install hint about the supply-chain embargo must surface.
     assert.match(stdout, /minimumReleaseAge: 1440/);
-    assert.match(stdout, /pnpm\.onlyBuiltDependencies/);
+    assert.match(stdout, /ignore-scripts/);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -2070,7 +2070,7 @@ test("--help documents the secure-by-default install + CI defaults", async () =>
     proc.on("error", () => resolve(buf));
   });
   assert.match(out, /minimumReleaseAge/);
-  assert.match(out, /onlyBuiltDependencies/);
+  assert.match(out, /ignore-scripts/);
   assert.match(out, /--with-ci.*\(default: Y\)/);
   assert.match(out, /--with-deploy.*inherits --with-ci/);
 });

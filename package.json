@@ -206,11 +206,5 @@
     "README.md"
   ],
   "packageManager": "pnpm@11.1.3",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ],
-    "neverBuiltDependencies": []
-  },
   "dependencies": {}
 }

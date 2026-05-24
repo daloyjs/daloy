@@ -34,6 +34,6 @@ verifyDepsBeforeRun: install
 
 # Explicit allowlist of packages permitted to run install scripts. Add a new
 # entry only with a PR that names *why* the package needs to build at install
-# time. `package.json#pnpm.onlyBuiltDependencies` is the legacy mirror.
+# time. On pnpm 11+, this workspace file is the source of truth.
 allowBuilds:
   esbuild: true

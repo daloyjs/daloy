@@ -18,12 +18,11 @@ test("root npmrc blocks install-time supply-chain attack paths", async () => {
   assert.match(npmrc, /^provenance=true$/m);
 });
 
-test("workspace allowlists dependency build scripts explicitly", async () => {
+test("package.json keeps the lockfile verifier and no stale pnpm mirror", async () => {
   const packageJson = JSON.parse(await readWorkspaceFile("package.json"));
 
   assert.equal(packageJson.scripts["verify:lockfile"], "node --import tsx scripts/verify-lockfile-sources.ts");
-  assert.deepEqual(packageJson.pnpm.onlyBuiltDependencies, ["esbuild"]);
-  assert.deepEqual(packageJson.pnpm.neverBuiltDependencies, []);
+  assert.equal(packageJson.pnpm, undefined);
 });
 
 test("pnpm-workspace.yaml enables pnpm 11 supply-chain controls", async () => {
