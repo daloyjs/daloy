@@ -1467,6 +1467,74 @@ test("verify-no-registry-exfiltration ignores benign WhatsApp-kill-switch-shaped
   assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
 });
 
+test("verify-no-registry-exfiltration flags the Beamglea phishing-CDN October 2025 IOCs", async () => {
+  // Positive: the documented IOCs from the Socket 2025-10-09 write-up on
+  // the 175-package Beamglea phishing-CDN npm campaign
+  // (https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure):
+  //   - one of the 7 documented Microsoft-OAuth phishing C2 hosts
+  //   - the unique `nb830r6x` HTML meta-tag campaign identifier
+  //   - the `beamglea.js` payload filename (campaign codename)
+  //   - the `unpkg.com/redirect-<id>` CDN URL distribution shape
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// unsafe: one of the 7 documented phishing C2 hosts",
+    'const c2a = "https://cfn.jackpotmastersdanske.com/TJImeEKD";',
+    "",
+    "// unsafe: another C2 host (subdomain variant)",
+    'const c2b = "https://evil.musicboxcr.com/login";',
+    "",
+    "// unsafe: campaign meta-tag identifier",
+    'const tag = "<meta name=\\"html-meta\\" content=\\"nb830r6x\\">";',
+    "",
+    "// unsafe: the payload filename / campaign codename",
+    'const payload = "beamglea.js";',
+    "",
+    "// unsafe: unpkg-CDN URL distribution shape",
+    'const cdn = "https://unpkg.com/redirect-xs13nr@1.0.0/beamglea.js";',
+    "",
+    "// unsafe: the outlier campaign package name on unpkg",
+    'const cdn2 = "https://unpkg.com/redirect-homer-flajpt@1.0.3/index.js";',
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  // c2a, c2b, tag, payload, cdn (matches both unpkg-redirect AND beamglea
+  // on the same line but only first pattern hit per line by `break`), cdn2
+  // = 6 findings.
+  assert.equal(findings.length, 6, JSON.stringify(findings, null, 2));
+  for (const finding of findings) {
+    assert.match(finding.reason, /Beamglea/);
+  }
+});
+
+test("verify-no-registry-exfiltration ignores benign Beamglea-shaped tokens", async () => {
+  // Negative: doc-comment mentions, unrelated unpkg packages, longer/
+  // shorter `redirect-*` package names that don't match the campaign
+  // pattern, hostnames that merely share a suffix string with an IOC,
+  // and unrelated identifiers must NOT trip the gate.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// safe: unrelated unpkg package (Swagger UI) is allowed",
+    'const swagger = "https://unpkg.com/swagger-ui-dist@5/swagger-ui.css";',
+    "",
+    "// safe: legitimate `redirect-loop` package is shorter than 6-char suffix",
+    'const real1 = "https://unpkg.com/redirect-loop@1.0.0/index.js";',
+    "",
+    "// safe: legitimate `redirect-debounce` is longer than 6-char suffix",
+    'const real2 = "https://unpkg.com/redirect-debounce@2.0.0/index.js";',
+    "",
+    "// safe: identifier that merely shares a prefix",
+    "const beamGuide = await loadDoc();",
+    "",
+    "// safe: unrelated `.com` host that does not match any IOC",
+    'const real3 = "https://elkendinscape.com/help";',
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
+});
+
 test("verify-no-registry-exfiltration ignores benign 11-Go-package-shaped tokens", async () => {
   // Negative: unrelated `.icu` / `.tech` / `.fun` hosts not on the
   // documented list, an unrelated `/storage/...` path, identifiers

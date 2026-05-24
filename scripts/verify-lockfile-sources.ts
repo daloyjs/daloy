@@ -8,6 +8,7 @@ export interface ForbiddenLockfileSource {
     | "known-malicious package (Lazarus BeaverTail / InvisibleFerret)"
     | "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"
     | "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"
+    | "known-malicious package (Beamglea phishing-CDN campaign, October 2025)"
     | "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)";
   text: string;
 }
@@ -100,7 +101,45 @@ const KNOWN_MALICIOUS_PACKAGES: ReadonlyMap<string, ForbiddenLockfileSource["rea
   ["naya-clone", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
   ["node-smsk", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
   ["@veryflore/disc", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  // Beamglea phishing-CDN campaign (Socket 2025-10-09,
+  // https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure)
+  // — one outlier name that does NOT match the campaign's
+  // `^redirect-[a-z0-9]{6}$` random-suffix pattern (handled by
+  // {@link BEAMGLEA_NAME_RE} below). The other 174 packages
+  // (`redirect-04g1my`, `redirect-0g91q6`, ... `redirect-zoju4g`)
+  // are matched by the regex so we do not have to enumerate them.
+  ["redirect-homer-flajpt", "known-malicious package (Beamglea phishing-CDN campaign, October 2025)"],
 ]);
+
+/**
+ * Regex matching the 174 random-suffix package names published by the
+ * **Beamglea** phishing-CDN campaign (Socket 2025-10-09,
+ * https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure).
+ *
+ * The campaign's Python `redirect_generator.py` tool publishes packages
+ * named `redirect-<random 6-char lowercase-alphanumeric suffix>` (e.g.
+ * `redirect-xs13nr`, `redirect-04g1my`) that ship a single `beamglea.js`
+ * redirect script. The packages themselves are install-time inert —
+ * they exist purely to be served via `unpkg.com`'s CDN to victims who
+ * open phishing HTML lures, then redirected to credential-harvesting
+ * pages. Daloy is a backend HTTP framework, so the direct dependency
+ * surface is effectively zero (the names are not typosquats and have
+ * no legitimate use), but this exact-pattern blocklist is a defensible
+ * belt-and-braces gate: a future PR that pulls one in (direct or
+ * transitive) — and any future campaign expansion that recycles the
+ * same naming scheme — is rejected at CI before merge.
+ *
+ * Pattern is intentionally tight (exactly 6 lowercase-alphanumeric
+ * characters after the `redirect-` prefix, anchored on both ends) so
+ * that legitimate `redirect-*` packages (e.g. `redirect-loop`,
+ * `redirect-debounce`, `redirect-tape`) are not affected. The single
+ * non-pattern-conforming campaign package (`redirect-homer-flajpt`)
+ * is enumerated above in {@link KNOWN_MALICIOUS_PACKAGES}.
+ */
+const BEAMGLEA_NAME_RE = /^redirect-[a-z0-9]{6}$/;
+
+const BEAMGLEA_REASON: ForbiddenLockfileSource["reason"] =
+  "known-malicious package (Beamglea phishing-CDN campaign, October 2025)";
 
 /**
  * Known-compromised `name@version` pairs for legitimate, widely-used npm
@@ -193,6 +232,7 @@ function findMaliciousPackageOnLine(
     const name = keyMatch[1]!;
     const reason = KNOWN_MALICIOUS_PACKAGES.get(name);
     if (reason !== undefined) return { name, reason };
+    if (BEAMGLEA_NAME_RE.test(name)) return { name, reason: BEAMGLEA_REASON };
   }
   // Pattern B: explicit `name: <name>` field inside a package entry.
   const nameField = /^name:\s*['"]?(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)['"]?\s*$/i
@@ -201,6 +241,7 @@ function findMaliciousPackageOnLine(
     const name = nameField[1]!;
     const reason = KNOWN_MALICIOUS_PACKAGES.get(name);
     if (reason !== undefined) return { name, reason };
+    if (BEAMGLEA_NAME_RE.test(name)) return { name, reason: BEAMGLEA_REASON };
   }
   // Pattern C: a dependency-map entry like `is-buffer-validator: 1.0.0`
   //            under `dependencies:` / `devDependencies:` / `specifiers:`.
@@ -210,6 +251,7 @@ function findMaliciousPackageOnLine(
     const name = depEntry[1]!;
     const reason = KNOWN_MALICIOUS_PACKAGES.get(name);
     if (reason !== undefined) return { name, reason };
+    if (BEAMGLEA_NAME_RE.test(name)) return { name, reason: BEAMGLEA_REASON };
   }
   return null;
 }

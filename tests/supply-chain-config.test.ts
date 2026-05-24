@@ -264,8 +264,68 @@ test("lockfile scanner allows the legitimate is-buffer package (exact-match bloc
   assert.deepEqual(findForbiddenLockfileSources(lockfile), []);
 });
 
-test("lockfile scanner rejects every Qix / DuckDB Sep 2025 crypto-clipper version", () => {
-  // Socket 2025-09-08 (https://socket.dev/blog/npm-author-qix-compromised-in-major-supply-chain-attack)
+test("lockfile scanner rejects Beamglea phishing-CDN October 2025 `redirect-<id>` packages", () => {
+  // Socket 2025-10-09 — 175 npm packages published across 9 throwaway
+  // accounts that abuse `unpkg.com` as a free CDN to serve `beamglea.js`
+  // redirect scripts to victims who open phishing HTML attachments.
+  // 174 of the package names match `^redirect-[a-z0-9]{6}$` and one is
+  // the outlier `redirect-homer-flajpt`. Documented at
+  // https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure.
+  const lockfile = [
+    "packages:",
+    "  redirect-xs13nr@1.0.0:",
+    "    resolution: {integrity: sha512-aaaa}",
+    "  redirect-04g1my@1.0.0:",
+    "    resolution: {integrity: sha512-bbbb}",
+    "  redirect-zoju4g@1.0.0:",
+    "    resolution: {integrity: sha512-cccc}",
+    "  redirect-homer-flajpt@1.0.3:",
+    "    resolution: {integrity: sha512-dddd}",
+    "  some-pkg@1.0.0:",
+    "    dependencies:",
+    "      redirect-nf0qo1: 1.0.0",
+  ].join("\n");
+
+  const findings = findForbiddenLockfileSources(lockfile);
+  assert.equal(findings.length, 5, JSON.stringify(findings, null, 2));
+  for (const finding of findings) {
+    assert.equal(
+      finding.reason,
+      "known-malicious package (Beamglea phishing-CDN campaign, October 2025)",
+    );
+  }
+  assert.match(findings[0]!.text, /redirect-xs13nr/);
+  assert.match(findings[1]!.text, /redirect-04g1my/);
+  assert.match(findings[2]!.text, /redirect-zoju4g/);
+  assert.match(findings[3]!.text, /redirect-homer-flajpt/);
+  assert.match(findings[4]!.text, /redirect-nf0qo1/);
+});
+
+test("lockfile scanner allows benign `redirect-*` package names outside the Beamglea pattern", () => {
+  // Regression: the Beamglea regex is anchored on exactly 6 lowercase
+  // alphanumeric characters after `redirect-`, so legitimate `redirect-*`
+  // packages with longer / shorter / hyphenated suffixes must NOT trip
+  // the gate. Common real packages on npm: `redirect-loop` (5 chars,
+  // hyphenless), `redirect-tape` (4 chars), `redirect-debounce`
+  // (8 chars), `redirect-pathname` (8 chars).
+  const lockfile = [
+    "packages:",
+    "  redirect-loop@1.0.0:",
+    "    resolution: {integrity: sha512-real-hash}",
+    "  redirect-tape@1.0.0:",
+    "    resolution: {integrity: sha512-real-hash}",
+    "  redirect-debounce@1.0.0:",
+    "    resolution: {integrity: sha512-real-hash}",
+    "  redirect@1.0.0:",
+    "    resolution: {integrity: sha512-real-hash}",
+    "  some-redirect-abcdef@1.0.0:",
+    "    resolution: {integrity: sha512-real-hash}",
+  ].join("\n");
+
+  assert.deepEqual(findForbiddenLockfileSources(lockfile), []);
+});
+
+test("lockfile scanner rejects every Qix / DuckDB Sep 2025 crypto-clipper version", () => {  // Socket 2025-09-08 (https://socket.dev/blog/npm-author-qix-compromised-in-major-supply-chain-attack)
   // and the Aikido DuckDB follow-up (https://www.aikido.dev/blog/duckdb-npm-packages-compromised):
   // the maintainer "Qix" was phished and trojanised versions of 19 foundational
   // packages were published with a browser crypto-clipper payload. The legit

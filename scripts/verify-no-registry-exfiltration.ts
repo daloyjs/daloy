@@ -1401,6 +1401,89 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "remove this literal",
     keepStrings: true,
   },
+  // Beamglea phishing-CDN campaign (Socket 2025-10-09,
+  // https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure)
+  // — 175 npm packages (`redirect-<6-char>` + `redirect-homer-flajpt`)
+  // published across 9 throwaway accounts that abuse `unpkg.com`'s
+  // free CDN to host a `beamglea.js` redirect script targeting 135+
+  // industrial / technology / energy companies. The packages are
+  // install-time inert (no `postinstall` payload); the attack chain
+  // runs entirely in the *victim's browser* when they open a phishing
+  // HTML attachment that references `https://unpkg.com/redirect-<id>@<v>/beamglea.js`.
+  // Each redirect script ends at one of 7 Microsoft-OAuth-phishing C2
+  // hosts that capture credentials, pre-filling the victim's email
+  // from the URL fragment for a more convincing lure. Daloy is a
+  // backend HTTP framework with no client-side surface, but the
+  // patterns below close the only places this campaign could land in
+  // our published bytes: an HTML template, docs page, or scaffolded
+  // example that names one of the 7 phishing C2 hosts, the campaign's
+  // unique `nb830r6x` HTML meta-tag identifier, the literal
+  // `beamglea.js` filename, or an `unpkg.com/redirect-<id>` URL.
+  {
+    // The 7 documented phishing C2 hosts (Microsoft-OAuth credential
+    // capture). DNS-label-anchored alternation so a subdomain match
+    // (`evil.musicboxcr.com`) also fires but an unrelated host with a
+    // similar suffix does not. Each host is uniquely tied to this
+    // campaign — none have any legitimate use in a backend framework.
+    re: /\b(?:cfn\.jackpotmastersdanske\.com|musicboxcr\.com|villasmbuva\.co\.mz|cfn\.fejyhy\.com|cfn\.fenamu\.com|cfn\.notwinningbutpartici\.com|elkendinsc\.com)\b/i,
+    reason:
+      "one of the 7 documented phishing C2 hosts for the Beamglea phishing-CDN npm " +
+      "campaign (Socket 2025-10-09) — `cfn.jackpotmastersdanske.com`, `musicboxcr.com`, " +
+      "`villasmbuva.co.mz`, `cfn.fejyhy.com`, `cfn.fenamu.com`, " +
+      "`cfn.notwinningbutpartici.com`, or `elkendinsc.com`. Each serves a Microsoft-OAuth " +
+      "credential-harvesting page that the `beamglea.js` redirect script funnels victims to " +
+      "(https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // The campaign's unique HTML meta-tag identifier. The string
+    // `nb830r6x` appears in the `<meta name="html-meta" content="...">`
+    // of all 630+ phishing HTML lures and (per Socket) had virtually
+    // no presence online prior to the disclosure — a near-perfect
+    // tracking identifier with zero false-positive risk.
+    re: /\bnb830r6x\b/,
+    reason:
+      "`nb830r6x` is the documented HTML meta-tag identifier for the Beamglea phishing-CDN " +
+      "npm campaign (Socket 2025-10-09) — appears in all 630+ phishing HTML lures across the " +
+      "175 packages, and had virtually no presence online prior to disclosure " +
+      "(https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // The campaign's payload filename. Every one of the 175 packages
+    // ships a single `beamglea.js` redirect script (the name doubles
+    // as the campaign codename). The word is not a real library name
+    // and has no legitimate use anywhere — matching it on a word
+    // boundary catches both bare filename references and full
+    // `https://unpkg.com/redirect-<id>@<v>/beamglea.js` URLs.
+    re: /\bbeamglea(?:\.js)?\b/i,
+    reason:
+      "`beamglea` / `beamglea.js` is the documented payload filename and campaign codename " +
+      "for the Beamglea phishing-CDN npm campaign (Socket 2025-10-09) — every one of the 175 " +
+      "packages ships this filename as its `main` redirect script " +
+      "(https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // The unpkg-CDN URL shape the campaign relies on for distribution:
+    // `https://unpkg.com/redirect-<6-char>@<version>/...`. Matches the
+    // exact `redirect-<6 lowercase-alphanumeric chars>` package-name
+    // pattern (or the `redirect-homer-flajpt` outlier) on the unpkg
+    // host, so unrelated unpkg references (e.g. `unpkg.com/swagger-ui`)
+    // are not flagged.
+    re: /\bunpkg\.com\/redirect-(?:[a-z0-9]{6}|homer-flajpt)(?:[@/]|\b)/i,
+    reason:
+      "`unpkg.com/redirect-<id>` URL — the CDN distribution shape for the Beamglea " +
+      "phishing-CDN npm campaign (Socket 2025-10-09); phishing HTML lures reference " +
+      "`https://unpkg.com/redirect-<id>@<version>/beamglea.js` to load the redirect " +
+      "script from npm's public CDN " +
+      "(https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
 ];
 
 const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
