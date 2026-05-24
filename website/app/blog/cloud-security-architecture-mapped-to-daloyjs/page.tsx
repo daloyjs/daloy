@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CodeBlock } from "@/components/code-block";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { buildMetadata, SITE_URL } from "@/lib/seo";
+import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const POST = {
   slug: "cloud-security-architecture-mapped-to-daloyjs",
@@ -199,7 +199,7 @@ export default function BlogPostPage() {
     <main className="flex-1">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <article className="mx-auto max-w-3xl px-6 py-16 lg:py-20">
         <header className="not-prose mb-10">

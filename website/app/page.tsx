@@ -26,6 +26,7 @@ import {
   CORE_PACKAGE_VERSION,
   HOME_DESCRIPTION,
   HOME_TITLE,
+  serializeJsonLd,
   SITE_URL,
 } from "@/lib/seo";
 
@@ -207,7 +208,7 @@ export default function HomePage() {
     <main className="flex-1">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       {/* Hero */}
       <section className="relative isolate overflow-hidden border-b bg-background">
@@ -216,7 +217,7 @@ export default function HomePage() {
           <div className="flex flex-col items-center gap-5 text-center">
             <Badge
               variant="outline"
-              className="float-up dim:border-mauve-900/60 dim:bg-mauve-950/20 dim:text-mauve-100 gap-2 border border-mauve-200/80 bg-mauve-50/85 px-3 py-1 text-mauve-950 shadow-sm dark:border-mauve-800/70 dark:bg-mauve-950/25 dark:text-mauve-100"
+              className="float-up gap-2 border border-mauve-200/80 bg-mauve-50/85 px-3 py-1 text-mauve-950 shadow-sm dark:border-mauve-800/70 dark:bg-mauve-950/25 dark:text-mauve-100 dim:border-mauve-900/60 dim:bg-mauve-950/20 dim:text-mauve-100"
               style={{ animationDelay: "0ms" }}
             >
               <span className="relative inline-flex size-1.5 items-center justify-center">
@@ -289,7 +290,7 @@ export default function HomePage() {
               </Link>
             </div>
             <div
-              className="float-up dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100 flex items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100"
+              className="float-up flex items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
               style={{ animationDelay: "380ms" }}
             >
               <code className="text-sm">$ {CREATE_COMMAND}</code>
@@ -430,7 +431,7 @@ export default function HomePage() {
             DaloyJS is not trying to win one checkbox. It is trying to remove
             the glue work between the best ideas developers already like.
           </p>
-          <div className="dim:scrollbar-thumb-mist-800 scrollbar-thin scrollbar-thumb-mist-300 scrollbar-track-transparent overflow-x-auto rounded-lg border dark:scrollbar-thumb-mist-700">
+          <div className="scrollbar-thin scrollbar-thumb-mist-300 scrollbar-track-transparent overflow-x-auto rounded-lg border dark:scrollbar-thumb-mist-700 dim:scrollbar-thumb-mist-800">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
