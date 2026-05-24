@@ -1398,6 +1398,75 @@ test("verify-no-registry-exfiltration flags the 11-Go-package obfuscated-loader 
   }
 });
 
+test("verify-no-registry-exfiltration flags the naya-flore / nvlore-hsc WhatsApp kill-switch IOCs", async () => {
+  // Positive: the documented IOCs from the Socket 2025-08-06 write-up
+  // on the `naya-flore` / `nvlore-hsc` WhatsApp remote-kill-switch
+  // npm packages
+  // (https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch):
+  //   - `api.verylinh.my.id` C2 host (status / exfiltration beacon)
+  //   - `navaLinh/database` GitHub repo path (whitelist endpoint)
+  //   - `seska.json` whitelist filename
+  //   - `rm -rf *` shell-glob destruction primitive
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// unsafe: documented C2 host for the WhatsApp kill-switch campaign",
+    'const c2 = "https://api.verylinh.my.id/running";',
+    "",
+    "// unsafe: GitHub-hosted whitelist endpoint",
+    'const wl = "https://raw.githubusercontent.com/navaLinh/database/main/seska.json";',
+    "",
+    "// unsafe: rm -rf * shell-glob destruction primitive (variant 1)",
+    "const cmd1 = \"rm -rf *\";",
+    "",
+    "// unsafe: rm -fr * variant (flag order reversed)",
+    "const cmd2 = \"rm -fr * \";",
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  // Lines: c2 (1), wl (1 — matches both navaLinh and seska.json on same line but only first
+  // pattern hit per line by `break`), cmd1 (1), cmd2 (1) = 4 findings.
+  assert.equal(findings.length, 4, JSON.stringify(findings, null, 2));
+  assert.match(findings[0]!.reason, /api\.verylinh\.my\.id/);
+  assert.match(findings[1]!.reason, /navaLinh\/database/);
+  assert.match(findings[2]!.reason, /rm -rf \*/);
+  assert.match(findings[3]!.reason, /rm -rf \*/);
+  for (const finding of findings) {
+    assert.match(finding.reason, /naya-flore|nvlore-hsc/);
+  }
+});
+
+test("verify-no-registry-exfiltration ignores benign WhatsApp-kill-switch-shaped tokens", async () => {
+  // Negative: doc-comment mentions, unrelated `.my.id` hosts, unrelated
+  // `seska` substrings, unrelated `naval`/`navaLine` identifiers, and
+  // `rm -rf <path>` with a real path (not the bare `*` glob) must NOT
+  // trip the gate.
+  const { findForbiddenRegistryExfilCalls } = await import(
+    "../scripts/verify-no-registry-exfiltration.js"
+  );
+  const sample = [
+    "// safe: doc-comment mention of the C2 host",
+    "// the kill switch beaconed to api.verylinh.my.id/running",
+    "",
+    "// safe: doc-comment mention of the whitelist endpoint",
+    "// it fetched navaLinh/database/main/seska.json",
+    "",
+    "// safe: unrelated `.my.id` host (Indonesian ccTLD, not the IOC)",
+    'const ok1 = "https://example.my.id/api";',
+    "",
+    "// safe: identifier that shares a prefix with the GitHub user",
+    "const navalBattle = await loadGame();",
+    "",
+    "// safe: `rm -rf` against a specific path (not the bare `*` glob)",
+    'const buildClean = "rm -rf ./dist";',
+    "",
+    "// safe: `--recursive --force` long-flag form against a path",
+    'const altClean = "rm --recursive --force ./build";',
+  ].join("\n");
+  const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
+  assert.equal(findings.length, 0, JSON.stringify(findings, null, 2));
+});
+
 test("verify-no-registry-exfiltration ignores benign 11-Go-package-shaped tokens", async () => {
   // Negative: unrelated `.icu` / `.tech` / `.fun` hosts not on the
   // documented list, an unrelated `/storage/...` path, identifiers

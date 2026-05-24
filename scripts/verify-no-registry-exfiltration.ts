@@ -1311,6 +1311,96 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "`src/**` is a hard IOC",
     keepStrings: true,
   },
+  // ---- naya-flore / nvlore-hsc WhatsApp remote-kill-switch campaign
+  //      (Socket 2025-08-06,
+  //      https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch) ----
+  //
+  // Two npm packages (`naya-flore`, `nvlore-hsc`) published by
+  // `nayflore` (`idzzcch@gmail.com`) masquerade as WhatsApp socket
+  // libraries (à la `baileys` / `whatsapp-web.js`) and embed a
+  // phone-number-keyed remote kill switch inside `requestPairingCode`.
+  // At pairing-code time the package fetches a GitHub-hosted whitelist
+  // (`https://raw.githubusercontent.com/navaLinh/database/main/seska.json`,
+  // referenced as a Base64-encoded constant) and, if the developer's
+  // phone number is NOT in the whitelist, runs `exec('rm -rf *')` —
+  // destroying every file in the current working directory of any
+  // process that pairs with an "unknown" number (i.e. anyone outside
+  // the threat actor's whitelist). A dormant `generateCreeds` function
+  // can additionally POST `{nomor, id, status, key}` to
+  // `https://api.verylinh.my.id/running` (commented out in the live
+  // versions but ready to be re-enabled). A leaked GitHub PAT
+  // (a `ghp_<REDACTED>` classic personal access token — verbatim
+  // value redacted here to satisfy GitHub Push Protection; the
+  // original is documented in the Socket write-up) is also embedded —
+  // the existing `verify-no-leaked-credentials` gate catches that
+  // shape directly, and the Base64-encoded URL is rejected by
+  // `verify-no-encoded-payloads`. The `exec('rm -rf *')` primitive
+  // requires `child_process`, already banned by `verify-no-remote-exec`.
+  // The patterns below are belt-and-braces IOC literals for the
+  // remaining campaign-specific surface: the C2 host, the GitHub-hosted
+  // whitelist endpoint, and the `rm -rf *` (or `rm -fr *`) shell-glob
+  // destruction primitive itself.
+  {
+    // The exfiltration / status-beacon C2 host. Pinned with at least
+    // a `/` after the host so that a docs mention of just the bare
+    // domain in prose without a path is less likely (the published
+    // POST target is `/running`).
+    re: /\bapi\.verylinh\.my\.id\b/i,
+    reason:
+      "`api.verylinh.my.id` is the documented C2 host for the `naya-flore` / `nvlore-hsc` " +
+      "WhatsApp remote-kill-switch npm campaign — the `generateCreeds` function POSTs phone " +
+      "number / device id / status to `https://api.verylinh.my.id/running` (currently dormant " +
+      "in the live versions but ready to be re-enabled) " +
+      "(https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // The GitHub-hosted phone-number whitelist endpoint. Matches the
+    // GitHub raw repo path (`navaLinh/database/...`) and the IOC
+    // filename `seska.json`. Either alone is a hard IOC for this
+    // campaign — a backend HTTP framework has zero reason to fetch
+    // an arbitrary GitHub-user JSON file at runtime, and the path
+    // segment `navaLinh/database` is uniquely tied to this threat
+    // actor.
+    re: /\b(?:navaLinh\/database|seska\.json)\b/,
+    reason:
+      "`navaLinh/database` (GitHub repo path) and `seska.json` are the documented kill-switch " +
+      "whitelist endpoint for the `naya-flore` / `nvlore-hsc` WhatsApp remote-kill-switch npm " +
+      "campaign — `requestPairingCode` fetches " +
+      "`https://raw.githubusercontent.com/navaLinh/database/main/seska.json` (the URL is " +
+      "Base64-encoded in source as `aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL25hdmFMaW5o...`) " +
+      "and, if the developer's phone number is not in the returned list, runs `exec('rm -rf *')` " +
+      "(https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch); " +
+      "any reference in `src/**` is a hard IOC",
+    keepStrings: true,
+  },
+  {
+    // `rm -rf *` (or `rm -fr *`) — shell-glob recursive-force-delete
+    // of the entire current working directory. Distinct from `rm -rf /`
+    // (covered by `--no-preserve-root` above): `rm -rf *` does not
+    // require `--no-preserve-root` because it never names `/` and
+    // simply wipes whatever the cwd happens to be when the process
+    // runs (typically the developer's project root). This is the
+    // exact destruction primitive the `naya-flore` / `nvlore-hsc`
+    // kill switch invokes from `requestPairingCode`. The pattern is
+    // anchored on a word boundary at `rm`, requires the `-rf` /
+    // `-fr` flag, and requires the bare `*` glob with optional
+    // surrounding whitespace — so a literal like `npm-rf` or a
+    // `--recursive --force <path>` long-flag form does not trip.
+    // `keepStrings: true` because the malware places this string
+    // inside an `exec("rm -rf *")` literal.
+    re: /\brm\s+-(?:rf|fr)\s+\*(?:\s|;|"|'|`|$)/,
+    reason:
+      "`rm -rf *` (shell-glob recursive-force-delete of the current working directory) — " +
+      "the destruction primitive the `naya-flore` / `nvlore-hsc` WhatsApp remote-kill-switch " +
+      "npm campaign invokes from `requestPairingCode` when the developer's phone number is " +
+      "not in the GitHub-hosted whitelist; library source has zero legitimate reason to ever " +
+      "materialize this command as a literal " +
+      "(https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch) — " +
+      "remove this literal",
+    keepStrings: true,
+  },
 ];
 
 const STRING_LITERAL_RE = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
@@ -1462,7 +1552,8 @@ async function main(): Promise<void> {
         "token-harvest command, or the `--no-preserve-root` destructive `rm` flag). These are the runtime primitives the GemStuffer, Lazarus / Jade " +
         "Sleet, RATatouille / rand-user-agent, xrpl.js / Ripple-SDK, Telegram-bot SSH-backdoor, " +
         "Lazarus BeaverTail / InvisibleFerret, `xlsx-to-json-lh` codebase-wiper, " +
-        "Vietnam-Telegram-ban Fastlane-typosquat, and Toptal GitHub-org hijack classes of " +
+        "Vietnam-Telegram-ban Fastlane-typosquat, Toptal GitHub-org hijack, and `naya-flore` / " +
+        "`nvlore-hsc` WhatsApp remote-kill-switch classes of " +
         "supply-chain attack use to scrape, exfiltrate, or destroy data. See https://socket.dev/blog/gemstuffer, " +
         "https://socket.dev/blog/social-engineering-campaign-npm-malware, " +
         "https://www.aikido.dev/blog/catching-a-rat-remote-access-trojian-rand-user-agent-supply-chain-compromise, " +
@@ -1471,7 +1562,8 @@ async function main(): Promise<void> {
         "https://socket.dev/blog/lazarus-strikes-npm-again-with-a-new-wave-of-malicious-packages, " +
         "https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger, " +
         "https://socket.dev/blog/malicious-ruby-gems-exfiltrate-telegram-tokens-and-messages-following-vietnam-ban, " +
-        "and https://socket.dev/blog/toptal-s-github-organization-hijacked-10-malicious-packages-published.",
+        "https://socket.dev/blog/toptal-s-github-organization-hijacked-10-malicious-packages-published, " +
+        "and https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch.",
     );
     process.exitCode = 1;
   }

@@ -7,6 +7,7 @@ export interface ForbiddenLockfileSource {
     | "non-registry tarball source"
     | "known-malicious package (Lazarus BeaverTail / InvisibleFerret)"
     | "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"
+    | "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"
     | "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)";
   text: string;
 }
@@ -75,6 +76,30 @@ const KNOWN_MALICIOUS_PACKAGES: ReadonlyMap<string, ForbiddenLockfileSource["rea
   ["vite-plugin-vue-extend", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
   ["vue-plugin-bomb", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
   ["quill-image-downloader", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
+  // naya-flore / nvlore-hsc WhatsApp remote-kill-switch campaign
+  // (Socket 2025-08-06,
+  // https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch)
+  // — two packages masquerading as WhatsApp socket libraries (à la
+  // `baileys` / `whatsapp-web.js`) embed a phone-number-keyed remote
+  // kill switch that fetches a GitHub-hosted whitelist and runs
+  // `exec('rm -rf *')` from `requestPairingCode` if the developer's
+  // phone number is not whitelisted. The same nayflore (`nayflore`,
+  // `idzzcch@gmail.com`) author published five additional packages
+  // that currently appear benign but are listed as IOCs in the Socket
+  // write-up — pin all seven by exact name so any future PR that
+  // pulls one in (direct or transitive) is rejected at CI before
+  // merge.
+  ["naya-flore", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  ["nvlore-hsc", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  // The five sibling packages below are author-IOCs from the same
+  // `nayflore` npm account — currently benign per Socket but treated
+  // as malicious here so a future weaponised republish is rejected at
+  // CI before merge.
+  ["nouku-search", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  ["very-nay", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  ["naya-clone", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  ["node-smsk", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  ["@veryflore/disc", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
 ]);
 
 /**
