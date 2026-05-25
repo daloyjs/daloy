@@ -224,6 +224,9 @@ CAPTCHA, ML fraud scoring, PSP-specific velocity rules, and AVS heuristics are t
 #### Clickjacking / MIME sniffing / cross-origin leakage
 `secureHeaders()` ships CSP nonce + Trusted Types, HSTS, COOP, CORP, `X-Frame-Options`, `X-Content-Type-Options`, Permissions-Policy.
 
+#### ClickFix social-engineering (clipboard-stuffing)
+The Ghost CMS [CVE-2026-26980](https://nvd.nist.gov/vuln/detail/CVE-2026-26980) campaign (May 2026, 700+ domains including Harvard, Oxford, DuckDuckGo) chained pre-auth SQLi → stolen admin API keys → injected `<script>` that overlaid a fake Cloudflare "verify you are human" iframe and silently called `navigator.clipboard.writeText()` to stuff a PowerShell one-liner into the victim's clipboard. `secureHeaders()` now ships `clipboard-write=()` in the default Permissions-Policy so a Daloy-served HTML surface refuses the clipboard write at the browser layer even if attacker JS slips past CSP. Override `permissionsPolicy:` if your page legitimately needs "Copy" buttons.
+
 #### Malicious image uploads / ImageTragick ([CVE-2016-3714](https://www.cve.org/CVERecord?id=CVE-2016-3714)) class
 `fileField()` validates magic bytes against declared MIME and, when `magicBytes` is enabled, refuses scriptable image formats (SVG, MVG, MSL, PostScript, EPS) by default. Opt back in with `rejectScriptableImages: false` only when the renderer is sandboxed. See [Snyk's ImageMagick write-up](https://snyk.io/blog/safe-imagemagick-for-node/).
 

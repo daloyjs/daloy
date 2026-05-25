@@ -13,6 +13,11 @@ const STATIC_PATHS: Array<{
   { path: "/", changeFrequency: "weekly", priority: 1.0 },
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
   {
+    path: "/blog/ghost-cms-clickfix-campaign-mapped-to-daloyjs",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/litellm-teampcp-poisoned-scanner-mapped-to-daloyjs",
     changeFrequency: "monthly",
     priority: 0.7,

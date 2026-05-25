@@ -13,6 +13,16 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
+    slug: "ghost-cms-clickfix-campaign-mapped-to-daloyjs",
+    title:
+      "The Ghost CMS / ClickFix Campaign, Mapped to DaloyJS \u2014 Plus the One Default We Just Tightened",
+    description:
+      "A pre-auth SQL injection in Ghost CMS (CVE-2026-26980) is being exploited at scale to hijack 700+ sites \u2014 including Harvard, Oxford, and DuckDuckGo \u2014 and serve a fake Cloudflare \"verify you are human\" prompt that silently stuffs a PowerShell one-liner into the visitor's clipboard. Most of the chain was already blocked by DaloyJS defaults; the last mile (the clipboard write) wasn't. Here's the stage-by-stage mapping and the one-line default we changed in response.",
+    date: "2026-05-25",
+    readingTime: "8 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "litellm-teampcp-poisoned-scanner-mapped-to-daloyjs",
     title:
       "When the Security Scanner Is the Attacker: The LiteLLM / TeamPCP Compromise, Mapped to DaloyJS",

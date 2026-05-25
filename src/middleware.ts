@@ -338,7 +338,18 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
   const ref = opts.referrerPolicy ?? "no-referrer";
   if (ref !== false) headers["referrer-policy"] = ref;
 
-  const perm = opts.permissionsPolicy ?? "camera=(), microphone=(), geolocation=()";
+  // Default denies camera/mic/geo (rarely needed by HTTP backends) plus
+  // `clipboard-write` to neutralise the "ClickFix" social-engineering
+  // pattern — injected JS silently calls `navigator.clipboard.writeText()`
+  // with an attacker payload (e.g. a PowerShell one-liner) so a victim
+  // who follows a fake "verify you are human" prompt pastes the command
+  // into Win+R / Terminal. The Ghost CMS / CVE-2026-26980 campaign
+  // (May 2026, 700+ domains incl. Harvard / Oxford / DuckDuckGo) used
+  // exactly this chain. Override via `permissionsPolicy:` if your HTML
+  // surface legitimately needs clipboard write (e.g. "Copy" buttons).
+  const perm =
+    opts.permissionsPolicy ??
+    "camera=(), microphone=(), geolocation=(), clipboard-write=()";
   if (perm !== false) headers["permissions-policy"] = perm;
 
   const coop = opts.crossOriginOpenerPolicy ?? "same-origin";

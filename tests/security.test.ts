@@ -123,6 +123,24 @@ test("secureHeaders sets defaults", async () => {
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
   assert.equal(res.headers.get("x-frame-options"), "DENY");
   assert.ok(res.headers.get("strict-transport-security"));
+  // Default Permissions-Policy denies the ClickFix clipboard-write vector.
+  const permissionsPolicy = res.headers.get("permissions-policy") ?? "";
+  assert.match(permissionsPolicy, /clipboard-write=\(\)/);
+  assert.match(permissionsPolicy, /camera=\(\)/);
+});
+
+test("secureHeaders permissionsPolicy override fully replaces the default (no merge)", async () => {
+  const app = new App();
+  app.use(secureHeaders({ permissionsPolicy: "geolocation=(self)" }));
+  app.route({
+    method: "GET",
+    path: "/h2",
+    operationId: "h2",
+    responses: { 200: { description: "ok" } },
+    handler: async () => ({ status: 200 as const, body: undefined }),
+  });
+  const res = await app.request("/h2");
+  assert.equal(res.headers.get("permissions-policy"), "geolocation=(self)");
 });
 
 test("requestId surfaces on every response", async () => {
