@@ -470,7 +470,7 @@ export default function HomePage() {
                   [
                     "Portable supply-chain hardening for the apps you build",
                     "pnpm defaults + zero-runtime-dep core",
-                    "pnpm scaffolds block install scripts, add a 24h release-age cooldown, and verify lockfile sources; every app gets a zero-runtime-dep core plus SBOM + npm provenance you can verify on any CI — with an optional hardened GitHub Actions bundle for teams on GitHub",
+                    "Hardened .npmrc, source-verified lockfiles, SBOM + npm provenance",
                   ],
                 ].map(([want, best, give]) => (
                   <tr key={want} className="border-t">
