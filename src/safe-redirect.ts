@@ -38,7 +38,7 @@
  * });
  * ```
  *
- * @since 0.35.0
+ * @since 0.35.1
  */
 
 /** Reason an open-redirect candidate was refused. */
@@ -176,7 +176,7 @@ function classify(
  * @param target - User-supplied URL candidate (path or absolute URL).
  * @param options - Allowlist + response configuration.
  *
- * @since 0.35.0
+ * @since 0.35.1
  */
 export function safeRedirect(target: string, options: SafeRedirectOptions = {}): Response {
   const allowedPaths = options.allowedPaths ?? [];

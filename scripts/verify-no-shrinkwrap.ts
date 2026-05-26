@@ -52,7 +52,7 @@
  *   1 — at least one offending file or manifest entry was found;
  *       the offending paths are printed to stderr.
  *
- * @since 0.35.0
+ * @since 0.35.1
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";

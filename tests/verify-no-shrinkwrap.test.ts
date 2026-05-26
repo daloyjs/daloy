@@ -9,7 +9,7 @@
  * future change to the allowlist/`scripts` shape cannot silently
  * weaken the gate.
  *
- * @since 0.35.0
+ * @since 0.35.1
  */
 
 import assert from "node:assert/strict";

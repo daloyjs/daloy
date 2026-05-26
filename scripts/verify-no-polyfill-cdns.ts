@@ -90,7 +90,7 @@
  *   1 — at least one was found; offending lines printed to stderr with
  *       the IOC host name and the campaign citation.
  *
- * @since 0.35.0
+ * @since 0.35.1
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";

@@ -39,7 +39,7 @@
  *   0 — no leaky-skill anti-patterns found.
  *   1 — at least one finding; offending paths / lines printed to stderr.
  *
- * @since 0.35.0
+ * @since 0.35.1
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
