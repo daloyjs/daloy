@@ -205,16 +205,18 @@ export function timingSafeEqual(a: string, b: string): boolean {
  */
 // Cache the Web Crypto entry points at module load so randomId() doesn't pay
 // for a `globalThis.crypto` + optional-chain property lookup per request.
-// Falls back to the legacy lookup path if Web Crypto is somehow patched in
-// after module load (test harnesses).
+// Falls back to the runtime lookup path if Web Crypto is patched/replaced
+// after module load (test harnesses, custom runtimes) — the cache is only
+// trusted when `globalThis.crypto` is still the same reference, otherwise
+// the stubbed object would be silently bypassed.
 const _webCrypto: Crypto | undefined = (globalThis as any).crypto;
 const _randomUUID: (() => string) | undefined =
   _webCrypto && typeof _webCrypto.randomUUID === "function"
     ? _webCrypto.randomUUID.bind(_webCrypto)
     : undefined;
 export function randomId(): string {
-  if (_randomUUID !== undefined) return _randomUUID();
   const c: Crypto | undefined = (globalThis as any).crypto;
+  if (c === _webCrypto && _randomUUID !== undefined) return _randomUUID();
   if (c?.randomUUID) return c.randomUUID();
   if (c?.getRandomValues) {
     const buf = new Uint8Array(16);
