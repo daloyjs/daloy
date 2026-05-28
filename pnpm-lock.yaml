@@ -32,7 +32,7 @@ importers:
   workshop:
     dependencies:
       '@daloyjs/core':
-        specifier: ^0.35.1
+        specifier: ^0.35.2
         version: link:..
       zod:
         specifier: ^4.4.3

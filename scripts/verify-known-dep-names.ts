@@ -37,7 +37,7 @@
  *       names + the package.json paths that declared them are printed
  *       to stderr along with a slopsquatting-aware remediation hint.
  *
- * @since 0.35.1
+ * @since 0.35.2
  */
 
 import { readFile } from "node:fs/promises";
@@ -144,7 +144,7 @@ export interface UnknownDependency {
  * An `"foo": "npm:bar@1.0.0"` dependency-aliasing entry. See
  * {@link findAliasedDependencySpecifiers} for why this is gated.
  *
- * @since 0.35.1
+ * @since 0.35.2
  */
 export interface AliasedDependency {
   readonly source: string;
@@ -209,7 +209,7 @@ export function findUnknownDependencyNames(
  *
  * Pure / no I/O — safe to call from tests.
  *
- * @since 0.35.1
+ * @since 0.35.2
  */
 export function findAliasedDependencySpecifiers(
   source: string,
@@ -233,7 +233,7 @@ export function findAliasedDependencySpecifiers(
  * `"foo": "https://example.com/pkg.tgz"` dependency-specifier entry.
  * See {@link findGitOrUrlDependencySpecifiers} for why this is gated.
  *
- * @since 0.35.1
+ * @since 0.35.2
  */
 export interface NonRegistryDependency {
   readonly source: string;
@@ -294,7 +294,7 @@ const URL_SPECIFIER_PATTERN = /^https?:\/\//i;
  *
  * Pure / no I/O — safe to call from tests.
  *
- * @since 0.35.1
+ * @since 0.35.2
  */
 export function findGitOrUrlDependencySpecifiers(
   source: string,

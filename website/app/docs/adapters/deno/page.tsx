@@ -71,8 +71,8 @@ deno task dev    # deno run --allow-net --allow-env --allow-read --watch`}
         code={`// deno.json
 {
   "imports": {
-    "@daloyjs/core":  "npm:@daloyjs/core@^0.35.1",
-    "@daloyjs/core/": "npm:@daloyjs/core@^0.35.1/",
+    "@daloyjs/core":  "npm:@daloyjs/core@^0.35.2",
+    "@daloyjs/core/": "npm:@daloyjs/core@^0.35.2/",
     "zod":            "npm:zod@^4.4.3"
   }
 }`}

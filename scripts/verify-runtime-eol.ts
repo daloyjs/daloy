@@ -50,7 +50,7 @@
  *   1 — at least one endorsed Node major is EOL (or warning in --strict).
  *   2 — the EOL feed could not be fetched / parsed.
  *
- * @since 0.35.1
+ * @since 0.35.2
  */
 
 import { readdir, readFile } from "node:fs/promises";

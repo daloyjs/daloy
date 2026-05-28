@@ -46,7 +46,7 @@
  *
  *     pnpm scan:staged-secrets
  *
- * @since 0.35.1
+ * @since 0.35.2
  */
 
 import { spawnSync } from "node:child_process";

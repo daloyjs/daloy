@@ -62,7 +62,7 @@
     "dev:sol:8:bug": "tsx --watch src/challenges/8-hour/solutions/challenge-2-bug-end.ts"
   },
   "dependencies": {
-    "@daloyjs/core": "^0.35.1",
+    "@daloyjs/core": "^0.35.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

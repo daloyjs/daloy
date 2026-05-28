@@ -37,7 +37,7 @@ const POSTS = [
     title:
       "Aikido's Top 10 App Security Problems, Mapped to DaloyJS (and the One Gap We Just Closed)",
     description:
-      "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list \u2014 SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and the single gap we shipped a new helper for in 0.35.1: safeRedirect().",
+      "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list \u2014 SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and the single gap we shipped a new helper for in 0.35.2: safeRedirect().",
     date: "2026-05-24",
     readingTime: "10 min read",
     author: "Devlin Duldulao",
