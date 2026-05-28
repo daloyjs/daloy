@@ -95,8 +95,10 @@
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = new URL("../", import.meta.url);
+const REPO_ROOT_PATH = fileURLToPath(REPO_ROOT);
 
 export interface ForbiddenCdnReference {
   readonly file: string;
@@ -331,7 +333,7 @@ async function* walk(dir: URL): AsyncGenerator<string> {
       if (SKIP_DIR_NAMES.has(entry.name)) continue;
       yield* walk(new URL(entry.name + "/", dir));
     } else if (entry.isFile() && hasScanExtension(entry.name)) {
-      yield new URL(entry.name, dir).pathname;
+      yield fileURLToPath(new URL(entry.name, dir));
     }
   }
 }
@@ -348,7 +350,7 @@ async function main(): Promise<void> {
     return;
   }
   for await (const absolute of walk(REPO_ROOT)) {
-    const rel = toPosix(relative(REPO_ROOT.pathname, absolute));
+    const rel = toPosix(relative(REPO_ROOT_PATH, absolute));
     if (isSkippedPath(rel)) continue;
     const text = await readFile(absolute, "utf8");
     const findings = findForbiddenCdnReferences(rel, text);
