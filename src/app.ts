@@ -2688,7 +2688,10 @@ export class App {
       );
       let response: Response = isPromiseLike(serializeResultRes) ? await serializeResultRes : serializeResultRes;
       copyContextHeaders(ctx, response);
-      if (!response.headers.has("x-request-id")) response.headers.set("x-request-id", requestId);
+      // `serializeResult` always builds a fresh Response with no request id —
+      // skip the `has()` probe and set directly. Saves one undici contains()
+      // call per request on the hot path.
+      response.headers.set("x-request-id", requestId);
       let finalized: Response;
       if (hasFinalizeHook) {
         const fin = finalizeResponse(response, ctx, allHooks, stripFingerprint);

@@ -18,7 +18,8 @@
     "bench:errors": "node error-path.mjs",
     "bench:streaming": "node streaming.mjs",
     "bench:secured": "node middleware-stack.mjs",
-    "bench:all": "node run.mjs && node cold-start.mjs && node install-size.mjs && node bundle-size.mjs && node body-size-sweep.mjs && node route-scale.mjs && node error-path.mjs && node streaming.mjs && node middleware-stack.mjs",
+    "bench:logging": "node logging.mjs",
+    "bench:all": "node run.mjs && node cold-start.mjs && node install-size.mjs && node bundle-size.mjs && node body-size-sweep.mjs && node route-scale.mjs && node error-path.mjs && node streaming.mjs && node middleware-stack.mjs && node logging.mjs",
     "bench:smoke": "node smoke.mjs --only=daloy"
   },
   "devDependencies": {
@@ -55,6 +56,7 @@
     "koa-helmet": "^9.0.0",
     "koa-jwt": "^4.0.4",
     "koa-ratelimit": "^6.0.0",
+    "pino": "^10.3.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "tsx": "^4.19.0",
