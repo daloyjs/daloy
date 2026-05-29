@@ -1,4 +1,4 @@
-// Hono on @hono/node-server, with the same Zod schemas as servers/daloy.ts.
+// Hono on @hono/node-server, with the same Zod schemas as throughput/daloy.ts.
 // This exists so memory-load.mjs (and any other per-request-allocation bench)
 // can compare daloy-with-validation against hono-with-validation, instead of
 // daloy-with-validation against hono-without. Zod parses allocate result

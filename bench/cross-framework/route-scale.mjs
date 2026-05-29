@@ -11,7 +11,7 @@ import path from "node:path";
 import autocannon from "autocannon";
 import {
   __dirname, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, stats, fmt,
+  startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 
 // Only servers that honor the ROUTE_COUNT env var and expose /r/:i routes
@@ -23,10 +23,16 @@ import {
 //   daloy-scale-nozod  = Daloy without response-body schema (router + middleware only)
 //   hono-scale-validated = Hono with zod response validation (matches daloy-scale's work)
 const FRAMEWORKS = [
-  { name: "daloy-scale",          file: "servers/daloy-scale.ts" },
-  { name: "daloy-scale-nozod",    file: "servers/daloy-scale-nozod.ts" },
-  { name: "hono-scale",           file: "servers/hono-scale.ts" },
-  { name: "hono-scale-validated", file: "servers/hono-scale-validated.ts" },
+  { name: "daloy-scale",          file: "servers/scale/daloy.ts" },
+  { name: "daloy-scale-nozod",    file: "servers/scale/daloy-nozod.ts" },
+  { name: "hono-scale",           file: "servers/scale/hono.ts" },
+  { name: "hono-scale-validated", file: "servers/scale/hono-validated.ts" },
+  { name: "fastify-scale",        file: "servers/scale/fastify.ts" },
+  { name: "express-scale",        file: "servers/scale/express.ts" },
+  { name: "koa-scale",            file: "servers/scale/koa.ts" },
+  { name: "nest-scale",           file: "servers/scale/nest.ts" },
+  { name: "elysia-scale",         file: "servers/scale/elysia.ts" },
+  { name: "feathers-scale",       file: "servers/scale/feathers.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -74,6 +80,7 @@ async function benchOneCount(fw, routeCount) {
 }
 
 async function main() {
+  warnBenchEnvironment({ maxConnections: CONNECTIONS });
   const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
   const rows = [];
   for (const fw of targets) {

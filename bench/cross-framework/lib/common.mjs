@@ -1,7 +1,8 @@
 // Shared helpers for the bench scripts.
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { setTimeout as wait } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { readFileSync, readdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import os from "node:os";
@@ -11,8 +12,79 @@ export const ROOT = path.dirname(__dirname);
 
 export const DEFAULT_PORT = 3456;
 
+// Best-effort, cross-platform power-source detection. Returns the AC/battery
+// state so benchmark results can record whether the machine was running on
+// battery — laptops (especially Apple silicon MacBooks) throttle the CPU and
+// vary clocks aggressively on battery, which makes throughput numbers noisy
+// and not comparable to an on-AC run. Never throws: any failure → "unknown".
+export function detectPowerSource() {
+  try {
+    if (process.platform === "darwin") {
+      // `pmset -g batt` prints e.g. "Now drawing from 'AC Power'".
+      const out = execFileSync("pmset", ["-g", "batt"], {
+        encoding: "utf8",
+        timeout: 2_000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      if (/drawing from 'AC Power'/i.test(out)) return { onBattery: false, source: "AC" };
+      if (/drawing from 'Battery Power'/i.test(out)) return { onBattery: true, source: "battery" };
+      return { onBattery: undefined, source: "unknown" };
+    }
+    if (process.platform === "linux") {
+      // Look for a mains/AC adapter under /sys/class/power_supply.
+      const base = "/sys/class/power_supply";
+      for (const name of readdirSync(base)) {
+        let type = "";
+        try { type = readFileSync(path.join(base, name, "type"), "utf8").trim(); } catch { continue; }
+        if (type === "Mains") {
+          const online = readFileSync(path.join(base, name, "online"), "utf8").trim();
+          const onAc = online === "1";
+          return { onBattery: !onAc, source: onAc ? "AC" : "battery" };
+        }
+      }
+      return { onBattery: undefined, source: "unknown" };
+    }
+    if (process.platform === "win32") {
+      // BatteryStatus 2 == "AC connected". No battery present → no rows.
+      const out = execFileSync(
+        "powershell",
+        ["-NoProfile", "-Command", "(Get-CimInstance Win32_Battery).BatteryStatus"],
+        { encoding: "utf8", timeout: 4_000, stdio: ["ignore", "pipe", "ignore"] },
+      ).trim();
+      if (out === "") return { onBattery: false, source: "AC" }; // desktop / no battery
+      const status = Number(out.split(/\s+/)[0]);
+      const onBattery = status === 1;
+      return { onBattery, source: onBattery ? "battery" : "AC" };
+    }
+  } catch {
+    /* fall through to unknown */
+  }
+  return { onBattery: undefined, source: "unknown" };
+}
+
+// Best-effort soft file-descriptor limit (POSIX only). macOS defaults to a
+// soft limit of 256, which autocannon (hundreds of client sockets) plus the
+// server's accepted sockets can exhaust, producing EMFILE and bogus error
+// rates. Returns a number, or undefined when it can't be determined.
+export function detectFdLimit() {
+  if (process.platform === "win32") return undefined;
+  try {
+    const out = execFileSync("sh", ["-c", "ulimit -n"], {
+      encoding: "utf8",
+      timeout: 2_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (/^unlimited$/i.test(out)) return Infinity;
+    const n = Number(out);
+    return Number.isFinite(n) ? n : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function machineInfo() {
   const cpus = os.cpus();
+  const power = detectPowerSource();
   return {
     node: process.version,
     platform: process.platform,
@@ -21,8 +93,39 @@ export function machineInfo() {
     cpuCount: cpus.length,
     totalMemGiB: +(os.totalmem() / 1024 ** 3).toFixed(2),
     loadAvg: os.loadavg(),
-    onBattery: undefined, // populated below if powerstate is available
+    onBattery: power.onBattery,
+    powerSource: power.source,
+    fdLimit: detectFdLimit(),
   };
+}
+
+// Print a one-time warning to stderr when the environment is likely to produce
+// noisy or unreliable benchmark numbers: running on battery (CPU throttling) or
+// a file-descriptor soft limit too low for the requested connection count.
+// Purely advisory — never throws, never changes the run. `maxConnections` is
+// the highest connection count the caller will drive (defaults to 100).
+export function warnBenchEnvironment({ maxConnections = 100 } = {}) {
+  const info = machineInfo();
+  if (info.onBattery === true) {
+    console.error(
+      "⚠ Running on BATTERY power. Laptops throttle the CPU on battery, so " +
+      "throughput/latency numbers will be noisy and not comparable to an " +
+      "on-AC run. Plug in for stable results.",
+    );
+  }
+  // Each connection needs a client socket + an accepted server socket, plus
+  // headroom for stdio, the spawned child, and Node internals. Warn well
+  // before the hard ceiling.
+  if (typeof info.fdLimit === "number" && info.fdLimit !== Infinity) {
+    const needed = maxConnections * 3 + 64;
+    if (info.fdLimit < needed) {
+      console.error(
+        `⚠ File-descriptor soft limit is ${info.fdLimit}, which may be too low ` +
+        `for ${maxConnections} connections (need ~${needed}). On macOS/Linux run ` +
+        `\`ulimit -n 4096\` in this shell before benchmarking to avoid EMFILE errors.`,
+      );
+    }
+  }
 }
 
 export function parseArgs(argv) {

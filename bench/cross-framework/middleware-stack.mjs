@@ -17,12 +17,18 @@ import path from "node:path";
 import autocannon from "autocannon";
 import {
   __dirname, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, stats, fmt,
+  startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy", file: "servers/daloy-secured.ts" },
-  { name: "hono",  file: "servers/hono-secured.ts" },
+  { name: "daloy",    file: "servers/secured/daloy.ts" },
+  { name: "hono",     file: "servers/secured/hono.ts" },
+  { name: "fastify",  file: "servers/secured/fastify.ts" },
+  { name: "express",  file: "servers/secured/express.ts" },
+  { name: "koa",      file: "servers/secured/koa.ts" },
+  { name: "nest",     file: "servers/secured/nest.ts" },
+  { name: "elysia",   file: "servers/secured/elysia.ts" },
+  { name: "feathers", file: "servers/secured/feathers.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -112,6 +118,7 @@ async function benchOne(fw) {
 }
 
 async function main() {
+  warnBenchEnvironment({ maxConnections: CONNECTIONS });
   const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
   const rows = [];
   for (const fw of targets) {

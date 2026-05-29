@@ -24,17 +24,18 @@ import {
   httpRequest,
   stats,
   fmt,
+  warnBenchEnvironment,
 } from "./lib/common.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy", file: "servers/daloy-logging.ts" },
-  { name: "hono", file: "servers/hono-logging.ts" },
-  { name: "fastify", file: "servers/fastify-logging.ts" },
-  { name: "express", file: "servers/express-logging.ts" },
-  { name: "koa", file: "servers/koa-logging.ts" },
-  { name: "nest", file: "servers/nest-logging.ts" },
-  { name: "elysia", file: "servers/elysia-logging.ts" },
-  { name: "feathers", file: "servers/feathers-logging.ts" },
+  { name: "daloy", file: "servers/logging/daloy.ts" },
+  { name: "hono", file: "servers/logging/hono.ts" },
+  { name: "fastify", file: "servers/logging/fastify.ts" },
+  { name: "express", file: "servers/logging/express.ts" },
+  { name: "koa", file: "servers/logging/koa.ts" },
+  { name: "nest", file: "servers/logging/nest.ts" },
+  { name: "elysia", file: "servers/logging/elysia.ts" },
+  { name: "feathers", file: "servers/logging/feathers.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -204,6 +205,7 @@ function renderTable(rows) {
 }
 
 async function main() {
+  warnBenchEnvironment({ maxConnections: CONNECTIONS });
   const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
   const rows = [];
   for (const fw of targets) {

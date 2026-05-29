@@ -16,18 +16,18 @@ import path from "node:path";
 import autocannon from "autocannon";
 import {
   __dirname, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, stats, fmt,
+  startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",    file: "servers/daloy-stream.ts" },
-  // { name: "hono",     file: "servers/hono-stream.ts" },
-  // { name: "fastify",  file: "servers/fastify-stream.ts" },
-  // { name: "express",  file: "servers/express-stream.ts" },
-  // { name: "koa",      file: "servers/koa-stream.ts" },
-  // { name: "nest",     file: "servers/nest-stream.ts" },
-  // { name: "elysia",   file: "servers/elysia-stream.ts" },
-  // { name: "feathers", file: "servers/feathers-stream.ts" },
+  { name: "daloy",    file: "servers/stream/daloy.ts" },
+  { name: "hono",     file: "servers/stream/hono.ts" },
+  { name: "fastify",  file: "servers/stream/fastify.ts" },
+  { name: "express",  file: "servers/stream/express.ts" },
+  { name: "koa",      file: "servers/stream/koa.ts" },
+  { name: "nest",     file: "servers/stream/nest.ts" },
+  { name: "elysia",   file: "servers/stream/elysia.ts" },
+  { name: "feathers", file: "servers/stream/feathers.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -82,6 +82,7 @@ async function benchOne(fw) {
 }
 
 async function main() {
+  warnBenchEnvironment({ maxConnections: CONNECTIONS });
   const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
   const rows = [];
   for (const fw of targets) {

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
-// Parity with hono-scale.ts (Hono has no built-in logger).
+// Parity with scale/hono.ts (Hono has no built-in logger).
 const app = new App({ logger: false });
 const COUNT = Number(process.env.ROUTE_COUNT ?? 100);
 

@@ -1,6 +1,6 @@
 // Hono parity server for the secured-stack benchmark.
 //
-// Mirrors the posture of servers/daloy-secured.ts so the comparison is
+// Mirrors the posture of secured/daloy.ts so the comparison is
 // apples-to-apples: request-id, secure-headers, CORS allowlist, a
 // no-op-cost rate-limit shim, HS256 JWT verification, and zod validation
 // of params/body on each route.

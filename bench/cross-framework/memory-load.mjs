@@ -16,20 +16,20 @@ import path from "node:path";
 import autocannon from "autocannon";
 import {
   __dirname, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, fmt,
+  startServer, killServer, waitForHealthy, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy", file: "servers/daloy.ts" },
-  { name: "fastify",  file: "servers/fastify.ts" },
-  // { name: "daloy-nozod", file: "servers/daloy-nozod.ts" },
-  // { name: "hono",     file: "servers/hono.ts" },
-  // { name: "hono-validated", file: "servers/hono-validated.ts" },
-  // { name: "elysia",   file: "servers/elysia.ts" },
-  // { name: "nest",     file: "servers/nest.ts" },
-  // { name: "koa",      file: "servers/koa.ts" },
-  // { name: "feathers", file: "servers/feathers.ts" },
-  // { name: "express",  file: "servers/express.ts" },
+  { name: "daloy", file: "servers/throughput/daloy.ts" },
+  { name: "fastify",  file: "servers/throughput/fastify.ts" },
+  // { name: "daloy-nozod", file: "servers/throughput/daloy-nozod.ts" },
+  // { name: "hono",     file: "servers/throughput/hono.ts" },
+  // { name: "hono-validated", file: "servers/throughput/hono-validated.ts" },
+  // { name: "elysia",   file: "servers/throughput/elysia.ts" },
+  // { name: "nest",     file: "servers/throughput/nest.ts" },
+  // { name: "koa",      file: "servers/throughput/koa.ts" },
+  // { name: "feathers", file: "servers/throughput/feathers.ts" },
+  // { name: "express",  file: "servers/throughput/express.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -139,6 +139,7 @@ async function benchOne(fw) {
 }
 
 async function main() {
+  warnBenchEnvironment({ maxConnections: CONNECTIONS });
   const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
   const rows = [];
   for (const fw of targets) {

@@ -1,10 +1,10 @@
 // DaloyJS — N dynamic routes, NO response-body schema (raw 200).
-// Mirrors hono-scale.ts so the comparison isolates framework/middleware cost
-// from the response-validation cost paid by daloy-scale.ts.
+// Mirrors scale/hono.ts so the comparison isolates framework/middleware cost
+// from the response-validation cost paid by scale/daloy.ts.
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
-// Parity with hono-scale.ts (Hono has no built-in logger).
+// Parity with scale/hono.ts (Hono has no built-in logger).
 const app = new App({ logger: false });
 const COUNT = Number(process.env.ROUTE_COUNT ?? 100);
 

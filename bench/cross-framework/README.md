@@ -90,6 +90,27 @@ To change durations:
 DURATION=20 CONNECTIONS=200 node run.mjs
 ```
 
+## Running on macOS / laptops
+
+The runners are cross-platform (macOS, Linux, Windows). Two laptop-specific
+gotchas are detected automatically and printed to stderr at startup:
+
+- **Battery throttling.** On battery, laptops (especially Apple-silicon
+  MacBooks) scale clocks aggressively, so throughput/latency numbers become
+  noisy and non-comparable. The runner warns when it detects battery power —
+  **plug in before benchmarking.** The AC/battery state is also recorded in
+  every `results*.json` under `machine.onBattery` / `machine.powerSource`.
+- **File-descriptor limit.** macOS defaults to a soft `ulimit -n` of 256,
+  which hundreds of autocannon client sockets plus the server's accepted
+  sockets can exhaust (`EMFILE`, inflated error rates). The runner warns when
+  the limit looks too low for the requested connection count. Raise it for the
+  current shell before running:
+
+  ```bash
+  ulimit -n 4096
+  node run.mjs
+  ```
+
 ## Beyond the default throughput run
 
 The default `run.mjs` measures requests/sec and latency for three small
@@ -112,6 +133,28 @@ spawning, machine-info capture, and statistics helpers, and write their own
 | `streaming.mjs`        | Large `ReadableStream` response throughput in MiB/s and req/s.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `middleware-stack.mjs` | Same scenarios as `run.mjs` but with the production middleware stack on (CORS, secure headers, request-id, rate-limit, JWT verify).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `logging.mjs`          | Same scenarios as `run.mjs` but with one structured Pino access log emitted per completed response. Defaults to `LOG_DEST=/dev/null` to avoid terminal or collector backpressure.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+### Server layout
+
+The framework servers live under `servers/`, organized by the concern each
+scenario exercises. Every framework has one file per concern, named by the
+framework alone:
+
+```
+servers/
+  throughput/   plain router + JSON handlers (run.mjs, cold-start, error-path, memory-load)
+  secured/      production middleware stack: request-id, secure headers, CORS, rate-limit, HS256 JWT (middleware-stack.mjs)
+  logging/      one structured Pino access log per response, via ./access-log (logging.mjs)
+  stream/       large ReadableStream responses (streaming.mjs)
+  echo-bytes/   raw-bytes POST echo for the body-size sweep (body-size-sweep.mjs)
+  scale/        N dynamically registered routes (route-scale.mjs)
+```
+
+Daloy/Hono A/B variants that don't generalize across frameworks keep their
+descriptive suffix inside the relevant folder (e.g.
+`throughput/daloy-minimal.ts`, `throughput/daloy-nozod.ts`,
+`throughput/hono-validated.ts`, `scale/daloy-nozod.ts`,
+`scale/hono-validated.ts`).
 
 Run any one:
 
