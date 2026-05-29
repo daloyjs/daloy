@@ -108,38 +108,55 @@ test("detectColor: NO_COLOR forces color off, FORCE_COLOR forces it on", () => {
   }
 });
 
-test("detectAscii: DALOY_ASCII forces ASCII glyphs, UTF-8 LANG keeps Unicode", () => {
+test("detectAscii: DALOY_ASCII forces ASCII glyphs, platform Unicode hints keep Unicode", () => {
+  const isWindows = process.platform === "win32";
   const prev = {
     DALOY_ASCII: process.env.DALOY_ASCII,
     LANG: process.env.LANG,
     LC_ALL: process.env.LC_ALL,
     TERM_PROGRAM: process.env.TERM_PROGRAM,
+    WT_SESSION: process.env.WT_SESSION,
   };
-  try {
+  // Clear every signal detectAscii() reads so the starting state is a known
+  // "no hints" baseline on both the win32 and POSIX code paths.
+  const clearAllHints = () => {
     delete process.env.LANG;
     delete process.env.LC_ALL;
     delete process.env.TERM_PROGRAM;
+    delete process.env.WT_SESSION;
+    delete process.env.DALOY_ASCII;
+  };
+  try {
+    clearAllHints();
     process.env.DALOY_ASCII = "1";
     const ascii = formatStartupBanner({ url: "http://x", color: false });
     assert.ok(ascii.includes("+") && !ascii.includes("\u256D"));
 
-    delete process.env.DALOY_ASCII;
-    process.env.LANG = "en_US.UTF-8";
+    // Drive each platform's actual Unicode trigger so this assertion is
+    // meaningful on macOS/Linux AND Windows rather than skipped on one:
+    //   - POSIX: a UTF-8 LANG selects Unicode glyphs.
+    //   - win32: detectAscii() ignores LANG and keys off WT_SESSION (Windows
+    //     Terminal) / TERM_PROGRAM instead.
+    clearAllHints();
+    if (isWindows) {
+      process.env.WT_SESSION = "1";
+    } else {
+      process.env.LANG = "en_US.UTF-8";
+    }
     const utf = formatStartupBanner({ url: "http://x", color: false });
     assert.ok(utf.includes("\u256D"));
 
-    delete process.env.LANG;
+    // TERM_PROGRAM selects Unicode on both platforms.
+    clearAllHints();
     process.env.TERM_PROGRAM = "vscode";
     const term = formatStartupBanner({ url: "http://x", color: false });
     assert.ok(term.includes("\u256D"));
 
-    delete process.env.TERM_PROGRAM;
+    // No hints on either platform → ASCII fallback. With WT_SESSION now also
+    // cleared, this is a true "no hints" case on Windows too.
+    clearAllHints();
     const fallback = formatStartupBanner({ url: "http://x", color: false });
-    // No UTF hints → ASCII fallback (on non-win32 path this exercises the
-    // final `return true` branch).
-    if (process.platform !== "win32") {
-      assert.ok(fallback.includes("+"));
-    }
+    assert.ok(fallback.includes("+"));
   } finally {
     for (const [k, v] of Object.entries(prev)) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;
