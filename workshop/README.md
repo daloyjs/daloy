@@ -105,7 +105,7 @@ The `coding-steps/` files include mental models, before → after snippets, a co
 | `pnpm dev:sol:8:N`      | Run the 8-hour reference solution for exercise N                     |
 | `pnpm typecheck`        | TypeScript check across all exercises                                |
 | `pnpm gen`              | Regenerate the typed fetch SDK from a running exercise's OpenAPI doc |
-| `pnpm test`             | Run contract tests for the current exercise (exercise 7+ and 14)     |
+| `pnpm test`             | Run contract tests (currently the 4-hour exercise 7 solution)        |
 
 ## Why DaloyJS Is the Pitch
 
