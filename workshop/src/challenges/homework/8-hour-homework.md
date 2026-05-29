@@ -80,7 +80,7 @@ Export a `buildApp()` factory and test via `app.fetch(new Request(...))`:
 - Happy path of each public + admin route (200 / 201 / 204).
 - 401 on every admin route when the JWT is missing, expired, or signed with a disallowed algorithm.
 - 403 on `POST /auth/logout` when the CSRF token is missing or mismatched.
-- 400 mass-assignment rejection on `POST /admin/books` (send an extra `version` or `isFeatured` field).
+- 400 mass-assignment rejection on `POST /admin/books` (send an extra `version` or `isFeatured` field — DaloyJS returns 422 for schema validation failures).
 - 409 on `PATCH /admin/books/:id` with a stale `version`.
 - `/books/:id/cover` rejects an upstream that resolves to a private/loopback address (fetchGuard).
 - WebSocket upgrade is rejected without a valid token.

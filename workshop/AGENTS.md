@@ -40,7 +40,7 @@ pnpm dev:sol:4:N          # run 4-hour reference solution N
 pnpm dev:sol:8:N          # run 8-hour reference solution N
 pnpm typecheck            # tsc --noEmit
 pnpm gen                  # regenerate generated/client/ from a running exercise's OpenAPI
-pnpm test                 # contract tests (currently the 4-hour exercise 7 solution)
+pnpm test                 # contract tests (4-hour exercise 7 + 8-hour exercise 8 solutions)
 ```
 
 ## Project Structure

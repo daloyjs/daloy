@@ -43,7 +43,7 @@ The `POST /orders` body accepts only `customerEmail`, `amountCents`, `currency`.
 - **Contract tests** (`node:test`) for:
   - Happy path of each route (200, 201).
   - 401 on protected routes when the token is missing or wrong.
-  - 400 mass-assignment rejection on `POST /orders` (send an extra `isPaid` field).
+  - 400 mass-assignment rejection on `POST /orders` (send an extra `isPaid` field — DaloyJS returns 422 for schema validation failures).
   - 409 on the second `PATCH /orders/:id/cancel` for an already-cancelled order.
   - `app.introspect()` returns exactly the four operationIds.
 
