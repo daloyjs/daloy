@@ -190,7 +190,7 @@ Real **405** with `Allow` header.
 `requestTimeoutMs` aborts handlers (30 s default); Node adapter sets `requestTimeout` + `headersTimeout` + `maxHeaderSize`.
 
 #### HTTP/2 Rapid Reset DDoS ([CVE-2023-44487](https://nvd.nist.gov/vuln/detail/CVE-2023-44487))
-Not exploitable against `@daloyjs/core`: the framework never speaks HTTP/2 at its layer. The Node adapter uses `node:http` (HTTP/1.1) only; Bun/Deno adapters delegate to runtimes that shipped the upstream mitigation. `engines.node` is pinned `>=24.15.0` and `pnpm verify:runtime-eol` refuses EOL Node majors. Network-layer DDoS absorption is the operator's CDN/WAF.
+Not exploitable against `@daloyjs/core`: the framework never speaks HTTP/2 at its layer. The Node adapter uses `node:http` (HTTP/1.1) only; Bun/Deno adapters delegate to runtimes that shipped the upstream mitigation. `engines.node` is pinned `>=24.0.0` and `pnpm verify:runtime-eol` refuses EOL Node majors. Network-layer DDoS absorption is the operator's CDN/WAF.
 
 #### ReDoS — catastrophic backtracking
 Four layers: (a) no user-supplied regex meets user-supplied input in core; the only `new RegExp(...)` is in [`src/combine.ts`](src/combine.ts) and translates `*` / `**` linearly. (b) Input is bounded by `bodyLimitBytes`. (c) `requestTimeoutMs` is a wall-clock backstop. (d) `pnpm verify:no-redos-patterns` walks `src/**`, extracts every regex literal (slash + `new RegExp("…")`), and refuses nested unbounded quantifiers or overlapping alternation under unbounded quantifier. Opt-in `// daloy-allow-redos: <reason>` marker. See [Snyk's write-up](https://snyk.io/blog/timing-out-synchronous-functions-with-regex/). For user-supplied regex, use [RE2](https://github.com/google/re2) or `vm.runInContext({ timeout })`.

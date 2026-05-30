@@ -24,7 +24,7 @@ npm-shrinkwrap.json
 package-lock.json
 
 
-otherdocs
+otherdocs/*
 
 
 test_output.txt

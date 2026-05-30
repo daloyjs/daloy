@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:0d084814-9add-52b1-bc16-13d7de5c9b03",
+  "serialNumber": "urn:uuid:f594d57c-27ff-5894-820f-b565268f4bc6",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-05-29T16:47:39.315Z",
+    "timestamp": "2026-05-30T08:25:42.112Z",
     "tools": [
       {
         "vendor": "DaloyJS",

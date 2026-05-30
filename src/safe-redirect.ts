@@ -38,7 +38,7 @@
  * });
  * ```
  *
- * @since 0.36.0
+ * @since 0.35.0
  */
 
 /** Reason an open-redirect candidate was refused. */
@@ -96,12 +96,7 @@ export interface SafeRedirectOptions {
   headers?: HeadersInit;
 }
 
-const FORBIDDEN_SCHEMES = new Set([
-  "javascript:",
-  "data:",
-  "vbscript:",
-  "file:",
-]);
+const FORBIDDEN_SCHEMES = new Set(["javascript:", "data:", "vbscript:", "file:"]);
 
 const ALLOWED_REDIRECT_STATUSES = new Set<number>([301, 302, 303, 307, 308]);
 
@@ -122,7 +117,7 @@ function buildResponse(location: string, status: number, headers?: HeadersInit):
 function classify(
   target: string,
   allowedPaths: readonly string[],
-  allowedOrigins: readonly string[],
+  allowedOrigins: readonly string[]
 ): { ok: true; location: string } | { ok: false; reason: SafeRedirectBlockReason } {
   if (typeof target !== "string" || target.length === 0) {
     return { ok: false, reason: "empty-target" };
@@ -176,7 +171,7 @@ function classify(
  * @param target - User-supplied URL candidate (path or absolute URL).
  * @param options - Allowlist + response configuration.
  *
- * @since 0.36.0
+ * @since 0.35.0
  */
 export function safeRedirect(target: string, options: SafeRedirectOptions = {}): Response {
   const allowedPaths = options.allowedPaths ?? [];
@@ -184,14 +179,14 @@ export function safeRedirect(target: string, options: SafeRedirectOptions = {}):
   const status = options.status ?? 303;
   if (!ALLOWED_REDIRECT_STATUSES.has(status)) {
     throw new TypeError(
-      `safeRedirect: status ${String(status)} is not a redirect status (allowed: 301, 302, 303, 307, 308)`,
+      `safeRedirect: status ${String(status)} is not a redirect status (allowed: 301, 302, 303, 307, 308)`
     );
   }
 
   for (const p of allowedPaths) {
     if (typeof p !== "string" || (p !== "/*" && !p.startsWith("/"))) {
       throw new TypeError(
-        `safeRedirect: allowedPaths entries must start with "/" (got ${JSON.stringify(p)})`,
+        `safeRedirect: allowedPaths entries must start with "/" (got ${JSON.stringify(p)})`
       );
     }
   }
@@ -207,7 +202,7 @@ export function safeRedirect(target: string, options: SafeRedirectOptions = {}):
     }
     if (parsed.origin !== o) {
       throw new TypeError(
-        `safeRedirect: allowedOrigins entry must be a bare origin (scheme + host [+ port]); got ${o}`,
+        `safeRedirect: allowedOrigins entry must be a bare origin (scheme + host [+ port]); got ${o}`
       );
     }
   }
@@ -218,7 +213,7 @@ export function safeRedirect(target: string, options: SafeRedirectOptions = {}):
   if (options.fallback !== undefined) {
     if (!options.fallback.startsWith("/") || options.fallback.startsWith("//")) {
       throw new TypeError(
-        `safeRedirect: fallback must be a same-origin path starting with "/"; got ${options.fallback}`,
+        `safeRedirect: fallback must be a same-origin path starting with "/"; got ${options.fallback}`
       );
     }
     return buildResponse(options.fallback, status, options.headers);
