@@ -827,10 +827,13 @@ const TRACING_SPAN_STATUS_ERROR:  number;`}
       <CodeBlock
         code={`passwordHash(password: string): Promise<string>;
   // scrypt with random salt + per-hash params; returns a self-describing PHC string.
+  // Throws TypeError on empty input or passwords over 4096 UTF-8 bytes
+  // (the cap blocks scrypt CPU-amplification abuse).
 
 passwordVerify(password: string, hash: string): Promise<boolean>;
   // timing-safe comparison; refuses to verify when scrypt parameters are below
-  // the secure floor (forces a rehash via your application logic).`}
+  // the secure floor (forces a rehash via your application logic).
+  // Returns false (never throws) for empty or over-4096-byte passwords.`}
       />
 
       <h2>
