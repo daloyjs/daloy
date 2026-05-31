@@ -145,6 +145,10 @@
       "types": "./dist/metrics.d.ts",
       "import": "./dist/metrics.js"
     },
+    "./fetch-resilience": {
+      "types": "./dist/fetch-resilience.d.ts",
+      "import": "./dist/fetch-resilience.js"
+    },
     "./banner": {
       "types": "./dist/banner.d.ts",
       "import": "./dist/banner.js"

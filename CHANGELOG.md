@@ -16,6 +16,22 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Added
 
+- **Outbound resilience for `fetch`.** New dependency-free
+  `@daloyjs/core/fetch-resilience` module adds `resilientFetch()` — a circuit
+  breaker, retry-with-backoff, and per-call timeout designed to layer **on top
+  of** `fetchGuard()` (which only covers SSRF on egress). The per-call timeout
+  uses an `AbortController` combined with any caller-supplied `signal` and
+  surfaces as `FetchTimeoutError`; retries are exponential with full jitter,
+  scoped to idempotent methods (`GET`/`HEAD`/`OPTIONS`/`PUT`/`DELETE`) and
+  transient statuses (`408`/`429`/`5xx`), and honour a `Retry-After` header; the
+  shared three-state `CircuitBreaker` (`closed → open → half-open`) fails fast
+  with `CircuitOpenError` when an upstream is down and probes for recovery. SSRF
+  protection stays intact: an `SsrfBlockedError` is a terminal refusal that is
+  never retried and never trips the breaker, and a caller-initiated abort is
+  neither retried nor counted as an upstream failure. `CircuitBreaker` is
+  exported standalone (with `execute()` / `admit()` / `recordOutcome()` /
+  `release()`) so the same semantics can protect any non-`fetch` dependency.
+
 - **Metrics &amp; the `/metrics` endpoint.** New dependency-free
   `@daloyjs/core/metrics` module and `app.metrics()` route method add the third
   observability pillar alongside the structured logger and the OpenTelemetry

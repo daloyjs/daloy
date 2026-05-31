@@ -193,6 +193,18 @@ export { ipRestriction } from "./ip-restriction.js";
 export type { IpRestrictionOptions } from "./ip-restriction.js";
 export { fetchGuard, SsrfBlockedError } from "./fetch-guard.js";
 export type { FetchGuardOptions, SsrfBlockReason } from "./fetch-guard.js";
+export {
+  resilientFetch,
+  CircuitBreaker,
+  CircuitOpenError,
+  FetchTimeoutError,
+} from "./fetch-resilience.js";
+export type {
+  ResilientFetchOptions,
+  CircuitBreakerOptions,
+  CircuitState,
+  RetryContext,
+} from "./fetch-resilience.js";
 export { safeRedirect, OpenRedirectBlockedError } from "./safe-redirect.js";
 export type {
   SafeRedirectOptions,
