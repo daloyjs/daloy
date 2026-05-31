@@ -158,3 +158,117 @@ test("doctor: --no-audit-defaults skips every live audit check", async () => {
   const parsed = JSON.parse(out.join(""));
   assert.equal(parsed.ok, true);
 });
+
+test("doctor: secureDefaults: false surfaces a warn", async () => {
+  const app = dummyApp({ secureDefaults: false });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes("secureDefaults.off"), codes.join(","));
+});
+
+test("doctor: requestTimeoutMs: 0 surfaces an error", async () => {
+  const app = dummyApp({ requestTimeoutMs: 0 });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 1);
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes("requestTimeout.zero"), codes.join(","));
+});
+
+test("doctor: disconnectStatusCode outside [400,499] surfaces an error", async () => {
+  // The App constructor rejects an out-of-range disconnectStatusCode at
+  // construction. Exercise the defense-in-depth doctor check by injecting
+  // the option directly onto `app.options` (simulating a custom plugin).
+  const app = dummyApp();
+  (app as unknown as { options: Record<string, unknown> }).options.disconnectStatusCode = 200;
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 1);
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes("disconnectStatusCode.range"), codes.join(","));
+});
+
+test("doctor: in-range disconnectStatusCode does not surface a finding", async () => {
+  const app = dummyApp({ disconnectStatusCode: 499 });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 0);
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(!codes.includes("disconnectStatusCode.range"), codes.join(","));
+});
+
+test("doctor: idleTimeoutMs: 0 in production surfaces an error", async () => {
+  const app = dummyApp({ env: "production", idleTimeoutMs: 0 });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 1);
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes("audit.idleTimeout.zero"), codes.join(","));
+});
+
+test("doctor: text output renders a clean app as OK", async () => {
+  const app = dummyApp();
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "entry.ts"], io);
+  assert.equal(r.exitCode, 0);
+  assert.match(out.join(""), /OK — no findings/);
+});
+
+test("doctor: text output lists findings line by line", async () => {
+  const app = dummyApp({ requestTimeoutMs: 0 });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "entry.ts"], io);
+  assert.equal(r.exitCode, 1);
+  const text = out.join("");
+  assert.match(text, /1 finding\b/);
+  assert.match(text, /\[error\] requestTimeout\.zero:/);
+});
+
+test("doctor: loadApp failure surfaces stderr and exits 1", async () => {
+  const out: string[] = [];
+  const err: string[] = [];
+  const io: CliIO = {
+    stdout: (chunk) => out.push(chunk),
+    stderr: (chunk) => err.push(chunk),
+    importEntry: async () => {
+      throw new Error("boom: cannot import entry");
+    },
+    version: "0.0.0-test",
+  };
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 1);
+  assert.match(err.join(""), /boom: cannot import entry/);
+});
+
+test("doctor: --audit-secrets flags weak and short secrets from env", async () => {
+  const env = globalThis.process.env;
+  const saved = {
+    API_TOKEN: env.API_TOKEN,
+    SESSION_SECRET: env.SESSION_SECRET,
+    NODE_ENV: env.NODE_ENV,
+  };
+  env.NODE_ENV = "production";
+  env.API_TOKEN = "changeme";
+  env.SESSION_SECRET = "short-secret-value";
+  try {
+    const app = dummyApp();
+    const { io, out } = buildIO(app);
+    const r = await runCli(["doctor", "--json", "--audit-secrets", "entry.ts"], io);
+    assert.equal(r.exitCode, 1);
+    const parsed = JSON.parse(out.join(""));
+    const codes = parsed.findings.map((f: { code: string }) => f.code);
+    assert.ok(codes.includes("secret.weak"), codes.join(","));
+    assert.ok(codes.includes("secret.short"), codes.join(","));
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete env[k];
+      else env[k] = v;
+    }
+  }
+});

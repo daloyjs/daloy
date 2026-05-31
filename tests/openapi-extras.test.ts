@@ -569,6 +569,14 @@ test("openapiToYAML renders empty objects inline as {}", () => {
   assert.match(yaml, /nested:\n {2}alsoEmpty: \{\}\n/);
 });
 
+test("openapiToYAML renders a top-level scalar document inline", () => {
+  // The public type expects a document object, but the emitter's scalar
+  // fallback is reachable when a scalar is passed directly. Cast through
+  // unknown to exercise that branch.
+  const yaml = openapiToYAML("hello" as unknown as Record<string, unknown>);
+  assert.equal(yaml, " hello\n");
+});
+
 test("App.docs mounts /openapi.yaml alongside /openapi.json by default", async () => {
   const yamlApp = new App({ docs: true });
   const res = await yamlApp.fetch(new Request("http://localhost/openapi.yaml"));
