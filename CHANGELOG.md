@@ -16,6 +16,23 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Added
 
+- **Opt-in WAF-lite signature/anomaly inspection middleware.** New
+  dependency-free `@daloyjs/core/waf` module adds `waf()` — a first-party
+  defense-in-depth layer for teams without an edge WAF (it does **not** replace
+  ModSecurity / a CDN WAF). Wires curated, low-false-positive SQLi / XSS /
+  NoSQL-operator / command-injection signatures (NoSQLi reuses
+  `hasMongoOperatorKeys` for a structural body check) into one scored
+  `beforeHandle` inspection pass over the decoded path, the raw + decoded query
+  string, an opt-in header allowlist, and the validated body. Each rule that
+  fires adds an anomaly `score`; reaching `blockThreshold` (default `5`) rejects
+  with a generic `403` (block mode, never naming the rule that fired) or reports
+  via `onMatch` (log mode) so operators can tune against real traffic first.
+  Per-rule enable/disable + score overrides, inspection-surface toggles, and
+  bounded scanning (`maxValueLength` / `maxBodyNodes`) with
+  control-character-stripped log samples keep a hostile payload from becoming
+  CPU-DoS. Exposes `WafOptions` / `WafEvent` / `WafMatch` / `WafRuleId` /
+  `WafRuleConfig` / `WafMode` / `WafInspectConfig` / `WafInspectionLocation`.
+
 - **Inbound request-decompression bomb guard.** New dependency-free
   `@daloyjs/core/request-decompression` module adds `requestDecompression()`.
   DaloyJS core deliberately does not decompress request bodies (safe by

@@ -147,6 +147,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "IP reputation / denylist feed", href: "/docs/ip-reputation" as Route },
       { title: "Concurrency limits + queueing", href: "/docs/concurrency-limit" as Route },
       { title: "Request decompression guard", href: "/docs/request-decompression" as Route },
+      { title: "WAF-lite inspection", href: "/docs/waf" as Route },
       { title: "Secure admin panels", href: "/docs/security/admin-panels" as Route },
       { title: "Sessions", href: "/docs/security/session" },
       {

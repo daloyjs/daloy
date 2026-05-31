@@ -181,6 +181,10 @@
       "types": "./dist/request-decompression.d.ts",
       "import": "./dist/request-decompression.js"
     },
+    "./waf": {
+      "types": "./dist/waf.d.ts",
+      "import": "./dist/waf.js"
+    },
     "./banner": {
       "types": "./dist/banner.d.ts",
       "import": "./dist/banner.js"

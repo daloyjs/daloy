@@ -293,6 +293,17 @@ export type {
   RequestDecompressionEncoding,
   DecompressionBombInfo,
 } from "./request-decompression.js";
+export { waf } from "./waf.js";
+export type {
+  WafOptions,
+  WafMode,
+  WafRuleId,
+  WafRuleConfig,
+  WafInspectConfig,
+  WafMatch,
+  WafEvent,
+  WafInspectionLocation,
+} from "./waf.js";
 export { safeRedirect, OpenRedirectBlockedError } from "./safe-redirect.js";
 export type {
   SafeRedirectOptions,
