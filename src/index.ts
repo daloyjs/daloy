@@ -84,6 +84,12 @@ export type { ProblemDetails, ProblemRenderOptions, HttpErrorOptions } from "./e
 
 export type { StandardSchemaV1 } from "./schema.js";
 export { validate, isStandardSchema } from "./schema.js";
+export { diffOpenAPI, hasBreakingChanges } from "./openapi-diff.js";
+export type {
+  ChangeSeverity,
+  OpenAPIChange,
+  OpenAPIDiffResult,
+} from "./openapi-diff.js";
 
 export {
   readBodyLimited,

@@ -437,6 +437,7 @@ DaloyJS is in **public preview** (`0.x`). The public API may still change betwee
 - Zero-config OpenAPI `info` autofill from `package.json` (Node / Bun) or `deno.json` / `deno.jsonc` (Deno); explicit `openapi.info` values always win.
 - RFC 7231 + RFC 5789 HTTP-method allowlist enforced inside `app.route()` (WebDAV, `TRACE`, `CONNECT` rejected at the framework boundary).
 - AI-friendly route metadata via optional `meta: { examples, extensions, summary, description, tags }`; examples are validated against your schemas at build time, surfaced as OpenAPI `examples` + `x-daloy-*` extensions, and dumped as `routes.json` / `routes.yaml` via `daloy inspect --ai`.
+- API lifecycle and breaking-change detection: mark routes `deprecated` or give them a `sunset` date to emit RFC 8594 `Deprecation` / `Sunset` headers and an `x-sunset` OpenAPI extension, then gate CI with `diffOpenAPI()` / the `daloy diff` command, which fail on a breaking change versus the last published spec.
 - In-process test client (`app.request()`), contract-test runner, in-process typed client, and Hey API codegen via `pnpm gen`.
 
 ### Runtimes and deployment

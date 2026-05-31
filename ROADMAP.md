@@ -122,7 +122,7 @@ Capabilities a contract-first, production-grade API framework is expected to shi
 
 ### Contract lifecycle & API evolution
 
-- [ ] **API versioning + breaking-change detection** _(pre-`1.0` candidate)_ — route-level `deprecated` lifecycle, `Deprecation` + `Sunset` headers (RFC 8594), and an **OpenAPI diff / breaking-change gate** that compares the generated spec against the last published one in CI. For a single-source-of-truth framework, "did this PR break my published API?" is the obvious missing tool. Today `openapi.ts` only carries a free-form `version` string.
+- [x] **API versioning + breaking-change detection** _(pre-`1.0` candidate)_ — route-level `deprecated` lifecycle, `Deprecation` + `Sunset` headers (RFC 8594), and an **OpenAPI diff / breaking-change gate** that compares the generated spec against the last published one in CI. For a single-source-of-truth framework, "did this PR break my published API?" is the obvious missing tool. Today `openapi.ts` only carries a free-form `version` string. _(Shipped in 0.37.0: route-level `sunset`, RFC 8594 `Deprecation`/`Sunset` response headers, the `diffOpenAPI`/`hasBreakingChanges` API, the `daloy diff` CLI, and the `verify:breaking-changes` CI gate.)_
 - [ ] **AsyncAPI generation for WebSockets** — the RFC 6455 stack (`src/websocket.ts`) and its CSWSH defenses ship with no contract/doc artifact. Extend the contract-first story past HTTP by emitting AsyncAPI for `app.ws()` surfaces, mirroring the built-in OpenAPI generator.
 
 ### Request/response semantics

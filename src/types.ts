@@ -379,6 +379,40 @@ export interface RouteDefinition<
   deprecated?: boolean;
   version?: string;
 
+  /**
+   * Mark the endpoint as scheduled for removal at a specific date (RFC 8594
+   * "The Sunset HTTP Header Field"). Accepts an ISO-8601 string, any string
+   * parseable by `new Date(...)`, or a `Date`. When set, the framework:
+   *
+   * - implicitly treats the route as {@link RouteDefinition.deprecated}
+   *   (the OpenAPI operation is emitted with `deprecated: true`);
+   * - emits a `Deprecation: true` response header (RFC 8594 / the
+   *   `Deprecation` HTTP header field) on every response from the route; and
+   * - emits a `Sunset: <IMF-fixdate>` response header normalized to an HTTP
+   *   date so clients and gateways can schedule migration.
+   *
+   * The OpenAPI document also surfaces the normalized value as an
+   * `x-sunset` vendor extension on the operation.
+   *
+   * Invalid (unparseable) values are rejected at `app.route(...)`
+   * registration time, never per-request.
+   *
+   * @example
+   * ```ts
+   * app.route({
+   *   method: "GET",
+   *   path: "/v1/legacy",
+   *   deprecated: true,
+   *   sunset: "2026-12-31T00:00:00Z",
+   *   responses: { 200: { description: "OK" } },
+   *   handler: () => ({ status: 200, body: { ok: true } }),
+   * });
+   * ```
+   *
+   * @since 0.37.0
+   */
+  sunset?: string | Date;
+
   request?: Req;
   responses: Res;
 

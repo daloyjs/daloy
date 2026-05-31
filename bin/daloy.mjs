@@ -10,6 +10,7 @@
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { runCli } from "../dist/cli.js";
 
@@ -83,6 +84,7 @@ const result = await runCli(process.argv.slice(2), {
   importEntry,
   version: PKG.version,
   spawn: spawnDev,
+  readTextFile: (path) => readFile(resolve(process.cwd(), path), "utf8"),
 });
 
 process.exit(result.exitCode);

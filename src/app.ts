@@ -1635,6 +1635,13 @@ export class App {
       auth: def.auth ?? this.groupAuth,
     };
     this.assertRouteAuthPayloadConfig(merged);
+    // Normalize an optional RFC 8594 sunset date to a stable IMF-fixdate
+    // (HTTP date) string once, at registration time, so the hot response
+    // path can emit the `Sunset` header without re-parsing per request and
+    // a bad value fails fast rather than silently emitting garbage.
+    if (merged.sunset !== undefined) {
+      merged.sunset = normalizeSunset(merged.sunset, merged.method, fullPath);
+    }
     const sources: Hooks[] = [...this.groupHooks, def.hooks ?? {}];
     const hooks = mergeHooks(sources);
     const corsOriginAllows = corsOriginAllowsFromHooks(sources);
@@ -3592,6 +3599,26 @@ async function readBody(
   return new TextDecoder().decode(bytes);
 }
 
+/**
+ * Validate and normalize a route's RFC 8594 `sunset` value to an IMF-fixdate
+ * (HTTP date) string. Accepts an ISO-8601/parseable string or a `Date`.
+ * Throws at registration time when the value cannot be parsed into a valid
+ * date so a typo never silently ships a malformed `Sunset` header.
+ *
+ * @internal
+ */
+function normalizeSunset(value: string | Date, method: string, path: string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(
+      `app.route(): invalid sunset date for ${method} ${path}: ` +
+        `${JSON.stringify(value)}. Provide an ISO-8601 string, an HTTP date, ` +
+        `or a Date instance.`,
+    );
+  }
+  return date.toUTCString();
+}
+
 function serializeResult(
   result: { status: number; body: unknown; headers?: Record<string, string> },
   def: RouteDefinition<any, any, any, any>,
@@ -3609,6 +3636,16 @@ function serializeResult(
     const explicitCt = headers.get("content-type");
     const treatAsJson = !explicitCt || explicitCt.includes("application/json");
     if (!explicitCt) headers.set("content-type", "application/json");
+
+    // RFC 8594 deprecation lifecycle headers. A route with an explicit
+    // `sunset` date is implicitly deprecated. Never overwrite a value the
+    // handler set deliberately.
+    if (def.deprecated === true || def.sunset !== undefined) {
+      if (!headers.has("deprecation")) headers.set("deprecation", "true");
+      if (def.sunset !== undefined && !headers.has("sunset")) {
+        headers.set("sunset", def.sunset as string);
+      }
+    }
 
     let body: BodyInit | null;
     let rawBody: Uint8Array | null = null;

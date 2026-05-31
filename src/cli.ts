@@ -12,6 +12,7 @@
 
 import type { App, IntrospectedRoute } from "./app.js";
 import { runContractTests } from "./contract.js";
+import { diffOpenAPI, type OpenAPIChange } from "./openapi-diff.js";
 import { generateOpenAPI, openapiToYAML } from "./openapi.js";
 import type { RouteDefinition, RouteMeta } from "./types.js";
 
@@ -29,6 +30,11 @@ export interface CliIO {
    * can omit it.
    */
   spawn?: (command: string, args: readonly string[]) => Promise<number>;
+  /**
+   * Read a UTF-8 text file by path. Required for `daloy diff`; optional so
+   * unit tests that only exercise `inspect` can omit it.
+   */
+  readTextFile?: (path: string) => Promise<string>;
   /**
    * Override runtime detection (defaults to inspecting `globalThis.process.versions`).
    * Mainly exists for tests.
@@ -68,6 +74,8 @@ export interface CliOptions {
   auditSecrets?: boolean;
   /** `daloy doctor` — disable the default-defaults audit. */
   noAuditDefaults?: boolean;
+  /** Positional arguments collected in order (used by `daloy diff`). */
+  positionals?: string[];
 }
 
 const HELP = `daloy — DaloyJS CLI
@@ -84,6 +92,11 @@ Commands:
                          Exits non-zero on any violation so the
                          command can guard container HEALTHCHECK and CI
                          deploy steps.
+  diff <baseline> <current>
+                         Compare two OpenAPI 3.1 JSON documents and report
+                         added, removed, and changed operations. Exits 1
+                         when a breaking change is detected so it can gate
+                         CI; pass --json for machine-readable output.
 
 Options:
   --json                 Print machine-readable JSON instead of a table.
@@ -130,6 +143,8 @@ Examples:
   daloy inspect --openapi --format yaml > openapi.yaml
   daloy dev
   daloy dev src/server.ts
+  daloy diff openapi.published.json openapi.json
+  daloy diff --json openapi.published.json openapi.json
 `;
 
 const DEFAULT_ENTRIES: string[] = [
@@ -310,7 +325,7 @@ export function parseArgs(argv: readonly string[]): { command: string; opts: Cli
   };
   let command = "inspect";
   let i = 0;
-  if (argv[0] === "inspect" || argv[0] === "dev" || argv[0] === "help" || argv[0] === "doctor") {
+  if (argv[0] === "inspect" || argv[0] === "dev" || argv[0] === "help" || argv[0] === "doctor" || argv[0] === "diff") {
     command = argv[0];
     i = 1;
   }
@@ -376,6 +391,7 @@ export function parseArgs(argv: readonly string[]): { command: string; opts: Cli
         if (a.startsWith("-")) {
           throw new Error(`Unknown flag: ${a}`);
         }
+        (opts.positionals ??= []).push(a);
         opts.entry = a;
     }
   }
@@ -417,6 +433,9 @@ export async function runCli(argv: readonly string[], io: CliIO): Promise<CliRes
   }
   if (command === "doctor") {
     return runDoctor(opts, io);
+  }
+  if (command === "diff") {
+    return runDiff(opts, io);
   }
   if (command !== "inspect") {
     io.stderr(`Unknown command: ${command}\n\n${HELP}`);
@@ -538,6 +557,60 @@ function formatContract(report: Awaited<ReturnType<typeof runContractTests>>): s
   if (report.ok) out.push("OK.");
   else out.push("FAIL.");
   return `${out.join("\n")}\n`;
+}
+
+/**
+ * `daloy diff <baseline> <current>` — compare two OpenAPI 3.1 JSON documents
+ * and report added, removed, and changed operations. Exits 1 when a breaking
+ * change is detected so it can gate CI; `--json` emits machine-readable output.
+ *
+ * @internal
+ */
+async function runDiff(opts: CliOptions, io: CliIO): Promise<CliResult> {
+  const positionals = opts.positionals ?? [];
+  if (positionals.length !== 2) {
+    io.stderr(`daloy diff requires two file paths: <baseline> <current>\n\n${HELP}`);
+    return { exitCode: 2 };
+  }
+  if (!io.readTextFile) {
+    io.stderr("daloy diff: this environment cannot read files.\n");
+    return { exitCode: 2 };
+  }
+  const [baselinePath, currentPath] = positionals as [string, string];
+
+  let baseline: unknown;
+  let current: unknown;
+  try {
+    baseline = JSON.parse(await io.readTextFile(baselinePath));
+    current = JSON.parse(await io.readTextFile(currentPath));
+  } catch (err) {
+    io.stderr(`daloy diff: failed to read or parse input: ${(err as Error).message}\n`);
+    return { exitCode: 1 };
+  }
+
+  const result = diffOpenAPI(baseline, current);
+  const hasBreaking = result.breaking.length > 0;
+
+  if (opts.json) {
+    io.stdout(`${JSON.stringify(result, null, 2)}\n`);
+    return { exitCode: hasBreaking ? 1 : 0 };
+  }
+
+  const out: string[] = [];
+  const fmt = (c: OpenAPIChange) =>
+    `  [${c.severity === "breaking" ? "BREAKING" : "ok"}] ${c.kind} ${c.location}` +
+    (c.detail ? ` — ${c.detail}` : "");
+  const total = result.breaking.length + result.nonBreaking.length;
+  if (total === 0) {
+    out.push("Specs match: no changes detected.");
+  } else {
+    out.push(`OpenAPI changes: ${total} · ${result.breaking.length} breaking`);
+    for (const change of result.breaking) out.push(fmt(change));
+    for (const change of result.nonBreaking) out.push(fmt(change));
+  }
+  out.push(hasBreaking ? "FAIL: breaking changes detected." : "OK.");
+  io.stdout(`${out.join("\n")}\n`);
+  return { exitCode: hasBreaking ? 1 : 0 };
 }
 
 /**

@@ -181,6 +181,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/errors", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/multipart", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/openapi", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/api-lifecycle", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/ai-metadata", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/typed-client", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/streaming", changeFrequency: "monthly", priority: 0.8 },

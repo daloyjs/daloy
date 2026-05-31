@@ -14,7 +14,22 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **API lifecycle headers (RFC 8594).** Routes accept an optional `sunset`
+  date (ISO-8601 string or `Date`). A route with a `sunset` is implicitly
+  deprecated: every response carries a `Deprecation: true` header and a
+  `Sunset: <HTTP-date>` header, and the generated OpenAPI operation gains
+  `deprecated: true` plus an `x-sunset` extension. The value is validated and
+  normalized once at `app.route(...)` registration time.
+- **OpenAPI diff engine.** New pure, dependency-free `@daloyjs/core/openapi-diff`
+  module exporting `diffOpenAPI(baseline, current)` and
+  `hasBreakingChanges(baseline, current)` to classify added, removed, and
+  changed operations as breaking or non-breaking.
+- **`daloy diff <baseline> <current>` CLI command** and a
+  `verify:breaking-changes` script that compares the generated spec against the
+  last published one and exits non-zero on a breaking change, so CI can gate
+  "did this PR break my published API?".
 
 ## [0.36.0] — 2026-05-28 to 2026-05-30
 

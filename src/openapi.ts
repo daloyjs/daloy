@@ -237,7 +237,10 @@ function buildOperation(
       ? { description: route.description ?? meta?.description }
       : {}),
     ...(mergedTags.length ? { tags: mergedTags } : {}),
-    ...(route.deprecated ? { deprecated: true } : {}),
+    ...(route.deprecated || (route as { sunset?: unknown }).sunset ? { deprecated: true } : {}),
+    ...((route as { sunset?: unknown }).sunset
+      ? { "x-sunset": (route as { sunset?: unknown }).sunset }
+      : {}),
   };
 
   const parameters: Array<Record<string, unknown>> = [];
