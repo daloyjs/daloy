@@ -29,8 +29,8 @@ export default function Page() {
         As of <strong>0.37.0</strong> DaloyJS ships <code>ipReputation()</code>.
         Where <code>ipRestriction()</code> enforces a <em>static</em> allow/deny
         list compiled once at startup, <code>ipReputation()</code> wires{" "}
-        <strong>pluggable, periodically-refreshed abuse feeds</strong> — Tor exit
-        lists, Spamhaus DROP, cloud-abuse ranges, or your own threat
+        <strong>pluggable, periodically-refreshed abuse feeds</strong> — Tor
+        exit lists, Spamhaus DROP, cloud-abuse ranges, or your own threat
         intelligence — into the request path without a redeploy.
       </p>
       <ul>
@@ -41,19 +41,20 @@ export default function Page() {
         </li>
         <li>
           <strong>Periodic refresh</strong> — the denylist reloads on an
-          <code>unref</code>&apos;d timer so stale ranges expire and new ones are
-          picked up automatically.
+          <code>unref</code>&apos;d timer so stale ranges expire and new ones
+          are picked up automatically.
         </li>
         <li>
           <strong>Fail-open</strong> — a denylist is additive defense, never the
-          only gate. If a feed can&apos;t be loaded (initial or refresh), traffic
-          is <em>not</em> blocked: the last-known-good list is retained. A feed
-          outage never takes your app down.
+          only gate. If a feed can&apos;t be loaded (initial or refresh),
+          traffic is <em>not</em> blocked: the last-known-good list is retained.
+          A feed outage never takes your app down.
         </li>
       </ul>
       <p>
-        It reuses the same SSRF-grade CIDR matcher as <code>ipRestriction()</code>,
-        is dependency-free, and runs on every supported runtime.
+        It reuses the same SSRF-grade CIDR matcher as{" "}
+        <code>ipRestriction()</code>, is dependency-free, and runs on every
+        supported runtime.
       </p>
 
       <h2>Quick start</h2>
@@ -93,10 +94,11 @@ process.on("SIGTERM", () => reputation.stop());`}
       />
       <p>
         <code>urlFeed()</code> covers the common case. It fetches the URL,
-        understands the Spamhaus-DROP-style <code>{"<cidr> ; <annotation>"}</code>{" "}
-        format, and skips <code>#</code>, <code>;</code>, and <code>//</code>{" "}
-        comment lines. Lines that aren&apos;t valid IPs/CIDRs are skipped, so a
-        partially-malformed feed still loads its good rows.
+        understands the Spamhaus-DROP-style{" "}
+        <code>{"<cidr> ; <annotation>"}</code> format, and skips <code>#</code>,{" "}
+        <code>;</code>, and <code>//</code> comment lines. Lines that
+        aren&apos;t valid IPs/CIDRs are skipped, so a partially-malformed feed
+        still loads its good rows.
       </p>
       <CodeBlock
         language="ts"
@@ -150,8 +152,8 @@ const reputation = ipReputation({
 
       <h2>Monitor mode</h2>
       <p>
-        Roll a new feed out in <code>&quot;log&quot;</code> mode first to measure
-        what it would block before you enforce it:
+        Roll a new feed out in <code>&quot;log&quot;</code> mode first to
+        measure what it would block before you enforce it:
       </p>
       <CodeBlock
         language="ts"
@@ -185,10 +187,11 @@ reputation.has("203.0.113.7");       // probe without side effects`}
 
       <h2>Custom IP resolution</h2>
       <p>
-        By default the client IP is resolved from the socket-supplied value;
-        set <code>trustProxyHeaders: true</code> to read{" "}
-        <code>X-Forwarded-For</code> / <code>X-Real-IP</code> (only behind a proxy
-        you trust to overwrite them), or pass your own <code>resolveIp</code>:
+        By default the client IP is resolved from the socket-supplied value; set{" "}
+        <code>trustProxyHeaders: true</code> to read{" "}
+        <code>X-Forwarded-For</code> / <code>X-Real-IP</code> (only behind a
+        proxy you trust to overwrite them), or pass your own{" "}
+        <code>resolveIp</code>:
       </p>
       <CodeBlock
         language="ts"
@@ -212,8 +215,8 @@ reputation.has("203.0.113.7");       // probe without side effects`}
         </li>
         <li>
           <strong>SSRF.</strong> <code>urlFeed()</code> uses the platform{" "}
-          <code>fetch</code>; pass an SSRF-guarded <code>fetchImpl</code> if feed
-          URLs are operator-configurable.
+          <code>fetch</code>; pass an SSRF-guarded <code>fetchImpl</code> if
+          feed URLs are operator-configurable.
         </li>
       </ul>
     </>

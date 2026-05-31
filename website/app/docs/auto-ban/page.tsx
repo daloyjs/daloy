@@ -52,9 +52,10 @@ const app = createApp();
 app.use(autoBan({ trustProxyHeaders: true }));`}
       />
       <p>
-        Mount it globally with <code>app.use()</code> so it observes every route.
-        Because it reads the outgoing status, it counts failures produced by{" "}
-        <em>any</em> downstream middleware or handler (auth rejections, rate-limit
+        Mount it globally with <code>app.use()</code> so it observes every
+        route. Because it reads the outgoing status, it counts failures produced
+        by <em>any</em> downstream middleware or handler (auth rejections,
+        rate-limit
         <code>429</code>s, your own <code>403</code>s) — not just its own.
       </p>
 
@@ -65,7 +66,8 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
         <code>trustProxyHeaders: true</code>. This is deliberate: a shared{" "}
         <code>&quot;global&quot;</code> bucket would let a single offender ban
         every caller at once. A request the key generator cannot attribute
-        (returns <code>undefined</code>) is skipped — never counted, never banned.
+        (returns <code>undefined</code>) is skipped — never counted, never
+        banned.
       </p>
       <CodeBlock
         language="ts"
@@ -81,8 +83,8 @@ app.use(
       <ul>
         <li>
           Each watched response is a <strong>strike</strong>. Strikes accumulate
-          inside <code>windowMs</code> (default 10 min) and decay when the window
-          passes.
+          inside <code>windowMs</code> (default 10 min) and decay when the
+          window passes.
         </li>
         <li>
           Reaching <code>maxStrikes</code> (default 5) issues a ban for{" "}
@@ -90,9 +92,9 @@ app.use(
         </li>
         <li>
           With <code>escalate: true</code> (default) each <em>repeat</em> ban
-          doubles — <code>banMs</code>, <code>2×</code>, <code>4×</code>, … capped
-          at <code>maxBanMs</code> (default 24 h) — for as long as the record
-          stays alive.
+          doubles — <code>banMs</code>, <code>2×</code>, <code>4×</code>, …
+          capped at <code>maxBanMs</code> (default 24 h) — for as long as the
+          record stays alive.
         </li>
         <li>
           Once the client stops tripping statuses, the record expires and the
@@ -104,9 +106,10 @@ app.use(
       <p>
         A banned request is rejected in <code>beforeHandle</code> before the
         handler runs. By default it returns <code>429 Too Many Requests</code>{" "}
-        with a <code>Retry-After</code> header and <code>Cache-Control: no-store</code>.
-        Set <code>banStatus: 403</code> for a <code>403 Forbidden</code> with your
-        own <code>message</code> instead.
+        with a <code>Retry-After</code> header and{" "}
+        <code>Cache-Control: no-store</code>. Set <code>banStatus: 403</code>{" "}
+        for a <code>403 Forbidden</code> with your own <code>message</code>{" "}
+        instead.
       </p>
       <CodeBlock
         language="ts"
@@ -169,17 +172,17 @@ const redisStore: AutoBanStore = {
 app.use(autoBan({ trustProxyHeaders: true, store: redisStore }));`}
       />
       <p>
-        Implementations must treat an entry past its <code>ttlMs</code> as absent
-        so bans and escalation decay automatically. To lift a ban manually, call{" "}
-        <code>store.delete(key)</code>.
+        Implementations must treat an entry past its <code>ttlMs</code> as
+        absent so bans and escalation decay automatically. To lift a ban
+        manually, call <code>store.delete(key)</code>.
       </p>
 
       <h2>Sharing across route groups</h2>
       <p>
         Every <code>autoBan()</code> with the same <code>groupId</code> (default{" "}
-        <code>&quot;auto-ban&quot;</code>) shares one in-memory store, so a client
-        banned on one group is banned on all of them — an attacker can&apos;t
-        dodge the ban by rotating endpoints.
+        <code>&quot;auto-ban&quot;</code>) shares one in-memory store, so a
+        client banned on one group is banned on all of them — an attacker
+        can&apos;t dodge the ban by rotating endpoints.
       </p>
     </>
   );

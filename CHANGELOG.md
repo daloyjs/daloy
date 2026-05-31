@@ -16,6 +16,26 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Added
 
+- **HTTP Message Signatures (RFC 9421) at `@daloyjs/core/http-signatures`.**
+  First-party, dependency-free sign/verify for server-to-server request
+  authentication via the standard `Signature` / `Signature-Input` headers.
+  `signMessage` / `signRequest` build an RFC 9421 signature base over derived
+  components (`@method`, `@target-uri`, `@authority`, `@scheme`,
+  `@request-target`, `@path`, `@query`, `@query-param`, `@status`) and HTTP
+  fields, with Structured-Fields header serialization; `verifyMessage` /
+  `verifyRequest` and the `httpSignatureAuth()` middleware check them. Supports
+  `hmac-sha256`, `ed25519`, `ecdsa-p256-sha256`, `ecdsa-p384-sha384`,
+  `rsa-pss-sha512`, and `rsa-v1_5-sha256` via WebCrypto (no `node:` imports).
+  Secure-by-default verify: a mandatory `algorithms` allowlist, optional
+  per-key algorithm pinning to defeat algorithm-confusion, a required `created`
+  timestamp with a `DEFAULT_MAX_SIGNATURE_AGE_SECONDS` (300s) freshness window,
+  `created`-in-future / `expires` skew rejection, configurable
+  `requiredComponents`, a 32-byte raw-HMAC floor, and `nonce` replay defense.
+  The middleware answers a missing/invalid signature with `401` +
+  `Cache-Control: no-store` and stamps the verified result on
+  `ctx.state.httpSignature`. Adds RFC 9530 `contentDigest` /
+  `verifyContentDigest` helpers to bind the request body into the signature.
+
 - **Subresource Integrity (SRI) for the CDN-loaded docs UI assets.** The
   built-in `/docs` page loads Scalar / Swagger UI bundles from jsDelivr; the
   new `DocsAssetOptions` lets you pin version-exact `*Integrity` hashes

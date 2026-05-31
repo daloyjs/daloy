@@ -25,26 +25,30 @@ export default function Page() {
     <>
       <h1>Bot / User-Agent management</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships <code>botGuard()</code> — the
-        in-app equivalent of the bot rules Nginx, Cloudflare, and other WAFs run
-        at the edge, but inside the app where the framework already owns request
-        parsing and client-IP resolution. It does three opt-in jobs:
+        As of <strong>0.37.0</strong> DaloyJS ships <code>botGuard()</code> —
+        the in-app equivalent of the bot rules Nginx, Cloudflare, and other WAFs
+        run at the edge, but inside the app where the framework already owns
+        request parsing and client-IP resolution. It does three opt-in jobs:
       </p>
       <ul>
         <li>
-          <strong>Block empty / missing <code>User-Agent</code></strong> — a
-          common signature of crude scrapers and vulnerability scanners (on by
-          default).
+          <strong>
+            Block empty / missing <code>User-Agent</code>
+          </strong>{" "}
+          — a common signature of crude scrapers and vulnerability scanners (on
+          by default).
         </li>
         <li>
-          <strong>Block known-abusive <code>User-Agent</code> strings</strong> —
-          your own substrings or <code>RegExp</code>s.
+          <strong>
+            Block known-abusive <code>User-Agent</code> strings
+          </strong>{" "}
+          — your own substrings or <code>RegExp</code>s.
         </li>
         <li>
           <strong>Verify declared crawlers</strong> — when a request{" "}
-          <em>claims</em> to be Googlebot or Bingbot, confirm it via reverse-DNS +
-          forward-confirm (the method Google and Bing themselves document) so a
-          spoofed <code>User-Agent</code> can&apos;t impersonate a trusted
+          <em>claims</em> to be Googlebot or Bingbot, confirm it via reverse-DNS
+          + forward-confirm (the method Google and Bing themselves document) so
+          a spoofed <code>User-Agent</code> can&apos;t impersonate a trusted
           crawler.
         </li>
       </ul>
@@ -70,9 +74,9 @@ app.use(
 );`}
       />
       <p>
-        Mount it with <code>app.use()</code> so it runs in <code>beforeHandle</code>{" "}
-        before your handlers. A blocked request is rejected with{" "}
-        <code>403 Forbidden</code> RFC 9457 problem+json.
+        Mount it with <code>app.use()</code> so it runs in{" "}
+        <code>beforeHandle</code> before your handlers. A blocked request is
+        rejected with <code>403 Forbidden</code> RFC 9457 problem+json.
       </p>
 
       <h2>Blocking empty &amp; abusive User-Agents</h2>
@@ -94,9 +98,9 @@ app.use(
       <h2>Allowlist wins</h2>
       <p>
         <code>allowUserAgents</code> is consulted first and bypasses{" "}
-        <strong>every</strong> other rule (including empty-UA blocking and crawler
-        verification) — handy for your own monitoring agents or a partner&apos;s
-        integration.
+        <strong>every</strong> other rule (including empty-UA blocking and
+        crawler verification) — handy for your own monitoring agents or a
+        partner&apos;s integration.
       </p>
       <CodeBlock
         language="ts"
@@ -110,12 +114,13 @@ app.use(
 
       <h2>Verifying declared crawlers</h2>
       <p>
-        Spoofing <code>User-Agent: Googlebot</code> is trivial. The only reliable
-        check is the one Google and Bing publish: reverse-DNS the client IP, make
-        sure the PTR hostname is on an official domain, then forward-resolve that
-        hostname back to the same IP. <code>botGuard()</code> ships{" "}
-        <code>GOOGLEBOT</code> and <code>BINGBOT</code> rules (bundled as{" "}
-        <code>WELL_KNOWN_BOTS</code>) and you can add your own:
+        Spoofing <code>User-Agent: Googlebot</code> is trivial. The only
+        reliable check is the one Google and Bing publish: reverse-DNS the
+        client IP, make sure the PTR hostname is on an official domain, then
+        forward-resolve that hostname back to the same IP.{" "}
+        <code>botGuard()</code> ships <code>GOOGLEBOT</code> and{" "}
+        <code>BINGBOT</code> rules (bundled as <code>WELL_KNOWN_BOTS</code>) and
+        you can add your own:
       </p>
       <CodeBlock
         language="ts"
@@ -141,11 +146,12 @@ app.use(
         Because <code>verifiedBots</code> needs the client IP, the middleware{" "}
         <strong>refuses to construct</strong> unless you supply{" "}
         <code>resolveIp</code> or set <code>trustProxyHeaders</code>. A request
-        that claims to be a crawler but can&apos;t be verified — no client IP, or
-        a DNS failure — is blocked by default (<code>blockUnverifiableBots</code>,
-        the secure-by-default posture). Set it to <code>false</code> to fail open.
-        Verification results are cached per IP (default 1 h via{" "}
-        <code>cacheTtlMs</code>) so DNS stays off the hot path.
+        that claims to be a crawler but can&apos;t be verified — no client IP,
+        or a DNS failure — is blocked by default (
+        <code>blockUnverifiableBots</code>, the secure-by-default posture). Set
+        it to <code>false</code> to fail open. Verification results are cached
+        per IP (default 1 h via <code>cacheTtlMs</code>) so DNS stays off the
+        hot path.
       </p>
 
       <h2>Monitor mode &amp; callbacks</h2>
@@ -170,7 +176,8 @@ app.use(
 );`}
       />
       <p>
-        The <code>reason</code> is one of <code>&quot;empty-user-agent&quot;</code>,{" "}
+        The <code>reason</code> is one of{" "}
+        <code>&quot;empty-user-agent&quot;</code>,{" "}
         <code>&quot;blocked-user-agent&quot;</code>,{" "}
         <code>&quot;spoofed-bot&quot;</code>, or{" "}
         <code>&quot;unverifiable-bot&quot;</code>.
@@ -179,8 +186,8 @@ app.use(
       <h2>Custom DNS resolver</h2>
       <p>
         The default resolver lazily imports <code>node:dns/promises</code>. On a
-        runtime without it (Workers, Deno without <code>--allow-net</code>) or in
-        tests, supply your own <code>BotResolver</code>:
+        runtime without it (Workers, Deno without <code>--allow-net</code>) or
+        in tests, supply your own <code>BotResolver</code>:
       </p>
       <CodeBlock
         language="ts"

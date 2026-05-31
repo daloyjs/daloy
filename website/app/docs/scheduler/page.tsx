@@ -27,19 +27,19 @@ export default function Page() {
     <>
       <h1>Scheduled tasks (in-process cron)</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships a <strong>queue-agnostic
-        schedule primitive</strong>: run periodic work inside <em>this</em>{" "}
-        process on a fixed interval or a cron expression. It is the in-process
-        counterpart to an external job queue &mdash; reach for it for cache
-        sweeps, token refresh, reconciliation, and other housekeeping, not for
-        distributed fan-out. It has zero runtime dependencies and three
-        properties a production scheduler needs:
+        As of <strong>0.37.0</strong> DaloyJS ships a{" "}
+        <strong>queue-agnostic schedule primitive</strong>: run periodic work
+        inside <em>this</em> process on a fixed interval or a cron expression.
+        It is the in-process counterpart to an external job queue &mdash; reach
+        for it for cache sweeps, token refresh, reconciliation, and other
+        housekeeping, not for distributed fan-out. It has zero runtime
+        dependencies and three properties a production scheduler needs:
       </p>
       <ul>
         <li>
-          <strong>Flexible schedules</strong> &mdash; fixed intervals
-          (<code>intervalMs</code>) or 5-field cron expressions
-          (<code>cron</code>, with <code>@hourly</code>/<code>@daily</code>/…
+          <strong>Flexible schedules</strong> &mdash; fixed intervals (
+          <code>intervalMs</code>) or 5-field cron expressions (
+          <code>cron</code>, with <code>@hourly</code>/<code>@daily</code>/…
           aliases and an optional IANA <code>timeZone</code>).
         </li>
         <li>
@@ -58,7 +58,9 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Quick start with <code>app.cron()</code></h2>
+      <h2>
+        Quick start with <code>app.cron()</code>
+      </h2>
       <p>
         The easiest entry point is <code>app.cron()</code>. The first call
         lazily creates an app-managed <code>Scheduler</code>, starts it, and
@@ -94,10 +96,10 @@ await app.scheduledTasks?.runNow("purge-sessions"); // out-of-band run`}
 
       <h2>Cron expressions</h2>
       <p>
-        The <code>cron</code> field accepts a standard 5-field expression
-        (<code>minute hour day-of-month month day-of-week</code>) with
-        wildcards, lists (<code>1,15,30</code>), ranges (<code>1-5</code>), steps
-        (<code>*/5</code>), and case-insensitive month/day names. Day-of-week
+        The <code>cron</code> field accepts a standard 5-field expression (
+        <code>minute hour day-of-month month day-of-week</code>) with wildcards,
+        lists (<code>1,15,30</code>), ranges (<code>1-5</code>), steps (
+        <code>*/5</code>), and case-insensitive month/day names. Day-of-week
         accepts both <code>0</code> and <code>7</code> for Sunday. The named
         aliases <code>@yearly</code>, <code>@monthly</code>,{" "}
         <code>@weekly</code>, <code>@daily</code>, and <code>@hourly</code> are
@@ -151,10 +153,10 @@ state.nextRunAt;       // epoch ms of the next scheduled run`}
 
       <h2>Per-run timeouts</h2>
       <p>
-        Set <code>timeoutMs</code> to bound a run. When it elapses the run&apos;s{" "}
-        <code>signal</code> is aborted; forward it to your I/O so the handler
-        unwinds promptly. A timed-out run is recorded as a failure and reported
-        to <code>onError</code> with <code>timedOut: true</code>.
+        Set <code>timeoutMs</code> to bound a run. When it elapses the
+        run&apos;s <code>signal</code> is aborted; forward it to your I/O so the
+        handler unwinds promptly. A timed-out run is recorded as a failure and
+        reported to <code>onError</code> with <code>timedOut: true</code>.
       </p>
       <CodeBlock
         language="ts"
@@ -171,7 +173,9 @@ state.nextRunAt;       // epoch ms of the next scheduled run`}
 );`}
       />
 
-      <h2>Using the <code>Scheduler</code> directly</h2>
+      <h2>
+        Using the <code>Scheduler</code> directly
+      </h2>
       <p>
         For lifecycles you manage yourself (workers, scripts, tests), construct
         a <code>Scheduler</code> and drive it directly. It accepts an injectable
@@ -202,11 +206,11 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
       <p>
         This scheduler runs in-process: each instance of your app runs its own
         timers. That is exactly what you want for idempotent maintenance, but
-        for work that must run <em>exactly once</em> across a horizontally-scaled
-        fleet — or that must survive a process restart — use a durable queue or
-        a leader-elected external scheduler and have the elected instance call{" "}
-        <code>runNow()</code>. The single-flight guarantee is per-process, not
-        cluster-wide.
+        for work that must run <em>exactly once</em> across a
+        horizontally-scaled fleet — or that must survive a process restart — use
+        a durable queue or a leader-elected external scheduler and have the
+        elected instance call <code>runNow()</code>. The single-flight guarantee
+        is per-process, not cluster-wide.
       </p>
     </>
   );

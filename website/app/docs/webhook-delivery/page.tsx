@@ -34,8 +34,9 @@ export default function Page() {
         <em>outbound</em> side: it delivers events to your subscribers with a{" "}
         timestamped HMAC signature, bounded retries with exponential backoff,{" "}
         <code>Retry-After</code> awareness, a per-attempt timeout, and{" "}
-        dead-letter semantics &mdash; all with <strong>zero runtime
-        dependencies</strong> and SSRF-safe transport by default.
+        dead-letter semantics &mdash; all with{" "}
+        <strong>zero runtime dependencies</strong> and SSRF-safe transport by
+        default.
       </p>
       <ul>
         <li>
@@ -46,8 +47,8 @@ export default function Page() {
           convention <code>verifyWebhookSignature()</code> validates.
         </li>
         <li>
-          <strong>Retry with backoff</strong> &mdash; transient statuses
-          (<code>408/429/500/502/503/504</code>) and network errors are retried
+          <strong>Retry with backoff</strong> &mdash; transient statuses (
+          <code>408/429/500/502/503/504</code>) and network errors are retried
           with exponential backoff + jitter, honouring <code>Retry-After</code>.
         </li>
         <li>
@@ -56,8 +57,8 @@ export default function Page() {
           <code>WebhookDeadLetterSink</code> for later inspection or replay.
         </li>
         <li>
-          <strong>SSRF-safe by default</strong> &mdash; the transport defaults to{" "}
-          <code>fetchGuard()</code>, so a subscriber URL pointing at cloud
+          <strong>SSRF-safe by default</strong> &mdash; the transport defaults
+          to <code>fetchGuard()</code>, so a subscriber URL pointing at cloud
           metadata or a private range is refused (and never retried).
         </li>
       </ul>
@@ -137,9 +138,9 @@ app.post("/hooks", async (c) => {
         <code>5</code>) with exponential backoff between{" "}
         <code>retryDelayMs</code> and <code>maxRetryDelayMs</code>. A{" "}
         <code>Retry-After</code> header on a <code>429</code>/<code>503</code>{" "}
-        takes precedence (capped at <code>maxRetryDelayMs</code>). Only transient
-        statuses and network/timeout errors are retried; a <code>400</code> or{" "}
-        any other non-retryable status fails immediately.
+        takes precedence (capped at <code>maxRetryDelayMs</code>). Only
+        transient statuses and network/timeout errors are retried; a{" "}
+        <code>400</code> or any other non-retryable status fails immediately.
       </p>
       <CodeBlock
         language="ts"

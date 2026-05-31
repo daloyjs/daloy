@@ -25,13 +25,19 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>Outbound resilience for <code>fetch</code></h1>
+      <h1>
+        Outbound resilience for <code>fetch</code>
+      </h1>
       <p>
-        <code>fetchGuard()</code> answers <em>&ldquo;is this outbound address
-        safe?&rdquo;</em> &mdash; it blocks the SSRF chain to cloud metadata and
-        internal ranges. <code>resilientFetch()</code> answers the operational
-        other half: <em>&ldquo;is this upstream healthy, and how do we behave
-        when it is not?&rdquo;</em> As of <strong>0.37.0</strong> DaloyJS ships a{" "}
+        <code>fetchGuard()</code> answers{" "}
+        <em>&ldquo;is this outbound address safe?&rdquo;</em> &mdash; it blocks
+        the SSRF chain to cloud metadata and internal ranges.{" "}
+        <code>resilientFetch()</code> answers the operational other half:{" "}
+        <em>
+          &ldquo;is this upstream healthy, and how do we behave when it is
+          not?&rdquo;
+        </em>{" "}
+        As of <strong>0.37.0</strong> DaloyJS ships a{" "}
         <strong>dependency-free</strong> resilience layer with three classic
         guards:
       </p>
@@ -48,8 +54,8 @@ export default function Page() {
           transient statuses, honouring <code>Retry-After</code>.
         </li>
         <li>
-          <strong>Circuit breaker</strong> &mdash; a three-state machine
-          (<code>closed &rarr; open &rarr; half-open</code>) that fails fast when
+          <strong>Circuit breaker</strong> &mdash; a three-state machine (
+          <code>closed &rarr; open &rarr; half-open</code>) that fails fast when
           an upstream is clearly down, then probes for recovery.
         </li>
       </ul>
@@ -61,8 +67,8 @@ export default function Page() {
 
       <h2>Quick start</h2>
       <p>
-        Layer <code>resilientFetch()</code> over <code>fetchGuard()</code> so the
-        SSRF floor stays underneath the resilience logic.
+        Layer <code>resilientFetch()</code> over <code>fetchGuard()</code> so
+        the SSRF floor stays underneath the resilience logic.
       </p>
       <CodeBlock
         code={`import { fetchGuard, resilientFetch } from "@daloyjs/core";
@@ -111,15 +117,15 @@ try {
 
       <h2>Retry-with-backoff</h2>
       <p>
-        Retries only fire for <strong>idempotent</strong> methods
-        (<code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>,{" "}
+        Retries only fire for <strong>idempotent</strong> methods (
+        <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>,{" "}
         <code>PUT</code>, <code>DELETE</code>) and a conservative set of
-        transient statuses (<code>408</code>, <code>429</code>,{" "}
-        <code>500</code>, <code>502</code>, <code>503</code>, <code>504</code>),
-        plus network errors and timeouts. Non-idempotent <code>POST</code> /{" "}
+        transient statuses (<code>408</code>, <code>429</code>, <code>500</code>
+        , <code>502</code>, <code>503</code>, <code>504</code>), plus network
+        errors and timeouts. Non-idempotent <code>POST</code> /{" "}
         <code>PATCH</code> calls are never retried unless you opt in via{" "}
-        <code>retryableMethods</code>. Backoff is exponential with full jitter to
-        avoid a thundering-herd retry storm, and a <code>Retry-After</code>{" "}
+        <code>retryableMethods</code>. Backoff is exponential with full jitter
+        to avoid a thundering-herd retry storm, and a <code>Retry-After</code>{" "}
         response header is honoured (capped by <code>maxRetryDelayMs</code>).
       </p>
       <CodeBlock
@@ -154,14 +160,15 @@ try {
       <p>
         After <code>failureThreshold</code> consecutive failures the breaker
         trips <strong>open</strong>: every subsequent call fails fast with{" "}
-        <code>CircuitOpenError</code> &mdash; no network round-trip &mdash; until{" "}
-        <code>resetTimeoutMs</code> elapses. The breaker then enters{" "}
-        <strong>half-open</strong> and admits a limited number of trial requests;
-        a success closes it again, a failure re-opens it. The breaker is shared
-        across every call made through the returned function, so one hot upstream
-        is protected process-wide. A <code>5xx</code> response counts as a
-        failure (configurable via <code>circuitBreakerFailureStatuses</code>); an{" "}
-        SSRF refusal and a caller-initiated abort do <strong>not</strong>.
+        <code>CircuitOpenError</code> &mdash; no network round-trip &mdash;
+        until <code>resetTimeoutMs</code> elapses. The breaker then enters{" "}
+        <strong>half-open</strong> and admits a limited number of trial
+        requests; a success closes it again, a failure re-opens it. The breaker
+        is shared across every call made through the returned function, so one
+        hot upstream is protected process-wide. A <code>5xx</code> response
+        counts as a failure (configurable via{" "}
+        <code>circuitBreakerFailureStatuses</code>); an SSRF refusal and a
+        caller-initiated abort do <strong>not</strong>.
       </p>
       <CodeBlock
         code={`import { resilientFetch, CircuitOpenError } from "@daloyjs/core";
@@ -188,8 +195,8 @@ try {
       />
       <p>
         Pass <code>circuitBreaker: false</code> to disable it, or pass an
-        existing <code>CircuitBreaker</code> instance to share one breaker across
-        several clients targeting the same upstream.
+        existing <code>CircuitBreaker</code> instance to share one breaker
+        across several clients targeting the same upstream.
       </p>
 
       <h2>The standalone CircuitBreaker</h2>
@@ -224,13 +231,14 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
         </li>
         <li>
           <strong>No event-loop exhaustion.</strong> Every attempt is bounded by
-          a per-call timeout, and the backoff timer is <code>unref()</code>&rsquo;d
-          so it never keeps the process alive on its own.
+          a per-call timeout, and the backoff timer is <code>unref()</code>
+          &rsquo;d so it never keeps the process alive on its own.
         </li>
         <li>
           <strong>Zero runtime dependencies.</strong> Built entirely on
           Web-standard <code>AbortController</code> / <code>fetch</code>, so it
-          runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
+          runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel
+          Edge.
         </li>
       </ul>
     </>

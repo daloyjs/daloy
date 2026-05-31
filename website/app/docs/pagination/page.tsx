@@ -30,18 +30,21 @@ export default function Page() {
         List endpoints need a way to page through results that is stable under
         concurrent writes, cheap on the database, and self-describing in the
         contract. As of <strong>0.37.0</strong> DaloyJS ships{" "}
-        <strong>built-in, dependency-free</strong> cursor-pagination helpers that
-        cover all three concerns: an <strong>opaque cursor</strong> codec, an{" "}
-        <strong>RFC 8288 <code>Link</code> header</strong> builder, and a{" "}
-        <code>paginationQuery()</code> Standard Schema that validates the{" "}
-        <code>cursor</code> / <code>limit</code> query parameters{" "}
+        <strong>built-in, dependency-free</strong> cursor-pagination helpers
+        that cover all three concerns: an <strong>opaque cursor</strong> codec,
+        an{" "}
+        <strong>
+          RFC 8288 <code>Link</code> header
+        </strong>{" "}
+        builder, and a <code>paginationQuery()</code> Standard Schema that
+        validates the <code>cursor</code> / <code>limit</code> query parameters{" "}
         <em>and</em> wires them into the generated OpenAPI document and typed
         client.
       </p>
       <p>
-        Everything is built on Web-standard <code>URL</code>,{" "}
-        <code>btoa</code> / <code>atob</code>, and <code>JSON</code>, so it runs
-        unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
+        Everything is built on Web-standard <code>URL</code>, <code>btoa</code>{" "}
+        / <code>atob</code>, and <code>JSON</code>, so it runs unchanged on
+        Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
       </p>
 
       <h2>Quick start</h2>
@@ -180,9 +183,10 @@ set.headers.set("Link", linkHeader);
       />
       <p>
         At runtime the same schema coerces <code>limit</code> from its string
-        query value to an integer, clamps it to <code>[minLimit, maxLimit]</code>
-        , and rejects out-of-range or non-integer values at the request boundary
-        with a <code>422</code>. Customize the parameter names and bounds:
+        query value to an integer, clamps it to{" "}
+        <code>[minLimit, maxLimit]</code>, and rejects out-of-range or
+        non-integer values at the request boundary with a <code>422</code>.
+        Customize the parameter names and bounds:
       </p>
       <CodeBlock
         code={`paginationQuery({

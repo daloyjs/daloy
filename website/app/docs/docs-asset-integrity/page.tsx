@@ -32,8 +32,8 @@ export default function Page() {
         UI by loading their JavaScript and CSS bundles from the jsDelivr CDN. A
         CDN keeps the framework dependency-free and means no build step for the
         docs UI — but it also means the browser will execute whatever bytes the
-        CDN serves. If a CDN asset were ever poisoned, that code would run in the
-        context of your docs page.
+        CDN serves. If a CDN asset were ever poisoned, that code would run in
+        the context of your docs page.
       </p>
       <p>
         As of <strong>0.37.0</strong>, the docs helpers accept{" "}
@@ -107,17 +107,17 @@ const app = new App({
   | sed 's/^/sha384-/'`}
       />
       <p>
-        jsDelivr also surfaces a copy-paste SRI snippet on each file&apos;s page,
-        which is a convenient cross-check. Re-run this whenever you bump the
-        pinned version.
+        jsDelivr also surfaces a copy-paste SRI snippet on each file&apos;s
+        page, which is a convenient cross-check. Re-run this whenever you bump
+        the pinned version.
       </p>
 
       <h2>Self-hosting instead</h2>
       <p>
         If your Content-Security-Policy forbids third-party CDNs, point the same{" "}
-        <code>assets</code> URLs at copies you serve yourself. SRI is optional in
-        that case (the assets are same-origin and under your control), but you
-        can still pin hashes for defense in depth.
+        <code>assets</code> URLs at copies you serve yourself. SRI is optional
+        in that case (the assets are same-origin and under your control), but
+        you can still pin hashes for defense in depth.
       </p>
       <CodeBlock
         language="ts"
@@ -157,10 +157,11 @@ new App({
       <h2>Low-level helpers</h2>
       <p>
         The same options flow through the <code>scalarHtml()</code> and{" "}
-        <code>swaggerUiHtml()</code> helpers (from the <code>@daloyjs/core/docs</code>{" "}
-        subpath) if you render the docs page yourself. Multiple digests are
-        supported — separate them with whitespace, and the strongest one the
-        browser understands wins. The <code>crossOrigin</code> field defaults to{" "}
+        <code>swaggerUiHtml()</code> helpers (from the{" "}
+        <code>@daloyjs/core/docs</code> subpath) if you render the docs page
+        yourself. Multiple digests are supported — separate them with
+        whitespace, and the strongest one the browser understands wins. The{" "}
+        <code>crossOrigin</code> field defaults to{" "}
         <code>&quot;anonymous&quot;</code>; set it to{" "}
         <code>&quot;use-credentials&quot;</code> only when the asset host needs
         credentialed requests.

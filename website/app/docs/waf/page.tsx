@@ -28,10 +28,10 @@ export default function Page() {
     <>
       <h1>WAF-lite signature/anomaly inspection</h1>
       <p>
-        A full Web Application Firewall belongs at your <strong>edge</strong> — a
-        CDN, reverse proxy, or ModSecurity with the OWASP Core Rule Set. DaloyJS
-        does not try to replace that. But plenty of teams ship without an edge
-        WAF, and for them <code>waf()</code> is a first-party,{" "}
+        A full Web Application Firewall belongs at your <strong>edge</strong> —
+        a CDN, reverse proxy, or ModSecurity with the OWASP Core Rule Set.
+        DaloyJS does not try to replace that. But plenty of teams ship without
+        an edge WAF, and for them <code>waf()</code> is a first-party,{" "}
         <strong>opt-in defense-in-depth</strong> layer: it wires the
         framework&apos;s high-confidence injection signatures into a single,
         scored inbound-inspection pass you can turn on with one line.
@@ -41,8 +41,8 @@ export default function Page() {
         URL path, the raw and decoded query string, an optional header
         allowlist, and the validated request body for four rule categories —{" "}
         <strong>SQLi</strong>, <strong>XSS</strong>, <strong>NoSQLi</strong>{" "}
-        (Mongo-style operator injection), and <strong>command injection</strong>.
-        Each rule that fires contributes an <em>anomaly score</em>; when the
+        (Mongo-style operator injection), and <strong>command injection</strong>
+        . Each rule that fires contributes an <em>anomaly score</em>; when the
         total reaches the threshold, the request is rejected with a generic{" "}
         <code>403</code> (block mode) or merely reported (log mode).
       </p>
@@ -63,8 +63,8 @@ app.use(waf());`}
         the validated context — <code>query</code>, <code>params</code>,{" "}
         <code>headers</code>, and the schema-parsed <code>body</code>. Because
         body inspection reads <code>ctx.body</code>, it composes with the
-        framework&apos;s schema-first contract: routes that declare a body schema
-        are body-inspected automatically.
+        framework&apos;s schema-first contract: routes that declare a body
+        schema are body-inspected automatically.
       </p>
 
       <h2>Tune in log mode first</h2>
@@ -98,10 +98,10 @@ app.use(waf());`}
       <ul>
         <li>
           <strong>sqli</strong> — <code>UNION SELECT</code>, boolean tautologies
-          (<code>OR 1=1</code>), stacked statements (
-          <code>; DROP TABLE</code>), time-based probes (<code>SLEEP()</code>,{" "}
-          <code>WAITFOR DELAY</code>), <code>INFORMATION_SCHEMA</code>,{" "}
-          <code>xp_cmdshell</code>, and file primitives.
+          (<code>OR 1=1</code>), stacked statements (<code>; DROP TABLE</code>),
+          time-based probes (<code>SLEEP()</code>, <code>WAITFOR DELAY</code>),{" "}
+          <code>INFORMATION_SCHEMA</code>, <code>xp_cmdshell</code>, and file
+          primitives.
         </li>
         <li>
           <strong>xss</strong> — <code>&lt;script&gt;</code> tags,{" "}
@@ -178,8 +178,8 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
       />
       <p>
         Scanning is bounded so a hostile payload cannot turn inspection into
-        CPU-DoS: <code>maxValueLength</code> (default <code>8192</code>) caps the
-        length of any single scanned string, and <code>maxBodyNodes</code>{" "}
+        CPU-DoS: <code>maxValueLength</code> (default <code>8192</code>) caps
+        the length of any single scanned string, and <code>maxBodyNodes</code>{" "}
         (default <code>10000</code>) caps how many body nodes are walked. Only
         own enumerable properties are followed — prototype keys are never
         inspected.

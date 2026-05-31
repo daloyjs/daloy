@@ -28,11 +28,11 @@ export default function Page() {
       <h1>mTLS / client-certificate auth</h1>
       <p>
         As of <strong>0.37.0</strong> DaloyJS ships{" "}
-        <code>clientCertAuth()</code> — a middleware that authenticates a request
-        by its <strong>TLS client certificate</strong>, the standard answer to
-        &ldquo;prove this internal call came from a trusted peer&rdquo; in
-        zero-trust / service-to-service deployments. It is dependency-free and
-        runtime-portable, with two certificate sources:
+        <code>clientCertAuth()</code> — a middleware that authenticates a
+        request by its <strong>TLS client certificate</strong>, the standard
+        answer to &ldquo;prove this internal call came from a trusted
+        peer&rdquo; in zero-trust / service-to-service deployments. It is
+        dependency-free and runtime-portable, with two certificate sources:
       </p>
       <ul>
         <li>
@@ -195,10 +195,10 @@ app.route({
         </li>
       </ul>
 
-      <h2 id="the-clientcertificate">The <code>ClientCertificate</code></h2>
-      <p>
-        Whatever the source, handlers receive one normalized shape:
-      </p>
+      <h2 id="the-clientcertificate">
+        The <code>ClientCertificate</code>
+      </h2>
+      <p>Whatever the source, handlers receive one normalized shape:</p>
       <CodeBlock
         language="ts"
         code={`interface ClientCertificate {
@@ -216,9 +216,8 @@ app.route({
 }`}
       />
       <p>
-        The building blocks are exported from{" "}
-        <code>@daloyjs/core/mtls</code> too:{" "}
-        <code>parseForwardedClientCert()</code> (Envoy XFCC),{" "}
+        The building blocks are exported from <code>@daloyjs/core/mtls</code>{" "}
+        too: <code>parseForwardedClientCert()</code> (Envoy XFCC),{" "}
         <code>normalizePeerCertificate()</code> (Node{" "}
         <code>getPeerCertificate()</code> shape), and{" "}
         <code>setClientCertificate()</code> /{" "}

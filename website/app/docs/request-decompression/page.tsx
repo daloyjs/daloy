@@ -30,8 +30,8 @@ export default function Page() {
         DaloyJS core deliberately does <strong>not</strong> decompress request
         bodies — it is <em>safe by omission</em>. A{" "}
         <code>Content-Encoding: gzip</code> request body is read as-is, and a
-        schema parse simply fails on the compressed bytes. The moment you inflate
-        attacker-supplied bytes, though, you inherit the classic{" "}
+        schema parse simply fails on the compressed bytes. The moment you
+        inflate attacker-supplied bytes, though, you inherit the classic{" "}
         <strong>decompression bomb</strong> (a.k.a. &quot;zip bomb&quot;): a few
         kilobytes of crafted gzip can expand to gigabytes and blow straight past{" "}
         <code>bodyLimitBytes</code>, which only ever sees the small compressed
@@ -72,8 +72,8 @@ app.use(requestDecompression({
       <h2>The two caps</h2>
       <p>
         A single absolute byte cap is not enough on its own: a small payload can
-        stay under it yet still amplify wildly. <code>requestDecompression()</code>{" "}
-        enforces both, during inflation:
+        stay under it yet still amplify wildly.{" "}
+        <code>requestDecompression()</code> enforces both, during inflation:
       </p>
       <ul>
         <li>
@@ -93,8 +93,8 @@ app.use(requestDecompression({
       <p>
         Crossing either cap aborts inflation and rejects the request with{" "}
         <code>413 Payload Too Large</code> (a{" "}
-        <code>DecompressionBombError</code>) — the reader is cancelled mid-stream,
-        so the full bomb is never materialised.
+        <code>DecompressionBombError</code>) — the reader is cancelled
+        mid-stream, so the full bomb is never materialised.
       </p>
 
       <h2>Bounding the compressed input</h2>
@@ -110,10 +110,11 @@ app.use(requestDecompression({
         Built on the web-standard <code>DecompressionStream</code>, so the same
         line works on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge. Only{" "}
         <code>gzip</code> and <code>deflate</code> are accepted (the encodings{" "}
-        <code>DecompressionStream</code> implements consistently across runtimes).
-        <strong> Brotli is intentionally excluded</strong> — it is not part of the
-        Compression Streams spec and is unavailable on most runtimes. Restrict the
-        allowlist with <code>encodings</code>:
+        <code>DecompressionStream</code> implements consistently across
+        runtimes).
+        <strong> Brotli is intentionally excluded</strong> — it is not part of
+        the Compression Streams spec and is unavailable on most runtimes.
+        Restrict the allowlist with <code>encodings</code>:
       </p>
       <CodeBlock
         language="ts"
@@ -130,10 +131,10 @@ app.use(requestDecompression({
           compressed upload exceeded <code>maxCompressedBytes</code>.
         </li>
         <li>
-          <code>415</code> — an unknown, non-allowlisted, runtime-unsupported, or{" "}
-          <strong>layered</strong> (<code>gzip, gzip</code>) encoding. Layered
-          encodings are a classic nested-bomb vector and are refused rather than
-          inflated recursively. The response carries an{" "}
+          <code>415</code> — an unknown, non-allowlisted, runtime-unsupported,
+          or <strong>layered</strong> (<code>gzip, gzip</code>) encoding.
+          Layered encodings are a classic nested-bomb vector and are refused
+          rather than inflated recursively. The response carries an{" "}
           <code>Accept-Encoding</code> header listing the allowed encodings.
         </li>
         <li>
@@ -144,9 +145,9 @@ app.use(requestDecompression({
       </ul>
       <p>
         Requests without a <code>Content-Encoding</code> (or with{" "}
-        <code>identity</code>) pass through untouched, and{" "}
-        <code>GET</code> / <code>HEAD</code> requests are never decompressed — so
-        bodyless and uncompressed traffic pays nothing.
+        <code>identity</code>) pass through untouched, and <code>GET</code> /{" "}
+        <code>HEAD</code> requests are never decompressed — so bodyless and
+        uncompressed traffic pays nothing.
       </p>
 
       <h2>Observability</h2>
@@ -172,20 +173,23 @@ app.use(requestDecompression({
 
       <h2>Low-level helper</h2>
       <p>
-        <code>decompressRequestBody(compressed, encoding, opts)</code> is exported
-        for custom flows that read raw bytes themselves — it inflates with the
-        exact same bomb-resistant semantics and the same caps.
+        <code>decompressRequestBody(compressed, encoding, opts)</code> is
+        exported for custom flows that read raw bytes themselves — it inflates
+        with the exact same bomb-resistant semantics and the same caps.
       </p>
 
-      <h2>Relationship to <code>bodyLimitBytes</code></h2>
+      <h2>
+        Relationship to <code>bodyLimitBytes</code>
+      </h2>
       <p>
-        <code>bodyLimitBytes</code> caps the body the app reads — which, with this
-        guard installed, is the <em>inflated</em> payload. Keep{" "}
-        <code>maxDecompressedBytes</code> at or below <code>bodyLimitBytes</code>{" "}
-        so a request that survives the bomb guard still fits the limit the rest of
-        the stack assumes. Without this middleware, <code>bodyLimitBytes</code>{" "}
-        only ever sees the compressed bytes — which is exactly why an unguarded
-        decompression step is dangerous.
+        <code>bodyLimitBytes</code> caps the body the app reads — which, with
+        this guard installed, is the <em>inflated</em> payload. Keep{" "}
+        <code>maxDecompressedBytes</code> at or below{" "}
+        <code>bodyLimitBytes</code> so a request that survives the bomb guard
+        still fits the limit the rest of the stack assumes. Without this
+        middleware, <code>bodyLimitBytes</code> only ever sees the compressed
+        bytes — which is exactly why an unguarded decompression step is
+        dangerous.
       </p>
     </>
   );

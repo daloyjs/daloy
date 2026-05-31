@@ -25,7 +25,9 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>Metrics &amp; the <code>/metrics</code> endpoint</h1>
+      <h1>
+        Metrics &amp; the <code>/metrics</code> endpoint
+      </h1>
       <p>
         Metrics are the third observability pillar alongside the structured{" "}
         <strong>logger</strong> and the OpenTelemetry-compatible{" "}
@@ -105,10 +107,11 @@ app.route({
       <h2>The route label</h2>
       <p>
         High-cardinality labels are the classic way to melt a Prometheus server.
-        By default the <code>route</code> label uses the request pathname, capped
-        at <code>maxRouteCardinality</code> (100) distinct values before further
-        paths collapse to <code>&lt;other&gt;</code>. For templated routes,
-        supply a resolver that returns the route <strong>template</strong>:
+        By default the <code>route</code> label uses the request pathname,
+        capped at <code>maxRouteCardinality</code> (100) distinct values before
+        further paths collapse to <code>&lt;other&gt;</code>. For templated
+        routes, supply a resolver that returns the route{" "}
+        <strong>template</strong>:
       </p>
       <CodeBlock
         code={`app.metrics({

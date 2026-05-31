@@ -161,6 +161,10 @@
       "types": "./dist/mtls.d.ts",
       "import": "./dist/mtls.js"
     },
+    "./http-signatures": {
+      "types": "./dist/http-signatures.d.ts",
+      "import": "./dist/http-signatures.js"
+    },
     "./auto-ban": {
       "types": "./dist/auto-ban.d.ts",
       "import": "./dist/auto-ban.js"

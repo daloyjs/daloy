@@ -26,13 +26,14 @@ export default function Page() {
     <>
       <h1>Per-route / per-client concurrency limits</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships <code>concurrencyLimit()</code> —
-        HAProxy <code>maxconn</code> + request-queue parity, but inside the app
-        where the framework already owns routing and client identity. Where the
-        Node adapter&apos;s <code>maxConnections</code> caps <em>sockets</em> at
-        accept time and <code>loadShedding()</code> rejects traffic under{" "}
-        <em>process</em> pressure, <code>concurrencyLimit()</code> bounds the
-        number of requests <strong>in flight through a given surface</strong>.
+        As of <strong>0.37.0</strong> DaloyJS ships{" "}
+        <code>concurrencyLimit()</code> — HAProxy <code>maxconn</code> +
+        request-queue parity, but inside the app where the framework already
+        owns routing and client identity. Where the Node adapter&apos;s{" "}
+        <code>maxConnections</code> caps <em>sockets</em> at accept time and{" "}
+        <code>loadShedding()</code> rejects traffic under <em>process</em>{" "}
+        pressure, <code>concurrencyLimit()</code> bounds the number of requests{" "}
+        <strong>in flight through a given surface</strong>.
       </p>
       <p>Each request:</p>
       <ul>
@@ -46,7 +47,8 @@ export default function Page() {
         </li>
         <li>
           is rejected with a fast <code>503 Service Unavailable</code> (+{" "}
-          <code>Retry-After</code>) once the queue is full or the wait times out;
+          <code>Retry-After</code>) once the queue is full or the wait times
+          out;
         </li>
         <li>
           releases its slot when the response is finalized — on success, error,
@@ -85,9 +87,10 @@ app.use(concurrencyLimit({
           others mounted under the same guard.
         </li>
         <li>
-          <code>&quot;client&quot;</code> — a separate budget per client identity
-          (requires <code>trustProxyHeaders</code> or a <code>keyGenerator</code>),
-          so a heavy client can&apos;t consume everyone else&apos;s slots.
+          <code>&quot;client&quot;</code> — a separate budget per client
+          identity (requires <code>trustProxyHeaders</code> or a{" "}
+          <code>keyGenerator</code>), so a heavy client can&apos;t consume
+          everyone else&apos;s slots.
         </li>
         <li>
           a <strong>function</strong> — return a custom bucket key, or{" "}
@@ -117,8 +120,8 @@ app.use(concurrencyLimit({
         With the default <code>maxQueue: 0</code>, an overflowing request is
         rejected <em>immediately</em> with <code>503</code> — useful when you
         prefer fast failure over added latency. Set <code>maxQueue</code> to
-        absorb short bursts, and pair it with <code>queueTimeoutMs</code> to bound
-        tail latency so a waiting request doesn&apos;t hang indefinitely.
+        absorb short bursts, and pair it with <code>queueTimeoutMs</code> to
+        bound tail latency so a waiting request doesn&apos;t hang indefinitely.
       </p>
       <CodeBlock
         language="ts"
@@ -167,21 +170,31 @@ app.use(concurrencyLimit({
       <h2>How it complements the rest of the stack</h2>
       <ul>
         <li>
-          <strong><code>maxConnections</code></strong> (Node adapter) — rejects
-          surplus <em>sockets</em> at accept time (L4 admission).
+          <strong>
+            <code>maxConnections</code>
+          </strong>{" "}
+          (Node adapter) — rejects surplus <em>sockets</em> at accept time (L4
+          admission).
         </li>
         <li>
-          <strong><code>loadShedding()</code></strong> — sheds traffic when the{" "}
-          <em>process</em> is under pressure (event-loop delay, heap, RSS).
+          <strong>
+            <code>loadShedding()</code>
+          </strong>{" "}
+          — sheds traffic when the <em>process</em> is under pressure
+          (event-loop delay, heap, RSS).
         </li>
         <li>
-          <strong><code>concurrencyLimit()</code></strong> — bounds{" "}
-          <em>in-flight requests</em> per route / client with queueing (L7
-          fairness + backpressure).
+          <strong>
+            <code>concurrencyLimit()</code>
+          </strong>{" "}
+          — bounds <em>in-flight requests</em> per route / client with queueing
+          (L7 fairness + backpressure).
         </li>
         <li>
-          <strong><code>rateLimit()</code></strong> — bounds <em>request rate</em>{" "}
-          over time per client.
+          <strong>
+            <code>rateLimit()</code>
+          </strong>{" "}
+          — bounds <em>request rate</em> over time per client.
         </li>
       </ul>
       <p>

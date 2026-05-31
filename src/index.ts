@@ -249,6 +249,33 @@ export type {
   PeerCertificateLike,
 } from "./mtls.js";
 export {
+  signMessage,
+  signRequest,
+  verifyMessage,
+  verifyRequest,
+  httpSignatureAuth,
+  contentDigest,
+  verifyContentDigest,
+  DEFAULT_SIGNATURE_LABEL,
+  DEFAULT_MAX_SIGNATURE_AGE_SECONDS,
+  DEFAULT_SIGNATURE_CLOCK_SKEW_SECONDS,
+} from "./http-signatures.js";
+export type {
+  HttpSignatureAlgorithm,
+  HttpSignatureKeyMaterial,
+  HttpSignatureKey,
+  SignMessageOptions,
+  SignRequestOptions,
+  MessageSignature,
+  VerifyMessageOptions,
+  VerifyResult,
+  VerifySuccess,
+  VerifyFailure,
+  KeyResolutionInfo,
+  HttpSignatureAuthOptions,
+  ContentDigestAlgorithm,
+} from "./http-signatures.js";
+export {
   autoBan,
   MemoryAutoBanStore,
   _resetAutoBanStoresForTests,
