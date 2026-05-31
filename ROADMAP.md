@@ -12,7 +12,7 @@ Source of truth for what's shipped, what's next, and the order we plan to ship i
 ## Definition of done (every milestone)
 
 1. Implementation in `src/` with no `any` leaks across public types.
-2. Tests added; `pnpm coverage` stays at **≥90% lines / 90% functions**, `pnpm coverage:branches` at **≥90% branches**. Relaxed from 100% — see [AGENTS.md](AGENTS.md) for the pragmatic-escape clause on hard security work (unreachable defensive branches, tsx phantom lines).
+2. Tests added; `pnpm coverage` stays at **≥90% lines / 90% functions**, `pnpm coverage:branches` at **≥92% branches** (ratcheting back up from a temporary ≥90% relaxation). Relaxed from 100% — see [AGENTS.md](AGENTS.md) for the pragmatic-escape clause on hard security work (unreachable defensive branches, tsx phantom lines).
 3. `pnpm typecheck`, `pnpm test`, `pnpm build`, and CI pass.
 4. Security impact considered; `SECURITY.md` or threat notes updated when relevant.
 5. Public-facing docs (`website/app/docs/...`) updated.
@@ -51,7 +51,7 @@ Published to npm as **`@daloyjs/core`** (latest: `0.36.0`).
 
 ### Quality gates
 
-- **≥90% lines + functions / ≥90% branches** enforced by `pnpm coverage` and `pnpm coverage:branches` (relaxed from 100% — see [AGENTS.md](AGENTS.md)).
+- **≥90% lines + functions / ≥92% branches** enforced by `pnpm coverage` and `pnpm coverage:branches` (relaxed from 100%, branch floor now ratcheting back up — see [AGENTS.md](AGENTS.md)).
 - Regression coverage for repo-level security posture and scaffolder `.npmrc` hardening.
 
 ---
@@ -109,9 +109,10 @@ Published to npm as **`@daloyjs/core`** (latest: `0.36.0`).
 
 ## In flight — `0.10.0` ratchet (carry-over)
 
-The branch-coverage gate shipped, but the floor was **relaxed from ≥95% to ≥90%** (`--test-coverage-branches=90` in `package.json`, alongside ≥90% lines / functions) under the pragmatic-escape clause in [AGENTS.md](AGENTS.md) — unreachable defensive branches and tsx phantom source-map lines were not worth blocking releases on. Remaining work:
+The branch-coverage gate shipped, but the floor was **relaxed from ≥95% to ≥90%** (`--test-coverage-branches` in `package.json`, alongside ≥90% lines / functions) under the pragmatic-escape clause in [AGENTS.md](AGENTS.md) — unreachable defensive branches and tsx phantom source-map lines were not worth blocking releases on. The floor is now being ratcheted back up as genuinely-reachable branches get covered (currently **≥92%**; aggregate measured at 92.63%). Remaining work:
 
-- [ ] **Re-ratchet `pnpm coverage:branches` upward** — incrementally test genuinely reachable uncovered branches in `lambda`, `openapi`, `client`, `cli`, `streaming` and bump `--test-coverage-branches` in `package.json` as the floor rises, without re-chasing unreachable defensive paths.
+- [x] **Re-ratchet `pnpm coverage:branches` upward (first pass → 92%)** — added targeted unit tests for reachable branches in `client` (scalar query-param set + undefined-skip → 100% branches), `lambda` (v2 detection via `rawQueryString` + GET `/` fallback → 91.03% branches), and `openapi` (empty-object inline `{}` YAML rendering); bumped `--test-coverage-branches` from 90 → 92 in `package.json`. The remaining gaps in `cli` and `streaming` are unreachable defensive `catch` blocks (e.g. `controller.close()`/`enqueue` throwing on already-closed streams) and were intentionally not chased per the pragmatic-escape clause.
+- [ ] **Continue ratcheting toward the former ≥95%** — incrementally test any further genuinely-reachable uncovered branches in `cli` and `openapi` and bump `--test-coverage-branches` again as the floor rises, without re-chasing unreachable defensive paths.
 
 ---
 

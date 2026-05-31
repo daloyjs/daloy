@@ -558,6 +558,17 @@ test("openapiToYAML coerces non-finite numbers and exotic scalars", () => {
   assert.match(yaml, /arrScalars:\n {2}- null\n {2}- null\n {2}- "1"\n/);
 });
 
+test("openapiToYAML renders empty objects inline as {}", () => {
+  const yaml = openapiToYAML({
+    emptyObj: {},
+    nested: { alsoEmpty: {} },
+  });
+  // An object with zero entries collapses to inline ` {}` rather than a
+  // dangling empty mapping block.
+  assert.match(yaml, /emptyObj: \{\}\n/);
+  assert.match(yaml, /nested:\n {2}alsoEmpty: \{\}\n/);
+});
+
 test("App.docs mounts /openapi.yaml alongside /openapi.json by default", async () => {
   const yamlApp = new App({ docs: true });
   const res = await yamlApp.fetch(new Request("http://localhost/openapi.yaml"));

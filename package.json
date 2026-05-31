@@ -169,7 +169,7 @@
     "bench": "node --import tsx bench/router.bench.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=90 --test-coverage-functions=90 tests/**/*.test.ts",
-    "coverage:branches": "tsc -p tsconfig.coverage.json && node --test --experimental-test-coverage --test-coverage-include='dist-coverage/src/**' --test-coverage-branches=90 dist-coverage/tests/**/*.test.js",
+    "coverage:branches": "tsc -p tsconfig.coverage.json && node --test --experimental-test-coverage --test-coverage-include='dist-coverage/src/**' --test-coverage-branches=92 dist-coverage/tests/**/*.test.js",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "gen:openapi": "node --import tsx scripts/dump-openapi.ts",

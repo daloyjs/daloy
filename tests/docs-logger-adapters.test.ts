@@ -600,3 +600,21 @@ test("lambda adapter base64-encodes binary responses and handles GET defaults", 
   });
   assert.equal(emptyFromContextPath.statusCode, 204);
 });
+
+test("lambda adapter detects v2 via rawQueryString and falls back to GET / when method and path are absent", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/",
+    operationId: "lambdaRoot",
+    responses: { 200: { description: "ok" } },
+    handler: async (ctx) => ({ status: 200 as const, body: { url: ctx.request.url } }),
+  });
+
+  // Event has neither `version`, `rawPath`, nor `requestContext.http`; the
+  // presence of `rawQueryString` alone marks it v2. With no method/path the
+  // adapter must fall back to GET, "/" and host "localhost".
+  const result = await toLambdaHandler(app)({ rawQueryString: "q=1" });
+  assert.equal(result.statusCode, 200);
+  assert.equal(JSON.parse(result.body).url, "https://localhost/?q=1");
+});

@@ -56,6 +56,43 @@ test("typed client replaces params, appends array query values, merges headers, 
   assert.deepEqual(result, { status: 200, body: { ok: true }, headers: { "content-type": "application/json", "x-result": "yes" } });
 });
 
+test("typed client sets scalar query values and skips undefined ones", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/search",
+    operationId: "searchBooks",
+    request: {
+      query: z.object({ q: z.string(), page: z.number().optional(), cursor: z.string().optional() }) as any,
+    },
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: async () => ({ status: 200 as const, body: { ok: true } }),
+  });
+
+  let seenUrl = "";
+  const client = createClient(app, {
+    baseUrl: "https://api.example.com",
+    fetch: async (url) => {
+      seenUrl = String(url);
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  await client.searchBooks({
+    // `q` and `page` are scalars (hits the non-array `searchParams.set` path);
+    // `cursor: undefined` must be skipped entirely.
+    query: { q: "dune", page: 2, cursor: undefined },
+  } as any);
+
+  const url = new URL(seenUrl);
+  assert.equal(url.searchParams.get("q"), "dune");
+  assert.equal(url.searchParams.get("page"), "2");
+  assert.equal(url.searchParams.has("cursor"), false);
+});
+
 test("typed client preserves non-JSON response bodies as text", async () => {
   const app = new App({ logger: false });
   app.route({
