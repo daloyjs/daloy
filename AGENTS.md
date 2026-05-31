@@ -64,6 +64,15 @@ If a change touches `website/`, also run `cd website && pnpm typecheck && pnpm b
 - Any new features should be well documenbted in the `website` documentation, and the documentation should be updated to reflect any changes in behavior or new capabilities introduced by the feature
 - Making the repo and the app itself secure are top priorities; any change that has security implications must be carefully reviewed for potential vulnerabilities and should include updates to `SECURITY.md` or related documentation when relevant
 
+## Editing the codebase (non-negotiable)
+
+When editing any code in this repo, the following rules are non-negotiable:
+
+- **Never remove or compromise a security feature.** Do not delete, disable, weaken, or bypass any existing security check, guardrail, or secure default to make code compile, make a test pass, or simplify an implementation. If a security control genuinely blocks a legitimate use case, fix the default for everyone (per-route override, narrower scope, configurable knob) and raise it in the PR — never strip it inline. See the secure-by-default guardrails below for the specific controls that must stay intact.
+- **Always add TSDoc.** Every new or modified exported function, class, method, type, interface, and public API surface must carry accurate TSDoc comments that explain its purpose, parameters, return value, thrown errors, and any security-relevant behavior. Keep existing TSDoc in sync when you change behavior. (When chasing coverage, keep TSDoc concise — large doc blocks can shift tsx source maps; see the coverage notes above.)
+- **Never compromise existing performance.** Do not introduce regressions on hot paths (routing, parsing, serialization, middleware dispatch). Avoid unnecessary allocations, redundant work, or algorithmic complexity increases. If a change could affect performance, validate against `bench/` and keep results at parity or better; call out any measured deltas in the PR.
+- **Always document new features in `website/app/docs`.** Every new feature or public API surface must ship with matching documentation under [`website/app/docs/`](website/app/docs) (with usage and examples), plus the docs navigation/search updates required by [`website/AGENTS.md`](website/AGENTS.md). Read `website/AGENTS.md` before editing anything under `website/`, and run `cd website && pnpm typecheck && pnpm build` after docs changes.
+
 ## Secure-by-default guardrails (do not weaken these to make a test pass)
 
 DaloyJS ships with strong defaults — body limits, request timeouts, header sanitization, JWT algorithm allowlists, `timingSafeEqual` credential comparisons, prototype-pollution-safe parsers, `fetchGuard()` SSRF defaults, `.strict()`-by-convention schemas, RFC 9457 problem+json with prod-mode redaction, and a 24h release-age + `ignore-scripts` posture on the supply-chain side. The Supabase + Aikido write-up [Secure-by-Default Development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development) captures the failure mode in one line: *"If you tell an AI to make something work, it might remove the very security checks that protect you."*
