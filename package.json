@@ -229,7 +229,7 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.97.1",
     "@types/node": "^25.7.0",
-    "fast-check": "^3.23.2",
+    "fast-check": "^4.8.0",
     "prettier": "^3.8.3",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
