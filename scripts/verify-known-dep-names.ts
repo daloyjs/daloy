@@ -66,6 +66,7 @@ export const ALLOWED_DEP_NAMES: ReadonlySet<string> = new Set([
   "@hey-api/openapi-ts",
   "@types/bun",
   "@types/node",
+  "fast-check",
   "prettier",
   "tsx",
   "typescript",

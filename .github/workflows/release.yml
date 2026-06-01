@@ -301,6 +301,11 @@ jobs:
             exit 1
           fi
 
+      - name: Packaging signal (npm publish dry-run)
+        run: npm publish --dry-run --access public --provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+
       - name: Stage @daloyjs/core on npm with provenance
         run: npm stage publish . --access public --provenance
         env:
@@ -402,6 +407,12 @@ jobs:
 
       - name: Verify no leaky agent skills in shipped SKILL.md / AGENTS.md (Snyk OpenClaw "leaky skills" gate)
         run: pnpm verify:no-leaky-agent-skills
+
+      - name: Packaging signal (npm publish dry-run)
+        working-directory: packages/create-daloy
+        run: npm publish --dry-run --access public --provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
 
       - name: Stage create-daloy on npm with provenance
         working-directory: packages/create-daloy
