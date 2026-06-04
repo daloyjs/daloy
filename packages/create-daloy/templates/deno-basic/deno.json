@@ -8,8 +8,10 @@
     "gen:openapi": "deno run --allow-net --allow-env --allow-read --allow-write scripts/dump-openapi.ts"
   },
   "imports": {
-    "@daloyjs/core": "npm:@daloyjs/core@^0.37.0",
-    "@daloyjs/core/": "npm:@daloyjs/core@^0.37.0/",
+    "@daloyjs/core": "jsr:@daloyjs/daloy@^0.37.0",
+    "@daloyjs/core/banner": "jsr:@daloyjs/daloy@^0.37.0/banner",
+    "@daloyjs/core/deno": "jsr:@daloyjs/daloy@^0.37.0/deno",
+    "@daloyjs/core/openapi": "jsr:@daloyjs/daloy@^0.37.0/openapi",
     "zod": "npm:zod@^4.4.3"
   },
   "compilerOptions": {

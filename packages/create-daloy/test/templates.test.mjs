@@ -1481,11 +1481,29 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
   );
   assert.match(denoJson.tasks.dev, /^deno run.*--watch src\/main\.ts$/);
   assert.match(denoJson.tasks.test, /^deno test\b/);
-  assert.equal(denoJson.imports["@daloyjs/core"], "npm:@daloyjs/core@^0.37.0");
+  assert.equal(denoJson.imports["@daloyjs/core"], "jsr:@daloyjs/daloy@^0.37.0");
   assert.equal(
-    denoJson.imports["@daloyjs/core/"],
-    "npm:@daloyjs/core@^0.37.0/",
+    denoJson.imports["@daloyjs/core/deno"],
+    "jsr:@daloyjs/daloy@^0.37.0/deno",
   );
+  assert.equal(
+    denoJson.imports["@daloyjs/core/banner"],
+    "jsr:@daloyjs/daloy@^0.37.0/banner",
+  );
+  assert.equal(
+    denoJson.imports["@daloyjs/core/openapi"],
+    "jsr:@daloyjs/daloy@^0.37.0/openapi",
+  );
+});
+
+test("jsr package exports cover the Deno template surface", async () => {
+  const jsrConfig = JSON.parse(
+    await readFile(path.join(pkgRoot, "..", "..", "jsr.json"), "utf8"),
+  );
+  assert.equal(jsrConfig.exports["."], "./src/index.ts");
+  assert.equal(jsrConfig.exports["./deno"], "./src/adapters/deno.ts");
+  assert.equal(jsrConfig.exports["./banner"], "./src/banner.ts");
+  assert.equal(jsrConfig.exports["./openapi"], "./src/openapi.ts");
 });
 
 test("--list-templates includes the new bun-basic and deno-basic options", async () => {

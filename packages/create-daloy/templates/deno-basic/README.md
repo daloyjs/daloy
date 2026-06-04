@@ -49,7 +49,7 @@ deno task test
 
 ## What's included
 
-- `@daloyjs/core` (loaded via `npm:` specifiers in `deno.json`).
+- `@daloyjs/core` (loaded via `jsr:` specifiers in `deno.json`).
 - Starter security middleware: `secureHeaders`, `requestId`, and `rateLimit`.
 <!-- daloy-minimal:strip-start books -->
 - A health route and contract-first `/books/:id` route with Zod validation.
