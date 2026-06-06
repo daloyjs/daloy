@@ -13,6 +13,21 @@ const STATIC_PATHS: Array<{
   { path: "/", changeFrequency: "weekly", priority: 1.0 },
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
   {
+    path: "/blog/why-daloyjs-is-the-rest-api-framework-you-should-use-today",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/daloyjs-the-backend-framework-you-should-already-be-using",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/blog/why-daloyjs-feels-like-the-backend-default-we-should-have-had-already",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/software-security-for-developers-laur-spilca-goto-2026",
     changeFrequency: "monthly",
     priority: 0.7,

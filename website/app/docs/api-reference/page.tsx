@@ -74,6 +74,7 @@ interface AppOptions {
   bodyLimitBytes?: number;             // default: 1 MiB
   allowedContentTypes?: string[];      // default: ["application/json"]
   requestTimeoutMs?: number;           // default: 30_000; 0 disables
+  maxHeaderCount?: number;             // default: 100; 0 disables (header-count flood / HTTP/2-Bomb guard)
   multipart?: { maxFileBytes?: number; maxFields?: number; maxFiles?: number };
 
   // Environment & logging

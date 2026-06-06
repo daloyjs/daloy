@@ -13,6 +13,34 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
+    slug: "why-daloyjs-is-the-rest-api-framework-you-should-use-today",
+    title: "Why DaloyJS Is the REST API Framework You Should Use Today",
+    description:
+      "In 2026, security guardrails are not optional anymore. This is the blunt case for a REST framework that treats secure defaults as the baseline instead of a plugin shopping list.",
+    date: "2026-06-06",
+    readingTime: "7 min read",
+    author: "Devlin Duldulao",
+  },
+  {
+    slug: "daloyjs-the-backend-framework-you-should-already-be-using",
+    title: "DaloyJS: The Backend Framework You Should Already Be Using",
+    description:
+      "A contract-first TypeScript backend framework with security guardrails, typed clients, live OpenAPI, and a supply-chain posture that feels designed for 2026 instead of remembered from 2019.",
+    date: "2026-06-06",
+    readingTime: "10 min read",
+    author: "Devlin Duldulao",
+  },
+  {
+    slug: "why-daloyjs-feels-like-the-backend-default-we-should-have-had-already",
+    title:
+      "Why DaloyJS Feels Like the Backend Default We Should Have Had Already",
+    description:
+      "DaloyJS feels underrated because it starts with the unglamorous parts that modern backend teams actually need: install-time safety, runtime guardrails, and one route definition that keeps types, docs, and clients aligned.",
+    date: "2026-06-06",
+    readingTime: "6 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "best-node-express-alternative-daloyjs",
     title:
       "The Best Node.js Express Alternative in 2026 Is Contract-First: The Case for DaloyJS",

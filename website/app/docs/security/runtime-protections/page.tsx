@@ -162,6 +162,16 @@ export default function Page() {
             </td>
           </tr>
           <tr>
+            <td>Header-count flood / HTTP/2 Bomb</td>
+            <td>
+              <code>maxHeaderCount</code> rejects requests carrying more than
+              100 header fields with <code>431</code> before routing; the Node
+              adapter sets <code>server.maxHeadersCount</code>. Portable
+              defence-in-depth against header-count amplification. Apply the
+              vendor HTTP/2 fix at any proxy that terminates HTTP/2.
+            </td>
+          </tr>
+          <tr>
             <td>Bad reverse-proxy assumptions</td>
             <td>
               <code>X-Forwarded-*</code> headers are not trusted by default.
