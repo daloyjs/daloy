@@ -528,6 +528,37 @@ export class PayloadTooLargeError extends HttpError {
 }
 
 /**
+ * `431 Request Header Fields Too Large` — thrown when an incoming request
+ * carries more distinct header fields than {@link AppOptions.maxHeaderCount}.
+ *
+ * This is the portable, JS-layer counterpart to the native "max header
+ * count" caps that web servers and proxies expose (e.g. NGINX's
+ * `max_headers`, Node's `server.maxHeadersCount`). It is defence-in-depth
+ * against header-*count* amplification — the dimension abused by the
+ * "HTTP/2 Bomb" (Calif, 2026), where per-header server-side bookkeeping is
+ * the amplifier rather than header size. A flood of nearly-empty headers
+ * never reaches the router because the count cap fires first.
+ *
+ * The native HPACK session-memory pinning that the bomb relies on must
+ * still be mitigated at the runtime/proxy that terminates HTTP/2 (apply the
+ * vendor fix and cap the header count there); this guard protects the
+ * application tier on every runtime regardless of upstream configuration.
+ *
+ * @param limit - The configured maximum header count that was exceeded.
+ * @since 0.38.0
+ */
+export class RequestHeaderFieldsTooLargeError extends HttpError {
+  constructor(limit: number) {
+    super(431, {
+      type: "https://daloyjs.dev/errors/request-header-fields-too-large",
+      title: "Request Header Fields Too Large",
+      detail: `Request carries more than ${limit} header fields`,
+    });
+    this.name = "RequestHeaderFieldsTooLargeError";
+  }
+}
+
+/**
  * `415 Unsupported Media Type` — thrown when the request `Content-Type` is
  * not in {@link AppOptions.allowedContentTypes} for a route that declares a
  * body schema.

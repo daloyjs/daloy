@@ -51,6 +51,20 @@ export interface NodeServerOptions {
   /** Maximum HTTP header size bytes (DoS protection). Default: 16 KiB. */
   maxHeaderBytes?: number;
   /**
+   * Maximum number of incoming HTTP header fields, forwarded to Node's
+   * `server.maxHeadersCount`. This is the native, parser-level counterpart to
+   * the framework's portable {@link "../app.js".AppOptions.maxHeaderCount}
+   * guard: a header-count flood is dropped by the HTTP parser before it ever
+   * becomes a `Request`, which is the cheapest place to shed header-count
+   * amplification (the dimension abused by the "HTTP/2 Bomb"). Node's own
+   * default is `2000`; this adapter tightens it to `100` to mirror the
+   * application-tier cap. Set `0` to disable (use Node's unbounded default).
+   * Default: 100.
+   *
+   * @since 0.38.0
+   */
+  maxHeaderCount?: number;
+  /**
    * Maximum number of concurrent sockets the server will accept, forwarded to
    * Node's `server.maxConnections`. Acts as connection-layer admission
    * control: once the limit is reached, additional incoming connections are
@@ -118,6 +132,14 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
   server.requestTimeout = opts.connectionTimeoutMs ?? 30_000;
   server.headersTimeout = opts.connectionTimeoutMs ?? 30_000;
   server.keepAliveTimeout = 5_000;
+  // Native parser-level header-count cap. Drops header-count floods (the
+  // "HTTP/2 Bomb" amplification dimension) before they become a Request.
+  // `0` opts out and restores Node's unbounded-ish default (2000).
+  const maxHeaderCount = opts.maxHeaderCount;
+  server.maxHeadersCount =
+    typeof maxHeaderCount === "number" && maxHeaderCount >= 0
+      ? maxHeaderCount
+      : 100;
   // Connection-layer admission control. Reject overflow sockets at accept time
   // rather than queuing them into the event loop under overload.
   if (typeof opts.maxConnections === "number" && opts.maxConnections > 0) {

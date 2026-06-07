@@ -754,6 +754,33 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
       });
     }
 
+    // Header-count cap audit. The framework's portable maxHeaderCount
+    // guard is the application-tier defence against header-*count*
+    // amplification (the "HTTP/2 Bomb" dimension). Surface a finding when
+    // it is disabled (0) or raised to an implausibly generous value, both
+    // of which let a header flood reach routing.
+    const maxHeaderCount = o.maxHeaderCount;
+    if (maxHeaderCount === 0) {
+      findings.push({
+        level: "warn",
+        code: "audit.maxHeaderCount.disabled",
+        message:
+          "maxHeaderCount is 0 — the header-count flood guard is disabled. " +
+          "A request carrying thousands of header fields reaches routing. " +
+          "Keep a finite cap (default 100) unless an upstream proxy already " +
+          "enforces one (NGINX max_headers, Node server.maxHeadersCount).",
+      });
+    } else if (typeof maxHeaderCount === "number" && maxHeaderCount > 1000) {
+      findings.push({
+        level: "warn",
+        code: "audit.maxHeaderCount.blanket",
+        message:
+          `maxHeaderCount is ${maxHeaderCount} (> 1000). Realistic requests ` +
+          "carry a few dozen headers; a cap this high weakens the " +
+          "header-count amplification defence.",
+      });
+    }
+
     // Idle-timeout / request-timeout audit. Reaffirms the
     // existing requestTimeoutMs check; also surface an explicit zero
     // idleTimeoutMs in production. The framework also keeps adapter

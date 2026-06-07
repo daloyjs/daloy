@@ -12,6 +12,7 @@
 import {
   PayloadTooLargeError,
   BadRequestError,
+  RequestHeaderFieldsTooLargeError,
 } from "./errors.js";
 
 // Resolved once at module load. Mirror of `DALOY_REQUEST_RAW_BODY` in
@@ -332,6 +333,54 @@ export function assertNoReservedInternalHeaders(headers: Headers): void {
       if (name.startsWith(prefix)) {
         throw new BadRequestError(`Reserved internal header rejected: ${name}`);
       }
+    }
+  });
+}
+
+/**
+ * Default cap on the number of distinct request header fields accepted
+ * before {@link assertHeaderCountWithinLimit} rejects the request. Chosen to
+ * sit far above any realistic legitimate request (browsers, tracing layers,
+ * and reverse proxies rarely add more than a few dozen headers) yet far
+ * below the thousands-of-headers floods used by header-count amplification
+ * attacks such as the "HTTP/2 Bomb".
+ *
+ * @since 0.38.0
+ */
+export const DEFAULT_MAX_HEADER_COUNT = 100;
+
+/**
+ * Reject requests that carry more than `limit` distinct header fields.
+ *
+ * This is the runtime-portable, application-tier defence against
+ * header-*count* amplification (the dimension abused by the "HTTP/2 Bomb",
+ * where per-entry server bookkeeping — not header size — is the amplifier).
+ * It complements, and does not replace, the native header-count caps that a
+ * runtime/proxy terminating HTTP/2 must apply (NGINX `max_headers`, Node
+ * `server.maxHeadersCount`, etc.). Because the WHATWG `Headers` collection
+ * coalesces same-named fields, the count is over distinct header names —
+ * the truest signal available once a request has been normalised to a
+ * web-standard `Request`.
+ *
+ * A `limit` of `0` (or any non-positive / non-finite value) disables the
+ * check. Throws {@link RequestHeaderFieldsTooLargeError} (`431`) so the
+ * framework returns a structured `problem+json` response instead of routing
+ * a flood.
+ *
+ * @param headers - The incoming request headers.
+ * @param limit - Maximum distinct header fields to allow. `0` disables.
+ * @since 0.38.0
+ */
+export function assertHeaderCountWithinLimit(headers: Headers, limit: number): void {
+  if (!(limit > 0) || !Number.isFinite(limit)) return;
+  let count = 0;
+  // Count via forEach (not keys()) so a same-named coalesced field counts
+  // once and the check works on any Headers-shaped object. Throwing from the
+  // callback bails the instant the cap is crossed, so a flood pays for at
+  // most `limit + 1` iterations rather than walking the whole set.
+  headers.forEach(() => {
+    if (++count > limit) {
+      throw new RequestHeaderFieldsTooLargeError(limit);
     }
   });
 }

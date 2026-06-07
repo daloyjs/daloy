@@ -19,7 +19,7 @@ import {
   ValidationError,
 } from "./errors.js";
 import { validate } from "./schema.js";
-import { readBodyLimited, safeJsonParse, randomId, assertNoDuplicateSingletonHeaders, assertNoReservedInternalHeaders, assertStrongSecret, timingSafeEqual, isForbiddenObjectKey } from "./security.js";
+import { readBodyLimited, safeJsonParse, randomId, assertNoDuplicateSingletonHeaders, assertNoReservedInternalHeaders, assertHeaderCountWithinLimit, DEFAULT_MAX_HEADER_COUNT, assertStrongSecret, timingSafeEqual, isForbiddenObjectKey } from "./security.js";
 import { createLogger, noopLogger, type Logger } from "./logger.js";
 import type {
   BaseContext,
@@ -246,6 +246,20 @@ export interface AppOptions {
 
   /** Per-request timeout in ms (handler + hooks). Default: 30000. Set 0 to disable. */
   requestTimeoutMs?: number;
+
+  /**
+   * Maximum number of distinct request header fields accepted before the
+   * request is rejected with `431 Request Header Fields Too Large`. This is
+   * the runtime-portable, application-tier defence against header-*count*
+   * amplification (the dimension abused by the "HTTP/2 Bomb", where
+   * per-header server-side bookkeeping — not header size — is the
+   * amplifier). It complements the native header-count caps a runtime/proxy
+   * terminating HTTP/2 must apply (NGINX `max_headers`, Node
+   * `server.maxHeadersCount`). Set `0` to disable. Default: 100.
+   *
+   * @since 0.38.0
+   */
+  maxHeaderCount?: number;
 
   /**
    * Per-request limits applied when parsing `multipart/form-data` bodies.
@@ -846,6 +860,7 @@ function applySecurityPreset(options: AppOptions): AppOptions {
 const DEFAULTS = {
   bodyLimitBytes: 1024 * 1024,
   requestTimeoutMs: 30_000,
+  maxHeaderCount: DEFAULT_MAX_HEADER_COUNT,
   validateResponses: true,
 };
 
@@ -1048,6 +1063,7 @@ export class App {
         resolved.validateResponses ?? DEFAULTS.validateResponses,
       bodyLimitBytes: resolved.bodyLimitBytes ?? DEFAULTS.bodyLimitBytes,
       requestTimeoutMs: resolved.requestTimeoutMs ?? DEFAULTS.requestTimeoutMs,
+      maxHeaderCount: resolved.maxHeaderCount ?? DEFAULTS.maxHeaderCount,
       ...resolved,
     };
     this.log =
@@ -1179,6 +1195,7 @@ export class App {
     trustProxy: true | false | "unconfigured";
     bodyLimitBytes: number;
     requestTimeoutMs: number;
+    maxHeaderCount: number;
     stripServerHeaders: boolean;
     production: boolean;
   } {
@@ -1198,6 +1215,7 @@ export class App {
         o.trustProxy === undefined ? "unconfigured" : o.trustProxy,
       bodyLimitBytes: this.options.bodyLimitBytes,
       requestTimeoutMs: this.options.requestTimeoutMs,
+      maxHeaderCount: this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT,
       stripServerHeaders: o.stripServerHeaders !== false,
       production: this.isProduction(),
     });
@@ -2773,6 +2791,7 @@ export class App {
     try {
       assertNoDuplicateSingletonHeaders(request.headers);
       assertNoReservedInternalHeaders(request.headers);
+      assertHeaderCountWithinLimit(request.headers, this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT);
       this.assertTrustProxyConfigured(request);
       this.assertBootGuards();
       if (globalHooks.onRequest !== undefined) {
