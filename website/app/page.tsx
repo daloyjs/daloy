@@ -468,6 +468,42 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Support */}
+      <section className="border-b bg-mauve-50/35 dark:bg-mauve-950/10 dim:bg-mauve-950/10">
+        <div className="mx-auto max-w-4xl px-6 py-14">
+          <div className="rounded-3xl border border-mauve-200/70 bg-background/90 p-8 text-center shadow-sm dark:border-mauve-900/70 dark:bg-background/80">
+            <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+              Support the project
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight">
+              If DaloyJS saves you time, you can buy me a coffee
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl leading-8 text-muted-foreground">
+              DaloyJS is free and MIT-licensed. If the docs, posts, or the
+              framework itself helped you ship something with a little less
+              drama, coffee is a perfectly reasonable way to keep the work
+              going.
+            </p>
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <a
+                href="https://buymeacoffee.com/daloyjs"
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ size: "lg" })}
+              >
+                Buy me a coffee
+              </a>
+              <Link
+                href="/blog"
+                className={buttonVariants({ size: "lg", variant: "outline" })}
+              >
+                Read the blog
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section>
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
