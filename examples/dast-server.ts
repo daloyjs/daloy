@@ -23,8 +23,8 @@
  * without needing a deployed endpoint.
  */
 
-import { serve } from "../src/adapters/node.js";
-import { buildExampleApp } from "./build-app.js";
+import { serve } from "../src/adapters/node.ts";
+import { buildExampleApp } from "./build-app.ts";
 
 const app = buildExampleApp();
 const port = Number(process.env.PORT ?? 3000);

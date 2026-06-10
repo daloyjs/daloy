@@ -13,11 +13,11 @@
  *   pnpm gen
  */
 
-import { App } from "../src/index.js";
-import { serve } from "../src/adapters/node.js";
-import { createClient } from "../src/client.js";
-import { printStartupBanner } from "../src/banner.js";
-import { buildExampleApp } from "./build-app.js";
+import { App } from "../src/index.ts";
+import { serve } from "../src/adapters/node.ts";
+import { createClient } from "../src/client.ts";
+import { printStartupBanner } from "../src/banner.ts";
+import { buildExampleApp } from "./build-app.ts";
 
 // `buildExampleApp()` configures `docs: true` on the App constructor, so
 // GET /docs (Scalar UI) and GET /openapi.json are auto-mounted for us.

@@ -57,8 +57,8 @@ import {
   rateLimit,
   autoBan,
   type BaseContext,
-} from "../src/index.js";
-import { serve } from "../src/adapters/node.js";
+} from "../src/index.ts";
+import { serve } from "../src/adapters/node.ts";
 
 const app = new App({
   production: process.env.NODE_ENV === "production",

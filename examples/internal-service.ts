@@ -45,8 +45,8 @@
  */
 
 import { z } from "zod";
-import { App } from "../src/index.js";
-import { serve } from "../src/adapters/node.js";
+import { App } from "../src/index.ts";
+import { serve } from "../src/adapters/node.ts";
 
 const app = new App({
   // Single line: switch the posture for an internal service.

@@ -15,7 +15,7 @@ import {
   requestId,
   secureHeaders,
   timing,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 export const BookSchema = z.object({ id: z.string(), title: z.string() });
 export const ProblemSchema = z.object({
