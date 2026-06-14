@@ -8,11 +8,14 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   experimental: {
     cachedNavigations: true,
-    instantInsights: {
-      validationLevel: "warning"
-    }
   },
   cacheComponents: true,
+  // The /mcp documentation endpoint reads the docs `page.tsx` sources from disk
+  // at runtime (via lib/docs-content). Trace those files into its serverless
+  // bundle so they are present in production, not just during the build.
+  outputFileTracingIncludes: {
+    "/mcp": ["./app/docs/**/*.tsx"],
+  },
   turbopack: {
     root,
   },

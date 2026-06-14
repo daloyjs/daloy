@@ -53,6 +53,10 @@ export const metadata = buildMetadata({
     "zero runtime dependencies",
     "hardened GitHub Actions bundle",
     "create-daloy",
+    "MCP endpoint",
+    "Model Context Protocol",
+    "MCP documentation server",
+    "AI agent docs",
   ],
 });
 
@@ -84,6 +88,31 @@ app.route({
 serve(app, { port: 3000 });`;
 
 const CREATE_COMMAND = "pnpm create daloy@latest my-api";
+
+const MCP_ENDPOINT_URL = "https://daloyjs.dev/mcp";
+
+const MCP_CLIENT_CONFIG = `{
+  "mcpServers": {
+    "daloyjs-docs": {
+      "url": "https://daloyjs.dev/mcp"
+    }
+  }
+}`;
+
+const MCP_TOOLS = [
+  {
+    name: "search_docs",
+    body: "Keyword search across every docs page, ranked by relevance.",
+  },
+  {
+    name: "get_doc",
+    body: "Read the full text of one page by its route or slug.",
+  },
+  {
+    name: "list_docs",
+    body: "Browse every available documentation page in one call.",
+  },
+] as const;
 
 const DEVELOPER_PITCH = [
   {
@@ -505,7 +534,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA */}
-      <section>
+      <section className="border-b">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
           <h2 className="mb-4 text-3xl font-bold tracking-tight">
             Ready to ship, secure by default?
@@ -538,6 +567,76 @@ export default function HomePage() {
             >
               View source
             </a>
+          </div>
+        </div>
+      </section>
+
+      {/* MCP endpoint */}
+      <section id="mcp" className="scroll-mt-20">
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <div className="mb-10 text-center">
+            <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+              For developers and AI agents
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight">
+              Read the docs over MCP
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl leading-8 text-muted-foreground">
+              DaloyJS ships a public{" "}
+              <a
+                href="https://modelcontextprotocol.io"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-4"
+              >
+                Model Context Protocol
+              </a>{" "}
+              (MCP) endpoint, so your AI coding agent (Claude, Cursor, VS Code,
+              and friends) can search and read these docs without copy and
+              paste. It is read-only, needs no API key, and speaks the standard
+              Streamable HTTP transport, so it works for humans and LLM agents
+              alike.
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+            <Card className="flex flex-col border-olive-200/70 bg-olive-50/55 dark:border-olive-900/70 dark:bg-olive-950/18 dim:border-olive-900/60 dim:bg-olive-950/15">
+              <CardHeader>
+                <span className="mb-2 inline-flex size-11 items-center justify-center rounded-xl bg-olive-100 text-olive-700 ring-1 ring-olive-200/80 dark:bg-olive-950/40 dark:text-olive-200 dark:ring-olive-800/70 dim:bg-olive-950/35 dim:text-olive-100">
+                  <RobotIcon className="size-6" />
+                </span>
+                <CardTitle>Endpoint</CardTitle>
+                <CardDescription>
+                  Point any MCP-compatible client at this URL:
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col gap-4">
+                <div className="flex items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100">
+                  <code className="text-sm break-all">{MCP_ENDPOINT_URL}</code>
+                </div>
+                <ul className="flex flex-col gap-3 text-sm">
+                  {MCP_TOOLS.map((tool) => (
+                    <li key={tool.name} className="flex flex-col gap-0.5">
+                      <code className="w-fit rounded bg-muted px-1.5 py-0.5 text-xs font-medium">
+                        {tool.name}
+                      </code>
+                      <span className="text-muted-foreground">{tool.body}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-medium text-foreground">
+                Add it to your MCP client config
+              </p>
+              <CodeBlock code={MCP_CLIENT_CONFIG} language="json" />
+              <p className="text-sm leading-6 text-muted-foreground">
+                Using a stdio-only client? Bridge it with{" "}
+                <code>npx -y mcp-remote {MCP_ENDPOINT_URL}</code>.
+              </p>
+            </div>
           </div>
         </div>
       </section>

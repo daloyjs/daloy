@@ -1,8 +1,13 @@
 import type { Route } from "next";
 import { cacheLife } from "next/cache";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { docsNav } from "@/components/docs-nav";
+import {
+  docsDir,
+  extractBodyText,
+  parseDocFrontmatter,
+  walkDocsPages,
+} from "@/lib/docs-content";
 
 export type DocsSearchItem = {
   title: string;
@@ -24,102 +29,15 @@ type DiscoveredDoc = {
   body: string;
 };
 
-const docsDir = path.join(process.cwd(), "app", "docs");
-
 /** Per-page cap on extracted body text (chars) sent to the client. */
 const BODY_INDEX_LIMIT = 2_400;
 
-const HTML_ENTITIES: Record<string, string> = {
-  "&apos;": "'",
-  "&quot;": '"',
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&nbsp;": " ",
-};
-
-function decodeEntities(value: string) {
-  return value.replace(/&(apos|quot|amp|lt|gt|nbsp);/g, (match) => HTML_ENTITIES[match] ?? match);
-}
-
-/**
- * Extract searchable plain text from a docs page.tsx source. We strip imports,
- * the metadata block, and JSX tags, then keep the inner text plus the contents
- * of any `code={` ... `}` template literals so things mentioned only in code
- * samples (e.g. `ui: "swagger"`) are still discoverable from cmdk.
- */
-function extractBodyText(source: string): string {
-  let working = source;
-
-  // Drop imports and the metadata block — they're indexed via the metadata fields already.
-  working = working.replace(/^\s*import[\s\S]*?;\s*$/gm, "");
-  working = working.replace(/export\s+const\s+metadata\s*=\s*buildMetadata\(\{[\s\S]*?\}\);?/, "");
-
-  const collected: string[] = [];
-
-  // Pull CodeBlock template-literal payloads first so they survive tag stripping.
-  for (const match of working.matchAll(/code=\{`([\s\S]*?)`\}/g)) {
-    collected.push(match[1]);
-  }
-  working = working.replace(/code=\{`[\s\S]*?`\}/g, " ");
-
-  // Drop JSX expression containers — most are className strings, hrefs, callbacks.
-  working = working.replace(/\{[^{}]*\}/g, " ");
-  // Drop opening/closing tags but keep their inner text.
-  working = working.replace(/<\/?[A-Za-z][^>]*>/g, " ");
-
-  collected.push(working);
-
-  return decodeEntities(collected.join(" "))
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, BODY_INDEX_LIMIT);
-}
-
-async function walkDocsPages(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const nestedFiles = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => walkDocsPages(path.join(dir, entry.name))),
-  );
-
-  const pageFile = entries.some((entry) => entry.isFile() && entry.name === "page.tsx")
-    ? [path.join(dir, "page.tsx")]
-    : [];
-
-  return [...pageFile, ...nestedFiles.flat()];
-}
-
-function normalizeText(value: string) {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function getRouteFromFile(filePath: string): Route {
-  const relativeDir = path.relative(docsDir, path.dirname(filePath));
-
-  if (!relativeDir || relativeDir === ".") {
-    return "/docs";
-  }
-
-  return `/docs/${relativeDir.split(path.sep).join("/")}` as Route;
-}
-
 function extractMetadata(source: string, filePath: string): DiscoveredDoc {
-  const title = source.match(/title:\s*"([^"]+)"/)?.[1] ?? "Untitled";
-  const description =
-    source.match(/description:\s*(?:\n\s*)?"([\s\S]*?)",\s*path:/)?.[1] ??
-    "Documentation page";
-  const href = (source.match(/path:\s*"([^"]+)"/)?.[1] as Route | undefined) ?? getRouteFromFile(filePath);
-  const keywordsBlock = source.match(/keywords:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
-  const keywords = [...keywordsBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  const frontmatter = parseDocFrontmatter(source, filePath);
 
   return {
-    title: normalizeText(title),
-    href,
-    description: normalizeText(description),
-    keywords,
-    body: extractBodyText(source),
+    ...frontmatter,
+    body: extractBodyText(source, BODY_INDEX_LIMIT),
   };
 }
 
