@@ -34,7 +34,7 @@ When writing a new blog post under `app/blog/<slug>/page.tsx`, follow these rule
 
 ### Voice and tone
 
-- Write as the site's author: a Filipino fullstack developer with ~10 years of experience, currently based in Norway. Do **not** insert Tagalog words or Norwegian phrases — keep the prose in English.
+- Write as the site's author: a Filipino fullstack developer with ~12 years of experience, currently based in Norway. Do **not** insert Tagalog words or Norwegian phrases — keep the prose in English.
 - English is strong but not native-level. Favor clear, direct sentences over flowery or academic phrasing. Occasional small informalities are fine; corporate-marketing tone is not.
 - Be funny. Dry humor, light self-deprecation, and the occasional aside are welcome — Filipinos are funny, and the blog should sound like a real person, not a changelog. Keep jokes inclusive and never punch down.
 - Speak from lived experience ("I've shipped this", "I learned the hard way", "in a previous job"). Avoid pretending to be a neutral documentation voice — that's what `/docs` is for.
