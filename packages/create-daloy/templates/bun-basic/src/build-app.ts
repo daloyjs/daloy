@@ -40,19 +40,15 @@ export function buildApp(): App {
     // `info.title` / `info.version` are pulled from package.json by default;
     // set `openapi.info` here to override them.
     openapi: {
-      // Advertise the public origin so the Scalar "Try it" panel calls the
-      // deployed URL (and stays within the connect-src 'self' CSP) instead of
-      // localhost. Resolves PUBLIC_URL, then Railway's injected domain, then
-      // the local dev port.
-      servers: [
-        {
-          url:
-            process.env.PUBLIC_URL ??
-            (process.env.RAILWAY_PUBLIC_DOMAIN
-              ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-              : `http://localhost:${process.env.PORT ?? 3000}`),
-        },
-      ],
+      // Leave `servers` unset so the Scalar "Try it" panel and the generated
+      // client target the origin the docs are served from — the deployed
+      // domain in production, localhost in dev — which keeps "Try it" within
+      // the connect-src 'self' CSP on every platform. Never hardcode a URL
+      // here: a localhost default breaks "Try it" once deployed. Set PUBLIC_URL
+      // to pin an absolute base URL (e.g. for client codegen).
+      ...(process.env.PUBLIC_URL
+        ? { servers: [{ url: process.env.PUBLIC_URL }] }
+        : {}),
     },
     docs: true,
     // daloy-minimal:strip-end docs

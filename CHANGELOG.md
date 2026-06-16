@@ -48,6 +48,13 @@ project deploys cleanly.
   now runs a local Node dev server (`src/dev.ts`) that serves the same app over
   `@daloyjs/core/node` at the site root — fast iteration with no `vercel dev` or
   Vercel login.
+- **Scalar's "Try it" panel works on every deploy target.** The `node-basic`,
+  `bun-basic`, and `deno-basic` templates previously set an OpenAPI `servers`
+  URL that fell back to `localhost`, which the browser's `connect-src 'self'`
+  CSP blocked once deployed where no `PUBLIC_URL` / `RAILWAY_PUBLIC_DOMAIN` was
+  set (e.g. Deno Deploy). They now leave `servers` unset by default so Scalar
+  calls the origin the docs are served from (the deployed domain in production,
+  localhost in dev); set `PUBLIC_URL` to pin an absolute base URL.
 
 ### Security
 

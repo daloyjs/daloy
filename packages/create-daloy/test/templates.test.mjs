@@ -1595,17 +1595,19 @@ test("server templates ship deploy-portable proxy + OpenAPI server defaults", as
       `${template} must not blanket-trust forwarded headers`,
     );
 
-    // OpenAPI server URL resolves the public origin, falling back to the dev
-    // port — it must not be hardcoded to localhost only.
-    assert.match(
+    // OpenAPI `servers` must NOT be hardcoded to localhost — that breaks the
+    // Scalar "Try it" panel under the connect-src 'self' CSP once deployed
+    // (Railway, Deno Deploy, etc.). The templates omit `servers` by default so
+    // Scalar uses the docs origin, and only pin one when PUBLIC_URL is set.
+    assert.doesNotMatch(
       buildApp,
-      /PUBLIC_URL/,
-      `${template} must resolve the OpenAPI server URL from PUBLIC_URL`,
+      /servers:\s*\[\s*\{\s*url:\s*[`'"]http:\/\/localhost/,
+      `${template} must not hardcode a localhost OpenAPI server URL`,
     );
     assert.match(
       buildApp,
-      /RAILWAY_PUBLIC_DOMAIN/,
-      `${template} must fall back to Railway's injected public domain`,
+      /PUBLIC_URL/,
+      `${template} must allow pinning the OpenAPI server URL via PUBLIC_URL`,
     );
   }
 });

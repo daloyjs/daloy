@@ -17,7 +17,8 @@ export const metadata = buildMetadata({
     "Railway TRUST_PROXY_HOPS",
     "Railway behindProxy hops",
     "Railway X-Forwarded-For 500",
-    "Railway RAILWAY_PUBLIC_DOMAIN OpenAPI server URL",
+    "Railway Scalar Try it CSP localhost",
+    "PUBLIC_URL OpenAPI server URL",
   ],
   type: "article",
 });
@@ -122,14 +123,13 @@ pnpm dlx @railway/cli up`}
 
       <h2>Public API URL</h2>
       <p>
-        So the Scalar <em>Try it</em> panel and the OpenAPI <code>servers</code> entry point at
-        your deployed origin instead of <code>localhost</code> (which the browser blocks under
-        the <code>connect-src &apos;self&apos;</code> CSP), the templates resolve the server URL
-        at runtime: <code>PUBLIC_URL</code>, then Railway&apos;s injected{" "}
-        <code>RAILWAY_PUBLIC_DOMAIN</code>, then the local dev port. Railway sets{" "}
-        <code>RAILWAY_PUBLIC_DOMAIN</code> automatically once the service has a domain, so this
-        usually needs no extra config. Set <code>PUBLIC_URL</code> explicitly to pin a custom
-        domain:
+        The templates leave the OpenAPI <code>servers</code> list unset by default, so the
+        Scalar <em>Try it</em> panel calls the <strong>origin the docs are served from</strong>{" "}
+        (your Railway domain in production, <code>localhost</code> in dev). That keeps{" "}
+        <em>Try it</em> within the <code>connect-src &apos;self&apos;</code> CSP automatically,
+        with no env var to set. Set <code>PUBLIC_URL</code> only if you want to pin an absolute
+        base URL in the spec (for example, to generate a typed client against a fixed
+        environment):
       </p>
       <CodeBlock
         language="bash"
