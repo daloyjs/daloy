@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "daloyjs-docs": {
+      "type": "http",
+      "url": "https://daloyjs.dev/mcp"
+    }
+  }
+}

@@ -263,6 +263,33 @@ bun  create daloy           my-api`}
         starter.
       </p>
 
+      <h2>Editor MCP integration</h2>
+      <p>
+        Every scaffold ships a <code>.vscode/mcp.json</code> that wires VS Code
+        (and other MCP-aware editors) to the DaloyJS documentation MCP server at{" "}
+        <code>https://daloyjs.dev/mcp</code> over HTTP. With it, AI assistants in
+        your editor can pull current DaloyJS docs while you work, with no manual
+        setup. The file is authored as <code>_vscode/mcp.json</code> in the
+        template and renamed to <code>.vscode/mcp.json</code> on copy so it
+        survives npm packing.
+      </p>
+      <CodeBlock
+        language="json"
+        code={`{
+  "servers": {
+    "daloyjs-docs": {
+      "type": "http",
+      "url": "https://daloyjs.dev/mcp"
+    }
+  }
+}`}
+      />
+      <p>
+        Delete the file or remove the server entry if you do not want the
+        integration. It is editor configuration only and the framework does not
+        depend on it at runtime.
+      </p>
+
       <h2>Which template should I choose?</h2>
       <ul>
         <li>

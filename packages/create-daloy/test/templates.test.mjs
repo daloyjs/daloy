@@ -1996,6 +1996,103 @@ test("scaffolded projects include AGENTS.md and SKILL.md at the conventional pat
   }
 });
 
+test("every template ships _vscode/mcp.json wiring the DaloyJS docs MCP server", async () => {
+  // Authored as `_vscode/` so npm pack does not drop the dotfolder on
+  // publish; the copier renames it to `.vscode/` on scaffold. The file gives
+  // a freshly scaffolded project immediate access to the DaloyJS docs MCP
+  // server from VS Code (and compatible editors) with no manual setup.
+  const templates = [
+    "node-basic",
+    "vercel-edge",
+    "cloudflare-worker",
+    "bun-basic",
+    "deno-basic",
+  ];
+  for (const template of templates) {
+    const raw = await readFile(
+      path.join(pkgRoot, "templates", template, "_vscode", "mcp.json"),
+      "utf8",
+    );
+    // Must be valid JSON declaring the daloyjs-docs HTTP server.
+    const parsed = JSON.parse(raw);
+    assert.ok(
+      parsed.servers && typeof parsed.servers === "object",
+      `${template} mcp.json must declare a "servers" object`,
+    );
+    const server = parsed.servers["daloyjs-docs"];
+    assert.ok(
+      server,
+      `${template} mcp.json must declare the "daloyjs-docs" server`,
+    );
+    assert.equal(
+      server.type,
+      "http",
+      `${template} daloyjs-docs server must use the http transport`,
+    );
+    assert.equal(
+      server.url,
+      "https://daloyjs.dev/mcp",
+      `${template} daloyjs-docs server must point at the DaloyJS docs MCP endpoint`,
+    );
+  }
+});
+
+test("scaffolded projects include .vscode/mcp.json at the conventional path", async () => {
+  // Verify the CLI copies the editor config out of the template and renames
+  // `_vscode/` → `.vscode/` (i.e. it is not left as `_vscode` or filtered by
+  // the copier).
+  const templates = [
+    "node-basic",
+    "vercel-edge",
+    "cloudflare-worker",
+    "bun-basic",
+    "deno-basic",
+  ];
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  try {
+    for (const template of templates) {
+      const projectName = `vscode-${template}`;
+      const args = [
+        path.join(pkgRoot, "bin/create-daloy.mjs"),
+        projectName,
+        "--template",
+        template,
+        "--no-install",
+        "--no-git",
+        "--yes",
+      ];
+      // Node-style templates also need an explicit package manager flag in
+      // non-interactive mode; deno-basic ignores it.
+      if (template !== "deno-basic") {
+        args.push("--package-manager", "pnpm");
+      }
+      const exitCode = await new Promise((resolve) => {
+        const proc = spawn(process.execPath, args, {
+          cwd: tmpDir,
+          stdio: "ignore",
+        });
+        proc.on("exit", (code) => resolve(code ?? 1));
+        proc.on("error", () => resolve(1));
+      });
+      assert.equal(exitCode, 0, `scaffolding ${template} should succeed`);
+
+      const mcpPath = path.join(tmpDir, projectName, ".vscode", "mcp.json");
+      await access(mcpPath);
+      const parsed = JSON.parse(await readFile(mcpPath, "utf8"));
+      assert.equal(
+        parsed.servers?.["daloyjs-docs"]?.url,
+        "https://daloyjs.dev/mcp",
+        `${template} scaffold must wire the daloyjs-docs MCP server`,
+      );
+
+      // The `_vscode` placeholder must be renamed to `.vscode` on copy.
+      await assert.rejects(access(path.join(tmpDir, projectName, "_vscode")));
+    }
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test("--yes + pnpm defaults install to N and skips dependency installation", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   const projectName = "pnpm-default-no-install";

@@ -65,6 +65,11 @@ const RENAME_ON_COPY = new Map([
   // `.agents/skills/<skill-name>/SKILL.md`. Templates author this as
   // `_agents/` so npm pack does not drop the dotfolder during publish.
   ["_agents", ".agents"],
+  // Directory: holds editor configuration such as `mcp.json`, which wires
+  // VS Code (and compatible editors) to the DaloyJS docs MCP server.
+  // Templates author this as `_vscode/` so npm pack does not drop the
+  // dotfolder during publish.
+  ["_vscode", ".vscode"],
 ]);
 
 // Templates that target a runtime instead of an npm package manager.

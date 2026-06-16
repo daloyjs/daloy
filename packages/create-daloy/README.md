@@ -260,7 +260,7 @@ not need.
 - Zero runtime dependencies (uses only Node built-ins) for a clean supply-chain footprint.
 - A modern terminal experience with Unicode/color capability detection and ASCII fallbacks.
 - Templates are copied verbatim from this package's `templates/` directory.
-- Files and folders prefixed with `_` are renamed on copy (`_gitignore` → `.gitignore`, `_npmrc` → `.npmrc`, `_github/` → `.github`, `_agents/` → `.agents/`, `_Dockerfile` → `Dockerfile`, `_dockerignore` → `.dockerignore`, `_env.example` → `.env.example`) to survive npm packing.
+- Files and folders prefixed with `_` are renamed on copy (`_gitignore` → `.gitignore`, `_npmrc` → `.npmrc`, `_github/` → `.github`, `_agents/` → `.agents/`, `_vscode/` → `.vscode/`, `_Dockerfile` → `Dockerfile`, `_dockerignore` → `.dockerignore`, `_env.example` → `.env.example`) to survive npm packing.
 - pnpm-specific `.npmrc` hardening is kept only when you choose `pnpm`; other package managers get a clean project without unsupported config warnings.
 - pnpm projects ship with `ignore-scripts=true`, `minimum-release-age=1440`, `verify-store-integrity=true`, `prefer-frozen-lockfile=true`, and `strict-peer-dependencies=true` by default.
 - `--with-ci` projects ship with pinned GitHub Actions workflows, CODEOWNERS, Dependabot, SECURITY.md, and lockfile-source verification.
@@ -274,3 +274,5 @@ Every scaffolded project ships with two files that help AI coding agents (Copilo
 - `.agents/skills/daloyjs-best-practices/SKILL.md` — comprehensive operational guidance following the open `agents/skills/<skill-name>/SKILL.md` convention: when to use the skill, project structure, core workflows (adding routes, regenerating the OpenAPI spec and client), schema and validation conventions, error-handling patterns, middleware order, testing best practices (happy and unhappy paths), security best practices, logging and observability notes, configuration and secrets handling, deployment notes, pitfalls and guardrails, and process expectations.
 
 Both files are tailored to the chosen template (Node, Bun, Deno, Vercel Edge, or Cloudflare Workers), and Node-style templates rewrite their commands to match your selected package manager. They follow the "instruction budget" advice — small root file, progressive disclosure for the rest — so they don't waste agent tokens. Edit or delete them freely; the framework does not depend on them at runtime.
+
+Every scaffold also ships a `.vscode/mcp.json` (authored as `_vscode/mcp.json` in the template) that wires VS Code and other MCP-aware editors to the DaloyJS documentation MCP server (`https://daloyjs.dev/mcp`) over HTTP. AI assistants in your editor can then pull current DaloyJS docs with no manual setup. Delete the file or remove the server entry to opt out; it is editor configuration only and the framework does not depend on it at runtime.
