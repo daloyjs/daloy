@@ -4012,7 +4012,16 @@ function serializeResult(
     );
   }
 
-  const finish = () => {
+  // `outputBody` is the value actually serialized onto the wire. It defaults
+  // to the raw handler return, but when response-body validation runs it is
+  // replaced with the validator's parsed `value` (e.g. a Zod object with
+  // unknown keys stripped). This closes the OWASP API3 "excessive data
+  // exposure" hole: a handler that returns extra fields not declared in the
+  // response schema must not leak them — only declared fields are emitted,
+  // exactly as the OpenAPI contract and the security docs promise. Schemas
+  // that opt into pass-through (e.g. Zod `.passthrough()`) keep their extra
+  // keys because the validator itself returns them in `value`.
+  const finish = (outputBody: unknown) => {
     const headers = new Headers(result.headers);
     const explicitCt = headers.get("content-type");
     const treatAsJson = !explicitCt || explicitCt.includes("application/json");
@@ -4031,26 +4040,26 @@ function serializeResult(
     let body: BodyInit | null;
     let rawBody: Uint8Array | null = null;
     let isStream = false;
-    if (result.body === undefined || result.body === null) {
+    if (outputBody === undefined || outputBody === null) {
       body = null;
-    } else if (!treatAsJson && typeof result.body === "string") {
-      const bytes = TEXT_ENCODER.encode(result.body);
+    } else if (!treatAsJson && typeof outputBody === "string") {
+      const bytes = TEXT_ENCODER.encode(outputBody);
       setContentLength(headers, bytes.byteLength);
       body = bytes;
       rawBody = bytes;
-    } else if (!treatAsJson && result.body instanceof Uint8Array) {
-      setContentLength(headers, result.body.byteLength);
-      body = result.body as BodyInit;
-      rawBody = result.body;
-    } else if (!treatAsJson && result.body instanceof ArrayBuffer) {
-      setContentLength(headers, result.body.byteLength);
-      body = result.body as BodyInit;
-      rawBody = new Uint8Array(result.body);
-    } else if (!treatAsJson && (result.body as any) instanceof ReadableStream) {
-      body = result.body as BodyInit;
+    } else if (!treatAsJson && outputBody instanceof Uint8Array) {
+      setContentLength(headers, outputBody.byteLength);
+      body = outputBody as BodyInit;
+      rawBody = outputBody;
+    } else if (!treatAsJson && outputBody instanceof ArrayBuffer) {
+      setContentLength(headers, outputBody.byteLength);
+      body = outputBody as BodyInit;
+      rawBody = new Uint8Array(outputBody);
+    } else if (!treatAsJson && (outputBody as any) instanceof ReadableStream) {
+      body = outputBody as BodyInit;
       isStream = true;
     } else {
-      const bytes = TEXT_ENCODER.encode(JSON.stringify(result.body));
+      const bytes = TEXT_ENCODER.encode(JSON.stringify(outputBody));
       setContentLength(headers, bytes.byteLength);
       body = bytes;
       rawBody = bytes;
@@ -4077,7 +4086,9 @@ function serializeResult(
               .join("; ")}`,
           );
         }
-        return finish();
+        // Serialize the validated (and, for object schemas, key-stripped)
+        // value so undeclared fields never reach the client.
+        return finish((resolved as { value: unknown }).value);
       });
     } else {
       if ((r as any).issues) {
@@ -4087,10 +4098,11 @@ function serializeResult(
             .join("; ")}`,
         );
       }
+      return finish((r as { value: unknown }).value);
     }
   }
 
-  return finish();
+  return finish(result.body);
 }
 
 function setContentLength(headers: Headers, byteLength: number): void {

@@ -131,9 +131,11 @@ export default function Page() {
               Contract-first <code>app.route()</code> with <code>request</code>{" "}
               <em>and</em> <code>responses</code> schemas (Zod / Valibot /
               ArkType / TypeBox). Only fields you declare in the response schema
-              are emitted; only fields you declare in the request schema are
-              accepted. Surfaced in OpenAPI so reviewers can audit every
-              payload.
+              are emitted &mdash; undeclared fields a handler returns (a stray{" "}
+              <code>passwordHash</code>, a spread ORM row) are stripped at
+              serialization, not just flagged. Only fields you declare in the
+              request schema reach your handler. Surfaced in OpenAPI so
+              reviewers can audit every payload.
             </td>
             <td>
               Author response schemas that omit internal fields. Don&apos;t
