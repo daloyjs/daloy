@@ -241,7 +241,7 @@
     "example": "node --import tsx examples/basic.ts",
     "bench": "node --import tsx bench/router.bench.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
-    "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts",
+    "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts tests/red-team-attacks-6.test.ts",
     "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=90 --test-coverage-functions=90 tests/**/*.test.ts",
     "coverage:branches": "tsc -p tsconfig.coverage.json && node --test --experimental-test-coverage --test-coverage-include='dist-coverage/src/**' --test-coverage-branches=92 dist-coverage/tests/**/*.test.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.typetest.json",

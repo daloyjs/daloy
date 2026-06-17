@@ -68,7 +68,18 @@ the residual DNS-rebinding window noted under R-2.
 - **Remediation:** requests carrying an `Authorization` header now bypass the shared cache by default (RFC 9111 §3.5), with an explicit `cacheAuthenticatedRequests: true` opt-in for genuinely shareable content. Unauthenticated/public responses are still cached.
 - **Verification:** `tests/red-team-attacks-5.test.ts`.
 
-No other defects were identified across the five red-team waves.
+No other defects were identified across the six red-team waves.
+
+### Verified-secure controls (wave 6 — no defects, locked as regression tests)
+
+A further pass over session, cookie, compression, and multipart handling found
+the existing defenses sound; they are now regression-locked in
+`tests/red-team-attacks-6.test.ts`:
+
+- **Session fixation / forgery.** A client-supplied session cookie is adopted only when its HMAC signature verifies *and* the id exists in the store; otherwise a fresh id is issued. An attacker cannot plant a chosen id (no secret → no valid signature). `regenerate()` rotates the id on privilege change.
+- **Cookie tossing.** The session cookie uses the `__Host-` prefix (host-only, `Path=/`, no `Domain`) plus `HttpOnly` + `Secure` + `SameSite`, so a sibling subdomain cannot inject it.
+- **BREACH / CRIME.** `compression()` skips responses with `Set-Cookie`, requests with an `Authorization` header, and requests carrying a session/CSRF/`__Host-`/`__Secure-` cookie — credentialed, per-user bodies are never compressed.
+- **Multipart DoS.** Per-file (`maxFileBytes` → `413`) and field/file-count (`maxFields`/`maxFiles` → `400`) caps are enforced when configured, with the always-on `bodyLimitBytes` (1 MiB) as the backstop.
 
 ---
 
@@ -82,18 +93,20 @@ No other defects were identified across the five red-team waves.
 | R-4 | `timingSafeEqual` is not a hardware constant-time primitive (compares UTF-16 code units)               | Low      | Framework | Documented in TSDoc; for raw bytes use `crypto.timingSafeEqual`                                             |
 | R-5 | In-memory rate-limit / autoBan / idempotency / response-cache stores are single-process                | Low      | Operator  | Documented; Redis adapters provided for multi-instance deployments                                         |
 | R-6 | `trustProxyHeaders` / `behindProxy` misconfiguration affects IP-based controls (rate/geo/autoBan/bot)  | Low      | Operator  | Fails **closed** by default (`trustProxy: false`); `daloy doctor` flags an unset proxy config in production |
+| R-7 | `waf()` is a signature engine: it decodes input once, so multiply-encoded payloads evade it | Low | Framework/Developer | By design (recursive decoding causes false positives). WAF is defense-in-depth; rely on schemas + output escaping. Documented + locked in wave 6 |
 
 ---
 
 ## Red-team suite inventory
 
-The adversarial suite (`pnpm test:red-team`, gated in CI) contains **111 attacks** across five files:
+The adversarial suite (`pnpm test:red-team`, gated in CI) contains **119 attacks** across six files:
 
 - **Wave 1** (`red-team-attacks.test.ts`): prototype pollution, body/header DoS, request smuggling and header injection, JWT, SSRF, open redirect, NoSQL operators, path traversal, constant-time compare, webhook HMAC, CORS, rate limit, CSRF, WAF, content-type, mass assignment, error redaction, secure headers, strong-secret guard, response over-exposure.
 - **Wave 2** (`red-team-attacks-2.test.ts`): decompression bombs, signed-value/session integrity, cookie attribute guards, mTLS header spoofing, HTTP message signatures, bearer/basic/scopes/fetch-metadata, WebSocket frame protocol and CSWSH, pagination cursors, idempotency, concurrency, multipart magic-bytes, refuse-to-boot, internal-service preset.
 - **Wave 3** (`red-team-attacks-3.test.ts`): bot-guard spoofed-crawler, geo-block allow/deny, IP-reputation denylist, auto-ban strike escalation, auto-ban shared-bucket footgun refusal.
 - **Wave 4** (`red-team-attacks-4.test.ts`): nested/array response over-exposure (independent verification of F-1), JWT header key-injection (`jwk`/`jku`/`x5u`/`kid`), uppercase `NONE` bypass attempt, HTTP method-override smuggling, path-confusion `except()` fail-closed, WAF ReDoS bound.
 - **Wave 5** (`red-team-attacks-5.test.ts`): cross-tenant cached-response disclosure — idempotency replay isolation (F-2) and response-cache Authorization bypass (F-3), including the same-principal/public happy paths and the explicit opt-in path.
+- **Wave 6** (`red-team-attacks-6.test.ts`): defense verification — session fixation/forgery + `regenerate()` rotation, `__Host-` cookie scoping, BREACH-aware compression skips, multipart per-file cap, WAF single-encoding catch + the documented double-encoding limitation.
 
 ---
 
