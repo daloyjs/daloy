@@ -114,6 +114,28 @@ test("otelTracing starts a SERVER span with HTTP semantic-convention attributes"
   assert.equal(span.status, undefined);
 });
 
+test("otelTracing splits host and port into server.address (no port) and server.port", async () => {
+  const { tracer, spans } = makeFakeTracer();
+  const app = makeApp(otelTracing({ tracer }));
+  const res = await app.request("http://api.test.local:8443/ok");
+  assert.equal(res.status, 200);
+  const span = spans[0]!;
+  // server.address must NOT include the port per the OTel HTTP semconv.
+  assert.equal(span.attributes["server.address"], "api.test.local");
+  assert.equal(span.attributes["server.port"], 8443);
+});
+
+test("otelTracing omits server.port for default ports", async () => {
+  const { tracer, spans } = makeFakeTracer();
+  const app = makeApp(otelTracing({ tracer }));
+  // No explicit port → URL.port is "" → no server.port attribute.
+  const res = await app.request("http://api.test.local/ok");
+  assert.equal(res.status, 200);
+  const span = spans[0]!;
+  assert.equal(span.attributes["server.address"], "api.test.local");
+  assert.equal(span.attributes["server.port"], undefined);
+});
+
 test("otelTracing exposes the active span on ctx.state under the configured key", async () => {
   const { tracer } = makeFakeTracer();
   const seen: { hadSpan: boolean } = { hadSpan: false };

@@ -162,7 +162,11 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
     if (url) {
       attrs["url.path"] = url.pathname;
       attrs["url.scheme"] = url.protocol.replace(/:$/, "");
-      if (url.host) attrs["server.address"] = url.host;
+      // Per the OTel HTTP semantic conventions `server.address` is the host
+      // WITHOUT the port (which belongs in `server.port`), so derive both from
+      // `url.hostname`/`url.port` rather than `url.host` (which concatenates them).
+      if (url.hostname) attrs["server.address"] = url.hostname;
+      if (url.port) attrs["server.port"] = Number(url.port);
       if (url.search) attrs["url.query"] = url.search.replace(/^\?/, "");
     }
     const ua = req.headers.get("user-agent");

@@ -60,9 +60,9 @@ const app = new App({
       <ul>
         <li>
           <code>http.request.method</code>, <code>url.path</code>,{" "}
-          <code>url.scheme</code>, <code>server.address</code>,{" "}
-          <code>url.query</code>, <code>user_agent.original</code> set on{" "}
-          <code>beforeHandle</code>.
+          <code>url.scheme</code>, <code>server.address</code> (host without
+          port), <code>server.port</code> (when present), <code>url.query</code>,{" "}
+          <code>user_agent.original</code> set on <code>beforeHandle</code>.
         </li>
         <li>
           <code>http.response.status_code</code> set on <code>onSend</code>.
@@ -133,6 +133,61 @@ otelTracing({
     span.setAttribute("component", "daloy");
   },
 });`} />
+
+      <h2>End-to-end with Jaeger (OTLP)</h2>
+      <p>
+        The repository ships a runnable example plus a Jaeger service in the{" "}
+        <code>examples/observability/</code> Docker stack, so you can watch real
+        spans land in a trace UI without writing any exporter code. Because{" "}
+        <code>otelTracing()</code> only needs a tracer that matches the small{" "}
+        <code>TracingTracer</code> interface, the example wires in a{" "}
+        <strong>dependency-free OTLP/HTTP exporter</strong> (about 120 lines of
+        web-standard <code>fetch</code> + <code>crypto</code>) that ships spans
+        straight to Jaeger&apos;s OTLP receiver, no <code>@opentelemetry/*</code>{" "}
+        SDK required.
+      </p>
+      <h3>1. Start Jaeger</h3>
+      <CodeBlock
+        code={`docker compose -f examples/observability/docker-compose.yml up jaeger
+# Jaeger UI:            http://localhost:16686
+# OTLP/HTTP receiver:   http://localhost:4318/v1/traces`}
+        language="sh"
+      />
+      <h3>2. Run the demo app</h3>
+      <CodeBlock
+        code={`node --import tsx examples/otel-tracing-demo.ts
+# DaloyJS OTel tracing demo running at http://localhost:3002
+# Exporting OTLP spans to: http://localhost:4318/v1/traces`}
+        language="sh"
+      />
+      <h3>3. Generate traffic and open Jaeger</h3>
+      <CodeBlock
+        code={`curl localhost:3002/orders
+curl -X POST localhost:3002/orders -d '{"item":"book","total":42}' -H 'content-type: application/json'
+curl localhost:3002/slow    # a span with visible duration
+curl localhost:3002/boom    # an ERROR span with an exception event
+
+# Continue a trace started by an upstream service (W3C traceparent):
+curl localhost:3002/orders \\
+  -H 'traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'`}
+        language="sh"
+      />
+      <p>
+        Open <code>http://localhost:16686</code>, pick the{" "}
+        <code>daloy-otel-demo</code> service, and you will see one SERVER span
+        per request: the <code>/boom</code> span flagged as an error with an{" "}
+        <code>exception</code> event, the <code>/slow</code> span showing its
+        real duration, and the <code>traceparent</code> request stitched into
+        the upstream trace as a child span.
+      </p>
+      <p>
+        In production you usually swap the demo exporter for the real SDK,{" "}
+        <code>trace.getTracer(&quot;svc&quot;)</code> from{" "}
+        <code>@opentelemetry/api</code> backed by{" "}
+        <code>@opentelemetry/sdk-node</code> and an OTLP exporter. The{" "}
+        <code>otelTracing()</code> call does not change; only the tracer you pass
+        in does.
+      </p>
 
       <h2>Lifecycle and limitations</h2>
       <ul>
