@@ -38,6 +38,7 @@ import {
 
 const FRAMEWORKS = [
   { name: "daloy",      file: "servers/throughput/daloy.ts" },
+  { name: "daloy-bare", file: "servers/throughput/daloy-bare.ts" },
   { name: "daloy-shed", file: "servers/throughput/daloy-shed.ts" },
   { name: "hono",       file: "servers/throughput/hono.ts" },
   // { name: "fastify",  file: "servers/throughput/fastify.ts" },
