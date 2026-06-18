@@ -12,6 +12,40 @@ For the forward-looking plan and the full thematic release log, see
 > `create-daloy` are published together — a new core release always ships a
 > matching scaffolder so generated projects pin the latest peer.
 
+## [0.41.0] — 2026-06-18
+
+A tooling release for the **`create-daloy`** scaffolder: every generated project
+now gates its OpenAPI contract automatically, and gets an opt-in localhost
+`pre-push` hook. `@daloyjs/core` publishes at the same version in lockstep — there
+is **no runtime code change** this release (the `runContractTests` runner and
+`daloy inspect --check` already shipped in 0.40.0); only the scaffolder, its
+templates, the docs, and the package README change.
+
+### Added
+
+- **Contract gate in every template.** Each scaffold now ships a
+  `tests/contract.test.ts` (`tests/contract_test.ts` on Deno) that runs
+  `runContractTests` against the real app and proves the gate rejects a broken
+  contract. It runs under the project's `test` task, so a missing or duplicate
+  `operationId`, a response example that doesn't match its schema, or a route
+  with no declared responses fails CI from the first commit.
+- **Opt-in `pre-push` contract hook.** Templates ship `.githooks/pre-push` plus a
+  `hooks:install` script that points `core.hooksPath` at it — a localhost-only
+  gate that runs the contract check before a push (`daloy inspect --check` on
+  Node / Vercel / Cloudflare, the contract test on Bun / Deno). It skips
+  gracefully when tooling is absent (never blocks a push over a missing
+  dependency) and is bypassable with `git push --no-verify`. A new `contract`
+  script/task runs the same check on demand.
+- **Example-app contract gated in CI.** The framework's own CI now runs
+  `daloy inspect --check examples/app.ts` after the build, guarding the showcase
+  app's contract (and the `daloy inspect --check` path itself) against regressions.
+
+### Changed
+
+- The scaffolder preserves file modes when copying templates (so the executable
+  `pre-push` hook survives scaffolding) and maps the authored `_githooks/`
+  directory to `.githooks/` in generated projects.
+
 ## [0.40.0] — 2026-06-18
 
 A security-hardening release focused on **response-side data exposure** and
@@ -1226,7 +1260,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel-edge`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v0.38.3...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/daloyjs/daloy/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/daloyjs/daloy/compare/v0.39.1...v0.40.0
 [0.39.1]: https://github.com/daloyjs/daloy/compare/v0.39.0...v0.39.1
 [0.39.0]: https://github.com/daloyjs/daloy/compare/v0.38.3...v0.39.0
