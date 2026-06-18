@@ -28,7 +28,7 @@ import type { BotResolver, IpReputationFeed } from "../src/index.js";
 function devApp() {
   return new App({ env: "development", logger: false });
 }
-function okRoute(app: App, method: "GET" | "POST" = "GET", path = "/") {
+function okRoute(app: App, method: "GET" | "POST" = "GET", path: `/${string}` = "/") {
   app.route({
     method,
     path,

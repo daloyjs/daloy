@@ -635,7 +635,7 @@ test("[mass-assignment] extra request keys are stripped before the handler sees 
     path: "/user",
     operationId: "createUser",
     request: { body: z.object({ name: z.string() }) as any }, // intentionally NOT .strict()
-    responses: { 200: { description: "ok", body: z.object({ received: z.record(z.unknown()) }) as any } },
+    responses: { 200: { description: "ok", body: z.object({ received: z.record(z.string(), z.unknown()) }) as any } },
     handler: async ({ body }: any) => ({ status: 200 as const, body: { received: body } }),
   });
   const res = await app.request("/user", {

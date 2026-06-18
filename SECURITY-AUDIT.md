@@ -99,7 +99,7 @@ the existing defenses sound; they are now regression-locked in
 
 ## Red-team suite inventory
 
-The adversarial suite (`pnpm test:red-team`, gated in CI) contains **119 attacks** across six files:
+The adversarial suite (`pnpm test:red-team`, gated in CI) contains **127 attacks** across seven files:
 
 - **Wave 1** (`red-team-attacks.test.ts`): prototype pollution, body/header DoS, request smuggling and header injection, JWT, SSRF, open redirect, NoSQL operators, path traversal, constant-time compare, webhook HMAC, CORS, rate limit, CSRF, WAF, content-type, mass assignment, error redaction, secure headers, strong-secret guard, response over-exposure.
 - **Wave 2** (`red-team-attacks-2.test.ts`): decompression bombs, signed-value/session integrity, cookie attribute guards, mTLS header spoofing, HTTP message signatures, bearer/basic/scopes/fetch-metadata, WebSocket frame protocol and CSWSH, pagination cursors, idempotency, concurrency, multipart magic-bytes, refuse-to-boot, internal-service preset.
@@ -107,6 +107,7 @@ The adversarial suite (`pnpm test:red-team`, gated in CI) contains **119 attacks
 - **Wave 4** (`red-team-attacks-4.test.ts`): nested/array response over-exposure (independent verification of F-1), JWT header key-injection (`jwk`/`jku`/`x5u`/`kid`), uppercase `NONE` bypass attempt, HTTP method-override smuggling, path-confusion `except()` fail-closed, WAF ReDoS bound.
 - **Wave 5** (`red-team-attacks-5.test.ts`): cross-tenant cached-response disclosure — idempotency replay isolation (F-2) and response-cache Authorization bypass (F-3), including the same-principal/public happy paths and the explicit opt-in path.
 - **Wave 6** (`red-team-attacks-6.test.ts`): defense verification — session fixation/forgery + `regenerate()` rotation, `__Host-` cookie scoping, BREACH-aware compression skips, multipart per-file cap, WAF single-encoding catch + the documented double-encoding limitation.
+- **Wave 7** (`red-team-attacks-7.test.ts`): three-front nation-state simulation — (R) production docs/OpenAPI hidden, error-response leak-free, forged-JWT privilege-escalation rejected; (C) request-timeout slowloris cutoff, deep-nest stack-bomb rejected fast, wide-JSON hash-flood bounded; (N) prototype-gadget pollutes nothing, no dynamic code-execution primitive on the public surface.
 
 ---
 

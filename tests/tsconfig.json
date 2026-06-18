@@ -1,0 +1,26 @@
+{
+  // Editor + on-demand type-check config for the test suite.
+  //
+  // The root tsconfig.json deliberately EXCLUDES `tests/` (tests run through
+  // `tsx`, which strips types without checking). That exclusion means an IDE
+  // opening a test file finds no owning project and falls back to default
+  // compiler options — which lack `types: ["node"]`, so `node:test` /
+  // `node:assert` imports surface spurious "Cannot find module" errors.
+  //
+  // This config gives the editor a project that owns the test files with the
+  // same strict options as the root plus Node types, so those false positives
+  // disappear and real type errors (e.g. Zod v4 `z.record(key, value)` arity)
+  // show up where you can see them. It is not part of `pnpm typecheck`; run it
+  // explicitly with `tsc -p tests/tsconfig.json --noEmit` to gate tests in CI.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Widen rootDir to the repo root: this config never emits, but the root
+    // tsconfig pins rootDir to `src`, which would otherwise reject test files
+    // (TS6059) for living outside it.
+    "rootDir": "..",
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["types"]
+}
