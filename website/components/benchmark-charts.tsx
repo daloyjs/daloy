@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import { cn } from "@/lib/utils"
 import {
@@ -33,7 +33,7 @@ import {
 /** Display row after the raw source value has been scaled into chart units. */
 type DisplayRow = { framework: string; minimal: number; secure: number };
 
-/** Minimal shape of the tick props Recharts hands a custom `XAxis` tick. */
+/** Minimal shape of the tick props Recharts hands a custom category-axis tick. */
 type AxisTickProps = {
   x?: number;
   y?: number;
@@ -46,18 +46,20 @@ function frameworkLabel(framework: string): string {
 }
 
 /**
- * Custom x-axis tick that bolds the DaloyJS label so it stands out among the
- * comparison frameworks without relying on a per-point series color (Recharts
- * colors areas per-series, not per-category).
+ * Custom y-axis (category) tick for the horizontal bar charts. Bolds the
+ * DaloyJS row so it stands out among the comparison frameworks without relying
+ * on a per-bar color (the two bars per row already encode minimal vs secure).
  */
-function FrameworkTick({ x, y, payload }: AxisTickProps) {
+function CategoryTick({ x, y, payload }: AxisTickProps) {
   const value = frameworkLabel(payload?.value ?? "");
   const isDaloy = value === "DaloyJS";
   return (
     <text
       x={x}
-      y={(y ?? 0) + 14}
-      textAnchor="middle"
+      y={y}
+      dy={4}
+      dx={-4}
+      textAnchor="end"
       className={cn(
         "text-[11px] fill-muted-foreground",
         isDaloy && "fill-foreground font-semibold"
@@ -89,11 +91,12 @@ function withUnit(unit: string) {
 }
 
 /**
- * Renders one framework-axis area chart with the two app-shape series
- * (`minimal` / `secure`). Source data is scaled into the chart's display unit
- * before it reaches this component.
+ * Renders one framework comparison as a horizontal grouped bar chart with the
+ * two app-shape series (`minimal` / `secure`). Source data is scaled into the
+ * chart's display unit before it reaches this component. Horizontal bars keep
+ * the framework names readable on narrow (mobile) viewports.
  */
-function FootprintAreaChart({
+function FootprintBarChart({
   data,
   unit,
   axisFormat,
@@ -106,37 +109,32 @@ function FootprintAreaChart({
   return (
     <ChartContainer
       config={footprintConfig}
-      className="aspect-auto h-[300px] w-full"
+      className="aspect-auto h-[360px] w-full"
     >
-      <AreaChart data={data} margin={{ left: 4, right: 12, top: 8 }}>
-        <defs>
-          <linearGradient id="fillMinimal" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-minimal)" stopOpacity={0.7} />
-            <stop offset="95%" stopColor="var(--color-minimal)" stopOpacity={0.08} />
-          </linearGradient>
-          <linearGradient id="fillSecure" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-secure)" stopOpacity={0.6} />
-            <stop offset="95%" stopColor="var(--color-secure)" stopOpacity={0.06} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid vertical={false} />
+      <BarChart
+        accessibilityLayer
+        layout="vertical"
+        data={data}
+        margin={{ left: 4, right: 16, top: 4, bottom: 4 }}
+        barCategoryGap="22%"
+      >
+        <CartesianGrid horizontal={false} />
         <XAxis
-          dataKey="framework"
+          type="number"
           tickLine={false}
           axisLine={false}
-          tickMargin={8}
-          interval={0}
-          tick={<FrameworkTick />}
-        />
-        <YAxis
-          tickLine={false}
-          axisLine={false}
-          width={48}
-          tickMargin={4}
+          tickMargin={6}
           tickFormatter={axisFormat}
         />
+        <YAxis
+          type="category"
+          dataKey="framework"
+          width={68}
+          tickLine={false}
+          axisLine={false}
+          tick={<CategoryTick />}
+        />
         <ChartTooltip
-          cursor={false}
           content={
             <ChartTooltipContent
               indicator="dot"
@@ -160,70 +158,60 @@ function FootprintAreaChart({
           }
         />
         <ChartLegend content={<ChartLegendContent />} />
-        <Area
-          dataKey="secure"
-          type="monotone"
-          stroke="var(--color-secure)"
-          strokeWidth={2}
-          fill="url(#fillSecure)"
-          stackId={undefined}
-        />
-        <Area
+        <Bar
           dataKey="minimal"
-          type="monotone"
-          stroke="var(--color-minimal)"
-          strokeWidth={2}
-          fill="url(#fillMinimal)"
-          stackId={undefined}
+          fill="var(--color-minimal)"
+          radius={[0, 4, 4, 0]}
+          maxBarSize={20}
         />
-      </AreaChart>
+        <Bar
+          dataKey="secure"
+          fill="var(--color-secure)"
+          radius={[0, 4, 4, 0]}
+          maxBarSize={20}
+        />
+      </BarChart>
     </ChartContainer>
   );
 }
 
 /**
- * Renders the DaloyJS-vs-Hono throughput area chart. Both frameworks run a
- * comparable middleware stack, so the two areas sit almost on top of each other
- * by design: the honest takeaway is "neck and neck", not "we win".
+ * Renders the DaloyJS-vs-Hono middleware throughput as a horizontal grouped bar
+ * chart. Both frameworks run a comparable middleware stack, so the bars come
+ * out nearly equal by design: the honest read is "neck and neck", and two bars
+ * of almost-equal length show that far more clearly than overlapping areas did.
  */
-function ThroughputAreaChart() {
+function ThroughputBarChart() {
   const format = withUnit("req/s");
   return (
     <ChartContainer
       config={throughputConfig}
-      className="aspect-auto h-[300px] w-full"
+      className="aspect-auto h-[240px] w-full"
     >
-      <AreaChart
+      <BarChart
+        accessibilityLayer
+        layout="vertical"
         data={MIDDLEWARE_THROUGHPUT_RPS}
-        margin={{ left: 4, right: 12, top: 8 }}
+        margin={{ left: 4, right: 16, top: 4, bottom: 4 }}
+        barCategoryGap="28%"
       >
-        <defs>
-          <linearGradient id="fillDaloy" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-daloy)" stopOpacity={0.7} />
-            <stop offset="95%" stopColor="var(--color-daloy)" stopOpacity={0.08} />
-          </linearGradient>
-          <linearGradient id="fillHono" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-hono)" stopOpacity={0.5} />
-            <stop offset="95%" stopColor="var(--color-hono)" stopOpacity={0.05} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid vertical={false} />
+        <CartesianGrid horizontal={false} />
         <XAxis
-          dataKey="scenario"
-          tickLine={false}
-          axisLine={false}
-          tickMargin={10}
-        />
-        <YAxis
-          tickLine={false}
-          axisLine={false}
-          width={48}
-          tickMargin={4}
+          type="number"
           domain={[0, 24000]}
+          tickLine={false}
+          axisLine={false}
+          tickMargin={6}
           tickFormatter={(value: number) => `${Math.round(value / 1000)}k`}
         />
+        <YAxis
+          type="category"
+          dataKey="scenario"
+          width={92}
+          tickLine={false}
+          axisLine={false}
+        />
         <ChartTooltip
-          cursor={false}
           content={
             <ChartTooltipContent
               indicator="dot"
@@ -246,21 +234,19 @@ function ThroughputAreaChart() {
           }
         />
         <ChartLegend content={<ChartLegendContent />} />
-        <Area
-          dataKey="hono"
-          type="monotone"
-          stroke="var(--color-hono)"
-          strokeWidth={2}
-          fill="url(#fillHono)"
-        />
-        <Area
+        <Bar
           dataKey="daloy"
-          type="monotone"
-          stroke="var(--color-daloy)"
-          strokeWidth={2.5}
-          fill="url(#fillDaloy)"
+          fill="var(--color-daloy)"
+          radius={[0, 4, 4, 0]}
+          maxBarSize={26}
         />
-      </AreaChart>
+        <Bar
+          dataKey="hono"
+          fill="var(--color-hono)"
+          radius={[0, 4, 4, 0]}
+          maxBarSize={26}
+        />
+      </BarChart>
     </ChartContainer>
   );
 }
@@ -296,7 +282,7 @@ const TABS = [
     soWhat:
       "Fewer packages to trust means fewer CVEs and no surprise postinstall scripts. Zero dependencies is zero supply-chain doors left open for an attacker.",
     render: () => (
-      <FootprintAreaChart
+      <FootprintBarChart
         data={DEPENDENCY_COUNT}
         unit="deps"
         axisFormat={(v) => `${v}`}
@@ -308,13 +294,13 @@ const TABS = [
     trigger: "Install size",
     title: "On-disk install footprint",
     description:
-      "Total bytes written to node_modules for a hello-world app, minimal vs. a security-hardened (secure parity) setup.",
+      "Total megabytes written to node_modules for a hello-world app, minimal vs. a security-hardened (secure parity) setup.",
     takeaway:
       "DaloyJS is ~1.3 MB on disk and stays flat when you turn security on, because the hardening is already in-core. Fastify and NestJS balloon once you bolt the equivalent plugins back on.",
     soWhat:
       "Smaller installs mean faster CI runs, leaner Docker images, and quicker cold starts on serverless and the edge.",
     render: () => (
-      <FootprintAreaChart
+      <FootprintBarChart
         data={toMegabytes(INSTALL_FOOTPRINT_BYTES)}
         unit="MB"
         axisFormat={(v) => `${v}`}
@@ -332,7 +318,7 @@ const TABS = [
     soWhat:
       "A smaller bundle boots faster after a cold start, so the first user to hit your edge function or serverless endpoint waits less.",
     render: () => (
-      <FootprintAreaChart
+      <FootprintBarChart
         data={toKilobytes(BUNDLE_GZIP_BYTES)}
         unit="kB"
         axisFormat={(v) => `${v}`}
@@ -349,15 +335,16 @@ const TABS = [
       "With comparable middleware on both sides, DaloyJS and Hono are neck and neck, and DaloyJS even edges ahead at ~19.7k vs ~19.3k req/s on static routes. A bare hello-world route would show a much larger gap, but that gap is mostly DaloyJS's security and validation running on every request, work the bare baseline simply skips.",
     soWhat:
       "Security and validation are essentially free at the framework layer. Your real bottleneck will be the database and the network, not DaloyJS.",
-    render: () => <ThroughputAreaChart />,
+    render: () => <ThroughputBarChart />,
   },
 ] as const;
 
 /**
- * Landing-page benchmark section: a tabbed set of Area charts comparing
- * DaloyJS against popular Node frameworks, plus an explicit "not
+ * Landing-page benchmark section: a tabbed set of horizontal bar charts
+ * comparing DaloyJS against popular Node frameworks, plus an explicit "not
  * apples-to-apples" caveat block. All numbers are sourced from the repo's own
- * `bench/cross-framework` suite (see {@link BENCH_META}).
+ * `bench/cross-framework` suite (see {@link BENCH_META}). Fully responsive: the
+ * tab strip collapses to a 2x2 grid and the charts reflow on small screens.
  */
 export function BenchmarkCharts() {
   const [tab, setTab] = React.useState<string>(TABS[0].value);
@@ -365,7 +352,7 @@ export function BenchmarkCharts() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
+      <Card size="sm">
         <CardHeader>
           <CardTitle>How DaloyJS measures up</CardTitle>
           <CardDescription>
@@ -376,7 +363,7 @@ export function BenchmarkCharts() {
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
-            <TabsList className="flex w-full flex-wrap">
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
               {TABS.map((t) => (
                 <TabsTrigger key={t.value} value={t.value}>
                   {t.trigger}
@@ -413,14 +400,14 @@ export function BenchmarkCharts() {
             <span className="text-muted-foreground">{active.takeaway}</span>
           </p>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs leading-relaxed text-muted-foreground">
             {BENCH_META.machine} · {BENCH_META.ranAt} · {BENCH_META.coreVersion}{" "}
             · source in <code>{BENCH_META.source}</code>
           </p>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card size="sm">
         <CardHeader>
           <CardTitle>Why this is apples to oranges</CardTitle>
           <CardDescription>
