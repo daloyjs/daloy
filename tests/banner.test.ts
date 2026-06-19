@@ -201,3 +201,29 @@ test("printStartupBanner: defaults to process.stdout.write when no writer is giv
   const out = captured.join("");
   assert.match(out, /StdoutTest/);
 });
+
+test("formatStartupBanner survives a permission-restricted env (Deno --allow-env denial)", () => {
+  // Simulate Deno's capability model: reading a non-granted env var throws
+  // NotCapable. The banner is cosmetic and must degrade gracefully, never
+  // crash the host app.
+  const realEnv = process.env;
+  const throwingEnv = new Proxy(
+    {},
+    {
+      get(_t, prop) {
+        throw new Error(`NotCapable: Requires env access to "${String(prop)}"`);
+      },
+    },
+  );
+  try {
+    Object.defineProperty(process, "env", { value: throwingEnv, configurable: true });
+    let out = "";
+    assert.doesNotThrow(() => {
+      out = formatStartupBanner({ name: "Svc", url: "http://localhost:3000", runtime: "Deno" });
+    });
+    // Falls back to no-color, ASCII-safe output that still contains the app name.
+    assert.match(strip(out), /Svc/);
+  } finally {
+    Object.defineProperty(process, "env", { value: realEnv, configurable: true });
+  }
+});

@@ -5,15 +5,19 @@
 #   - Non-root runtime user (`deno`, uid 1993 — created by the official
 #     `denoland/deno` image).
 #   - **Deno's capability-based permission model is the primary
-#     defense.** The runtime CMD passes only `--allow-net`,
-#     `--allow-env`, and scoped `--allow-read` — no `--allow-write`, no
-#     `--allow-run`, no `--allow-ffi`, no `--allow-sys`, no `--allow-all`.
-#     Network and env permissions are constrained to the server port and
-#     expected env vars so a compromised dependency cannot silently open
-#     arbitrary outbound sockets or read every secret in the environment.
+#     defense.** The runtime CMD passes a scoped `--allow-net`, a
+#     `--allow-env` allowlist of only the variables this app reads, and a
+#     scoped `--allow-read` — no `--allow-write`, no `--allow-run`, no
+#     `--allow-ffi`, no `--allow-sys`, no `--allow-all`. Network access is
+#     constrained to the server port and the env allowlist names each
+#     variable explicitly, so a compromised dependency cannot silently
+#     open arbitrary outbound sockets; even if it reads a listed var it
+#     has no `--allow-net` route to exfiltrate it.
 #   - `--cached-only` refuses any module that was not baked into the
-#     image at build time. A malicious republish of a transitive dep
-#     cannot ride in via a runtime `import("https://…")`.
+#     image at build time, and `--no-lock` keeps the lockfile out of the
+#     runtime surface (integrity is already verified against that cache).
+#     A malicious republish of a transitive dep cannot ride in via a
+#     runtime `import("https://…")`.
 #   - Read-only-root-filesystem friendly: no runtime writes. Run with
 #     `--read-only --tmpfs /tmp` or set `readOnlyRootFilesystem: true`
 #     in your orchestrator.
@@ -63,4 +67,12 @@ ENTRYPOINT ["/sbin/tini", "--"]
 # app genuinely needs them — every flag widens the blast radius of a
 # compromised dependency. If you change `PORT`, update `--allow-net` to
 # match the exposed listen address.
-CMD ["deno", "run", "--cached-only", "--allow-net=0.0.0.0:3000,127.0.0.1:3000,localhost:3000", "--allow-env=PORT,DENO_ENV", "--allow-read=/app/deno.json,/app/src", "src/main.ts"]
+#
+# `--allow-env` lists exactly the variables this app reads at startup
+# (see src/main.ts + src/build-app.ts): PORT (listen port), DENO_ENV
+# (production flag), TRUST_PROXY_HOPS (behindProxy), and PUBLIC_URL
+# (OpenAPI server URL). Add a variable here when you read a new one.
+# `--no-lock` skips runtime lockfile access — integrity is already
+# guaranteed by `--cached-only` against the cache baked at build time,
+# and the lockfile is not copied into the runtime stage.
+CMD ["deno", "run", "--cached-only", "--no-lock", "--allow-net=0.0.0.0:3000,127.0.0.1:3000,localhost:3000", "--allow-env=PORT,DENO_ENV,TRUST_PROXY_HOPS,PUBLIC_URL", "--allow-read=/app/deno.json,/app/src", "src/main.ts"]

@@ -67,21 +67,41 @@ export interface StartupBannerOptions {
   ascii?: boolean;
 }
 
+/**
+ * Read a single environment variable defensively. On runtimes with a
+ * capability-based permission model (Deno), reading an env var the process was
+ * not granted via `--allow-env` throws a `NotCapable` error. The startup
+ * banner is purely cosmetic, so a missing color/locale hint must never crash
+ * the host application — swallow the denial and treat the variable as unset.
+ * On Node and Bun `process.env` access never throws, so this is a no-op there.
+ *
+ * @param key - Environment variable name.
+ * @returns The value, or `undefined` when unset or inaccessible.
+ */
+function readEnv(key: string): string | undefined {
+  try {
+    return process.env[key];
+  } catch {
+    return undefined;
+  }
+}
+
 function detectColor(): boolean {
-  if (process.env.NO_COLOR) return false;
-  if (process.env.FORCE_COLOR && process.env.FORCE_COLOR !== "0") return true;
+  if (readEnv("NO_COLOR")) return false;
+  const force = readEnv("FORCE_COLOR");
+  if (force && force !== "0") return true;
   const stdout = process.stdout as { isTTY?: boolean } | undefined;
   return Boolean(stdout && stdout.isTTY);
 }
 
 function detectAscii(): boolean {
-  if (process.env.DALOY_ASCII) return true;
+  if (readEnv("DALOY_ASCII")) return true;
   if (process.platform === "win32") {
-    return !(process.env.WT_SESSION || process.env.TERM_PROGRAM);
+    return !(readEnv("WT_SESSION") || readEnv("TERM_PROGRAM"));
   }
-  const lang = process.env.LANG ?? process.env.LC_ALL ?? "";
+  const lang = readEnv("LANG") ?? readEnv("LC_ALL") ?? "";
   if (/UTF-?8/i.test(lang)) return false;
-  if (process.env.TERM_PROGRAM) return false;
+  if (readEnv("TERM_PROGRAM")) return false;
   return true;
 }
 

@@ -497,6 +497,28 @@ test("every template ships a hardened _Dockerfile and _dockerignore", async () =
       /(--frozen-lockfile|deno cache|--cached-only)/,
       `${template} Dockerfile must use a reproducible dependency install`,
     );
+    // Deno's capability model: the runtime CMD must boot the scaffolded app.
+    // `--no-lock` avoids a NotCapable crash reading a deno.lock that the
+    // runtime stage doesn't carry, and `--allow-env` must grant every var the
+    // template's own src reads (PORT/DENO_ENV plus TRUST_PROXY_HOPS/PUBLIC_URL
+    // from build-app.ts) — otherwise the container exits on the first read.
+    if (template === "deno-basic") {
+      assert.match(
+        dockerfile,
+        /--no-lock/,
+        "deno Dockerfile runtime CMD must pass --no-lock (deno.lock is not copied into the runtime stage)",
+      );
+      assert.match(
+        dockerfile,
+        /--allow-env=[^"]*\bTRUST_PROXY_HOPS\b/,
+        "deno Dockerfile --allow-env must grant TRUST_PROXY_HOPS (read in src/build-app.ts)",
+      );
+      assert.match(
+        dockerfile,
+        /--allow-env=[^"]*\bPUBLIC_URL\b/,
+        "deno Dockerfile --allow-env must grant PUBLIC_URL (read in src/build-app.ts)",
+      );
+    }
     // .dockerignore must keep secrets, VCS metadata, and CI config out
     // of the build context.
     assert.match(
