@@ -12,6 +12,50 @@ For the forward-looking plan and the full thematic release log, see
 > `create-daloy` are published together — a new core release always ships a
 > matching scaffolder so generated projects pin the latest peer.
 
+## [0.42.0] — 2026-06-19
+
+A feature release that rounds out two areas: **multitenancy** and **real-time
+docs**. `@daloyjs/core` gains a secure-by-default `tenancy()` primitive and an
+auto-mounted interactive **AsyncAPI UI** (the WebSocket counterpart to the
+Scalar / Swagger / Redoc OpenAPI viewers), plus a WebSocket close-lifecycle fix.
+`create-daloy` publishes at the same version in lockstep.
+
+### Added
+
+- **Multitenancy via `tenancy()`** at `@daloyjs/core/tenancy` — a dependency-free
+  `Hooks` bundle that resolves the calling tenant once per request and exposes
+  it on `ctx.state.tenant`. Pluggable resolution (`tenantFromSubdomain`
+  PSL-aware, `tenantFromHeader`, `tenantFromPathPrefix`, `tenantFromClaim`, or a
+  custom `(ctx) => string`, tried in array order). Secure-by-default:
+  **refuse-unresolved** (no ambient "default" tenant leak), **format-validated
+  ids** (rejects key/log-injection and cache-poisoning payloads before they
+  reach a key), **no-enumeration `404`** for unknown tenants, and
+  **host-spoof-safe** subdomain resolution. A `tenantScope()` key helper drops
+  straight into `rateLimit` `keyGenerator` and `concurrencyLimit` /
+  `idempotency` / `responseCache` `scope` to partition each per tenant
+  (CWE-524 cross-tenant cached-response defense). Runnable
+  `examples/multitenancy-demo.ts`.
+- **Interactive AsyncAPI UI** via `asyncapi: true` (mirroring `docs: true`) —
+  auto-mounts `GET /asyncapi` (the official AsyncAPI React component, loaded from
+  a CDN via a `<script>` tag exactly like the OpenAPI viewers — no build step, no
+  runtime dependency), plus `GET /asyncapi.json` and `GET /asyncapi.yaml`. The
+  document is generated lazily so `app.ws()` routes registered after construction
+  are included. `"auto"` skips production; the object form
+  (`AsyncAPIRouteOptions`) exposes custom paths, `servers`, UI `configuration`,
+  and SRI-pinnable `assets`. The UI page ships the same hardened response as the
+  OpenAPI docs (strict CSP scoped to the asset origin + `connect-src 'self'`,
+  `nosniff`, `no-referrer`). HTTP `openapi.servers` are mapped to AsyncAPI
+  `ws`/`wss` servers when none are given. Runnable `examples/websocket-demo.ts`
+  and `examples/scheduler-demo.ts`.
+
+### Fixed
+
+- **WebSocket close lifecycle (Node adapter).** A socket error arriving *after*
+  the close handshake — e.g. a peer that resets the TCP connection right after
+  closing, or a `terminate()` racing the OS — no longer fires the handler's
+  `error()` callback after `close()` already fired. This restores the "no events
+  after close" contract and prevents double-running handler cleanup.
+
 ## [0.41.0] — 2026-06-18
 
 A tooling release for the **`create-daloy`** scaffolder: every generated project
@@ -1261,6 +1305,7 @@ scaffolded projects pin the latest peer.
   `vercel-edge`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v0.41.0...HEAD
+[0.42.0]: https://github.com/daloyjs/daloy/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/daloyjs/daloy/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/daloyjs/daloy/compare/v0.39.1...v0.40.0
 [0.39.1]: https://github.com/daloyjs/daloy/compare/v0.39.0...v0.39.1
