@@ -64,6 +64,87 @@ test("choiceInputMode prefers the controlling TTY when a wrapper hides raw mode 
   );
 });
 
+async function importCliModule() {
+  process.env.DALOY_TEST_IMPORT = "1";
+  try {
+    return await import(
+      `file://${path.join(pkgRoot, "bin/create-daloy.mjs")}?test=${Date.now()}`
+    );
+  } finally {
+    delete process.env.DALOY_TEST_IMPORT;
+  }
+}
+
+test("requiredTools maps each template + package manager to the CLIs it needs", async () => {
+  const { requiredTools } = await importCliModule();
+
+  // Node-flavored templates need Node plus the chosen package manager.
+  assert.deepEqual(
+    requiredTools({ template: "node-basic", packageManager: "pnpm" }),
+    ["node", "pnpm"],
+  );
+  assert.deepEqual(
+    requiredTools({ template: "vercel", packageManager: "npm" }),
+    ["node", "npm"],
+  );
+  assert.deepEqual(
+    requiredTools({ template: "cloudflare-worker", packageManager: "yarn" }),
+    ["node", "yarn"],
+  );
+
+  // The Bun template targets the Bun runtime; Bun-as-package-manager dedupes.
+  assert.deepEqual(
+    requiredTools({ template: "bun-basic", packageManager: "bun" }),
+    ["bun"],
+  );
+  assert.deepEqual(
+    requiredTools({ template: "bun-basic", packageManager: "pnpm" }),
+    ["bun", "pnpm"],
+  );
+
+  // Runtime-only templates (deno) drive the runtime directly: no npm manager.
+  assert.deepEqual(
+    requiredTools({ template: "deno-basic", packageManager: "pnpm", skipPackageManager: true }),
+    ["deno"],
+  );
+});
+
+test("missingToolGuides returns only uninstalled tools, each with an install link", async () => {
+  const { missingToolGuides } = await importCliModule();
+
+  // Happy path: everything installed → nothing to surface.
+  assert.deepEqual(
+    await missingToolGuides(["node", "pnpm"], () => true),
+    [],
+  );
+
+  // Unhappy path: pnpm missing → it (and only it) comes back with a guide.
+  const installed = new Set(["node"]);
+  const missing = await missingToolGuides(["node", "pnpm"], (tool) => installed.has(tool));
+  assert.deepEqual(missing, [
+    { tool: "pnpm", label: "pnpm", url: "https://pnpm.io/installation" },
+  ]);
+
+  // The predicate may be async (mirrors the real PATH probe).
+  const asyncMissing = await missingToolGuides(["bun"], async () => false);
+  assert.deepEqual(asyncMissing, [
+    { tool: "bun", label: "Bun", url: "https://bun.sh" },
+  ]);
+
+  // Unknown tool names are skipped rather than crashing on a missing guide.
+  assert.deepEqual(await missingToolGuides(["totally-made-up"], () => false), []);
+});
+
+test("isToolInstalled finds a real binary and rejects a bogus one", async () => {
+  const { isToolInstalled } = await importCliModule();
+
+  // `node` is guaranteed on PATH while this very test runs under Node.
+  assert.equal(await isToolInstalled("node"), true);
+  assert.equal(await isToolInstalled("definitely-not-a-real-binary-xyz"), false);
+  // An empty PATH means nothing can be found.
+  assert.equal(await isToolInstalled("node", { PATH: "" }), false);
+});
+
 test("node-basic health route preserves literal true type", async () => {
   const source = await readFile(
     path.join(pkgRoot, "templates/node-basic/src/build-app.ts"),
@@ -2023,6 +2104,81 @@ test("non-interactive scaffold output includes the polished completion summary",
     assert.match(out, new RegExp(`cd ${projectName}`));
     assert.match(out, /pnpm install/);
     assert.match(out, /pnpm run dev/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("summary surfaces install links for runtime + package manager missing from PATH", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "needs-tools";
+  try {
+    // An empty PATH makes every tool probe miss, so the heads-up block renders
+    // deterministically regardless of what the CI runner has installed. The
+    // CLI itself still runs because process.execPath is an absolute node path.
+    const out = await new Promise((resolve) => {
+      let buf = "";
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          projectName,
+          "--template",
+          "node-basic",
+          "--package-manager",
+          "pnpm",
+          "--no-install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PATH: "", Path: "" } },
+      );
+      proc.stdout.on("data", (chunk) => (buf += chunk.toString()));
+      proc.stderr.on("data", (chunk) => (buf += chunk.toString()));
+      proc.on("exit", () => resolve(buf));
+      proc.on("error", () => resolve(buf));
+    });
+    assert.match(out, /Install these to run the commands above/);
+    assert.match(out, /https:\/\/nodejs\.org/);
+    assert.match(out, /https:\/\/pnpm\.io\/installation/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("a missing package manager skips the install attempt with an install link", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectName = "missing-pm";
+  try {
+    // Force pnpm to look absent (empty PATH) while asking to install. The CLI
+    // must refuse to spawn a doomed `pnpm install` and point at the install
+    // guide instead of failing later with "command not found".
+    const out = await new Promise((resolve) => {
+      let buf = "";
+      const proc = spawn(
+        process.execPath,
+        [
+          path.join(pkgRoot, "bin/create-daloy.mjs"),
+          projectName,
+          "--template",
+          "node-basic",
+          "--package-manager",
+          "pnpm",
+          "--install",
+          "--no-git",
+          "--yes",
+        ],
+        { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PATH: "", Path: "" } },
+      );
+      proc.stdout.on("data", (chunk) => (buf += chunk.toString()));
+      proc.stderr.on("data", (chunk) => (buf += chunk.toString()));
+      proc.on("exit", () => resolve(buf));
+      proc.on("error", () => resolve(buf));
+    });
+    assert.match(out, /pnpm is not installed; skipping dependency install/);
+    assert.match(out, /https:\/\/pnpm\.io\/installation/);
+    // The scaffold still completes successfully.
+    assert.match(out, /Your DaloyJS project is ready!/);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }

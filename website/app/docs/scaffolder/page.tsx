@@ -122,6 +122,27 @@ bun  create daloy           my-api`}
         </li>
       </ul>
 
+      <h3>Missing-tool hints</h3>
+      <p>
+        Before printing the completion summary, the CLI checks whether the
+        runtime and package manager your selections actually need are on your{" "}
+        <code>PATH</code>. If something is missing, it prints an official
+        install link next to the next steps instead of leaving you to hit a{" "}
+        <code>command not found</code> on your first command. For example,
+        scaffolding the <code>bun-basic</code> template on a machine without Bun
+        surfaces a <a href="https://bun.sh" target="_blank" rel="noreferrer">https://bun.sh</a>{" "}
+        link, and choosing <code>pnpm</code> without pnpm installed surfaces{" "}
+        <a href="https://pnpm.io/installation" target="_blank" rel="noreferrer">https://pnpm.io/installation</a>.
+        Node-flavored templates (<code>node-basic</code>, <code>vercel</code>,{" "}
+        <code>cloudflare-worker</code>) point at{" "}
+        <a href="https://nodejs.org" target="_blank" rel="noreferrer">https://nodejs.org</a>{" "}
+        when Node.js is absent. The probe only reads <code>PATH</code> (it never
+        executes the binary), and if you asked to install dependencies but the
+        chosen package manager is missing, the CLI skips the doomed install and
+        shows the link instead. When every required tool is present, no hint is
+        printed.
+      </p>
+
       <h2>Templates</h2>
       <p>
         Run <code>create-daloy --list-templates</code> to inspect the available

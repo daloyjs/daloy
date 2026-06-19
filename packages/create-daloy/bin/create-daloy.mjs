@@ -3,8 +3,8 @@
 // Zero runtime dependencies; uses only Node built-ins.
 
 import { spawn } from "node:child_process";
-import { existsSync, openSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile, copyFile, rm, stat, chmod } from "node:fs/promises";
+import { existsSync, openSync, constants as FS_CONSTANTS } from "node:fs";
+import { mkdir, readdir, readFile, writeFile, copyFile, rm, stat, chmod, access } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { ReadStream as TtyReadStream } from "node:tty";
@@ -464,6 +464,100 @@ function detectPackageManager() {
   if (ua.startsWith("bun")) return "bun";
   if (ua.startsWith("npm")) return "npm";
   return "pnpm";
+}
+
+// ----------------------------------------------------------------------------
+// Tooling presence checks.
+//
+// A scaffolded project is only useful if the runtime and package manager its
+// "Next steps" reference are actually installed. When the user picks a path
+// whose CLI is missing from PATH (e.g. `bun-basic` on a machine without Bun, or
+// pnpm on a fresh box), we surface the official install link instead of letting
+// `pnpm run dev` or the dependency install fail with a cryptic spawn error.
+// ----------------------------------------------------------------------------
+
+// Official install guides for every runtime and package manager the scaffolder
+// can target. Keyed by the bare executable name we probe for on PATH.
+const TOOL_INSTALL_GUIDES = {
+  node: { label: "Node.js", url: "https://nodejs.org" },
+  npm: { label: "npm", url: "https://nodejs.org" },
+  pnpm: { label: "pnpm", url: "https://pnpm.io/installation" },
+  yarn: { label: "Yarn", url: "https://yarnpkg.com/getting-started/install" },
+  bun: { label: "Bun", url: "https://bun.sh" },
+  deno: { label: "Deno", url: "https://docs.deno.com/runtime/getting_started/installation/" },
+};
+
+/**
+ * Compute the CLIs a freshly-scaffolded project needs to run, given the chosen
+ * template (which fixes the runtime) and package manager. Runtime-only
+ * templates such as `deno-basic` drive the runtime directly, so they need the
+ * runtime but no npm-style package manager.
+ *
+ * @param {object} selection
+ * @param {string} selection.template - resolved template value, e.g. `node-basic`.
+ * @param {string} [selection.packageManager] - chosen package manager (pnpm/npm/yarn/bun).
+ * @param {boolean} [selection.skipPackageManager] - true for runtime-only templates (deno).
+ * @returns {string[]} bare executable names the scaffold depends on, deduped.
+ */
+function requiredTools({ template, packageManager, skipPackageManager }) {
+  const tools = new Set();
+  if (template === "bun-basic") tools.add("bun");
+  else if (template === "deno-basic") tools.add("deno");
+  else tools.add("node");
+  if (!skipPackageManager && packageManager) tools.add(packageManager);
+  return [...tools];
+}
+
+/**
+ * Resolve whether an executable is reachable on PATH **without executing it**.
+ * We scan each PATH entry for a matching file and check it is executable
+ * (POSIX) or simply present (Windows, where `PATHEXT` governs runnability).
+ * Avoiding a spawn keeps the check fast, side-effect-free, and immune to a
+ * misbehaving binary hanging the scaffolder.
+ *
+ * @param {string} binary - bare command name, e.g. `pnpm` or `node`.
+ * @param {NodeJS.ProcessEnv} [env=process.env] - environment to read PATH from.
+ * @returns {Promise<boolean>} true when a runnable match is found on PATH.
+ */
+async function isToolInstalled(binary, env = process.env) {
+  const pathValue = env.PATH ?? env.Path ?? "";
+  if (!pathValue) return false;
+  const dirs = pathValue.split(path.delimiter).filter(Boolean);
+  const isWindows = process.platform === "win32";
+  const extensions = isWindows
+    ? (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").map((ext) => ext.trim()).filter(Boolean)
+    : [""];
+  const mode = isWindows ? FS_CONSTANTS.F_OK : FS_CONSTANTS.X_OK;
+  for (const dir of dirs) {
+    for (const ext of extensions) {
+      try {
+        await access(path.join(dir, `${binary}${ext}`), mode);
+        return true;
+      } catch {
+        // Not in this PATH entry (or not executable); keep scanning.
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Filter `tools` down to those that are not installed, pairing each with its
+ * official install guide. The `isInstalled` predicate is injected so the
+ * resolution stays unit-testable without touching the real PATH.
+ *
+ * @param {string[]} tools - bare executable names to probe (see {@link requiredTools}).
+ * @param {(binary: string) => boolean | Promise<boolean>} isInstalled - presence predicate.
+ * @returns {Promise<Array<{ tool: string, label: string, url: string }>>} missing tools + guides.
+ */
+async function missingToolGuides(tools, isInstalled) {
+  const missing = [];
+  for (const tool of tools) {
+    const guide = TOOL_INSTALL_GUIDES[tool];
+    if (!guide) continue;
+    if (!(await isInstalled(tool))) missing.push({ tool, ...guide });
+  }
+  return missing;
 }
 
 const VALID_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
@@ -1567,7 +1661,7 @@ function createSpinner(initialMessage) {
   };
 }
 
-function printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy }) {
+function printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy, missingTools = [] }) {
   const templateMeta = TEMPLATE_OPTIONS.find((option) => option.value === template);
   const templateLabel = templateMeta ? `${templateMeta.title} ${color(COLORS.dim, `(${template})`)}` : template;
   const summaryLines = [
@@ -1599,6 +1693,19 @@ function printSummary({ projectName, template, packageManager, installDeps, skip
   } else {
     if (!installDeps) console.log(`  ${arrow} ${color(COLORS.cyan, `${packageManager} install`)}`);
     console.log(`  ${arrow} ${color(COLORS.cyan, `${packageManager} run dev`)}`);
+  }
+
+  // Surface install links for any runtime/package manager the commands above
+  // rely on that isn't on PATH — saves a confusing "command not found" on the
+  // user's very first step.
+  if (missingTools.length > 0) {
+    const labelWidth = Math.max(...missingTools.map((tool) => tool.label.length));
+    console.log("");
+    console.log(`${color(COLORS.yellow, SYMBOLS.warn)}  ${color(COLORS.bold, "Install these to run the commands above")}`);
+    for (const { label, url } of missingTools) {
+      const name = color(COLORS.bold, label.padEnd(labelWidth));
+      console.log(`  ${color(COLORS.yellow, SYMBOLS.pointer)} ${name}  ${color(COLORS.cyan + COLORS.underline, url)}`);
+    }
   }
 
   if (!installDeps && !skipPackageManager && packageManager === "pnpm") {
@@ -1840,6 +1947,17 @@ async function main() {
       }
     }
 
+    // Probe PATH for the runtime + package manager this scaffold needs so we
+    // can print official install links (and avoid spawning a doomed install).
+    const missingTools = await missingToolGuides(
+      requiredTools({ template, packageManager, skipPackageManager }),
+      isToolInstalled,
+    );
+    if (installDeps && missingTools.some((tool) => tool.tool === packageManager)) {
+      logWarn(`${packageManager} is not installed; skipping dependency install. Install it from ${TOOL_INSTALL_GUIDES[packageManager].url}`);
+      installDeps = false;
+    }
+
     if (installDeps) {
       const spinner = createSpinner(`Installing dependencies with ${color(COLORS.cyan, packageManager)}\u2026`);
       spinner.start();
@@ -1857,7 +1975,7 @@ async function main() {
       }
     }
 
-    printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy });
+    printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy, missingTools });
   } catch (err) {
     rl?.close();
     if (err && err.message === "Cancelled") {
@@ -1874,4 +1992,4 @@ if (process.env.DALOY_TEST_IMPORT !== "1") {
   await main();
 }
 
-export { choiceInputMode };
+export { choiceInputMode, requiredTools, missingToolGuides, isToolInstalled, TOOL_INSTALL_GUIDES };

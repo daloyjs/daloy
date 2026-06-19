@@ -516,7 +516,7 @@ DaloyJS is in **public preview** (`0.x`). The public API may still change betwee
 
 - Adapters for Node (Heroku, Railway, Render, Fly.io), Bun, Deno, Cloudflare Workers, Vercel Node / Edge / Next.js / Netlify Edge, Fastly Compute, and AWS Lambda / Netlify Functions / Lambda Function URLs.
 - `daloy dev` watch loop delegates to the host runtime's native watcher (`node --import tsx --watch`, `bun --hot`, or `deno run --watch`) with a `--runtime` override for cross-runtime `package.json` scripts.
-- `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel Edge templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening.
+- `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel Edge templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening. The completion summary surfaces official install links (nodejs.org, pnpm.io, bun.sh) for any runtime or package manager your selections need but that is missing from `PATH`, and skips a doomed dependency install when the chosen package manager is absent.
 - Container-first templates: `HEALTHCHECK` to `/readyz`, `STOPSIGNAL SIGTERM`, non-root user, `tini` as PID 1.
 - Generated `deploy.yml` for container templates signs every pushed GHCR image with **Sigstore Cosign** (keyless OIDC) and attaches an **SPDX SBOM attestation** so consumers can `cosign verify` and `cosign verify-attestation --type spdxjson` instead of trusting the registry alone.
 - Pretty `printStartupBanner()` / `formatStartupBanner()` helpers at `@daloyjs/core/banner`, used by every starter template (TTY + `NO_COLOR` / `FORCE_COLOR` aware, ASCII fallback for dumb terminals).
