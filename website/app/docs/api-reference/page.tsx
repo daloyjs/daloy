@@ -48,6 +48,18 @@ export default function Page() {
 @daloyjs/core/lambda      // AWS Lambda (API Gateway v1 + v2 / Function URLs)`}
       />
 
+      <p>
+        You can import any feature two ways: from the root{" "}
+        <code>@daloyjs/core</code> barrel (convenient and tree-shakeable), or from
+        its own subpath (for example <code>@daloyjs/core/jwt</code>) for the
+        smallest possible bundle without relying on a bundler&apos;s
+        tree-shaking. Both resolve to the same code. Runtime{" "}
+        <strong>adapters</strong> are the one exception: they are available{" "}
+        <em>only</em> as subpaths (for example <code>@daloyjs/core/node</code>),
+        so runtime-specific code such as <code>node:http</code> never leaks into
+        an edge or Worker bundle.
+      </p>
+
       <h2>
         <code>@daloyjs/core</code> (root)
       </h2>
