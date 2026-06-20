@@ -93,6 +93,7 @@ export const ALLOWED_DEP_NAMES: ReadonlySet<string> = new Set([
   "prettier-plugin-tailwindcss",
   "react",
   "react-dom",
+  "recharts",
   "shadcn",
   "sharp",
   "shiki",
