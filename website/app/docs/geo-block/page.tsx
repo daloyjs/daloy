@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -57,6 +58,38 @@ export default function Page() {
           network guards.
         </li>
       </ul>
+
+      <FlowDiagram
+        title="Country decision"
+        steps={[
+          {
+            label: "Resolve country",
+            detail: "lookupCountry(ip) or resolveCountry(ctx) header",
+            eyebrow: "request",
+          },
+          {
+            label: "On deny list?",
+            detail: "a deny match always wins (least privilege)",
+            tone: "danger",
+          },
+          {
+            label: "Allow list set + not listed?",
+            detail: "only listed countries pass",
+            tone: "danger",
+          },
+          {
+            label: "Unknown country?",
+            detail: "allow-list -> blocked (fail closed); deny-only -> allowed",
+            tone: "accent",
+          },
+          {
+            label: "Permitted -> handler",
+            detail: "country stamped on ctx.state.geo",
+            tone: "success",
+          },
+        ]}
+        caption="Deny is evaluated first, then the allow-list gate. An unresolved country fails closed when an allow-list is configured and fails open for deny-only setups, both overridable with allowUnknownCountry. A blocked request returns 403 without echoing the country."
+      />
 
       <h2>Strategy 1 — bring your own IP → country lookup</h2>
       <p>

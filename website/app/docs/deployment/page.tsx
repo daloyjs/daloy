@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -84,6 +85,33 @@ export default function Page() {
         choose where to run a DaloyJS REST API and shows the packaging and
         platform config that matter in production.
       </p>
+
+      <FlowDiagram
+        title="Build to run"
+        numbered
+        steps={[
+          {
+            label: "Build",
+            detail: "pnpm install --frozen-lockfile, pnpm build",
+            eyebrow: "ci",
+          },
+          {
+            label: "Package",
+            detail: "distroless image or dist/",
+          },
+          {
+            label: "Release",
+            detail: "signed image + SBOM attestation",
+            tone: "accent",
+          },
+          {
+            label: "Run",
+            detail: "Node adapter, graceful shutdown",
+            tone: "success",
+          },
+        ]}
+        caption="The same pipeline underpins every Node platform below. Only the packaging and platform config differ; the build, release, and run stages stay the same."
+      />
 
       <h2>Node platforms</h2>
       <p>

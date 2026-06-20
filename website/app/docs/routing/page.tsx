@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -76,6 +77,20 @@ export default function Page() {
         <li><code>onSend</code>: symmetric to <code>beforeHandle</code>, but for outgoing responses. Mutate headers in place or return a brand-new <code>Response</code> to replace it. Runs on success, error, and OPTIONS preflight paths.</li>
         <li><code>onResponse</code>: final hook, always runs. Use for observability; do not mutate the response here.</li>
       </ul>
+      <FlowDiagram
+        title="Request lifecycle"
+        numbered
+        caption="Hooks fire at fixed points around your handler. Validation runs before beforeHandle, so an invalid request never reaches your code. If anything throws, control jumps to onError, then onSend and onResponse still run so the error response is shaped and observed like any other."
+        steps={[
+          { label: "onRequest", eyebrow: "earliest", detail: "before parsing" },
+          { label: "validate", eyebrow: "framework", detail: "params · query · body · headers" },
+          { label: "beforeHandle", detail: "return a Response to short-circuit" },
+          { label: "handler", detail: "your route logic", tone: "accent" },
+          { label: "afterHandle", detail: "wrap / transform the result" },
+          { label: "onSend", detail: "mutate or replace the Response" },
+          { label: "onResponse", eyebrow: "always", detail: "observability only", tone: "success" },
+        ]}
+      />
       <CodeBlock code={`app.route({
   method: "POST",
   path: "/admin/purge",

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -294,6 +295,48 @@ app.route({
       />
 
       <h2>6. Verify the client callback</h2>
+      <SequenceDiagram
+        title="Order + client callback verification"
+        participants={["Browser", "DaloyJS route", "Razorpay"]}
+        steps={[
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /checkout/razorpay/order",
+            detail: "amount in paise + receipt",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Razorpay",
+            label: "orders.create, return order_id + key_id",
+            detail: "Checkout JS opens with order_id",
+            kind: "request",
+          },
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /verify after Checkout success",
+            detail: "razorpay_order_id, _payment_id, _signature",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "validatePaymentVerification with the key secret",
+            detail: "401 on mismatch, then fetchPayment",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Browser",
+            label: "200 only when payment.status is 'captured'",
+            detail: "signature proves origin, not capture",
+            kind: "response",
+          },
+        ]}
+        caption="Create the Order server-side, verify the client callback signature with your key secret, then refetch the payment because the signature proves the callback came from Razorpay but not that it was captured."
+      />
       <p>
         After a successful payment, Checkout JS posts{" "}
         <code>{`{ razorpay_order_id, razorpay_payment_id, razorpay_signature }`}</code> back
@@ -338,6 +381,41 @@ app.route({
       />
 
       <h2>7. Webhook</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Razorpay", "DaloyJS route", "Your queue"]}
+        steps={[
+          {
+            from: "Razorpay",
+            to: "DaloyJS route",
+            label: "POST /webhooks/razorpay",
+            detail: "X-Razorpay-Signature over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "validateWebhookSignature with the webhook secret",
+            detail: "different secret from the client callback",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Razorpay",
+            label: "401 when the signature does not match",
+            detail: "{ error: 'bad signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Handle payment.captured / refund.processed, then ack",
+            detail: "200 even for unhandled events",
+            kind: "async",
+          },
+        ]}
+        caption="The webhook uses a different secret than the client callback. Verify X-Razorpay-Signature over the raw body with the webhook secret, then ack 200 for every event once it checks out, even ones you do not handle."
+      />
       <CodeBlock
         code={`import { readRawBody } from "@daloyjs/core/raw";
 

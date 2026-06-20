@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BranchDiagram } from "../../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -36,6 +38,33 @@ export default function Page() {
         <li>A catalog with roughly 600 endpoints is too large for the core docs sidebar structure.</li>
         <li>Users looking at OpenAPI, client generation, and docs rendering need a realistic large example.</li>
       </ul>
+
+      <BranchDiagram
+        title="One large spec, many things to test"
+        source={{
+          eyebrow: "~600 endpoints",
+          label: "Large OpenAPI contract",
+          detail: "realistic, non-trivial API size",
+        }}
+        branches={[
+          {
+            eyebrow: "humans",
+            label: "Docs UI & navigation",
+            detail: "pressure-test endpoint browsing",
+          },
+          {
+            eyebrow: "codegen",
+            label: "Typed client generation",
+            detail: "Hey API SDK at scale",
+          },
+          {
+            eyebrow: "integration",
+            label: "Sample integrations",
+            detail: "exercise before exposing your own API",
+          },
+        ]}
+        caption="The demo exists so you can validate OpenAPI tooling, typed client codegen, and docs UX against a realistic large contract instead of a toy example."
+      />
 
       <h2>What to use it for</h2>
       <ul>

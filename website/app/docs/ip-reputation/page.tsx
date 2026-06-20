@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -56,6 +57,33 @@ export default function Page() {
         <code>ipRestriction()</code>, is dependency-free, and runs on every
         supported runtime.
       </p>
+
+      <FlowDiagram
+        title="Request against the denylist"
+        steps={[
+          {
+            label: "Resolve client IP",
+            detail: "socket value, or X-Forwarded-For when trustProxyHeaders",
+            eyebrow: "request",
+          },
+          {
+            label: "Match the compiled CIDR set",
+            detail: "same SSRF-grade matcher as ipRestriction()",
+            tone: "accent",
+          },
+          {
+            label: "Listed -> block",
+            detail: "log mode never blocks; only fires onMatch",
+            tone: "danger",
+          },
+          {
+            label: "Not listed / unresolved IP -> allow",
+            detail: "feed outage retains last-known-good; fail-open",
+            tone: "success",
+          },
+        ]}
+        caption="The denylist is periodically refreshed from pluggable feeds. Reputation is layered defense, so a failed load or an unresolvable IP never blocks traffic: it retains the last-known-good list and lets the request through."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

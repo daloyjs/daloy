@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../components/code-block";
+import { BranchDiagram } from "../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -95,6 +96,44 @@ serve(app, { port: 3000 });`}
       />
 
       <p>That single route definition gives you:</p>
+
+      <BranchDiagram
+        title="One route, five outputs"
+        source={{
+          eyebrow: "single declaration",
+          label: "app.route({ ... })",
+          detail: "method, path, request, responses, handler",
+        }}
+        branches={[
+          {
+            eyebrow: "handler",
+            label: "Typed params",
+            detail: "params.name is string",
+          },
+          {
+            eyebrow: "return",
+            label: "Typed response",
+            detail: "200 to { msg: string }",
+          },
+          {
+            eyebrow: "spec",
+            label: "OpenAPI 3.1 entry",
+            detail: "operationId: sayHello",
+          },
+          {
+            eyebrow: "consumers",
+            label: "Typed client method",
+            detail: "client.sayHello(...)",
+          },
+          {
+            eyebrow: "tooling",
+            label: "Introspection entry",
+            detail: "app.introspect()",
+          },
+        ]}
+        caption="You write one contract-first route. The handler types, the response type, the OpenAPI entry, the typed client method, and the introspection record are all derived from it."
+      />
+
       <ul>
         <li>Strict, typed <code>params</code> in your handler.</li>
         <li>A typed return - TypeScript knows <code>200 → {`{ msg: string }`}</code>.</li>

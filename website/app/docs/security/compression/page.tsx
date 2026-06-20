@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -70,6 +71,35 @@ app.use(compression());
         bytes share the same compressed response. Daloy keeps those guards built
         in rather than asking every app to remember the same list.
       </p>
+      <FlowDiagram
+        title="BREACH-aware skip decision"
+        steps={[
+          {
+            eyebrow: "onSend",
+            label: "Response ready",
+            detail: "negotiate br / gzip / deflate",
+          },
+          {
+            eyebrow: "secrets",
+            label: "Set-Cookie / Authorization / session cookie?",
+            detail: "skip, send identity",
+            tone: "danger",
+          },
+          {
+            eyebrow: "not worth it",
+            label: "Below minimumSize or already encoded?",
+            detail: "skip, keep original",
+            tone: "muted",
+          },
+          {
+            eyebrow: "safe",
+            label: "Compress the body",
+            detail: "GET / HEAD, 2xx, text-like content",
+            tone: "success",
+          },
+        ]}
+        caption="Responses that mix secrets with attacker-influenced bytes (Set-Cookie, Authorization, session/CSRF cookies) are never compressed, which closes the BREACH oracle. Tiny, already-encoded, or already-compressed payloads are skipped too. Vary: Accept-Encoding is still added either way."
+      />
       <ul>
         <li>
           Skips responses with <code>Set-Cookie</code>.

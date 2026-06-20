@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -105,6 +106,34 @@ app.route({
         is authentic, forcing a re-authentication instead of letting an
         attacker-injected shadow cookie win.
       </p>
+      <FlowDiagram
+        title="Cookie-tossing defense on read"
+        steps={[
+          {
+            eyebrow: "ingress",
+            label: "Cookie header",
+            detail: "readRequestCookie(header, name)",
+          },
+          {
+            eyebrow: "count",
+            label: "How many copies of name?",
+            detail: "scan the parsed header",
+          },
+          {
+            eyebrow: "exactly one",
+            label: "Return the value",
+            detail: "authentic cookie to handler",
+            tone: "success",
+          },
+          {
+            eyebrow: "two or more",
+            label: "Return null",
+            detail: "ambiguous to force re-auth",
+            tone: "danger",
+          },
+        ]}
+        caption="When a name appears more than once the helper refuses to guess which copy is authentic and returns null, so an attacker-injected shadow cookie cannot win by ambiguity. Exactly one match returns the value."
+      />
       <CodeBlock
         language="ts"
         code={`import { readRequestCookie } from "@daloyjs/core";

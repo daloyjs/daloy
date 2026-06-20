@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { SequenceDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -48,6 +49,42 @@ export default function Page() {
           structured headers).
         </li>
       </ul>
+
+      <SequenceDiagram
+        title="Certificate verification"
+        participants={["Peer", "TLS terminator", "clientCertAuth()", "Handler"]}
+        steps={[
+          {
+            from: "Peer",
+            to: "TLS terminator",
+            kind: "request",
+            label: "TLS handshake presents client certificate",
+            detail: "native socket, or forwarded by a trusted proxy (XFCC / structured headers)",
+          },
+          {
+            from: "TLS terminator",
+            to: "clientCertAuth()",
+            kind: "request",
+            label: "Normalized ClientCertificate (subject, issuer, fingerprint, SANs, verified)",
+            detail: "read lazily; plain requests pay nothing",
+          },
+          {
+            from: "clientCertAuth()",
+            to: "Peer",
+            kind: "note",
+            label: "No certificate -> 401; unverified / allow-list miss / expired -> 403",
+            detail: "403 never echoes which check failed",
+          },
+          {
+            from: "clientCertAuth()",
+            to: "Handler",
+            kind: "response",
+            label: "Verified + allow-listed -> proceed",
+            detail: "ctx.state.clientCertificate stamped for downstream + audit",
+          },
+        ]}
+        caption="The TLS layer verifies the chain; clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook. Anything that fails is rejected before the handler runs."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

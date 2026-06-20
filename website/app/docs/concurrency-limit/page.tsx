@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -55,6 +56,37 @@ export default function Page() {
           and short-circuit paths alike, so a slot is never leaked.
         </li>
       </ul>
+
+      <FlowDiagram
+        title="Acquire, queue, or shed"
+        steps={[
+          {
+            label: "Incoming request",
+            detail: "bucket key from scope: global / route / client / fn",
+            eyebrow: "request",
+          },
+          {
+            label: "Slot free?",
+            detail: "per-bucket semaphore (maxConcurrent)",
+            tone: "accent",
+          },
+          {
+            label: "Run handler",
+            detail: "slot released on success, error, and short-circuit",
+            tone: "success",
+          },
+          {
+            label: "Full -> wait in FIFO queue",
+            detail: "up to maxQueue, for up to queueTimeoutMs",
+          },
+          {
+            label: "Queue full / timed out -> shed",
+            detail: "503 + Retry-After; onReject(queue-full | queue-timeout)",
+            tone: "danger",
+          },
+        ]}
+        caption="A request acquires a slot from the per-bucket semaphore, waits in a bounded FIFO queue if every slot is busy, and is shed with a fast 503 once the queue is full or the wait times out. The slot is always released when the response finalizes, so a slot is never leaked."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

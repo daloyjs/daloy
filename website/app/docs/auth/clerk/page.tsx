@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -48,6 +49,45 @@ export default function Page() {
         <code>Auth</code> object, a perfect fit for DaloyJS&apos;s
         Web-standard handlers.
       </p>
+
+      <SequenceDiagram
+        title="Clerk session-token verification"
+        participants={["Frontend SDK", "Clerk", "DaloyJS API"]}
+        steps={[
+          {
+            from: "Frontend SDK",
+            to: "Clerk",
+            label: "User signs in; SDK gets a session token via getToken()",
+            kind: "async",
+          },
+          {
+            from: "Frontend SDK",
+            to: "DaloyJS API",
+            label: "Call API with Authorization: Bearer <session token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Clerk",
+            label: "authenticateRequest() verifies the token",
+            detail: "networkless when jwtKey is set; otherwise calls Clerk",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "DaloyJS API",
+            label: "Check authorizedParties, then read userId, orgId, orgRole",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Frontend SDK",
+            label: "Return protected data, or 401 when isAuthenticated is false",
+            kind: "response",
+          },
+        ]}
+        caption="With CLERK_JWT_KEY set, authenticateRequest() verifies the token as a pure crypto check with no Clerk API call, which is ideal for edge runtimes. authorizedParties pins the origins allowed to call the API."
+      />
 
       <h2>1. Set up your Clerk app</h2>
       <ol>

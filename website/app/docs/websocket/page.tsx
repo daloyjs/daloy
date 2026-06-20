@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { SequenceDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -163,6 +164,50 @@ app.ws("/chat/:room", chatHandler);`}
         return a <code>string</code> to pick a subprotocol from{" "}
         <code>Sec-WebSocket-Protocol</code>:
       </p>
+
+      <SequenceDiagram
+        title="Upgrade, message, close"
+        participants={["Client", "DaloyJS adapter", "Your handler"]}
+        steps={[
+          {
+            from: "Client",
+            to: "DaloyJS adapter",
+            label: "GET with Upgrade: websocket",
+            detail: "Origin policy checked first, then beforeUpgrade",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS adapter",
+            to: "Client",
+            label: "101 Switching Protocols (or a rejection Response)",
+            detail: "Sec-WebSocket-Accept, optional negotiated subprotocol",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS adapter",
+            to: "Your handler",
+            label: "open(conn, ctx)",
+            detail: "set conn.data, send a welcome frame",
+            kind: "async",
+          },
+          {
+            from: "Client",
+            to: "Your handler",
+            label: "message(conn, data, isBinary)",
+            detail: "text or binary frames, capped by maxPayloadLength",
+            kind: "async",
+          },
+          {
+            from: "Client",
+            to: "Your handler",
+            label: "close(conn, code, reason)",
+            detail: "CLOSE frame, then the socket is torn down",
+            kind: "note",
+          },
+        ]}
+        caption="The adapter runs the Origin policy and beforeUpgrade hook before replying 101. After the upgrade your open, message, and close callbacks run with the same shape on both Node and Bun."
+      />
+
       <CodeBlock
         code={`app.ws("/api", {
   allowedOrigins: "same-origin",

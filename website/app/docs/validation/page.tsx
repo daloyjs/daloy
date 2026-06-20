@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -31,6 +32,22 @@ export default function Page() {
         and <strong>TypeBox</strong> all implement. Pick whichever validator fits your project; the framework
         contract is identical.
       </p>
+
+      <BranchDiagram
+        title="One interface, four validators"
+        source={{
+          eyebrow: "framework contract",
+          label: "Standard Schema",
+          detail: "the ~standard property",
+        }}
+        branches={[
+          { eyebrow: "default", label: "Zod", detail: "z.object({ ... })" },
+          { eyebrow: "tree-shakeable", label: "Valibot", detail: "v.object({ ... })" },
+          { label: "ArkType", detail: 'type({ ... })' },
+          { label: "TypeBox", detail: "Type.Object({ ... })" },
+        ]}
+        caption="Each validator exposes the same ~standard property, so DaloyJS infers handler types, generates OpenAPI, and returns problem+json errors the same way no matter which one you pick."
+      />
 
       <h2>What gets validated</h2>
       <p>For each route you can declare schemas for:</p>
@@ -86,6 +103,16 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
       </p>
 
       <h2>Errors</h2>
+      <FlowDiagram
+        title="Parse, then branch on the outcome"
+        steps={[
+          { eyebrow: "untrusted", label: "Raw request", detail: "params · query · headers · body", tone: "muted" },
+          { eyebrow: "standard schema", label: "Schema parse", detail: "validate(schema, input)", tone: "accent" },
+          { eyebrow: "on failure", label: "422 problem+json", detail: "path[] + message[]", tone: "danger" },
+          { eyebrow: "on success", label: "Typed handler", detail: "ctx.body / params / query", tone: "success" },
+        ]}
+        caption="Every declared schema runs before your handler. Invalid input never reaches handler code, it short-circuits to a 422 RFC 9457 response; valid input arrives fully typed."
+      />
       <p>
         On invalid input, DaloyJS returns <strong>422 Unprocessable Entity</strong> as RFC 9457 problem+json
         with the per-issue <code>path</code> and <code>message</code> array. You don&apos;t write an error

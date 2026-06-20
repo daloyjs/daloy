@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -45,6 +46,38 @@ export default function Page() {
       </p>
 
       <h2>1. Connection-draining shutdown</h2>
+
+      <FlowDiagram
+        title="Draining in-flight requests on shutdown"
+        numbered
+        steps={[
+          {
+            eyebrow: "signal",
+            label: "app.close(timeoutMs)",
+            detail: "drain flag flips synchronously",
+          },
+          {
+            eyebrow: "new traffic",
+            label: "New requests rejected",
+            detail: "503 + retry-after: 5 + connection: close",
+            tone: "danger",
+          },
+          {
+            eyebrow: "in-flight",
+            label: "Existing responses finish",
+            detail: "gain connection: close header",
+            tone: "accent",
+          },
+          {
+            eyebrow: "drained",
+            label: "onClose hooks run",
+            detail: "idle keep-alive sockets killed",
+            tone: "success",
+          },
+        ]}
+        caption="During the drain window new requests get a structured 503 while in-flight responses are allowed to finish, then onClose hooks run. The connection: close header stops HTTP/1.1 load balancers from reusing the socket."
+      />
+
       <p>
         <code>app.shutdown(timeoutMs, reason?)</code> (alias{" "}
         <code>app.close()</code>) flips a drain flag synchronously. Every

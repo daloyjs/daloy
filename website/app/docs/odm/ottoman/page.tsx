@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -30,6 +31,19 @@ export default function Page() {
         scopes, and collections and you want model definitions, validation, query helpers, and indexes around
         that document layer.
       </p>
+
+      <FlowDiagram
+        title="Ottoman setup"
+        numbered
+        steps={[
+          { label: "Install", detail: "pnpm add ottoman couchbase" },
+          { label: "Schema & model", detail: "new Schema · model('User')" },
+          { label: "Plugin", detail: "connect · start · decorate('db')", tone: "accent" },
+          { label: "Augment state", detail: "interface AppState { db }" },
+          { label: "Use in routes", detail: "state.db.User.findById()", tone: "success" },
+        ]}
+        caption="Ottoman connects once and runs ottoman.start() to build indexes before traffic arrives. Handlers then read the decorated state.db model surface."
+      />
 
       <h2>1. Install</h2>
       <CodeBlock code={`pnpm add ottoman couchbase`} />

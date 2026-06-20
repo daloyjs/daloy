@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -45,6 +46,47 @@ export default function Page() {
         . That keeps the same security guarantees while running on every
         runtime DaloyJS targets, including the edge.
       </p>
+
+      <SequenceDiagram
+        title="Auth0 access-token verification"
+        participants={["Client app", "Auth0 tenant", "DaloyJS API", "Auth0 JWKS"]}
+        steps={[
+          {
+            from: "Client app",
+            to: "Auth0 tenant",
+            label: "Universal Login (authorization-code + PKCE)",
+            detail: "Auth0 owns login, MFA, social",
+            kind: "request",
+          },
+          {
+            from: "Auth0 tenant",
+            to: "Client app",
+            label: "Access token (RS256 JWT, aud = your API)",
+            kind: "response",
+          },
+          {
+            from: "Client app",
+            to: "DaloyJS API",
+            label: "Request with Authorization: Bearer <token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Auth0 JWKS",
+            label: "Fetch signing keys (cached by jose)",
+            detail: "GET /.well-known/jwks.json",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Client app",
+            label: "jwtVerify checks iss (trailing slash), aud, RS256, then scopes",
+            detail: "401 on a bad token, 403 on a missing scope",
+            kind: "response",
+          },
+        ]}
+        caption="DaloyJS is the resource server: jose verifies the RS256 token against your tenant's JWKS and enforces scopes or permissions. Auth0 owns login and is the only party that mints tokens."
+      />
 
       <h2>1. Configure an Auth0 API</h2>
       <ol>

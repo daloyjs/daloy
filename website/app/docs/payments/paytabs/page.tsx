@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -267,6 +268,41 @@ declare module "@daloyjs/core" {
       </p>
 
       <h2>5. Create a payment page</h2>
+      <SequenceDiagram
+        title="Payment page flow"
+        participants={["Customer", "DaloyJS route", "PayTabs"]}
+        steps={[
+          {
+            from: "Customer",
+            to: "DaloyJS route",
+            label: "POST /checkout/paytabs",
+            detail: "cart + customer (region-bound profile)",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayTabs",
+            label: "createPaymentPage with return + callback URLs",
+            detail: "tran_type 'sale', tran_class 'ecom'",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Customer",
+            label: "Return redirect_url",
+            detail: "201 { tranRef, redirectUrl }",
+            kind: "response",
+          },
+          {
+            from: "Customer",
+            to: "PayTabs",
+            label: "Pays on the hosted page, returns via the return URL",
+            detail: "return URL is a UX hint, not proof",
+            kind: "async",
+          },
+        ]}
+        caption="Create the payment page, redirect the customer to redirect_url, and render a confirmation on the return URL only. The server-side IPN is the only signal you should mark an order paid on."
+      />
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -332,6 +368,41 @@ app.route({
       />
 
       <h2>6. IPN webhook</h2>
+      <SequenceDiagram
+        title="IPN verification"
+        participants={["PayTabs", "DaloyJS route"]}
+        steps={[
+          {
+            from: "PayTabs",
+            to: "DaloyJS route",
+            label: "POST /webhooks/paytabs",
+            detail: "signature header (HMAC-SHA256) over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "HMAC-SHA256 the raw body with the server_key",
+            detail: "timingSafeEqual vs the signature header",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayTabs",
+            label: "401 when the signature does not match",
+            detail: "{ error: 'bad signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "PayTabs",
+            label: "queryTransaction(tran_ref), fulfil on status 'A', ack",
+            detail: "200, re-query before fulfilment",
+            kind: "async",
+          },
+        ]}
+        caption="Verify the HMAC-SHA256 signature over the raw body with your server_key, reject mismatches with 401, then re-query the transaction and fulfil only when response_status is 'A'."
+      />
       <p>
         PayTabs POSTs the same payload as a successful{" "}
         <code>queryTransaction</code> call to your IPN URL on every transaction state

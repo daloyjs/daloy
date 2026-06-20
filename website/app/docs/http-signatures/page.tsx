@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { SequenceDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -102,6 +103,41 @@ export default function Page() {
         signature with a <code>401</code> (<code>Cache-Control: no-store</code>)
         and stamps the verified result on <code>ctx.state.httpSignature</code>.
       </p>
+      <SequenceDiagram
+        title="Sign then verify"
+        participants={["Caller", "httpSignatureAuth()", "Handler"]}
+        steps={[
+          {
+            from: "Caller",
+            to: "httpSignatureAuth()",
+            kind: "request",
+            label: "Request with Signature / Signature-Input",
+            detail: "covers @method, @path, @authority, content-digest, ...",
+          },
+          {
+            from: "httpSignatureAuth()",
+            to: "httpSignatureAuth()",
+            kind: "note",
+            label: "Resolve keyid -> key (alg pinned to key)",
+            detail: "alg not in allowlist -> alg_not_allowed; key missing -> key_not_found",
+          },
+          {
+            from: "httpSignatureAuth()",
+            to: "Caller",
+            kind: "note",
+            label: "Forged / stale / replayed / missing component -> 401",
+            detail: "invalid_signature, signature_stale, replay_detected, missing_required_component",
+          },
+          {
+            from: "httpSignatureAuth()",
+            to: "Handler",
+            kind: "response",
+            label: "Signature valid + fresh -> proceed",
+            detail: "ctx.state.httpSignature = VerifySuccess",
+          },
+        ]}
+        caption="The verifier requires an explicit algorithms allowlist, a fresh created timestamp, and a covered requiredComponents set. Any failure rejects with 401 and Cache-Control: no-store before the handler runs."
+      />
       <CodeBlock
         language="ts"
         code={`import { createApp } from "@daloyjs/core";

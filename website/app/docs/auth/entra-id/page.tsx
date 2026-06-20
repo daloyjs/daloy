@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -49,6 +50,52 @@ export default function Page() {
         on top when your API needs to call <em>another</em> protected service
         (OAuth 2.0 on-behalf-of, client credentials, etc.).
       </p>
+
+      <SequenceDiagram
+        title="Entra ID v2.0 access-token verification"
+        participants={[
+          "Client app",
+          "Entra ID",
+          "DaloyJS API",
+          "Tenant JWKS",
+        ]}
+        steps={[
+          {
+            from: "Client app",
+            to: "Entra ID",
+            label: "User signs in; Entra ID mints a v2.0 access token (RS256)",
+            detail: "aud = api://my-daloy-api",
+            kind: "async",
+          },
+          {
+            from: "Client app",
+            to: "DaloyJS API",
+            label: "Call API with Authorization: Bearer <access token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Tenant JWKS",
+            label: "createRemoteJWKSet fetches signing keys (cached)",
+            detail: "GET /{tenantId}/discovery/v2.0/keys",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "DaloyJS API",
+            label: "jwtVerify checks issuer, audience, scp / roles",
+            detail: "iss = login.microsoftonline.com/{tenantId}/v2.0",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Client app",
+            label: "Return protected data after requireAuth passes",
+            kind: "response",
+          },
+        ]}
+        caption="The DaloyJS API verifies the v2.0 token against the tenant's JWKS with jose. Keys refresh automatically on a missing kid, so signing-key rollover needs no redeploy. Multi-tenant apps must also validate the tid claim against an allowlist."
+      />
 
       <h2>1. Register the API in Entra ID</h2>
       <ol>

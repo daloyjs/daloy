@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -109,6 +110,51 @@ export default function Page() {
           </tr>
         </tbody>
       </table>
+
+      <SequenceDiagram
+        title="How the three roles interact"
+        participants={[
+          "Client (RP)",
+          "Authorization Server (IdP)",
+          "Resource Server (DaloyJS)",
+        ]}
+        steps={[
+          {
+            from: "Client (RP)",
+            to: "Authorization Server (IdP)",
+            label: "Start login (authorization-code + PKCE)",
+            detail: "user authenticates on the IdP's pages",
+            kind: "request",
+          },
+          {
+            from: "Authorization Server (IdP)",
+            to: "Client (RP)",
+            label: "Issue access token (a signed JWT)",
+            detail: "the IdP mints tokens; nobody else does",
+            kind: "response",
+          },
+          {
+            from: "Client (RP)",
+            to: "Resource Server (DaloyJS)",
+            label: "Call the API with Authorization: Bearer <token>",
+            kind: "request",
+          },
+          {
+            from: "Resource Server (DaloyJS)",
+            to: "Authorization Server (IdP)",
+            label: "Fetch JWKS to verify the signature (cached)",
+            detail: "GET /.well-known/jwks.json",
+            kind: "async",
+          },
+          {
+            from: "Resource Server (DaloyJS)",
+            to: "Client (RP)",
+            label: "Return protected data after checking iss, aud & scopes",
+            kind: "response",
+          },
+        ]}
+        caption="DaloyJS only ever plays the Resource Server: it verifies tokens and enforces scopes. Minting tokens and running the login UI stays with the Authorization Server (the IdP)."
+      />
 
       <h2 id="where-daloy-fits">
         Where DaloyJS fits (and where it doesn&apos;t)
@@ -339,6 +385,52 @@ app.use(csrf());
 
 // Your routes call upstream APIs with the access token stored in the session,
 // so the browser never sees it.`}
+      />
+      <SequenceDiagram
+        title="BFF pattern: tokens never reach the browser"
+        participants={["Browser", "BFF (DaloyJS)", "Authorization Server (IdP)", "Upstream API"]}
+        steps={[
+          {
+            from: "Browser",
+            to: "BFF (DaloyJS)",
+            label: "GET /login (same-origin)",
+            kind: "request",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Authorization Server (IdP)",
+            label: "Authorization-code + PKCE flow",
+            detail: "exchange code for tokens server-side",
+            kind: "async",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Browser",
+            label: "Set signed, encrypted session cookie",
+            detail: "tokens stay server-side; cookie holds only a session id",
+            kind: "response",
+          },
+          {
+            from: "Browser",
+            to: "BFF (DaloyJS)",
+            label: "Call same-origin route (+ CSRF token)",
+            detail: "cookie auth → csrf() guards the mutation",
+            kind: "request",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Upstream API",
+            label: "Forward request with the stored access token",
+            kind: "request",
+          },
+          {
+            from: "BFF (DaloyJS)",
+            to: "Browser",
+            label: "Return data; the access token is never exposed",
+            kind: "response",
+          },
+        ]}
+        caption="Because the browser now authenticates with a cookie, every state-changing route is protected with csrf(). Access and refresh tokens live only in the encrypted session, never in JavaScript."
       />
       <p>
         The login/callback routes themselves drive the OIDC flow against your

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -43,6 +44,38 @@ export default function Page() {
         Node with the OTel SDK, on Workers with a custom exporter, or in tests
         with an in-memory fake.
       </p>
+
+      <FlowDiagram
+        title="One span per request"
+        numbered
+        caption="The hook starts a SERVER span, attaches request attributes on beforeHandle, exposes the span on ctx.state for handlers, then records the status code (and any exception) on onSend before ending the span exactly once."
+        steps={[
+          {
+            label: "Extract context",
+            eyebrow: "optional",
+            detail: "contextFromRequest reads traceparent / B3",
+          },
+          {
+            label: "beforeHandle",
+            detail: "start SERVER span + http.request.method, url.path",
+            tone: "accent",
+          },
+          {
+            label: "handler",
+            detail: "ctx.state.otelSpan for events & child spans",
+          },
+          {
+            label: "onSend",
+            detail: "http.response.status_code, recordException on errors",
+          },
+          {
+            label: "span.end()",
+            eyebrow: "exactly once",
+            detail: "5xx escalates to setStatus(ERROR)",
+            tone: "success",
+          },
+        ]}
+      />
 
       <h2>Quick start</h2>
       <CodeBlock code={`import { trace } from "@opentelemetry/api";

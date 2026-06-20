@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -30,6 +31,31 @@ export default function Page() {
         Worker style (<code>addEventListener(&quot;fetch&quot;, ...)</code>) is
         no longer recommended; the adapter does not emit it.
       </p>
+
+      <FlowDiagram
+        title="Workers modules-format request path"
+        steps={[
+          {
+            eyebrow: "platform",
+            label: "Worker fetch(request, env, ctx)",
+            detail: "export default { fetch }",
+          },
+          {
+            eyebrow: "adapter",
+            label: "toFetchHandler(app)",
+            detail: "or app.decorate(env) by hand",
+            tone: "muted",
+          },
+          {
+            eyebrow: "core",
+            label: "app.fetch(Request)",
+            detail: "routing · hooks · handler",
+            tone: "accent",
+          },
+          { eyebrow: "platform", label: "Response", tone: "success" },
+        ]}
+        caption="toFetchHandler returns the { fetch } object Workers expect. To reach KV, R2, D1, or secrets, write the module export by hand and app.decorate(env) so bindings land on ctx.state inside every handler."
+      />
 
       <h2>When to choose Workers</h2>
       <ul>

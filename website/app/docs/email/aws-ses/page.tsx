@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -38,6 +39,42 @@ export default function Page() {
         . Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2) or need very low
         per-message cost.
       </p>
+
+      <SequenceDiagram
+        title="Send through SESv2, then track events"
+        participants={["Route handler", "SESv2Client", "Amazon SES", "SNS / EventBridge"]}
+        steps={[
+          {
+            from: "Route handler",
+            to: "SESv2Client",
+            label: "send(SendEmailCommand)",
+            detail: "FromEmailAddress, Destination, Content.Simple",
+            kind: "request",
+          },
+          {
+            from: "SESv2Client",
+            to: "Amazon SES",
+            label: "Signed HTTPS call (AWS SigV4)",
+            detail: "ses:SendEmail via IAM role or keys",
+            kind: "request",
+          },
+          {
+            from: "Amazon SES",
+            to: "Route handler",
+            label: "Accepted",
+            detail: "out.MessageId returned as { id }",
+            kind: "response",
+          },
+          {
+            from: "Amazon SES",
+            to: "SNS / EventBridge",
+            label: "Delivery, bounce, complaint events",
+            detail: "via a configuration set (ConfigurationSetName)",
+            kind: "async",
+          },
+        ]}
+        caption="The route handler sends through the SESv2Client, which signs the request and calls Amazon SES. SES returns a MessageId synchronously, then publishes delivery and bounce events asynchronously when you attach a configuration set."
+      />
 
       <h2>1. Provision</h2>
       <ol>

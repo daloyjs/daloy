@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -242,6 +243,41 @@ declare module "@daloyjs/core" {
       />
 
       <h2>5. Create a payment</h2>
+      <SequenceDiagram
+        title="Token handoff and charge"
+        participants={["Browser", "DaloyJS route", "Square"]}
+        steps={[
+          {
+            from: "Browser",
+            to: "Square",
+            label: "Web Payments SDK tokenises the card",
+            detail: "returns a single-use sourceId (cnon:...)",
+            kind: "async",
+          },
+          {
+            from: "Browser",
+            to: "DaloyJS route",
+            label: "POST /checkout/square",
+            detail: "sourceId + amountMinor (BigInt) + currency",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Square",
+            label: "payments.create with an idempotencyKey",
+            detail: "amountMoney { amount: bigint }, locationId",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Browser",
+            label: "201 captured, or 402 on SquareError decline",
+            detail: "{ paymentId, status, receiptUrl }",
+            kind: "response",
+          },
+        ]}
+        caption="The browser tokenises the card into a single-use sourceId so raw PANs never reach your server. Send an idempotencyKey on payments.create and map a 402 SquareError to a card-declined response."
+      />
       <p>
         The client uses Square&apos;s{" "}
         <a
@@ -321,6 +357,41 @@ app.route({
       </p>
 
       <h2>6. Webhook</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Square", "DaloyJS route"]}
+        steps={[
+          {
+            from: "Square",
+            to: "DaloyJS route",
+            label: "POST /webhooks/square",
+            detail: "x-square-hmacsha256-signature over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "WebhooksHelper.verifySignature",
+            detail: "raw body + signatureKey + exact notificationUrl",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Square",
+            label: "401 when the signature does not match",
+            detail: "{ error: 'bad signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Square",
+            label: "getPayment(id) to confirm COMPLETED, then ack",
+            detail: "200, dedupe on event_id",
+            kind: "async",
+          },
+        ]}
+        caption="verifySignature needs the raw body, the signature key, and the exact registered notificationUrl. A wrong URL (trailing slash, http vs https) fails every event. Refetch the payment to confirm COMPLETED before fulfilling."
+      />
       <CodeBlock
         code={`import { readRawBody } from "@daloyjs/core/raw";
 

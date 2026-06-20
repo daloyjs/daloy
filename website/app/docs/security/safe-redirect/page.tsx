@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -38,6 +39,47 @@ export default function Page() {
         explicit allowlist of internal paths and external origins{" "}
         <strong>before</strong> building the redirect response.
       </p>
+
+      <FlowDiagram
+        title="Validate before redirecting"
+        steps={[
+          {
+            eyebrow: "input",
+            label: "Candidate URL",
+            detail: "?next= / ?returnTo=",
+          },
+          {
+            eyebrow: "scheme",
+            label: "Dangerous scheme?",
+            detail: "javascript:/data:/file: to refused",
+            tone: "danger",
+          },
+          {
+            eyebrow: "shape",
+            label: "Protocol-relative or CR/LF?",
+            detail: "// or backslash or control chars to refused",
+            tone: "danger",
+          },
+          {
+            eyebrow: "allowlist",
+            label: "Path or origin allowed?",
+            detail: "allowedPaths / allowedOrigins exact match",
+          },
+          {
+            eyebrow: "allowed",
+            label: "Emit Location",
+            detail: "303 + Cache-Control: no-store",
+            tone: "success",
+          },
+          {
+            eyebrow: "rejected",
+            label: "Fallback or throw",
+            detail: "fallback path, else OpenRedirectBlockedError",
+            tone: "danger",
+          },
+        ]}
+        caption="Every candidate runs the full gauntlet before any Location header is built. Dangerous schemes, protocol-relative escapes, and control characters are refused outright; only an exact allowlist match is emitted. A rejected target either falls back or throws."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

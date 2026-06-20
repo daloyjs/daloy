@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -37,6 +38,42 @@ export default function Page() {
         </a>{" "}
         SDK.
       </p>
+
+      <SequenceDiagram
+        title="Send through the postmark SDK"
+        participants={["Route handler", "ServerClient", "Postmark API", "Webhooks"]}
+        steps={[
+          {
+            from: "Route handler",
+            to: "ServerClient",
+            label: "client.sendEmail({ From, To, Subject, MessageStream })",
+            detail: "MessageStream defaults to outbound",
+            kind: "request",
+          },
+          {
+            from: "ServerClient",
+            to: "Postmark API",
+            label: "POST /email",
+            detail: "header X-Postmark-Server-Token",
+            kind: "request",
+          },
+          {
+            from: "Postmark API",
+            to: "Route handler",
+            label: "{ ErrorCode, MessageID }",
+            detail: "throw unless ErrorCode === 0, else return { id: MessageID }",
+            kind: "response",
+          },
+          {
+            from: "Postmark API",
+            to: "Webhooks",
+            label: "delivery, bounce, spam-complaint events",
+            detail: "verify the request before trusting payloads",
+            kind: "async",
+          },
+        ]}
+        caption="Postmark returns an ErrorCode rather than throwing, so the plugin checks ErrorCode === 0 and surfaces the MessageID as { id }. Pick the outbound or broadcast MessageStream per send."
+      />
 
       <h2>1. Provision</h2>
       <ol>

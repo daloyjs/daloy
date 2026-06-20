@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -42,6 +43,49 @@ export default function Page() {
         Workers, and Vercel Edge because it only uses <code>WebCrypto</code> and
         standard <code>Set-Cookie</code> headers.
       </p>
+
+      <SequenceDiagram
+        title="Login + fixation defense"
+        participants={["Browser", "session()", "Store", "Handler"]}
+        steps={[
+          {
+            from: "Browser",
+            to: "session()",
+            label: "Request carries the signed __Host- cookie",
+            detail: "Cookie: __Host-daloy.sid=<id>.<hmac>",
+            kind: "request",
+          },
+          {
+            from: "session()",
+            to: "Browser",
+            label: "Bad / forged signature is rejected, no data loaded",
+            detail: "HMAC-SHA256 mismatch to empty session",
+            kind: "note",
+          },
+          {
+            from: "session()",
+            to: "Store",
+            label: "Valid signature loads the server-side payload",
+            detail: "store.get(id)",
+            kind: "request",
+          },
+          {
+            from: "Handler",
+            to: "session()",
+            label: "On login: regenerate() issues a fresh id",
+            detail: "old store record destroyed to defeat fixation",
+            kind: "async",
+          },
+          {
+            from: "session()",
+            to: "Browser",
+            label: "Persist once in onSend, re-emit the cookie",
+            detail: "Set-Cookie: HttpOnly; Secure; SameSite=Lax",
+            kind: "response",
+          },
+        ]}
+        caption="The cookie only carries a signed id, never the payload. A tampered stub fails the HMAC check and loads nothing; on login regenerate() swaps the id and drops the old store record, so a fixated session id is useless after authentication."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

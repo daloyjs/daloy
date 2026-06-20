@@ -1,6 +1,8 @@
 import { CodeBlock } from "../../../components/code-block";
 import Link from "next/link";
 
+import { FlowDiagram } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -37,6 +39,37 @@ export default function Page() {
         runtime and may warn or fail depending on your package manager and
         engine-strict settings.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="Two ways in"
+        steps={[
+          {
+            eyebrow: "fastest",
+            label: "Scaffold",
+            detail: "pnpm create daloy@latest",
+            tone: "accent",
+          },
+          {
+            eyebrow: "or",
+            label: "Install into a project",
+            detail: "pnpm add @daloyjs/core zod",
+          },
+          {
+            eyebrow: "harden",
+            label: "Add .npmrc defaults",
+            detail: "strict-peer-dependencies, frozen lockfile",
+            tone: "muted",
+          },
+          {
+            eyebrow: "confirm",
+            label: "Verify the import",
+            detail: "node -e import('@daloyjs/core')",
+            tone: "success",
+          },
+        ]}
+        caption="Either scaffold a hardened project in one command or add the dependency-free package to an existing one, then drop in the hardened .npmrc and verify the import resolves."
+      />
 
       <h2>Fastest path: scaffold a project</h2>
       <p>

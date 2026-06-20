@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -28,6 +29,33 @@ export default function Page() {
         <Link href="/docs/adapters/node">Node adapter</Link> and let Render
         inject <code>PORT</code>.
       </p>
+
+      <FlowDiagram
+        title="Blueprint deploy pipeline"
+        numbered
+        steps={[
+          {
+            label: "Push to repo",
+            detail: "render.yaml detected",
+            eyebrow: "git",
+          },
+          {
+            label: "buildCommand",
+            detail: "pnpm install && pnpm build",
+          },
+          {
+            label: "startCommand",
+            detail: "node dist/server.js",
+            tone: "accent",
+          },
+          {
+            label: "healthCheckPath + scaling",
+            detail: "/healthz, min/max instances",
+            tone: "success",
+          },
+        ]}
+        caption="Render picks up render.yaml on every push, builds and starts the Node web service, then gates routing on a 2xx from healthCheckPath while autoscaling between your min and max instances."
+      />
 
       <h2>When to choose Render</h2>
       <ul>

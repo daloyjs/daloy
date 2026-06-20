@@ -1,6 +1,8 @@
 import { CodeBlock } from "../../../components/code-block";
 import Link from "next/link";
 
+import { FlowDiagram } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -27,6 +29,30 @@ export default function Page() {
         Build a tiny DaloyJS server, hit it with the typed client, and inspect
         the OpenAPI spec, in five minutes.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="Five minutes, five steps"
+        steps={[
+          { label: "Scaffold", detail: "pnpm add @daloyjs/core zod" },
+          {
+            label: "Write a route",
+            detail: "app.route({ ... })",
+            tone: "accent",
+          },
+          { label: "Add OpenAPI & docs UI", detail: "docs: true" },
+          {
+            label: "Call the typed client",
+            detail: "createClient(app)",
+          },
+          {
+            label: "Generate a Hey API SDK",
+            detail: "pnpm exec openapi-ts",
+            tone: "success",
+          },
+        ]}
+        caption="This guide goes from an empty folder to a typed SDK in five steps, each one builds on the route you declared in step two."
+      />
 
       <h2>1. Scaffold</h2>
       <CodeBlock

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -32,6 +34,24 @@ export default function Page() {
         the six most common transactional email providers using their official
         Node SDKs.
       </p>
+
+      <BranchDiagram
+        title="One EmailSender, six providers"
+        source={{
+          eyebrow: "your app",
+          label: "EmailSender interface",
+          detail: "send(msg): Promise<{ id }>",
+        }}
+        branches={[
+          { eyebrow: "AWS", label: "AWS SES (SESv2)", detail: "@aws-sdk/client-sesv2" },
+          { eyebrow: "Twilio", label: "SendGrid", detail: "@sendgrid/mail" },
+          { eyebrow: "edge-ready", label: "Resend", detail: "resend" },
+          { eyebrow: "inbox-first", label: "Postmark", detail: "postmark" },
+          { eyebrow: "Sinch", label: "Mailgun", detail: "mailgun.js" },
+          { eyebrow: "sandbox", label: "Mailtrap", detail: "mailtrap" },
+        ]}
+        caption="One tiny plugin decorates app.state with a provider client behind a shared EmailSender contract, so route handlers call state.email.send() and never know which provider is wired in. Swapping providers is a one-file change."
+      />
 
       <h2>Supported providers</h2>
       <ul>
@@ -147,6 +167,32 @@ export default function Page() {
         The plugin shape is intentionally tiny so you can swap providers without
         touching business logic:
       </p>
+
+      <FlowDiagram
+        title="Wire it up once"
+        numbered
+        steps={[
+          {
+            eyebrow: "step 1",
+            label: "Install the SDK",
+            detail: "pnpm add <provider-sdk>",
+          },
+          {
+            eyebrow: "step 2",
+            label: "Register the plugin",
+            detail: "app.decorate(\"email\", sender)",
+            tone: "accent",
+          },
+          {
+            eyebrow: "step 3",
+            label: "Call from a route",
+            detail: "state.email.send(msg)",
+            tone: "success",
+          },
+        ]}
+        caption="Every guide in this section follows the same three steps. The plugin puts the client on app.state, then validated route handlers send through it."
+      />
+
       <pre>
         <code>{`// src/plugins/email.ts
 import type { App } from "@daloyjs/core";

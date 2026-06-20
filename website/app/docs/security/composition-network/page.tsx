@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { BranchDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -184,6 +185,31 @@ app.use(ipRestriction({
         <code>Allow</code> headers so a probe with a different method stays a
         clean <code>404</code> rather than a leaky <code>405</code>.
       </p>
+
+      <BranchDiagram
+        title="Two entry points, one internal route"
+        source={{
+          eyebrow: "route",
+          label: "internal: true route",
+          detail: "/__admin/reindex",
+        }}
+        branches={[
+          {
+            eyebrow: "public",
+            label: "app.fetch()",
+            detail: "404, existence cannot be probed",
+            tone: "danger",
+          },
+          {
+            eyebrow: "in-process",
+            label: "app.inject()",
+            detail: "runs normally, 204",
+            tone: "success",
+          },
+        ]}
+        caption="The public adapter returns 404 for an internal route so its existence stays hidden, while cron jobs, admin scripts, and tests reach it through app.inject(). Internal routes are also excluded from generated OpenAPI by default."
+      />
+
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { BranchDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -34,6 +35,29 @@ export default function Page() {
         (a fork of SQLite). The <code>@libsql/client</code> driver speaks HTTP and WebSocket, so the same
         DaloyJS app works on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
       </p>
+
+      <BranchDiagram
+        title="One client, two connection modes"
+        source={{
+          eyebrow: "@libsql/client",
+          label: "createClient(...)",
+          detail: "HTTP and WebSocket",
+        }}
+        branches={[
+          {
+            eyebrow: "node / bun",
+            label: "Embedded replica",
+            detail: "url: file:local.db + syncUrl · local reads, writes to primary",
+            tone: "success",
+          },
+          {
+            eyebrow: "workers / edge",
+            label: "Remote HTTP client",
+            detail: "url + authToken · no embedded replicas",
+          },
+        ]}
+        caption="The same createClient() driver serves both modes. Use an embedded replica on Node or Bun for ultra-low-latency local reads, and the remote HTTP client on Cloudflare Workers or Vercel Edge."
+      />
 
       <h2>1. Provision</h2>
       <p>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -41,6 +42,38 @@ export default function Page() {
         <strong>Additive and non-breaking.</strong> Existing routes keep working
         unchanged, <code>meta</code> is optional everywhere.
       </p>
+
+      <BranchDiagram
+        title="One meta block, many consumers"
+        source={{
+          eyebrow: "single source",
+          label: "route({ meta })",
+          detail: "examples, description, x-* extensions",
+        }}
+        branches={[
+          {
+            eyebrow: "build time",
+            label: "Schema validation",
+            detail: "every example checked vs Standard Schema",
+          },
+          {
+            eyebrow: "spec",
+            label: "OpenAPI 3.1",
+            detail: "examples + x-daloy-examples on the operation",
+          },
+          {
+            eyebrow: "agents",
+            label: "daloy inspect --ai",
+            detail: "routes.json / routes.yaml dump",
+          },
+          {
+            eyebrow: "codegen",
+            label: "Hey API + LLM tooling",
+            detail: "examples carry into SDK docstrings",
+          },
+        ]}
+        caption="The meta block is the one place you author examples. Daloy validates them against your schemas, then surfaces the same payload into OpenAPI and the AI dump that codegen agents consume."
+      />
 
       <h2>Author examples</h2>
       <CodeBlock

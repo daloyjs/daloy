@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -28,6 +29,33 @@ export default function Page() {
         <Link href="/docs/adapters/node">Node adapter</Link>, ship a Dockerfile, and let{" "}
         <code>auto_stop_machines</code> scale you to zero when idle.
       </p>
+
+      <FlowDiagram
+        title="fly deploy pipeline"
+        numbered
+        steps={[
+          {
+            label: "Dockerfile build",
+            detail: "distroless node:24 image",
+            eyebrow: "image",
+          },
+          {
+            label: "fly deploy",
+            detail: "ship image to Fly",
+          },
+          {
+            label: "Machines + health checks",
+            detail: "GET /healthz",
+            tone: "accent",
+          },
+          {
+            label: "auto_stop_machines",
+            detail: "scale to zero when idle",
+            tone: "success",
+          },
+        ]}
+        caption="Fly runs the container as one or more Machines. Health checks against /healthz gate routing, and auto_stop_machines = stop scales you to zero when traffic drops."
+      />
 
       <h2>When to choose Fly</h2>
       <ul>

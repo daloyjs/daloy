@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -33,6 +34,42 @@ export default function Page() {
         </a>{" "}
         templates. It&apos;s an excellent default for new DaloyJS projects.
       </p>
+
+      <SequenceDiagram
+        title="Send through the resend SDK"
+        participants={["Route handler", "Resend SDK", "Resend API", "Webhooks"]}
+        steps={[
+          {
+            from: "Route handler",
+            to: "Resend SDK",
+            label: "resend.emails.send({ from, to, subject })",
+            detail: "uses the standard fetch API (edge-friendly)",
+            kind: "request",
+          },
+          {
+            from: "Resend SDK",
+            to: "Resend API",
+            label: "HTTPS request",
+            detail: "Bearer RESEND_API_KEY",
+            kind: "request",
+          },
+          {
+            from: "Resend API",
+            to: "Route handler",
+            label: "{ data, error }",
+            detail: "throw on error, else return { id: data.id }",
+            kind: "response",
+          },
+          {
+            from: "Resend API",
+            to: "Webhooks",
+            label: "delivered, bounced, complained events",
+            detail: "verify the signature before trusting payloads",
+            kind: "async",
+          },
+        ]}
+        caption="resend.emails.send() runs on the standard fetch API, so it works on edge runtimes too. The SDK returns { data, error } rather than throwing, so handle the error branch and return data.id on success."
+      />
 
       <h2>1. Provision</h2>
       <ol>

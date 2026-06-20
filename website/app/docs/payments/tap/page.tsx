@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -271,6 +272,41 @@ declare module "@daloyjs/core" {
       </p>
 
       <h2>4. Create a hosted charge</h2>
+      <SequenceDiagram
+        title="Hosted charge flow"
+        participants={["Customer", "DaloyJS route", "Tap"]}
+        steps={[
+          {
+            from: "Customer",
+            to: "DaloyJS route",
+            label: "POST /checkout/tap",
+            detail: "orderId + amount + source { id: 'src_all' }",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Tap",
+            label: "POST /v2/charges with post + redirect URLs",
+            detail: "Authorization: Bearer sk_...",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Customer",
+            label: "Return transaction.url",
+            detail: "201 { redirectUrl }",
+            kind: "response",
+          },
+          {
+            from: "Customer",
+            to: "Tap",
+            label: "Pays on the hosted page, returns with ?tap_id=chg_xxx",
+            detail: "redirect is a UX hint, not proof",
+            kind: "async",
+          },
+        ]}
+        caption="Create the charge with src_all for the hosted page, redirect the customer to transaction.url, and treat the ?tap_id on return as a hint only. The webhook plus a refetch is what marks an order paid."
+      />
       <p>
         The simplest integration: <code>source.id: &quot;src_all&quot;</code> gets you Tap&apos;s
         hosted checkout page with every method you&apos;ve enabled. Use{" "}
@@ -328,6 +364,41 @@ app.route({
       />
 
       <h2>5. Webhook</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Tap", "DaloyJS route"]}
+        steps={[
+          {
+            from: "Tap",
+            to: "DaloyJS route",
+            label: "POST /webhooks/tap",
+            detail: "hashstring header over ordered fields",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "Rebuild buildHashString, HMAC-SHA256 with the secret key",
+            detail: "timingSafeEqual vs the hashstring header",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Tap",
+            label: "401 when the hash does not match",
+            detail: "{ error: 'bad hashstring' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Tap",
+            label: "GET /v2/charges/{id} to confirm CAPTURED, then ack",
+            detail: "200, fulfil on the refetched status",
+            kind: "async",
+          },
+        ]}
+        caption="Recompute the hashstring with the same field order Tap documents, reject mismatches with 401, then refetch the charge so a replayed or out-of-order delivery cannot flip a paid order back to pending."
+      />
       <p>
         Tap POSTs JSON for every charge state change. Verify the <code>hashstring</code>{" "}
         header, then refetch the charge before doing anything irreversible:

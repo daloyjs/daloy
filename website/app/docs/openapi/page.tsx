@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -32,6 +33,38 @@ export default function Page() {
         from your route definitions, no plugins, no separate decorators.
         Validation, types, and the spec all share one source of truth.
       </p>
+
+      <BranchDiagram
+        title="One contract, four outputs"
+        source={{
+          eyebrow: "single source of truth",
+          label: "Route definition",
+          detail: "app.route({ request, responses, handler })",
+        }}
+        branches={[
+          {
+            eyebrow: "runtime",
+            label: "Request & response validation",
+            detail: "Zod · Valibot · ArkType",
+          },
+          {
+            eyebrow: "spec",
+            label: "OpenAPI 3.1 document",
+            detail: "GET /openapi.json · /openapi.yaml",
+          },
+          {
+            eyebrow: "humans",
+            label: "Docs UI",
+            detail: "Scalar · Swagger UI · Redoc",
+          },
+          {
+            eyebrow: "consumers",
+            label: "Typed client SDK",
+            detail: "Hey API codegen",
+          },
+        ]}
+        caption="You write the route once. Validation, the OpenAPI spec, the interactive docs, and the typed client are all derived from it, so they can never drift out of sync."
+      />
 
       <h2>One line: auto-mount /docs, /openapi.json, /openapi.yaml</h2>
       <p>

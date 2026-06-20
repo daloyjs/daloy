@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram } from "../../../components/diagram";
 
 import { buildMetadata, CORE_PACKAGE_VERSION } from "@/lib/seo";
 
@@ -59,6 +60,34 @@ export default function Page() {
         so runtime-specific code such as <code>node:http</code> never leaks into
         an edge or Worker bundle.
       </p>
+
+      <BranchDiagram
+        title="Two ways to import"
+        source={{
+          eyebrow: "same code",
+          label: "@daloyjs/core feature",
+          detail: "App, jwt, fetchGuard, ...",
+        }}
+        branches={[
+          {
+            eyebrow: "convenient",
+            label: "Root barrel",
+            detail: 'import { App } from "@daloyjs/core"',
+          },
+          {
+            eyebrow: "smallest bundle",
+            label: "Own subpath",
+            detail: 'import { ... } from "@daloyjs/core/jwt"',
+          },
+          {
+            eyebrow: "subpath only",
+            label: "Runtime adapters",
+            detail: "@daloyjs/core/node · /bun · /vercel",
+            tone: "muted",
+          },
+        ]}
+        caption="The barrel and per-feature subpaths resolve to the same code, so pick whichever suits your bundler. Runtime adapters are the exception: they ship only as subpaths so platform code (like node:http) never leaks into an edge bundle."
+      />
 
       <h2>
         <code>@daloyjs/core</code> (root)

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram, LayerStack } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -34,6 +35,41 @@ export default function Page() {
         per trip (first-party middleware). You don&apos;t have to wire the
         airbag yourself, but you do have to pick a destination.
       </blockquote>
+
+      <LayerStack
+        title="Two layers of defense"
+        flow="down"
+        layers={[
+          {
+            title: "Core-enforced guardrails",
+            detail: "armed by default, no middleware call required",
+            tone: "success",
+            items: [
+              "bodyLimitBytes",
+              "safeJsonParse",
+              "sanitizeHeaderValue",
+              "path-traversal reject",
+              "requestTimeoutMs",
+              "405 + Allow",
+              "prod 5xx redaction",
+            ],
+          },
+          {
+            title: "First-party security middleware",
+            detail: "explicit, because policy is a deployment decision",
+            tone: "accent",
+            items: [
+              "secureHeaders()",
+              "cors()",
+              "csrf()",
+              "rateLimit()",
+              "session()",
+              "bearerAuth()",
+            ],
+          },
+        ]}
+        caption="The dangerous things are blocked in the core without any setup. The deployment-specific things (CSP, CORS origins, session secrets, CSRF rollout) stay explicit middleware you opt into."
+      />
 
       <h2>Plain-English analogies for every protection</h2>
       <p>
@@ -323,6 +359,43 @@ export default function Page() {
         These checks happen in <code>App</code> or the runtime adapter itself.
         Applications get them without calling any middleware.
       </p>
+
+      <FlowDiagram
+        title="Every request runs the gauntlet"
+        numbered
+        steps={[
+          {
+            eyebrow: "ingress",
+            label: "Incoming request",
+            detail: "method, path, headers, body",
+          },
+          {
+            eyebrow: "size cap",
+            label: "Body-size limit",
+            detail: "Content-Length over cap to 413",
+            tone: "danger",
+          },
+          {
+            eyebrow: "parse",
+            label: "Hardened JSON parse",
+            detail: "strips __proto__ / constructor",
+          },
+          {
+            eyebrow: "route",
+            label: "Router + method check",
+            detail: ".. segments reject; bad method to 405",
+            tone: "danger",
+          },
+          {
+            eyebrow: "handler",
+            label: "Your typed handler",
+            detail: "runs under requestTimeoutMs",
+            tone: "success",
+          },
+        ]}
+        caption="A request only reaches your handler after clearing the body cap, the prototype-pollution-safe parser, and the path/method guards. Anything that fails a guard is rejected by the core before your code runs."
+      />
+
       <table>
         <thead>
           <tr>

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -64,6 +65,20 @@ export default function Page() {
         one and you get both safety <em>and</em> resilience with zero runtime
         dependencies.
       </p>
+
+      <FlowDiagram
+        title="What every guarded call goes through"
+        numbered
+        caption="Each call flows through the circuit breaker, then the SSRF floor, then a timed attempt that retries only transient failures with jittered backoff. An SsrfBlockedError or a caller-initiated abort is terminal, it is never retried and never trips the breaker."
+        steps={[
+          { label: "safeFetch(url)", detail: "drop-in for global fetch", tone: "accent" },
+          { label: "Circuit breaker", eyebrow: "fail fast", detail: "open? throw CircuitOpenError" },
+          { label: "fetchGuard()", eyebrow: "SSRF floor", detail: "refusal is terminal", tone: "muted" },
+          { label: "Attempt + timeout", detail: "AbortController, FetchTimeoutError" },
+          { label: "Retry on transient", detail: "idempotent + 408/429/5xx, backoff + jitter" },
+          { label: "Response", detail: "a success closes the circuit", tone: "success" },
+        ]}
+      />
 
       <h2>Quick start</h2>
       <p>

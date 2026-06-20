@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -30,6 +31,18 @@ export default function Page() {
         everywhere DaloyJS does, including Cloudflare Workers and Vercel Edge, 
         and infers result types directly from your schema.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="One request through Drizzle"
+        caption="Zod validates the request before your handler runs, Drizzle runs a SQL-like query off state.db with result types inferred from your schema, then the response schema checks the body on the way out."
+        steps={[
+          { eyebrow: "client", label: "HTTP request", detail: "GET /users/:id" },
+          { eyebrow: "zod", label: "Validated input", detail: "params.id is a uuid", tone: "accent" },
+          { eyebrow: "drizzle", label: "Typed query", detail: "select().from(users).where(eq(...))" },
+          { eyebrow: "response", label: "Typed body", detail: "200 UserSchema | 404", tone: "success" },
+        ]}
+      />
 
       <h2>1. Install</h2>
       <CodeBlock

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -39,6 +40,51 @@ export default function Page() {
         package (4.x, stable) to validate tokens from a Custom Authorization
         Server.
       </p>
+
+      <SequenceDiagram
+        title="Okta access-token verification"
+        participants={[
+          "Client app",
+          "Okta Custom Auth Server",
+          "DaloyJS API",
+          "Okta JWKS",
+        ]}
+        steps={[
+          {
+            from: "Client app",
+            to: "Okta Custom Auth Server",
+            label: "User signs in; Okta issues a scoped access token (RS256)",
+            detail: "iss = https://{domain}/oauth2/{asId}",
+            kind: "async",
+          },
+          {
+            from: "Client app",
+            to: "DaloyJS API",
+            label: "Call API with Authorization: Bearer <access token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Okta JWKS",
+            label: "OktaJwtVerifier fetches signing keys (cached 1h)",
+            detail: "jwksRequestsPerMinute throttles fetches",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "DaloyJS API",
+            label: "verifyAccessToken checks issuer, audience, scp & assertClaims",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Client app",
+            label: "Return protected data after requireAuth passes",
+            kind: "response",
+          },
+        ]}
+        caption="Only tokens from a Custom Authorization Server are meant to be verified by your app. The Org Authorization Server issues opaque tokens that you introspect instead, never verify locally."
+      />
 
       <h2>1. Configure an Okta Authorization Server</h2>
       <ol>

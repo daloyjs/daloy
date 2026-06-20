@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -47,6 +48,38 @@ export default function Page() {
         pinned hash — the docs UI inherits the same supply-chain posture as the
         rest of the framework.
       </p>
+
+      <FlowDiagram
+        title="SRI-pinned docs asset"
+        numbered
+        steps={[
+          {
+            label: "Version-exact CDN asset",
+            detail: "@scalar/api-reference@1.25.0",
+            eyebrow: "jsDelivr",
+          },
+          {
+            label: "Pinned integrity hash",
+            detail: "integrity + crossorigin",
+            tone: "accent",
+          },
+          {
+            label: "Browser hashes the bytes",
+            detail: "sha384 of fetched file",
+          },
+          {
+            label: "Bytes match: execute",
+            detail: "docs UI renders",
+            tone: "success",
+          },
+          {
+            label: "Mismatch: refuse",
+            detail: "poisoned asset blocked",
+            tone: "danger",
+          },
+        ]}
+        caption="DaloyJS emits an integrity and crossorigin attribute on the script or link tag for the pinned, version-exact URL. The browser hashes the downloaded bytes and refuses to execute anything that does not match, so a poisoned CDN asset never runs."
+      />
 
       <h2>Why it&apos;s opt-in</h2>
       <p>

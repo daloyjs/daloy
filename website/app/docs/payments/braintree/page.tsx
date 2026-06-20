@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -296,6 +297,41 @@ app.route({
       </p>
 
       <h2>7. Receive and verify webhooks</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Braintree", "DaloyJS route", "Your queue"]}
+        steps={[
+          {
+            from: "Braintree",
+            to: "DaloyJS route",
+            label: "POST /webhooks/braintree",
+            detail: "form-encoded bt_signature + bt_payload",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "webhookNotification.parse() verifies the signature",
+            detail: "throws InvalidSignatureError on tamper",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Braintree",
+            label: "401 when parse throws",
+            detail: "{ error: 'invalid signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Enqueue the notification, then ack",
+            detail: "200 within ~30s",
+            kind: "async",
+          },
+        ]}
+        caption="The SDK verifies the signature for you, so reject parse failures with 401, hand the notification to a background job, and ack within 30 seconds."
+      />
       <p>
         Braintree posts webhooks as <code>application/x-www-form-urlencoded</code> with two
         fields: <code>bt_signature</code> and <code>bt_payload</code>. Pass them to{" "}

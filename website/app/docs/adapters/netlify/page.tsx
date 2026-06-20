@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { BranchDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -30,6 +31,34 @@ export default function Page() {
         adapter is the same helper in both places &mdash; only the file location
         and the optional config export change.
       </p>
+
+      <BranchDiagram
+        title="One app, two Netlify targets"
+        source={{
+          eyebrow: "identical app",
+          label: "Your DaloyJS App",
+          detail: "Request → Response",
+        }}
+        branches={[
+          {
+            eyebrow: "deno · global",
+            label: "Edge Functions",
+            detail: "netlify/edge-functions/ · toWebHandler(app)",
+          },
+          {
+            eyebrow: "node · recommended",
+            label: "Functions v2",
+            detail: "netlify/functions/*.mts · toWebHandler(app)",
+          },
+          {
+            eyebrow: "legacy v1",
+            label: "Lambda-shape handler",
+            detail: "toLambdaHandler(app)",
+            tone: "muted",
+          },
+        ]}
+        caption="Edge and Functions v2 both speak Request → Response, so they share toWebHandler; only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2."
+      />
 
       <h2>When to choose Netlify</h2>
       <ul>

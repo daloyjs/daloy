@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -112,6 +113,38 @@ pnpm dlx @railway/cli up`}
       <CodeBlock
         language="bash"
         code={`pnpm dlx @railway/cli variables --set "TRUST_PROXY_HOPS=1"`}
+      />
+
+      <FlowDiagram
+        title="Forwarded-header trust"
+        numbered
+        steps={[
+          {
+            label: "Client request",
+            detail: "to Railway edge",
+            eyebrow: "inbound",
+          },
+          {
+            label: "Railway edge proxy",
+            detail: "adds X-Forwarded-For / -Proto",
+          },
+          {
+            label: "Posture undeclared",
+            detail: "500 errors/internal",
+            tone: "danger",
+          },
+          {
+            label: "TRUST_PROXY_HOPS=1",
+            detail: "behindProxy: { hops: 1 }",
+            tone: "accent",
+          },
+          {
+            label: "Real client IP resolved",
+            detail: "right-most XFF entry",
+            tone: "success",
+          },
+        ]}
+        caption="With no posture declared, DaloyJS returns 500 on the first forwarded request so spoofable IPs never reach rate-limiting or audit logs. Declaring one hop satisfies the guard and resolves the real client IP. Cloudflare in front of Railway is two hops."
       />
       <p>
         Now DaloyJS reads the real client IP from the right-most{" "}

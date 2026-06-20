@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { BranchDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -32,6 +33,29 @@ export default function Page() {
         that runs in <em>every</em> runtime DaloyJS targets, including Cloudflare Workers and Vercel
         Edge where raw TCP isn&apos;t available.
       </p>
+
+      <BranchDiagram
+        title="Two drivers, one connection string"
+        source={{
+          eyebrow: "@neondatabase/serverless",
+          label: "DATABASE_URL",
+          detail: "neon(...) or new Pool(...)",
+        }}
+        branches={[
+          {
+            eyebrow: "edge-friendly",
+            label: "HTTP neon() client",
+            detail: "One-shot queries · Workers · Vercel Edge",
+            tone: "success",
+          },
+          {
+            eyebrow: "node",
+            label: "Pooled Pool client",
+            detail: "WebSocket · reused connections · pool.end()",
+          },
+        ]}
+        caption="Both clients ship in the same package. Use the lightweight HTTP neon() client on edge runtimes and the pooled WebSocket Pool for long-lived Node processes."
+      />
 
       <h2>1. Provision</h2>
       <p>

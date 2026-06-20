@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -26,6 +27,33 @@ export default function Page() {
         <Link href="/docs/adapters/node">Node adapter</Link>, declare a <code>Procfile</code>, and
         pin to a supported stack.
       </p>
+
+      <FlowDiagram
+        title="git push deploy pipeline"
+        numbered
+        steps={[
+          {
+            label: "git push heroku main",
+            detail: "heroku-24 / heroku-26 stack",
+            eyebrow: "git",
+          },
+          {
+            label: "heroku/nodejs buildpack",
+            detail: "auto-detected from package.json",
+          },
+          {
+            label: "Procfile web dyno",
+            detail: "web: node dist/server.js",
+            tone: "accent",
+          },
+          {
+            label: "Graceful shutdown",
+            detail: "SIGTERM, shutdownTimeoutMs < 30s",
+            tone: "success",
+          },
+        ]}
+        caption="A push builds with the auto-detected heroku/nodejs buildpack and boots the Procfile web dyno bound to PORT. On a redeploy Heroku sends SIGTERM then SIGKILL after 30 seconds, so keep shutdownTimeoutMs well under that."
+      />
 
       <h2>When to choose Heroku</h2>
       <ul>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -37,6 +38,18 @@ export default function Page() {
         Treat Supabase as a platform client, not a traditional ORM: you are composing PostgREST, auth,
         storage, and realtime APIs rather than mapping tables through model classes.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="One request through Supabase"
+        caption="Zod validates the request, the handler calls the fetch-based PostgREST client off state.supabase, the destructured error is mapped to problem+json, then the response schema checks the body. The same client runs on Node.js and every edge runtime."
+        steps={[
+          { eyebrow: "client", label: "HTTP request", detail: "GET /users/:id" },
+          { eyebrow: "zod", label: "Validated input", detail: "params.id is a uuid", tone: "accent" },
+          { eyebrow: "supabase", label: "PostgREST query", detail: 'from("users").select(...).eq(...)' },
+          { eyebrow: "response", label: "Typed body", detail: "200 UserSchema | 404", tone: "success" },
+        ]}
+      />
 
       <h2>1. Install</h2>
       <CodeBlock code={`pnpm add @supabase/supabase-js`} />

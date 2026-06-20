@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -65,6 +66,41 @@ app.use(ipRestriction({
       </p>
 
       <h2>How matching works</h2>
+      <FlowDiagram
+        title="Resolve then match (fail closed)"
+        steps={[
+          {
+            eyebrow: "ingress",
+            label: "Request",
+            detail: "resolveIp / trustProxyHeaders",
+          },
+          {
+            eyebrow: "no IP",
+            label: "Cannot resolve client IP",
+            detail: "fail closed to 403 ForbiddenError",
+            tone: "danger",
+          },
+          {
+            eyebrow: "deny first",
+            label: "Matches a deny range?",
+            detail: "deny wins, even over allow to 403",
+            tone: "danger",
+          },
+          {
+            eyebrow: "allow whitelist",
+            label: "Outside the allow list?",
+            detail: "not whitelisted to 403",
+            tone: "danger",
+          },
+          {
+            eyebrow: "permitted",
+            label: "Allowed",
+            detail: "request proceeds",
+            tone: "success",
+          },
+        ]}
+        caption="A request must first resolve to a client IP or it is rejected. Deny ranges are checked first and always win, then the allow list acts as a whitelist. Anything that is not explicitly permitted is refused with a 403."
+      />
       <ul>
         <li>
           <strong>Deny wins.</strong> When both lists are supplied, the matcher

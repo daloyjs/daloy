@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram, LayerStack } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -46,12 +47,58 @@ export default function Page() {
         </li>
       </ul>
 
+      <BranchDiagram
+        title="One app, your choice of data layer"
+        source={{
+          eyebrow: "your app",
+          label: "DaloyJS app",
+          detail: 'app.decorate("db", client)',
+        }}
+        branches={[
+          { eyebrow: "schema-first", label: "Prisma", detail: "@prisma/client" },
+          { eyebrow: "ts-first", label: "Drizzle ORM", detail: "drizzle-orm" },
+          { eyebrow: "decorators", label: "TypeORM", detail: "DataSource" },
+          { eyebrow: "unit of work", label: "MikroORM", detail: "EntityManager" },
+          { eyebrow: "active record", label: "Sequelize", detail: "Sequelize models" },
+          { eyebrow: "platform", label: "Supabase", detail: "@supabase/supabase-js", tone: "muted" },
+        ]}
+        caption="DaloyJS is database-agnostic. The same decorate plus onClose pattern wires any SQL client (or the Supabase platform client) onto every handler's state, so the choice of data layer stays a swappable detail."
+      />
+
       <h2>The recommended pattern</h2>
       <p>
         Wrap the database client in a plugin and register it once at the root of
         your app. Handlers read it from <code>state</code> with full
         type-safety.
       </p>
+      <LayerStack
+        title="Where the client lives"
+        caption="A plugin decorates one shared client onto app state at startup. Every route handler reaches the same client through state.db, and onClose ties teardown to graceful shutdown."
+        layers={[
+          {
+            title: "Route handler",
+            detail: "reads the client off state, type-safe",
+            tone: "accent",
+            items: ["state.db.user.findUnique(...)"],
+          },
+          {
+            title: "App state",
+            detail: 'attached once via app.decorate("db", client)',
+            items: ["state.db"],
+          },
+          {
+            title: "ORM / query client",
+            detail: "one shared instance per process",
+            tone: "muted",
+            items: ["Prisma", "Drizzle", "TypeORM", "..."],
+          },
+          {
+            title: "Database",
+            detail: "Postgres, MySQL, SQLite, ...",
+            tone: "muted",
+          },
+        ]}
+      />
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";

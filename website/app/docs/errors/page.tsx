@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -20,6 +21,37 @@ export default function Page() {
         <a href="https://www.rfc-editor.org/rfc/rfc9457" target="_blank" rel="noreferrer">RFC 9457 problem+json</a>{" "}
         with a stable <code>type</code> URI, a request-id, and the appropriate Content-Type.
       </p>
+
+      <FlowDiagram
+        title="From thrown error to problem+json"
+        numbered
+        steps={[
+          {
+            eyebrow: "handler",
+            label: "throw new NotFoundError(...)",
+            detail: "any HttpError subclass",
+            tone: "accent",
+          },
+          {
+            eyebrow: "framework",
+            label: "Map to RFC 9457 fields",
+            detail: "type · title · status · detail",
+          },
+          {
+            eyebrow: "production",
+            label: "Redact 5xx detail",
+            detail: "NODE_ENV=production strips internals",
+            tone: "muted",
+          },
+          {
+            eyebrow: "wire",
+            label: "Serialized response",
+            detail: "application/problem+json + x-request-id",
+            tone: "success",
+          },
+        ]}
+        caption="A thrown HttpError becomes a problem+json document automatically. In production the detail field on 5xx responses is redacted so stack traces and SQL fragments never reach the client, while the full error still goes to your onError hook."
+      />
 
       <h2>Built-in error classes</h2>
       <CodeBlock code={`import {

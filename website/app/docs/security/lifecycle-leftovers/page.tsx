@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -81,6 +82,38 @@ export default function Page() {
         runtimes without <code>node:perf_hooks</code> (Cloudflare Workers,
         Vercel Edge, Fastly Compute) so the same line is portable.
       </p>
+
+      <FlowDiagram
+        title="Shedding load under pressure"
+        numbered
+        steps={[
+          {
+            eyebrow: "sample",
+            label: "Pressure sampler",
+            detail: "loop delay, ELU, heap, RSS via perf_hooks",
+          },
+          {
+            eyebrow: "check",
+            label: "Threshold breached?",
+            detail: "any configured limit, or healthCheck reason",
+            tone: "accent",
+          },
+          {
+            eyebrow: "overloaded",
+            label: "Request shed",
+            detail: "503 problem+json + Retry-After",
+            tone: "danger",
+          },
+          {
+            eyebrow: "healthy",
+            label: "Request proceeds",
+            detail: "no threshold breached",
+            tone: "success",
+          },
+        ]}
+        caption="While the process is under pressure every incoming request is short-circuited with a 503 and a Retry-After. The unref()'d sampler never pins the event loop, and the middleware is a no-op where node:perf_hooks is unavailable."
+      />
+
       <CodeBlock
         code={`import { App, loadShedding } from "@daloyjs/core";
 

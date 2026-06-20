@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Route } from "next";
 
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -76,6 +78,24 @@ export default function Page() {
         </li>
       </ul>
 
+      <BranchDiagram
+        title="One resource server, many identity providers"
+        source={{
+          label: "DaloyJS API (resource server)",
+          detail: "verifies the bearer token, gates routes by scope/role",
+          eyebrow: "your code",
+          tone: "accent",
+        }}
+        branches={[
+          { label: "AWS Cognito", detail: "aws-jwt-verify" },
+          { label: "Microsoft Entra ID", detail: "jose + OIDC JWKS" },
+          { label: "Auth0", detail: "jose" },
+          { label: "Okta", detail: "@okta/jwt-verifier" },
+          { label: "Clerk", detail: "@clerk/backend" },
+        ]}
+        caption="DaloyJS stays the resource server in every case. Each provider page swaps only the verifier SDK behind the same TokenVerifier interface, so the rest of your app stays IdP-agnostic."
+      />
+
       <h2>Runtime compatibility at a glance</h2>
       <table>
         <thead>
@@ -143,6 +163,26 @@ export default function Page() {
         an <code>auth</code> object, then guard routes with a small middleware
         that requires a token (and optional scopes).
       </p>
+      <FlowDiagram
+        numbered
+        title="The same three steps on every provider page"
+        steps={[
+          {
+            label: "Install the verifier SDK",
+            detail: "pnpm add <provider-sdk>",
+          },
+          {
+            label: "Register an auth plugin",
+            detail: "decorates ctx with a verifier",
+          },
+          {
+            label: "Guard routes",
+            detail: "requireAuth(...scopes)",
+            tone: "accent",
+          },
+        ]}
+        caption="Every provider page follows this shape. Only the verifier SDK in step 1 changes; steps 2 and 3 stay the same across IdPs."
+      />
       <pre>
         <code>{`// src/plugins/auth.ts
 import type { App, Middleware } from "@daloyjs/core";

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -137,6 +138,17 @@ jobLog.info({ processed: 1280 }, "done");`}
         <code>sk_live_…</code>, OpenAI <code>sk-…</code>, and more) is scrubbed
         regardless of its key.
       </p>
+      <FlowDiagram
+        title="From log call to log line"
+        steps={[
+          { eyebrow: "your call", label: "log.info(fields, msg)", detail: "{ userId, authorization, ... }", tone: "accent" },
+          { eyebrow: "bound context", label: "requestId + child fields", detail: "ctx.state.log child bindings" },
+          { eyebrow: "secure by default", label: "Redaction", detail: "keys + JWT / token values → [REDACTED]", tone: "danger" },
+          { eyebrow: "one line", label: "JSON record", detail: '{"level":"info",...}', tone: "success" },
+          { eyebrow: "sink", label: "write()", detail: "stdout → Loki · Datadog · CloudWatch", tone: "muted" },
+        ]}
+        caption="Every record is enriched with the request id and any child bindings, scrubbed of credential-shaped keys and values, serialized to a single JSON line, then handed to the output sink. Redaction happens before anything is written, so secrets never hit disk."
+      />
       <CodeBlock
         language="ts"
         code={`log.info(

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -47,6 +48,40 @@ export default function Page() {
       </p>
 
       <h2>How DaloyJS itself is published</h2>
+      <FlowDiagram
+        title="The publish pipeline, tag to tarball"
+        numbered
+        steps={[
+          {
+            eyebrow: "trigger",
+            label: "Signed tag push",
+            detail: "release.yml only; fork PRs can't",
+          },
+          {
+            eyebrow: "gate",
+            label: "Protected environment",
+            detail: "maintainer approval required",
+            tone: "accent",
+          },
+          {
+            eyebrow: "runner",
+            label: "harden-runner egress block",
+            detail: "npm + GitHub + Sigstore only",
+          },
+          {
+            eyebrow: "auth",
+            label: "OIDC trusted publish",
+            detail: "no long-lived NPM_TOKEN",
+          },
+          {
+            eyebrow: "attest",
+            label: "--provenance via Sigstore",
+            detail: "tarball bound to commit + run",
+            tone: "success",
+          },
+        ]}
+        caption="Only a signed tag can start a release, and only after maintainer approval on a network-restricted runner. There is no long-lived publish token to steal, and every tarball carries a provenance attestation back to its source commit."
+      />
       <ul>
         <li>
           <strong>Releases run in a separate workflow</strong> (

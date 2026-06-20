@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { BranchDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -58,6 +59,57 @@ export default function Page() {
         For these deployments, use <code>{`preset: "internal-service"`}</code>.
         It turns off the topology-dependent guards and keeps everything else on.
       </p>
+
+      <BranchDiagram
+        title="What the preset changes"
+        source={{
+          label: 'preset: "internal-service"',
+          detail: "names the topology once",
+        }}
+        branches={[
+          {
+            eyebrow: "turned off",
+            label: "secureHeaders auto-install",
+            detail: "HSTS / CSP / X-Frame-Options",
+            tone: "danger",
+          },
+          {
+            eyebrow: "turned off",
+            label: "corsCrossOriginGuard",
+            detail: "no browser Origin to compare",
+            tone: "danger",
+          },
+          {
+            eyebrow: "turned off",
+            label: "csrf boot guard",
+            detail: "callers use bearer / mTLS",
+            tone: "danger",
+          },
+          {
+            eyebrow: "kept on",
+            label: "bodyLimitBytes + requestTimeoutMs",
+            detail: "1 MiB / 30 s defaults",
+            tone: "success",
+          },
+          {
+            eyebrow: "kept on",
+            label: "fetchGuard() SSRF defaults",
+            detail: "still blocks 169.254.169.254",
+            tone: "success",
+          },
+          {
+            eyebrow: "kept on",
+            label: "JWT allowlist + timingSafeEqual",
+            detail: "prototype-pollution-safe parsers",
+            tone: "success",
+          },
+        ]}
+        converge={{
+          label: "Boot audit log",
+          detail: 'event: "security.preset.applied"',
+        }}
+        caption="The preset only disables the topology-dependent, browser-facing guards (top row). Every guard that protects the service from malformed input, confused dependencies, or compromised callers stays on. A one-time boot log names exactly what was disabled and what was kept."
+      />
 
       <h2>One line to switch posture</h2>
       <CodeBlock

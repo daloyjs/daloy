@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -61,6 +62,33 @@ export interface Env {
         D1 bindings live on <code>env</code>, not <code>process.env</code>, so decorate inside the
         Worker&apos;s <code>fetch</code> handler and call <code>app.fetch(req)</code> directly:
       </p>
+
+      <FlowDiagram
+        title="Per-request binding flow"
+        numbered
+        steps={[
+          {
+            label: "Worker fetch(req, env)",
+            detail: "env.DB is the D1 binding",
+            tone: "accent",
+          },
+          {
+            label: "app.decorate('db', env.DB)",
+            detail: "attach the binding to app state",
+          },
+          {
+            label: "app.fetch(req)",
+            detail: "route handler reads state.db",
+          },
+          {
+            label: "state.db.prepare(...).all()",
+            detail: "query D1, no network driver",
+            tone: "success",
+          },
+        ]}
+        caption="D1 bindings live on env, not process.env, so decorate the app inside the Worker fetch handler on every request before calling app.fetch(req)."
+      />
+
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";

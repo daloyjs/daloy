@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -275,6 +276,41 @@ app.route({
       />
 
       <h2>6. Standard webhook notifications</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Adyen", "DaloyJS route", "Your queue"]}
+        steps={[
+          {
+            from: "Adyen",
+            to: "DaloyJS route",
+            label: "POST /webhooks/adyen",
+            detail: "Basic auth + notificationItems[]",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "Check Basic auth, then validateHMAC per item",
+            detail: "additionalData.hmacSignature, HMAC-SHA256",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Adyen",
+            label: "401 on bad Basic auth or HMAC",
+            detail: "{ error: 'bad hmac' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Dedupe on pspReference, enqueue, ack [accepted]",
+            detail: "200 { notificationResponse: '[accepted]' } within ~10s",
+            kind: "async",
+          },
+        ]}
+        caption="Check Basic auth, validate the per-item HMAC with hmacValidator, dedupe on pspReference + eventCode, then always answer 200 [accepted] and process AUTHORISATION asynchronously."
+      />
       <p>
         Adyen posts JSON like{" "}
         <code>{`{ "live": "false", "notificationItems": [{ "NotificationRequestItem": { ... } }] }`}</code>.

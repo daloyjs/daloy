@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -41,6 +42,37 @@ export default function Page() {
         surface every missing or invalid key in one shot, so operators do not
         have to redeploy four times to discover four different typos.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="What defineConfig() does at boot"
+        steps={[
+          {
+            eyebrow: "source",
+            label: "Load raw values",
+            detail: "env, file, object, or custom resolver",
+          },
+          {
+            eyebrow: "transform",
+            label: "Coerce & rename",
+            detail: "optional transform(raw)",
+            tone: "muted",
+          },
+          {
+            eyebrow: "validate",
+            label: "Check Standard Schema",
+            detail: "Zod, Valibot, ArkType, TypeBox",
+            tone: "accent",
+          },
+          {
+            eyebrow: "ok",
+            label: "Typed config",
+            detail: "fully inferred from your schema",
+            tone: "success",
+          },
+        ]}
+        caption="On success you get a typed config object. On failure defineConfig() aggregates every issue into one ConfigValidationError and exits before the server binds a port."
+      />
 
       <h2>Quick start (from the environment)</h2>
       <p>

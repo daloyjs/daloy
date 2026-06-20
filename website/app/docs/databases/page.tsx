@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { LayerStack } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -44,6 +46,31 @@ export default function Page() {
         <strong>HTTP data API</strong>, or a runtime-native binding. Pick a host whose driver matches the
         runtime you ship to.
       </p>
+
+      <LayerStack
+        title="What sits between your handler and the data"
+        flow="down"
+        layers={[
+          {
+            title: "DaloyJS app on a runtime",
+            detail: "Same route code on any adapter",
+            items: ["Node", "Workers", "Vercel Edge", "Lambda"],
+            tone: "accent",
+          },
+          {
+            title: "Driver style",
+            detail: "How the runtime reaches the database",
+            items: ["HTTP / WebSocket", "fetch data API", "Workers binding", "TCP (pg)"],
+          },
+          {
+            title: "Managed database host",
+            detail: "Where your data actually lives",
+            items: ["Neon", "PlanetScale", "Turso", "D1", "Aurora DSQL"],
+            tone: "muted",
+          },
+        ]}
+        caption="On edge runtimes only HTTP, fetch, or native bindings work, raw TCP does not. The driver style is the layer that decides whether a host can run on Workers or Vercel Edge."
+      />
 
       <h2>Supported providers</h2>
       <ul>

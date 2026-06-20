@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -27,6 +28,17 @@ export default function Page() {
         <a href="/docs/validation/valibot">Validation with Valibot</a>. Both work the same way at the
         framework level.
       </p>
+
+      <FlowDiagram
+        title="One Zod schema, picked up everywhere"
+        steps={[
+          { eyebrow: "you write", label: "Zod schema", detail: "z.object({ ... })", tone: "accent" },
+          { eyebrow: "runtime", label: "Request & response validation", detail: "422 on invalid input" },
+          { eyebrow: "compile time", label: "Inferred handler types", detail: "z.infer<typeof ...>" },
+          { eyebrow: "spec", label: "OpenAPI JSON Schema", detail: "stays in sync via pnpm gen", tone: "success" },
+        ]}
+        caption="Because Zod implements Standard Schema, DaloyJS reuses one schema for runtime validation, handler type inference, and the OpenAPI document. No adapter, no second source of truth."
+      />
 
       <h2>Install</h2>
       <CodeBlock code={`pnpm add @daloyjs/core zod`} />

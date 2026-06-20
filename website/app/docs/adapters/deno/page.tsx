@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { LayerStack } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -29,6 +30,28 @@ export default function Page() {
         shutdown uses an <code>AbortController</code>, which is the pattern Deno
         itself recommends.
       </p>
+
+      <LayerStack
+        title="Deno adapter stack"
+        layers={[
+          {
+            title: "Your DaloyJS App",
+            detail: "routes · hooks · handlers",
+            tone: "accent",
+          },
+          {
+            title: "Deno adapter",
+            detail: "serve(app) wraps Deno.serve",
+            items: ["signal", "onListen", "cert/key"],
+          },
+          {
+            title: "Deno runtime",
+            detail: "stable Deno.serve, TS built in",
+            tone: "muted",
+          },
+        ]}
+        caption="serve() drives the stable Deno.serve and threads an AbortController signal through for graceful shutdown. The same src/server.ts runs locally and on Deno Deploy."
+      />
 
       <h2>When to choose Deno</h2>
       <ul>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "../../../../components/code-block";
+import { LayerStack } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -137,6 +138,29 @@ generated/                   # Hey API typed client output
         The whole point of a modular monolith is that the rules are <em>enforceable</em>, not just
         documented. There are only three rules and a linter can keep you honest.
       </p>
+      <LayerStack
+        title="Dependency direction"
+        caption="Dependencies only ever point downward. app.ts wires the modules; each module may use shared/ and other modules' public contracts; shared/ never reaches back up into a module. The exact allow/forbid rules follow below."
+        layers={[
+          {
+            title: "app.ts",
+            detail: "builds the App, registers modules in order",
+            tone: "accent",
+            items: ["registerModules(app)"],
+          },
+          {
+            title: "modules/",
+            detail: "one bounded context per folder",
+            items: ["catalog", "orders", "identity"],
+          },
+          {
+            title: "shared/",
+            detail: "cross-cutting kernel, no business logic",
+            tone: "muted",
+            items: ["db", "http", "logger", "config", "types"],
+          },
+        ]}
+      />
       <CodeBlock
         language="text"
         code={`           ┌──────────────────────────────────────────────┐

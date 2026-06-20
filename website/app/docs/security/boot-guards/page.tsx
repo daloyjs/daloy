@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -56,6 +57,37 @@ export default function Page() {
         </code>{" "}
         disables every boot guard at once.
       </p>
+
+      <FlowDiagram
+        title="Fail in the driveway, not the intersection"
+        numbered
+        steps={[
+          {
+            eyebrow: "startup",
+            label: "App boots in production",
+            detail: 'env: "production"',
+          },
+          {
+            eyebrow: "guards",
+            label: "Four refuse-to-boot checks",
+            detail: "secret, cors '*', csrf, X-Forwarded-*",
+            tone: "accent",
+          },
+          {
+            eyebrow: "misconfig",
+            label: "Refuses to start / first request 500",
+            detail: "loud error during startup",
+            tone: "danger",
+          },
+          {
+            eyebrow: "clean",
+            label: "Serves traffic",
+            detail: "all guards satisfied",
+            tone: "success",
+          },
+        ]}
+        caption="In production each guard turns a common misconfiguration into a refuse-to-boot or first-request 500 instead of a silent vulnerability under load. Dev and CI keep working with sample secrets."
+      />
 
       <h2>1. Weak session secret refuse-to-boot</h2>
       <p>

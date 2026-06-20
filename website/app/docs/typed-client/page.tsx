@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -115,6 +116,20 @@ if (r.status === 200) {
         </a>
         .
       </p>
+
+      <FlowDiagram
+        title="Codegen pipeline"
+        numbered
+        caption="pnpm gen runs the whole chain: dump the spec from your routes, then let Hey API turn it into a typed fetch SDK. Re-run it whenever a route changes and the client stays in lockstep with the contract."
+        steps={[
+          { label: "Routes", detail: "app.route(...)", tone: "accent" },
+          { label: "generateOpenAPI", detail: "@daloyjs/core/openapi" },
+          { label: "openapi.json", detail: "OpenAPI 3.1 spec on disk" },
+          { label: "openapi-ts", detail: "Hey API generator" },
+          { label: "Typed SDK", detail: "sdk.gen.ts · types.gen.ts" },
+          { label: "Consumer", detail: "fully typed fetch calls", tone: "success" },
+        ]}
+      />
 
       <CodeBlock language="bash" code={`pnpm add -D @hey-api/openapi-ts`} />
 

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { SequenceDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -38,6 +39,50 @@ export default function Page() {
         caller-owned resources (DB cursors, upstream fetches, message-queue
         subscriptions) get released cleanly.
       </p>
+
+      <SequenceDiagram
+        title="A pull-driven stream"
+        participants={["Async generator", "DaloyJS helper", "Client"]}
+        steps={[
+          {
+            from: "Client",
+            to: "DaloyJS helper",
+            label: "Pull the next chunk",
+            detail: "ReadableStream pull(), one per consumer read",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS helper",
+            to: "Async generator",
+            label: "Advance the iterator",
+            detail: "iterator.next() called exactly once per pull",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS helper",
+            to: "Client",
+            label: "Encode and send one frame",
+            detail: "SSE data: ... or one NDJSON line + \\n",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS helper",
+            to: "Client",
+            label: "Optional keep-alive comment while idle",
+            detail: ": keep-alive every keepAliveMs",
+            kind: "async",
+          },
+          {
+            from: "Client",
+            to: "DaloyJS helper",
+            label: "Disconnect or abort",
+            detail: "request.signal fires, iterator.return() runs finally",
+            kind: "note",
+          },
+        ]}
+        caption="The consumer drives the pace. A slow client pulls slowly, so the generator is only advanced when there is demand, then iterator.return() releases resources on disconnect."
+      />
+
       <p>
         The helpers live in the main barrel and in the <code>/streaming</code>{" "}
         subpath:

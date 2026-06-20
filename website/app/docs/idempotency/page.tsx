@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { SequenceDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -83,6 +84,50 @@ app.route({
         header, the middleware fingerprints the request (method + path + body)
         and consults a pluggable store:
       </p>
+
+      <SequenceDiagram
+        title="Same key, replayed request"
+        participants={["Client", "idempotency()", "Store", "Handler"]}
+        steps={[
+          {
+            from: "Client",
+            to: "idempotency()",
+            label: "POST /charges with Idempotency-Key",
+            detail: "first attempt",
+            kind: "request",
+          },
+          {
+            from: "idempotency()",
+            to: "Store",
+            label: "reserve(key): atomic set-if-absent",
+            detail: "wins the reservation",
+            kind: "async",
+          },
+          {
+            from: "idempotency()",
+            to: "Handler",
+            label: "Run handler once, capture response",
+            detail: "complete(key, response) for ttlSeconds",
+            kind: "request",
+          },
+          {
+            from: "Client",
+            to: "idempotency()",
+            label: "Identical retry, same key + fingerprint",
+            detail: "network hiccup, client retries",
+            kind: "request",
+          },
+          {
+            from: "idempotency()",
+            to: "Client",
+            label: "Replay stored response, handler skipped",
+            detail: "Idempotency-Replayed: true",
+            kind: "response",
+          },
+        ]}
+        caption="The first request runs the handler and stores its response under the key. An identical retry replays that stored response byte for byte without running the side effect again. A retry while the first is still in flight gets a 409, and the same key with a different body gets a 422."
+      />
+
       <ul>
         <li>
           <strong>First request</strong> — the handler runs normally; the final

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -56,6 +57,39 @@ export default function Page() {
         Every check is opt-in and allowlist-friendly, and the middleware is
         dependency-free and runtime-portable.
       </p>
+
+      <FlowDiagram
+        title="Decision order"
+        steps={[
+          {
+            label: "On allowUserAgents?",
+            detail: "consulted first; bypasses every other rule",
+            eyebrow: "allowlist",
+            tone: "success",
+          },
+          {
+            label: "Empty / missing UA?",
+            detail: "blockEmptyUserAgent (on by default) -> 403",
+            tone: "danger",
+          },
+          {
+            label: "Matches blockedUserAgents?",
+            detail: "substring or RegExp -> 403",
+            tone: "danger",
+          },
+          {
+            label: "Claims a verified crawler?",
+            detail: "reverse-DNS + forward-confirm; spoofed / unverifiable -> 403",
+            tone: "danger",
+          },
+          {
+            label: "Allowed -> handler",
+            detail: "log mode never blocks; only fires onBlock",
+            tone: "success",
+          },
+        ]}
+        caption="The allowlist wins first. After that an empty User-Agent, a blocked pattern, or a crawler that fails reverse-DNS plus forward-confirm is rejected with a 403 by default, so a spoofed Googlebot cannot impersonate a trusted crawler."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -21,6 +22,33 @@ export default function Page() {
   return (
     <>
       <h1>Testing & contract tests</h1>
+
+      <FlowDiagram
+        title="Three layers, one app"
+        numbered
+        caption="In-process tests exercise real handlers through app.request(), mock mode returns declared examples for pure contract assertions, and the contract runner validates the whole spec, the same check daloy inspect runs in CI and the pre-push hook."
+        steps={[
+          {
+            label: "In-process tests",
+            detail: "app.request() through the real pipeline",
+            tone: "accent",
+          },
+          {
+            label: "Mock mode",
+            detail: "new App({ mockMode: true }), returns examples",
+          },
+          {
+            label: "Contract runner",
+            detail: "runContractTests(app) validates every route",
+          },
+          {
+            label: "CI / pre-push gate",
+            eyebrow: "backstop",
+            detail: "daloy inspect --check, exits non-zero",
+            tone: "success",
+          },
+        ]}
+      />
 
       <h2>In-process test client</h2>
       <p>Every <code>App</code> exposes a <code>request()</code> method that round-trips a fetch <code>Request</code> through the same pipeline real traffic uses, no socket, no port:</p>
@@ -81,6 +109,42 @@ if (!report.ok) {
   process.exit(1);
 }
 console.log(\`\${report.checked} routes - all clean\`);`} />
+
+      <BranchDiagram
+        title="What the runner checks"
+        source={{
+          eyebrow: "one pass",
+          label: "runContractTests(app)",
+          detail: "walks every registered route",
+        }}
+        branches={[
+          {
+            label: "operationId present",
+            detail: "requireOperationId",
+          },
+          {
+            label: "operationIds unique",
+            detail: "no duplicates across routes",
+          },
+          {
+            label: "examples match schema",
+            detail: "each example validates",
+          },
+          {
+            label: "no body on safe methods",
+            detail: "GET / HEAD / DELETE",
+          },
+          {
+            label: "responses declared",
+            detail: "every route has responses",
+          },
+        ]}
+        converge={{
+          label: "report.ok",
+          detail: "report.issues lists every failure",
+        }}
+        caption="A single walk over your routes produces one pass/fail report. Any failed check lands in report.issues, which is exactly what the CI gate and pre-push hook key off."
+      />
 
       <p>The report flags:</p>
       <ul>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../components/code-block";
+import { LayerStack } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -47,6 +48,38 @@ export default function Page() {
         Just like SQL clients, ODM connections belong in a plugin. Decorate your app with a small database
         surface and close the connection on shutdown.
       </p>
+
+      <LayerStack
+        title="Where the ODM connection lives"
+        flow="down"
+        layers={[
+          {
+            title: "Route handlers",
+            detail: "Read models from state, never connect directly",
+            items: ["state.db.User", "state.db.Order"],
+            tone: "accent",
+          },
+          {
+            title: "Database plugin",
+            detail: "app.decorate('db', db) plus app.onClose() teardown",
+            items: ["register(app)", "onClose"],
+          },
+          {
+            title: "ODM connection & models",
+            detail: "Schemas, validation, query helpers",
+            items: ["Mongoose", "Ottoman"],
+            tone: "muted",
+          },
+          {
+            title: "Document database",
+            detail: "Collections, buckets, scopes",
+            items: ["MongoDB", "Couchbase"],
+            tone: "muted",
+          },
+        ]}
+        caption="Connections are opened once in a plugin and exposed on state. Handlers read models from state.db, so the connection lifecycle stays in one place and closes cleanly on shutdown."
+      />
+
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -38,6 +39,37 @@ export default function Page() {
         <code>Blob</code>, so handlers can stream it (<code>file.stream()</code>
         ) directly to S3, disk, or another upstream.
       </p>
+
+      <FlowDiagram
+        title="How an upload is validated"
+        numbered
+        steps={[
+          {
+            eyebrow: "request",
+            label: "multipart/form-data body",
+            detail: "File / Blob entries kept, not buffered",
+          },
+          {
+            eyebrow: "app caps",
+            label: "maxFileBytes · maxFields · maxFiles",
+            detail: "413 (size) or 400 (counts)",
+            tone: "muted",
+          },
+          {
+            eyebrow: "field caps",
+            label: "fileField(): size · MIME · magic bytes",
+            detail: "forged image/png rejected, 422",
+            tone: "accent",
+          },
+          {
+            eyebrow: "handler",
+            label: "Typed body",
+            detail: "body.file.stream() to S3 or disk",
+            tone: "success",
+          },
+        ]}
+        caption="App-level caps are evaluated as soon as the body is parsed, so an oversized or over-counted request is rejected before the handler runs. Per-field fileField() checks (size, MIME allowlist, magic bytes) then surface mismatches as a 422 problem+json, leaving the handler a fully typed body."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

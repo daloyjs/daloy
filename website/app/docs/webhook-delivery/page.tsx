@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { SequenceDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -62,6 +63,49 @@ export default function Page() {
           metadata or a private range is refused (and never retried).
         </li>
       </ul>
+
+      <SequenceDiagram
+        title="Delivery lifecycle"
+        participants={["createWebhookSender()", "fetchGuard()", "Subscriber", "Dead-letter sink"]}
+        steps={[
+          {
+            from: "createWebhookSender()",
+            to: "Subscriber",
+            kind: "request",
+            label: "Signed POST (attempt 1)",
+            detail: "webhook-id, webhook-timestamp, webhook-signature=sha256=...",
+          },
+          {
+            from: "Subscriber",
+            to: "createWebhookSender()",
+            kind: "response",
+            label: "503 + Retry-After (transient)",
+            detail: "retryable status -> schedule a retry",
+          },
+          {
+            from: "createWebhookSender()",
+            to: "Subscriber",
+            kind: "async",
+            label: "Retry with backoff + jitter",
+            detail: "same webhook-id/signature reused; honours Retry-After",
+          },
+          {
+            from: "Subscriber",
+            to: "createWebhookSender()",
+            kind: "response",
+            label: "2xx -> delivered",
+            detail: "result.ok === true",
+          },
+          {
+            from: "fetchGuard()",
+            to: "Dead-letter sink",
+            kind: "note",
+            label: "SSRF refusal or attempts exhausted",
+            detail: "SsrfBlockedError is permanent: never retried -> WebhookDeadLetterSink",
+          },
+        ]}
+        caption="Each delivery is a signed POST. Transient failures are retried with exponential backoff and jitter while reusing the same signature. An SSRF refusal or an exhausted attempt budget is sent straight to the dead-letter sink for inspection or replay."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

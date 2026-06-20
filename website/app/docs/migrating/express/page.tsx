@@ -2,6 +2,8 @@ import { CodeBlock } from "../../../../components/code-block";
 import Link from "next/link";
 import type { Route } from "next";
 
+import { BranchDiagram, FlowDiagram } from "../../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -68,6 +70,38 @@ export default function Page() {
         </strong>{" "}
         Once that clicks, the rest is mechanical.
       </p>
+
+      <BranchDiagram
+        title="What one DaloyJS route declaration buys you"
+        source={{
+          eyebrow: "declare once",
+          label: "app.route({ ... })",
+          detail: "method, path, request, responses, handler",
+        }}
+        branches={[
+          {
+            eyebrow: "runtime",
+            label: "Validated, typed inputs",
+            detail: "no req.body as any",
+          },
+          {
+            eyebrow: "spec",
+            label: "OpenAPI document",
+            detail: "the spec is the route",
+          },
+          {
+            eyebrow: "humans",
+            label: "Interactive docs",
+            detail: "GET /docs",
+          },
+          {
+            eyebrow: "consumers",
+            label: "Typed client SDK",
+            detail: "pnpm gen",
+          },
+        ]}
+        caption="In Express you bolt these on separately (swagger-jsdoc, a validator, a hand-written client) and hope they stay in sync. In DaloyJS they all fall out of the one route declaration."
+      />
 
       <h3>Why would you migrate at all?</h3>
       <ul>
@@ -494,6 +528,45 @@ app.route({
         positional chain with named <strong>hooks</strong> that fire at fixed
         lifecycle points:
       </p>
+
+      <FlowDiagram
+        title="The hook lifecycle (replaces the middleware chain)"
+        steps={[
+          {
+            label: "onRequest",
+            detail: "raw Request, before parsing",
+          },
+          {
+            label: "validation",
+            detail: "schemas checked, 422 on failure",
+            tone: "muted",
+          },
+          {
+            label: "beforeHandle",
+            detail: "guard; return Response to stop",
+          },
+          {
+            label: "handler",
+            detail: "returns { status, body }",
+            tone: "accent",
+          },
+          {
+            label: "afterHandle",
+            detail: "transform the return value",
+          },
+          {
+            label: "onSend",
+            detail: "mutate or replace the response",
+          },
+          {
+            label: "onResponse",
+            detail: "fire-and-forget observer",
+            tone: "success",
+          },
+        ]}
+        caption="Instead of a positional middleware chain you forget to order, hooks fire at named points. Validation runs before your handler, and onError sits on the error path between beforeHandle and the response."
+      />
+
       <table>
         <thead>
           <tr>

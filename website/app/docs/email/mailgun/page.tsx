@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -37,6 +38,42 @@ export default function Page() {
         </a>{" "}
         SDK.
       </p>
+
+      <SequenceDiagram
+        title="Send through the mailgun.js SDK"
+        participants={["Route handler", "mg client", "Mailgun API", "Webhooks"]}
+        steps={[
+          {
+            from: "Route handler",
+            to: "mg client",
+            label: "mg.messages.create(DOMAIN, { from, to, subject })",
+            detail: "client keyed with MAILGUN_API_KEY",
+            kind: "request",
+          },
+          {
+            from: "mg client",
+            to: "Mailgun API",
+            label: "POST /v3/{domain}/messages",
+            detail: "US api.mailgun.net or EU api.eu.mailgun.net (fixed per domain)",
+            kind: "request",
+          },
+          {
+            from: "Mailgun API",
+            to: "Route handler",
+            label: "{ id, message }",
+            detail: "return { id } on success",
+            kind: "response",
+          },
+          {
+            from: "Mailgun API",
+            to: "Webhooks",
+            label: "delivery, bounce, complaint events",
+            detail: "verify HMAC-SHA256(timestamp + token) before trusting",
+            kind: "async",
+          },
+        ]}
+        caption="The region is fixed per domain (US or EU), set url accordingly. On edge runtimes pass useFetch: true so the SDK uses native fetch. Webhook payloads are HMAC-signed, verify them before acting."
+      />
 
       <h2>1. Provision</h2>
       <ol>

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Route } from "next";
 
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -32,6 +34,25 @@ export default function Page() {
       </p>
 
       <h2>Supported providers</h2>
+      <BranchDiagram
+        title="One abstraction, many gateways"
+        source={{
+          label: "Your route handlers",
+          detail: "call state.<provider>",
+          eyebrow: "business logic",
+        }}
+        branches={[
+          { label: "Shopify", detail: "shopify-api-node" },
+          { label: "Braintree", detail: "braintree" },
+          { label: "Authorize.Net", detail: "authorizenet" },
+          { label: "Adyen", detail: "@adyen/api-library" },
+          { label: "Mollie", detail: "mollie-api-typescript" },
+          { label: "Tap / PayTabs", detail: "REST / paytabs_pt2" },
+          { label: "Razorpay", detail: "razorpay" },
+          { label: "Square", detail: "square" },
+        ]}
+        caption="Each provider SDK lives behind a small plugin on app.state, so your handlers stay provider-agnostic and you can swap or A/B gateways without rewriting routes."
+      />
       <ul>
         <li>
           <Link href={"/docs/payments/shopify" as Route}>Shopify</Link>: read products, create orders, and
@@ -122,6 +143,35 @@ export default function Page() {
       </ul>
 
       <h2>Common plugin shape</h2>
+      <FlowDiagram
+        title="Plugin lifecycle"
+        numbered
+        steps={[
+          {
+            label: "Wrap the SDK",
+            detail: "new ProviderSDK(secrets)",
+            eyebrow: "plugin",
+          },
+          {
+            label: "Attach to state",
+            detail: "app.decorate(name, client)",
+            eyebrow: "register",
+          },
+          {
+            label: "Call from handlers",
+            detail: "state.<provider>.charge()",
+            eyebrow: "routes",
+            tone: "accent",
+          },
+          {
+            label: "Verify webhooks",
+            detail: "HMAC over raw body",
+            eyebrow: "callbacks",
+            tone: "success",
+          },
+        ]}
+        caption="Every provider guide follows the same four steps, so dropping a new gateway into an existing app never touches your route code."
+      />
       <p>
         Each provider guide implements roughly the same interface on{" "}
         <code>app.state</code>:

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -50,6 +51,48 @@ export default function Page() {
         <code>groupId</code> on HTTP login routes and the WebSocket session
         route so an attacker cannot dodge the bucket by switching transports.
       </p>
+      <SequenceDiagram
+        title="One bucket, two transports"
+        participants={["Attacker", "loginThrottle()", "wsRateLimit()", "Shared bucket"]}
+        steps={[
+          {
+            from: "Attacker",
+            to: "loginThrottle()",
+            label: "Brute-force POST /login attempts",
+            detail: "each attempt spends from groupId: auth-entry",
+            kind: "request",
+          },
+          {
+            from: "loginThrottle()",
+            to: "Shared bucket",
+            label: "Increment the same keyed counter",
+            detail: "windowMs / max enforced",
+            kind: "async",
+          },
+          {
+            from: "Attacker",
+            to: "wsRateLimit()",
+            label: "Switch transports: WebSocket upgrade",
+            detail: "beforeUpgrade on /session",
+            kind: "request",
+          },
+          {
+            from: "wsRateLimit()",
+            to: "Shared bucket",
+            label: "Spends from the SAME groupId bucket",
+            detail: "no fresh budget for switching transport",
+            kind: "async",
+          },
+          {
+            from: "Shared bucket",
+            to: "Attacker",
+            label: "Limit exhausted, both paths reject",
+            detail: "HTTP 429 / upgrade refused",
+            kind: "note",
+          },
+        ]}
+        caption="Putting the same groupId on the login route and the WebSocket upgrade makes both helpers spend from one shared counter. An attacker who exhausts the HTTP budget cannot get a fresh allowance by switching to the WebSocket transport."
+      />
       <CodeBlock
         code={`import { App, loginThrottle, wsRateLimit } from "@daloyjs/core";
 

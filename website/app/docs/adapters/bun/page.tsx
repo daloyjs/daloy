@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { LayerStack } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -27,6 +28,28 @@ export default function Page() {
         deployments. You get fast startup, a smaller memory footprint, and
         first-class TLS and Unix-socket support without extra middleware.
       </p>
+
+      <LayerStack
+        title="Bun adapter stack"
+        layers={[
+          {
+            title: "Your DaloyJS App",
+            detail: "routes · hooks · handlers",
+            tone: "accent",
+          },
+          {
+            title: "Bun adapter",
+            detail: "serve(app) wraps Bun.serve",
+            items: ["idleTimeout", "tls", "unix"],
+          },
+          {
+            title: "Bun runtime",
+            detail: "native Bun.serve, fast startup",
+            tone: "muted",
+          },
+        ]}
+        caption="serve() hands your app to the native Bun.serve so routing stays owned by DaloyJS. Bun's built-in routes option is intentionally unused to keep the same REST API portable across runtimes."
+      />
 
       <h2>When to choose Bun</h2>
       <ul>

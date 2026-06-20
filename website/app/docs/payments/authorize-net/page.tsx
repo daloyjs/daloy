@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -381,6 +382,41 @@ await fetch(\`\${host}/rest/v1/webhooks\`, {
       />
 
       <h2>7. Verify webhook deliveries</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Authorize.Net", "DaloyJS route", "Your queue"]}
+        steps={[
+          {
+            from: "Authorize.Net",
+            to: "DaloyJS route",
+            label: "POST /webhooks/authorizenet",
+            detail: "X-ANET-Signature: sha512=... over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "Recompute HMAC-SHA512 with the Signature Key",
+            detail: "timingSafeEqual vs the header digest",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Authorize.Net",
+            label: "401 when the digest does not match",
+            detail: "{ error: 'invalid signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your queue",
+            label: "Dedupe on notificationId, then enqueue and ack",
+            detail: "200, fetch the full record async",
+            kind: "async",
+          },
+        ]}
+        caption="Hash the raw bytes with the dedicated Signature Key before JSON.parse, reject mismatches with 401, dedupe on notificationId, then ack and fetch the full record in the background."
+      />
       <p>
         Authorize.Net signs each notification with HMAC-SHA512 over the raw body using the
         Signature Key, and sends the hex digest in the <code>X-ANET-Signature</code> header

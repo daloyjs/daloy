@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
+import { LayerStack } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -644,6 +645,40 @@ const app = new App({
         Most real systems use several of these tools together. A typical
         production layout looks like this:
       </p>
+
+      <LayerStack
+        title="Where DaloyJS sits"
+        layers={[
+          {
+            title: "Browser / Mobile app",
+            detail: "the clients",
+            tone: "muted",
+          },
+          {
+            title: "CDN",
+            detail: "static assets, images",
+            tone: "muted",
+          },
+          {
+            title: "Load balancer",
+            detail: "NGINX, ALB, Cloudflare",
+            tone: "muted",
+          },
+          {
+            title: "API gateway (optional)",
+            detail: "Kong, APISIX, Envoy for many services",
+            tone: "muted",
+          },
+          {
+            title: "DaloyJS services",
+            detail: "same framework, configured per role",
+            items: ["BFF", "Catalog API", "Orders API", "Webhooks", "WebSocket", "MCP"],
+            tone: "accent",
+          },
+        ]}
+        caption="Every box marked DaloyJS is the same framework with the same contract style and security defaults. The layers above it exist because they are better at their specific job (traffic, routing, static assets)."
+      />
+
       <CodeBlock
         language="text"
         code={`Browser / Mobile app

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -28,6 +29,31 @@ export default function Page() {
         Cloudflare Workers. The DaloyJS adapter wraps that registration so you
         only call one function.
       </p>
+
+      <FlowDiagram
+        title="Fastly Compute request path"
+        steps={[
+          {
+            eyebrow: "platform",
+            label: "fetch event",
+            detail: "addEventListener('fetch', ...)",
+          },
+          {
+            eyebrow: "adapter",
+            label: "installFastlyListener(app)",
+            detail: "event.respondWith(app.fetch(...))",
+            tone: "muted",
+          },
+          {
+            eyebrow: "core",
+            label: "app.fetch(Request)",
+            detail: "routing · hooks · handler",
+            tone: "accent",
+          },
+          { eyebrow: "platform", label: "Response", tone: "success" },
+        ]}
+        caption="Fastly Compute still uses the fetch-event listener model. installFastlyListener registers it for you and forwards event.request into app.fetch. Outbound fetch() calls must be declared as backends in fastly.toml."
+      />
 
       <h2>When to choose Fastly Compute</h2>
       <ul>

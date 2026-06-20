@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -34,6 +35,17 @@ export default function Page() {
         first is solved with a route-level deprecation lifecycle; the second
         with an OpenAPI diff you can run in CI.
       </p>
+
+      <FlowDiagram
+        title="Route deprecation lifecycle"
+        caption="A route moves through these states. deprecated: true announces the intent and adds the Deprecation header; a sunset date adds the Sunset header and a hard removal target; only then do you delete the route. diffOpenAPI catches the final step if a consumer still depends on it."
+        steps={[
+          { label: "Active", detail: "no extra headers", tone: "success" },
+          { label: "deprecated: true", detail: "Deprecation: true header" },
+          { label: "sunset: <date>", detail: "Sunset: <IMF-fixdate> header" },
+          { label: "Removed", detail: "route deleted after the sunset", tone: "danger" },
+        ]}
+      />
 
       <h2>Deprecating a route</h2>
       <p>
@@ -153,6 +165,17 @@ daloy diff --json openapi.published.json openapi.json`}
         fails the build on any breaking change. When no baseline exists yet the
         gate is a no-op, so you can adopt it incrementally.
       </p>
+      <FlowDiagram
+        title="Breaking-change CI gate"
+        numbered
+        caption="The same diff engine the library exposes runs as a CI gate. A breaking change fails the build (exit 1); additive changes pass. With no committed baseline the gate is a no-op, so adoption is incremental."
+        steps={[
+          { label: "pnpm gen", detail: "regenerate generated/openapi.json" },
+          { label: "baseline", detail: "generated/openapi.baseline.json" },
+          { label: "diffOpenAPI", detail: "classify every change", tone: "accent" },
+          { label: "breaking?", detail: "fail CI ⟋ pass build" },
+        ]}
+      />
       <CodeBlock
         language="bash"
         code={`pnpm gen                      # regenerate generated/openapi.json

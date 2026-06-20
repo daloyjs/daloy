@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -31,6 +32,18 @@ export default function Page() {
         <Link href="/docs/routing">contract-first routes</Link>: Zod validates
         the wire, Prisma validates the database.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="One request through Prisma"
+        caption="Zod validates the request before your handler runs, Prisma runs the typed query off state.db, and the result is checked against the response schema on the way out. Two validation layers guard the wire and the database."
+        steps={[
+          { eyebrow: "client", label: "HTTP request", detail: "GET /users/:id" },
+          { eyebrow: "zod", label: "Validated input", detail: "params.id is a uuid", tone: "accent" },
+          { eyebrow: "prisma", label: "Typed query", detail: "state.db.user.findUnique(...)" },
+          { eyebrow: "response", label: "Typed body", detail: "200 UserSchema | 404", tone: "success" },
+        ]}
+      />
 
       <h2>1. Install</h2>
       <CodeBlock

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -57,6 +58,38 @@ export default function Page() {
           alive on its own.
         </li>
       </ul>
+
+      <FlowDiagram
+        title="One tick"
+        numbered
+        steps={[
+          {
+            label: "Tick fires",
+            detail: "cron expr or intervalMs is due",
+            eyebrow: "schedule",
+          },
+          {
+            label: "Single-flight check",
+            detail: "already running? skip + count getState().skipped",
+            tone: "accent",
+          },
+          {
+            label: "Run handler",
+            detail: "({ signal }) with optional timeoutMs budget",
+          },
+          {
+            label: "Completed",
+            detail: "runs++, lastDurationMs recorded",
+            tone: "success",
+          },
+          {
+            label: "Threw / timed out",
+            detail: "failures++, onError(err, { timedOut })",
+            tone: "danger",
+          },
+        ]}
+        caption="Each tick is armed fixed-rate before the run starts. If the previous run is still in flight the overlapping tick is skipped, not started concurrently, so a slow task degrades to back-to-back runs instead of piling up."
+      />
 
       <h2>
         Quick start with <code>app.cron()</code>

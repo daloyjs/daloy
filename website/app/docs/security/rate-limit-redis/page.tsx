@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -41,6 +42,55 @@ export default function Page() {
         <code>INCR</code> + <code>PEXPIRE</code>), so every replica observes the
         same window without a hot key shootout.
       </p>
+      <SequenceDiagram
+        title="One client hitting two replicas, one shared counter"
+        participants={["Client", "Replica A", "Replica B", "Redis"]}
+        steps={[
+          {
+            from: "Client",
+            to: "Replica A",
+            label: "Request lands on replica A",
+            detail: "key = daloy:rl:<client>",
+            kind: "request",
+          },
+          {
+            from: "Replica A",
+            to: "Redis",
+            label: "Atomic INCR + PEXPIRE (Lua)",
+            detail: "count = 120 / max 120",
+            kind: "async",
+          },
+          {
+            from: "Replica A",
+            to: "Client",
+            label: "Allowed, at the limit",
+            detail: "200 OK",
+            kind: "response",
+          },
+          {
+            from: "Client",
+            to: "Replica B",
+            label: "Next request load-balanced away",
+            detail: "same key, different process",
+            kind: "request",
+          },
+          {
+            from: "Replica B",
+            to: "Redis",
+            label: "INCR sees the shared count",
+            detail: "count = 121 > 120",
+            kind: "async",
+          },
+          {
+            from: "Replica B",
+            to: "Client",
+            label: "Rejected by the shared window",
+            detail: "429 + Retry-After",
+            kind: "response",
+          },
+        ]}
+        caption="Every replica increments the same Redis key, so switching doors does not reset the count. With the in-memory store each replica keeps its own counter and a client can get N times the limit."
+      />
 
       <h2>When to use Redis (and when not to)</h2>
       <p>

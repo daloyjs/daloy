@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -45,6 +46,38 @@ export default function Page() {
         inflation, so a bomb is aborted long before it is fully materialised in
         memory.
       </p>
+
+      <FlowDiagram
+        title="onRequest decompression"
+        numbered
+        steps={[
+          {
+            label: "Compressed body",
+            detail: "Content-Encoding: gzip",
+            eyebrow: "inbound",
+          },
+          {
+            label: "Bound compressed input",
+            detail: "maxCompressedBytes",
+          },
+          {
+            label: "Inflate with caps",
+            detail: "maxDecompressedBytes / maxRatio",
+            tone: "accent",
+          },
+          {
+            label: "Inflated body to app",
+            detail: "fits bodyLimitBytes",
+            tone: "success",
+          },
+          {
+            label: "Bomb tripped a cap",
+            detail: "413 DecompressionBombError",
+            tone: "danger",
+          },
+        ]}
+        caption="The middleware caps the compressed upload first, then inflates with two caps enforced during inflation. Either cap crossing cancels the stream mid-inflate and rejects with 413, so the full bomb is never materialised."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

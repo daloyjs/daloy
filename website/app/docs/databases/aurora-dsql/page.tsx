@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -53,6 +54,37 @@ export default function Page() {
         password before opening a connection. For Lambda, create one client per invocation; for long-lived
         Node processes, refresh on a timer or on auth errors.
       </p>
+
+      <FlowDiagram
+        title="IAM token auth flow"
+        numbered
+        steps={[
+          {
+            label: "DsqlSigner",
+            detail: "new DsqlSigner({ hostname, region })",
+            tone: "accent",
+          },
+          {
+            label: "Sign a token",
+            detail: "signer.getDbConnectAdminAuthToken()",
+          },
+          {
+            label: "Short-lived token",
+            detail: "expires in ~15 minutes",
+          },
+          {
+            label: "pg Client",
+            detail: "password: token · ssl rejectUnauthorized: true",
+          },
+          {
+            label: "client.connect()",
+            detail: "Postgres wire protocol over TCP",
+            tone: "success",
+          },
+        ]}
+        caption="DSQL replaces a static password with a short-lived IAM token (~15 min). Sign a fresh token per Lambda invocation, or refresh it on a timer for long-lived Node processes."
+      />
+
       <CodeBlock
         code={`// src/db/dsql.ts
 import { Client } from "pg";

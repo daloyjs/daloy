@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram, SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -43,6 +44,49 @@ export default function Page() {
         separate requirement: if an attacker can run script in your origin, they
         can read the CSRF token too.
       </p>
+
+      <SequenceDiagram
+        title="Double-submit cookie"
+        participants={["Browser", "Attacker page", "csrf()", "Handler"]}
+        steps={[
+          {
+            from: "Browser",
+            to: "csrf()",
+            label: "Safe request (GET) stamps a token cookie",
+            detail: "Set-Cookie: __Host-daloy.csrf=<random>",
+            kind: "request",
+          },
+          {
+            from: "csrf()",
+            to: "Browser",
+            label: "Token also exposed via ctx.state.csrfToken",
+            detail: "client echoes it on the next mutating call",
+            kind: "response",
+          },
+          {
+            from: "Browser",
+            to: "csrf()",
+            label: "POST /transfer with header mirroring the cookie",
+            detail: "x-csrf-token === __Host-daloy.csrf",
+            kind: "request",
+          },
+          {
+            from: "csrf()",
+            to: "Handler",
+            label: "Constant-time compare matches, request proceeds",
+            detail: "timingSafeEqual(cookie, header)",
+            kind: "response",
+          },
+          {
+            from: "Attacker page",
+            to: "csrf()",
+            label: "Cross-site POST cannot read or set the header",
+            detail: "missing / mismatched token to 403 Forbidden",
+            kind: "note",
+          },
+        ]}
+        caption="A forged cross-site request rides the cookie automatically but cannot read it to populate the x-csrf-token header, so the constant-time compare fails and the middleware returns 403. Only a same-origin client that read the token can match it."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock
@@ -267,6 +311,34 @@ await fetch("/transfer", {
         CSRF attack model without any cookie round-trip and without coupling
         your HTML rendering to a token.
       </p>
+      <FlowDiagram
+        title="Fetch-Metadata decision"
+        steps={[
+          {
+            eyebrow: "ingress",
+            label: "Mutating request",
+            detail: "POST / PUT / PATCH / DELETE",
+          },
+          {
+            eyebrow: "header",
+            label: "Read Sec-Fetch-Site",
+            detail: "browser-attested origin context",
+          },
+          {
+            eyebrow: "same-origin / none",
+            label: "Accept",
+            detail: "same-origin or none to handler",
+            tone: "success",
+          },
+          {
+            eyebrow: "cross-site",
+            label: "Reject",
+            detail: "cross-site to 403 Forbidden",
+            tone: "danger",
+          },
+        ]}
+        caption="In fetch-metadata mode there is no cookie. The middleware trusts the browser-attested Sec-Fetch-Site header: same-origin and none pass, cross-site is rejected. A missing header (legacy browser) only passes when Origin or Referer matches allowedOrigins."
+      />
       <CodeBlock
         code={`app.use(csrf({
   strategy: "fetch-metadata",

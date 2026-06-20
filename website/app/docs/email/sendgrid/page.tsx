@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -37,6 +38,42 @@ export default function Page() {
         </a>{" "}
         SDK, which wraps the v3 Mail Send REST API.
       </p>
+
+      <SequenceDiagram
+        title="Send through @sendgrid/mail"
+        participants={["Route handler", "sgMail", "SendGrid v3 API", "Event Webhook"]}
+        steps={[
+          {
+            from: "Route handler",
+            to: "sgMail",
+            label: "sgMail.send({ from, to, subject, text })",
+            detail: "API key set once via sgMail.setApiKey()",
+            kind: "request",
+          },
+          {
+            from: "sgMail",
+            to: "SendGrid v3 API",
+            label: "POST /v3/mail/send",
+            detail: "Bearer token, JSON body",
+            kind: "request",
+          },
+          {
+            from: "SendGrid v3 API",
+            to: "Route handler",
+            label: "202 Accepted",
+            detail: "X-Message-Id header returned as { id }",
+            kind: "response",
+          },
+          {
+            from: "SendGrid v3 API",
+            to: "Event Webhook",
+            label: "delivered, bounce, open events",
+            detail: "verify the signature before trusting payloads",
+            kind: "async",
+          },
+        ]}
+        caption="The plugin sets the API key once, then sgMail.send() POSTs to the v3 Mail Send API. SendGrid replies 202 with an X-Message-Id, and later posts delivery events to your Event Webhook."
+      />
 
       <h2>1. Provision</h2>
       <ol>

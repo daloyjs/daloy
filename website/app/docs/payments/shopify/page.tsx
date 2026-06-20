@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -277,6 +278,41 @@ app.route({
       </p>
 
       <h2>6. Receive and verify webhooks</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Shopify", "DaloyJS route", "Your worker"]}
+        steps={[
+          {
+            from: "Shopify",
+            to: "DaloyJS route",
+            label: "POST /webhooks/shopify",
+            detail: "X-Shopify-Hmac-Sha256 over raw body",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "Compare HMAC-SHA256 with timingSafeEqual",
+            detail: "verifyWebhook(headers, rawBody)",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Shopify",
+            label: "401 when the signature does not match",
+            detail: "{ error: 'invalid signature' }",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Your worker",
+            label: "Dedupe on X-Shopify-Webhook-Id, then enqueue",
+            detail: "ack 200 within ~5s",
+            kind: "async",
+          },
+        ]}
+        caption="Hash the raw bytes before JSON.parse, reject bad signatures with 401, dedupe on the webhook id, then ack fast and do the heavy work in a background job."
+      />
       <p>
         Shopify signs every webhook with <code>X-Shopify-Hmac-Sha256</code> over the{" "}
         <em>raw</em> body. Skip JSON parsing until the signature matches, and dedupe on{" "}

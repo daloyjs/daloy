@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { LayerStack } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -83,6 +84,40 @@ export default function Page() {
         defense-in-depth: DaloyJS keeps dangerous defaults out of the app;
         Socket, Snyk, and Aikido keep watching the world around the app.
       </p>
+      <LayerStack
+        title="Layers a scanner adds on top of the framework"
+        flow="down"
+        layers={[
+          {
+            title: "DaloyJS framework defaults",
+            detail: "in the source tree, enforced by verify:* gates",
+            tone: "success",
+            items: [
+              "ignore-scripts=true",
+              "release-age cooldown",
+              "fetchGuard",
+              ".strict() schemas",
+            ],
+          },
+          {
+            title: "Install-time firewall (Socket)",
+            detail: "blocks confirmed malware before it touches disk",
+            tone: "accent",
+            items: ["sfw / Socket Firewall", "lockfile PR review"],
+          },
+          {
+            title: "PR / CI scans (Snyk, Aikido)",
+            detail: "CVEs, SAST, IaC, containers on every diff",
+            items: ["snyk test", "socket ci", "Aikido PR gating"],
+          },
+          {
+            title: "Runtime / DAST (against a running app)",
+            detail: "live API surface the repo can't see at rest",
+            items: ["DAST / API scanning", "surface monitoring"],
+          },
+        ]}
+        caption="Each layer catches what the others miss. The framework keeps dangerous defaults out at build time; the scanners watch the registry, the diff, and the running service. None of them replaces keeping the framework controls on."
+      />
       <p>
         Facts on this page were checked against the vendors&apos; public docs on
         2026-05-24. Product names, plan limits, and packaging details can

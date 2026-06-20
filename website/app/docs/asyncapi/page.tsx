@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -49,6 +50,19 @@ export default function Page() {
           to clients (emitted only when you declare an outbound schema).
         </li>
       </ul>
+
+      <FlowDiagram
+        title="From socket route to AsyncAPI"
+        numbered
+        caption="The same contract-first flow as OpenAPI: each app.ws() route becomes one channel with a receive operation (a socket can always be written to) plus an optional send operation. The generator is read-only, it never mounts a route or changes your socket's security posture."
+        steps={[
+          { label: "app.ws(\"/chat/:room\")", detail: "+ optional meta block", tone: "accent" },
+          { label: "generateAsyncAPI(app)", detail: "built-in, dependency-free" },
+          { label: "AsyncAPI 3.0 document", detail: "channels + operations" },
+          { label: "receive / send ops", detail: "receive always, send when declared" },
+          { label: "UI / YAML / codegen", detail: "GET /asyncapi, asyncapiToYAML, CLI", tone: "success" },
+        ]}
+      />
 
       <h2>Quick start</h2>
       <p>

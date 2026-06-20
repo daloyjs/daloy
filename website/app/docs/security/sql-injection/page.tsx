@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -124,6 +125,29 @@ export default function Page() {
         Aikido&apos;s report calls it out as defense #1 and #2; Daloy gives you
         both in one block.
       </p>
+      <FlowDiagram
+        title="Two ways the same input reaches the database"
+        steps={[
+          {
+            eyebrow: "ingress",
+            label: "Request value",
+            detail: "id = \"foo' OR 1=1 --\"",
+          },
+          {
+            eyebrow: "spliced",
+            label: "String-concatenated SQL",
+            detail: "`... WHERE id = '${id}'`",
+            tone: "danger",
+          },
+          {
+            eyebrow: "bound",
+            label: "Parameterized query",
+            detail: "WHERE id = $1, [id]",
+            tone: "success",
+          },
+        ]}
+        caption="The same attacker string takes two paths. Spliced into the SQL text it becomes executable syntax; passed as a bound parameter it is only ever data, so the query structure can never change."
+      />
       <CodeBlock
         code={`import { App, z } from "@daloyjs/core";
 import { db } from "./db";

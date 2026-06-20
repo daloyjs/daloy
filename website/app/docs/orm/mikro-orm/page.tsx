@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -144,6 +145,17 @@ export const mikroOrmPlugin = {
         concurrent handlers. Do it in middleware and expose the forked EM on{" "}
         <code>state</code>.
       </p>
+      <FlowDiagram
+        numbered
+        title="A forked EntityManager per request"
+        caption="The plugin decorates one root ORM at startup. A beforeHandle hook forks a fresh EntityManager for each request onto state.em, so the identity map and unit-of-work state stay isolated, then a single flush() (or transactional()) persists the changes."
+        steps={[
+          { eyebrow: "startup", label: "Root ORM", detail: "state.orm = await MikroORM.init(...)", tone: "muted" },
+          { eyebrow: "beforeHandle", label: "Fork per request", detail: "state.em = state.orm.em.fork()", tone: "accent" },
+          { eyebrow: "handler", label: "Scoped queries", detail: "state.em.create / findOne" },
+          { eyebrow: "unit of work", label: "Persist on flush", detail: "await state.em.flush()", tone: "success" },
+        ]}
+      />
       <CodeBlock
         code={`// src/db/middleware.ts
 import type { Hooks } from "@daloyjs/core";

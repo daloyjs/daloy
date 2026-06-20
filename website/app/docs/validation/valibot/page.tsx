@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -97,6 +98,18 @@ app.route({
         the built-in <code>v.toNumber</code>/<code>v.toBoolean</code>/<code>v.toDate</code> actions)
         into the pipe to convert before further validation:
       </p>
+      <FlowDiagram
+        title="Inside a v.pipe()"
+        numbered
+        steps={[
+          { eyebrow: "from the URL", label: "Raw string", detail: '"?page=2"', tone: "muted" },
+          { label: "v.string()", detail: "assert it is a string" },
+          { label: "v.transform(Number)", detail: "coerce to a number", tone: "accent" },
+          { label: "v.integer() · v.minValue(1)", detail: "validate the result" },
+          { eyebrow: "in your handler", label: "Typed value", detail: "query.page: number", tone: "success" },
+        ]}
+        caption="A pipe runs left to right: each action receives the previous output. Coerce first with v.transform, then validate the converted value, so query.page reaches your handler already typed as a number."
+      />
       <CodeBlock code={`import * as v from "valibot";
 
 const Params = v.object({

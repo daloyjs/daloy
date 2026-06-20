@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import { CodeBlock } from "@/components/code-block";
+import { BranchDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -110,6 +111,36 @@ export default function Page() {
         thin adapters at the edge. Choose the adapter for the place you want to
         deploy your API.
       </p>
+
+      <BranchDiagram
+        title="One app core, many runtimes"
+        source={{
+          eyebrow: "web-standard core",
+          label: "Your DaloyJS App",
+          detail: "Request → Response",
+        }}
+        branches={[
+          { eyebrow: "runtime", label: "Node.js", detail: "@daloyjs/core/node" },
+          { eyebrow: "runtime", label: "Bun", detail: "@daloyjs/core/bun" },
+          { eyebrow: "runtime", label: "Deno", detail: "@daloyjs/core/deno" },
+          {
+            eyebrow: "edge",
+            label: "Cloudflare Workers",
+            detail: "@daloyjs/core/cloudflare",
+          },
+          {
+            eyebrow: "serverless",
+            label: "Vercel / Netlify",
+            detail: "@daloyjs/core/vercel",
+          },
+          {
+            eyebrow: "edge / serverless",
+            label: "Fastly / AWS Lambda",
+            detail: "@daloyjs/core/fastly · /lambda",
+          },
+        ]}
+        caption="The core only ever sees a Request and returns a Response. Each thin adapter handles one platform's sockets, signals, or event shape, so the same app ships everywhere without a rewrite."
+      />
 
       <h2>Pick a target</h2>
 

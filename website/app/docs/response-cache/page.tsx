@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -87,6 +88,37 @@ app.route({
 
       <h2>How it works</h2>
       <p>For an eligible request the middleware derives a cache key and:</p>
+
+      <BranchDiagram
+        title="Three cache outcomes"
+        source={{
+          eyebrow: "request",
+          label: "Eligible GET/HEAD, derive cache key",
+          detail: "method + URL (+ varyHeaders)",
+        }}
+        branches={[
+          {
+            eyebrow: "fresh",
+            label: "HIT",
+            detail: "stored body served, handler skipped",
+            tone: "success",
+          },
+          {
+            eyebrow: "within SWR window",
+            label: "STALE",
+            detail: "stale served now, one background refresh",
+            tone: "accent",
+          },
+          {
+            eyebrow: "no entry",
+            label: "MISS",
+            detail: "handler runs, cacheable response stored",
+            tone: "muted",
+          },
+        ]}
+        caption="Every response carries an X-Cache marker (HIT, STALE, or MISS). On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry."
+      />
+
       <ul>
         <li>
           <strong>Fresh hit</strong> — the stored response is served and the

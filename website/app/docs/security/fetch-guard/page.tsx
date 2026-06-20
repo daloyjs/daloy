@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -47,6 +48,35 @@ export default function Page() {
         which handed back short-lived IAM credentials and pivoted into the
         startup&rsquo;s S3 buckets.
       </p>
+      <FlowDiagram
+        title="What every guarded fetch goes through"
+        steps={[
+          {
+            eyebrow: "url",
+            label: "Check protocol",
+            detail: "http: / https: only",
+            tone: "danger",
+          },
+          {
+            eyebrow: "dns",
+            label: "Resolve hostname",
+            detail: "to one or more IPs",
+          },
+          {
+            eyebrow: "ip",
+            label: "Match deny ranges",
+            detail: "RFC1918, loopback, 169.254.x",
+            tone: "danger",
+          },
+          {
+            eyebrow: "safe",
+            label: "Dispatch request",
+            detail: "redirects re-validated per hop",
+            tone: "success",
+          },
+        ]}
+        caption="A request only leaves the box after the protocol, the resolved IPs, and every redirect Location pass the deny floor. Anything that resolves to an internal or metadata address throws SsrfBlockedError instead of being sent."
+      />
       <p>
         <code>fetchGuard()</code> wraps the global <code>fetch</code> and
         refuses to dispatch a request whose target resolves to a dangerous

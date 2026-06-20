@@ -1,4 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -29,6 +31,44 @@ export default function Page() {
         <em>“are any operationIds missing?”</em>, or{" "}
         <em>“give me the OpenAPI spec”</em> without starting a server.
       </p>
+
+      <BranchDiagram
+        title="Load the App, emit anything"
+        source={{
+          eyebrow: "loads your app",
+          label: "daloy inspect [entry]",
+          detail: "default export, app, or buildApp() / createApp()",
+        }}
+        branches={[
+          {
+            eyebrow: "default",
+            label: "Human table",
+            detail: "method, path, operationId",
+          },
+          {
+            eyebrow: "--json",
+            label: "Machine-readable JSON",
+            detail: "route catalog",
+          },
+          {
+            eyebrow: "--openapi",
+            label: "OpenAPI 3.1 document",
+            detail: "add --yaml for YAML",
+          },
+          {
+            eyebrow: "--ai",
+            label: "AI/codegen dump",
+            detail: "schemas + meta.examples",
+          },
+          {
+            eyebrow: "--check",
+            label: "Contract suite",
+            detail: "exit 1 on errors",
+            tone: "danger",
+          },
+        ]}
+        caption="One command loads your App instance without starting a server, then prints the registered routes in whatever shape you ask for."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

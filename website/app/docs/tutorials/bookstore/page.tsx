@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 import Link from "next/link";
 
 import { buildMetadata } from "@/lib/seo";
@@ -20,6 +21,20 @@ export default function Page() {
         We&apos;ll build a tiny bookstore service end-to-end: routes, validation, security, OpenAPI, a Hey
         API typed SDK, and contract tests. By the end you&apos;ll have a production-shaped DaloyJS app.
       </p>
+
+      <FlowDiagram
+        title="What you'll build"
+        numbered
+        steps={[
+          { label: "Scaffold", detail: "pnpm add @daloyjs/core zod" },
+          { label: "buildApp factory", detail: "routes · Zod · security hooks", tone: "accent" },
+          { label: "Serve", detail: "serve(app) on Node" },
+          { label: "OpenAPI spec", detail: "generateOpenAPI(app)" },
+          { label: "Typed SDK", detail: "Hey API openapi-ts" },
+          { label: "Contract tests", detail: "runContractTests(app)", tone: "success" },
+        ]}
+        caption="A single buildApp factory is shared by the server, the OpenAPI dump, and the tests, so the spec, the typed client, and the contract tests can never drift apart."
+      />
 
       <h2>1. Scaffold</h2>
       <CodeBlock language="bash" code={`mkdir bookstore && cd bookstore

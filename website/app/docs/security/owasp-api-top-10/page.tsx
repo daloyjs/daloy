@@ -1,3 +1,5 @@
+import { LayerStack } from "../../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -59,6 +61,46 @@ export default function Page() {
         framework can decide for you (business-logic authorization, data
         sensitivity classification, threat modelling).
       </p>
+
+      <LayerStack
+        title="Where each item is handled"
+        flow="down"
+        layers={[
+          {
+            title: "Refused at construction or boot",
+            detail: "the dangerous choice never makes it to runtime",
+            tone: "success",
+            items: [
+              "cors origin: '*'",
+              "weak session secret",
+              "HS* under 32 bytes",
+              "session() without csrf()",
+            ],
+          },
+          {
+            title: "Enforced per request by core + middleware",
+            detail: "one documented call away",
+            tone: "accent",
+            items: [
+              "bearerAuth() / jwk()",
+              "requireScopes()",
+              "rateLimit()",
+              "fetchGuard()",
+              "secureHeaders()",
+            ],
+          },
+          {
+            title: "Still your responsibility",
+            detail: "decisions no framework can make for you",
+            items: [
+              "object ownership checks",
+              "data classification",
+              "abuse threat modelling",
+            ],
+          },
+        ]}
+        caption="The OWASP API Top 10 splits cleanly across three layers in Daloy: choices refused before runtime, controls one call away, and the business-logic decisions only your code can make. The mapping table below walks each item through these layers."
+      />
 
       <h2>The mapping</h2>
       <table>

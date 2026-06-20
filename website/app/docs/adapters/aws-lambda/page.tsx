@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -33,6 +34,36 @@ export default function Page() {
         <code>multiValueHeaders</code>, and forwards method, path, query, and
         headers into a standard <code>Request</code>.
       </p>
+
+      <FlowDiagram
+        title="Lambda adapter request path"
+        steps={[
+          {
+            eyebrow: "trigger",
+            label: "HTTP API v2 · REST v1 · Function URL",
+            detail: "Lambda event payload",
+          },
+          {
+            eyebrow: "adapter",
+            label: "toLambdaHandler(app)",
+            detail: "decodes base64, cookies, multiValueHeaders",
+            tone: "muted",
+          },
+          {
+            eyebrow: "core",
+            label: "app.fetch(Request)",
+            detail: "routing · hooks · handler",
+            tone: "accent",
+          },
+          {
+            eyebrow: "trigger",
+            label: "Lambda result",
+            detail: "or streamed via toLambdaStreamHandler",
+            tone: "success",
+          },
+        ]}
+        caption="toLambdaHandler normalizes all three event shapes into one web-standard Request, runs app.fetch, then serializes the Response back into the Lambda result. Swap in toLambdaStreamHandler for SSE or large downloads."
+      />
 
       <h2>When to choose Lambda</h2>
       <ul>

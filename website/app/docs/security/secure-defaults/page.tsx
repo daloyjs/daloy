@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { BranchDiagram, FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -37,6 +38,33 @@ export default function Page() {
         escape hatch (<code>secureDefaults: false</code>) plus per-feature
         opt-outs for the rare cases where you genuinely need the old behavior.
       </p>
+
+      <BranchDiagram
+        title="What new App() arms for you"
+        source={{
+          eyebrow: "construction",
+          label: "new App()",
+          detail: "no middleware calls required",
+        }}
+        branches={[
+          {
+            label: "secureHeaders() auto-applied",
+            detail: "HSTS, frame DENY, nosniff, baseline CSP",
+            tone: "success",
+          },
+          {
+            label: "Cross-origin write guard",
+            detail: "POST/PUT/PATCH/DELETE need cors()",
+            tone: "success",
+          },
+          {
+            label: "Per-route accepts allowlist",
+            detail: "content-type opt-in per route",
+            tone: "success",
+          },
+        ]}
+        caption="A fresh App instance ships these defaults armed. Each one has a per-feature opt-out, and secureDefaults: false is the single master escape hatch for migrations."
+      />
 
       <h2>What flipped</h2>
 
@@ -107,6 +135,38 @@ app.use(
         <code>Origin: null</code> from a sandboxed iframe) pass through
         unchanged.
       </p>
+
+      <FlowDiagram
+        title="Cross-origin write admission"
+        numbered
+        steps={[
+          {
+            eyebrow: "ingress",
+            label: "Cross-origin POST/PUT/PATCH/DELETE",
+            detail: "Origin differs from request URL",
+          },
+          {
+            eyebrow: "guard",
+            label: "cors() allows the origin?",
+            detail: "matched route policy decides",
+            tone: "accent",
+          },
+          {
+            eyebrow: "no policy",
+            label: "Rejected",
+            detail: "403 application/problem+json",
+            tone: "danger",
+          },
+          {
+            eyebrow: "allowed",
+            label: "Reaches your handler",
+            detail: "origin on the cors() allowlist",
+            tone: "success",
+          },
+        ]}
+        caption="Without a cors() policy that allows the origin, a cross-origin state-changing request is rejected with 403 before your handler runs. Read-only methods and same-origin requests are never affected."
+      />
+
       <CodeBlock
         code={`import { App, cors } from "@daloyjs/core";
 

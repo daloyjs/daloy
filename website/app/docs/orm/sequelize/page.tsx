@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -30,6 +31,18 @@ export default function Page() {
         transactions, and broad driver support. It is a strong fit when your
         team prefers an Active Record style API and deploys DaloyJS on Node.js.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="One request through Sequelize"
+        caption="Zod validates the request, the handler queries a Sequelize model off state.db, then the response schema checks the body on the way out (call toJSON() so the plain object matches the schema)."
+        steps={[
+          { eyebrow: "client", label: "HTTP request", detail: "GET /users/:id" },
+          { eyebrow: "zod", label: "Validated input", detail: "params.id is a uuid", tone: "accent" },
+          { eyebrow: "sequelize", label: "Model query", detail: "state.db.User.findByPk(id)" },
+          { eyebrow: "response", label: "Typed body", detail: "user.toJSON() | 404", tone: "success" },
+        ]}
+      />
 
       <h2>1. Install</h2>
       <CodeBlock

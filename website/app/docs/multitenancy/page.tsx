@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -38,6 +39,36 @@ export default function Page() {
         <code>responseCache</code>) can all key off the same resolved value via{" "}
         <code>tenantScope()</code>.
       </p>
+
+      <FlowDiagram
+        title="Resolve once, then isolate"
+        numbered
+        steps={[
+          {
+            eyebrow: "request",
+            label: "Incoming request",
+            detail: "subdomain · header · path · claim",
+          },
+          {
+            eyebrow: "tenancy()",
+            label: "Resolve + validate + normalize",
+            detail: "ctx.state.tenant",
+            tone: "accent",
+          },
+          {
+            eyebrow: "tenantScope()",
+            label: "Partition isolation knobs",
+            detail: "rateLimit · concurrencyLimit · idempotency · responseCache",
+          },
+          {
+            eyebrow: "handler",
+            label: "Tenant-scoped work",
+            detail: "ordersFor(state.tenant)",
+            tone: "success",
+          },
+        ]}
+        caption="tenancy() resolves the calling tenant once per request and writes it to ctx.state.tenant. Register it first so tenantScope() can key every per-tenant bucket off the same value. If a limiter runs before tenancy(), its key falls back to tenant:unknown."
+      />
 
       <h2>Quick start</h2>
       <p>
@@ -81,6 +112,50 @@ app.route({
         fall back to the subdomain). A resolver is just a{" "}
         <code>(ctx) =&gt; string | undefined</code>, so you can write your own.
       </p>
+
+      <BranchDiagram
+        title="Many sources, one resolved tenant"
+        source={{
+          eyebrow: "resolve",
+          label: "Resolver(s) tried in order",
+          detail: "first non-empty value wins",
+        }}
+        branches={[
+          {
+            eyebrow: "subdomain",
+            label: "tenantFromSubdomain()",
+            detail: "acme.example.com to acme",
+          },
+          {
+            eyebrow: "header",
+            label: "tenantFromHeader()",
+            detail: "spoofable, pair with allow",
+            tone: "danger",
+          },
+          {
+            eyebrow: "path",
+            label: "tenantFromPathPrefix()",
+            detail: "/acme/orders to acme",
+          },
+          {
+            eyebrow: "claim",
+            label: "tenantFromClaim()",
+            detail: "verified JWT/session claim",
+          },
+          {
+            eyebrow: "custom",
+            label: "(ctx) => string | undefined",
+            detail: "derive it however you like",
+          },
+        ]}
+        converge={{
+          eyebrow: "ctx.state.tenant",
+          label: "Validated, normalized id",
+          detail: "[a-z0-9_-], 1 to 63 chars",
+        }}
+        caption="Pass one resolver or an array tried in order. The first non-empty result is normalized to a conservative charset before it is stored, so a spoofable header value cannot smuggle separators into keys or log lines. tenantFromHeader is opt-in and only safe behind a trusted proxy."
+      />
+
       <div className="overflow-x-auto">
         <table>
           <thead>

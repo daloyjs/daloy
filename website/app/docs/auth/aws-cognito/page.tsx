@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -35,6 +36,51 @@ export default function Page() {
         library, pure TypeScript, zero runtime dependencies, and edge-runtime
         compatible via Web Crypto.
       </p>
+
+      <SequenceDiagram
+        title="Cognito access-token verification"
+        participants={[
+          "Client app",
+          "Cognito (user pool)",
+          "DaloyJS API",
+          "Cognito JWKS",
+        ]}
+        steps={[
+          {
+            from: "Client app",
+            to: "Cognito (user pool)",
+            label: "Sign in via hosted UI / authorization-code flow",
+            detail: "Cognito issues access + ID tokens (RS256)",
+            kind: "async",
+          },
+          {
+            from: "Client app",
+            to: "DaloyJS API",
+            label: "Call API with Authorization: Bearer <access token>",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Cognito JWKS",
+            label: "CognitoJwtVerifier fetches signing keys (cached)",
+            detail: "hydrate() pre-warms the JWKS cache",
+            kind: "async",
+          },
+          {
+            from: "DaloyJS API",
+            to: "DaloyJS API",
+            label: "Verify signature, tokenUse, clientId, scope & cognito:groups",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS API",
+            to: "Client app",
+            label: "Return protected data after requireAuth passes",
+            kind: "response",
+          },
+        ]}
+        caption="The DaloyJS API only verifies the access token Cognito issued. It never sees user passwords, and the JWKS is cached so most requests verify without a network round-trip."
+      />
 
       <h2>1. Provision</h2>
       <ol>

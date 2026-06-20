@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -59,6 +60,32 @@ export default function Page() {
         shipped to production&quot; footgun by forcing an explicit two-step
         opt-in:
       </p>
+
+      <FlowDiagram
+        title="Turning off secure defaults in production"
+        numbered
+        steps={[
+          {
+            eyebrow: "construct",
+            label: "new App({ env: 'production' })",
+            detail: "with secureDefaults: false",
+          },
+          {
+            eyebrow: "no ack",
+            label: "Refuses to construct",
+            detail: "acknowledgeInsecureDefaults missing",
+            tone: "danger",
+          },
+          {
+            eyebrow: "ack: true",
+            label: "Constructs, audit-logged",
+            detail: 'event: "secure_defaults.disabled"',
+            tone: "success",
+          },
+        ]}
+        caption="Disabling the whole secure-by-default surface in production needs an explicit second flag. Even when acknowledged, a once-per-process error log enumerates every default that was turned off."
+      />
+
       <CodeBlock
         language="ts"
         code={`// ❌ refuses-to-construct in production

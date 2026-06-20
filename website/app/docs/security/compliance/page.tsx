@@ -1,3 +1,5 @@
+import { LayerStack } from "../../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -58,6 +60,45 @@ export default function Page() {
         Most frameworks ask for the same handful of application-layer controls
         under different names. DaloyJS ships them by default.
       </p>
+      <LayerStack
+        title="The application-layer controls auditors keep asking about"
+        flow="down"
+        layers={[
+          {
+            title: "Transport & headers",
+            detail: "secure-by-default HTTP boundary",
+            tone: "accent",
+            items: ["secureHeaders()", "HSTS", "CSP nonce"],
+          },
+          {
+            title: "Authn, authz & crypto",
+            detail: "identity tied to every request",
+            items: [
+              "session()",
+              "bearerAuth()",
+              "JWT alg allowlist",
+              "timingSafeEqual",
+            ],
+          },
+          {
+            title: "Input validation & abuse control",
+            detail: "bad input rejected before the handler",
+            items: [
+              ".strict() schemas",
+              "safeJsonParse",
+              "rateLimit()",
+              "fetchGuard()",
+            ],
+          },
+          {
+            title: "Audit logging & supply chain",
+            detail: "evidence trail for the dossier",
+            tone: "success",
+            items: ["requestId + logs", "redactRecord()", "provenance", "SBOM"],
+          },
+        ]}
+        caption="The same four control families show up in SOC 2, ISO 27001, HIPAA, GDPR, PCI, NIS2, DORA, and the UK CSR Bill under different names. The table below maps each framework's clause to the DaloyJS primitive that satisfies it."
+      />
       <table>
         <thead>
           <tr>

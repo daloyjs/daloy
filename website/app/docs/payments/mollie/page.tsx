@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
+import { SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -200,6 +201,41 @@ declare module "@daloyjs/core" {
       </p>
 
       <h2>5. Create a payment</h2>
+      <SequenceDiagram
+        title="Redirect payment flow"
+        participants={["Shopper", "DaloyJS route", "Mollie"]}
+        steps={[
+          {
+            from: "Shopper",
+            to: "DaloyJS route",
+            label: "POST /checkout/mollie",
+            detail: "orderId + amount { value: '10.00' }",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Mollie",
+            label: "payments.create with an idempotencyKey",
+            detail: "redirectUrl + webhookUrl",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Shopper",
+            label: "Return _links.checkout.href",
+            detail: "201 { checkoutUrl }",
+            kind: "response",
+          },
+          {
+            from: "Shopper",
+            to: "Mollie",
+            label: "Pays on the hosted checkout, returns via redirectUrl",
+            detail: "redirect is a UX hint, not proof",
+            kind: "async",
+          },
+        ]}
+        caption="Create the payment with an idempotency key, hand the shopper the hosted checkout URL, and treat the redirect back as a UX signal only. The webhook is the source of truth."
+      />
       <CodeBlock
         code={`import { z } from "zod";
 import { randomUUID } from "node:crypto";
@@ -253,6 +289,41 @@ app.route({
       />
 
       <h2>6. Webhook</h2>
+      <SequenceDiagram
+        title="Webhook verification"
+        participants={["Mollie", "DaloyJS route"]}
+        steps={[
+          {
+            from: "Mollie",
+            to: "DaloyJS route",
+            label: "POST /webhooks/mollie",
+            detail: "X-Mollie-Signature: sha256=... over id=tr_xxx",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS route",
+            to: "DaloyJS route",
+            label: "SignatureValidator over the raw body",
+            detail: "valid | legacy (unsigned) | invalid",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Mollie",
+            label: "401 on invalid, otherwise payments.get(id)",
+            detail: "refetch the authoritative status",
+            kind: "response",
+          },
+          {
+            from: "DaloyJS route",
+            to: "Mollie",
+            label: "Fulfil when status === 'paid', ack 200",
+            detail: "use metadata.orderId",
+            kind: "async",
+          },
+        ]}
+        caption="Verify X-Mollie-Signature over the raw body, refetch the full payment with payments.get because the webhook body carries only the id, then fulfil on the 'paid' status and ack 200 fast."
+      />
       <p>
         Mollie&apos;s webhook payload is famously minimalist: a form-encoded body of{" "}
         <code>id=tr_xxx</code>. You take that <code>id</code>, fetch the full payment from

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { LayerStack } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -48,6 +49,41 @@ export default function Page() {
         you need to follow that checklist is already in the framework. This page
         maps each rule to the helper that enforces it.
       </p>
+
+      <LayerStack
+        title="Defense layers a request crosses before it changes admin state"
+        flow="down"
+        layers={[
+          {
+            title: "Network perimeter",
+            detail: "rejected before authentication even runs",
+            tone: "accent",
+            items: ["internal: true", "ipRestriction()", "VPN / tunnel"],
+          },
+          {
+            title: "Per-admin authentication",
+            detail: "no shared support@ accounts",
+            items: ["bearerAuth()", "JWT verify", "rateLimit(admin-auth)"],
+          },
+          {
+            title: "Session & CSRF",
+            detail: "stops cross-site state changes",
+            items: ["session() Strict+Secure", "csrf()"],
+          },
+          {
+            title: "Strict CSP",
+            detail: "injected scripts dropped by the browser",
+            items: ["default-src 'none'", "nonce: true", "Trusted Types"],
+          },
+          {
+            title: "Audit log",
+            detail: "who did what, when, from where",
+            tone: "success",
+            items: ["requestId()", "structured logger", "tracing()"],
+          },
+        ]}
+        caption="Each layer maps to one rule on Aikido's checklist. A leaked password alone clears none of them: it still has to come from the right network, carry an unthrottled per-admin token, survive CSRF, and leave an audit record."
+      />
 
       <h2>1. Don&apos;t mix admin routes into your public app</h2>
       <p>

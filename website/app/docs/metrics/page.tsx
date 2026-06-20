@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -43,6 +44,37 @@ export default function Page() {
         <code>process.*</code> gauges guarded for non-Node runtimes), so it runs
         unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
       </p>
+
+      <FlowDiagram
+        title="From request to scrape"
+        numbered
+        caption="RED instrumentation records counters and the latency histogram on every request, the registry accumulates the series, then a Prometheus scrape hits the auth-guarded, rate-limited /metrics route and gets the rendered exposition text."
+        steps={[
+          {
+            label: "Request handled",
+            detail: "RED hook installed by app.metrics()",
+          },
+          {
+            label: "Record series",
+            detail: "requests_total, request_duration_seconds, in_flight",
+            tone: "accent",
+          },
+          {
+            label: "Registry accumulates",
+            detail: "low-cardinality {method, route, status} labels",
+          },
+          {
+            label: "Prometheus scrapes",
+            detail: "GET /metrics, Bearer token + per-IP rate limit",
+          },
+          {
+            label: "Exposition rendered",
+            eyebrow: "text/plain",
+            detail: "registry.render() to OpenMetrics",
+            tone: "success",
+          },
+        ]}
+      />
 
       <h2>Quick start</h2>
       <p>

@@ -1,3 +1,5 @@
+import { LayerStack } from "../../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -44,6 +46,46 @@ export default function Page() {
         Think of DaloyJS supply-chain and security posture as three independent
         layers. This page documents the first one.
       </p>
+
+      <LayerStack
+        title="Three independent layers"
+        flow="down"
+        layers={[
+          {
+            title: "Runtime guardrails (this page)",
+            detail: "inside @daloyjs/core, every request, no CI host required",
+            tone: "success",
+            items: [
+              "safe CORS",
+              "safeJsonParse",
+              "bodyLimitBytes",
+              "requestTimeoutMs",
+              "secureHeaders()",
+            ],
+          },
+          {
+            title: "Install-time hardening",
+            detail: "pnpm scaffold .npmrc + verify:lockfile",
+            tone: "accent",
+            items: [
+              "ignore-scripts=true",
+              "minimum-release-age=1440",
+              "frozen lockfile",
+            ],
+          },
+          {
+            title: "CI / CD hardening",
+            detail: "GitHub Actions bundle only; translate elsewhere",
+            tone: "muted",
+            items: [
+              "SHA-pinned actions",
+              "harden-runner",
+              "permissions: {}",
+            ],
+          },
+        ]}
+        caption="Only the top layer travels everywhere. It is baked into the framework and runs on every request no matter where you host the repo. The lower two layers depend on keeping the pnpm scaffold and the generated GitHub workflows."
+      />
 
       <h2>The three layers, side by side</h2>
       <table>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram, SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -30,6 +31,19 @@ export default function Page() {
         and transactions through sessions. It fits naturally into DaloyJS when you register the connection once
         and expose a small model surface on <code>state</code>.
       </p>
+
+      <FlowDiagram
+        title="Mongoose setup"
+        numbered
+        steps={[
+          { label: "Install", detail: "pnpm add mongoose" },
+          { label: "Schema & model", detail: "new Schema · model('User')" },
+          { label: "Plugin", detail: "connect · decorate('db') · onClose", tone: "accent" },
+          { label: "Augment state", detail: "interface AppState { db }" },
+          { label: "Use in routes", detail: "state.db.User.findById()", tone: "success" },
+        ]}
+        caption="The connection happens once inside the plugin. After you augment AppState, handlers get a fully typed state.db model surface."
+      />
 
       <h2>1. Install</h2>
       <CodeBlock code={`pnpm add mongoose`} />
@@ -139,6 +153,42 @@ serve(app, { port: 3000 });`}
         Use MongoDB sessions for multi-document transactions. Start the session inside the handler and thread it
         through every model call in the unit of work.
       </p>
+
+      <SequenceDiagram
+        title="Session-scoped transaction"
+        participants={["Handler", "Session", "Models"]}
+        steps={[
+          {
+            from: "Handler",
+            to: "Session",
+            label: "Start a session",
+            detail: "startSession()",
+            kind: "request",
+          },
+          {
+            from: "Handler",
+            to: "Models",
+            label: "Run every write inside withTransaction",
+            detail: "User.create([...], { session })",
+            kind: "request",
+          },
+          {
+            from: "Session",
+            to: "Handler",
+            label: "Commit on success, roll back on throw",
+            kind: "response",
+          },
+          {
+            from: "Handler",
+            to: "Session",
+            label: "Always end the session in finally",
+            detail: "endSession()",
+            kind: "note",
+          },
+        ]}
+        caption="The session is opened once, threaded through every model call, and ended in a finally block so it closes whether the transaction commits or rolls back."
+      />
+
       <CodeBlock
         code={`handler: async ({ body, state }) => {
   const session = await state.db.connection.startSession();

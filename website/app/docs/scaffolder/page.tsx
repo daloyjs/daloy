@@ -1,6 +1,8 @@
 import { CodeBlock } from "../../../components/code-block";
 import Link from "next/link";
 
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
+
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -47,6 +49,43 @@ export default function Page() {
         .
       </p>
 
+      <BranchDiagram
+        title="One generator, five templates"
+        source={{
+          eyebrow: "generator",
+          label: "create-daloy",
+          detail: "pnpm create daloy@latest my-api",
+        }}
+        branches={[
+          {
+            eyebrow: "default",
+            label: "node-basic",
+            detail: "@daloyjs/core/node",
+          },
+          {
+            eyebrow: "serverless",
+            label: "vercel",
+            detail: "@daloyjs/core/vercel",
+          },
+          {
+            eyebrow: "edge",
+            label: "cloudflare-worker",
+            detail: "@daloyjs/core/cloudflare",
+          },
+          {
+            eyebrow: "runtime",
+            label: "bun-basic",
+            detail: "@daloyjs/core/bun",
+          },
+          {
+            eyebrow: "runtime",
+            label: "deno-basic",
+            detail: "@daloyjs/core/deno",
+          },
+        ]}
+        caption="Pick a target with --template. Every starter ships the same guardrail-first posture and scripts, only the runtime adapter and config differ."
+      />
+
       <h2>Quick start</h2>
       <CodeBlock
         language="bash"
@@ -63,6 +102,24 @@ bun  create daloy           my-api`}
         dependencies, whether to initialize a git repository, and whether to add
         the GitHub security bundle.
       </p>
+
+      <FlowDiagram
+        numbered
+        title="The interactive prompts"
+        steps={[
+          { label: "Project name", detail: "my-api" },
+          { label: "Template", detail: "node-basic, vercel, ..." },
+          { label: "Package manager", detail: "pnpm, npm, yarn, bun" },
+          { label: "Install deps?", detail: "--install / --no-install" },
+          { label: "Init git?", detail: "--git / --no-git" },
+          {
+            label: "GitHub security bundle?",
+            detail: "--with-ci",
+            tone: "success",
+          },
+        ]}
+        caption="When you omit flags the CLI prompts for each choice in order. Pass --yes to accept every default and skip the prompts entirely."
+      />
 
       <h2>Non-interactive usage</h2>
       <CodeBlock

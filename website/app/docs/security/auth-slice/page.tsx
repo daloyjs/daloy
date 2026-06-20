@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram, SequenceDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -138,6 +139,43 @@ export default function Page() {
         the HMAC secret&quot; attack cannot be configured. The middleware is
         exported from the dedicated subpath <code>@daloyjs/core/jwk</code>.
       </p>
+
+      <SequenceDiagram
+        title="Verifying a Bearer token with jwk()"
+        participants={["Client", "jwk() middleware", "IdP JWKS"]}
+        steps={[
+          {
+            from: "Client",
+            to: "jwk() middleware",
+            label: "Request with Bearer token",
+            detail: "JWT header carries kid + alg",
+            kind: "request",
+          },
+          {
+            from: "jwk() middleware",
+            to: "IdP JWKS",
+            label: "Fetch key set by kid",
+            detail: "TTL-cached, in-flight dedup, stale fallback",
+            kind: "async",
+          },
+          {
+            from: "jwk() middleware",
+            to: "jwk() middleware",
+            label: "Cross-check JWT alg vs JWK alg; reject HS*",
+            detail: "asymmetric-only allowlist",
+            kind: "note",
+          },
+          {
+            from: "jwk() middleware",
+            to: "Client",
+            label: "Verify signature + exp, stamp ctx.state.user",
+            detail: "{ sub, scopes, claims }",
+            kind: "response",
+          },
+        ]}
+        caption="jwk() resolves the signing key by kid from the JWKS source, cross-checks the JWT-header alg against the JWK, and refuses HS* so the confused-deputy attack cannot be configured. Tokens are always cryptographically verified and exp-checked."
+      />
+
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import { jwk } from "@daloyjs/core/jwk";
@@ -194,6 +232,38 @@ app.use(
         revocation list, a token-version counter, or any other per-request
         signal that a previously-issued token has been invalidated.
       </p>
+
+      <FlowDiagram
+        title="Static check then per-request revalidation"
+        numbered
+        steps={[
+          {
+            eyebrow: "static",
+            label: "validate / signature check",
+            detail: "token shape or JWT signature + exp",
+          },
+          {
+            eyebrow: "revalidate",
+            label: "verify(credentials, ctx)",
+            detail: "revocation list, token-version, password-changed",
+            tone: "accent",
+          },
+          {
+            eyebrow: "returns false",
+            label: "ForbiddenError",
+            detail: "403, no WWW-Authenticate (RFC 6750)",
+            tone: "danger",
+          },
+          {
+            eyebrow: "true / undefined",
+            label: "Request accepted",
+            detail: "handler runs",
+            tone: "success",
+          },
+        ]}
+        caption="The verify hook runs only after the static validate or signature check passes, so a structurally valid but revoked token is still rejected with 403. Returning true or undefined accepts the request."
+      />
+
       <CodeBlock
         code={`import { bearerAuth } from "@daloyjs/core";
 

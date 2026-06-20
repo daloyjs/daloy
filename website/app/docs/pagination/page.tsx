@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -46,6 +47,41 @@ export default function Page() {
         / <code>atob</code>, and <code>JSON</code>, so it runs unchanged on
         Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
       </p>
+
+      <FlowDiagram
+        title="One page of a cursor-paginated list"
+        numbered
+        steps={[
+          {
+            eyebrow: "validate",
+            label: "paginationQuery()",
+            detail: "typed { limit, cursor }",
+          },
+          {
+            eyebrow: "decode",
+            label: "decodeCursor()",
+            detail: "opaque token to sort key",
+          },
+          {
+            eyebrow: "query",
+            label: "Fetch limit + 1 rows",
+            detail: "one extra row reveals next page",
+            tone: "accent",
+          },
+          {
+            eyebrow: "encode",
+            label: "encodeCursor(last row)",
+            detail: "next cursor or null",
+          },
+          {
+            eyebrow: "advertise",
+            label: "buildPageLinks() Link header",
+            detail: "rel=next · prev · first",
+            tone: "success",
+          },
+        ]}
+        caption="paginationQuery() validates and coerces the limit and cursor query params, decodeCursor() turns the opaque token back into a sort key, and fetching limit + 1 rows reveals whether another page exists. The last row becomes the next cursor, advertised through an RFC 8288 Link header."
+      />
 
       <h2>Quick start</h2>
       <p>

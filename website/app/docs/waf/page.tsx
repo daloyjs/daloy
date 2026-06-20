@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -46,6 +47,38 @@ export default function Page() {
         total reaches the threshold, the request is rejected with a generic{" "}
         <code>403</code> (block mode) or merely reported (log mode).
       </p>
+
+      <FlowDiagram
+        title="beforeHandle inspection"
+        numbered
+        steps={[
+          {
+            label: "Validated request",
+            detail: "path / query / body",
+            eyebrow: "inbound",
+          },
+          {
+            label: "Inspect locations",
+            detail: "sqli / xss / nosqli / cmdi",
+          },
+          {
+            label: "Anomaly score vs threshold",
+            detail: "score >= blockThreshold",
+            tone: "accent",
+          },
+          {
+            label: "Pass to handler",
+            detail: "below threshold",
+            tone: "success",
+          },
+          {
+            label: "Reject (block mode)",
+            detail: "403 generic body",
+            tone: "danger",
+          },
+        ]}
+        caption="In the beforeHandle phase waf() scans the decoded path, query, optional headers, and schema-parsed body. Each firing rule adds its score once per request; reaching blockThreshold fires onMatch and returns a generic 403 in block mode (log mode only reports)."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -19,6 +20,33 @@ export default function Page() {
         Plugins package routes, hooks, and decorators into reusable units. Like Fastify, plugins are{" "}
         <strong>encapsulated</strong>: what happens inside a plugin stays inside, unless you opt out.
       </p>
+
+      <BranchDiagram
+        title="Plugin encapsulation"
+        source={{
+          eyebrow: "app.register(...)",
+          label: "App",
+          detail: "global hooks + decorators flow inward",
+        }}
+        branches={[
+          {
+            eyebrow: "prefix /users",
+            label: "users plugin",
+            detail: "scoped hooks · routes · decorators",
+          },
+          {
+            eyebrow: "prefix /billing",
+            label: "billing plugin",
+            detail: "scoped hooks · routes · decorators",
+          },
+          {
+            eyebrow: "prefix /admin",
+            label: "admin plugin",
+            detail: "scoped hooks · routes · decorators",
+          },
+        ]}
+        caption="Each plugin gets its own scope. Middleware and decorators added inside a plugin apply only to that plugin's routes, never to siblings, so you can mount the same plugin twice under different prefixes and third-party plugins can't rewrite your error handler."
+      />
 
       <h2>Defining a plugin</h2>
       <p>

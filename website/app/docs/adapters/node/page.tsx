@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -33,6 +34,27 @@ export default function Page() {
         Fly.io). Use it when you control the process, long-lived, observable,
         and easy to debug.
       </p>
+
+      <FlowDiagram
+        title="Node adapter request path"
+        steps={[
+          { eyebrow: "client", label: "HTTP request", detail: "TCP socket" },
+          {
+            eyebrow: "node:http",
+            label: "serve(app)",
+            detail: "timeouts · maxConnections",
+            tone: "muted",
+          },
+          {
+            eyebrow: "core",
+            label: "app.fetch(Request)",
+            detail: "routing · hooks · handler",
+            tone: "accent",
+          },
+          { eyebrow: "client", label: "Response", tone: "success" },
+        ]}
+        caption="The adapter turns a node:http socket into a web-standard Request, applies production timeouts and optional connection-layer admission control, then hands off to app.fetch. SIGTERM and SIGINT drain in-flight requests before closing."
+      />
 
       <h2>When to choose Node</h2>
       <ul>

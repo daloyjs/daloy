@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -49,6 +50,33 @@ export default function Page() {
         security markers (CORS / CSRF / session / secure-headers) are forwarded
         so boot-time guards still see them.
       </p>
+
+      <FlowDiagram
+        title="every() runs each layer in order"
+        numbered
+        steps={[
+          { eyebrow: "layer 1", label: "requestId()", detail: "tag the request" },
+          {
+            eyebrow: "layer 2",
+            label: "bearerAuth()",
+            detail: "verify the token",
+            tone: "accent",
+          },
+          {
+            eyebrow: "layer 3",
+            label: "rateLimit()",
+            detail: "throttle per bucket",
+          },
+          {
+            eyebrow: "result",
+            label: "Handler",
+            detail: "one reusable adminStack value",
+            tone: "success",
+          },
+        ]}
+        caption="every(...layers) merges several Hooks bundles into one that runs each layer in registration order, equivalent to calling app.use() for each. Security markers (CORS, CSRF, session, secure-headers) are forwarded so boot-time guards still see them."
+      />
+
       <CodeBlock
         code={`import { App, every, requestId, bearerAuth, rateLimit } from "@daloyjs/core";
 
@@ -73,6 +101,34 @@ app.use(adminStack);`}
         one of them passes without throwing. Use it for &quot;this route accepts
         a bearer token OR a signed session cookie OR an API key&quot; patterns.
       </p>
+
+      <BranchDiagram
+        title="some() accepts any one proof"
+        source={{
+          eyebrow: "request",
+          label: "beforeHandle runs each bundle in order",
+          detail: "first to pass wins",
+        }}
+        branches={[
+          {
+            eyebrow: "proof A",
+            label: "bearerAuth()",
+            detail: "valid bearer token",
+          },
+          {
+            eyebrow: "proof B",
+            label: "session()",
+            detail: "signed session cookie",
+          },
+        ]}
+        converge={{
+          eyebrow: "accepted",
+          label: "First passing bundle wins",
+          detail: "its ctx.state / headers are preserved",
+        }}
+        caption="some(...layers) accepts the request as soon as one bundle passes without throwing. A bundle that returns a Response counts as a denial and the next gets a chance. If every bundle denies, the first denial wins, so place the auth method whose WWW-Authenticate challenge you want clients to see first."
+      />
+
       <CodeBlock
         language="ts"
         code={`import { App, some, bearerAuth, session } from "@daloyjs/core";

@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -39,6 +40,38 @@ export default function Page() {
         so a one-off burst is forgiven while a persistent attacker is locked out
         for progressively longer. It is dependency-free and runtime-portable.
       </p>
+
+      <FlowDiagram
+        title="Per-request decision"
+        steps={[
+          {
+            label: "Incoming request",
+            detail: "identified by keyGenerator or trusted proxy IP",
+            eyebrow: "client",
+          },
+          {
+            label: "Already banned?",
+            detail: "checked in beforeHandle",
+            tone: "accent",
+          },
+          {
+            label: "Banned -> reject",
+            detail: "429 + Retry-After (or 403); handler never runs",
+            tone: "danger",
+          },
+          {
+            label: "Not banned -> run",
+            detail: "watch the outgoing status",
+            tone: "success",
+          },
+          {
+            label: "401 / 403 / 429 -> strike",
+            detail: "maxStrikes in windowMs -> ban banMs, doubling on repeat",
+            tone: "danger",
+          },
+        ]}
+        caption="A banned client is rejected before the handler runs. Otherwise the request proceeds and its outgoing status is watched: enough suspicious statuses inside the rolling window issue an escalating ban that decays once the client goes quiet."
+      />
 
       <h2>Quick start</h2>
       <CodeBlock

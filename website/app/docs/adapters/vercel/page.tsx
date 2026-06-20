@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
+import { BranchDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -29,6 +30,28 @@ export default function Page() {
         slightly different export shape; the underlying <code>app</code> object
         is identical.
       </p>
+
+      <BranchDiagram
+        title="One app, two Vercel targets"
+        source={{
+          eyebrow: "identical app",
+          label: "Your DaloyJS App",
+          detail: "import { app } from '../src/server.ts'",
+        }}
+        branches={[
+          {
+            eyebrow: "node.js runtime",
+            label: "Node.js Function",
+            detail: "export default toFetchHandler(app)",
+          },
+          {
+            eyebrow: "edge runtime",
+            label: "Edge Function",
+            detail: "export const runtime = 'edge' · toWebHandler(app)",
+          },
+        ]}
+        caption="Both shapes live at api/index.ts and need the /(.*) → /api rewrite so DaloyJS owns routing at the site root. Only the export shape and runtime differ; the app object is the same."
+      />
 
       <h2>When to choose Vercel</h2>
       <ul>

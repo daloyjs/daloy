@@ -1,4 +1,5 @@
 import { CodeBlock } from "../../../../components/code-block";
+import { FlowDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -137,6 +138,29 @@ export default function Page() {
       <p>
         Two rules cover ~95% of the real-world Node CVEs in the Aikido write-up:
       </p>
+      <FlowDiagram
+        title="Where the second command comes from"
+        steps={[
+          {
+            eyebrow: "ingress",
+            label: "User input",
+            detail: 'sourcePath = "x.mp4; rm -rf /"',
+          },
+          {
+            eyebrow: "shell string",
+            label: "exec(`cmd ${input}`)",
+            detail: "/bin/sh -c parses ; | $() &",
+            tone: "danger",
+          },
+          {
+            eyebrow: "argv array",
+            label: "execFile + [args]",
+            detail: "shell: false, one literal arg",
+            tone: "success",
+          },
+        ]}
+        caption="A shell string lets a stray metacharacter turn one command into many. An argv array with no shell passes the whole value as a single literal argument, so the metacharacters are inert."
+      />
       <ol>
         <li>
           Use <code>execFile</code> or <code>spawn</code> with an{" "}

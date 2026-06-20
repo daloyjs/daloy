@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { LayerStack } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -33,6 +34,30 @@ export default function Page() {
         PlanetScale Postgres, follow the <Link href="/docs/databases/neon">Neon</Link> driver pattern
         instead.
       </p>
+
+      <LayerStack
+        title="One HTTP driver, every runtime"
+        caption="Because @planetscale/database speaks plain fetch instead of a raw TCP socket, the same data-access code runs on every runtime DaloyJS targets, including Cloudflare Workers and Vercel Edge."
+        layers={[
+          {
+            title: "DaloyJS route",
+            detail: "handler reads state.db",
+            tone: "accent",
+            items: ["app.decorate(\"db\", db)", "db.execute(sql, params)"],
+          },
+          {
+            title: "@planetscale/database",
+            detail: "fetch-based HTTP driver",
+            items: ["Node", "Bun", "Deno", "Workers", "Vercel Edge"],
+          },
+          {
+            title: "PlanetScale",
+            detail: "managed MySQL on Vitess",
+            tone: "muted",
+            items: ["branches", "deploy requests"],
+          },
+        ]}
+      />
 
       <h2>1. Provision and grab credentials</h2>
       <p>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
+import { BranchDiagram } from "../../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -31,6 +32,29 @@ export default function Page() {
         especially handy for staging environments: dev/staging captures messages, production
         actually delivers, with the same code path.
       </p>
+
+      <BranchDiagram
+        title="One client, two destinations"
+        source={{
+          eyebrow: "state.email.send(...)",
+          label: "MailtrapClient",
+          detail: "MAILTRAP_SANDBOX flips the mode",
+        }}
+        branches={[
+          {
+            eyebrow: "dev / staging",
+            label: "Email Sandbox",
+            detail: "sandbox: true + testInboxId · captured, never delivered",
+          },
+          {
+            eyebrow: "production",
+            label: "Email Sending",
+            detail: "verified domain · delivered to recipients",
+            tone: "success",
+          },
+        ]}
+        caption="The same plugin code path serves every environment. Set MAILTRAP_SANDBOX=true in dev/staging to capture messages in a test inbox, and leave it off in production to deliver for real."
+      />
 
       <h2>1. Provision</h2>
       <ol>
