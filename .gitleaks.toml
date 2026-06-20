@@ -95,3 +95,28 @@ paths = [
 regexes = [
   '''whsec_0123456789abcdef0123456789abcdef''',
 ]
+
+[[allowlists]]
+description = "Allow the RFC 6455 WebSocket handshake test vector (base64 of the literal 16-byte string \"0123456789abcdef\") in the live red-team driver. Covers both the raw base64 match and its base64-decoded form."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''(?:^|/)red-team-live/run\.ts$''',
+]
+regexes = [
+  '''MDEyMzQ1Njc4OWFiY2RlZg==''',
+  '''0123456789abcdef''',
+]
+
+[[allowlists]]
+description = "Allow the forged alg:none JWT attack vector (unsigned {\"alg\":\"none\"}.{\"sub\":\"admin\"}) used to prove the auth guard rejects token-confusion attacks in the red-team attack suite."
+targetRules = ["jwt"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''(?:^|/)tests/red-team-attacks-9\.test\.ts$''',
+]
+regexes = [
+  '''eyJhbGciOiJub25lIn0\.eyJzdWIiOiJhZG1pbiJ9\.''',
+]
