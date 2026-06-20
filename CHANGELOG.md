@@ -12,6 +12,45 @@ For the forward-looking plan and the full thematic release log, see
 > `create-daloy` are published together — a new core release always ships a
 > matching scaffolder so generated projects pin the latest peer.
 
+## [0.43.0] — 2026-06-20
+
+A maintenance release focused on **scaffolder onboarding** and **runtime
+portability**. `create-daloy` now points you at the official install guide for
+any runtime or package manager the chosen template needs but that isn't on your
+`PATH`, and `@daloyjs/core`'s startup banner is now safe under Deno's
+capability-based `--allow-env` permission model. The unused `/app` package
+export was removed and is now guarded by an exports-parity test. `@daloyjs/core`
+and `create-daloy` publish at the same version in lockstep.
+
+### Added
+
+- **Missing-tooling install links in `create-daloy`.** After scaffolding, the
+  CLI probes `PATH` (without executing anything) for the runtime and package
+  manager the generated project's "Next steps" rely on — Node, npm, pnpm, Yarn,
+  Bun, or Deno depending on the template — and prints the official install URL
+  for any that are absent. When the selected package manager itself is missing,
+  the dependency install is skipped with a clear pointer instead of failing on
+  an opaque spawn error.
+
+### Fixed
+
+- **Startup banner under Deno `--allow-env`.** The cosmetic startup banner read
+  environment variables (`NO_COLOR`, `FORCE_COLOR`, `LANG`, `TERM_PROGRAM`, …)
+  directly. On Deno's capability-based permission model, reading a variable not
+  granted via `--allow-env` throws `NotCapable` and could crash the host app.
+  Banner env reads are now wrapped defensively so a denied read is treated as
+  "unset" — never a crash. No-op on Node and Bun, where `process.env` access
+  never throws.
+
+### Changed
+
+- **Removed the unused `/app` package subpath export.** `@daloyjs/core/app` was
+  never a documented entrypoint; the public surface is unchanged for every
+  supported import. A new exports-parity test now guards the export map against
+  drift, and subpath imports are documented.
+- **CLI TSDoc:** corrected the documented `daloy doctor` exit codes and the
+  `--json` `ok` semantics.
+
 ## [0.42.0] — 2026-06-19
 
 A feature release that rounds out two areas: **multitenancy** and **real-time
@@ -1305,6 +1344,7 @@ scaffolded projects pin the latest peer.
   `vercel-edge`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v0.41.0...HEAD
+[0.43.0]: https://github.com/daloyjs/daloy/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/daloyjs/daloy/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/daloyjs/daloy/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/daloyjs/daloy/compare/v0.39.1...v0.40.0
