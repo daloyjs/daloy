@@ -2,14 +2,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 // The published API surface is the `exports` map in `package.json` (npm, points
 // at built `dist/*`) and `jsr.json` (JSR, points at `src/*`). These must stay in
 // parity, and every advertised subpath must resolve to a real source file —
 // otherwise a renamed/deleted module leaves a dangling public export that only
 // fails at a consumer's install/import time.
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+//
+// Resolve from the current working directory (the repo root in both `pnpm test`
+// and `pnpm coverage:branches`) rather than from `import.meta.url`. The compiled
+// `coverage:branches` run lives in `dist-coverage/tests/` whose parent is
+// `dist-coverage/`, not the repo root — an `import.meta.url`-based `..` would
+// read `dist-coverage/package.json` and throw ENOENT.
+const REPO_ROOT = process.cwd();
 
 function readExports(rel: string): Record<string, unknown> {
   const json = JSON.parse(readFileSync(path.join(REPO_ROOT, rel), "utf8")) as {
