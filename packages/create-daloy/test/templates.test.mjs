@@ -1920,46 +1920,6 @@ test("--list-templates includes the new bun-basic and deno-basic options", async
   assert.match(out, /deno-basic/);
 });
 
-test("deprecated --template vercel-edge alias resolves to the vercel template", async () => {
-  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
-  const projectName = "vercel-alias";
-  try {
-    const { code, stderr } = await new Promise((resolve) => {
-      let err = "";
-      const proc = spawn(
-        process.execPath,
-        [
-          path.join(pkgRoot, "bin/create-daloy.mjs"),
-          projectName,
-          "--template",
-          "vercel-edge",
-          "--package-manager",
-          "npm",
-          "--no-install",
-          "--no-git",
-          "--yes",
-        ],
-        { cwd: tmpDir, stdio: ["ignore", "ignore", "pipe"] },
-      );
-      proc.stderr.on("data", (chunk) => (err += chunk.toString()));
-      proc.on("exit", (c) => resolve({ code: c ?? 1, stderr: err }));
-      proc.on("error", () => resolve({ code: 1, stderr: err }));
-    });
-    assert.equal(code, 0);
-    // A one-line deprecation notice is printed to stderr.
-    assert.match(stderr, /vercel-edge.*deprecated/i);
-    // The scaffolded project is the Node.js-runtime `vercel` template.
-    const handler = await readFile(
-      path.join(tmpDir, projectName, "api/index.ts"),
-      "utf8",
-    );
-    assert.match(handler, /export default toFetchHandler\(app\)/);
-    assert.match(handler, /runtime: "vercel" as const/);
-  } finally {
-    await rm(tmpDir, { recursive: true, force: true });
-  }
-});
-
 test("--help documents the create flow across package managers", async () => {
   const out = await new Promise((resolve) => {
     let buf = "";

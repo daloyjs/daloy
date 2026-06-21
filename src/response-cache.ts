@@ -34,7 +34,7 @@
  *
  * This module is dependency-free and uses only Web Standard
  * `Request`/`Response` + `Headers`, so it runs unchanged on Node, Bun, Deno,
- * Cloudflare Workers, and Vercel Edge.
+ * Cloudflare Workers, and Vercel.
  *
  * @module
  * @since 0.37.0
@@ -313,7 +313,7 @@ function buildResponseFromCache(
   entry: CachedResponse,
   outcome: "HIT" | "STALE",
   statusHeaderName: string | null,
-  isHead: boolean,
+  isHead: boolean
 ): Response {
   const headers = new Headers();
   for (const [name, value] of entry.headers) headers.set(name, value);
@@ -386,7 +386,7 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
   }
   if (swrSeconds > 0 && typeof opts.revalidate !== "function") {
     throw new Error(
-      "responseCache(): staleWhileRevalidateSeconds requires a revalidate callback (e.g. (req) => app.fetch(req)).",
+      "responseCache(): staleWhileRevalidateSeconds requires a revalidate callback (e.g. (req) => app.fetch(req))."
     );
   }
   const maxBodyBytes = opts.maxBodyBytes ?? 1_048_576;
@@ -453,9 +453,7 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
       const reqCc = parseCacheControl(ctx.request.headers.get("cache-control"));
       if (reqCc.has("no-store")) return undefined;
 
-      const rawKey = opts.keyGenerator
-        ? opts.keyGenerator(ctx)
-        : defaultKey(ctx, varyHeaders);
+      const rawKey = opts.keyGenerator ? opts.keyGenerator(ctx) : defaultKey(ctx, varyHeaders);
       if (rawKey === null) return undefined;
       const key = `${keyPrefix}${rawKey}`;
 

@@ -22,7 +22,7 @@
  *
  * Everything is built on Web-standard primitives (`AbortController`,
  * `Intl.DateTimeFormat` for timezone wall-clock math, `setTimeout`), so it
- * runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge, with
+ * runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel, with
  * zero runtime dependencies. Pair it with {@link App.cron} for an app-managed
  * scheduler whose lifecycle is tied to graceful shutdown, or drive a
  * {@link Scheduler} directly.
@@ -244,12 +244,28 @@ const CRON_ALIASES: Readonly<Record<string, string>> = {
 };
 
 const MONTH_NAMES: Readonly<Record<string, number>> = {
-  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12,
 };
 
 const DAY_NAMES: Readonly<Record<string, number>> = {
-  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
 };
 
 function resolveNamed(token: string, names: Readonly<Record<string, number>>): string {
@@ -268,7 +284,7 @@ function parseField(
   min: number,
   max: number,
   fieldName: string,
-  names?: Readonly<Record<string, number>>,
+  names?: Readonly<Record<string, number>>
 ): Set<number> {
   const out = new Set<number>();
   for (const part of field.split(",")) {
@@ -306,7 +322,7 @@ function parseField(
     }
     if (lo < min || hi > max || lo > hi) {
       throw new CronParseError(
-        `Value out of range in ${fieldName} field "${field}" (allowed ${min}-${max}).`,
+        `Value out of range in ${fieldName} field "${field}" (allowed ${min}-${max}).`
       );
     }
     for (let v = lo; v <= hi; v += step) out.add(v);
@@ -336,7 +352,7 @@ export function parseCron(expression: string): CronFields {
   const fields = expanded.split(/\s+/);
   if (fields.length !== 5) {
     throw new CronParseError(
-      `Cron expression must have 5 fields, got ${fields.length}: "${expression}".`,
+      `Cron expression must have 5 fields, got ${fields.length}: "${expression}".`
     );
   }
   const [min, hr, dom, mon, dow] = fields as [string, string, string, string, string];
@@ -368,7 +384,13 @@ interface WallClock {
 }
 
 const WEEKDAY_INDEX: Readonly<Record<string, number>> = {
-  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
 };
 
 function wallClockOf(date: Date, timeZone: string | undefined): WallClock {
@@ -438,7 +460,7 @@ const MAX_LOOKAHEAD_MINUTES = 5 * 366 * 24 * 60;
 export function nextCronRun(
   expression: string | CronFields,
   after: Date = new Date(),
-  timeZone?: string,
+  timeZone?: string
 ): Date {
   const fields = typeof expression === "string" ? parseCron(expression) : expression;
   // Advance to the start of the next whole minute.
@@ -447,9 +469,7 @@ export function nextCronRun(
     const candidate = new Date(start + i * 60_000);
     if (matches(fields, wallClockOf(candidate, timeZone))) return candidate;
   }
-  throw new CronParseError(
-    `Cron expression matches no time within five years (unsatisfiable).`,
-  );
+  throw new CronParseError(`Cron expression matches no time within five years (unsatisfiable).`);
 }
 
 // ── scheduler ───────────────────────────────────────────────────────
@@ -534,17 +554,15 @@ export class Scheduler {
     const hasCron = def.cron !== undefined;
     if (hasInterval === hasCron) {
       throw new RangeError(
-        `Scheduler task "${def.name}" requires exactly one of intervalMs or cron.`,
+        `Scheduler task "${def.name}" requires exactly one of intervalMs or cron.`
       );
     }
     if (hasInterval && (!Number.isInteger(def.intervalMs) || def.intervalMs! <= 0)) {
-      throw new RangeError(
-        `Scheduler task "${def.name}" intervalMs must be a positive integer.`,
-      );
+      throw new RangeError(`Scheduler task "${def.name}" intervalMs must be a positive integer.`);
     }
     if (def.timeoutMs !== undefined && (!Number.isInteger(def.timeoutMs) || def.timeoutMs < 0)) {
       throw new RangeError(
-        `Scheduler task "${def.name}" timeoutMs must be a non-negative integer.`,
+        `Scheduler task "${def.name}" timeoutMs must be a non-negative integer.`
       );
     }
     const fields = hasCron ? parseCron(def.cron!) : undefined;
@@ -561,8 +579,13 @@ export class Scheduler {
     };
     this.#tasks.set(def.name, task);
     this.#logger?.debug(
-      { event: "scheduler.task.defined", task: def.name, cron: def.cron, intervalMs: def.intervalMs },
-      `Scheduled task "${def.name}" defined`,
+      {
+        event: "scheduler.task.defined",
+        task: def.name,
+        cron: def.cron,
+        intervalMs: def.intervalMs,
+      },
+      `Scheduled task "${def.name}" defined`
     );
     if (this.#started && !this.#stopped) this.#arm(task, def.runOnStart === true);
     return this;
@@ -578,7 +601,10 @@ export class Scheduler {
     if (this.#started) return this;
     this.#started = true;
     this.#stopped = false;
-    this.#logger?.info({ event: "scheduler.started", tasks: this.#tasks.size }, "Scheduler started");
+    this.#logger?.info(
+      { event: "scheduler.started", tasks: this.#tasks.size },
+      "Scheduler started"
+    );
     for (const task of this.#tasks.values()) this.#arm(task, task.def.runOnStart === true);
     return this;
   }
@@ -633,7 +659,7 @@ export class Scheduler {
       if (stuck.length > 0) {
         this.#logger?.warn(
           { event: "scheduler.stop.timeout", tasks: stuck.map((t) => t.def.name) },
-          `Scheduler grace period elapsed; aborting ${stuck.length} in-flight task(s)`,
+          `Scheduler grace period elapsed; aborting ${stuck.length} in-flight task(s)`
         );
         for (const t of stuck) t.current!.controller.abort();
         // Wait for the aborted runs to unwind.
@@ -662,7 +688,7 @@ export class Scheduler {
       task.skipped++;
       this.#logger?.warn(
         { event: "scheduler.task.overrun", task: name, trigger: "manual" },
-        `Manual run of "${name}" skipped: a run is already in progress`,
+        `Manual run of "${name}" skipped: a run is already in progress`
       );
       return false;
     }
@@ -742,7 +768,7 @@ export class Scheduler {
       task.skipped++;
       this.#logger?.warn(
         { event: "scheduler.task.overrun", task: task.def.name, trigger: "tick" },
-        `Tick for "${task.def.name}" skipped: previous run still in progress`,
+        `Tick for "${task.def.name}" skipped: previous run still in progress`
       );
       return;
     }
@@ -779,8 +805,14 @@ export class Scheduler {
         task.failures++;
         task.lastError = error;
         this.#logger?.error(
-          { event: "scheduler.task.failed", task: task.def.name, runCount, timedOut, err: serializeError(error) },
-          `Scheduled task "${task.def.name}" failed`,
+          {
+            event: "scheduler.task.failed",
+            task: task.def.name,
+            runCount,
+            timedOut,
+            err: serializeError(error),
+          },
+          `Scheduled task "${task.def.name}" failed`
         );
         try {
           task.def.onError?.(error, { name: task.def.name, runCount, timedOut });

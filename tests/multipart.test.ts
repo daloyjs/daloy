@@ -90,7 +90,7 @@ test("fileField verifies inferred magic bytes", async () => {
   const png = new File(
     [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])],
     "x.png",
-    { type: "image/png" },
+    { type: "image/png" }
   );
   assert.equal((await validate(f, png)).issues, undefined);
 
@@ -127,17 +127,11 @@ test("fileField accepts custom magic-byte signatures", async () => {
 });
 
 test("fileField validates magic-byte options", () => {
-  assert.throws(
-    () => fileField({ magicBytes: [{ mime: "text/plain", bytes: [] }] }),
-    /bytes/,
-  );
-  assert.throws(
-    () => fileField({ magicBytes: [{ mime: "text/plain", bytes: [256] }] }),
-    /bytes/,
-  );
+  assert.throws(() => fileField({ magicBytes: [{ mime: "text/plain", bytes: [] }] }), /bytes/);
+  assert.throws(() => fileField({ magicBytes: [{ mime: "text/plain", bytes: [256] }] }), /bytes/);
   assert.throws(
     () => fileField({ magicBytes: [{ mime: "text/plain", bytes: [0], offset: -1 }] }),
-    /offset/,
+    /offset/
   );
 });
 
@@ -145,7 +139,7 @@ test("fileField rejects magicBytes true without a sniffable accept type", () => 
   assert.throws(() => fileField({ magicBytes: true }), /known sniffable MIME/);
   assert.throws(
     () => fileField({ accept: ["text/plain"], magicBytes: true }),
-    /known sniffable MIME/,
+    /known sniffable MIME/
   );
 });
 
@@ -169,10 +163,7 @@ test("fileField filename matcher tolerates missing name", async () => {
 test("isFileFieldSchema / isMultipartObjectSchema", () => {
   assert.equal(isFileFieldSchema(fileField()), true);
   assert.equal(isFileFieldSchema({}), false);
-  assert.equal(
-    isMultipartObjectSchema(multipartObject({ a: z.string() })),
-    true
-  );
+  assert.equal(isMultipartObjectSchema(multipartObject({ a: z.string() })), true);
   assert.equal(isMultipartObjectSchema({}), false);
 });
 
@@ -209,10 +200,7 @@ test("multipartObject rejects missing required file fields", async () => {
 });
 
 test("multipartObject strict mode flags unknown fields", async () => {
-  const schema = multipartObject(
-    { a: z.string() },
-    { strict: true }
-  );
+  const schema = multipartObject({ a: z.string() }, { strict: true });
   const r = await validate(schema, { a: "ok", extra: "no" });
   assert.ok(r.issues);
   assert.match(r.issues![0]!.message, /Unknown field/);
@@ -222,9 +210,11 @@ test("fileField rejects scriptable image formats by default when magicBytes is s
   const f = fileField({ accept: ["image/*"], magicBytes: true });
 
   const svg = new File(
-    [`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`],
+    [
+      `<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`,
+    ],
     "x.svg",
-    { type: "image/svg+xml" },
+    { type: "image/svg+xml" }
   );
   const svgResult = await validate(f, svg);
   assert.ok(svgResult.issues, "SVG should be rejected");
@@ -240,9 +230,11 @@ test("fileField rejects scriptable image formats by default when magicBytes is s
 
   // ImageMagick MVG \u2014 the ImageTragick payload shape.
   const mvg = new File(
-    [`push graphic-context\nviewbox 0 0 640 480\nimage Over 0,0 0,0 'url(http://example.com/)'\npop graphic-context`],
+    [
+      `push graphic-context\nviewbox 0 0 640 480\nimage Over 0,0 0,0 'url(http://example.com/)'\npop graphic-context`,
+    ],
     "x.mvg",
-    { type: "image/png" },
+    { type: "image/png" }
   );
   const mvgResult = await validate(f, mvg);
   assert.ok(mvgResult.issues);
@@ -298,7 +290,7 @@ test("fileField scriptable-image guard leaves real PNGs alone", async () => {
   const png = new File(
     [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])],
     "ok.png",
-    { type: "image/png" },
+    { type: "image/png" }
   );
   const r = await validate(f, png);
   assert.equal(r.issues, undefined);
@@ -493,10 +485,7 @@ test("OpenAPI generator emits multipart/form-data for multipartObject bodies", (
   assert.deepEqual(schema.required.sort(), ["file", "title"]);
   assert.equal(schema.properties.file.type, "string");
   assert.equal(schema.properties.file.format, "binary");
-  assert.deepEqual(schema.properties.file["x-accept"], [
-    "image/png",
-    "image/jpeg",
-  ]);
+  assert.deepEqual(schema.properties.file["x-accept"], ["image/png", "image/jpeg"]);
   assert.equal(schema.properties.file["x-max-bytes"], 1024);
   assert.equal(schema.properties.file["x-magic-bytes"], true);
   assert.equal(schema.properties.cover.format, "binary");
@@ -516,8 +505,8 @@ test("OpenAPI generator reflects strict multipart objects", () => {
   });
   const doc = generateOpenAPI(app, { info: { title: "t", version: "1" } }) as any;
   assert.equal(
-    doc.paths["/strict-upload"].post.requestBody.content["multipart/form-data"]
-      .schema.additionalProperties,
+    doc.paths["/strict-upload"].post.requestBody.content["multipart/form-data"].schema
+      .additionalProperties,
     false
   );
 });
@@ -539,8 +528,7 @@ test("fileField honors the format option", async () => {
   });
   const doc = generateOpenAPI(app, { info: { title: "t", version: "1" } }) as any;
   assert.equal(
-    doc.paths["/u"].post.requestBody.content["multipart/form-data"].schema
-      .properties.f.format,
+    doc.paths["/u"].post.requestBody.content["multipart/form-data"].schema.properties.f.format,
     "byte"
   );
 });
@@ -549,7 +537,7 @@ test("multipart body is capped at bodyLimitBytes even with no Content-Length (st
   // Regression: the multipart branch used to trust Content-Length and then
   // hand the body to the platform formData() parser. A chunked upload sends no
   // Content-Length, so on runtimes without a socket-layer cap (Workers/Deno/
-  // Vercel Edge) the parser could buffer an unbounded body. The reader now caps
+  // Vercel) the parser could buffer an unbounded body. The reader now caps
   // the ACTUAL bytes against bodyLimitBytes before parsing.
   const app = new App({ logger: false, bodyLimitBytes: 512 });
   app.route({

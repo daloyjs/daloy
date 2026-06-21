@@ -450,7 +450,7 @@ export interface AppOptions {
    * {@link AppOptions.secureDefaults} is not `false`. Pass `false` to opt
    * out (long-running CLI processes / test harnesses that intentionally
    * swallow rejections may want this). No-op on runtimes without
-   * `process.on` (Cloudflare Workers / Vercel Edge / Fastly).
+   * `process.on` (Cloudflare Workers / Vercel / Fastly).
    *
    * @since 0.18.0
    */
@@ -1017,7 +1017,7 @@ export const DALOY_RAW_STREAM = Symbol.for("daloyjs.response.rawStream");
  *  - graceful shutdown and lifecycle observability
  *
  * `App` is **runtime-agnostic**: the same instance runs on Node, Bun, Deno,
- * Cloudflare Workers, Vercel Edge, AWS Lambda, and Fastly Compute via the
+ * Cloudflare Workers, Vercel, AWS Lambda, and Fastly Compute via the
  * dedicated adapters.
  *
  * @example
@@ -1565,7 +1565,7 @@ export class App<
       // The refusals below are production-only. When the environment is
       // *indeterminate* (no explicit `env` / `production` option and no
       // `NODE_ENV` — the common default on edge runtimes such as Workers /
-      // Deno Deploy / Vercel Edge), those refusals never fire, so a risky
+      // Deno Deploy / Vercel), those refusals never fire, so a risky
       // config could ship unguarded. Surface that once as a warning when such
       // a config is actually present. Enforcement is unchanged — this only
       // makes the silent skip observable. The runtime itself is deliberately
@@ -1597,7 +1597,7 @@ export class App<
    * Whether the resolved runtime environment is indeterminate: no explicit
    * {@link AppOptions.env} / {@link AppOptions.production} was provided AND
    * `process.env.NODE_ENV` is unset or empty. This is the common default on
-   * edge runtimes (Cloudflare Workers, Deno Deploy, Vercel Edge), which have no
+   * edge runtimes (Cloudflare Workers, Deno Deploy), which have no
    * `NODE_ENV`. Deliberately does not sniff the runtime — it only reports
    * whether the environment signal is absent — so it stays runtime-portable.
    *
@@ -4357,7 +4357,7 @@ async function readBody(
     // chunked upload sends none, and a lying small value slips past the check —
     // in both cases the platform parser would otherwise buffer the whole body
     // in memory on runtimes whose adapter does not cap at the socket layer
-    // (Workers / Deno / Vercel Edge). `readBodyLimited` streams the body and
+    // (Workers / Deno / Vercel). `readBodyLimited` streams the body and
     // throws `PayloadTooLargeError` the instant it exceeds `limit`; we then
     // re-parse the bounded bytes with the standard `formData()` parser,
     // preserving the multipart boundary via the original Content-Type. This is
@@ -4616,7 +4616,7 @@ const PACKAGE_JSON_CACHE: { value?: Promise<{ title?: string; version?: string; 
  * none is found while walking up from `process.cwd()`, falls back to
  * `deno.json` / `deno.jsonc` so Deno projects get the same DX without a
  * `package.json`. Returns an empty object on edge runtimes (Cloudflare
- * Workers, Vercel Edge) where `node:fs` is absent, on any I/O or parse
+ * Workers) where `node:fs` is absent, on any I/O or parse
  * error, and when nothing is found.
  *
  * The result is memoized at module scope: manifests do not change

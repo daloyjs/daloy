@@ -18,7 +18,7 @@
  *
  * Everything is built on Web-standard primitives (plus optional `process.*`
  * gauges guarded for non-Node runtimes), so it runs unchanged on Node, Bun,
- * Deno, Cloudflare Workers, and Vercel Edge.
+ * Deno, Cloudflare Workers, and Vercel.
  *
  * @module
  * @since 0.37.0
@@ -262,14 +262,11 @@ export class Histogram extends Metric {
 
   /** @internal */
   render(): string {
-    const lines = [
-      `# HELP ${this.name} ${escapeHelp(this.help)}`,
-      `# TYPE ${this.name} histogram`,
-    ];
+    const lines = [`# HELP ${this.name} ${escapeHelp(this.help)}`, `# TYPE ${this.name} histogram`];
     for (const s of this.series.values()) {
       for (let i = 0; i < this.bounds.length; i++) {
         lines.push(
-          `${this.name}_bucket${renderLabelBlock(s.labels, ["le", String(this.bounds[i])])} ${s.counts[i]}`,
+          `${this.name}_bucket${renderLabelBlock(s.labels, ["le", String(this.bounds[i])])} ${s.counts[i]}`
         );
       }
       lines.push(`${this.name}_bucket${renderLabelBlock(s.labels, ["le", "+Inf"])} ${s.count}`);
@@ -360,11 +357,15 @@ export class MetricsRegistry {
   }
 
   /** Get or create a {@link Histogram} with the given (or default) buckets. */
-  histogram(name: string, help = name, buckets: readonly number[] = DEFAULT_DURATION_BUCKETS): Histogram {
+  histogram(
+    name: string,
+    help = name,
+    buckets: readonly number[] = DEFAULT_DURATION_BUCKETS
+  ): Histogram {
     return this.getOrCreate(
       name,
       () => new Histogram(this, this.prefix + name, help, buckets),
-      Histogram,
+      Histogram
     );
   }
 
@@ -400,7 +401,7 @@ export class MetricsRegistry {
   private getOrCreate<T extends Metric>(
     name: string,
     make: () => T,
-    kind: new (...args: any[]) => T,
+    kind: new (...args: any[]) => T
   ): T {
     const existing = this.metrics.get(name);
     if (existing) {
@@ -417,7 +418,7 @@ export class MetricsRegistry {
   private registerDefaultMetrics(): void {
     this.droppedCounter = this.counter(
       "metrics_series_dropped_total",
-      "Series dropped after hitting the per-metric cardinality cap.",
+      "Series dropped after hitting the per-metric cardinality cap."
     );
     if (typeof process === "undefined") return;
     const rss = this.gauge("process_resident_memory_bytes", "Resident memory size in bytes.");
@@ -494,7 +495,7 @@ export function httpMetrics(opts: HttpMetricsOptions): Hooks {
   const duration = registry.histogram(
     "http_request_duration_seconds",
     "HTTP request latency in seconds.",
-    buckets,
+    buckets
   );
   const inFlight = registry.gauge("http_requests_in_flight", "In-flight HTTP requests.");
   const seenRoutes = new Set<string>();

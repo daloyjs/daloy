@@ -50,7 +50,7 @@ pnpm create daloy@latest my-api \
 
 | Flag | Description |
 | --- | --- |
-| `--template <name>` | `node-basic` (default), `vercel`, `cloudflare-worker`, `bun-basic`, or `deno-basic`. (`vercel-edge` is a deprecated alias for `vercel`.) |
+| `--template <name>` | `node-basic` (default), `vercel`, `cloudflare-worker`, `bun-basic`, or `deno-basic`, `vercel`. |
 | `--package-manager <pm>` | `pnpm` (default), `npm`, `yarn`, or `bun`. Ignored for `deno-basic`. |
 | `--list-templates` | Print available templates with descriptions. |
 | `--install` / `--no-install` | Install dependencies after scaffolding. Defaults to **Y** for npm/yarn/bun and **N** for pnpm so you can review the hardened `.npmrc` / `pnpm-workspace.yaml` and aren't blocked by the 24h `minimumReleaseAge` embargo on the first run. |
@@ -99,8 +99,6 @@ for standalone functions, on Fluid Compute) using `@daloyjs/core/vercel` with:
 - `vercel dev` / `vercel deploy` scripts.
 - `secureHeaders` and `requestId` enabled by default, with smaller serverless-friendly body and timeout limits.
 - A health route and bookstore route mirroring the Node starter.
-
-> The previous template name `vercel-edge` still works as a deprecated alias for `vercel`.
 
 ### `bun-basic`
 
@@ -251,7 +249,7 @@ required status checks in the repository settings.
 
 ## Container-first scaffolds
 
-Every template (Node, Bun, Vercel Edge, Cloudflare Worker, and Deno) ships a
+Every template (Node, Bun, Vercel, Cloudflare Worker, and Deno) ships a
 production-oriented `Dockerfile` and `.dockerignore` with secure-by-default
 posture: a non-root user, `STOPSIGNAL SIGTERM`, `tini` as PID 1, and a
 `HEALTHCHECK` pointed at `/readyz`. Node-style templates also ship an
@@ -276,6 +274,6 @@ Every scaffolded project ships with two files that help AI coding agents (Copilo
 - `AGENTS.md` (repo root) — a small, top-of-context file (per the open [AGENTS.md](https://agents.md) convention): one-line project description, package manager / runtime, project shape, core rules, and the few commands an agent needs. It links to the full skill below.
 - `.agents/skills/daloyjs-best-practices/SKILL.md` — comprehensive operational guidance following the open `agents/skills/<skill-name>/SKILL.md` convention: when to use the skill, project structure, core workflows (adding routes, regenerating the OpenAPI spec and client), schema and validation conventions, error-handling patterns, middleware order, testing best practices (happy and unhappy paths), security best practices, logging and observability notes, configuration and secrets handling, deployment notes, pitfalls and guardrails, and process expectations.
 
-Both files are tailored to the chosen template (Node, Bun, Deno, Vercel Edge, or Cloudflare Workers), and Node-style templates rewrite their commands to match your selected package manager. They follow the "instruction budget" advice — small root file, progressive disclosure for the rest — so they don't waste agent tokens. Edit or delete them freely; the framework does not depend on them at runtime.
+Both files are tailored to the chosen template (Node, Bun, Deno, Vercel, or Cloudflare Workers), and Node-style templates rewrite their commands to match your selected package manager. They follow the "instruction budget" advice — small root file, progressive disclosure for the rest — so they don't waste agent tokens. Edit or delete them freely; the framework does not depend on them at runtime.
 
 Every scaffold also ships a `.vscode/mcp.json` (authored as `_vscode/mcp.json` in the template) that wires VS Code and other MCP-aware editors to the DaloyJS documentation MCP server (`https://daloyjs.dev/mcp`) over HTTP. AI assistants in your editor can then pull current DaloyJS docs with no manual setup. Delete the file or remove the server entry to opt out; it is editor configuration only and the framework does not depend on it at runtime.

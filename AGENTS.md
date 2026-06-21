@@ -8,7 +8,7 @@ docs/marketing site (`website/`).
 
 - **Package manager:** pnpm (>= 11). Do not use `npm`/`yarn` here.
 - **Runtime:** Node.js >= 24. The framework also ships adapters for Bun, Deno,
-  Cloudflare Workers, and Vercel Edge.
+  Cloudflare Workers, and Vercel.
 - **No runtime dependencies:** `@daloyjs/core` must stay dependency-free
   (`pnpm verify:no-runtime-deps` is the floor).
 

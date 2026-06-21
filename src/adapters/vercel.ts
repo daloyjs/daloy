@@ -20,7 +20,7 @@
  */
 import type { App } from "../app.js";
 
-/** Web-standard handler shape used by Vercel Edge Functions, Next.js route handlers, and middleware. */
+/** Web-standard handler shape used by Vercel Functions, Next.js route handlers, and middleware. */
 export type WebHandler = (req: Request) => Promise<Response>;
 /** Default export shape for Vercel's web-standard `{ fetch }` runtime. */
 export interface FetchHandler {

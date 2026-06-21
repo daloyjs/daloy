@@ -13,7 +13,7 @@
  * backed by Redis, Cloudflare KV, Vercel KV, or any other shared store.
  *
  * The module is dependency-free and uses Web Crypto (`crypto.subtle`), so it
- * works on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
+ * works on Node, Bun, Deno, Cloudflare Workers, and Vercel.
  */
 
 import type { BaseContext, Hooks } from "./types.js";
@@ -37,9 +37,7 @@ const DEFAULT_COOKIE_NAME = "__Host-daloy.sid";
  *
  * @since 0.17.0
  */
-export const SESSION_HOOK_MARKER: unique symbol = Symbol.for(
-  "daloyjs.session.hook",
-);
+export const SESSION_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.session.hook");
 
 /**
  * Marker stamped on the `Hooks` object returned by {@link session} that
@@ -49,9 +47,7 @@ export const SESSION_HOOK_MARKER: unique symbol = Symbol.for(
  *
  * @since 0.17.0
  */
-export const SESSION_SECRETS_MARKER: unique symbol = Symbol.for(
-  "daloyjs.session.secrets",
-);
+export const SESSION_SECRETS_MARKER: unique symbol = Symbol.for("daloyjs.session.secrets");
 
 // ---------- Public types ----------
 
@@ -185,7 +181,7 @@ function getSubtle(): SubtleCrypto {
   const c: Crypto | undefined = (globalThis as { crypto?: Crypto }).crypto;
   if (!c?.subtle) {
     throw new Error(
-      "session(): Web Crypto (crypto.subtle) is required. Provide a polyfill in environments without it.",
+      "session(): Web Crypto (crypto.subtle) is required. Provide a polyfill in environments without it."
     );
   }
   return c.subtle;
@@ -204,7 +200,7 @@ function makeSigner(secret: string): Signer {
       "session(): each secret must be a string of at least 16 characters — it is the HMAC key " +
         "that signs every session cookie, so a short or guessable value lets an attacker forge sessions. " +
         "Generate one with `openssl rand -base64 32` and load it from an env var or secret manager " +
-        "(never hard-code or commit it). See https://daloyjs.dev/docs/security/session.",
+        "(never hard-code or commit it). See https://daloyjs.dev/docs/security/session."
     );
   }
   let keyPromise: Promise<CryptoKey> | null = null;
@@ -215,7 +211,7 @@ function makeSigner(secret: string): Signer {
         enc.encode(secret),
         { name: "HMAC", hash: "SHA-256" },
         false,
-        ["sign"],
+        ["sign"]
       );
     }
     return keyPromise;
@@ -236,7 +232,9 @@ function makeSigner(secret: string): Signer {
 function generateSessionId(): string {
   const c: Crypto | undefined = (globalThis as { crypto?: Crypto }).crypto;
   if (!c?.getRandomValues) {
-    throw new Error("session(): Web Crypto getRandomValues is required for the default id generator.");
+    throw new Error(
+      "session(): Web Crypto getRandomValues is required for the default id generator."
+    );
   }
   const buf = new Uint8Array(32);
   c.getRandomValues(buf);
@@ -263,7 +261,7 @@ function makeSessionContext(
   id: string,
   data: Record<string, unknown>,
   internal: SessionInternal,
-  regenerate: (keepData: boolean) => Promise<string>,
+  regenerate: (keepData: boolean) => Promise<string>
 ): SessionContext {
   const proxy = new Proxy(data, {
     set(target, key, value) {
@@ -501,10 +499,7 @@ export function session(opts: SessionOptions): Hooks {
         if (internal.hadCookie) {
           res.headers.append(
             "set-cookie",
-            serializeClearCookie(
-              internal.cookieName,
-              sessionCookieAttributes(internal.cookieOpts),
-            ),
+            serializeClearCookie(internal.cookieName, sessionCookieAttributes(internal.cookieOpts))
           );
         }
         return undefined;
@@ -544,8 +539,8 @@ export function session(opts: SessionOptions): Hooks {
         serializeCookie(
           internal.cookieName,
           `${sid}.${sig}`,
-          sessionCookieAttributes(internal.cookieOpts),
-        ),
+          sessionCookieAttributes(internal.cookieOpts)
+        )
       );
       return undefined;
     },
@@ -564,10 +559,7 @@ export interface RotateSessionOptions {
    * changes during a handler, the helper calls `ctx.state.session.regenerate()`.
    * Default keys cover common privilege-bearing fields.
    */
-  watch?:
-    | string
-    | readonly string[]
-    | ((ctx: BaseContext<any, any>) => unknown | Promise<unknown>);
+  watch?: string | readonly string[] | ((ctx: BaseContext<any, any>) => unknown | Promise<unknown>);
   /** Carry existing data across the regenerated session id. Default: true. */
   keepData?: boolean;
 }
@@ -592,7 +584,11 @@ interface RotateSessionSnapshot {
 
 function sessionFromContext(ctx: BaseContext<any, any>): SessionContext {
   const value = (ctx.state as Record<string, unknown>)[STATE_KEY];
-  if (!value || typeof value !== "object" || typeof (value as SessionContext).regenerate !== "function") {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    typeof (value as SessionContext).regenerate !== "function"
+  ) {
     throw new Error("rotateSession(): session() must run before rotateSession().");
   }
   return value as SessionContext;
@@ -600,7 +596,7 @@ function sessionFromContext(ctx: BaseContext<any, any>): SessionContext {
 
 async function readRotationWatchValue(
   ctx: BaseContext<any, any>,
-  watch: RotateSessionOptions["watch"],
+  watch: RotateSessionOptions["watch"]
 ): Promise<unknown> {
   if (typeof watch === "function") return watch(ctx);
   const sessionCtx = sessionFromContext(ctx);
@@ -651,9 +647,9 @@ export function rotateSession(opts: RotateSessionOptions = {}): Hooks {
       } satisfies RotateSessionSnapshot;
     },
     async afterHandle(ctx, result) {
-      const snapshot = (ctx.state as Record<string, unknown>)[
-        ROTATE_SESSION_SNAPSHOT_KEY
-      ] as RotateSessionSnapshot | undefined;
+      const snapshot = (ctx.state as Record<string, unknown>)[ROTATE_SESSION_SNAPSHOT_KEY] as
+        | RotateSessionSnapshot
+        | undefined;
       if (!snapshot) return result;
       const sessionCtx = sessionFromContext(ctx);
       if (sessionCtx.id !== snapshot.id) return result;
@@ -686,7 +682,10 @@ export async function signValue(value: string, secret: string): Promise<string> 
  * Verify a `signValue()`-produced string. Returns the original value when the
  * signature checks out, otherwise `null`. Constant-time on the signature.
  */
-export async function verifySignedValue(signed: string, secret: string | string[]): Promise<string | null> {
+export async function verifySignedValue(
+  signed: string,
+  secret: string | string[]
+): Promise<string | null> {
   const dot = signed.lastIndexOf(".");
   if (dot <= 0 || dot >= signed.length - 1) return null;
   const value = signed.slice(0, dot);

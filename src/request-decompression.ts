@@ -24,7 +24,7 @@
  *
  * The compressed input itself is bounded by `maxCompressedBytes` before a single
  * byte is inflated. Built on the web-standard `DecompressionStream`, so the same
- * line works on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge. Zero
+ * line works on Node, Bun, Deno, Cloudflare Workers, and Vercel. Zero
  * runtime dependencies.
  *
  * The middleware runs in the {@link "./types.js".Hooks.onRequest} phase — before
@@ -135,7 +135,7 @@ export class UnsupportedContentEncodingError extends HttpError {
         title: "Unsupported Media Type",
         detail: `Unsupported request Content-Encoding "${encoding}". Allowed: ${allowed.join(", ")}`,
       },
-      { "accept-encoding": allowed.join(", ") },
+      { "accept-encoding": allowed.join(", ") }
     );
     this.name = "UnsupportedContentEncodingError";
   }
@@ -204,7 +204,7 @@ export interface RequestDecompressionOptions {
 function assertPositiveInteger(value: number, label: string): void {
   if (!Number.isInteger(value) || value <= 0) {
     throw new TypeError(
-      `requestDecompression(): \`${label}\` must be a positive integer, received ${String(value)}`,
+      `requestDecompression(): \`${label}\` must be a positive integer, received ${String(value)}`
     );
   }
 }
@@ -254,9 +254,7 @@ interface ResolvedCaps {
   onBomb: ((info: DecompressionBombInfo) => void) | undefined;
 }
 
-async function cancelReader(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): Promise<void> {
+async function cancelReader(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
   try {
     await reader.cancel();
   } catch {
@@ -283,13 +281,13 @@ async function cancelReader(
 export async function decompressRequestBody(
   compressed: Uint8Array,
   encoding: RequestDecompressionEncoding,
-  opts: RequestDecompressionOptions,
+  opts: RequestDecompressionOptions
 ): Promise<Uint8Array> {
   assertPositiveInteger(opts.maxDecompressedBytes, "maxDecompressedBytes");
   const maxRatio = opts.maxRatio ?? DEFAULT_MAX_RATIO;
   if (!Number.isFinite(maxRatio) || maxRatio < 1) {
     throw new TypeError(
-      `requestDecompression(): \`maxRatio\` must be a finite number >= 1, received ${String(maxRatio)}`,
+      `requestDecompression(): \`maxRatio\` must be a finite number >= 1, received ${String(maxRatio)}`
     );
   }
   return inflateGuarded(compressed, encoding, {
@@ -302,7 +300,7 @@ export async function decompressRequestBody(
 async function inflateGuarded(
   compressed: Uint8Array,
   encoding: RequestDecompressionEncoding,
-  caps: ResolvedCaps,
+  caps: ResolvedCaps
 ): Promise<Uint8Array> {
   // An empty body has nothing to inflate; treat it as an empty payload rather
   // than feeding an invalid (zero-byte) stream to DecompressionStream.
@@ -411,30 +409,26 @@ async function inflateGuarded(
  * @throws {TypeError} At construction when a cap is invalid.
  * @since 0.37.0
  */
-export function requestDecompression(
-  opts: RequestDecompressionOptions,
-): Hooks {
+export function requestDecompression(opts: RequestDecompressionOptions): Hooks {
   assertPositiveInteger(opts.maxDecompressedBytes, "maxDecompressedBytes");
   const maxCompressedBytes = opts.maxCompressedBytes ?? DEFAULT_MAX_COMPRESSED_BYTES;
   assertPositiveInteger(maxCompressedBytes, "maxCompressedBytes");
   const maxRatio = opts.maxRatio ?? DEFAULT_MAX_RATIO;
   if (!Number.isFinite(maxRatio) || maxRatio < 1) {
     throw new TypeError(
-      `requestDecompression(): \`maxRatio\` must be a finite number >= 1, received ${String(maxRatio)}`,
+      `requestDecompression(): \`maxRatio\` must be a finite number >= 1, received ${String(maxRatio)}`
     );
   }
   const allowed = (opts.encodings ?? ["gzip", "deflate"]).map((e) =>
-    e.toLowerCase(),
+    e.toLowerCase()
   ) as RequestDecompressionEncoding[];
   if (allowed.length === 0) {
-    throw new TypeError(
-      "requestDecompression(): `encodings` must contain at least one encoding",
-    );
+    throw new TypeError("requestDecompression(): `encodings` must contain at least one encoding");
   }
   for (const enc of allowed) {
     if (enc !== "gzip" && enc !== "deflate") {
       throw new TypeError(
-        `requestDecompression(): unsupported encoding "${enc}"; only "gzip" and "deflate" are supported`,
+        `requestDecompression(): unsupported encoding "${enc}"; only "gzip" and "deflate" are supported`
       );
     }
   }

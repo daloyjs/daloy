@@ -58,9 +58,8 @@ const PACKAGE_MANAGERS = PACKAGE_MANAGER_OPTIONS.map((option) => option.value);
 // `--template <old>` commands (and published docs/blog posts) keep working.
 // Each maps to its current canonical template value.
 const TEMPLATE_ALIASES = new Map([
-  // `vercel-edge` shipped before Vercel deprecated standalone Edge Functions;
+  // `vercel` shipped before Vercel deprecated standalone Edge Functions;
   // the template now targets the recommended Node.js runtime as `vercel`.
-  ["vercel-edge", "vercel"],
 ]);
 
 const RENAME_ON_COPY = new Map([
@@ -1802,7 +1801,7 @@ async function main() {
     if (!template) {
       template = rl ? await askChoice(rl, "Choose a starter template:", TEMPLATE_OPTIONS, "node-basic") : "node-basic";
     }
-    // Resolve deprecated template aliases (e.g. `vercel-edge` -> `vercel`).
+    // Resolve deprecated template aliases.
     if (TEMPLATE_ALIASES.has(template)) {
       const canonical = TEMPLATE_ALIASES.get(template);
       logWarn(`Template "${template}" is deprecated; using "${canonical}" instead.`);

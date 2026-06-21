@@ -91,7 +91,7 @@ export interface CspDirectivesOptions {
    * Pair with {@link SecureHeadersOptions.reportingEndpoints} (or
    * {@link App.cspReportRoute}) to register the receiver.
    *
-    * @since 0.20.0
+   * @since 0.20.0
    */
   reportTo?: string;
 }
@@ -128,7 +128,7 @@ export interface SecureHeadersOptions {
    * `reportTo: "csp-endpoint"` here as a shortcut) to direct CSP
    * violation reports there.
    *
-    * @since 0.20.0
+   * @since 0.20.0
    */
   reportingEndpoints?: Record<string, string>;
   /**
@@ -137,7 +137,7 @@ export interface SecureHeadersOptions {
    * header so violation reports land at the matching
    * `reportingEndpoints` URL.
    *
-    * @since 0.20.0
+   * @since 0.20.0
    */
   reportTo?: string;
 }
@@ -149,7 +149,7 @@ function generateCspNonce(): string {
   if (!cryptoApi?.getRandomValues) {
     throw new Error(
       "secureHeaders(): WebCrypto is required to generate a CSP nonce. " +
-        "Run on Node 20+, Bun, Deno, Cloudflare Workers, or Vercel Edge.",
+        "Run on Node 20+, Bun, Deno, Cloudflare Workers, or Vercel."
     );
   }
   const nonceBytes = new Uint8Array(16);
@@ -253,9 +253,7 @@ function cspOptionsHaveFrameAncestors(csp: CspDirectivesOptions): boolean {
  *
  * @since 0.16.0
  */
-export const SECURE_HEADERS_MARKER: unique symbol = Symbol.for(
-  "daloyjs.middleware.secureHeaders",
-);
+export const SECURE_HEADERS_MARKER: unique symbol = Symbol.for("daloyjs.middleware.secureHeaders");
 
 /**
  * Apply a Helmet-equivalent baseline of secure response headers (see
@@ -286,7 +284,7 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
         "secureHeaders(): refusing to construct with both frameOptions: false " +
           "AND no CSP frame-ancestors directive — that disables every clickjacking " +
           "defense the helper provides. Set frameOptions: 'DENY' / 'SAMEORIGIN', " +
-          "or add a `frame-ancestors` directive to contentSecurityPolicy.",
+          "or add a `frame-ancestors` directive to contentSecurityPolicy."
       );
     }
   }
@@ -305,16 +303,10 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
       }
     }
     cspOpt = { directives, reportTo: opts.reportTo } as CspDirectivesOptions;
-  } else if (
-    opts.reportTo &&
-    cspOpt !== false &&
-    typeof cspOpt === "object" &&
-    !cspOpt.reportTo
-  ) {
+  } else if (opts.reportTo && cspOpt !== false && typeof cspOpt === "object" && !cspOpt.reportTo) {
     cspOpt = { ...cspOpt, reportTo: opts.reportTo };
   }
-  const cspIsDynamic =
-    cspOpt !== false && typeof cspOpt === "object";
+  const cspIsDynamic = cspOpt !== false && typeof cspOpt === "object";
   if (cspOpt !== false && typeof cspOpt === "string") {
     headers["content-security-policy"] = cspOpt;
   }
@@ -333,7 +325,8 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
   const ref = opts.referrerPolicy ?? "no-referrer";
   if (ref !== false) headers["referrer-policy"] = ref;
 
-  const perm = opts.permissionsPolicy ?? "camera=(), microphone=(), geolocation=(), clipboard-write=()";
+  const perm =
+    opts.permissionsPolicy ?? "camera=(), microphone=(), geolocation=(), clipboard-write=()";
   if (perm !== false) headers["permissions-policy"] = perm;
 
   const coop = opts.crossOriginOpenerPolicy ?? "same-origin";
@@ -365,7 +358,7 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
             group,
             max_age: 10886400,
             endpoints: [{ url }],
-          }),
+          })
         )
         .join(", ");
     }
@@ -490,8 +483,8 @@ export function fetchMetadata(opts: FetchMetadataOptions = {}): Hooks {
   const allowedDests = new Set(opts.allowedDestinations ?? FETCH_METADATA_DEFAULT_DESTS);
   const allowedNavMethods = new Set(
     (opts.allowedNavigationMethods ?? FETCH_METADATA_DEFAULT_NAV_METHODS).map((m) =>
-      m.toUpperCase(),
-    ),
+      m.toUpperCase()
+    )
   );
   const allowedOrigins = new Set(opts.allowedOrigins ?? []);
   const customAllow = opts.allow;
@@ -513,7 +506,7 @@ export function fetchMetadata(opts: FetchMetadataOptions = {}): Hooks {
       const dest = req.headers.get("sec-fetch-dest");
       if (dest && allowedDests.has(dest)) return;
       throw new ForbiddenError(
-        "Cross-site request rejected by fetch-metadata Resource Isolation Policy.",
+        "Cross-site request rejected by fetch-metadata Resource Isolation Policy."
       );
     },
   };
@@ -564,9 +557,7 @@ function appendVary(headers: Headers, token: string): void {
  *
  * @since 0.16.0
  */
-export const CORS_HOOK_MARKER: unique symbol = Symbol.for(
-  "daloyjs.middleware.cors",
-);
+export const CORS_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.middleware.cors");
 
 /**
  * Marker stamped on the `Hooks` object returned by {@link cors} with the
@@ -577,7 +568,7 @@ export const CORS_HOOK_MARKER: unique symbol = Symbol.for(
  * @since 0.16.0
  */
 export const CORS_ORIGIN_ALLOW_MARKER: unique symbol = Symbol.for(
-  "daloyjs.middleware.cors.originAllow",
+  "daloyjs.middleware.cors.originAllow"
 );
 
 /**
@@ -592,7 +583,7 @@ export const CORS_ORIGIN_ALLOW_MARKER: unique symbol = Symbol.for(
  * @since 0.17.0
  */
 export const CORS_WILDCARD_ORIGIN_MARKER: unique symbol = Symbol.for(
-  "daloyjs.middleware.cors.wildcardOrigin",
+  "daloyjs.middleware.cors.wildcardOrigin"
 );
 
 /**
@@ -606,9 +597,7 @@ export const CORS_WILDCARD_ORIGIN_MARKER: unique symbol = Symbol.for(
  *
  * @since 0.17.0
  */
-export const CSRF_HOOK_MARKER: unique symbol = Symbol.for(
-  "daloyjs.middleware.csrf",
-);
+export const CSRF_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.middleware.csrf");
 
 /** Predicate stamped on a CORS `Hooks` object that returns `true` for allowed origins. */
 export type CorsOriginAllow = (origin: string) => boolean;
@@ -658,12 +647,11 @@ export function cors(opts: CorsOptions): Hooks {
   // closed at construction time instead.
   if (opts.credentials) {
     const includesWildcard =
-      opts.origin === "*" ||
-      (Array.isArray(opts.origin) && opts.origin.includes("*"));
+      opts.origin === "*" || (Array.isArray(opts.origin) && opts.origin.includes("*"));
     if (includesWildcard) {
       throw new Error(
-        "cors(): origin: \"*\" cannot be combined with credentials: true. " +
-          "Pass an explicit origin string, an array of allowed origins, or a predicate function instead.",
+        'cors(): origin: "*" cannot be combined with credentials: true. ' +
+          "Pass an explicit origin string, an array of allowed origins, or a predicate function instead."
       );
     }
   }
@@ -676,12 +664,13 @@ export function cors(opts: CorsOptions): Hooks {
   if (opts.methods?.some((m) => m === "*" || m.trim() === "*")) {
     throw new Error(
       'cors(): methods cannot include "*". Declare each verb explicitly ' +
-        '(e.g. ["GET", "HEAD", "POST"]).',
+        '(e.g. ["GET", "HEAD", "POST"]).'
     );
   }
   const allow = (origin: string | null): string | null => {
     if (!origin) return null;
-    if (typeof opts.origin === "string") return opts.origin === "*" || opts.origin === origin ? opts.origin : null;
+    if (typeof opts.origin === "string")
+      return opts.origin === "*" || opts.origin === origin ? opts.origin : null;
     if (Array.isArray(opts.origin)) return opts.origin.includes(origin) ? origin : null;
     return opts.origin(origin) ? origin : null;
   };
@@ -734,12 +723,10 @@ export function cors(opts: CorsOptions): Hooks {
     },
   };
   (hooks as Record<PropertyKey, unknown>)[CORS_HOOK_MARKER] = true;
-  (hooks as Record<PropertyKey, unknown>)[CORS_ORIGIN_ALLOW_MARKER] = (
-    origin: string,
-  ) => allow(origin) !== null;
+  (hooks as Record<PropertyKey, unknown>)[CORS_ORIGIN_ALLOW_MARKER] = (origin: string) =>
+    allow(origin) !== null;
   const hasWildcard =
-    opts.origin === "*" ||
-    (Array.isArray(opts.origin) && opts.origin.includes("*"));
+    opts.origin === "*" || (Array.isArray(opts.origin) && opts.origin.includes("*"));
   if (hasWildcard) {
     (hooks as Record<PropertyKey, unknown>)[CORS_WILDCARD_ORIGIN_MARKER] = true;
   }
@@ -803,7 +790,10 @@ export interface RateLimitOptions {
  * @internal
  */
 const SHARED_RATE_LIMIT_STORES = new Map<string, MemoryStore>();
-const SHARED_LOGIN_THROTTLE_BUCKETS = new Map<string, Map<string, { count: number; resetMs: number }>>();
+const SHARED_LOGIN_THROTTLE_BUCKETS = new Map<
+  string,
+  Map<string, { count: number; resetMs: number }>
+>();
 
 /**
  * Test-only helper that clears the process-wide shared buckets used by
@@ -948,7 +938,7 @@ function assertPositiveInteger(name: string, value: number): void {
 }
 
 function defaultLoginThrottleKey(
-  trustProxyHeaders: boolean | undefined,
+  trustProxyHeaders: boolean | undefined
 ): (ctx: BaseContext<any, any>) => string {
   return (ctx) => {
     if (trustProxyHeaders) {
@@ -996,9 +986,7 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
     groupId,
     keyGenerator,
     ...(opts.store ? { store: opts.store } : {}),
-    ...(opts.trustProxyHeaders !== undefined
-      ? { trustProxyHeaders: opts.trustProxyHeaders }
-      : {}),
+    ...(opts.trustProxyHeaders !== undefined ? { trustProxyHeaders: opts.trustProxyHeaders } : {}),
     ...(opts.retryAfter !== undefined ? { retryAfter: opts.retryAfter } : {}),
   });
   let slowdownBuckets = SHARED_LOGIN_THROTTLE_BUCKETS.get(groupId);
@@ -1023,10 +1011,7 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
         }
       }
       if (bucket.count > delayAfter && delayMs > 0 && maxDelayMs > 0) {
-        const delay = Math.min(
-          maxDelayMs,
-          (bucket.count - delayAfter) * delayMs,
-        );
+        const delay = Math.min(maxDelayMs, (bucket.count - delayAfter) * delayMs);
         if (delay > 0) await wait(delay);
       }
       return limiter.beforeHandle?.(ctx);
@@ -1107,7 +1092,7 @@ export function timing(headerName = "server-timing"): Hooks {
  */
 export type BearerAuthVerifyHook<TCredentials = string> = (
   credentials: TCredentials,
-  ctx: BaseContext<any, any>,
+  ctx: BaseContext<any, any>
 ) => boolean | void | Promise<boolean | void>;
 
 /** Options for {@link bearerAuth}. */
@@ -1118,9 +1103,9 @@ export interface BearerAuthOptions {
   realm?: string;
   /**
    * Optional per-request revalidation hook. Called after `validate`
-  * accepts the token. Returning `false` rejects the request with `403`;
-  * returning `true` or `undefined` accepts. Use for revocation lists,
-  * token-version counters, etc.
+   * accepts the token. Returning `false` rejects the request with `403`;
+   * returning `true` or `undefined` accepts. Use for revocation lists,
+   * token-version counters, etc.
    *
    * @since 0.22.0
    */
@@ -1273,10 +1258,14 @@ function generateCsrfToken(): string {
     return Array.from(buf, (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
   if (cryptoApi?.randomUUID) return cryptoApi.randomUUID().replace(/-/g, "");
-  throw new Error("csrf(): WebCrypto is required for the default token generator. Pass a custom generator to csrf({ generator }).");
+  throw new Error(
+    "csrf(): WebCrypto is required for the default token generator. Pass a custom generator to csrf({ generator })."
+  );
 }
 
-function csrfCookieAttributes(opts: Required<CsrfCookieOptions>): CsrfCookieOptions & { httpOnly: false } {
+function csrfCookieAttributes(
+  opts: Required<CsrfCookieOptions>
+): CsrfCookieOptions & { httpOnly: false } {
   return {
     sameSite: opts.sameSite,
     secure: opts.secure,
@@ -1324,7 +1313,9 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
   }
   const cookieName = opts.cookieName ?? "__Host-daloy.csrf";
   const headerName = sanitizeHeaderName(opts.headerName ?? "x-csrf-token").toLowerCase();
-  const ignore = new Set((opts.ignoreMethods ?? ["GET", "HEAD", "OPTIONS"]).map((m) => m.toUpperCase()));
+  const ignore = new Set(
+    (opts.ignoreMethods ?? ["GET", "HEAD", "OPTIONS"]).map((m) => m.toUpperCase())
+  );
   const generator = opts.generator ?? generateCsrfToken;
 
   const originAllowed = (origin: string | null): boolean => {
@@ -1411,9 +1402,14 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
     },
     onSend(res, ctx) {
       if (!ctx || !wantsDoubleSubmit) return undefined;
-      const issued = (ctx.state as Record<string, unknown>)[CSRF_STATE_ISSUED] as string | undefined;
+      const issued = (ctx.state as Record<string, unknown>)[CSRF_STATE_ISSUED] as
+        | string
+        | undefined;
       if (!issued) return undefined;
-      res.headers.append("set-cookie", serializeCookie(cookieName, issued, csrfCookieAttributes(cookieOpts)));
+      res.headers.append(
+        "set-cookie",
+        serializeCookie(cookieName, issued, csrfCookieAttributes(cookieOpts))
+      );
       return undefined;
     },
   };
@@ -1436,7 +1432,7 @@ export interface BasicAuthOptions {
    */
   verify: (
     username: string,
-    password: string,
+    password: string
   ) => boolean | Promise<boolean> | object | Promise<object | boolean>;
   /** WWW-Authenticate realm. Default: `"api"`. */
   realm?: string;
@@ -1457,7 +1453,7 @@ export interface BasicAuthOptions {
    */
   onAuthSuccess?: (
     creds: { username: string; password: string },
-    ctx: BaseContext<any, any>,
+    ctx: BaseContext<any, any>
   ) => void | Promise<void>;
 }
 
@@ -1502,7 +1498,7 @@ function basicAuthChallenge(realm: string): Response {
         "www-authenticate": `Basic realm="${realm}", charset="UTF-8"`,
         "cache-control": "no-store",
       },
-    },
+    }
   );
 }
 
@@ -1560,10 +1556,7 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
       (ctx.state as Record<string, unknown>).user =
         typeof result === "object" ? result : { username: creds.user };
       if (options.onAuthSuccess) {
-        await options.onAuthSuccess(
-          { username: creds.user, password: creds.pass },
-          ctx,
-        );
+        await options.onAuthSuccess({ username: creds.user, password: creds.pass }, ctx);
       }
       return undefined;
     },
@@ -1584,14 +1577,12 @@ export const REQUIRE_SCOPES_AGGREGATE_KEY = "__daloyRequiredScopes" as const;
 
 /** Marker on the `Hooks` object returned by {@link requireScopes}, used to detect installed scope guards. */
 export const REQUIRE_SCOPES_HOOK_MARKER: unique symbol = Symbol.for(
-  "daloyjs.middleware.requireScopes",
+  "daloyjs.middleware.requireScopes"
 );
 
 function validateScopeList(scopes: unknown): readonly string[] {
   if (!Array.isArray(scopes) || scopes.length === 0) {
-    throw new Error(
-      "requireScopes(): scopes must be a non-empty array of strings.",
-    );
+    throw new Error("requireScopes(): scopes must be a non-empty array of strings.");
   }
   const seen = new Set<string>();
   const out: string[] = [];
@@ -1672,18 +1663,14 @@ export function requireScopes(scopes: readonly string[]): Hooks {
               "www-authenticate": challenge,
               "cache-control": "no-store",
             },
-          },
+          }
         );
       }
 
       const owned = readUserScopes(user);
-      const missing = owned === null
-        ? aggregate.slice()
-        : aggregate.filter((s) => !owned.has(s));
+      const missing = owned === null ? aggregate.slice() : aggregate.filter((s) => !owned.has(s));
       if (missing.length > 0) {
-        throw new ForbiddenError(
-          `Missing required scope(s): ${missing.join(", ")}.`,
-        );
+        throw new ForbiddenError(`Missing required scope(s): ${missing.join(", ")}.`);
       }
       return undefined;
     },
@@ -1693,4 +1680,3 @@ export function requireScopes(scopes: readonly string[]): Hooks {
 }
 
 export { timingSafeEqual };
-

@@ -3,7 +3,7 @@
  * BREACH-aware safe defaults.
  *
  * Built on the web-standard `CompressionStream` API so the same line works
- * on Node, Bun, Deno, Cloudflare Workers, Vercel Edge, and Fastly Compute.
+ * on Node, Bun, Deno, Cloudflare Workers, Vercel, and Fastly Compute.
  * The middleware deliberately refuses to expose a configurable compression
  * level — `CompressionStream` uses the runtime's documented default (gzip
  * level 6 on Node / V8); a `level: 9` opt-in is rejected at construction
@@ -71,10 +71,10 @@ export interface CompressionOptions {
    */
   authCookieNames?: readonly string[];
   /**
-  * Deliberately unsupported. Provided as a `never`-typed trap so the type
-  * system flags accidental opt-in. The actual `CompressionStream` never
-  * exposes a level knob — passing any value triggers a construction-time
-  * refusal.
+   * Deliberately unsupported. Provided as a `never`-typed trap so the type
+   * system flags accidental opt-in. The actual `CompressionStream` never
+   * exposes a level knob — passing any value triggers a construction-time
+   * refusal.
    *
    * @internal
    */
@@ -87,9 +87,7 @@ export interface CompressionOptions {
  *
  * @since 0.25.0
  */
-export const COMPRESSION_HOOK_MARKER: unique symbol = Symbol.for(
-  "daloy.compression.hook",
-);
+export const COMPRESSION_HOOK_MARKER: unique symbol = Symbol.for("daloy.compression.hook");
 
 // Lowercased MIME-prefix deny-list. Each entry is matched as a leading
 // prefix of the response's resolved content-type token (no parameters).
@@ -159,7 +157,7 @@ function parseAcceptEncoding(header: string | null): ParsedAccept[] {
 function pickEncoding(
   accept: ParsedAccept[],
   serverPreferred: readonly CompressionEncoding[],
-  runtimeSupported: ReadonlySet<CompressionEncoding>,
+  runtimeSupported: ReadonlySet<CompressionEncoding>
 ): CompressionEncoding | null {
   if (accept.length === 0) return null;
   // Reject if `identity;q=0` AND no positive coded entries OR `*;q=0`.
@@ -190,9 +188,11 @@ let cachedRuntimeSupport: Set<CompressionEncoding> | null = null;
 
 function detectRuntimeSupport(): Set<CompressionEncoding> {
   if (cachedRuntimeSupport) return cachedRuntimeSupport;
-  const Stream = (globalThis as unknown as {
-    CompressionStream?: new (format: string) => unknown;
-  }).CompressionStream;
+  const Stream = (
+    globalThis as unknown as {
+      CompressionStream?: new (format: string) => unknown;
+    }
+  ).CompressionStream;
   const supported = new Set<CompressionEncoding>();
   if (!Stream) {
     cachedRuntimeSupport = supported;
@@ -219,10 +219,7 @@ export function _resetCompressionRuntimeProbeForTests(): void {
   cachedRuntimeSupport = null;
 }
 
-function isExcludedContentType(
-  contentType: string | null,
-  extraDeny: readonly string[],
-): boolean {
+function isExcludedContentType(contentType: string | null, extraDeny: readonly string[]): boolean {
   if (!contentType) return false;
   const token = contentType.split(";")[0]!.trim().toLowerCase();
   if (!token) return false;
@@ -238,10 +235,7 @@ function isExcludedContentType(
   return false;
 }
 
-function requestCarriesAuthCookie(
-  cookieHeader: string | null,
-  extra: readonly string[],
-): boolean {
+function requestCarriesAuthCookie(cookieHeader: string | null, extra: readonly string[]): boolean {
   if (!cookieHeader) return false;
   const lower = cookieHeader.toLowerCase();
   for (const tok of ALWAYS_AUTH_COOKIE_TOKENS) {
@@ -272,21 +266,17 @@ function appendVaryAcceptEncoding(headers: Headers): void {
 
 function normalizeOptionTokens(
   values: readonly string[] | undefined,
-  optionName: string,
+  optionName: string
 ): readonly string[] {
   if (!values) return Object.freeze([]);
   const normalized: string[] = [];
   for (const value of values) {
     if (typeof value !== "string") {
-      throw new TypeError(
-        `compression(): \`${optionName}\` entries must be non-empty strings.`,
-      );
+      throw new TypeError(`compression(): \`${optionName}\` entries must be non-empty strings.`);
     }
     const token = value.trim().toLowerCase();
     if (!token) {
-      throw new TypeError(
-        `compression(): \`${optionName}\` entries must be non-empty strings.`,
-      );
+      throw new TypeError(`compression(): \`${optionName}\` entries must be non-empty strings.`);
     }
     normalized.push(token);
   }
@@ -295,14 +285,16 @@ function normalizeOptionTokens(
 
 async function compressBytes(
   bytes: Uint8Array,
-  encoding: CompressionEncoding,
+  encoding: CompressionEncoding
 ): Promise<Uint8Array> {
-  const Stream = (globalThis as unknown as {
-    CompressionStream: new (format: string) => {
-      readable: ReadableStream<Uint8Array>;
-      writable: WritableStream<Uint8Array>;
-    };
-  }).CompressionStream;
+  const Stream = (
+    globalThis as unknown as {
+      CompressionStream: new (format: string) => {
+        readable: ReadableStream<Uint8Array>;
+        writable: WritableStream<Uint8Array>;
+      };
+    }
+  ).CompressionStream;
   const cs = new Stream(encoding);
   const writer = cs.writable.getWriter();
   // Intentionally do not `await writer.write(...)` separately from
@@ -370,20 +362,17 @@ async function compressBytes(
 export function compression(opts: CompressionOptions = {}): Hooks {
   if (Object.prototype.hasOwnProperty.call(opts, "compressLevel")) {
     throw new TypeError(
-      "compression(): `compressLevel` is not configurable. CompressionStream uses the runtime default (typically 6); higher levels are a CPU-DoS amplifier with single-digit-percent bytes-saved gains.",
+      "compression(): `compressLevel` is not configurable. CompressionStream uses the runtime default (typically 6); higher levels are a CPU-DoS amplifier with single-digit-percent bytes-saved gains."
     );
   }
-  const minimumSize =
-    opts.minimumSize === undefined ? 1024 : opts.minimumSize;
+  const minimumSize = opts.minimumSize === undefined ? 1024 : opts.minimumSize;
   if (
     !Number.isFinite(minimumSize) ||
     !Number.isInteger(minimumSize) ||
     minimumSize < 0 ||
     minimumSize > 2 ** 31 - 1
   ) {
-    throw new TypeError(
-      "compression(): `minimumSize` must be a finite non-negative integer.",
-    );
+    throw new TypeError("compression(): `minimumSize` must be a finite non-negative integer.");
   }
   const serverPreferred: readonly CompressionEncoding[] =
     opts.encodings && opts.encodings.length > 0
@@ -393,18 +382,12 @@ export function compression(opts: CompressionOptions = {}): Hooks {
   for (const enc of serverPreferred) {
     if (enc !== "br" && enc !== "gzip" && enc !== "deflate") {
       throw new TypeError(
-        `compression(): unknown encoding ${JSON.stringify(enc)} — supported: br, gzip, deflate.`,
+        `compression(): unknown encoding ${JSON.stringify(enc)} — supported: br, gzip, deflate.`
       );
     }
   }
-  const extraDeny = normalizeOptionTokens(
-    opts.excludeContentTypes,
-    "excludeContentTypes",
-  );
-  const extraAuthCookies = normalizeOptionTokens(
-    opts.authCookieNames,
-    "authCookieNames",
-  );
+  const extraDeny = normalizeOptionTokens(opts.excludeContentTypes, "excludeContentTypes");
+  const extraAuthCookies = normalizeOptionTokens(opts.authCookieNames, "authCookieNames");
 
   const hooks: Hooks & { [COMPRESSION_HOOK_MARKER]?: true } = {
     async onSend(res, ctx) {
@@ -417,14 +400,10 @@ export function compression(opts: CompressionOptions = {}): Hooks {
       if (res.headers.has("content-encoding")) return undefined;
       if (res.headers.has("set-cookie")) return undefined;
       if (req.headers.has("authorization")) return undefined;
-      if (
-        requestCarriesAuthCookie(req.headers.get("cookie"), extraAuthCookies)
-      ) {
+      if (requestCarriesAuthCookie(req.headers.get("cookie"), extraAuthCookies)) {
         return undefined;
       }
-      if (
-        isExcludedContentType(res.headers.get("content-type"), extraDeny)
-      ) {
+      if (isExcludedContentType(res.headers.get("content-type"), extraDeny)) {
         return undefined;
       }
 
@@ -452,8 +431,7 @@ export function compression(opts: CompressionOptions = {}): Hooks {
       if (existingEtag && !existingEtag.startsWith("W/")) {
         headers.set("etag", `W/${existingEtag}`);
       }
-      const responseBody: BodyInit | null =
-        method === "HEAD" ? null : (compressed as BodyInit);
+      const responseBody: BodyInit | null = method === "HEAD" ? null : (compressed as BodyInit);
       return new Response(responseBody, {
         status: res.status,
         statusText: res.statusText,

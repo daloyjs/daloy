@@ -22,7 +22,7 @@
  *
  * Everything here is built on Web-standard `URL` / `Request` and `btoa` /
  * `atob`, so it runs unchanged on Node, Bun, Deno, Cloudflare Workers, and
- * Vercel Edge.
+ * Vercel.
  *
  * @module
  * @since 0.37.0
@@ -266,8 +266,10 @@ export interface PaginationParams {
  * `toJSONSchema()` method so the OpenAPI generator wires the `cursor` and
  * `limit` parameters into the contract automatically.
  */
-export interface PaginationQuerySchema
-  extends StandardSchemaV1<Record<string, unknown>, PaginationParams> {
+export interface PaginationQuerySchema extends StandardSchemaV1<
+  Record<string, unknown>,
+  PaginationParams
+> {
   /** Used by the OpenAPI generator to emit the query parameters. */
   toJSONSchema(): Record<string, unknown>;
 }

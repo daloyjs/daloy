@@ -27,7 +27,7 @@ every `create-daloy` template now pins `@daloyjs/core@^1.0.0-beta.1`.
   refuse-to-boot guard (a wildcard `cors({ origin: "*" })`, a weak `session()`
   secret) is bypassed *only* because the runtime environment is indeterminate
   (no `env` option and no `NODE_ENV`, the default on edge runtimes such as
-  Cloudflare Workers / Deno Deploy / Vercel Edge), the framework now logs a
+  Cloudflare Workers / Deno Deploy / Vercel), the framework now logs a
   single once-per-process warning pointing at `app({ env: "production" })`.
   Enforcement is unchanged and the runtime is deliberately not sniffed (which
   would break portability); the warning only surfaces a previously silent skip,
@@ -43,7 +43,7 @@ every `create-daloy` template now pins `@daloyjs/core@^1.0.0-beta.1`.
 - **`multipart/form-data` bodies are capped at `bodyLimitBytes` even without a
   `Content-Length`.** Chunked or mislabeled multipart uploads were handed to the
   platform `formData()` parser uncapped on runtimes without a socket-layer limit
-  (Workers / Deno / Vercel Edge); the actual bytes are now bounded before
+  (Workers / Deno / Vercel); the actual bytes are now bounded before
   parsing. Web-standard only (`Request` + `formData`), so it stays
   runtime-portable.
 
@@ -461,8 +461,6 @@ scaffolded projects pin the latest peer.
   standalone Edge Functions. The template was renamed `vercel-edge` → `vercel`
   and now exports `toFetchHandler(app)` (the `{ fetch }` shape Node.js Functions
   expect, no `runtime` export needed); opting into the Edge runtime stays
-  documented as a one-line alternative. `--template vercel-edge` keeps working as
-  a deprecated alias that resolves to `vercel`.
 
 ### Documentation
 
@@ -531,7 +529,7 @@ scaffolded projects pin the latest peer.
 
 - **`create-daloy` templates now use `.ts` relative import specifiers** (for
   example `./build-app.ts` and `../api/[...path].ts`) instead of `.js`, so the
-  files you import match the files on disk. The `node-basic` and `vercel-edge`
+  files you import match the files on disk. The `node-basic` and `vercel`
   templates gain the required `allowImportingTsExtensions` (and, where it emits,
   `rewriteRelativeImportExtensions`) tsconfig flags; `bun-basic` and
   `deno-basic` already used `.ts` natively. npm + JSR publish output for
@@ -1208,7 +1206,7 @@ scaffolded projects pin the latest peer.
 
 - Repair release: republished to fix an incomplete `0.29.0` publish and resync
   the `@daloyjs/core` version pin across every `create-daloy` template
-  (`node-basic`, `bun-basic`, `deno-basic`, `cloudflare-worker`, `vercel-edge`)
+  (`node-basic`, `bun-basic`, `deno-basic`, `cloudflare-worker`, `vercel`)
   and the `seo.ts` fallback. No runtime behavior change.
 
 ## [0.29.0] — 2026-05-20
@@ -1451,7 +1449,7 @@ scaffolded projects pin the latest peer.
 
 - Confidence & lifecycle: `onSend` hook, GitHub Actions CI, `SECURITY.md`, OIDC
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
-  `vercel-edge`, `cloudflare-worker`), docs metadata + ORM guides.
+  `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.1...HEAD
 [1.0.0-beta.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.0...v1.0.0-beta.1

@@ -48,7 +48,7 @@ body:
         - Bun
         - Deno
         - Cloudflare Workers
-        - Vercel Edge
+        - Vercel
         - Multiple runtimes
         - Other / not sure
     validations:

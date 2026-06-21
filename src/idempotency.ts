@@ -26,7 +26,7 @@
  *
  * This module is dependency-free and uses only Web Crypto + Web Standard
  * `Request`/`Response`, so it runs unchanged on Node, Bun, Deno, Cloudflare
- * Workers, and Vercel Edge.
+ * Workers, and Vercel.
  *
  * @module
  * @since 0.37.0
@@ -363,10 +363,7 @@ async function captureResponse(
   return { status: res.status, headers, body: buf.byteLength ? bytesToBase64(buf) : "" };
 }
 
-function buildReplayResponse(
-  stored: StoredIdempotentResponse,
-  replayHeaderName: string
-): Response {
+function buildReplayResponse(stored: StoredIdempotentResponse, replayHeaderName: string): Response {
   const headers = new Headers();
   for (const [name, value] of stored.headers) headers.set(name, value);
   headers.set(replayHeaderName, "true");

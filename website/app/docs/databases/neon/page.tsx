@@ -31,7 +31,7 @@ export default function Page() {
         </a>{" "}
         is a serverless Postgres host with database branching, scale-to-zero,
         and an HTTP/WebSocket driver that runs in <em>every</em> runtime DaloyJS
-        targets, including Cloudflare Workers and Vercel Edge where raw TCP
+        targets, including Cloudflare Workers and Vercel where raw TCP
         isn&apos;t available.
       </p>
 
