@@ -296,7 +296,7 @@ const TABS = [
     description:
       "Total megabytes written to node_modules for a hello-world app, minimal vs. a security-hardened (secure parity) setup.",
     takeaway:
-      "DaloyJS is ~1.3 MB on disk and stays flat when you turn security on, because the hardening is already in-core. Fastify and NestJS balloon once you bolt the equivalent plugins back on.",
+      "DaloyJS is ~1.9 MB on disk and stays flat when you turn security on, because the hardening is already in-core. Fastify and NestJS balloon once you bolt the equivalent plugins back on.",
     soWhat:
       "Smaller installs mean faster CI runs, leaner Docker images, and quicker cold starts on serverless and the edge.",
     render: () => (
@@ -314,7 +314,7 @@ const TABS = [
     description:
       "Single-file production build, gzipped. Smaller is faster to ship to the edge and cold-start.",
     takeaway:
-      "DaloyJS gzips to ~27 kB minimal and ~31 kB secure, second only to Hono and a fraction of the Express or Nest bundles, despite shipping more batteries by default.",
+      "DaloyJS gzips to ~37 kB minimal and ~41 kB secure, second only to Hono and a fraction of the Express or Nest bundles, despite shipping more batteries by default.",
     soWhat:
       "A smaller bundle boots faster after a cold start, so the first user to hit your edge function or serverless endpoint waits less.",
     render: () => (
@@ -332,7 +332,7 @@ const TABS = [
     description:
       "Both frameworks run a comparable middleware stack on the same routes at 100 connections. This is the fair version of the throughput question: what does it cost once both sides actually do work?",
     takeaway:
-      "With comparable middleware on both sides, DaloyJS and Hono are neck and neck, and DaloyJS even edges ahead at ~19.7k vs ~19.3k req/s on static routes. A bare hello-world route would show a much larger gap, but that gap is mostly DaloyJS's security and validation running on every request, work the bare baseline simply skips.",
+      "With comparable middleware on both sides, DaloyJS and Hono are neck and neck, and DaloyJS even edges ahead at ~18.6k vs ~17.5k req/s on static routes. A bare hello-world route would show a much larger gap, but that gap is mostly DaloyJS's security and validation running on every request, work the bare baseline simply skips.",
     soWhat:
       "Security and validation are essentially free at the framework layer. Your real bottleneck will be the database and the network, not DaloyJS.",
     render: () => <ThroughputBarChart />,
