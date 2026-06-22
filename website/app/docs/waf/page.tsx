@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "WAF-lite signature/anomaly inspection",
   description:
-    "Add a first-party, opt-in defense-in-depth WAF-lite layer with waf() — wire DaloyJS' SQLi, XSS, NoSQL-operator, and command-injection signatures into a single scored inbound-inspection middleware with per-rule enable/disable and a block-or-log mode. Not a replacement for an edge WAF. Zero runtime dependencies.",
+    "Add a first-party, opt-in defense-in-depth WAF-lite layer with waf(): wire DaloyJS' SQLi, XSS, NoSQL-operator, and command-injection signatures into a single scored inbound-inspection middleware with per-rule enable/disable and a block-or-log mode. Not a replacement for an edge WAF. Zero runtime dependencies.",
   path: "/docs/waf",
   keywords: [
     "WAF",
@@ -29,7 +29,7 @@ export default function Page() {
     <>
       <h1>WAF-lite signature/anomaly inspection</h1>
       <p>
-        A full Web Application Firewall belongs at your <strong>edge</strong> —
+        A full Web Application Firewall belongs at your <strong>edge</strong>:
         a CDN, reverse proxy, or ModSecurity with the OWASP Core Rule Set.
         DaloyJS does not try to replace that. But plenty of teams ship without
         an edge WAF, and for them <code>waf()</code> is a first-party,{" "}
@@ -38,9 +38,9 @@ export default function Page() {
         scored inbound-inspection pass you can turn on with one line.
       </p>
       <p>
-        As of <strong>0.37.0</strong>, <code>waf()</code> inspects the decoded
+        <code>waf()</code> inspects the decoded
         URL path, the raw and decoded query string, an optional header
-        allowlist, and the validated request body for four rule categories —{" "}
+        allowlist, and the validated request body for four rule categories:{" "}
         <strong>SQLi</strong>, <strong>XSS</strong>, <strong>NoSQLi</strong>{" "}
         (Mongo-style operator injection), and <strong>command injection</strong>
         . Each rule that fires contributes an <em>anomaly score</em>; when the
@@ -93,7 +93,7 @@ app.use(waf());`}
       />
       <p>
         The middleware runs in the <code>beforeHandle</code> phase, so it sees
-        the validated context — <code>query</code>, <code>params</code>,{" "}
+        the validated context: <code>query</code>, <code>params</code>,{" "}
         <code>headers</code>, and the schema-parsed <code>body</code>. Because
         body inspection reads <code>ctx.body</code>, it composes with the
         framework&apos;s schema-first contract: routes that declare a body
@@ -110,7 +110,7 @@ app.use(waf());`}
       <CodeBlock
         language="ts"
         code={`app.use(waf({
-  mode: "log", // never rejects — only reports
+  mode: "log", // never rejects, only reports
   onMatch: (event) => {
     logger.warn({ waf: event }, "waf detection");
     // event = { mode, action, method, path, clientIp, score, threshold, matches }
@@ -130,27 +130,27 @@ app.use(waf());`}
       <h2>The rules</h2>
       <ul>
         <li>
-          <strong>sqli</strong> — <code>UNION SELECT</code>, boolean tautologies
+          <strong>sqli</strong>: <code>UNION SELECT</code>, boolean tautologies
           (<code>OR 1=1</code>), stacked statements (<code>; DROP TABLE</code>),
           time-based probes (<code>SLEEP()</code>, <code>WAITFOR DELAY</code>),{" "}
           <code>INFORMATION_SCHEMA</code>, <code>xp_cmdshell</code>, and file
           primitives.
         </li>
         <li>
-          <strong>xss</strong> — <code>&lt;script&gt;</code> tags,{" "}
+          <strong>xss</strong>: <code>&lt;script&gt;</code> tags,{" "}
           <code>javascript:</code> URIs, inline event handlers (
           <code>onerror=</code>, <code>onload=</code>), and{" "}
           <code>document.cookie</code> exfiltration.
         </li>
         <li>
-          <strong>nosqli</strong> — Mongo operator strings (<code>$ne</code>,{" "}
+          <strong>nosqli</strong>: Mongo operator strings (<code>$ne</code>,{" "}
           <code>$where</code>, …) <em>and</em> a structural check that rejects a
           parsed body containing any <code>$</code>-prefixed key, so{" "}
           <code>{`{"password": {"$ne": null}}`}</code> is caught even when no
           string value matches.
         </li>
         <li>
-          <strong>cmdi</strong> — shell metacharacters chaining into binaries (
+          <strong>cmdi</strong>: shell metacharacters chaining into binaries (
           <code>; rm</code>, <code>| nc</code>, <code>&amp;&amp; curl</code>),
           command substitution (<code>$(...)</code>, backticks), and sensitive
           path access (<code>/etc/passwd</code>).
@@ -214,7 +214,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         CPU-DoS: <code>maxValueLength</code> (default <code>8192</code>) caps
         the length of any single scanned string, and <code>maxBodyNodes</code>{" "}
         (default <code>10000</code>) caps how many body nodes are walked. Only
-        own enumerable properties are followed — prototype keys are never
+        own enumerable properties are followed; prototype keys are never
         inspected.
       </p>
 
@@ -222,7 +222,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
       <ul>
         <li>
           The <code>403</code> body is intentionally generic (
-          <code>Request blocked by security policy</code>) — it never tells an
+          <code>Request blocked by security policy</code>): it never tells an
           attacker which signature fired. Rule detail is delivered server-side
           via <code>onMatch</code> only.
         </li>

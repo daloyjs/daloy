@@ -459,7 +459,7 @@ export default function BlogPostPage() {
             That&apos;s it. One option. <code>docs.scalar</code> takes any
             JSON-serialisable Scalar API reference configuration and forwards it
             into the page. Theme, layout, brand CSS, favicon, the Try-It toggle,
-            sidebar density, &quot;open the first tag by default&quot; &mdash;
+            sidebar density, &quot;open the first tag by default&quot;:
             all the knobs Scalar already supports.
           </p>
 
@@ -468,7 +468,7 @@ export default function BlogPostPage() {
           <p>
             There are about forty fields on{" "}
             <code>ScalarReferenceConfiguration</code>. I&apos;m not going to
-            list all of them &mdash; the type ships with your IDE, and Scalar
+            list all of them. The type ships with your IDE, and Scalar
             keeps the canonical reference. But these are the ones I set in
             almost every project, in roughly this order:
           </p>
@@ -566,8 +566,8 @@ export default function BlogPostPage() {
             Second, the function-valued fields (<code>onBeforeRequest</code>,{" "}
             <code>plugins</code>, <code>generateOperationSlug</code>, friends)
             are typed as <code>never</code> in the public type. They can&apos;t
-            ride along inside a data attribute &mdash; functions don&apos;t
-            survive <code>JSON.stringify</code> &mdash; and pretending they can
+            ride along inside a data attribute (functions don&apos;t
+            survive <code>JSON.stringify</code>), and pretending they can
             would be a footgun with great UX and terrible debuggability.
             TypeScript stops you up front:
           </p>
@@ -594,8 +594,8 @@ export default function BlogPostPage() {
             That&apos;s the entire mechanism. Scalar&apos;s HTML API reads{" "}
             <code>data-configuration</code> at boot, merges it with anything you
             set via other data attributes, and renders. The reason this looks
-            suspiciously simple is because it <em>is</em> suspiciously simple
-            &mdash; the value of <code>docs.scalar</code> isn&apos;t in the
+            suspiciously simple is because it <em>is</em> suspiciously simple.
+            The value of <code>docs.scalar</code> isn&apos;t in the
             rendering, it&apos;s in the contract we hold around what can and
             can&apos;t go in that JSON.
           </p>
@@ -625,7 +625,7 @@ export default function BlogPostPage() {
             About once a year I genuinely do want a Scalar plugin or a custom
             slug generator. Those are functions; they can&apos;t cross the JSON
             boundary. <code>docs.scalar</code> won&apos;t let me, and
-            that&apos;s correct. But Daloy doesn&apos;t leave me stuck &mdash;
+            that&apos;s correct. But Daloy doesn&apos;t leave me stuck:{" "}
             the same generator that powers the auto-mount is exported as{" "}
             <code>scalarHtml()</code>, and I can mount my own route:
           </p>
@@ -645,7 +645,7 @@ export default function BlogPostPage() {
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
               CSP nonces via secureHeaders()
             </Link>
-            , the nonce flows through automatically &mdash; pass{" "}
+            , the nonce flows through automatically. Pass{" "}
             <code>ctx.state.cspNonce</code> into both calls and the script tag
             is allow-listed.
           </p>
@@ -671,7 +671,7 @@ export default function BlogPostPage() {
           <p>
             Notice the last assertion. That&apos;s the one that makes me sleep
             at night. It pins the fact that the page&apos;s configuration block
-            carries the live spec URL &mdash; the same one your typed client,
+            carries the live spec URL, the same one your typed client,
             your contract tests, and your{" "}
             <Link href="/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health">
               daloy inspect
@@ -694,8 +694,8 @@ export default function BlogPostPage() {
 
           <p>
             The honest reason this feature took the shape it did: I wanted
-            FastAPI-style ergonomics for the docs page &mdash; one option, in
-            the constructor, no second mental model &mdash; without the
+            FastAPI-style ergonomics for the docs page (one option, in
+            the constructor, no second mental model) without the
             FastAPI-style outcome where a year later someone has forked the
             template and the docs are silently rendering last quarter&apos;s
             spec. JSON-only forces the API to stay declarative. Force-setting{" "}
@@ -707,7 +707,7 @@ export default function BlogPostPage() {
           <p>
             Upgrade with <code>pnpm add @daloyjs/core@^0.14.0</code> (and{" "}
             <code>pnpm create daloy@latest</code> if you&apos;re scaffolding
-            fresh &mdash; the templates now ship pinned to <code>^0.14.0</code>
+            fresh, the templates now ship pinned to <code>^0.14.0</code>
             ). Then add five lines under <code>docs</code>, ship the brand
             audit, and go do something more interesting.
           </p>

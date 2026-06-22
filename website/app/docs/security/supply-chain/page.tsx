@@ -38,7 +38,7 @@ export default function Page() {
         <code>ignore-scripts=true</code>).
       </blockquote>
       <p>
-        npm worm campaigns ship in waves &mdash; <code>chalk</code>/
+        npm worm campaigns ship in waves: <code>chalk</code>/
         <code>debug</code> in September 2025, <code>node-ipc</code> in May 2026,
         the @tanstack/* compromise on 2026-05-11. The pattern is consistent: a
         single phished maintainer or one CI cache-poisoning bug becomes
@@ -114,8 +114,8 @@ export default function Page() {
         <li>
           <strong>
             No <code>pull_request_target</code>
-          </strong>{" "}
-          &mdash; ever. The repository has a <code>zizmor</code> check on every
+          </strong>, ever. The repository has a <code>zizmor</code> check on
+          every
           PR that fails the build if anyone ever adds it.
         </li>
         <li>
@@ -127,6 +127,11 @@ export default function Page() {
           continuously, and <code>CODEOWNERS</code> blocks any change to{" "}
           <code>.github/</code>,<code>package.json</code>, the lockfile, or{" "}
           <code>.npmrc</code> without a maintainer review.
+        </li>
+        <li>
+          <strong>ClusterFuzzLite</strong> continuously fuzzes the
+          untrusted-input parsers with Jazzer.js, on every PR that touches{" "}
+          <code>src/</code> and again in a daily batch run (see below).
         </li>
         <li>
           <strong>Lockfile source verification</strong> runs in CI via
@@ -143,6 +148,75 @@ export default function Page() {
           rel="noreferrer"
         >
           SECURITY.md
+        </a>
+        .
+      </p>
+
+      <h2>How the framework itself is fuzzed</h2>
+      <p>
+        Beyond static analysis, the untrusted-input parsers in{" "}
+        <code>@daloyjs/core</code> are continuously fuzzed with{" "}
+        <a
+          href="https://github.com/CodeIntelligenceTesting/jazzer.js"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          Jazzer.js
+        </a>{" "}
+        wired through{" "}
+        <a
+          href="https://google.github.io/clusterfuzzlite/"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          ClusterFuzzLite
+        </a>
+        . A per-PR <code>code-change</code> run fuzzes anything that touches{" "}
+        <code>src/</code>, and a daily batch job fuzzes the full corpus. This is
+        also what earns the OpenSSF Scorecard <strong>Fuzzing</strong> check.
+      </p>
+      <p>
+        Each target asserts the function&apos;s documented contract, not just
+        &quot;does not crash&quot;. A declared rejection (for example a{" "}
+        <code>BadRequestError</code> on malformed input) is correct behavior and
+        is ignored; any other thrown error, or a hang, is a finding:
+      </p>
+      <ul>
+        <li>
+          <code>safeJsonParse</code>: only throws <code>BadRequestError</code>,
+          and never returns an object carrying a <code>__proto__</code> /{" "}
+          <code>constructor</code> / <code>prototype</code> own key.
+        </li>
+        <li>
+          <code>readRequestCookie</code>: never throws while parsing an
+          untrusted <code>Cookie</code> header.
+        </li>
+        <li>
+          <code>decodeCursor</code>: only throws <code>BadRequestError</code> on
+          a malformed pagination cursor.
+        </li>
+        <li>
+          <code>parseCron</code>: only throws <code>CronParseError</code>.
+        </li>
+        <li>
+          <code>parseIp</code>: never throws (returns <code>undefined</code> on
+          unrecognized input).
+        </li>
+        <li>
+          <code>sanitizeHeaderName</code> / <code>sanitizeHeaderValue</code>:
+          only throw <code>BadRequestError</code>, and an accepted value never
+          contains CR, LF, or NUL.
+        </li>
+      </ul>
+      <p>
+        The harness, including the per-target oracle and the digest-pinned
+        OSS-Fuzz build image, lives in{" "}
+        <a
+          href="https://github.com/daloyjs/daloy/tree/main/.clusterfuzzlite"
+          target="_blank"
+          rel="noreferrer"
+        >
+          .clusterfuzzlite/
         </a>
         .
       </p>
@@ -249,7 +323,7 @@ strict-peer-dependencies=true`}
           &ldquo;quantum incident response&rdquo;
         </a>{" "}
         write-up makes the point that you cannot out-react an npm worm once it
-        lands &mdash; prevention at install time is the only viable defense.
+        lands: prevention at install time is the only viable defense.
         DaloyJS&apos;s install defaults already implement that thesis (cooldown,
         no transitive lifecycle hooks, zero runtime deps in{" "}
         <code>@daloyjs/core</code>, frozen + verified store). For belt-and-
@@ -268,7 +342,7 @@ safe-chain setup`}
       <p>
         DaloyJS deliberately does <strong>not</strong> add{" "}
         <code>safe-chain</code> (or any other third-party scanner) as a
-        dependency or scaffold default &mdash; <code>@daloyjs/core</code> ships
+        dependency or scaffold default. <code>@daloyjs/core</code> ships
         zero runtime dependencies by policy and any install-time tool you run is
         your trust decision, not the framework&apos;s. Equivalent commercial
         offerings (Socket, Snyk Advisor, JFrog Curation, npm&apos;s own Package
@@ -337,8 +411,8 @@ safe-chain setup`}
         <li>
           <strong>Separate the publish job</strong>. Do not put{" "}
           <code>id-token: write</code> on a workflow that runs untrusted code in
-          any earlier step &mdash; OIDC tokens have been pulled from runner
-          memory in real attacks.
+          any earlier step. OIDC tokens have been pulled from runner memory in
+          real attacks.
         </li>
         <li>
           <strong>
@@ -362,10 +436,10 @@ safe-chain setup`}
             rel="noreferrer"
           >
             Aikido: Quantum incident response
-          </a>{" "}
-          &mdash; why traditional IR cannot catch an npm worm, and why
-          install-time prevention (cooldowns, blocked scripts, malware-feed
-          scanners) is the only viable defense.
+          </a>
+          : why traditional IR cannot catch an npm worm, and why install-time
+          prevention (cooldowns, blocked scripts, malware-feed scanners) is the
+          only viable defense.
         </li>
         <li>
           <a
@@ -374,8 +448,8 @@ safe-chain setup`}
             rel="noreferrer"
           >
             TanStack 2026-05-11 postmortem
-          </a>{" "}
-          &mdash; the cache-poisoning + OIDC-extraction chain in detail.
+          </a>
+          : the cache-poisoning + OIDC-extraction chain in detail.
         </li>
         <li>
           <a
@@ -384,8 +458,8 @@ safe-chain setup`}
             rel="noreferrer"
           >
             TanStack incident follow-up
-          </a>{" "}
-          &mdash; what they changed afterwards.
+          </a>
+          : what they changed afterwards.
         </li>
         <li>
           <a

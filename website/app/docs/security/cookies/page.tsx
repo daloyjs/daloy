@@ -26,7 +26,7 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> a tamper-evident envelope service.
         Every department that mails something out uses the same envelopes with
-        the same seals, so nobody invents their own flimsy version — and the
+        the same seals, so nobody invents their own flimsy version, and the
         mail room refuses to accept two identical envelopes claiming to be the
         same letter.
       </blockquote>
@@ -173,7 +173,7 @@ return {
         <code>assertCookieAttributes()</code> throws on the first RFC 6265bis or
         secure-default violation. <code>serializeCookie()</code> and{" "}
         <code>serializeClearCookie()</code> call it for you, but you can invoke
-        it directly to validate a configuration at construction time — failing
+        it directly to validate a configuration at construction time, failing
         the boot rather than shipping a cookie the browser would silently drop.
       </p>
       <CodeBlock
@@ -195,7 +195,7 @@ assertCookieAttributes({
       </p>
       <p>
         For client-readable tokens such as a CSRF mirror, set{" "}
-        <code>httpOnly: false</code> explicitly — everything else stays locked
+        <code>httpOnly: false</code> explicitly. Everything else stays locked
         down.
       </p>
 

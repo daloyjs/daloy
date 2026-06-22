@@ -96,7 +96,7 @@ export default function Page() {
       <ul>
         <li>
           <code>internal: true</code> on a route hides it from the public
-          listener entirely &mdash; it is only reachable via{" "}
+          listener entirely. It is only reachable via{" "}
           <code>app.inject()</code> (server-to-server) or through an adapter
           that explicitly mounts internal routes on a separate socket / hostname
           / port.
@@ -154,8 +154,8 @@ app.route({
       <p>
         Aikido&apos;s second rule is to ban shared <code>support@app.io</code>{" "}
         logins so every sensitive change is attributable. Daloy doesn&apos;t
-        ship an identity provider &mdash; pick one (Auth0, Clerk, Cognito,
-        Keycloak, or your own JWT issuer) and verify per-admin tokens with{" "}
+        ship an identity provider. Pick one (Auth0, Clerk, Cognito, Keycloak,
+        or your own JWT issuer) and verify per-admin tokens with{" "}
         <code>bearerAuth()</code> or the JWT helpers. The framework gives you
         the audit-log primitives:
       </p>
@@ -217,10 +217,10 @@ app.route({
 
       <h2>3. Enforce 2FA (or 3FA) for admin auth</h2>
       <p>
-        Daloy doesn&apos;t implement TOTP / WebAuthn itself &mdash; that belongs
-        in your identity provider &mdash; but it gives you three layers that
-        compose with whatever 2FA your IdP enforces, so a stolen password alone
-        is not enough:
+        Daloy doesn&apos;t implement TOTP / WebAuthn itself (that belongs in
+        your identity provider), but it gives you three layers that compose with
+        whatever 2FA your IdP enforces, so a stolen password alone is not
+        enough:
       </p>
       <ul>
         <li>
@@ -277,8 +277,8 @@ app.route({
 
       <h2>4. Block unknown JavaScript with CSP</h2>
       <p>
-        Aikido&apos;s last rule &mdash; and the one that would have prevented
-        the &quot;Apple email injection&quot; case they cite &mdash; is a strict
+        Aikido&apos;s last rule (and the one that would have prevented the
+        &quot;Apple email injection&quot; case they cite) is a strict
         Content-Security-Policy on the admin HTML. Daloy&apos;s{" "}
         <code>secureHeaders()</code> already emits a CSP, and it can mint a
         fresh per-request nonce so legitimate inline bootstrap scripts run while{" "}
@@ -323,7 +323,7 @@ app.use(secureHeaders({
         redaction so reported URLs don&apos;t leak PII into logs).
       </p>
 
-      <h2>Checklist &mdash; Aikido rule → Daloy primitive</h2>
+      <h2>Checklist: Aikido rule → Daloy primitive</h2>
       <table>
         <thead>
           <tr>
@@ -350,8 +350,8 @@ app.use(secureHeaders({
             <td>Per-admin authentication, no shared accounts</td>
             <td>
               <code>bearerAuth()</code>, <code>basicAuth()</code>, JWT helpers,
-              <code>session()</code> &mdash; each ties a request to an
-              identifiable subject
+              <code>session()</code>: each ties a request to an identifiable
+              subject
             </td>
           </tr>
           <tr>
@@ -392,8 +392,8 @@ app.use(secureHeaders({
           <tr>
             <td>Take admin offline without taking the app offline</td>
             <td>
-              Separate internal listener / subdomain mount &mdash; flip a
-              feature flag or firewall rule, leave the public API running
+              Separate internal listener / subdomain mount: flip a feature flag
+              or firewall rule, leave the public API running
             </td>
           </tr>
         </tbody>
@@ -404,8 +404,8 @@ app.use(secureHeaders({
       </h2>
       <ul>
         <li>
-          Implement TOTP, WebAuthn, or SSO &mdash; use an identity provider.
-          Daloy verifies the resulting bearer tokens / JWTs.
+          Implement TOTP, WebAuthn, or SSO. Use an identity provider. Daloy
+          verifies the resulting bearer tokens / JWTs.
         </li>
         <li>
           Render an admin UI. The framework is API-first; pair it with any admin

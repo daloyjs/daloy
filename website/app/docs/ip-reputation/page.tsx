@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "IP reputation / dynamic denylist feed",
   description:
-    "Wire pluggable abuse feeds (Tor exit lists, Spamhaus DROP, cloud-abuse ranges) into your app with ipReputation() — periodic refresh, fail-open semantics, and the same SSRF-grade CIDR matcher as ipRestriction(). Zero runtime dependencies.",
+    "Wire pluggable abuse feeds (Tor exit lists, Spamhaus DROP, cloud-abuse ranges) into your app with ipReputation(): periodic refresh, fail-open semantics, and the same SSRF-grade CIDR matcher as ipRestriction(). Zero runtime dependencies.",
   path: "/docs/ip-reputation",
   keywords: [
     "IP reputation",
@@ -27,26 +27,26 @@ export default function Page() {
     <>
       <h1>IP reputation / dynamic denylist feed</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships <code>ipReputation()</code>.
+        DaloyJS ships <code>ipReputation()</code>.
         Where <code>ipRestriction()</code> enforces a <em>static</em> allow/deny
         list compiled once at startup, <code>ipReputation()</code> wires{" "}
-        <strong>pluggable, periodically-refreshed abuse feeds</strong> — Tor
+        <strong>pluggable, periodically-refreshed abuse feeds</strong> (Tor
         exit lists, Spamhaus DROP, cloud-abuse ranges, or your own threat
-        intelligence — into the request path without a redeploy.
+        intelligence) into the request path without a redeploy.
       </p>
       <ul>
         <li>
-          <strong>Pluggable feeds</strong> — any source that yields IP / CIDR
+          <strong>Pluggable feeds</strong>: any source that yields IP / CIDR
           strings. <code>urlFeed()</code> ships for the common case (fetch a
           newline / Spamhaus-DROP-style list over HTTP).
         </li>
         <li>
-          <strong>Periodic refresh</strong> — the denylist reloads on an
+          <strong>Periodic refresh</strong>: the denylist reloads on an
           <code>unref</code>&apos;d timer so stale ranges expire and new ones
           are picked up automatically.
         </li>
         <li>
-          <strong>Fail-open</strong> — a denylist is additive defense, never the
+          <strong>Fail-open</strong>: a denylist is additive defense, never the
           only gate. If a feed can&apos;t be loaded (initial or refresh),
           traffic is <em>not</em> blocked: the last-known-good list is retained.
           A feed outage never takes your app down.
@@ -153,7 +153,7 @@ const reputation = ipReputation({
       <ul>
         <li>
           A failed <strong>initial</strong> load leaves an empty (permissive)
-          denylist — requests flow.
+          denylist, so requests flow.
         </li>
         <li>
           A failed <strong>refresh</strong> keeps the previous, last-known-good
@@ -232,8 +232,8 @@ reputation.has("203.0.113.7");       // probe without side effects`}
       <h2>Security notes</h2>
       <ul>
         <li>
-          <strong>Defense in depth.</strong> A denylist complements — never
-          replaces — authentication, rate limiting, and{" "}
+          <strong>Defense in depth.</strong> A denylist complements (never
+          replaces) authentication, rate limiting, and{" "}
           <code>ipRestriction()</code> allowlists.
         </li>
         <li>

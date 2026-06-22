@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Scheduled tasks (in-process cron)",
   description:
-    "Run periodic work inside your DaloyJS process with app.cron() and the Scheduler primitive. Cron expressions or fixed intervals, single-flight overlap protection, per-run timeouts, and graceful-shutdown integration — zero runtime dependencies.",
+    "Run periodic work inside your DaloyJS process with app.cron() and the Scheduler primitive. Cron expressions or fixed intervals, single-flight overlap protection, per-run timeouts, and graceful-shutdown integration with zero runtime dependencies.",
   path: "/docs/scheduler",
   keywords: [
     "in-process cron",
@@ -28,29 +28,29 @@ export default function Page() {
     <>
       <h1>Scheduled tasks (in-process cron)</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships a{" "}
+        DaloyJS ships a{" "}
         <strong>queue-agnostic schedule primitive</strong>: run periodic work
         inside <em>this</em> process on a fixed interval or a cron expression.
-        It is the in-process counterpart to an external job queue &mdash; reach
+        It is the in-process counterpart to an external job queue. Reach
         for it for cache sweeps, token refresh, reconciliation, and other
         housekeeping, not for distributed fan-out. It has zero runtime
         dependencies and three properties a production scheduler needs:
       </p>
       <ul>
         <li>
-          <strong>Flexible schedules</strong> &mdash; fixed intervals (
+          <strong>Flexible schedules</strong>: fixed intervals (
           <code>intervalMs</code>) or 5-field cron expressions (
           <code>cron</code>, with <code>@hourly</code>/<code>@daily</code>/…
           aliases and an optional IANA <code>timeZone</code>).
         </li>
         <li>
-          <strong>Single-flight</strong> &mdash; a task never overlaps itself.
+          <strong>Single-flight</strong>: a task never overlaps itself.
           If a tick fires while the previous run is still in progress, the tick
           is skipped (and counted), so a slow task can never pile up unbounded
           concurrent runs.
         </li>
         <li>
-          <strong>Graceful shutdown</strong> &mdash; <code>app.cron()</code>{" "}
+          <strong>Graceful shutdown</strong>: <code>app.cron()</code>{" "}
           ties the scheduler to the app lifecycle: on shutdown it stops arming
           new runs, awaits in-flight runs, and aborts their{" "}
           <code>AbortSignal</code> if they outlast the grace period. Timers are{" "}
@@ -159,7 +159,7 @@ app.cron({ name: "first-of-month", cron: "@monthly" }, run);    // 00:00 on the 
       <p>
         Parsing is purely arithmetic (no backtracking regular expressions), and
         a malformed or unsatisfiable expression (for example{" "}
-        <code>0 0 30 2 *</code> — the 30th of February) throws a{" "}
+        <code>0 0 30 2 *</code>, the 30th of February) throws a{" "}
         <code>CronParseError</code> at registration time, not silently at
         runtime.
       </p>
@@ -170,7 +170,7 @@ app.cron({ name: "first-of-month", cron: "@monthly" }, run);    // 00:00 on the 
         the current run starts. If a run outlasts its interval, the overlapping
         tick is <em>skipped</em> rather than started concurrently, and the skip
         is counted in <code>getState(name).skipped</code>. This guarantees at
-        most one concurrent run per task — a slow task degrades to &ldquo;runs
+        most one concurrent run per task: a slow task degrades to &ldquo;runs
         back-to-back&rdquo; instead of fanning out.
       </p>
       <CodeBlock
@@ -225,7 +225,7 @@ scheduler.define({ name: "cleanup", intervalMs: 60_000 }, ({ signal }) =>
 );
 scheduler.start();
 
-// On shutdown — wait up to 5s for in-flight runs, then abort:
+// On shutdown, wait up to 5s for in-flight runs, then abort:
 process.on("SIGTERM", () => scheduler.stop(5_000));`}
       />
       <p>
@@ -240,7 +240,7 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
         This scheduler runs in-process: each instance of your app runs its own
         timers. That is exactly what you want for idempotent maintenance, but
         for work that must run <em>exactly once</em> across a
-        horizontally-scaled fleet — or that must survive a process restart — use
+        horizontally-scaled fleet (or that must survive a process restart) use
         a durable queue or a leader-elected external scheduler and have the
         elected instance call <code>runNow()</code>. The single-flight guarantee
         is per-process, not cluster-wide.

@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Bot / User-Agent management",
   description:
-    "Block empty or known-abusive User-Agent strings and verify declared crawlers (Googlebot/Bingbot) with reverse-DNS + forward-confirm using botGuard() — the in-app equivalent of Nginx/WAF bot rules. Opt-in, allowlist-friendly, zero runtime dependencies.",
+    "Block empty or known-abusive User-Agent strings and verify declared crawlers (Googlebot/Bingbot) with reverse-DNS + forward-confirm using botGuard(): the in-app equivalent of Nginx/WAF bot rules. Opt-in, allowlist-friendly, zero runtime dependencies.",
   path: "/docs/bot-guard",
   keywords: [
     "bot management",
@@ -26,7 +26,7 @@ export default function Page() {
     <>
       <h1>Bot / User-Agent management</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships <code>botGuard()</code> —
+        DaloyJS ships <code>botGuard()</code>,
         the in-app equivalent of the bot rules Nginx, Cloudflare, and other WAFs
         run at the edge, but inside the app where the framework already owns
         request parsing and client-IP resolution. It does three opt-in jobs:
@@ -36,17 +36,17 @@ export default function Page() {
           <strong>
             Block empty / missing <code>User-Agent</code>
           </strong>{" "}
-          — a common signature of crude scrapers and vulnerability scanners (on
+          (a common signature of crude scrapers and vulnerability scanners, on
           by default).
         </li>
         <li>
           <strong>
             Block known-abusive <code>User-Agent</code> strings
           </strong>{" "}
-          — your own substrings or <code>RegExp</code>s.
+          (your own substrings or <code>RegExp</code>s).
         </li>
         <li>
-          <strong>Verify declared crawlers</strong> — when a request{" "}
+          <strong>Verify declared crawlers</strong>: when a request{" "}
           <em>claims</em> to be Googlebot or Bingbot, confirm it via reverse-DNS
           + forward-confirm (the method Google and Bing themselves document) so
           a spoofed <code>User-Agent</code> can&apos;t impersonate a trusted
@@ -133,7 +133,7 @@ app.use(
       <p>
         <code>allowUserAgents</code> is consulted first and bypasses{" "}
         <strong>every</strong> other rule (including empty-UA blocking and
-        crawler verification) — handy for your own monitoring agents or a
+        crawler verification), handy for your own monitoring agents or a
         partner&apos;s integration.
       </p>
       <CodeBlock
@@ -180,8 +180,8 @@ app.use(
         Because <code>verifiedBots</code> needs the client IP, the middleware{" "}
         <strong>refuses to construct</strong> unless you supply{" "}
         <code>resolveIp</code> or set <code>trustProxyHeaders</code>. A request
-        that claims to be a crawler but can&apos;t be verified — no client IP,
-        or a DNS failure — is blocked by default (
+        that claims to be a crawler but can&apos;t be verified (no client IP,
+        or a DNS failure) is blocked by default (
         <code>blockUnverifiableBots</code>, the secure-by-default posture). Set
         it to <code>false</code> to fail open. Verification results are cached
         per IP (default 1 h via <code>cacheTtlMs</code>) so DNS stays off the
@@ -190,7 +190,7 @@ app.use(
 
       <h2>Monitor mode &amp; callbacks</h2>
       <p>
-        Roll it out safely with <code>mode: &quot;log&quot;</code> — nothing is
+        Roll it out safely with <code>mode: &quot;log&quot;</code>: nothing is
         blocked, but every match fires <code>onBlock</code> so you can measure
         impact before enforcing.
       </p>

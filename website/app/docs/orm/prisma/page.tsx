@@ -267,7 +267,7 @@ export const prisma = new PrismaClient({ adapter });`}
         you pass to <code>where</code> is interpreted by Prisma. If a field
         annotated as <code>string</code> arrives at runtime as an object like{" "}
         <code>{`{ "not": "" }`}</code>, Prisma treats it as an operator and an
-        attacker can bypass equality checks &mdash; the
+        attacker can bypass equality checks, the
         &ldquo;NoSQL-injection-in-Prisma&rdquo; pattern{" "}
         <a
           href="https://www.aikido.dev/blog/prisma-and-postgresql-vulnerable-to-nosql-injection"

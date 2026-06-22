@@ -34,18 +34,18 @@ export default function Page() {
         UI, or Redoc by loading their JavaScript and CSS bundles from the
         jsDelivr CDN. A
         CDN keeps the framework dependency-free and means no build step for the
-        docs UI — but it also means the browser will execute whatever bytes the
+        docs UI, but it also means the browser will execute whatever bytes the
         CDN serves. If a CDN asset were ever poisoned, that code would run in
         the context of your docs page.
       </p>
       <p>
-        As of <strong>0.37.0</strong>, the docs helpers accept{" "}
+        The docs helpers accept{" "}
         <strong>Subresource Integrity (SRI)</strong> hashes. When you pin one,
         DaloyJS emits an <code>integrity=&quot;…&quot;</code> attribute plus a{" "}
         <code>crossorigin</code> attribute on the matching{" "}
         <code>&lt;script&gt;</code> / <code>&lt;link&gt;</code> tag, so the
         browser refuses to execute an asset whose bytes don&apos;t match the
-        pinned hash — the docs UI inherits the same supply-chain posture as the
+        pinned hash. The docs UI inherits the same supply-chain posture as the
         rest of the framework.
       </p>
 
@@ -86,7 +86,7 @@ export default function Page() {
         SRI only works against a <strong>version-pinned, byte-stable</strong>{" "}
         URL. The framework&apos;s default asset URLs intentionally track the{" "}
         <em>latest</em> upstream release (so you get fixes without bumping
-        DaloyJS), which means they cannot carry a fixed hash — the bytes change
+        DaloyJS), which means they cannot carry a fixed hash. The bytes change
         whenever Scalar or Swagger UI publishes. To pin SRI you therefore supply
         both a version-exact URL and its matching hash.
       </p>
@@ -210,7 +210,7 @@ new App({
         The same options flow through the <code>scalarHtml()</code>,{" "}
         <code>swaggerUiHtml()</code>, and <code>redocHtml()</code> helpers (from
         the <code>@daloyjs/core/docs</code> subpath) if you render the docs page
-        yourself. Multiple digests are supported — separate them with
+        yourself. Multiple digests are supported: separate them with
         whitespace, and the strongest one the browser understands wins. The{" "}
         <code>crossOrigin</code> field defaults to{" "}
         <code>&quot;anonymous&quot;</code>; set it to{" "}

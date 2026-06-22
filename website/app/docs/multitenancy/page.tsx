@@ -28,7 +28,7 @@ export default function Page() {
     <>
       <h1>Multitenancy</h1>
       <p>
-        As of <strong>0.42.0</strong> DaloyJS ships <code>tenancy()</code>, a{" "}
+        DaloyJS ships <code>tenancy()</code>, a{" "}
         <strong>dependency-free</strong>, secure-by-default <code>Hooks</code>{" "}
         bundle that resolves the calling tenant <em>once</em> per request,
         validates and normalizes it, and exposes it on{" "}
@@ -204,7 +204,7 @@ app.route({
             <tr>
               <td><code>(ctx) =&gt; string | undefined</code></td>
               <td>anything</td>
-              <td>Custom resolver — derive the id however you like.</td>
+              <td>Custom resolver: derive the id however you like.</td>
             </tr>
           </tbody>
         </table>
@@ -232,7 +232,7 @@ tenancy({
             <tr>
               <td><code>resolve</code></td>
               <td><code>TenantResolver | TenantResolver[]</code></td>
-              <td>— (required)</td>
+              <td>(required)</td>
               <td>Resolver(s) tried in order; first non-empty wins.</td>
             </tr>
             <tr>
@@ -240,7 +240,7 @@ tenancy({
               <td><code>boolean</code></td>
               <td><code>true</code></td>
               <td>
-                Reject unresolved requests. The secure default — an
+                Reject unresolved requests. The secure default: an
                 unresolved request is never served as an ambient
                 &ldquo;default&rdquo; tenant.
               </td>
@@ -248,7 +248,7 @@ tenancy({
             <tr>
               <td><code>allow</code></td>
               <td><code>string[] | (id, ctx) =&gt; boolean</code></td>
-              <td>—</td>
+              <td>-</td>
               <td>
                 Bound the tenant space. Array entries are validated at
                 construction. A disallowed id is rejected with{" "}
@@ -310,9 +310,9 @@ responseCache({ ttlMs: 30_000, scope: tenantScope() });`}
       <p>
         <strong>Ordering matters.</strong> <code>tenancy()</code> resolves in{" "}
         <code>beforeHandle</code>, and so do these consumers. Register{" "}
-        <code>tenancy()</code> first — as a global hook (
+        <code>tenancy()</code> first, as a global hook (
         <code>new App({`{ hooks: tenancy(...) }`}</code>) or the first{" "}
-        <code>app.use(...)</code> — so the tenant is populated before any{" "}
+        <code>app.use(...)</code>, so the tenant is populated before any{" "}
         <code>keyGenerator</code> / <code>scope</code> callback runs. If a
         limiter runs first, its key falls back to{" "}
         <code>tenant:unknown</code>.
@@ -340,7 +340,7 @@ declare module "@daloyjs/core" {
         <li>
           <strong>Refuse-unresolved by default.</strong> With{" "}
           <code>require: true</code>, a request whose tenant cannot be resolved
-          is rejected rather than silently served as a default tenant — the
+          is rejected rather than silently served as a default tenant, the
           failure mode that leaks one tenant&apos;s data to another.
         </li>
         <li>

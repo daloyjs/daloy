@@ -29,14 +29,14 @@ export default function Page() {
       <h1>Response caching</h1>
       <p>
         A hot read endpoint often renders the same response over and over while
-        nothing has changed — re-running the handler (and its database or
-        upstream calls) each time is pure waste. As of <strong>0.37.0</strong>{" "}
-        the <code>responseCache()</code> middleware stores rendered response
+        nothing has changed. Re-running the handler (and its database or
+        upstream calls) each time is pure waste. The{" "}
+        <code>responseCache()</code> middleware stores rendered response
         bodies and replays them for matching requests, so the handler is{" "}
         <em>not invoked at all</em> while a cached representation is fresh.
       </p>
       <p>
-        It completes — and does not overlap with — the two caching-adjacent
+        It completes (and does not overlap with) the two caching-adjacent
         helpers DaloyJS already ships. <code>etag()</code> answers conditional{" "}
         <code>GET</code>s with <code>304 Not Modified</code> but still runs the
         handler to produce the body it hashes; <code>compression()</code>{" "}
@@ -45,8 +45,8 @@ export default function Page() {
         <strong>body</strong>.
       </p>
       <p>
-        It is <strong>built-in and dependency-free</strong> — built on the
-        Web-standard <code>Request</code>/<code>Response</code> — so it runs
+        It is <strong>built-in and dependency-free</strong>, built on the
+        Web-standard <code>Request</code>/<code>Response</code>, so it runs
         unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel.
       </p>
 
@@ -81,8 +81,8 @@ app.route({
         language="ts"
       />
       <p>
-        Each response carries an <code>X-Cache</code> marker — <code>HIT</code>,{" "}
-        <code>MISS</code>, or <code>STALE</code> — plus an <code>Age</code>{" "}
+        Each response carries an <code>X-Cache</code> marker (<code>HIT</code>,{" "}
+        <code>MISS</code>, or <code>STALE</code>) plus an <code>Age</code>{" "}
         header on a hit, so caches and clients can observe the outcome.
       </p>
 
@@ -121,17 +121,17 @@ app.route({
 
       <ul>
         <li>
-          <strong>Fresh hit</strong> — the stored response is served and the
+          <strong>Fresh hit</strong>: the stored response is served and the
           handler does <em>not</em> run (<code>X-Cache: HIT</code>).
         </li>
         <li>
           <strong>Stale hit within the SWR window</strong> (requires{" "}
-          <code>revalidate</code>) — the stale response is served immediately (
+          <code>revalidate</code>): the stale response is served immediately (
           <code>X-Cache: STALE</code>) while a single, de-duplicated background
           refresh repopulates the cache.
         </li>
         <li>
-          <strong>Miss</strong> — the handler runs and a cacheable response is
+          <strong>Miss</strong>: the handler runs and a cacheable response is
           stored (<code>X-Cache: MISS</code>).
         </li>
       </ul>
@@ -168,7 +168,7 @@ app.route({
         </li>
         <li>
           <code>Cache-Control: no-cache</code> bypasses the read but still
-          refreshes the stored entry — this is exactly what the background
+          refreshes the stored entry. This is exactly what the background
           stale-while-revalidate refresh uses, which makes revalidation
           recursion-safe.
         </li>
@@ -227,7 +227,7 @@ app.use(
 
       <h2>Pluggable stores</h2>
       <p>
-        The default <code>MemoryResponseCacheStore</code> is process-local —
+        The default <code>MemoryResponseCacheStore</code> is process-local,
         perfect for tests and single-instance deployments. For a multi-instance
         or serverless fleet, supply a shared backend by implementing{" "}
         <code>ResponseCacheStore</code>. The contract mirrors{" "}
@@ -259,7 +259,7 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
         <li>
           Credentialed and per-user responses are never shared by default:
           anything carrying <code>Set-Cookie</code> or{" "}
-          <code>Cache-Control: private | no-store | no-cache</code> is skipped —
+          <code>Cache-Control: private | no-store | no-cache</code> is skipped,
           the same skip posture as <code>etag()</code>.
         </li>
         <li>

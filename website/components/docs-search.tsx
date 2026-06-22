@@ -87,14 +87,14 @@ function buildDocsFilter(
     const keywordsLower = item.keywords.toLowerCase();
     const tokens = needle.split(/\s+/).filter(Boolean);
 
-    // Title match — prioritised
+    // Title match: prioritised
     if (titleLower === needle) return 1.0;
     if (titleLower.startsWith(needle)) return 0.95;
     if (titleLower.includes(needle)) return 0.85;
     if (tokens.length > 1 && tokens.every((t) => titleLower.includes(t)))
       return 0.75;
 
-    // Keywords / body match — lower weight
+    // Keywords / body match: lower weight
     if (keywordsLower.includes(needle)) return 0.5;
     if (tokens.length > 1 && tokens.every((t) => keywordsLower.includes(t)))
       return 0.35;

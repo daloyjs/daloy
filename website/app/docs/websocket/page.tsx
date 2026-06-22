@@ -53,8 +53,8 @@ export default function Page() {
         <code>perMessageDeflate: true</code>.
       </p>
       <p>
-        Since <strong>0.33.0</strong>, production routes also require an Origin
-        policy with <code>allowedOrigins</code> or an explicit{" "}
+        Production routes also require an Origin policy with{" "}
+        <code>allowedOrigins</code> or an explicit{" "}
         <code>acknowledgeCrossOriginUpgrade: true</code>. This closes the
         Cross-Site WebSocket Hijacking pattern behind Storybook&apos;s
         CVE-2026-27148: browsers attach cookies to WS handshakes, even when

@@ -28,10 +28,10 @@ export default function Page() {
       <h1>Idempotency keys</h1>
       <p>
         Network retries are a fact of life on serverless platforms, behind load
-        balancers, and on flaky mobile connections. For unsafe methods —{" "}
+        balancers, and on flaky mobile connections. For unsafe methods (
         <code>POST</code>, <code>PUT</code>, <code>PATCH</code>,{" "}
-        <code>DELETE</code> — a blind retry can charge a card twice or create a
-        duplicate order. As of <strong>0.37.0</strong> the{" "}
+        <code>DELETE</code>) a blind retry can charge a card twice or create a
+        duplicate order. The{" "}
         <code>idempotency()</code> middleware gives those requests an
         exactly-once guarantee: the client sends a unique{" "}
         <code>Idempotency-Key</code> header, and DaloyJS makes sure the side
@@ -39,8 +39,8 @@ export default function Page() {
         replayed.
       </p>
       <p>
-        It is <strong>built-in and dependency-free</strong> — built on Web
-        Crypto and the Web-standard <code>Request</code>/<code>Response</code> —
+        It is <strong>built-in and dependency-free</strong>, built on Web
+        Crypto and the Web-standard <code>Request</code>/<code>Response</code>,
         so it runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel
         Edge. The behavior mirrors the IETF{" "}
         <em>Idempotency-Key HTTP Header Field</em> draft and the conventions
@@ -50,7 +50,7 @@ export default function Page() {
       <h2>Quick start</h2>
       <p>
         Mount <code>idempotency()</code> ahead of the routes that need
-        exactly-once semantics. That is all — clients opt in per request by
+        exactly-once semantics. That is all: clients opt in per request by
         sending an <code>Idempotency-Key</code> header.
       </p>
       <CodeBlock
@@ -130,24 +130,24 @@ app.route({
 
       <ul>
         <li>
-          <strong>First request</strong> — the handler runs normally; the final
+          <strong>First request</strong>: the handler runs normally; the final
           response is captured and persisted under the key for{" "}
           <code>ttlSeconds</code>.
         </li>
         <li>
           <strong>Identical retry</strong> (same key, same fingerprint, original
-          completed) — the stored response is replayed byte-for-byte with an{" "}
+          completed): the stored response is replayed byte-for-byte with an{" "}
           <code>Idempotency-Replayed: true</code> header. The handler does{" "}
           <em>not</em> run again.
         </li>
         <li>
-          <strong>Retry while the first is still in flight</strong> — a{" "}
+          <strong>Retry while the first is still in flight</strong>: a{" "}
           <code>409 Conflict</code> is returned (with{" "}
           <code>Cache-Control: no-store</code>) so the client backs off instead
           of racing.
         </li>
         <li>
-          <strong>Same key, different body</strong> — a{" "}
+          <strong>Same key, different body</strong>: a{" "}
           <code>422 Unprocessable Content</code> is returned. A key is
           permanently bound to the first payload it was used with.
         </li>
@@ -189,7 +189,7 @@ app.route({
 
       <h2>Pluggable stores</h2>
       <p>
-        The default <code>MemoryIdempotencyStore</code> is process-local —
+        The default <code>MemoryIdempotencyStore</code> is process-local,
         perfect for tests and single-instance deployments. For a multi-instance
         or serverless fleet, supply a shared backend by implementing{" "}
         <code>IdempotencyStore</code>. The contract mirrors{" "}
@@ -262,7 +262,7 @@ async function createChargeWithRetries(amount: number) {
         </li>
         <li>
           Server errors are never cached, so a transient <code>5xx</code> does
-          not poison the key — the client can safely retry.
+          not poison the key, so the client can safely retry.
         </li>
         <li>
           The stored body is capped by <code>maxResponseBytes</code> to bound

@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Per-route / per-client concurrency limits",
   description:
-    "Bound in-flight requests per route and per client with concurrencyLimit() — HAProxy maxconn/queue parity at the app layer: a semaphore, a bounded FIFO queue, and a fast 503. Complements maxConnections and loadShedding(). Zero runtime dependencies.",
+    "Bound in-flight requests per route and per client with concurrencyLimit(), HAProxy maxconn/queue parity at the app layer: a semaphore, a bounded FIFO queue, and a fast 503. Complements maxConnections and loadShedding(). Zero runtime dependencies.",
   path: "/docs/concurrency-limit",
   keywords: [
     "concurrency limit",
@@ -27,8 +27,8 @@ export default function Page() {
     <>
       <h1>Per-route / per-client concurrency limits</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships{" "}
-        <code>concurrencyLimit()</code> — HAProxy <code>maxconn</code> +
+        DaloyJS ships{" "}
+        <code>concurrencyLimit()</code>: HAProxy <code>maxconn</code> +
         request-queue parity, but inside the app where the framework already
         owns routing and client identity. Where the Node adapter&apos;s{" "}
         <code>maxConnections</code> caps <em>sockets</em> at accept time and{" "}
@@ -52,7 +52,7 @@ export default function Page() {
           out;
         </li>
         <li>
-          releases its slot when the response is finalized — on success, error,
+          releases its slot when the response is finalized: on success, error,
           and short-circuit paths alike, so a slot is never leaked.
         </li>
       </ul>
@@ -110,22 +110,22 @@ app.use(concurrencyLimit({
       </p>
       <ul>
         <li>
-          <code>&quot;global&quot;</code> (default) — one shared budget across
+          <code>&quot;global&quot;</code> (default): one shared budget across
           the whole mount.
         </li>
         <li>
-          <code>&quot;route&quot;</code> — a separate budget per{" "}
+          <code>&quot;route&quot;</code>: a separate budget per{" "}
           <code>method + path</code>, so one hot endpoint can&apos;t starve the
           others mounted under the same guard.
         </li>
         <li>
-          <code>&quot;client&quot;</code> — a separate budget per client
+          <code>&quot;client&quot;</code>: a separate budget per client
           identity (requires <code>trustProxyHeaders</code> or a{" "}
           <code>keyGenerator</code>), so a heavy client can&apos;t consume
           everyone else&apos;s slots.
         </li>
         <li>
-          a <strong>function</strong> — return a custom bucket key, or{" "}
+          a <strong>function</strong>: return a custom bucket key, or{" "}
           <code>undefined</code> to skip limiting for that request (fail-open).
         </li>
       </ul>
@@ -150,7 +150,7 @@ app.use(concurrencyLimit({
       <h2>No queue vs. queue</h2>
       <p>
         With the default <code>maxQueue: 0</code>, an overflowing request is
-        rejected <em>immediately</em> with <code>503</code> — useful when you
+        rejected <em>immediately</em> with <code>503</code>, useful when you
         prefer fast failure over added latency. Set <code>maxQueue</code> to
         absorb short bursts, and pair it with <code>queueTimeoutMs</code> to
         bound tail latency so a waiting request doesn&apos;t hang indefinitely.
@@ -205,28 +205,28 @@ app.use(concurrencyLimit({
           <strong>
             <code>maxConnections</code>
           </strong>{" "}
-          (Node adapter) — rejects surplus <em>sockets</em> at accept time (L4
+          (Node adapter): rejects surplus <em>sockets</em> at accept time (L4
           admission).
         </li>
         <li>
           <strong>
             <code>loadShedding()</code>
           </strong>{" "}
-          — sheds traffic when the <em>process</em> is under pressure
+          sheds traffic when the <em>process</em> is under pressure
           (event-loop delay, heap, RSS).
         </li>
         <li>
           <strong>
             <code>concurrencyLimit()</code>
           </strong>{" "}
-          — bounds <em>in-flight requests</em> per route / client with queueing
+          bounds <em>in-flight requests</em> per route / client with queueing
           (L7 fairness + backpressure).
         </li>
         <li>
           <strong>
             <code>rateLimit()</code>
           </strong>{" "}
-          — bounds <em>request rate</em> over time per client.
+          bounds <em>request rate</em> over time per client.
         </li>
       </ul>
       <p>

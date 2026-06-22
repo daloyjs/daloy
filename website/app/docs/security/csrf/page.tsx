@@ -363,8 +363,8 @@ await fetch("/transfer", {
         </li>
       </ul>
       <p>
-        For defense in depth, pass <code>strategy: &quot;both&quot;</code>{" "}
-        &mdash; mutating requests must then pass <em>both</em> the
+        For defense in depth, pass <code>strategy: &quot;both&quot;</code>.
+        Mutating requests must then pass <em>both</em> the
         Fetch-Metadata check <em>and</em> the double-submit cookie check.
       </p>
       <p>

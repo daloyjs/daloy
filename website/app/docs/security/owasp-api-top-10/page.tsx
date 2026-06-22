@@ -42,7 +42,7 @@ export default function Page() {
         </a>{" "}
         is the canonical checklist for what attackers actually exploit against
         HTTP APIs. This page maps every item to the Daloy primitive, middleware,
-        or boot guard that addresses it &mdash; including the cross-cutting best
+        or boot guard that addresses it, including the cross-cutting best
         practices called out in the{" "}
         <a
           href="https://www.aikido.dev/blog/api-security-guide"
@@ -115,7 +115,7 @@ export default function Page() {
           <tr>
             <td>
               <strong>
-                API1 &mdash; Broken Object Level Authorization (BOLA)
+                API1: Broken Object Level Authorization (BOLA)
               </strong>
               . Attacker swaps an <code>id</code> in the URL to read someone
               else&apos;s record.
@@ -136,7 +136,7 @@ export default function Page() {
           </tr>
           <tr>
             <td>
-              <strong>API2 &mdash; Broken Authentication</strong>
+              <strong>API2: Broken Authentication</strong>
             </td>
             <td>
               <code>createJwtSigner()</code> / <code>createJwtVerifier()</code>{" "}
@@ -165,7 +165,7 @@ export default function Page() {
           <tr>
             <td>
               <strong>
-                API3 &mdash; Broken Object Property Level Authorization
+                API3: Broken Object Property Level Authorization
               </strong>{" "}
               (excessive data exposure + mass assignment).
             </td>
@@ -173,7 +173,7 @@ export default function Page() {
               Contract-first <code>app.route()</code> with <code>request</code>{" "}
               <em>and</em> <code>responses</code> schemas (Zod / Valibot /
               ArkType / TypeBox). Only fields you declare in the response schema
-              are emitted &mdash; undeclared fields a handler returns (a stray{" "}
+              are emitted. Undeclared fields a handler returns (a stray{" "}
               <code>passwordHash</code>, a spread ORM row) are stripped at
               serialization, not just flagged. Only fields you declare in the
               request schema reach your handler. Surfaced in OpenAPI so
@@ -190,7 +190,7 @@ export default function Page() {
           </tr>
           <tr>
             <td>
-              <strong>API4 &mdash; Unrestricted Resource Consumption</strong>
+              <strong>API4: Unrestricted Resource Consumption</strong>
             </td>
             <td>
               Body-size cap (default 1 MiB, <code>Content-Length</code> checked
@@ -212,7 +212,7 @@ export default function Page() {
           <tr>
             <td>
               <strong>
-                API5 &mdash; Broken Function Level Authorization (BFLA)
+                API5: Broken Function Level Authorization (BFLA)
               </strong>
             </td>
             <td>
@@ -233,7 +233,7 @@ export default function Page() {
           <tr>
             <td>
               <strong>
-                API6 &mdash; Unrestricted Access to Sensitive Business Flows
+                API6: Unrestricted Access to Sensitive Business Flows
               </strong>
             </td>
             <td>
@@ -247,19 +247,18 @@ export default function Page() {
               requests by default.
             </td>
             <td>
-              Threat-model the abuse case &mdash; coupon stacking, repeated
-              transfers, mass account creation &mdash; and group the limiter
-              accordingly.
+              Threat-model the abuse case (coupon stacking, repeated transfers,
+              mass account creation) and group the limiter accordingly.
             </td>
           </tr>
           <tr>
             <td>
-              <strong>API7 &mdash; Server-Side Request Forgery (SSRF)</strong>
+              <strong>API7: Server-Side Request Forgery (SSRF)</strong>
             </td>
             <td>
               <code>fetchGuard()</code> wraps the global <code>fetch</code> and
               refuses requests to loopback, RFC1918, link-local (including every
-              documented cloud metadata IP &mdash; AWS / Azure / DigitalOcean{" "}
+              documented cloud metadata IP: AWS / Azure / DigitalOcean{" "}
               <code>169.254.169.254</code>, Oracle <code>192.0.0.192</code>,
               Alibaba <code>100.100.100.200</code>), and IPv6 unique-local.
               Throws <code>SsrfBlockedError</code> with a reason code so
@@ -273,7 +272,7 @@ export default function Page() {
           </tr>
           <tr>
             <td>
-              <strong>API8 &mdash; Security Misconfiguration</strong>
+              <strong>API8: Security Misconfiguration</strong>
             </td>
             <td>
               <code>secureHeaders()</code> auto-applied (CSP with nonce +
@@ -312,7 +311,7 @@ export default function Page() {
           </tr>
           <tr>
             <td>
-              <strong>API9 &mdash; Improper Inventory Management</strong>
+              <strong>API9: Improper Inventory Management</strong>
             </td>
             <td>
               OpenAPI 3.1 generated from your routes (single source of truth, no
@@ -325,13 +324,12 @@ export default function Page() {
             </td>
             <td>
               Decommission old API versions instead of leaving them mounted.
-              Treat shadow endpoints &mdash; the ones no route file defines
-              &mdash; as bugs.
+              Treat shadow endpoints (the ones no route file defines) as bugs.
             </td>
           </tr>
           <tr>
             <td>
-              <strong>API10 &mdash; Unsafe Consumption of APIs</strong>
+              <strong>API10: Unsafe Consumption of APIs</strong>
             </td>
             <td>
               <code>fetchGuard()</code> for outbound calls (blocks SSRF pivots
@@ -480,23 +478,23 @@ export default function Page() {
       <h2>Verify your posture</h2>
       <ul>
         <li>
-          <code>daloy doctor</code> &mdash; deployment-config posture checks.
+          <code>daloy doctor</code>: deployment-config posture checks.
         </li>
         <li>
-          <code>daloy doctor --audit-defaults</code> &mdash; live
-          secure-by-default audit.
+          <code>daloy doctor --audit-defaults</code>: live secure-by-default
+          audit.
         </li>
         <li>
-          <code>pnpm verify:parity-audits</code> &mdash; static gates that fail
-          CI if a secure default is regressed.
+          <code>pnpm verify:parity-audits</code>: static gates that fail CI if
+          a secure default is regressed.
         </li>
         <li>
-          <code>pnpm verify:governance-audits</code> &mdash; release- workflow
-          rotation and governance floor.
+          <code>pnpm verify:governance-audits</code>: release-workflow rotation
+          and governance floor.
         </li>
         <li>
-          <code>daloy inspect</code> &mdash; route inventory, dead routes,
-          missing <code>operationId</code>s.
+          <code>daloy inspect</code>: route inventory, dead routes, missing{" "}
+          <code>operationId</code>s.
         </li>
       </ul>
 

@@ -46,8 +46,8 @@ export default function Page() {
         </a>{" "}
         report shows it still accounts for ~7&ndash;10% of vulnerabilities found
         across open- and closed-source code. Daloy is an HTTP framework, not a
-        database driver, so it can&apos;t parameterize your queries for you
-        &mdash; but it does ship the layers <em>before</em> the database that
+        database driver, so it can&apos;t parameterize your queries for you, but
+        it does ship the layers <em>before</em> the database that
         make SQLi materially harder to introduce, and the patterns below close
         the rest.
       </p>
@@ -96,7 +96,7 @@ export default function Page() {
             <td>Structured logging redaction</td>
             <td>
               <code>redactRecord()</code> scrubs known credential-shaped fields
-              before they hit logs &mdash; helpful when post-incident triage
+              before they hit logs, helpful when post-incident triage
               needs to share logs without re-leaking the very secrets the
               injection grabbed.
             </td>
@@ -263,8 +263,8 @@ await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
         Zod&apos;s primitive checks (<code>z.string()</code>,{" "}
         <code>z.string().email()</code>, <code>z.number()</code>, &hellip;)
         reject nested objects with a <strong>400 problem+json</strong>. The
-        vulnerability shows up when developers route around that &mdash; usually
-        with <code>z.any()</code>, <code>z.unknown()</code>, a pass-through{" "}
+        vulnerability shows up when developers route around that, usually with{" "}
+        <code>z.any()</code>, <code>z.unknown()</code>, a pass-through{" "}
         <code>z.record()</code>, or by reading <code>await req.json()</code>{" "}
         directly and spreading it into <code>where</code>.
       </p>
@@ -327,8 +327,8 @@ await state.db.user.findMany({ where });`}
         </li>
         <li>
           Treat a missing <code>request</code> schema on a route that touches
-          the DB as the same severity as a missing CSRF token &mdash;
-          Daloy&apos;s strict-schema gate is doing real work here.
+          the DB as the same severity as a missing CSRF token. Daloy&apos;s
+          strict-schema gate is doing real work here.
         </li>
       </ul>
 
@@ -434,8 +434,8 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
         <li>
           <a href="https://www.aikido.dev/zen" target="_blank" rel="noreferrer">
             Aikido Zen
-          </a>{" "}
-          &mdash; Node/Bun-compatible in-app firewall that hooks the driver and
+          </a>
+          : a Node/Bun-compatible in-app firewall that hooks the driver and
           blocks requests whose query structure was altered by user input.
         </li>
         <li>

@@ -36,9 +36,9 @@ export default function Page() {
       </blockquote>
       <p>
         Any handler that calls <code>fetch()</code> on a URL the user can
-        influence &mdash; an avatar fetch, a webhook delivery, an &ldquo;import
-        from URL&rdquo; feature, an OAuth discovery endpoint, an embed unfurler
-        &mdash; is a Server-Side Request Forgery (SSRF) sink. The canonical
+        influence (an avatar fetch, a webhook delivery, an &ldquo;import from
+        URL&rdquo; feature, an OAuth discovery endpoint, an embed unfurler) is a
+        Server-Side Request Forgery (SSRF) sink. The canonical
         exploit is{" "}
         <a href="https://www.aikido.dev/blog/how-a-startups-cloud-got-taken-over-by-a-simple-form-that-sends-an-email">
           the Aikido write-up
@@ -80,8 +80,8 @@ export default function Page() {
       <p>
         <code>fetchGuard()</code> wraps the global <code>fetch</code> and
         refuses to dispatch a request whose target resolves to a dangerous
-        internal address &mdash; including every documented cloud metadata IP
-        (AWS / Azure / DigitalOcean <code>169.254.169.254</code>, Oracle Cloud{" "}
+        internal address, including every documented cloud metadata IP (AWS /
+        Azure / DigitalOcean <code>169.254.169.254</code>, Oracle Cloud{" "}
         <code>192.0.0.192</code>, Alibaba <code>100.100.100.200</code>).
       </p>
 
@@ -141,8 +141,8 @@ app.route({
         </li>
         <li>
           <strong>Always-deny floor (no flag lifts these):</strong>{" "}
-          <code>0.0.0.0/8</code>, <code>100.64.0.0/10</code> (CGNAT &mdash;
-          Alibaba metadata), <code>192.0.0.0/24</code> (Oracle Cloud metadata),
+          <code>0.0.0.0/8</code>, <code>100.64.0.0/10</code> (CGNAT, Alibaba
+          metadata), <code>192.0.0.0/24</code> (Oracle Cloud metadata),
           all IANA-reserved <code>TEST-NET</code> / benchmarking / docs ranges,{" "}
           <code>224.0.0.0/4</code> multicast,
           <code>240.0.0.0/4</code> reserved, broadcast{" "}
@@ -167,9 +167,9 @@ app.route({
       <p>
         A common SSRF bypass is to return{" "}
         <code>302 Location: http://169.254.169.254/</code> from a public host.{" "}
-        <code>fetchGuard()</code> follows redirects <strong>manually</strong>{" "}
-        &mdash; it re-checks the protocol and re-resolves DNS for every Location
-        header before issuing the next request. Set <code>maxRedirects: 0</code>{" "}
+        <code>fetchGuard()</code> follows redirects <strong>manually</strong>:
+        it re-checks the protocol and re-resolves DNS for every Location header
+        before issuing the next request. Set <code>maxRedirects: 0</code>{" "}
         to return the 3xx directly, or pass{" "}
         <code>redirect: &quot;manual&quot;</code> per call for the same effect.
       </p>
@@ -217,7 +217,7 @@ app.route({
       <ol>
         <li>
           <strong>Operator-side (recommended).</strong> Run behind a network
-          policy that already blocks egress to RFC1918 / metadata IPs &mdash;
+          policy that already blocks egress to RFC1918 / metadata IPs:
           Kubernetes <code>NetworkPolicy</code>,{" "}
           <code>step-security/harden-runner</code> in CI,{" "}
           <code>iptables -A OUTPUT -d 169.254.169.254 -j DROP</code> on the
@@ -262,24 +262,22 @@ const safeFetch = fetchGuard({
       </p>
       <ul>
         <li>
-          <code>protocol-not-allowed</code> &mdash; URL was <code>file:</code>,{" "}
+          <code>protocol-not-allowed</code>: URL was <code>file:</code>,{" "}
           <code>data:</code>, etc.
         </li>
         <li>
-          <code>address-not-allowed</code> &mdash; resolved IP fell in a blocked
-          range.
+          <code>address-not-allowed</code>: resolved IP fell in a blocked range.
         </li>
         <li>
-          <code>dns-resolution-failed</code> &mdash; lookup threw or returned no
+          <code>dns-resolution-failed</code>: lookup threw or returned no
           records.
         </li>
         <li>
-          <code>too-many-redirects</code> &mdash; chain exceeded{" "}
+          <code>too-many-redirects</code>: chain exceeded{" "}
           <code>maxRedirects</code>.
         </li>
         <li>
-          <code>invalid-url</code> &mdash; URL or Location header could not be
-          parsed.
+          <code>invalid-url</code>: URL or Location header could not be parsed.
         </li>
       </ul>
       <p>

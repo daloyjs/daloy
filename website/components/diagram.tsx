@@ -5,12 +5,12 @@ import { cn } from "../lib/utils";
 /**
  * Visual emphasis applied to a single diagram node.
  *
- * - `default` — neutral card styling, the common case.
- * - `accent` — highlights the node the surrounding prose is talking about
+ * - `default`: neutral card styling, the common case.
+ * - `accent`: highlights the node the surrounding prose is talking about
  *   (e.g. the route handler in a request pipeline).
- * - `muted` — de-emphasised infrastructure or "plumbing" nodes.
- * - `danger` — a failure, rejection, or attack path (e.g. a blocked request).
- * - `success` — a successful terminal state (e.g. a 2xx response).
+ * - `muted`: de-emphasised infrastructure or "plumbing" nodes.
+ * - `danger`: a failure, rejection, or attack path (e.g. a blocked request).
+ * - `success`: a successful terminal state (e.g. a 2xx response).
  */
 export type DiagramTone =
   | "default"
@@ -200,7 +200,7 @@ export type FlowStep = {
 };
 
 /**
- * A linear pipeline of connected steps — the most common documentation diagram.
+ * A linear pipeline of connected steps, the most common documentation diagram.
  * Renders left-to-right on `md+` screens (right arrows) and stacks top-to-bottom
  * on small screens (down arrows), so it stays readable on mobile.
  *
@@ -466,7 +466,7 @@ export type SequenceStep = {
 /**
  * A request/response sequence between two or more participants, rendered as a
  * numbered, top-to-bottom list of messages rather than a wide SVG with
- * lifelines — which keeps it fully responsive and readable on phones. The
+ * lifelines, which keeps it fully responsive and readable on phones. The
  * participants are shown as a legend above the steps.
  *
  * Ideal for protocol exchanges (OAuth2 / OIDC, webhook delivery with retries,

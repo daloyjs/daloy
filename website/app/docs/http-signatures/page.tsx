@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "HTTP message signatures (RFC 9421)",
   description:
-    "Sign and verify server-to-server HTTP requests with RFC 9421 HTTP Message Signatures — signMessage/verifyMessage, signRequest/verifyRequest, the httpSignatureAuth() middleware, hmac-sha256/ed25519/ecdsa/rsa-pss algorithms, mandatory algorithm allowlists, created/expires freshness windows, nonce replay defense, and RFC 9530 Content-Digest helpers. Zero runtime dependencies.",
+    "Sign and verify server-to-server HTTP requests with RFC 9421 HTTP Message Signatures: signMessage/verifyMessage, signRequest/verifyRequest, the httpSignatureAuth() middleware, hmac-sha256/ed25519/ecdsa/rsa-pss algorithms, mandatory algorithm allowlists, created/expires freshness windows, nonce replay defense, and RFC 9530 Content-Digest helpers. Zero runtime dependencies.",
   path: "/docs/http-signatures",
   keywords: [
     "HTTP message signatures",
@@ -28,12 +28,12 @@ export default function Page() {
     <>
       <h1>HTTP message signatures (RFC 9421)</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships first-party{" "}
+        DaloyJS ships first-party{" "}
         <strong>HTTP Message Signatures</strong> (
         <a href="https://www.rfc-editor.org/rfc/rfc9421" rel="noreferrer">
           RFC 9421
         </a>
-        ) — the IETF-standard way to prove a server-to-server request came from
+        ), the IETF-standard way to prove a server-to-server request came from
         a trusted peer. Where <a href="/docs/webhook-delivery">webhook HMAC</a>{" "}
         binds a signature to a request <em>body</em> and{" "}
         <a href="/docs/mtls">mTLS</a> authenticates the TLS <em>peer</em>,
@@ -52,8 +52,8 @@ export default function Page() {
       <h2>Secure-by-default</h2>
       <ul>
         <li>
-          The verifier requires an explicit <code>algorithms</code> allowlist —
-          there is no implicit &ldquo;accept any algorithm&rdquo; mode, and a
+          The verifier requires an explicit <code>algorithms</code> allowlist.
+          There is no implicit &ldquo;accept any algorithm&rdquo; mode, and a
           resolved key may pin its own algorithm to defeat algorithm-confusion.
         </li>
         <li>
@@ -84,16 +84,16 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <code>hmac-sha256</code> — symmetric shared secret (simplest to
+          <code>hmac-sha256</code>: symmetric shared secret (simplest to
           deploy).
         </li>
         <li>
           <code>ed25519</code>, <code>ecdsa-p256-sha256</code>,{" "}
-          <code>ecdsa-p384-sha384</code> — asymmetric (publish a public key, no
+          <code>ecdsa-p384-sha384</code>: asymmetric (publish a public key, no
           shared secret).
         </li>
         <li>
-          <code>rsa-pss-sha512</code>, <code>rsa-v1_5-sha256</code> — RSA.
+          <code>rsa-pss-sha512</code>, <code>rsa-v1_5-sha256</code>: RSA.
         </li>
       </ul>
 
@@ -277,7 +277,7 @@ if (!result.valid) {
       <h2>Rejection reasons</h2>
       <p>
         <code>verifyMessage()</code> / <code>verifyRequest()</code> never throw
-        on a forged or malformed signature — they return{" "}
+        on a forged or malformed signature. They return{" "}
         <code>{`{ valid: false, reason }`}</code> with a stable code such as{" "}
         <code>invalid_signature</code>, <code>signature_stale</code>,{" "}
         <code>created_in_future</code>, <code>signature_expired</code>,{" "}

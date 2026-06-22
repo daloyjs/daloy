@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Adaptive auto-ban (fail2ban-style)",
   description:
-    "Temporarily ban abusive clients with autoBan() — escalating, decaying bans triggered by repeated 401/403/429 (or custom) responses, a pluggable store mirroring rateLimit(), and secure-by-default identity attribution. Zero runtime dependencies.",
+    "Temporarily ban abusive clients with autoBan(): escalating, decaying bans triggered by repeated 401/403/429 (or custom) responses, a pluggable store mirroring rateLimit(), and secure-by-default identity attribution. Zero runtime dependencies.",
   path: "/docs/auto-ban",
   keywords: [
     "auto-ban",
@@ -27,7 +27,7 @@ export default function Page() {
     <>
       <h1>Adaptive auto-ban (fail2ban-style)</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships <code>autoBan()</code> — a
+        DaloyJS ships <code>autoBan()</code>, a
         reusable, escalating, decaying ban primitive. Where{" "}
         <a href="/docs/security/websocket-login-throttle">
           <code>loginThrottle()</code>
@@ -89,17 +89,17 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
         route. Because it reads the outgoing status, it counts failures produced
         by <em>any</em> downstream middleware or handler (auth rejections,
         rate-limit
-        <code>429</code>s, your own <code>403</code>s) — not just its own.
+        <code>429</code>s, your own <code>403</code>s), not just its own.
       </p>
 
       <h2>Identity is mandatory</h2>
       <p>
         <code>autoBan()</code> refuses to construct unless it can identify
-        clients — pass a <code>keyGenerator</code> or set{" "}
+        clients: pass a <code>keyGenerator</code> or set{" "}
         <code>trustProxyHeaders: true</code>. This is deliberate: a shared{" "}
         <code>&quot;global&quot;</code> bucket would let a single offender ban
         every caller at once. A request the key generator cannot attribute
-        (returns <code>undefined</code>) is skipped — never counted, never
+        (returns <code>undefined</code>) is skipped: never counted, never
         banned.
       </p>
       <CodeBlock
@@ -125,13 +125,13 @@ app.use(
         </li>
         <li>
           With <code>escalate: true</code> (default) each <em>repeat</em> ban
-          doubles — <code>banMs</code>, <code>2×</code>, <code>4×</code>, …
-          capped at <code>maxBanMs</code> (default 24 h) — for as long as the
+          doubles (<code>banMs</code>, <code>2×</code>, <code>4×</code>, …),
+          capped at <code>maxBanMs</code> (default 24 h), for as long as the
           record stays alive.
         </li>
         <li>
           Once the client stops tripping statuses, the record expires and the
-          escalation counter resets — the ban <strong>decays</strong>.
+          escalation counter resets: the ban <strong>decays</strong>.
         </li>
       </ul>
 
@@ -214,7 +214,7 @@ app.use(autoBan({ trustProxyHeaders: true, store: redisStore }));`}
       <p>
         Every <code>autoBan()</code> with the same <code>groupId</code> (default{" "}
         <code>&quot;auto-ban&quot;</code>) shares one in-memory store, so a
-        client banned on one group is banned on all of them — an attacker
+        client banned on one group is banned on all of them, so an attacker
         can&apos;t dodge the ban by rotating endpoints.
       </p>
     </>

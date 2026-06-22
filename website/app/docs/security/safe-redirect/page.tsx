@@ -26,7 +26,7 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> a receptionist who will only forward
         your call to extensions on an approved list. Hand them a number that
-        isn&apos;t on the sheet and they hang up — they never dial a random
+        isn&apos;t on the sheet and they hang up. They never dial a random
         outside line just because you asked nicely.
       </blockquote>
       <p>
@@ -34,7 +34,7 @@ export default function Page() {
         Aikido Top 10 #10) happen when an app blindly trusts a{" "}
         <code>?next=…</code> / <code>?returnTo=…</code> query parameter and
         emits a <code>Location</code> header pointing wherever the attacker
-        wants — turning your trusted domain into a phishing launch pad.{" "}
+        wants, turning your trusted domain into a phishing launch pad.{" "}
         <code>safeRedirect()</code> validates every candidate URL against an
         explicit allowlist of internal paths and external origins{" "}
         <strong>before</strong> building the redirect response.
@@ -127,7 +127,7 @@ app.route({
         </li>
         <li>
           <code>javascript:</code>, <code>data:</code>, <code>vbscript:</code>,
-          and <code>file:</code> schemes are always refused — even if you
+          and <code>file:</code> schemes are always refused, even if you
           accidentally wrote one into the allowlist.
         </li>
         <li>
@@ -189,7 +189,7 @@ try {
         <code>invalid-control-characters</code>, <code>protocol-relative</code>,{" "}
         <code>backslash-path</code>, <code>path-not-allowed</code>,{" "}
         <code>origin-not-allowed</code>, <code>scheme-not-allowed</code>, or{" "}
-        <code>parse-failed</code> — useful for metrics on which attack shape you
+        <code>parse-failed</code>, useful for metrics on which attack shape you
         are seeing.
       </p>
 

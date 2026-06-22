@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "mTLS / client-certificate auth",
   description:
-    "Authenticate clients by TLS certificate with clientCertAuth() — verified-chain enforcement, subject/issuer/fingerprint/SAN allow-lists, validity-window checks, native Node TLS, and trusted-proxy header parsing (Envoy XFCC, nginx). Zero runtime dependencies.",
+    "Authenticate clients by TLS certificate with clientCertAuth(): verified-chain enforcement, subject/issuer/fingerprint/SAN allow-lists, validity-window checks, native Node TLS, and trusted-proxy header parsing (Envoy XFCC, nginx). Zero runtime dependencies.",
   path: "/docs/mtls",
   keywords: [
     "mTLS",
@@ -28,8 +28,8 @@ export default function Page() {
     <>
       <h1>mTLS / client-certificate auth</h1>
       <p>
-        As of <strong>0.37.0</strong> DaloyJS ships{" "}
-        <code>clientCertAuth()</code> — a middleware that authenticates a
+        DaloyJS ships{" "}
+        <code>clientCertAuth()</code>, a middleware that authenticates a
         request by its <strong>TLS client certificate</strong>, the standard
         answer to &ldquo;prove this internal call came from a trusted
         peer&rdquo; in zero-trust / service-to-service deployments. It is
@@ -37,12 +37,12 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Native TLS</strong> — when the runtime terminates TLS itself,
+          <strong>Native TLS</strong>: when the runtime terminates TLS itself,
           the Node adapter reads the peer certificate off the socket and
-          attaches it to the request (lazily — plain requests pay nothing).
+          attaches it to the request (lazily, so plain requests pay nothing).
         </li>
         <li>
-          <strong>Forwarded by a trusted proxy</strong> — when TLS is terminated
+          <strong>Forwarded by a trusted proxy</strong>: when TLS is terminated
           upstream (Envoy, nginx, HAProxy, Traefik, a cloud load balancer), the
           middleware parses the verified identity the proxy forwards in request
           headers (Envoy <code>X-Forwarded-Client-Cert</code> or operator-named
@@ -144,8 +144,8 @@ app.route({
         the Node adapter normalizes it (subject, issuer, fingerprint, SANs,
         validity window, and whether the chain was <em>verified</em>) and
         attaches it to the request. The read is deferred behind a lazy thunk, so
-        only routes actually guarded by <code>clientCertAuth()</code> pay for it
-        — and plain HTTP requests pay nothing. Run your Node server with{" "}
+        only routes actually guarded by <code>clientCertAuth()</code> pay for it,
+        and plain HTTP requests pay nothing. Run your Node server with{" "}
         <code>requestCert: true</code> and a configured CA so the runtime
         verifies the chain.
       </p>
@@ -153,7 +153,7 @@ app.route({
         language="ts"
         code={`app.use(
   clientCertAuth({
-    // requireVerified defaults to true — refuse any cert the TLS layer
+    // requireVerified defaults to true: refuse any cert the TLS layer
     // did not cryptographically verify against the configured CA.
     allowFingerprints: [process.env.PEER_FINGERPRINT!],
   }),
@@ -164,7 +164,7 @@ app.route({
       <p>
         When a proxy terminates TLS, it forwards the verified client identity in
         request headers. Because those headers are spoofable by anything that
-        can reach the app directly, the header path is opt-in — only enable it
+        can reach the app directly, the header path is opt-in: only enable it
         when the app is <em>exclusively</em> reachable through the terminating
         proxy.
       </p>
@@ -204,30 +204,30 @@ app.route({
       <h2>Allow-lists &amp; checks</h2>
       <ul>
         <li>
-          <code>requireVerified</code> (default <code>true</code>) — refuse any
+          <code>requireVerified</code> (default <code>true</code>): refuse any
           certificate the TLS terminator did not verify.
         </li>
         <li>
-          <code>allowSubjectCNs</code> / <code>allowIssuerCNs</code> — exact CN
+          <code>allowSubjectCNs</code> / <code>allowIssuerCNs</code>: exact CN
           match.
         </li>
         <li>
-          <code>allowFingerprints</code> — SHA-256 fingerprint match in{" "}
+          <code>allowFingerprints</code>: SHA-256 fingerprint match in{" "}
           <strong>constant time</strong> (colons/spaces and case are ignored, so
           a value copied from <code>openssl</code> works as-is).
         </li>
         <li>
-          <code>allowSANs</code> — at least one Subject Alternative Name must
+          <code>allowSANs</code>: at least one Subject Alternative Name must
           match (as <code>TYPE:value</code> like{" "}
           <code>URI:spiffe://acme/svc-a</code>, or as a bare value).
         </li>
         <li>
-          <code>checkValidity</code> (default <code>true</code>) — reject
+          <code>checkValidity</code> (default <code>true</code>): reject
           certificates outside their <code>[notBefore, notAfter]</code> window
           when known (belt-and-braces for header-forwarded certs).
         </li>
         <li>
-          <code>verify(cert, ctx)</code> — a custom async hook run last;
+          <code>verify(cert, ctx)</code>: a custom async hook run last;
           returning <code>false</code> rejects with <code>403</code>.
         </li>
       </ul>

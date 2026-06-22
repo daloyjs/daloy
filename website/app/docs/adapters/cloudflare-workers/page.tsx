@@ -26,7 +26,7 @@ export default function Page() {
     <>
       <h1>Cloudflare Workers</h1>
       <p>
-        The Cloudflare adapter exports a Workers module entrypoint &mdash; the
+        The Cloudflare adapter exports a Workers module entrypoint: the
         canonical <code>export default &#123; fetch &#125;</code> shape. Service
         Worker style (<code>addEventListener(&quot;fetch&quot;, ...)</code>) is
         no longer recommended; the adapter does not emit it.
@@ -86,7 +86,7 @@ pnpm dev   # wrangler dev under the hood`}
         If you don&apos;t need <code>env</code> bindings or the Worker{" "}
         <code>ExecutionContext</code>, <code>toFetchHandler</code> is a
         one-liner. It returns the <code>&#123; fetch &#125;</code> object
-        Workers expect as the default export &mdash; do <strong>not</strong>{" "}
+        Workers expect as the default export, so do <strong>not</strong>{" "}
         wrap it again.
       </p>
       <CodeBlock
@@ -150,7 +150,7 @@ pnpm wrangler deploy`}
         To expose Worker bindings (KV, R2, D1, Durable Objects, Queues,
         Hyperdrive, secrets) to your handlers, write the module-format export by
         hand and inject the bindings into the app with{" "}
-        <code>app.decorate(...)</code> &mdash; that&apos;s how DaloyJS makes
+        <code>app.decorate(...)</code>. That&apos;s how DaloyJS makes
         runtime values available on <code>ctx.state</code> inside every handler.
       </p>
       <CodeBlock
@@ -207,13 +207,13 @@ export default {
           <Link href="/docs/databases">Database hosting</Link>.
         </li>
         <li>
-          No filesystem &mdash; use{" "}
+          No filesystem, so use{" "}
           <Link href="/docs/multipart">multipart uploads</Link> with R2, not{" "}
           <code>node:fs</code>.
         </li>
         <li>
           For background work, decorate the app with a <code>waitUntil</code>{" "}
-          wrapper (see the bindings example above) &mdash;{" "}
+          wrapper (see the bindings example above):{" "}
           <code>toFetchHandler</code> alone does not forward the Worker{" "}
           <code>ExecutionContext</code>.
         </li>

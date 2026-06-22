@@ -97,8 +97,8 @@ export default function Page() {
               <code>body</code> shapes. If you constrain a field with{" "}
               <code>z.enum([...])</code>, a tight regex, or{" "}
               <code>z.string().uuid()</code>, attacker shell metacharacters
-              don&apos;t reach your handler in the first place &mdash; the
-              request is rejected with <strong>400 problem+json</strong>.
+              don&apos;t reach your handler in the first place; the request is
+              rejected with <strong>400 problem+json</strong>.
             </td>
           </tr>
           <tr>
@@ -116,8 +116,8 @@ export default function Page() {
             <td>
               When you run <code>daloy dev</code>, the framework spawns{" "}
               <code>node</code> / <code>bun</code> / <code>deno</code> with a
-              hardcoded argv built by <code>buildDevCommand()</code> &mdash;
-              never a shell string. The <code>create-daloy</code> scaffolder
+              hardcoded argv built by <code>buildDevCommand()</code>, never a
+              shell string. The <code>create-daloy</code> scaffolder
               does the same for <code>git init</code> and{" "}
               <code>&lt;pm&gt; install</code>: the command and arguments are
               constants; only the working directory is derived from input, and{" "}
@@ -170,8 +170,8 @@ export default function Page() {
         <li>
           Leave <code>shell: false</code> (the default). If you set{" "}
           <code>shell: true</code>, every argument becomes shell-parsable and
-          you have to escape metacharacters yourself &mdash; which is exactly
-          the bug class you&apos;re trying to avoid.
+          you have to escape metacharacters yourself, which is exactly the bug
+          class you&apos;re trying to avoid.
         </li>
       </ol>
       <CodeBlock
@@ -274,7 +274,7 @@ git grep -nE 'require\\(["'\\\\'']child_process["'\\\\'']\\)|from\\s+["'\\\\'']n
         <strong>upgrade Node</strong>, or set <code>shell: true</code> and
         validate every argument against a strict allow-list before you spawn.
         Daloy&apos;s engines field already requires a fixed Node version, so you
-        inherit the patched runtime by default &mdash; but you&apos;re still
+        inherit the patched runtime by default, but you&apos;re still
         responsible for argument validation if you opt into{" "}
         <code>shell: true</code>.
       </p>
@@ -319,8 +319,8 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
         </li>
         <li>
           <strong>Audit your runtime dependencies.</strong> Most real-world
-          command-injection CVEs in 2024 were not in application code &mdash;
-          they were in transitive npm packages that wrapped{" "}
+          command-injection CVEs in 2024 were not in application code; they
+          were in transitive npm packages that wrapped{" "}
           <code>child_process.exec()</code>. Use <code>pnpm audit</code> on a
           schedule, and prefer the supply-chain hardened install path documented
           in <a href="/docs/security/supply-chain">Supply-chain security</a>.
@@ -328,8 +328,8 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
         <li>
           <strong>Reach for a library when possible.</strong> <code>sharp</code>{" "}
           for image processing, <code>archiver</code> for zip files,{" "}
-          <code>node:fs/promises</code> for copies &mdash; an in-process Node
-          library never invokes a shell, so the entire bug class disappears.
+          <code>node:fs/promises</code> for copies: an in-process Node library
+          never invokes a shell, so the entire bug class disappears.
         </li>
       </ul>
 

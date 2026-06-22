@@ -30,7 +30,7 @@ export default function Page() {
       <p>
         List endpoints need a way to page through results that is stable under
         concurrent writes, cheap on the database, and self-describing in the
-        contract. As of <strong>0.37.0</strong> DaloyJS ships{" "}
+        contract. DaloyJS ships{" "}
         <strong>built-in, dependency-free</strong> cursor-pagination helpers
         that cover all three concerns: an <strong>opaque cursor</strong> codec,
         an{" "}
@@ -168,8 +168,8 @@ const payload = decodeCursor<{ id: number; createdAt: string }>(cursor);
       <p>
         <code>buildPageLinks()</code> clones the current request URL and swaps
         its cursor query parameter to produce <code>next</code>,{" "}
-        <code>prev</code>, and <code>first</code> page URLs — preserving every
-        other query parameter (filters, <code>limit</code>, …) — then serializes
+        <code>prev</code>, and <code>first</code> page URLs, preserving every
+        other query parameter (filters, <code>limit</code>, …), then serializes
         them into a single <code>Link</code> header.
       </p>
       <CodeBlock
@@ -193,7 +193,7 @@ set.headers.set("Link", linkHeader);
         Need lower-level control? <code>buildLinkHeader()</code> serializes an
         explicit list of <code>{`{ url, rel, title? }`}</code> entries. Both
         builders reject control characters, <code>&lt;</code>/<code>&gt;</code>{" "}
-        in URLs, and <code>&quot;</code>/<code>\\</code> in rel/title values — a
+        in URLs, and <code>&quot;</code>/<code>\\</code> in rel/title values: a
         structural defense against <code>Link</code>-header / response-splitting
         injection.
       </p>
@@ -203,7 +203,7 @@ set.headers.set("Link", linkHeader);
         Because <code>paginationQuery()</code> exposes a{" "}
         <code>toJSONSchema()</code> method, the OpenAPI generator emits the{" "}
         <code>cursor</code> and <code>limit</code> query parameters into the
-        contract automatically — no duplicate parameter declarations, and the
+        contract automatically, with no duplicate parameter declarations, and the
         typed client picks them up on the next <code>pnpm gen</code>.
       </p>
       <CodeBlock
@@ -239,7 +239,7 @@ set.headers.set("Link", linkHeader);
       <ul>
         <li>
           Cursors are <strong>opaque, not secret</strong>: they are encoded, not
-          encrypted or signed. Never trust a decoded cursor for authorization —
+          encrypted or signed. Never trust a decoded cursor for authorization;
           always re-scope the underlying query by the authenticated principal on
           the server.
         </li>

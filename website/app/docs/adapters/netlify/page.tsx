@@ -28,7 +28,7 @@ export default function Page() {
         <strong>Edge Functions</strong> (Deno-based, global) and{" "}
         <strong>Functions v2</strong> (Node, fetch-style). Both speak the
         web-standard <code>Request → Response</code> contract, so the DaloyJS
-        adapter is the same helper in both places &mdash; only the file location
+        adapter is the same helper in both places. Only the file location
         and the optional config export change.
       </p>
 
@@ -73,7 +73,7 @@ export default function Page() {
       <h2>Netlify Edge Functions (Deno)</h2>
       <p>
         Edge Functions run on a Deno-based runtime. Use{" "}
-        <code>toWebHandler</code> &mdash; the same helper as the Vercel adapter,
+        <code>toWebHandler</code>, the same helper as the Vercel adapter,
         because the input/output shape is identical.
       </p>
       <CodeBlock
@@ -94,8 +94,8 @@ export const config: Config = {
       <p>
         Functions v2 is GA and is the recommended way to write Node functions on
         Netlify. The old v1 lambda-style handler (
-        <code>exports.handler = (event, context) =&gt; ...</code>) is legacy
-        &mdash; it still works for compatibility but you should write new code
+        <code>exports.handler = (event, context) =&gt; ...</code>) is legacy.
+        It still works for compatibility but you should write new code
         in v2.
       </p>
       <CodeBlock
@@ -155,7 +155,7 @@ pnpm netlify deploy --build --prod`}
       <h2>Gotchas</h2>
       <ul>
         <li>
-          Edge Functions don&apos;t expose <code>node:*</code> &mdash; same
+          Edge Functions don&apos;t expose <code>node:*</code>, the same
           caveat as Vercel and Cloudflare Workers.
         </li>
         <li>

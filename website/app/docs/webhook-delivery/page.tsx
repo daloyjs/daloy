@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Outbound webhook delivery",
   description:
-    "Deliver signed, retried, dead-lettered webhooks from DaloyJS with createWebhookSender(). Timestamped HMAC signatures, exponential backoff, Retry-After, and SSRF-safe transport by default — the outbound counterpart to verifyWebhookSignature().",
+    "Deliver signed, retried, dead-lettered webhooks from DaloyJS with createWebhookSender(). Timestamped HMAC signatures, exponential backoff, Retry-After, and SSRF-safe transport by default: the outbound counterpart to verifyWebhookSignature().",
   path: "/docs/webhook-delivery",
   keywords: [
     "outbound webhooks",
@@ -30,35 +30,35 @@ export default function Page() {
       <p>
         DaloyJS already verifies <em>inbound</em> webhooks with{" "}
         <code>verifyWebhookSignature()</code> and signs payloads with{" "}
-        <code>signWebhookPayload()</code>. As of <strong>0.37.0</strong>{" "}
+        <code>signWebhookPayload()</code>.{" "}
         <code>createWebhookSender()</code> closes the loop on the{" "}
         <em>outbound</em> side: it delivers events to your subscribers with a{" "}
         timestamped HMAC signature, bounded retries with exponential backoff,{" "}
         <code>Retry-After</code> awareness, a per-attempt timeout, and{" "}
-        dead-letter semantics &mdash; all with{" "}
+        dead-letter semantics, all with{" "}
         <strong>zero runtime dependencies</strong> and SSRF-safe transport by
         default.
       </p>
       <ul>
         <li>
-          <strong>Signed delivery</strong> &mdash; each request carries{" "}
+          <strong>Signed delivery</strong>: each request carries{" "}
           <code>webhook-id</code>, <code>webhook-timestamp</code>, and{" "}
           <code>webhook-signature</code> (<code>sha256=&hellip;</code>) computed
           over <code>&quot;&lt;timestamp&gt;.&lt;body&gt;&quot;</code>, the same
           convention <code>verifyWebhookSignature()</code> validates.
         </li>
         <li>
-          <strong>Retry with backoff</strong> &mdash; transient statuses (
+          <strong>Retry with backoff</strong>: transient statuses (
           <code>408/429/500/502/503/504</code>) and network errors are retried
           with exponential backoff + jitter, honouring <code>Retry-After</code>.
         </li>
         <li>
-          <strong>Dead-letter</strong> &mdash; events that exhaust their
+          <strong>Dead-letter</strong>: events that exhaust their
           attempts (or fail permanently) are handed to a{" "}
           <code>WebhookDeadLetterSink</code> for later inspection or replay.
         </li>
         <li>
-          <strong>SSRF-safe by default</strong> &mdash; the transport defaults
+          <strong>SSRF-safe by default</strong>: the transport defaults
           to <code>fetchGuard()</code>, so a subscriber URL pointing at cloud
           metadata or a private range is refused (and never retried).
         </li>
@@ -149,7 +149,7 @@ webhook-signature: sha256=9f8a...c2
       <p>
         The signature is computed once and reused across retries, so the{" "}
         <code>webhook-id</code> and <code>webhook-signature</code> are identical
-        on every attempt &mdash; receivers can safely dedupe on the id.
+        on every attempt, so receivers can safely dedupe on the id.
       </p>
 
       <h2>Verifying on the receiving end</h2>
@@ -205,8 +205,8 @@ app.post("/hooks", async (c) => {
 
       <h2>Dead-letter semantics</h2>
       <p>
-        When an event exhausts its attempts &mdash; or fails permanently (a{" "}
-        non-retryable status or an SSRF refusal) &mdash; it is handed to the{" "}
+        When an event exhausts its attempts, or fails permanently (a{" "}
+        non-retryable status or an SSRF refusal), it is handed to the{" "}
         configured <code>WebhookDeadLetterSink</code>. The built-in{" "}
         <code>MemoryWebhookDeadLetterSink</code> is a bounded ring buffer; in
         production, implement the one-method interface to persist to your queue
@@ -246,7 +246,7 @@ class TableDeadLetterSink implements WebhookDeadLetterSink {
         <em>permanent</em> failure: it is never retried and goes straight to the
         dead-letter sink. To use a custom transport (for example, a{" "}
         <code>resilientFetch()</code> wrapping <code>fetchGuard()</code>), pass{" "}
-        <code>fetch</code> explicitly &mdash; but never default it to the bare{" "}
+        <code>fetch</code> explicitly, but never default it to the bare{" "}
         global <code>fetch</code> for subscriber-controlled URLs.
       </p>
     </>

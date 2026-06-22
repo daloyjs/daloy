@@ -26,8 +26,8 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> assembling a security checkpoint.{" "}
         <code>every()</code> chains the metal detector, the bag scan, and the ID
-        check in order. <code>some()</code> says &quot;any valid ID gets you in
-        — passport OR driver&apos;s license OR staff badge.&quot;{" "}
+        check in order. <code>some()</code> says &quot;any valid ID gets you in:
+        passport OR driver&apos;s license OR staff badge.&quot;{" "}
         <code>except()</code> waves the staff entrance through without the
         queue.
       </blockquote>
@@ -35,12 +35,12 @@ export default function Page() {
         DaloyJS exposes three small composition primitives for{" "}
         <code>Hooks</code> bundles. They let you package curated middleware
         stacks as a single value, express &quot;any of these proofs is
-        enough&quot; authentication, and exempt specific paths from a check —
+        enough&quot; authentication, and exempt specific paths from a check,
         all without any runtime dependencies.
       </p>
 
       <h2>
-        <code>every()</code> — run a whole stack in order
+        <code>every()</code>: run a whole stack in order
       </h2>
       <p>
         <code>every(...layers)</code> merges several <code>Hooks</code> bundles
@@ -93,7 +93,7 @@ app.use(adminStack);`}
       />
 
       <h2>
-        <code>some()</code> — accept any one proof of identity
+        <code>some()</code>: accept any one proof of identity
       </h2>
       <p>
         <code>some(...layers)</code> runs each bundle&apos;s{" "}
@@ -152,7 +152,7 @@ app.use(some(
           denial wins.
         </li>
         <li>
-          When the first denial is a thrown error, that error is rethrown — so
+          When the first denial is a thrown error, that error is rethrown, so
           place the auth method whose <code>WWW-Authenticate</code> challenge
           you want clients to see first.
         </li>
@@ -163,7 +163,7 @@ app.use(some(
       </ul>
 
       <h2>
-        <code>except()</code> — apply everywhere but a few paths
+        <code>except()</code>: apply everywhere but a few paths
       </h2>
       <p>
         <code>except(when, hooks)</code> runs a bundle on every request{" "}

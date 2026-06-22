@@ -26,7 +26,7 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> a pre-flight checklist. Instead of
         taking off and discovering the fuel gauge is broken at 30,000 feet, you
-        catch every problem on the ground — and you get the whole list at once,
+        catch every problem on the ground, and you get the whole list at once,
         not one redeploy at a time.
       </blockquote>
       <p>
@@ -143,7 +143,7 @@ await defineConfig({
       <h2>Transforming before validation</h2>
       <p>
         Use <code>transform</code> to coerce or rename raw values before they
-        hit the schema — for example mapping <code>FOO_BAR</code> to{" "}
+        hit the schema, for example mapping <code>FOO_BAR</code> to{" "}
         <code>fooBar</code>, or normalizing string flags. It receives the raw
         source object and returns the object handed to the validator.
       </p>

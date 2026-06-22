@@ -145,8 +145,8 @@ app.use(
         Registers a rate-limited <code>POST</code> receiver for browser CSP
         violation reports. Defaults: path <code>/__csp-report</code>, per-IP
         rate limit <code>60</code> requests / <code>60s</code>, body cap{" "}
-        <code>8 KiB</code> (hard-capped at <code>64 KiB</code> since{" "}
-        <code>0.30.0</code>), accepted content types{" "}
+        <code>8 KiB</code> (hard-capped at <code>64 KiB</code>), accepted content
+        types{" "}
         <code>application/csp-report</code> and{" "}
         <code>application/reports+json</code>. <code>application/json</code> is
         refused with <code>415</code>.

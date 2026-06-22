@@ -68,7 +68,7 @@ export default function Page() {
       </blockquote>
       <p>
         Yes: we recommend pairing DaloyJS with external security scanning. The
-        framework gives you strong defaults in the source tree &mdash; blocked
+        framework gives you strong defaults in the source tree: blocked
         lifecycle scripts, source-verified lockfiles, a 24h release-age
         cooldown, strict schema conventions, <code>fetchGuard</code> SSRF
         controls, JWT algorithm allowlists, timing-safe comparisons, and many{" "}

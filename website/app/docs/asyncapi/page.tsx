@@ -27,13 +27,13 @@ export default function Page() {
     <>
       <h1>AsyncAPI for WebSockets</h1>
       <p>
-        DaloyJS already turns every HTTP route into an OpenAPI 3.1 operation. As
-        of <strong>0.37.0</strong> the same contract-first story extends to your
+        DaloyJS already turns every HTTP route into an OpenAPI 3.1 operation.
+        The same contract-first story extends to your
         real-time surfaces: the <code>@daloyjs/core/asyncapi</code> module emits
         a standards-compliant <strong>AsyncAPI 3.0</strong> document for the
         WebSocket routes you register with <code>app.ws()</code>. It is{" "}
-        <strong>built-in and dependency-free</strong> — the same posture as the
-        OpenAPI generator — so it adds nothing to your runtime footprint.
+        <strong>built-in and dependency-free</strong>, the same posture as the
+        OpenAPI generator, so it adds nothing to your runtime footprint.
       </p>
       <p>
         Each <code>app.ws()</code> route becomes one AsyncAPI{" "}
@@ -43,7 +43,7 @@ export default function Page() {
       <ul>
         <li>
           a <code>receive</code> operation for messages the server receives from
-          clients (always emitted — a socket can always be written to), and
+          clients (always emitted, a socket can always be written to), and
         </li>
         <li>
           an optional <code>send</code> operation for messages the server pushes
@@ -96,20 +96,20 @@ writeFileSync("./generated/asyncapi.json", JSON.stringify(doc, null, 2));`}
 
       <h2>Serving an interactive UI</h2>
       <p>
-        As of <strong>0.42.0</strong> you don&apos;t have to wire the spec up
+        You don&apos;t have to wire the spec up
         yourself. Set <code>asyncapi: true</code> on the app and DaloyJS
-        auto-mounts the AsyncAPI surface — the WebSocket counterpart to{" "}
+        auto-mounts the AsyncAPI surface, the WebSocket counterpart to{" "}
         <code>docs: true</code> for OpenAPI (Scalar / Swagger / Redoc):
       </p>
       <ul>
         <li>
-          <code>GET /asyncapi</code> — an <strong>interactive UI</strong> that
+          <code>GET /asyncapi</code>: an <strong>interactive UI</strong> that
           renders the official AsyncAPI React component, loaded from a CDN via a{" "}
           <code>&lt;script&gt;</code> tag exactly like the OpenAPI viewers (no
           build step, no extra runtime dependency).
         </li>
         <li>
-          <code>GET /asyncapi.json</code> and <code>GET /asyncapi.yaml</code> —
+          <code>GET /asyncapi.json</code> and <code>GET /asyncapi.yaml</code>:
           the AsyncAPI 3.0 document, generated lazily so{" "}
           <code>app.ws()</code> routes registered afterwards are included.
         </li>
@@ -157,28 +157,28 @@ printStartupBanner({
       <h2>Describing the messages</h2>
       <p>
         WebSocket handlers accept an optional <code>meta</code> block that
-        mirrors the HTTP route <code>meta</code>. It is purely descriptive — it
-        never changes the RFC 6455 handshake or runtime behavior — and the
+        mirrors the HTTP route <code>meta</code>. It is purely descriptive (it
+        never changes the RFC 6455 handshake or runtime behavior), and the
         AsyncAPI generator reads it to fill in summaries, tags, and message
         payloads.
       </p>
       <ul>
         <li>
-          <code>summary</code> / <code>description</code> / <code>tags</code> —
+          <code>summary</code> / <code>description</code> / <code>tags</code>:
           surfaced on the generated channel and operations.
         </li>
         <li>
-          <code>receive</code> — a Standard Schema describing messages the
+          <code>receive</code>: a Standard Schema describing messages the
           server receives from clients. Falls back to the handler&apos;s{" "}
           <code>request.body</code> schema (the same schema used for
           payload-size checks).
         </li>
         <li>
-          <code>send</code> — a Standard Schema describing messages the server
+          <code>send</code>: a Standard Schema describing messages the server
           sends to clients. Adds a <code>send</code> operation when present.
         </li>
         <li>
-          <code>operationId</code> — overrides the channel key that is otherwise
+          <code>operationId</code>: overrides the channel key that is otherwise
           derived from the path.
         </li>
       </ul>

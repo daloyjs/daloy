@@ -31,31 +31,31 @@ export default function Page() {
       </h1>
       <p>
         <code>fetchGuard()</code> answers{" "}
-        <em>&ldquo;is this outbound address safe?&rdquo;</em> &mdash; it blocks
-        the SSRF chain to cloud metadata and internal ranges.{" "}
+        <em>&ldquo;is this outbound address safe?&rdquo;</em>: it blocks the
+        SSRF chain to cloud metadata and internal ranges.{" "}
         <code>resilientFetch()</code> answers the operational other half:{" "}
         <em>
           &ldquo;is this upstream healthy, and how do we behave when it is
           not?&rdquo;
         </em>{" "}
-        As of <strong>0.37.0</strong> DaloyJS ships a{" "}
+        DaloyJS ships a{" "}
         <strong>dependency-free</strong> resilience layer with three classic
         guards:
       </p>
       <ul>
         <li>
-          <strong>Per-call timeout</strong> &mdash; an{" "}
+          <strong>Per-call timeout</strong>: an{" "}
           <code>AbortController</code> aborts any attempt that stalls, so a hung
           upstream can never exhaust your event loop. Surfaces as{" "}
           <code>FetchTimeoutError</code>.
         </li>
         <li>
-          <strong>Retry-with-backoff</strong> &mdash; bounded retries with
+          <strong>Retry-with-backoff</strong>: bounded retries with
           exponential backoff and full jitter, scoped to idempotent methods and
           transient statuses, honouring <code>Retry-After</code>.
         </li>
         <li>
-          <strong>Circuit breaker</strong> &mdash; a three-state machine (
+          <strong>Circuit breaker</strong>: a three-state machine (
           <code>closed &rarr; open &rarr; half-open</code>) that fails fast when
           an upstream is clearly down, then probes for recovery.
         </li>
@@ -107,7 +107,7 @@ const res = await safeFetch("https://api.example.com/things");`}
 
       <h2>Per-call timeout</h2>
       <p>
-        Each attempt &mdash; including every retry &mdash; gets a fresh
+        Each attempt (including every retry) gets a fresh{" "}
         <code>timeoutMs</code> budget (default <code>10_000</code>). A timeout
         aborts the in-flight request and throws <code>FetchTimeoutError</code>.
         A timeout combines with any caller-supplied <code>signal</code>: a
@@ -175,8 +175,8 @@ try {
       <p>
         After <code>failureThreshold</code> consecutive failures the breaker
         trips <strong>open</strong>: every subsequent call fails fast with{" "}
-        <code>CircuitOpenError</code> &mdash; no network round-trip &mdash;
-        until <code>resetTimeoutMs</code> elapses. The breaker then enters{" "}
+        <code>CircuitOpenError</code> (no network round-trip) until{" "}
+        <code>resetTimeoutMs</code> elapses. The breaker then enters{" "}
         <strong>half-open</strong> and admits a limited number of trial
         requests; a success closes it again, a failure re-opens it. The breaker
         is shared across every call made through the returned function, so one
@@ -203,7 +203,7 @@ try {
   await client("https://api.example.com/");
 } catch (err) {
   if (err instanceof CircuitOpenError) {
-    // fail fast — err.retryAfterMs hints when to try again
+    // fail fast: err.retryAfterMs hints when to try again
   }
 }`}
         language="ts"
@@ -217,8 +217,8 @@ try {
       <h2>The standalone CircuitBreaker</h2>
       <p>
         The breaker is exported on its own so you can protect any non-{" "}
-        <code>fetch</code> dependency &mdash; a database driver, a gRPC client
-        &mdash; with the same semantics.
+        <code>fetch</code> dependency (a database driver, a gRPC client) with
+        the same semantics.
       </p>
       <CodeBlock
         code={`import { CircuitBreaker } from "@daloyjs/core";
@@ -234,8 +234,8 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
       <ul>
         <li>
           <strong>SSRF protection is preserved.</strong>{" "}
-          <code>resilientFetch()</code> never replaces <code>fetchGuard()</code>{" "}
-          &mdash; it wraps it. An <code>SsrfBlockedError</code> is a terminal
+          <code>resilientFetch()</code> never replaces <code>fetchGuard()</code>
+          , it wraps it. An <code>SsrfBlockedError</code> is a terminal
           refusal: it bubbles unchanged, is never retried, and never trips the
           circuit breaker.
         </li>

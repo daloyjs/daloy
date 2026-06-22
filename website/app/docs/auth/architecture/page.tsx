@@ -228,7 +228,7 @@ export default function Page() {
             <td>Authorization server / login (issues tokens)</td>
             <td>Duende IdentityServer, OpenIddict, ASP.NET Core Identity</td>
             <td>
-              A separate IdP (managed or self-hosted) &mdash; no built-in
+              A separate IdP (managed or self-hosted), no built-in
               equivalent
             </td>
           </tr>
@@ -303,10 +303,10 @@ export default function Page() {
       </ul>
       <p>
         Whatever you pick, treat building your own authorization server as a
-        non-goal. Implementing OAuth2 / OIDC correctly &mdash;
-        authorization-code + PKCE, token rotation, key management and rotation,
-        consent, discovery, and the long tail of spec edge cases &mdash; is a
-        large, high-risk surface that vetted IdPs already solve.
+        non-goal. Implementing OAuth2 / OIDC correctly (authorization-code +
+        PKCE, token rotation, key management and rotation, consent, discovery,
+        and the long tail of spec edge cases) is a large, high-risk surface
+        that vetted IdPs already solve.
       </p>
 
       <h2 id="resource-server">

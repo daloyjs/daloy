@@ -32,7 +32,7 @@ export default function Page() {
       <p>
         Metrics are the third observability pillar alongside the structured{" "}
         <strong>logger</strong> and the OpenTelemetry-compatible{" "}
-        <strong>tracer</strong>. As of <strong>0.37.0</strong> DaloyJS ships a{" "}
+        <strong>tracer</strong>. DaloyJS ships a{" "}
         <strong>dependency-free</strong> Prometheus / OpenMetrics stack: a
         metrics registry (counters, gauges, histograms), RED (Rate / Errors /
         Duration) instrumentation for every route, and an opt-in,{" "}
@@ -108,7 +108,7 @@ app.route({
       />
       <p>
         Because the instrumentation is installed as a group hook, it only wraps
-        routes registered <em>after</em> the <code>app.metrics()</code> call —
+        routes registered <em>after</em> the <code>app.metrics()</code> call,
         the same ordering rule as any <code>app.use(...)</code> middleware.
       </p>
 
@@ -116,16 +116,16 @@ app.route({
       <p>Out of the box, the scrape route exposes:</p>
       <ul>
         <li>
-          <code>daloy_http_requests_total{`{method,route,status}`}</code> — a
+          <code>daloy_http_requests_total{`{method,route,status}`}</code>: a
           request counter (rate; the error rate is the subset with a{" "}
           <code>4xx</code>/<code>5xx</code> status).
         </li>
         <li>
-          <code>daloy_http_request_duration_seconds{`{method,route}`}</code> — a
+          <code>daloy_http_request_duration_seconds{`{method,route}`}</code>: a
           latency histogram with conventional Prometheus buckets.
         </li>
         <li>
-          <code>daloy_http_requests_in_flight</code> — a gauge of
+          <code>daloy_http_requests_in_flight</code>: a gauge of
           concurrently-handled requests.
         </li>
         <li>
@@ -171,7 +171,7 @@ app.route({
               <td>
                 <code>string</code>
               </td>
-              <td>—</td>
+              <td>-</td>
               <td>
                 Require <code>Authorization: Bearer &lt;token&gt;</code>,
                 compared via <code>timingSafeEqual</code>. Required in
@@ -252,7 +252,7 @@ app.route({
               <td>
                 <code>(path: string) =&gt; boolean</code>
               </td>
-              <td>—</td>
+              <td>-</td>
               <td>
                 Skip RED instrumentation for matching paths (e.g. health
                 probes). The scrape path itself is always excluded
@@ -344,7 +344,7 @@ renderTime.observe({ template: "invoice" }, 0.042);`}
       <p>
         Prefer to wire the pieces yourself? <code>httpMetrics()</code> returns a{" "}
         <code>Hooks</code> bundle you can <code>app.use(...)</code> without the
-        built-in scrape route — render the registry from your own handler.
+        built-in scrape route, then render the registry from your own handler.
       </p>
       <CodeBlock
         code={`import { App, MetricsRegistry, httpMetrics } from "@daloyjs/core";
@@ -391,13 +391,13 @@ app.route({
       <p>This brings up:</p>
       <ul>
         <li>
-          <strong>Prometheus</strong> at <code>http://localhost:9090</code> —
+          <strong>Prometheus</strong> at <code>http://localhost:9090</code>,
           pre-configured to scrape{" "}
           <code>host.docker.internal:3001/metrics</code> every 10 seconds.
         </li>
         <li>
           <strong>Grafana</strong> at <code>http://localhost:3000</code> (admin
-          / admin) — Prometheus datasource and the DaloyJS dashboard are
+          / admin). Prometheus datasource and the DaloyJS dashboard are
           auto-provisioned on first start, no manual import required.
         </li>
       </ul>
@@ -473,7 +473,7 @@ daloy_http_requests_in_flight`}
       <h2>Security posture</h2>
       <p>
         A <code>/metrics</code> endpoint leaks internal route names, latency
-        distributions, request volume, and process memory — so it ships with the
+        distributions, request volume, and process memory, so it ships with the
         same hardened defaults as <code>app.healthcheck()</code>:
       </p>
       <ul>

@@ -572,7 +572,7 @@ app.use(timing());              // Server-Timing header for observability`}
       </p>
       <ul>
         <li>
-          <strong>Double-submit cookie</strong> (default) &mdash; sets a token
+          <strong>Double-submit cookie</strong> (default): sets a token
           cookie on safe requests, requires the same value on the{" "}
           <code>x-csrf-token</code> header for unsafe methods, and rejects
           mismatches with a timing-safe <strong>403</strong>.
@@ -719,7 +719,7 @@ app.use(basicAuth({
         recommended pattern: <code>internal: true</code> routes,{" "}
         <code>ipRestriction()</code>, strict CSP with per-request nonces,
         per-admin authentication, login-throttle <code>rateLimit()</code>
-        groups, and structured audit logging &mdash; mapped one-to-one to
+        groups, and structured audit logging, mapped one-to-one to
         Aikido&apos;s public &quot;secure admin panel&quot; checklist.
       </p>
 
@@ -868,8 +868,8 @@ provenance=true`}
         >
           OWASP API Security Top 10 (2023)
         </a>{" "}
-        &mdash; plus the cross-cutting best practices (encryption, validation,
-        rate limiting, logging, inventory, third-party API safety) &mdash; read{" "}
+        plus the cross-cutting best practices (encryption, validation,
+        rate limiting, logging, inventory, third-party API safety), read{" "}
         <a href="/docs/security/owasp-api-top-10">OWASP API Top 10 mapping</a>.
       </p>
 

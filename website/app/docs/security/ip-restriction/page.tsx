@@ -26,7 +26,7 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> a guest list at the door. Names on
         the allow list get in; names on the deny list are turned away no matter
-        what — and if the bouncer can&apos;t see who you are at all, you
+        what, and if the bouncer can&apos;t see who you are at all, you
         don&apos;t get in either.
       </blockquote>
       <p>
@@ -105,7 +105,7 @@ app.use(ipRestriction({
         <li>
           <strong>Deny wins.</strong> When both lists are supplied, the matcher
           runs deny-first then allow-otherwise. A deny match always loses to
-          nothing — even an explicit allow-list entry cannot override a deny,
+          nothing: even an explicit allow-list entry cannot override a deny,
           matching the principle of least privilege.
         </li>
         <li>
@@ -148,7 +148,7 @@ app.use(ipRestriction({
 
       <h2>Customizing the rejection</h2>
       <p>
-        Override the response body with <code>message</code>. Keep it generic —
+        Override the response body with <code>message</code>. Keep it generic:
         echoing the client IP back can leak proxy topology to attackers, so the
         default message deliberately does not include it.
       </p>
