@@ -212,6 +212,8 @@ test("otelTracing traces unmatched requests through the error response", async (
   // url.query is omitted by default (secure-by-default).
   assert.equal("url.query" in span.attributes, false);
   assert.equal(span.attributes["http.response.status_code"], 404);
+  // ctx.state.route was never set (unmatched), so span name stays as the path-based creation-time name.
+  assert.equal(span.name, "GET /missing");
   assert.equal(span.ended, true);
   assert.equal(span.endCount, 1);
 });
@@ -458,6 +460,14 @@ test("redactQuery opts a sanitized query back in", async () => {
   assert.equal(spans[0]!.attributes["url.query"], "[redacted]");
 });
 
+test("redactQuery returning undefined keeps url.query absent", async () => {
+  const { tracer, spans } = makeFakeTracer();
+  const app = new App({ hooks: otelTracing({ tracer, redactQuery: () => undefined }) });
+  app.route({ method: "GET", path: "/x", responses: { 200: { description: "ok" } }, handler: () => ({ status: 200 as const, body: undefined }) });
+  await app.fetch(new Request("http://x/x?token=secret"));
+  assert.equal("url.query" in spans[0]!.attributes, false);
+});
+
 test("5xx without thrown error sets error.type to the status string", async () => {
   const { tracer, spans } = makeFakeTracer();
   const app = new App({ hooks: otelTracing({ tracer }) });
@@ -480,7 +490,7 @@ test("4xx leaves span status UNSET (regression guard)", async () => {
   const app = new App({ hooks: otelTracing({ tracer }) });
   app.route({ method: "GET", path: "/x", responses: { 404: { description: "not found" } }, handler: () => ({ status: 404 as const, body: undefined }) });
   await app.fetch(new Request("http://x/x"));
-  assert.equal(spans[0]!.status?.code ?? TRACING_SPAN_STATUS_UNSET, TRACING_SPAN_STATUS_UNSET);
+  assert.equal(spans[0]!.status, undefined);
 });
 
 test("tracer whose span lacks updateName() does not throw", async () => {
