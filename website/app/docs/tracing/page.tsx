@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Tracing with OpenTelemetry",
   description:
-    "Instrument DaloyJS apps with OpenTelemetry-compatible spans. The otelTracing helper produces a Hooks object that starts a SERVER span per request, attaches HTTP semantic-convention attributes, exposes the span on ctx.state, and ends it when the response is sent.",
+    "Instrument DaloyJS apps with OpenTelemetry-compatible spans. The otelTracing helper produces a Hooks object that starts a SERVER span per request, attaches HTTP semantic-convention attributes (including http.route automatically), exposes the span on ctx.state, and ends it when the response is sent.",
   path: "/docs/tracing",
   keywords: [
     "OpenTelemetry",
@@ -15,6 +15,8 @@ export const metadata = buildMetadata({
     "otelTracing",
     "DaloyJS observability",
     "OTel",
+    "http.route",
+    "redactQuery",
   ],
   type: "article",
 });
@@ -48,17 +50,16 @@ export default function Page() {
       <FlowDiagram
         title="One span per request"
         numbered
-        caption="The hook starts a SERVER span, attaches request attributes on beforeHandle, exposes the span on ctx.state for handlers, then records the status code (and any exception) on onSend before ending the span exactly once."
+        caption="The hook starts a SERVER span on onRequest, then stamps http.route and renames the span in beforeHandle once the router has matched the route template. The span is exposed on ctx.state for handlers, then ended exactly once on onSend."
         steps={[
           {
-            label: "Extract context",
-            eyebrow: "optional",
-            detail: "contextFromRequest reads traceparent / B3",
+            label: "onRequest",
+            detail: "start SERVER span + http.request.method, url.path; extract traceparent / B3 (optional)",
+            tone: "accent",
           },
           {
             label: "beforeHandle",
-            detail: "start SERVER span + http.request.method, url.path",
-            tone: "accent",
+            detail: "stamp http.route from ctx.state.route; rename span to METHOD /route/:template",
           },
           {
             label: "handler",
@@ -66,7 +67,7 @@ export default function Page() {
           },
           {
             label: "onSend",
-            detail: "http.response.status_code, recordException on errors",
+            detail: "http.response.status_code, error.type, recordException on errors",
           },
           {
             label: "span.end()",
@@ -94,11 +95,28 @@ const app = new App({
         <li>
           <code>http.request.method</code>, <code>url.path</code>,{" "}
           <code>url.scheme</code>, <code>server.address</code> (host without
-          port), <code>server.port</code> (when present), <code>url.query</code>,{" "}
-          <code>user_agent.original</code> set on <code>beforeHandle</code>.
+          port), <code>server.port</code> (when present),{" "}
+          <code>user_agent.original</code> set on <code>onRequest</code>.
+        </li>
+        <li>
+          <code>http.route</code> set automatically from{" "}
+          <code>ctx.state.route</code> (the matched route template, e.g.{" "}
+          <code>/books/:id</code>) on <code>beforeHandle</code>, and the span
+          is renamed to <code>GET /books/:id</code>. Unmatched requests (404 /
+          405) receive no <code>http.route</code> attribute.
+        </li>
+        <li>
+          Unknown HTTP methods are normalized to{" "}
+          <code>http.request.method=&quot;_OTHER&quot;</code> with the raw value
+          preserved on <code>http.request.method_original</code>.
         </li>
         <li>
           <code>http.response.status_code</code> set on <code>onSend</code>.
+        </li>
+        <li>
+          <code>error.type</code> set on failures: the exception class name
+          for thrown errors, or the HTTP status code as a string for 5xx
+          responses without an exception.
         </li>
         <li>
           <code>recordException</code> + <code>setStatus(ERROR)</code> on
@@ -110,6 +128,67 @@ const app = new App({
           both <code>onError</code> and <code>onSend</code> fire.
         </li>
       </ul>
+
+      <h2>Route label and span name</h2>
+      <p>
+        The framework sets <code>ctx.state.route</code> to the matched route
+        template on every handled request. <code>otelTracing()</code> reads
+        this in <code>beforeHandle</code> and uses it for two things:
+      </p>
+      <ul>
+        <li>
+          Sets <code>http.route</code> on the span (the low-cardinality OTel
+          semconv attribute that groups, say, <code>/books/1</code>,{" "}
+          <code>/books/2</code>, etc. under <code>/books/:id</code>).
+        </li>
+        <li>
+          Renames the span to <code>{"{METHOD} {route}"}</code>, e.g.{" "}
+          <code>GET /books/:id</code> instead of{" "}
+          <code>GET /books/42</code> — unless you supply a custom{" "}
+          <code>spanName</code> resolver.
+        </li>
+      </ul>
+      <p>
+        You can also read <code>ctx.state.route</code> directly in handlers
+        when you need the matched template for other purposes:
+      </p>
+      <CodeBlock code={`app.route({
+  method: "GET",
+  path: "/books/:id",
+  operationId: "getBookById",
+  responses: { 200: { description: "ok" } },
+  handler: async ({ state }) => {
+    // ctx.state.route is "/books/:id"
+    // ctx.state.operationId is "getBookById"
+    return { status: 200 as const, body: { route: state.route } };
+  },
+});`} />
+
+      <h2>URL query string: omitted by default</h2>
+      <p>
+        <code>url.query</code> is <strong>not</strong> recorded on spans by
+        default. Query strings frequently carry tokens, API keys, and other
+        PII, and recording them verbatim would leak that data into your trace
+        backend. This is a deliberate secure-by-default choice.
+      </p>
+      <p>
+        To record a sanitized query, supply a <code>redactQuery</code>{" "}
+        function. It receives the raw query string (without the leading{" "}
+        <code>?</code>) and should return either a safe replacement string or{" "}
+        <code>undefined</code> to still omit the attribute:
+      </p>
+      <CodeBlock code={`otelTracing({
+  tracer,
+  // Record the query but strip any "token" or "key" parameters.
+  redactQuery: (search) => {
+    const params = new URLSearchParams(search);
+    params.delete("token");
+    params.delete("key");
+    params.delete("api_key");
+    const redacted = params.toString();
+    return redacted.length > 0 ? redacted : undefined;
+  },
+});`} />
 
       <h2>Reading the active span in handlers</h2>
       <p>

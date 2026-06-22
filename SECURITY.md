@@ -159,6 +159,17 @@ DaloyJS is designed for the threat model of an **internet-facing HTTP API on a t
 
 Each subsection names the class, a one-line description, the framework primitive that defends it, and where the regression tests live.
 
+#### Tracing: URL query string omitted by default
+`otelTracing()` does **not** record the URL query string on spans unless a
+`redactQuery` function is explicitly supplied. Query parameters frequently
+carry API keys, session tokens, OAuth codes, and other credentials; recording
+them verbatim would leak that data into trace backends (Jaeger, Tempo, Datadog,
+etc.) and any downstream log pipelines that index spans. Opting in via
+`redactQuery` requires the caller to consciously sanitize or filter the query
+before it is stored. Projects upgrading from a hypothetical earlier version that
+recorded `url.query` unconditionally should audit their trace pipelines for
+sensitive data already written.
+
 #### Body-size DoS
 Streamed body read with hard cap (default 1 MiB); `Content-Length` rejected pre-read when oversize. Core-enforced.
 

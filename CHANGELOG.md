@@ -13,6 +13,52 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [Unreleased]
+
+OTel semconv hardening (Phase A). The tracing and metrics hooks now emit
+low-cardinality, spec-correct attributes without any route-resolver boilerplate,
+and the URL query string is omitted from spans by default to avoid leaking
+tokens and PII into trace backends.
+
+### Added
+
+- **`ctx.state.route` and `ctx.state.operationId`** are now set by the
+  framework on every matched request. `ctx.state.route` holds the matched route
+  template (e.g. `/books/:id`); `ctx.state.operationId` holds the route's
+  `operationId` when one is declared. Both are the canonical low-cardinality
+  sources for OTel attributes and Prometheus labels — no resolver boilerplate
+  required.
+
+### Changed
+
+- **`otelTracing()` — `http.route` is now automatic.** In `beforeHandle` the
+  hook reads `ctx.state.route` and stamps `http.route` on the span. The span
+  name is also renamed from `GET /books/42` to `GET /books/:id` unless a custom
+  `spanName` override is supplied.
+- **`otelTracing()` — unknown HTTP methods normalized.** Methods not in the OTel
+  allowlist are recorded as `http.request.method="_OTHER"` with the raw value
+  preserved on `http.request.method_original`, capping method cardinality per
+  the OTel HTTP semantic conventions.
+- **`otelTracing()` — `error.type` is now set on failures.** Thrown errors
+  record the exception class name; 5xx responses without an exception record the
+  status code as a string (e.g. `"500"`).
+- **`httpMetrics()` — route label defaults to `ctx.state.route`.** The default
+  `route` label now prefers the framework-set template over the raw pathname. A
+  custom `route` resolver still wins when supplied. The cardinality cap is
+  unchanged and only applies when neither the resolver nor the template is
+  available (e.g. 404 / 405 requests).
+
+### Security
+
+- **`otelTracing()` — `url.query` is now omitted from spans by default.**
+  Query strings routinely carry API keys, session tokens, and other PII. The
+  attribute is only recorded when you supply a `redactQuery` function that
+  returns a sanitized string. Projects upgrading from a version that recorded
+  `url.query` unconditionally should audit their trace pipelines for sensitive
+  data. This is a **behavior change**: spans that previously included
+  `url.query` will no longer include it unless `redactQuery` is configured.
+
+
 ## [1.0.0-beta.2] - 2026-06-22
 
 The third **1.0.0 beta**. The public API remains feature-complete and stable for
@@ -63,6 +109,7 @@ lockstep, and every `create-daloy` template now pins
 
 - Source files carry an internal formatting normalization (no behavior change)
   and a TSDoc wording fix (“Vercel Edge Functions” → “Vercel Functions”).
+
 
 ## [1.0.0-beta.1] - 2026-06-21
 

@@ -293,17 +293,43 @@ app.route({
       <h2>The route label</h2>
       <p>
         High-cardinality labels are the classic way to melt a Prometheus server.
-        By default the <code>route</code> label uses the request pathname,
-        capped at <code>maxRouteCardinality</code> (100) distinct values before
-        further paths collapse to <code>&lt;other&gt;</code>. For templated
-        routes, supply a resolver that returns the route{" "}
-        <strong>template</strong>:
+        The <code>route</code> label defaults to <code>ctx.state.route</code>
+        when available — the matched route template set by the framework on every
+        handled request (e.g. <code>/books/:id</code> rather than{" "}
+        <code>/books/42</code>). This means <strong>no custom resolver is needed
+        for typical apps</strong>: the framework already groups all requests to{" "}
+        <code>/books/1</code>, <code>/books/2</code>, etc. into a single{" "}
+        <code>/books/:id</code> series automatically.
+      </p>
+      <p>
+        The raw pathname fallback (capped at{" "}
+        <code>maxRouteCardinality</code>, default 100) only applies when neither
+        a custom <code>route</code> resolver nor a{" "}
+        <code>ctx.state.route</code> template is available (for example, on
+        unmatched 404 / 405 requests).
+      </p>
+      <p>
+        You can still provide a custom <code>route</code> resolver. When
+        supplied, it always wins over <code>ctx.state.route</code>. A common
+        pattern when you want to expose the template explicitly:
       </p>
       <CodeBlock
         code={`app.metrics({
   token: process.env.METRICS_TOKEN,
-  // Group "/books/1", "/books/2", ... into a single series.
-  route: (ctx) => new URL(ctx.request.url).pathname.replace(/\\/books\\/[^/]+/, "/books/:id"),
+  // ctx.state.route is the matched template — no regex needed.
+  route: (ctx) => ctx.state.route ?? "<unknown>",
+});`}
+        language="ts"
+      />
+      <p>
+        You can also read <code>ctx.state.operationId</code> in a custom
+        resolver to label series by operation rather than path template, which
+        is useful when multiple methods share a path:
+      </p>
+      <CodeBlock
+        code={`app.metrics({
+  token: process.env.METRICS_TOKEN,
+  route: (ctx) => ctx.state.operationId ?? ctx.state.route ?? "<unknown>",
 });`}
         language="ts"
       />
