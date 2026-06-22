@@ -1,5 +1,12 @@
-// DaloyJS without zod — for cold-start measurement only. This is a fair
-// like-for-like comparison with Hono, which also ships no validator.
+// DaloyJS without zod — a fair like-for-like comparison with Hono, which also
+// ships no validator. Used by cold-start, memory-load, and route-scale.
+//
+// NOTE on POST /echo: with no request body schema, DaloyJS never parses the
+// body for you (ctx.body stays undefined), exactly like a schema-less route in
+// daloy-bare.ts. So the handler reads the JSON itself via `request.json()`,
+// mirroring hono's `await c.req.json()`. Reading `body.name` off the (absent)
+// ctx.body instead would throw and turn /echo into an all-error path, which
+// would silently corrupt any bench that POSTs to it (memory-load, route-scale).
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
@@ -27,8 +34,10 @@ app.route({
   path: "/echo",
   operationId: "echo",
   responses: { 200: { description: "ok" } },
-  handler: async ({ body }: { body: { name: string } }) =>
-    ({ status: 200, body: { name: body.name } }),
+  handler: async ({ request }: { request: Request }) => {
+    const body = (await request.json()) as { name: string };
+    return { status: 200, body: { name: body.name } };
+  },
 });
 
 const port = Number(process.env.PORT ?? 3000);

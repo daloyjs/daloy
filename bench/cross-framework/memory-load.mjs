@@ -16,7 +16,7 @@ import path from "node:path";
 import autocannon from "autocannon";
 import {
   __dirname, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, fmt, warnBenchEnvironment,
+  startServer, killServer, waitForHealthy, httpRequest, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine } from "./lib/format.mjs";
 
@@ -89,12 +89,14 @@ async function sampleSeries(pid, durationMs) {
   return samples;
 }
 
+const ECHO_BODY = JSON.stringify({ name: "alice" });
+
 function startLoad() {
   const instance = autocannon({
     url: `http://127.0.0.1:${PORT}/echo`,
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "alice" }),
+    body: ECHO_BODY,
     connections: CONNECTIONS,
     duration: DURATION + 5, // a touch longer than our sampling window
   }, () => { /* swallow */ });
@@ -102,11 +104,35 @@ function startLoad() {
   return instance;
 }
 
+// Correctness preflight for the /echo path the load driver hammers. autocannon
+// swallows all responses, so without this a server that 500s on every request
+// (e.g. a schema-less route that reads an unparsed body) would be measured on
+// an all-error path and reported as a valid memory number. Abort instead.
+async function preflightEcho() {
+  const r = await httpRequest(`http://127.0.0.1:${PORT}/echo`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: ECHO_BODY,
+  });
+  if (r.status !== 200) {
+    throw new Error(`preflight POST /echo: status ${r.status} (expected 200). Body: ${r.body.slice(0, 200)}`);
+  }
+  let ok = false;
+  try { ok = JSON.parse(r.body).name === "alice"; } catch { /* ok stays false */ }
+  if (!ok) {
+    throw new Error(`preflight POST /echo: body did not echo {"name":"alice"}. Got: ${r.body.slice(0, 200)}`);
+  }
+}
+
 async function benchOne(fw) {
   console.error(section(fw.name));
   const child = await startServer(fw.file, { port: PORT });
   await waitForHealthy(PORT);
   try {
+    // 0) Correctness preflight — the load driver POSTs to /echo and swallows
+    // every response, so verify the endpoint actually works before measuring.
+    await preflightEcho();
+
     // 1) Idle baseline.
     await wait(2_000);
     const idleSamples = await sampleSeries(child.pid, 5_000);
