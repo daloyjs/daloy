@@ -261,7 +261,7 @@ export interface DocsAssetOptions {
   crossOrigin?: "anonymous" | "use-credentials";
 }
 
-/** Shared options for {@link scalarHtml} and {@link swaggerUiHtml}. */
+/** Shared options for {@link scalarHtml}, {@link swaggerUiHtml}, and {@link redocHtml}. */
 export interface DocsOptions {
   /** Absolute or relative URL of the OpenAPI document to render. */
   specUrl: string;
@@ -280,6 +280,55 @@ export interface DocsOptions {
 export interface ScalarHtmlOptions extends DocsOptions {
   /** Forwarded to the Scalar `<script id="api-reference">` tag. */
   configuration?: ScalarReferenceConfiguration;
+}
+
+/** JSON-only subset of Swagger UI's `SwaggerUIBundle(...)` configuration. */
+export interface SwaggerUiConfiguration {
+  [key: string]: ScalarJsonValue | undefined;
+  /**
+   * Preserve developer-entered API credentials across reloads. Defaults to
+   * `true` in {@link swaggerUiHtml} so the built-in docs behave like a local
+   * developer console instead of forgetting the bearer token on every refresh.
+   */
+  persistAuthorization?: boolean;
+  /** Expand operations by default: `"list"`, `"full"`, or `"none"`. */
+  docExpansion?: "list" | "full" | "none";
+  /** Enable filtering operations by tag/path text. */
+  filter?: boolean | string;
+  /** Show operation extension fields such as `x-*`. */
+  showExtensions?: boolean;
+  /** Show common extension fields. */
+  showCommonExtensions?: boolean;
+  /** Render request duration after "Try it out" calls. */
+  displayRequestDuration?: boolean;
+  /** Sort operations by HTTP method, alphabetically, or with no sorter. */
+  operationsSorter?: "alpha" | "method";
+  /** Sort tags alphabetically or with no sorter. */
+  tagsSorter?: "alpha";
+  /**
+   * Internal URL wiring owned by DaloyJS. Use {@link DocsOptions.specUrl}
+   * instead of passing Swagger UI's `url` directly.
+   */
+  url?: never;
+  /**
+   * Internal DOM mount point owned by DaloyJS. The generated HTML always mounts
+   * Swagger UI into `#swagger`.
+   */
+  dom_id?: never;
+  /** Function-valued Swagger UI plugins cannot cross the server-to-HTML boundary. */
+  plugins?: never;
+  /** Function-valued presets cannot cross the server-to-HTML boundary. */
+  presets?: never;
+  /** Function-valued request interceptors cannot cross the server-to-HTML boundary. */
+  requestInterceptor?: never;
+  /** Function-valued response interceptors cannot cross the server-to-HTML boundary. */
+  responseInterceptor?: never;
+}
+
+/** Options for {@link swaggerUiHtml}; adds Swagger UI-specific configuration. */
+export interface SwaggerUiHtmlOptions extends DocsOptions {
+  /** Forwarded into `SwaggerUIBundle(...)` after `url` and `dom_id`. */
+  configuration?: SwaggerUiConfiguration;
 }
 
 /**
@@ -309,6 +358,14 @@ export interface AsyncApiHtmlOptions extends DocsOptions {
 export interface DocsContentSecurityPolicyOptions {
   /** Extra origins to allow for `script-src` / `style-src` (defaults to jsDelivr). */
   assetOrigins?: string[];
+  /**
+   * Extra origins to allow for `connect-src`. Add API origins here when the
+   * docs UI should send "Try it" requests somewhere other than the same origin
+   * serving the docs page.
+   *
+   * @since 0.42.0
+   */
+  connectOrigins?: string[];
   /** When set, allows nonce-protected inline scripts instead of `'unsafe-inline'`. */
   scriptNonce?: string;
   /** When `false`, omits `'unsafe-inline'` from `style-src`. Defaults to `true`. */
@@ -408,10 +465,13 @@ export function scalarHtml(opts: ScalarHtmlOptions): string {
 /**
  * Render a Swagger UI HTML page that loads `opts.specUrl`. Same usage as
  * {@link scalarHtml} but emits the classic Swagger UI bundle.
+ *
+ * Developer-entered credentials are persisted by default
+ * (`persistAuthorization: true`) so routes with OpenAPI security requirements
+ * can be exercised after using Swagger UI's Authorize dialog.
  */
-export function swaggerUiHtml(opts: DocsOptions): string {
+export function swaggerUiHtml(opts: SwaggerUiHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Docs");
-  const url = escapeHtml(opts.specUrl);
   const cssUrl = escapeHtml(
     opts.assets?.swaggerUiCssUrl ??
       `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist/swagger-ui.css`,
@@ -429,6 +489,12 @@ export function swaggerUiHtml(opts: DocsOptions): string {
     opts.assets?.crossOrigin,
   );
   const nonce = nonceAttr(opts.scriptNonce);
+  const configuration = jsonForScript({
+    persistAuthorization: true,
+    ...(opts.configuration ?? {}),
+    url: opts.specUrl,
+    dom_id: "#swagger",
+  });
   return `<!doctype html>
 <html><head>
 <meta charset="utf-8" />
@@ -438,7 +504,7 @@ export function swaggerUiHtml(opts: DocsOptions): string {
 </head><body>
 <div id="swagger"></div>
 <script src="${bundleUrl}"${bundleSri}${nonce}></script>
-<script${nonce}>window.onload=()=>SwaggerUIBundle({url:"${url}",dom_id:"#swagger"});</script>
+<script${nonce}>window.onload=()=>SwaggerUIBundle(${configuration});</script>
 </body></html>`;
 }
 
@@ -550,13 +616,14 @@ export function docsContentSecurityPolicy(
 
   const styleSrc = ["'self'", ...assetOrigins];
   if (opts.allowInlineStyles !== false) styleSrc.push("'unsafe-inline'");
+  const connectSrc = ["'self'", ...(opts.connectOrigins ?? [])];
 
   const directives = [
     "default-src 'self'",
     `script-src ${scriptSrc.join(" ")}`,
     `style-src ${styleSrc.join(" ")}`,
     "img-src 'self' data: https:",
-    "connect-src 'self'",
+    `connect-src ${connectSrc.join(" ")}`,
   ];
   // Redoc spawns a Web Worker from a `blob:` URL; without an explicit
   // worker-src the browser falls back to script-src, which forbids `blob:`
@@ -582,6 +649,7 @@ export function htmlResponse(
         opts.contentSecurityPolicy ??
         docsContentSecurityPolicy({
           assetOrigins: opts.assetOrigins,
+          connectOrigins: opts.connectOrigins,
           scriptNonce: opts.scriptNonce,
           allowInlineStyles: opts.allowInlineStyles,
         }),

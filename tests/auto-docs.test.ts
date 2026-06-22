@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { App, createApp, _resetPackageJsonCacheForTests } from "../src/index.js";
+import {
+  App,
+  createApp,
+  httpBearerScheme,
+  _resetPackageJsonCacheForTests,
+} from "../src/index.js";
 
 function withRoute(app: App): App {
   app.route({
@@ -88,6 +93,58 @@ test("docs: { ui: 'swagger' } selects Swagger UI", async () => {
   const html = await docs.text();
   assert.match(html, /SwaggerUIBundle/);
   assert.match(html, /Swagger Demo/);
+  assert.match(html, /"persistAuthorization":true/);
+});
+
+test("docs: { ui: 'swagger', swagger } forwards config and allows API server connects", async () => {
+  const app = withRoute(
+    new App({
+      logger: false,
+      docs: {
+        ui: "swagger",
+        swagger: {
+          docExpansion: "none",
+          filter: true,
+          displayRequestDuration: true,
+        },
+      },
+      openapi: {
+        info: { title: "Authorized Swagger Demo", version: "1.0.0" },
+        servers: [{ url: "https://api.example.com/v1" }],
+        securitySchemes: {
+          bearer: httpBearerScheme({ bearerFormat: "JWT" }),
+        },
+      },
+    }),
+  );
+  app.route({
+    method: "POST",
+    path: "/books",
+    operationId: "createBook",
+    auth: { scheme: "bearer" },
+    responses: { 201: { description: "Created" } },
+    handler: async () => ({ status: 201 as const, body: undefined }),
+  });
+
+  const spec = await app.request("/openapi.json");
+  assert.equal(spec.status, 200);
+  const json: any = await spec.json();
+  assert.deepEqual(json.components.securitySchemes.bearer, {
+    type: "http",
+    scheme: "bearer",
+    bearerFormat: "JWT",
+  });
+  assert.deepEqual(json.paths["/books"].post.security, [{ bearer: [] }]);
+
+  const docs = await app.request("/docs");
+  assert.equal(docs.status, 200);
+  const html = await docs.text();
+  assert.match(html, /"persistAuthorization":true/);
+  assert.match(html, /"docExpansion":"none"/);
+  assert.match(html, /"filter":true/);
+  assert.match(html, /"displayRequestDuration":true/);
+  const csp = docs.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /connect-src 'self' https:\/\/api\.example\.com/);
 });
 
 test("docs: { ui: 'redoc' } selects Redoc and grants worker-src blob in CSP", async () => {
@@ -180,6 +237,58 @@ test("docs: { scalar } forwards Scalar UI configuration", async () => {
   assert.match(html, /&quot;layout&quot;:&quot;classic&quot;/);
   assert.match(html, /&quot;hideTestRequestButton&quot;:true/);
   assert.match(html, /&quot;url&quot;:&quot;\/reference\/openapi\.json&quot;/);
+});
+
+test("docs: scalar selects the first configured security scheme by default", async () => {
+  const app = withRoute(
+    new App({
+      logger: false,
+      docs: true,
+      openapi: {
+        info: { title: "Scalar Auth", version: "1.0.0" },
+        securitySchemes: {
+          bearer: httpBearerScheme({ bearerFormat: "JWT" }),
+        },
+      },
+    }),
+  );
+
+  const docs = await app.request("/docs");
+  assert.equal(docs.status, 200);
+  const html = await docs.text();
+  assert.match(
+    html,
+    /&quot;authentication&quot;:\{&quot;preferredSecurityScheme&quot;:&quot;bearer&quot;\}/,
+  );
+});
+
+test("docs: scalar respects an explicit preferred security scheme", async () => {
+  const app = withRoute(
+    new App({
+      logger: false,
+      docs: {
+        scalar: {
+          authentication: { preferredSecurityScheme: "apiKey" },
+        },
+      },
+      openapi: {
+        info: { title: "Scalar Auth", version: "1.0.0" },
+        securitySchemes: {
+          bearer: httpBearerScheme({ bearerFormat: "JWT" }),
+          apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+        },
+      },
+    }),
+  );
+
+  const docs = await app.request("/docs");
+  assert.equal(docs.status, 200);
+  const html = await docs.text();
+  assert.match(
+    html,
+    /&quot;authentication&quot;:\{&quot;preferredSecurityScheme&quot;:&quot;apiKey&quot;\}/,
+  );
+  assert.doesNotMatch(html, /preferredSecurityScheme&quot;:&quot;bearer/);
 });
 
 test("docs: { assets } pins SRI hashes on the auto-mounted docs UI", async () => {

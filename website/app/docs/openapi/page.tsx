@@ -117,18 +117,42 @@ const app = new App({
         <code>&quot;swagger&quot;</code>, or <code>&quot;redoc&quot;</code>. All
         three render the same live spec, mount on the same paths, and ship the
         same strict CSP and CDN-hosted assets, so switching is a one-word change.
+        Scalar and Swagger UI include a developer request console for protected
+        routes. Redoc is a read-only reference UI: it displays security
+        requirements, but it does not ship a built-in <em>Try it</em> console.
       </p>
       <CodeBlock
         code={`new App({
   openapi: { info: { title: "My API", version: "1.0.0" } },
   docs: {
-    ui: "redoc",
-    redoc: {
-      // Any Redoc standalone option is accepted (forwarded to Redoc.init):
-      disableSearch: false,
-      hideDownloadButtons: true,
-      sortPropsAlphabetically: true,
-      theme: { colors: { primary: { main: "#2563eb" } } },
+    ui: "swagger",
+    swagger: {
+      docExpansion: "none",
+      displayRequestDuration: true,
+    },
+  },
+});`}
+      />
+      <p>
+        Swagger UI keeps authorizations from its <em>Authorize</em> dialog across
+        reloads by default. Scalar automatically selects the first configured
+        OpenAPI security scheme, so the auth form is ready for developers to
+        paste a bearer token or API key. If you want a different Scalar default,
+        set it explicitly:
+      </p>
+      <CodeBlock
+        code={`new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+    },
+  },
+  docs: {
+    scalar: {
+      persistAuth: true,
+      authentication: { preferredSecurityScheme: "bearer" },
     },
   },
 });`}
@@ -142,7 +166,7 @@ const app = new App({
         <code>ui: &quot;redoc&quot;</code> only. Scalar and Swagger UI keep the
         tighter policy. The <code>scalar</code> option is ignored unless{" "}
         <code>ui</code> is <code>&quot;scalar&quot;</code>, and likewise for{" "}
-        <code>redoc</code>.
+        <code>swagger</code> and <code>redoc</code>.
       </p>
 
       <p>

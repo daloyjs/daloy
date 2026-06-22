@@ -720,13 +720,14 @@ interface ContractIssue  { route: string; method: HttpMethod; code: string; mess
       </h2>
       <CodeBlock
         code={`scalarHtml(opts: ScalarHtmlOptions): string;
-swaggerUiHtml(opts: DocsOptions): string;
+swaggerUiHtml(opts: SwaggerUiHtmlOptions): string;
 redocHtml(opts: RedocHtmlOptions): string;
 docsContentSecurityPolicy(opts?: DocsContentSecurityPolicyOptions): string;
 htmlResponse(html: string, opts?: HtmlResponseOptions): Response;
 
 interface DocsOptions { specUrl: string; title?: string; assets?: DocsAssetOptions; scriptNonce?: string }
 interface ScalarHtmlOptions extends DocsOptions { configuration?: ScalarReferenceConfiguration }
+interface SwaggerUiHtmlOptions extends DocsOptions { configuration?: SwaggerUiConfiguration }
 interface RedocHtmlOptions  extends DocsOptions { configuration?: RedocConfiguration }
 
 interface DocsAssetOptions {
@@ -744,6 +745,7 @@ interface DocsAssetOptions {
 
 interface DocsContentSecurityPolicyOptions {
   assetOrigins?: readonly string[];
+  connectOrigins?: readonly string[];
   scriptNonce?: string;
   allowInlineStyles?: boolean;
   allowBlobWorkers?: boolean;     // append worker-src 'self' blob: (Redoc needs it)

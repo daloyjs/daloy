@@ -47,6 +47,7 @@ import {
   type RedocConfiguration,
   type ScalarJsonValue,
   type ScalarReferenceConfiguration,
+  type SwaggerUiConfiguration,
 } from "./docs.js";
 import {
   generateAsyncAPI,
@@ -594,8 +595,21 @@ export interface DocsRouteOptions {
    * renders Redoc.
    */
   ui?: "scalar" | "swagger" | "redoc";
-  /** Scalar API reference UI configuration. Ignored unless `ui` is `"scalar"`. */
+  /**
+   * Scalar API reference UI configuration. Ignored unless `ui` is `"scalar"`.
+   * When OpenAPI security schemes are configured and this object does not set
+   * `authentication.preferredSecurityScheme`, DaloyJS selects the first scheme
+   * so Scalar's developer console opens with an auth type ready to fill.
+   */
   scalar?: ScalarReferenceConfiguration;
+  /**
+   * Swagger UI configuration, forwarded to `SwaggerUIBundle`. Ignored unless
+   * `ui: "swagger"`. DaloyJS owns `url` and `dom_id`; credentials entered in
+   * the Authorize dialog persist across reloads by default.
+   *
+   * @since 0.42.0
+   */
+  swagger?: SwaggerUiConfiguration;
   /**
    * Redoc UI configuration, forwarded to `Redoc.init`. Ignored unless
    * `ui: "redoc"`.
@@ -1893,11 +1907,16 @@ export class App<
     // (unless the caller explicitly overrode it). Scalar / Swagger UI keep the
     // tighter default. The policy is deterministic from `ui` + `opts.csp`, so
     // compute it once at mount time instead of per request.
-    const docsCsp = docsContentSecurityPolicy(
-      ui === "redoc"
+    const docsConnectOrigins = [
+      ...(opts.csp?.connectOrigins ?? []),
+      ...serverConnectOrigins(this.options.openapi?.servers),
+    ];
+    const docsCsp = docsContentSecurityPolicy({
+      ...(ui === "redoc"
         ? { ...opts.csp, allowBlobWorkers: opts.csp?.allowBlobWorkers ?? true }
-        : opts.csp,
-    );
+        : opts.csp),
+      ...(docsConnectOrigins.length ? { connectOrigins: docsConnectOrigins } : {}),
+    });
 
     this.route({
       method: "GET",
@@ -1915,6 +1934,7 @@ export class App<
             ? swaggerUiHtml({
                 specUrl: openapiPath,
                 title,
+                configuration: opts.swagger,
                 assets: opts.assets,
               })
             : ui === "redoc"
@@ -1927,7 +1947,10 @@ export class App<
               : scalarHtml({
                   specUrl: openapiPath,
                   title,
-                  configuration: opts.scalar,
+                  configuration: scalarConfigurationWithPreferredAuth(
+                    opts.scalar,
+                    this.options.openapi?.securitySchemes,
+                  ),
                   assets: opts.assets,
                 });
         return {
@@ -3951,6 +3974,55 @@ function responsePipeline(
       if (r instanceof Response) current = r;
     }
     return current;
+  };
+}
+
+function serverConnectOrigins(
+  servers: OpenAPIOptions["servers"] | undefined,
+): string[] {
+  if (!servers) return [];
+  const origins: string[] = [];
+  for (const server of servers) {
+    try {
+      const url = new URL(server.url);
+      if (
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        !origins.includes(url.origin)
+      ) {
+        origins.push(url.origin);
+      }
+    } catch {
+      // Relative server URLs are already covered by connect-src 'self'.
+    }
+  }
+  return origins;
+}
+
+function scalarConfigurationWithPreferredAuth(
+  configuration: ScalarReferenceConfiguration | undefined,
+  schemes: OpenAPIOptions["securitySchemes"] | undefined,
+): ScalarReferenceConfiguration | undefined {
+  const preferredSecurityScheme = schemes ? Object.keys(schemes)[0] : undefined;
+  if (!preferredSecurityScheme) return configuration;
+  const authentication = configuration?.authentication;
+  if (
+    authentication &&
+    typeof authentication === "object" &&
+    !Array.isArray(authentication) &&
+    "preferredSecurityScheme" in authentication
+  ) {
+    return configuration;
+  }
+  return {
+    ...(configuration ?? {}),
+    authentication: {
+      ...(authentication &&
+      typeof authentication === "object" &&
+      !Array.isArray(authentication)
+        ? authentication
+        : {}),
+      preferredSecurityScheme,
+    },
   };
 }
 

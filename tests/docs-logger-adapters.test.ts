@@ -25,6 +25,12 @@ function scalarConfigurationFrom(html: string): Record<string, unknown> {
   return JSON.parse(decodeHtmlAttribute(match[1]!));
 }
 
+function swaggerConfigurationFrom(html: string): Record<string, unknown> {
+  const match = html.match(/SwaggerUIBundle\((\{.*\})\);<\/script>/);
+  assert.ok(match);
+  return JSON.parse(match[1]!);
+}
+
 test("docs HTML escapes untrusted title and spec URL", () => {
   const scalar = scalarHtml({ title: "<img>", specUrl: "/openapi.json?x=<script>" });
   assert.match(scalar, /&lt;img&gt;/);
@@ -33,7 +39,8 @@ test("docs HTML escapes untrusted title and spec URL", () => {
 
   const swagger = swaggerUiHtml({ title: "Docs & API", specUrl: "\";alert(1)//" });
   assert.match(swagger, /Docs &amp; API/);
-  assert.doesNotMatch(swagger, /";alert\(1\)\/\//);
+  assert.equal(swaggerConfigurationFrom(swagger).url, "\";alert(1)//");
+  assert.doesNotMatch(swagger, /<\/script><script>/);
 });
 
 test("docs helpers support self-hosted assets and nonce-based scripts", () => {
@@ -109,6 +116,31 @@ test("swaggerUiHtml emits SRI on both the stylesheet and the bundle", () => {
     html,
     /<script src="[^"]+swagger-ui-bundle\.js" integrity="sha256-jsHASHvalue0123456789ABCDEFabcdef0=" crossorigin="use-credentials">/,
   );
+});
+
+test("swaggerUiHtml persists authorization and forwards JSON configuration safely", () => {
+  const html = swaggerUiHtml({
+    specUrl: "/openapi.json?x=<tag>",
+    configuration: {
+      docExpansion: "none",
+      filter: true,
+      displayRequestDuration: true,
+      persistAuthorization: false,
+      url: "/ignored.json",
+      dom_id: "#ignored",
+    } as any,
+  });
+  const configuration = swaggerConfigurationFrom(html);
+  assert.equal(configuration.url, "/openapi.json?x=<tag>");
+  assert.equal(configuration.dom_id, "#swagger");
+  assert.equal(configuration.persistAuthorization, false);
+  assert.equal(configuration.docExpansion, "none");
+  assert.equal(configuration.filter, true);
+  assert.equal(configuration.displayRequestDuration, true);
+  assert.doesNotMatch(html, /<tag>/);
+
+  const defaultHtml = swaggerUiHtml({ specUrl: "/openapi.json" });
+  assert.equal(swaggerConfigurationFrom(defaultHtml).persistAuthorization, true);
 });
 
 test("docs helpers omit SRI attributes when no integrity hash is supplied", () => {
@@ -303,6 +335,16 @@ test("docsContentSecurityPolicy can target custom asset origins", () => {
   const csp = docsContentSecurityPolicy({ assetOrigins: ["https://docs.example.com"], scriptNonce: "abc" });
   assert.match(csp, /script-src 'self' https:\/\/docs\.example\.com 'nonce-abc'/);
   assert.match(csp, /style-src 'self' https:\/\/docs\.example\.com 'unsafe-inline'/);
+});
+
+test("docsContentSecurityPolicy can target custom API connect origins", () => {
+  const csp = docsContentSecurityPolicy({
+    connectOrigins: ["https://api.example.com", "http://localhost:4000"],
+  });
+  assert.match(
+    csp,
+    /connect-src 'self' https:\/\/api\.example\.com http:\/\/localhost:4000/,
+  );
 });
 
 test("docsContentSecurityPolicy omits unsafe-inline scripts when nonce is present", () => {
