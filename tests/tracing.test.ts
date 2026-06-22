@@ -111,7 +111,9 @@ test("otelTracing starts a SERVER span with HTTP semantic-convention attributes"
   assert.equal(res.status, 200);
   assert.equal(spans.length, 1);
   const span = spans[0]!;
-  assert.equal(span.name, "GET /ok");
+  // Note: span rename is covered by the parameterized "/books/:id" test where
+  // creation-time name ("GET /books/42") differs from renamed name ("GET /books/:id").
+  // Asserting span.name here would be vacuous since the route template == the path.
   assert.equal(span.options?.kind, TRACING_SPAN_KIND_SERVER);
   assert.equal(span.attributes["http.request.method"], "GET");
   assert.equal(span.attributes["url.path"], "/ok");
@@ -208,12 +210,11 @@ test("otelTracing traces unmatched requests through the error response", async (
   assert.equal(res.status, 404);
   assert.equal(spans.length, 1);
   const span = spans[0]!;
+  // ctx.state.route was never set (unmatched), so span name stays as the path-based creation-time name.
   assert.equal(span.name, "GET /missing");
   // url.query is omitted by default (secure-by-default).
   assert.equal("url.query" in span.attributes, false);
   assert.equal(span.attributes["http.response.status_code"], 404);
-  // ctx.state.route was never set (unmatched), so span name stays as the path-based creation-time name.
-  assert.equal(span.name, "GET /missing");
   assert.equal(span.ended, true);
   assert.equal(span.endCount, 1);
 });
@@ -438,7 +439,11 @@ test("unknown HTTP method is normalized to _OTHER with method_original", async (
   const { tracer, spans } = makeFakeTracer();
   const app = new App({ hooks: otelTracing({ tracer }) });
   app.route({ method: "GET", path: "/x", responses: { 200: { description: "ok" } }, handler: () => ({ status: 200 as const, body: undefined }) });
-  // dispatch a non-standard method directly through the tracing hook path:
+  // PROPFIND hits the router as 405 (app.route() only accepts CANONICAL_HTTP_METHODS,
+  // so non-standard verbs can never match a registered route). This test therefore
+  // covers the startEntry/onRequest normalization path (where the span is created
+  // with method="_OTHER"). After FIX C, beforeHandle no longer has its own
+  // normalization branch — it reuses entry.method set at span creation.
   await app.fetch(new Request("http://x/x", { method: "PROPFIND" }));
   assert.equal(spans[0]!.attributes["http.request.method"], "_OTHER");
   assert.equal(spans[0]!.attributes["http.request.method_original"], "PROPFIND");
@@ -501,4 +506,54 @@ test("tracer whose span lacks updateName() does not throw", async () => {
   assert.equal(spans[0]!.attributes["http.route"], "/books/:id"); // attr still set
   // name stays as the creation-time path-based name since updateName is not available
   assert.equal(spans[0]!.name, "GET /books/42");
+});
+
+// ─── FIX A (TDD RED): framework route/operationId must win over decorate() ───
+
+test("FIX A: framework route/operationId values win over app.decorate() collisions", async () => {
+  // A user calling app.decorate('route', 'DECOY') must not overwrite the
+  // framework's low-cardinality route template that OTel/metrics depend on.
+  // Framework writes must happen AFTER the decoration spread.
+  const app = new App({ secureDefaults: false, acknowledgeInsecureDefaults: true });
+  (app as any).decorate("route", "DECOY");
+  (app as any).decorate("operationId", "DECOY_OP");
+  let seen: { route?: unknown; operationId?: unknown } = {};
+  app.route({
+    method: "GET",
+    path: "/books/:id",
+    operationId: "getBookById",
+    responses: { 200: { description: "ok" } },
+    handler: (ctx) => {
+      seen = { route: ctx.state.route, operationId: ctx.state.operationId };
+      return { status: 200 as const, body: undefined };
+    },
+  });
+  await app.fetch(new Request("http://x/books/42"));
+  assert.equal(seen.route, "/books/:id", "framework route must win over decorate() collision");
+  assert.equal(seen.operationId, "getBookById", "framework operationId must win over decorate() collision");
+});
+
+// ─── FIX B (TDD RED): error.type must use err.name for Error subclasses ──────
+
+test("FIX B: error.type uses err.name for Error subclasses with custom name property", async () => {
+  // err.name is the ECMAScript-authoritative source. When an Error subclass
+  // overrides the name property (common in application code to create semantic
+  // error types), err.name is what surface the class name to error.type.
+  // This test uses an anonymous Error subclass so that constructor.name is ""
+  // but err.name is explicitly set — verifying err.name takes priority.
+  const AnonValidationError = class extends Error {
+    override name = "ValidationError";
+  };
+  const { tracer, spans } = makeFakeTracer();
+  const app = new App({ hooks: otelTracing({ tracer }) });
+  app.route({
+    method: "GET",
+    path: "/validate",
+    operationId: "validate",
+    responses: { 500: { description: "err" } },
+    handler: () => { throw new AnonValidationError("bad input"); },
+  });
+  await app.fetch(new Request("http://x/validate"));
+  assert.equal(spans[0]!.attributes["error.type"], "ValidationError",
+    "error.type should reflect err.name, not constructor?.name (which is empty for anonymous classes)");
 });
