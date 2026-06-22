@@ -557,7 +557,7 @@ test("all workflows avoid unsafe pull_request_target and zizmor is enforced", as
   const zizmor = await readWorkspaceFile(".github/workflows/zizmor.yml");
   assert.match(zizmor, /^\s*pull_request:\s*$/m);
   assert.match(zizmor, /permissions:\s*\{\}/);
-  assert.match(zizmor, /zizmorcore\/zizmor-action@[0-9a-f]{40}\s+# v0\.5\.4/);
+  assert.match(zizmor, /zizmorcore\/zizmor-action@[0-9a-f]{40}\s+# v0\.5\.7/);
   assert.match(zizmor, /version:\s*v1\.25\.0/);
 });
 

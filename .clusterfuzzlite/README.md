@@ -40,10 +40,10 @@ fine), and every target runs and exits cleanly with no crash.
 # from the repo root — build the image
 docker build --platform linux/amd64 -t daloy-cflite -f .clusterfuzzlite/Dockerfile .
 
-# compile the fuzzers into ./build-out (FUZZING_LANGUAGE=javascript, no sanitizer)
+# compile the fuzzers into ./build-out
 mkdir -p build-out
 docker run --rm --platform linux/amd64 \
-  -e SANITIZER=none -e FUZZING_ENGINE=libfuzzer -e FUZZING_LANGUAGE=javascript \
+  -e SANITIZER=coverage -e FUZZING_ENGINE=libfuzzer -e FUZZING_LANGUAGE=javascript \
   -v "$(pwd)/build-out:/out" daloy-cflite compile
 
 # run one target for a bit (libFuzzer args after the target)
@@ -70,9 +70,10 @@ then overlays it into the project's `node_modules`. Two constraints drive this:
   devDependency tree leaves `@jazzer.js/fuzzer` without its native addon, so it
   is installed in a clean temp dir and copied in (no-clobber).
 
-JavaScript fuzzers use **no sanitizer** (`sanitizer: none` in the workflows /
-`SANITIZER=none` for `compile`); passing `address` errors with "JavaScript
-projects cannot be fuzzed with sanitizers."
+JavaScript fuzzers use ClusterFuzzLite's **coverage** sanitizer mode
+(`sanitizer: coverage` in the workflows / `SANITIZER=coverage` for `compile`);
+passing `address` errors with "JavaScript projects cannot be fuzzed with
+sanitizers."
 
 ## Maintaining the base-image pin
 
