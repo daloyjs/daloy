@@ -4199,8 +4199,7 @@ export function findRoutesMissingResponseBodySchema(
   const offending: Array<{ method: string; path: string; statuses: number[] }> = [];
   for (const route of routes) {
     const statuses: number[] = [];
-    const responses = route.responses as Record<number, { body?: unknown } | undefined> | undefined;
-    if (!responses) continue;
+    const responses = route.responses as Record<number, { body?: unknown } | undefined>;
     for (const key of Object.keys(responses)) {
       const status = Number(key);
       // Only successful responses can carry an over-exposing body, and 204/205
