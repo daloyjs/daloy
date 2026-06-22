@@ -278,13 +278,21 @@ new App({
       customCss: ":root { --scalar-color-accent: #2563eb; }",
       hideTestRequestButton: true,
     },
+    swagger: {
+      docExpansion: "none",
+      displayRequestDuration: true,
+    },
     tags: ["Docs"],
   },
 });
 ```
 
-Switch UIs with one word. `ui: "redoc"` renders Redoc instead, and its
-options are forwarded to `Redoc.init` via `docs.redoc`:
+Switch UIs with one word. Scalar and Swagger UI include developer request
+consoles for authenticated endpoints: Scalar selects the first configured
+OpenAPI security scheme by default, and Swagger UI keeps values from the
+Authorize dialog across reloads. `ui: "redoc"` renders Redoc instead, and its
+options are forwarded to `Redoc.init` via `docs.redoc`; Redoc displays security
+requirements but is a read-only reference UI, not a Try It console:
 
 ```ts
 new App({
@@ -299,7 +307,8 @@ new App({
 The `scalar` option is forwarded to Scalar's HTML API as JSON configuration,
 with Daloy keeping the live `openapiPath` as the source. Use it for themes,
 custom CSS, layout, auth defaults, and client visibility without copying the
-HTML helper. Redoc spins up a `blob:` Web Worker for search, so the
+HTML helper. The `swagger` option is forwarded to `SwaggerUIBundle` with Daloy
+owning `url` / `dom_id`. Redoc spins up a `blob:` Web Worker for search, so the
 auto-mounted `/docs` page widens its CSP with `worker-src 'self' blob:` for
 `ui: "redoc"` only — Scalar and Swagger UI keep the tighter default.
 
@@ -498,14 +507,14 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status
 
-DaloyJS is now in the **`1.0.0` beta** (`1.0.0-beta.1`). The public API is feature-complete and stable for the 1.0 line; from `1.0.0` onward, breaking changes follow SemVer and deprecations get at least one minor cycle. Small adjustments are still possible before the `1.0.0` GA if beta feedback surfaces something. The framework is already in use for production trials.
+DaloyJS is now in the **`1.0.0` beta** (`1.0.0-beta.2`). The public API is feature-complete and stable for the 1.0 line; from `1.0.0` onward, breaking changes follow SemVer and deprecations get at least one minor cycle. Small adjustments are still possible before the `1.0.0` GA if beta feedback surfaces something. The framework is already in use for production trials.
 
 **Release quality bar.** Every release ships with **≥90% line + function coverage and ≥90% branch coverage**, strict TypeScript, OpenSSF Scorecard, CodeQL + Opengrep dual SAST, zizmor workflow linting, and npm provenance. Coverage was relaxed from a former 100% gate so complex security work isn't blocked chasing throwaway tests for unreachable defensive branches or tsx source-map phantoms; see [AGENTS.md](AGENTS.md) for the policy.
 
 ### Routing, validation, and docs
 
 - Contract-first routing with Standard Schema validation (Zod 4, Valibot, ArkType, TypeBox) and OpenAPI 3.1 generated from a single source of truth.
-- Live OpenAPI 3.1 spec served as both JSON (`GET /openapi.json`) and YAML (`GET /openapi.yaml`) when `docs: true`, with a choice of Scalar (default), Swagger UI, or Redoc via `docs.ui`, plus Scalar theming/custom CSS via `docs.scalar` and Redoc options via `docs.redoc`.
+- Live OpenAPI 3.1 spec served as both JSON (`GET /openapi.json`) and YAML (`GET /openapi.yaml`) when `docs: true`, with a choice of Scalar (default), Swagger UI, or Redoc via `docs.ui`, plus Scalar theming/custom CSS/auth defaults via `docs.scalar`, Swagger UI options via `docs.swagger` (including persisted Authorize credentials), and Redoc options via `docs.redoc`.
 - Zero-config OpenAPI `info` autofill from `package.json` (Node / Bun) or `deno.json` / `deno.jsonc` (Deno); explicit `openapi.info` values always win.
 - RFC 7231 + RFC 5789 HTTP-method allowlist enforced inside `app.route()` (WebDAV, `TRACE`, `CONNECT` rejected at the framework boundary).
 - AI-friendly route metadata via optional `meta: { examples, extensions, summary, description, tags }`; examples are validated against your schemas at build time, surfaced as OpenAPI `examples` + `x-daloy-*` extensions, and dumped as `routes.json` / `routes.yaml` via `daloy inspect --ai`.

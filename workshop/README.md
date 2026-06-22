@@ -4,16 +4,20 @@ A self-guided, hands-on workshop for **senior TypeScript/Node developers** who a
 
 Clone the repo and everything is here: starter exercises, ordered coding steps, reference solutions, and instructions.
 
-This workshop tracks the current published release train: `create-daloy@1.0.0-beta.1` scaffolds templates with `@daloyjs/core@^1.0.0-beta.1`, and this workshop uses that same npm range so the exercises match the latest generated projects.
+This workshop tracks the current published release train: `create-daloy@1.0.0-beta.2` scaffolds templates with `@daloyjs/core@^1.0.0-beta.2`, and this workshop uses that same npm range so the exercises match the latest generated projects.
 
 ## Quick Start
 
 ```bash
 git clone <this-repo>
+cd <repo-root>
+pnpm install     # installs the whole workspace, including this workshop
+pnpm build       # compiles @daloyjs/core → dist/ (the workshop links to this local build)
 cd workshop
-pnpm install
 pnpm dev:4:0     # run exercise 0 (4-hour track) — http://localhost:3000/docs
 ```
+
+> **Why `pnpm build` first?** This workshop depends on `@daloyjs/core` via a `workspace:` link, so it imports the framework's compiled `dist/` from the monorepo. A fresh clone has no `dist/` yet (it's git-ignored), so build the core once up front — otherwise the first `pnpm dev:*` fails to resolve `@daloyjs/core`. You only need to rebuild when you change the framework itself; editing exercises never needs a rebuild.
 
 Want a fresh generated app beside the workshop for comparison? Use the same scaffolder release channel as the tutorials:
 
@@ -98,7 +102,7 @@ The `coding-steps/` files include mental models, before → after snippets, a co
 
 | Command                 | Purpose                                                              |
 | ----------------------- | -------------------------------------------------------------------- |
-| `pnpm install`          | Install dependencies (`@daloyjs/core@^1.0.0-beta.1`, `zod`, `tsx`)    |
+| `pnpm install`          | Install dependencies (`@daloyjs/core@^1.0.0-beta.2`, `zod`, `tsx`)    |
 | `pnpm dev:4:N`          | Run 4-hour exercise N with `tsx --watch` on port 3000                |
 | `pnpm dev:8:N`          | Run 8-hour exercise N with `tsx --watch` on port 3000                |
 | `pnpm dev:sol:4:N`      | Run the 4-hour reference solution for exercise N                     |

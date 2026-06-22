@@ -386,7 +386,7 @@ Items kept here briefly when shipped so the history remains auditable.
 - **Per-route capability-based body limits** derived from the route schema. *(tracked)*
 - **SLSA build-level-3 attestations** beyond the existing npm provenance. *(tracked)*
 - **Registry-signature verification for the pnpm lockfile.** *(tracked — blocked on a pnpm-native verifier; npm's `npm audit signatures` expects an npm lockfile and re-resolves a divergent graph.)*
-- **Continuous fuzzing** of JSON parser, header sanitizers, router, multipart parser via Jazzer.js + OSS-Fuzz. *(tracked)*
+- **Continuous fuzzing** of the untrusted-input parsers (JSON gate, cookie/header sanitizers, pagination cursor, cron, IP) via Jazzer.js, wired through [ClusterFuzzLite](https://google.github.io/clusterfuzzlite/) ([`.clusterfuzzlite/`](.clusterfuzzlite/)): a per-PR `code-change` run on `src/` changes plus a daily batch run. **(shipped)**
 - **Third-party audit** once the API stabilizes around `1.0`. *(tracked)*
 - **Public bug bounty** through huntr.dev (or equivalent) after the audit. *(tracked)*
 
@@ -407,6 +407,7 @@ We treat the package supply chain as an attack surface. Most controls below were
 - **`zizmor`** statically analyses every workflow on every PR.
 - **CodeQL** runs JS/TS and `actions` queries.
 - **Opengrep** runs a second SAST engine (Aikido's LGPL-2.1 fork of Semgrep) with `p/security-audit`, `p/owasp-top-ten`, `p/cwe-top-25`, `p/javascript`, `p/typescript`, `p/nodejs`, `p/secrets`. Binary is verified with cosign keyless against `opengrep/opengrep`. See ["Launching Opengrep"](https://www.aikido.dev/blog/launching-opengrep-why-we-forked-semgrep).
+- **ClusterFuzzLite** continuously fuzzes the untrusted-input parsers (JSON gate, cookie/header sanitizers, pagination cursor, cron, IP) with Jazzer.js: a per-PR `code-change` run on `src/` changes plus a daily batch run. Each target asserts the parser's documented contract, so a declared rejection is fine but any other throw or hang is a finding. Targets live in [`.clusterfuzzlite/`](.clusterfuzzlite/).
 - **OpenSSF Scorecard** publishes continuously.
 - **Daily SCA** runs `pnpm audit --prod` against the committed lockfile (cadence required by SOC 2 CC7.1; see Aikido's [SOC 2 automation guide](https://www.aikido.dev/blog/a-guide-to-automating-technical-vulnerability-management-for-soc-2)).
 - **`gitleaks` secret scan** on every PR/push plus a daily full-history sweep. Binary verified by SHA-256.

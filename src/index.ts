@@ -393,6 +393,8 @@ export type {
   ScalarTheme,
   RedocConfiguration,
   RedocHtmlOptions,
+  SwaggerUiConfiguration,
+  SwaggerUiHtmlOptions,
   AsyncApiHtmlOptions,
   DocsAssetOptions,
 } from "./docs.js";

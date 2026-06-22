@@ -13,6 +13,57 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [1.0.0-beta.2] - 2026-06-22
+
+The third **1.0.0 beta**. The public API remains feature-complete and stable for
+the 1.0 line, but the release train stays open for final polish before GA.
+Projects on `^1.0.0-beta.1` upgrade with a version bump. `@daloyjs/core`,
+`create-daloy`, and the JSR package `@daloyjs/daloy` move to `1.0.0-beta.2` in
+lockstep, and every `create-daloy` template now pins
+`@daloyjs/core@^1.0.0-beta.2`.
+
+### Added
+
+- **Continuous fuzzing via ClusterFuzzLite.** The untrusted-input parsers in
+  `@daloyjs/core` are now continuously fuzzed with Jazzer.js, wired through
+  [ClusterFuzzLite](https://google.github.io/clusterfuzzlite/): a per-PR
+  `code-change` run on `src/` changes plus a daily batch run that persists a
+  growing corpus. Six targets in [`.clusterfuzzlite/`](.clusterfuzzlite/) cover
+  `safeJsonParse` (prototype-pollution gate), the cookie/header sanitizers,
+  `decodeCursor`, `parseCron`, and `parseIp`. Each target asserts the function's
+  documented contract — a declared rejection (e.g. `BadRequestError` on
+  malformed input) is correct behavior, so only an undocumented throw or a hang
+  is a finding. This is also what earns the OpenSSF Scorecard **Fuzzing** check.
+  The OSS-Fuzz base image is digest-pinned and all workflow actions are
+  SHA-pinned.
+
+### Removed
+
+- **The deprecated `--template vercel-edge` scaffolder alias.** The template was
+  renamed `vercel-edge` → `vercel` back in `0.38.2`; the leftover back-compat
+  alias (and its test) are now gone. Scaffold with `--template vercel`. This is a
+  `create-daloy` CLI change only — the framework's `@daloyjs/core/vercel` adapter
+  surface is unchanged.
+
+### Changed
+
+- **Version: `1.0.0-beta.1` → `1.0.0-beta.2`** across the lockstep
+  packages (`@daloyjs/core`, `create-daloy`, and JSR `@daloyjs/daloy`), with the
+  `create-daloy` templates, workshop, README status line, and website version
+  reference synced to `1.0.0-beta.2`.
+- **Swagger UI option types are exported from the package barrel.**
+  `SwaggerUiConfiguration` and `SwaggerUiHtmlOptions` were already documented
+  and implemented in `@daloyjs/core/docs`; they now flow through the root
+  `@daloyjs/core` type export list as well.
+- **OpenSSF Scorecard now uses an optional `SCORECARD_TOKEN`** (a read-only admin
+  PAT) for fuller Branch-Protection evaluation, falling back to `GITHUB_TOKEN`
+  when the secret is absent — safe to run before the secret exists.
+
+### Notes
+
+- Source files carry an internal formatting normalization (no behavior change)
+  and a TSDoc wording fix (“Vercel Edge Functions” → “Vercel Functions”).
+
 ## [1.0.0-beta.1] - 2026-06-21
 
 The second **1.0.0 beta** — a small, security-leaning patch on top of
@@ -1451,7 +1502,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.1...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.2...HEAD
+[1.0.0-beta.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.0...v1.0.0-beta.1
 [1.0.0-beta.0]: https://github.com/daloyjs/daloy/compare/v0.44.0...v1.0.0-beta.0
 [0.44.0]: https://github.com/daloyjs/daloy/compare/v0.43.0...v0.44.0
