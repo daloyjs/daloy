@@ -3406,13 +3406,18 @@ export class App<
       const state = ctx.state as Record<string, unknown>;
       state.requestId = requestId;
       state.log = log;
+      // Apply user decorations first so that the framework-owned reserved keys
+      // written below always win over any `app.decorate('route', ...)` collision.
+      // OTel `http.route`, metric route labels, and structured logging depend on
+      // the framework value — a user decoration must never silently shadow it.
+      if (this.decorationsCount !== 0) Object.assign(state, this.decorations);
       // Expose the matched low-cardinality template + operationId so
       // observability hooks (tracing http.route, metric route labels) read a
       // first-class source instead of regex-reconstructing the path. Two
       // string|undefined writes keep ctx.state's hidden class monomorphic.
+      // Written AFTER the decoration spread so framework values always win.
       state.route = def.path;
       state.operationId = def.operationId;
-      if (this.decorationsCount !== 0) Object.assign(state, this.decorations);
 
       if (allHooks.beforeHandle !== undefined) {
         const beforeResult = allHooks.beforeHandle(ctx);

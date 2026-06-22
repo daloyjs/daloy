@@ -67,7 +67,11 @@ export interface TracingSpan {
   setStatus(status: { code: number; message?: string }): void;
   recordException?(err: unknown): void;
   end(endTime?: number): void;
-  /** OTel `Span.updateName`. Optional: tracers without it keep the creation-time name. */
+  /**
+   * OTel `Span.updateName`. Optional: tracers without it keep the creation-time name.
+   * @param name - The new span display name (e.g. `GET /books/:id`); replaces the
+   *   creation-time name in the backend.
+   */
   updateName?(name: string): void;
 }
 
@@ -130,6 +134,8 @@ interface TracingEntry {
   span: TracingSpan;
   ended: boolean;
   errored: boolean;
+  /** Normalized HTTP method (one of {@link KNOWN_HTTP_METHODS} or `"_OTHER"`). Cached at span creation so `beforeHandle` can reuse it without recomputing. */
+  method: string;
 }
 
 const REQUEST_TO_ENTRY: WeakMap<Request, TracingEntry> = new WeakMap();
@@ -182,7 +188,10 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
     const name = opts.spanName ? opts.spanName(req) : defaultSpanName(req, url, method);
 
     const attrs: TracingAttributes = { "http.request.method": method };
-    if (method === "_OTHER") attrs["http.request.method_original"] = rawMethod;
+    // Cap the stored raw value at 16 chars (a standard method is ≤7 chars, so real
+    // traffic is never truncated). This prevents a single oversized method token
+    // from bloating a span with unbounded data.
+    if (method === "_OTHER") attrs["http.request.method_original"] = rawMethod.slice(0, 16);
     if (url) {
       attrs["url.path"] = url.pathname;
       attrs["url.scheme"] = url.protocol.replace(/:$/, "");
@@ -209,7 +218,7 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
     }, parentContext);
     opts.onSpanStart?.(req, span);
 
-    const entry: TracingEntry = { span, ended: false, errored: false };
+    const entry: TracingEntry = { span, ended: false, errored: false, method };
     REQUEST_TO_ENTRY.set(req, entry);
     return entry;
   };
@@ -225,11 +234,11 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
       if (typeof route === "string" && route.length > 0) {
         entry.span.setAttribute("http.route", route);
         // Only rename when no custom spanName override is in use — the caller
-        // chose their own name and we must not clobber it.
+        // chose their own name and we must not clobber it. Reuse the normalized
+        // method stored on the entry at span-creation time (avoids redundant
+        // toUpperCase + Set.has per request on the hot path).
         if (!opts.spanName) {
-          const method = ctx.request.method.toUpperCase();
-          const normalized = KNOWN_HTTP_METHODS.has(method) ? method : "_OTHER";
-          entry.span.updateName?.(`${normalized} ${route}`);
+          entry.span.updateName?.(`${entry.method} ${route}`);
         }
       }
     },
@@ -240,7 +249,10 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
       entry.errored = true;
       if (err instanceof Error) {
         entry.span.recordException?.(err);
-        entry.span.setAttribute("error.type", err.constructor?.name ?? "_OTHER");
+        // `err.name` is the ECMAScript-authoritative source for the error class
+        // name (used by Error.prototype.toString). Fall back to constructor.name
+        // for the rare case where name is explicitly cleared, then "_OTHER".
+        entry.span.setAttribute("error.type", err.name || err.constructor?.name || "_OTHER");
         entry.span.setStatus({ code: TRACING_SPAN_STATUS_ERROR, message: err.message });
       } else {
         entry.span.setAttribute("error.type", "_OTHER");

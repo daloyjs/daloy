@@ -244,7 +244,17 @@ export interface AppState {
    */
   route?: string;
   /**
-   * The matched route's `operationId`, when declared; otherwise `undefined`.
+   * The matched route's `operationId` as declared in {@link RouteDefinition}, or
+   * `undefined` when no `operationId` was provided. For example, a route declared
+   * with `operationId: "getBookById"` sets this to `"getBookById"`.
+   *
+   * Primary uses:
+   * - OTel attribute resolvers (e.g. a custom `attributesFromRequest` that stamps
+   *   `"rpc.method"` for service-graph visualizations).
+   * - Metric `operation` labels in dashboards that want per-operation granularity
+   *   beyond the route template.
+   * - Structured access-log fields for correlating logs with OpenAPI operations.
+   *
    * @since (next)
    */
   operationId?: string;
