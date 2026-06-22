@@ -89,11 +89,15 @@ export interface OtelTracingOptions {
   /** OTel-compatible tracer (e.g. `trace.getTracer("my-service")`). */
   tracer: TracingTracer;
   /**
-   * Override the span name. Default: `"<METHOD> <pathname>"`.
+   * Override the default span name.
    *
-   * If you have a route template (e.g. `/users/:id`), you can read it from
-   * `ctx.request.url` plus your routing knowledge — DaloyJS doesn't expose the
-   * matched template here to keep the hook decoupled from the router internals.
+   * By default `otelTracing` renames the span to `"{METHOD} {route}"` in
+   * `beforeHandle`, using `ctx.state.route` (the matched route template, e.g.
+   * `GET /users/:id`), which keeps cardinality low automatically. Most apps do
+   * **not** need this option.
+   *
+   * Supply a function here only when you need a custom naming strategy that
+   * differs from the automatic `{method} {ctx.state.route}` default.
    */
   spanName?: (req: Request) => string;
   /** Extra attributes derived from the request. Merged on top of the defaults. */
