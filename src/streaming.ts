@@ -31,9 +31,15 @@
 
 const TEXT_ENCODER = new TextEncoder();
 
-/** A single SSE event. `data` may be a string or any JSON-serializable value. */
+/**
+ * A single SSE event or control frame.
+ *
+ * `data` may be a string or any JSON-serializable value. It is optional so
+ * callers can emit valid comment-only or retry-only SSE frames for keep-alive
+ * and reconnection control without sending an event payload.
+ */
 export interface SSEMessage {
-  data: unknown;
+  data?: unknown;
   event?: string;
   id?: string;
   /** Reconnection delay in milliseconds. */

@@ -15,8 +15,8 @@
  * - {@link buildLinkHeader} / {@link buildPageLinks} — assemble a Web-standard
  *   `Link` header, with CRLF / angle-bracket header-injection guards baked in.
  * - {@link paginationQuery} — a Standard Schema validator for the `cursor` +
- *   `limit` query parameters that both validates at runtime (clamping `limit`
- *   to a safe range) **and** advertises itself to the OpenAPI generator via a
+ *   `limit` query parameters that both validates runtime page-size bounds
+ *   **and** advertises itself to the OpenAPI generator via a
  *   `toJSONSchema()` method, so `request: { query: paginationQuery() }` wires
  *   the parameters into the contract with no extra code.
  *
@@ -249,13 +249,13 @@ export interface PaginationQueryOptions {
   defaultLimit?: number;
   /** Minimum accepted page size. Default: `1`. */
   minLimit?: number;
-  /** Maximum accepted page size (also caps over-large requests). Default: `100`. */
+  /** Maximum accepted page size. Over-large requests are rejected. Default: `100`. */
   maxLimit?: number;
 }
 
 /** Validated output of {@link paginationQuery}. */
 export interface PaginationParams {
-  /** The resolved page size, clamped to `[minLimit, maxLimit]`. */
+  /** The resolved page size after validation against `[minLimit, maxLimit]`. */
   limit: number;
   /** The opaque cursor, if the client supplied one. */
   cursor?: string;
@@ -278,11 +278,12 @@ export interface PaginationQuerySchema extends StandardSchemaV1<
  * Build a Standard Schema validator for cursor-pagination query parameters.
  *
  * Use it as a route's `request.query`. At runtime it parses and validates
- * `limit` (coerced from its string query value to an integer and clamped to
- * `[minLimit, maxLimit]`, defaulting to `defaultLimit` when absent) and passes
- * `cursor` through as an optional opaque string. Because it also exposes
- * `toJSONSchema()`, the same call wires both parameters into the generated
- * OpenAPI document and typed client — no duplicate parameter declarations.
+ * `limit` (coerced from its string query value to an integer, rejected when
+ * outside `[minLimit, maxLimit]`, and defaulting to `defaultLimit` when absent)
+ * and passes `cursor` through as an optional opaque string. Because it also
+ * exposes `toJSONSchema()`, the same call wires both parameters into the
+ * generated OpenAPI document and typed client — no duplicate parameter
+ * declarations.
  *
  * @example
  * ```ts

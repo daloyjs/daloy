@@ -331,6 +331,11 @@ test("htmlResponse can emit a self-hosted nonce-based docs CSP", () => {
   assert.doesNotMatch(csp, /'unsafe-inline'/);
 });
 
+test("htmlResponse forwards allowBlobWorkers for custom Redoc routes", () => {
+  const res = htmlResponse("<p>ok</p>", { allowBlobWorkers: true });
+  assert.match(res.headers.get("content-security-policy") ?? "", /worker-src 'self' blob:/);
+});
+
 test("docsContentSecurityPolicy can target custom asset origins", () => {
   const csp = docsContentSecurityPolicy({ assetOrigins: ["https://docs.example.com"], scriptNonce: "abc" });
   assert.match(csp, /script-src 'self' https:\/\/docs\.example\.com 'nonce-abc'/);

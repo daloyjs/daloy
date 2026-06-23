@@ -652,6 +652,7 @@ export function htmlResponse(
           connectOrigins: opts.connectOrigins,
           scriptNonce: opts.scriptNonce,
           allowInlineStyles: opts.allowInlineStyles,
+          allowBlobWorkers: opts.allowBlobWorkers,
         }),
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",

@@ -2,12 +2,12 @@
 # daloyjs-pre-push-contract-hook v1
 #
 # Localhost-only contract gate. Rejects a push whose OpenAPI contract has
-# error-level issues: missing or duplicate operationIds, response examples that
-# don't match their schema, accidental body schemas on safe methods, or routes
-# with no declared responses. Catches the class of drift `tsc` can't see before
-# it leaves your machine, with CI as the backstop.
+# error-level issues: missing or duplicate operationIds, examples that don't
+# match their schema, or routes with no declared responses. Safe-method body
+# schemas are reported as warnings. Catches the class of drift `tsc` can't see
+# before it leaves your machine, with CI as the backstop.
 #
-# Enable once per clone:  npm run hooks:install   (sets core.hooksPath here)
+# Enable once per clone:  pnpm hooks:install   (sets core.hooksPath here)
 # Bypass once:            git push --no-verify
 DALOY="./node_modules/.bin/daloy"
 if [ ! -x "$DALOY" ]; then

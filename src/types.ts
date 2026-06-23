@@ -386,8 +386,8 @@ export interface RouteDefinition<
    *
    * - implicitly treats the route as {@link RouteDefinition.deprecated}
    *   (the OpenAPI operation is emitted with `deprecated: true`);
-   * - emits a `Deprecation: true` response header (RFC 8594 / the
-   *   `Deprecation` HTTP header field) on every response from the route; and
+   * - emits a `Deprecation: true` response header on every response from the
+   *   route; and
    * - emits a `Sunset: <IMF-fixdate>` response header normalized to an HTTP
    *   date so clients and gateways can schedule migration.
    *

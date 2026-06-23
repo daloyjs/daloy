@@ -60,6 +60,12 @@ test("sseStream sanitizes CRLF in event/id fields", async () => {
   assert.match(text, /id: i d\n/);
 });
 
+test("sseStream allows comment-only and retry-only control frames", async () => {
+  const stream = sseStream([{ comment: "keep\nalive" }, { retry: 2500 }]);
+  const text = await collect(stream);
+  assert.equal(text, ": keep\n: alive\n\nretry: 2500\n\n");
+});
+
 test("sseStream is pull-driven and respects backpressure", async () => {
   let yielded = 0;
   const stream = sseStream(async function* () {

@@ -4529,7 +4529,7 @@ function serializeResult(
     const treatAsJson = !explicitCt || explicitCt.includes("application/json");
     if (!explicitCt) headers.set("content-type", "application/json");
 
-    // RFC 8594 deprecation lifecycle headers. A route with an explicit
+    // Deprecation lifecycle headers. A route with an explicit RFC 8594
     // `sunset` date is implicitly deprecated. Never overwrite a value the
     // handler set deliberately.
     if (def.deprecated === true || def.sunset !== undefined) {

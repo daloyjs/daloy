@@ -7,7 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx/esm --test tests/**/*.test.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts",
     "contract": "daloy inspect --check src/index.ts",
     "audit": "pnpm audit --prod",
     "hooks:install": "git config core.hooksPath .githooks"

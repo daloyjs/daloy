@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx/esm src/dev.ts",
+    "dev": "node --import tsx src/dev.ts",
     "deploy": "vercel deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx/esm --test tests/**/*.test.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts",
     "contract": "daloy inspect --check api/index.ts",
     "audit": "pnpm audit --prod",
     "hooks:install": "git config core.hooksPath .githooks"
