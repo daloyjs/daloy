@@ -230,6 +230,7 @@ export default function HomePage() {
     "https://jsr.io/@daloyjs/daloy",
     "https://x.com/daloyjs",
     "https://bsky.app/profile/daloyjs.dev",
+    "https://mastodon.social/@daloyjs",
     "https://www.instagram.com/daloyjs",
     "https://daloyjs.substack.com",
     "https://dev.to/daloyjs",
@@ -638,6 +639,7 @@ export default function HomePage() {
               View source
             </a>
           </div>
+          <a rel="me" href="https://mastodon.social/@daloyjs">Mastodon</a>
         </div>
       </section>
 

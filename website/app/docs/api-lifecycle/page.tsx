@@ -8,13 +8,14 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "API lifecycle & breaking changes",
   description:
-    "Deprecate and sunset DaloyJS routes with RFC 8594 Deprecation / Sunset headers, then catch breaking API changes in CI with diffOpenAPI, the daloy diff CLI, and the verify:breaking-changes gate.",
+    "Deprecate and sunset DaloyJS routes with Deprecation and RFC 8594 Sunset headers, then catch breaking API changes in CI with diffOpenAPI, the daloy diff CLI, and the verify:breaking-changes gate.",
   path: "/docs/api-lifecycle",
   keywords: [
     "API versioning",
     "breaking change detection",
     "OpenAPI diff",
     "RFC 8594",
+    "RFC 9745",
     "Deprecation header",
     "Sunset header",
     "deprecated route",
@@ -51,8 +52,8 @@ export default function Page() {
       <p>
         Set <code>deprecated: true</code> on a route to mark it in the OpenAPI
         document (the operation gets <code>deprecated: true</code>) and to emit
-        an RFC 8594 <code>Deprecation: true</code> response header on every
-        response from that route.
+        a <code>Deprecation: true</code> response header on every response from
+        that route.
       </p>
       <CodeBlock
         code={`app.route({
@@ -84,17 +85,19 @@ export default function Page() {
   handler: () => ({ status: 200, body: { ok: true } }),
 });
 
-// Response headers (RFC 8594):
+// Response headers:
 //   Deprecation: true
 //   Sunset: Thu, 31 Dec 2026 00:00:00 GMT`}
       />
       <p>
-        The <code>Sunset</code> value is normalized to an IMF-fixdate (HTTP
-        date) once, at <code>app.route(...)</code> registration time, so a typo
-        fails fast instead of silently shipping a malformed header. The OpenAPI
-        operation also carries the normalized value as an <code>x-sunset</code>{" "}
-        vendor extension. If your handler sets its own <code>Deprecation</code>{" "}
-        or <code>Sunset</code> header, the framework never overwrites it.
+        The RFC 8594 <code>Sunset</code> value is normalized to an IMF-fixdate
+        (HTTP date) once, at <code>app.route(...)</code> registration time, so
+        a typo fails fast instead of silently shipping a malformed header. The
+        OpenAPI operation also carries the normalized value as an{" "}
+        <code>x-sunset</code> vendor extension. If your handler sets its own{" "}
+        <code>Deprecation</code> or <code>Sunset</code> header, the framework
+        never overwrites it. That lets teams emit a date-valued RFC 9745{" "}
+        <code>Deprecation</code> header when they need that stricter form.
       </p>
 
       <h2>Detecting breaking changes</h2>

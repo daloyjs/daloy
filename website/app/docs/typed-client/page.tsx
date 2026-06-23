@@ -137,7 +137,7 @@ if (r.status === 200) {
 
       <CodeBlock
         language="bash"
-        code={`pnpm add -D @hey-api/openapi-ts prettier`}
+        code={`pnpm add -D @hey-api/openapi-ts prettier tsx`}
       />
 
       <CodeBlock
@@ -171,14 +171,14 @@ export default defineConfig({
 
       <h2>Using the generated SDK</h2>
       <CodeBlock
-        code={`import { client } from "./generated/client";
-import { getBookById } from "./generated/client/sdk.gen";
+        code={`import { client } from "./generated/client/client.gen.js";
+import { getBookById } from "./generated/client/sdk.gen.js";
 
 client.setConfig({ baseUrl: "https://api.example.com" });
 
 const { data, error } = await getBookById({ path: { id: "1" } });
 if (error) console.error(error);
-else console.log(data.title);`}
+else if (data) console.log(data.title);`}
       />
 
       <h2>Which one should I use?</h2>

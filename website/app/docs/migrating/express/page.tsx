@@ -1173,7 +1173,7 @@ await app.ready();`}
               <code>res.send(&quot;text&quot;)</code>
             </td>
             <td>
-              <code>return {"{ status: 200, body: &quot;text&quot; }"}</code>
+              <code>return {`{ status: 200, body: "text" }`}</code>
             </td>
           </tr>
           <tr>
@@ -1192,7 +1192,7 @@ await app.ready();`}
               <code>
                 return{" "}
                 {
-                  "{ status: 200, headers: { &quot;x-foo&quot;: &quot;bar&quot; }, body }"
+                  `{ status: 200, headers: { "x-foo": "bar" }, body }`
                 }
               </code>{" "}
               or <code>ctx.set.headers.set(...)</code>
@@ -1206,7 +1206,7 @@ await app.ready();`}
               <code>
                 return{" "}
                 {
-                  "{ status: 302, headers: { location: &quot;/login&quot; }, body: undefined }"
+                  `{ status: 302, headers: { location: "/login" }, body: undefined }`
                 }
               </code>
             </td>

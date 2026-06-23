@@ -151,9 +151,9 @@ app.route({
         converge={{
           eyebrow: "ctx.state.tenant",
           label: "Validated, normalized id",
-          detail: "[a-z0-9_-], 1 to 63 chars",
+          detail: "starts/ends alphanumeric, 1 to 63 chars",
         }}
-        caption="Pass one resolver or an array tried in order. The first non-empty result is normalized to a conservative charset before it is stored, so a spoofable header value cannot smuggle separators into keys or log lines. tenantFromHeader is opt-in and only safe behind a trusted proxy."
+        caption="Pass one resolver or an array tried in order. The first non-empty result is normalized to a conservative tenant-id grammar before it is stored, so a spoofable header value cannot smuggle separators into keys or log lines. tenantFromHeader is opt-in and only safe behind a trusted proxy."
       />
 
       <div className="overflow-x-auto">
@@ -261,8 +261,9 @@ tenancy({
               <td>trim + lowercase + strict charset</td>
               <td>
                 Validate/canonicalize the raw id. Return <code>undefined</code>{" "}
-                to reject. The default accepts only{" "}
-                <code>[a-z0-9_-]</code>, 1–63 chars.
+                to reject. The default accepts 1-63 lowercase alphanumeric
+                characters, with <code>-</code> and <code>_</code> allowed only
+                inside the id.
               </td>
             </tr>
             <tr>
@@ -345,10 +346,10 @@ declare module "@daloyjs/core" {
         </li>
         <li>
           <strong>Format-validated ids.</strong> Resolved ids are normalized to
-          a conservative <code>[a-z0-9_-]</code> charset before they are stored
-          or used as a key. A spoofable header value cannot smuggle newlines,{" "}
-          <code>:</code>, <code>/</code>, or <code>*</code> into rate-limit
-          keys, cache keys, or log lines (key/log injection, cache poisoning).
+          a conservative tenant-id grammar before they are stored or used as a
+          key. A spoofable header value cannot smuggle newlines, <code>:</code>,{" "}
+          <code>/</code>, or <code>*</code> into rate-limit keys, cache keys, or
+          log lines (key/log injection, cache poisoning).
         </li>
         <li>
           <strong>No enumeration.</strong> A resolved-but-unknown tenant is{" "}

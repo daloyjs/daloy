@@ -103,9 +103,9 @@ app.route({
         request: { body: { title: "Dune" } },
         response: { status: 201, body: { id: "1", title: "Dune" } },
       },
-      missingTitle: {
-        summary: "Validation failure",
-        request: { body: { title: "" } },
+      duplicateTitle: {
+        summary: "Duplicate title",
+        request: { body: { title: "Dune" } },
         response: { status: 400 },
       },
     },
