@@ -328,6 +328,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/email/mailgun", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/email/mailtrap", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/payments/stripe", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments/shopify", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments/braintree", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments/authorize-net", changeFrequency: "monthly", priority: 0.7 },

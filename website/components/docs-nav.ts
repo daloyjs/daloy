@@ -106,6 +106,7 @@ export const docsNav: DocsNavSection[] = [
     title: "Payments",
     items: [
       { title: "Overview", href: "/docs/payments" as Route },
+      { title: "Stripe", href: "/docs/payments/stripe" as Route },
       { title: "Shopify", href: "/docs/payments/shopify" as Route },
       { title: "Braintree (PayPal)", href: "/docs/payments/braintree" as Route },
       { title: "Authorize.Net", href: "/docs/payments/authorize-net" as Route },

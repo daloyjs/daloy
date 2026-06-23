@@ -526,8 +526,9 @@ export default function Page() {
         <li>
           <strong>SAQ scope.</strong> The strongest control here is{" "}
           <em>not seeing the PAN at all</em>. The payments docs (Stripe,
-          Authorize.Net, Square) document the redirect/hosted-fields patterns
-          that keep you in SAQ-A or SAQ-A-EP rather than SAQ-D.
+          Braintree, Authorize.Net, Square) document the redirect, hosted
+          checkout, and hosted-fields patterns that keep you in SAQ-A or
+          SAQ-A-EP rather than SAQ-D.
         </li>
       </ul>
 

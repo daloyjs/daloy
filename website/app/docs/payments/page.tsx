@@ -43,6 +43,7 @@ export default function Page() {
           eyebrow: "business logic",
         }}
         branches={[
+          { label: "Stripe", detail: "stripe" },
           { label: "Shopify", detail: "shopify-api-node" },
           { label: "Braintree", detail: "braintree" },
           { label: "Authorize.Net", detail: "authorizenet" },
@@ -55,6 +56,13 @@ export default function Page() {
         caption="Each provider SDK lives behind a small plugin on app.state, so your handlers stay provider-agnostic and you can swap or A/B gateways without rewriting routes."
       />
       <ul>
+        <li>
+          <Link href={"/docs/payments/stripe" as Route}>Stripe</Link>: create
+          hosted Checkout Sessions, redirect with{" "}
+          <code>@stripe/stripe-js</code>, verify{" "}
+          <code>Stripe-Signature</code> webhooks over the raw body, and use
+          idempotency keys with the official <code>stripe</code> Node SDK.
+        </li>
         <li>
           <Link href={"/docs/payments/shopify" as Route}>Shopify</Link>: read
           products, create orders, and handle Shopify webhooks via the community{" "}
@@ -118,7 +126,7 @@ export default function Page() {
         </li>
       </ul>
       <p>
-        More provider guides (Stripe, PayPal Checkout) will land here. Each
+        A direct PayPal Checkout guide will land here later. Each provider
         follows the same plugin shape so you can drop a new one into an existing
         application without rewriting routes.
       </p>
