@@ -34,8 +34,8 @@ export default function Page() {
         application configuration from a source you choose, validates the merged
         object against a Standard Schema validator (Zod, Valibot, ArkType,
         TypeBox, and others), and aggregates <strong>every</strong> validation
-        issue into one structured error printed to stderr before the process
-        exits.
+        issue into one structured error printed to stderr before startup
+        continues.
       </p>
       <p>
         The point is to fail fast and loud: a misconfigured deployment should
@@ -101,8 +101,28 @@ export const config = await defineConfig({ schema: Config });
       <CodeBlock
         language="text"
         code={`defineConfig(): configuration is invalid (2 issues)
-  - PORT: Expected number, received nan
-  - DATABASE_URL: Invalid url`}
+  - PORT: Invalid input: expected number, received NaN
+  - DATABASE_URL: Invalid URL`}
+      />
+
+      <h2>Use the validated config</h2>
+      <p>
+        Load configuration before constructing the app, then pass the typed
+        values into DaloyJS options and your runtime adapter:
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`import { App } from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+import { config } from "./config.js";
+
+const app = new App({
+  env: config.NODE_ENV,
+  openapi: { info: { title: "API", version: "1.0.0" } },
+  docs: config.NODE_ENV !== "production",
+});
+
+serve(app, { port: config.PORT });`}
       />
 
       <h2>Choosing a source</h2>
@@ -111,6 +131,11 @@ export const config = await defineConfig({ schema: Config });
         The built-in sources are intentionally narrow; anything more elaborate
         (Vault, Doppler, AWS Secrets Manager) arrives through the{" "}
         <code>custom</code> source with an async resolver.
+      </p>
+      <p>
+        File sources read through <code>node:fs/promises</code>. On edge
+        runtimes, prefer <code>env</code>, <code>object</code>, or{" "}
+        <code>custom</code> sources supplied by the platform.
       </p>
       <CodeBlock
         language="ts"
@@ -127,16 +152,42 @@ await defineConfig({
   source: { kind: "file", path: "./config.json" },
 });
 
+// Use a custom parser for dotenv, INI, TOML, or another text format
+await defineConfig({
+  schema: Config,
+  source: {
+    kind: "file",
+    path: "./config.env",
+    parse: (text) =>
+      Object.fromEntries(
+        text
+          .trim()
+          .split("\\n")
+          .map((line) => {
+            const [key, ...value] = line.split("=");
+            return [key.trim(), value.join("=").trim()];
+          }),
+      ),
+  },
+});
+
 // Validate an in-memory object
 await defineConfig({
   schema: Config,
-  source: { kind: "object", data: { PORT: "3000" } },
+  source: {
+    kind: "object",
+    data: {
+      PORT: "3000",
+      DATABASE_URL: "https://example.com/db",
+      NODE_ENV: "test",
+    },
+  },
 });
 
 // Pull from an async secrets resolver
 await defineConfig({
   schema: Config,
-  source: { kind: "custom", resolve: () => fetchSecretsFromVault() },
+  source: { kind: "custom", resolve: async () => fetchSecretsFromVault() },
 });`}
       />
 

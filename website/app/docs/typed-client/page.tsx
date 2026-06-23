@@ -131,7 +131,10 @@ if (r.status === 200) {
         ]}
       />
 
-      <CodeBlock language="bash" code={`pnpm add -D @hey-api/openapi-ts`} />
+      <CodeBlock
+        language="bash"
+        code={`pnpm add -D @hey-api/openapi-ts prettier`}
+      />
 
       <CodeBlock
         code={`// openapi-ts.config.ts
@@ -139,7 +142,7 @@ import { defineConfig } from "@hey-api/openapi-ts";
 
 export default defineConfig({
   input: "./generated/openapi.json",
-  output: { path: "./generated/client", format: "prettier" },
+  output: { path: "./generated/client", postProcess: ["prettier"] },
   plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
 });`}
       />

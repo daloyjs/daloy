@@ -44,11 +44,11 @@ export default function Page() {
         <strong>
           DaloyJS is excellent at the &quot;your code answers an HTTP
           request&quot; role
-        </strong>{" "}
-        , API server, microservice, BFF, webhook receiver, WebSocket server, MCP
-        server. It is <strong>not</strong>a router that proxies traffic to other
-        services, a load balancer, or a page-rendering UI framework. For those,
-        pair it with something purpose-built and let DaloyJS be the smart
+        </strong>
+        : API server, microservice, BFF, webhook receiver, WebSocket server, MCP
+        server. It is <strong>not</strong> a router that proxies traffic to
+        other services, a load balancer, or a page-rendering UI framework. For
+        those, pair it with something purpose-built and let DaloyJS be the smart
         endpoint behind them.
       </p>
 
@@ -139,15 +139,16 @@ export default function Page() {
               <td className="px-3 py-2">MCP server (HTTP transport)</td>
               <td className="px-3 py-2">Strong</td>
               <td className="px-3 py-2">
-                JSON-RPC over HTTP/SSE, DaloyJS handles it; the MCP framing is
-                yours.
+                JSON-RPC over Streamable HTTP, DaloyJS handles the HTTP pieces;
+                the MCP framing is yours.
               </td>
             </tr>
             <tr>
               <td className="px-3 py-2">gRPC server</td>
               <td className="px-3 py-2">No</td>
               <td className="px-3 py-2">
-                DaloyJS is HTTP/1.1+HTTP/2 REST. Use <code>@grpc/grpc-js</code>.
+                DaloyJS is web-standard HTTP REST. Use{" "}
+                <code>@grpc/grpc-js</code>.
               </td>
             </tr>
             <tr>
@@ -235,7 +236,8 @@ export default function Page() {
         <li>
           <strong>MCP server</strong>: Model Context Protocol. A standardized
           way for AI assistants to call tools and read resources. Transports are
-          stdio or HTTP+SSE.
+          stdio or Streamable HTTP, with optional SSE for streaming server
+          messages.
         </li>
         <li>
           <strong>gRPC</strong>: a binary RPC protocol from Google, defined with{" "}
@@ -266,9 +268,7 @@ export default function Page() {
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
-const app = new App({ docs: true });
-
-app.route({
+const app = new App({ docs: true }).route({
   method: "GET",
   path: "/books/:id",
   operationId: "getBook",
@@ -340,8 +340,8 @@ const app = new App({
           <strong>Safe egress</strong> via{" "}
           <Link href="/docs/security/fetch-guard">
             <code>fetchGuard()</code>
-          </Link>{" "}
-          , blocks SSRF, private CIDRs, and cloud-metadata IPs by default.
+          </Link>
+          : blocks SSRF, private CIDRs, and cloud-metadata IPs by default.
         </li>
         <li>
           <strong>Session edge</strong> via{" "}
@@ -422,13 +422,13 @@ const app = new App({
         Load Balancing, or Cloudflare. DaloyJS sits <em>behind</em> the LB and
         serves requests; it doesn&apos;t distribute them. The framework does
         ship a <code>behindProxy</code> declarative model so it correctly reads
-        <code> X-Forwarded-*</code> headers when the LB terminates TLS.
+        <code>X-Forwarded-*</code> headers when the LB terminates TLS.
       </p>
 
       <h3>7. Server-side renderer (SSR): no</h3>
       <p>
         There is no JSX, React, Vue, or Svelte renderer in DaloyJS. No
-        <code> renderToString</code>, no hydration, no file-system page router,
+        <code>renderToString</code>, no hydration, no file-system page router,
         no React Server Components. The framework deliberately stays in the
         REST/WS layer.
       </p>
@@ -443,8 +443,8 @@ const app = new App({
       <p>Webhooks are just HTTP POSTs with a signature header. DaloyJS has:</p>
       <ul>
         <li>
-          <code>verifyWebhookSignature</code> / <code>signWebhookPayload</code>{" "}
-          , zero-knob HMAC helpers
+          <code>verifyWebhookSignature</code> / <code>signWebhookPayload</code>:
+          zero-knob HMAC helpers
         </li>
         <li>
           <code>timingSafeEqual</code> for signature comparison
@@ -478,8 +478,9 @@ const app = new App({
       <h3>10. MCP server (HTTP transport): strong</h3>
       <p>
         The Model Context Protocol is JSON-RPC 2.0, transported over either
-        stdio or HTTP + Server-Sent Events. DaloyJS handles the HTTP/SSE half
-        natively:
+        stdio or Streamable HTTP. Streamable HTTP uses POST and GET requests,
+        and can use Server-Sent Events when the server needs to stream multiple
+        messages. DaloyJS handles the HTTP/SSE building blocks natively:
       </p>
       <ul>
         <li>
@@ -498,18 +499,19 @@ const app = new App({
       <p>
         You bring the MCP framing (initialize, tools/list, tools/call) on top.
         DaloyJS won&apos;t generate it for you, there&apos;s no{" "}
-        <code>defineTool()</code> primitive yet, but the HTTP, validation, auth,
-        and SSE pieces are in-box.
+        <code>defineTool()</code> primitive yet, but the HTTP, validation,
+        bearer-auth, scopes, and SSE pieces are in-box. For public remote MCP
+        servers, implement the MCP authorization metadata and OAuth flow on top.
       </p>
 
       <h3>11. gRPC server: no</h3>
       <p>
         gRPC needs HTTP/2 with Protobuf framing and trailers. DaloyJS is a REST
-        framework around web-standard <code>Request</code>/<code>Response</code>
-        . For gRPC, use <code>@grpc/grpc-js</code> or Connect (which can speak
-        Connect-over-HTTP/1.1 and is friendlier in serverless). You can run a
-        DaloyJS REST gateway in front of a gRPC backend if you want the external
-        surface to be JSON.
+        framework around web-standard <code>Request</code> /{" "}
+        <code>Response</code>. It does not implement Protobuf framing, trailers,
+        or generated service stubs. For gRPC, use <code>@grpc/grpc-js</code> or
+        Connect. You can run a DaloyJS REST gateway in front of a gRPC backend
+        if you want the external surface to be JSON.
       </p>
 
       <h3>12. GraphQL server: possible, not the framework&apos;s shape</h3>
@@ -577,7 +579,9 @@ const app = new App({
                 Binary, typed, fast S2S RPC inside a cluster
               </td>
               <td className="px-3 py-2">gRPC, Connect</td>
-              <td className="px-3 py-2">REST/JSON only.</td>
+              <td className="px-3 py-2">
+                No Protobuf/trailer-native RPC stack.
+              </td>
             </tr>
             <tr>
               <td className="px-3 py-2">
@@ -630,7 +634,7 @@ const app = new App({
               <td className="px-3 py-2">-</td>
             </tr>
             <tr>
-              <td className="px-3 py-2">MCP server over HTTP+SSE</td>
+              <td className="px-3 py-2">MCP server over Streamable HTTP</td>
               <td className="px-3 py-2">
                 <strong>DaloyJS</strong> (you bring the MCP framing)
               </td>

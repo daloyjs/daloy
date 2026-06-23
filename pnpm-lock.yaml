@@ -51,6 +51,9 @@ importers:
       '@types/node':
         specifier: ^25.7.0
         version: 25.7.0
+      prettier:
+        specifier: ^3.8.3
+        version: 3.8.3
       tsx:
         specifier: ^4.22.3
         version: 4.22.3

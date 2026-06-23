@@ -182,7 +182,7 @@ import { defineConfig } from "@hey-api/openapi-ts";
 
 export default defineConfig({
   input: "./generated/openapi.json",
-  output: { path: "./generated/client", format: "prettier" },
+  output: { path: "./generated/client", postProcess: ["prettier"] },
   plugins: ["@hey-api/client-fetch", "@hey-api/sdk", "@hey-api/typescript"],
 });`;
 

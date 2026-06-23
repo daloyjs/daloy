@@ -23,20 +23,11 @@ export default function Page() {
   return (
     <>
       <h1>Middleware combinators</h1>
-      <blockquote>
-        <strong>Think of it like…</strong> assembling a security checkpoint.{" "}
-        <code>every()</code> chains the metal detector, the bag scan, and the ID
-        check in order. <code>some()</code> says &quot;any valid ID gets you in:
-        passport OR driver&apos;s license OR staff badge.&quot;{" "}
-        <code>except()</code> waves the staff entrance through without the
-        queue.
-      </blockquote>
       <p>
-        DaloyJS exposes three small composition primitives for{" "}
-        <code>Hooks</code> bundles. They let you package curated middleware
-        stacks as a single value, express &quot;any of these proofs is
-        enough&quot; authentication, and exempt specific paths from a check,
-        all without any runtime dependencies.
+        DaloyJS exposes three composition primitives for <code>Hooks</code>{" "}
+        bundles. Use <code>every()</code> to package a full stack,{" "}
+        <code>some()</code> to accept any one valid proof, and{" "}
+        <code>except()</code> to skip a gate for specific paths.
       </p>
 
       <h2>
@@ -46,16 +37,22 @@ export default function Page() {
         <code>every(...layers)</code> merges several <code>Hooks</code> bundles
         into one that runs each layer in registration order. It is equivalent to
         calling <code>app.use(...)</code> for each bundle, but lets you name and
-        reuse a curated stack. All lifecycle phases compose, and symbol-keyed
-        security markers (CORS / CSRF / session / secure-headers) are forwarded
-        so boot-time guards still see them.
+        reuse a curated stack. All lifecycle phases compose:
+        <code> onRequest</code> and <code>onResponse</code> run in order,{" "}
+        <code>beforeHandle</code> and <code>onError</code> stop on the first{" "}
+        <code>Response</code>, and <code>afterHandle</code> plus{" "}
+        <code>onSend</code> thread the value through each layer.
       </p>
 
       <FlowDiagram
         title="every() runs each layer in order"
         numbered
         steps={[
-          { eyebrow: "layer 1", label: "requestId()", detail: "tag the request" },
+          {
+            eyebrow: "layer 1",
+            label: "requestId()",
+            detail: "tag the request",
+          },
           {
             eyebrow: "layer 2",
             label: "bearerAuth()",
@@ -65,7 +62,7 @@ export default function Page() {
           {
             eyebrow: "layer 3",
             label: "rateLimit()",
-            detail: "throttle per bucket",
+            detail: "throttle the shared admin bucket",
           },
           {
             eyebrow: "result",
@@ -74,7 +71,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="every(...layers) merges several Hooks bundles into one that runs each layer in registration order, equivalent to calling app.use() for each. Security markers (CORS, CSRF, session, secure-headers) are forwarded so boot-time guards still see them."
+        caption="Symbol-keyed security markers such as CORS, CSRF, session, and secure-headers are forwarded onto the merged bundle so boot-time guards still see them."
       />
 
       <CodeBlock
@@ -82,10 +79,12 @@ export default function Page() {
 
 const app = new App();
 
-// Package "the admin stack" as a single reusable value.
 const adminStack = every(
   requestId(),
-  bearerAuth({ validate: (token) => token === process.env.ADMIN_TOKEN }),
+  bearerAuth({
+    realm: "admin",
+    validate: (token) => token === process.env.ADMIN_TOKEN,
+  }),
   rateLimit({ windowMs: 60_000, max: 30, groupId: "admin" }),
 );
 
@@ -98,8 +97,9 @@ app.use(adminStack);`}
       <p>
         <code>some(...layers)</code> runs each bundle&apos;s{" "}
         <code>beforeHandle</code> in order and accepts the request as soon as
-        one of them passes without throwing. Use it for &quot;this route accepts
-        a bearer token OR a signed session cookie OR an API key&quot; patterns.
+        one bundle passes without throwing or returning a <code>Response</code>.
+        Use it for routes that accept more than one credential style, such as a
+        bearer token or a signed session cookie.
       </p>
 
       <BranchDiagram
@@ -117,48 +117,70 @@ app.use(adminStack);`}
           },
           {
             eyebrow: "proof B",
-            label: "session()",
-            detail: "signed session cookie",
+            label: "session auth",
+            detail: "signed cookie with a user id",
           },
         ]}
         converge={{
           eyebrow: "accepted",
           label: "First passing bundle wins",
-          detail: "its ctx.state / headers are preserved",
+          detail: "its ctx.state and headers are preserved",
         }}
-        caption="some(...layers) accepts the request as soon as one bundle passes without throwing. A bundle that returns a Response counts as a denial and the next gets a chance. If every bundle denies, the first denial wins, so place the auth method whose WWW-Authenticate challenge you want clients to see first."
+        caption="A bundle that returns a Response counts as a denial and the next bundle gets a chance. If every bundle denies, the first denial wins."
       />
 
       <CodeBlock
         language="ts"
-        code={`import { App, some, bearerAuth, session } from "@daloyjs/core";
+        code={`import { App, every, some, bearerAuth, session } from "@daloyjs/core";
 
 const app = new App();
 
-app.use(some(
-  bearerAuth({ validate: (token) => token === process.env.PUBLIC_API_TOKEN }),
-  session(),
-));`}
+const sessionAuth = every(
+  session({ secret: process.env.SESSION_SECRET! }),
+  {
+    beforeHandle(ctx) {
+      const sessionState = ctx.state.session as
+        | { data?: Record<string, unknown> }
+        | undefined;
+
+      if (typeof sessionState?.data?.userId === "string") return;
+
+      return new Response("Unauthorized", { status: 401 });
+    },
+  },
+);
+
+app.use(
+  some(
+    bearerAuth({
+      realm: "api",
+      validate: (token) => token === process.env.PUBLIC_API_TOKEN,
+    }),
+    sessionAuth,
+  ),
+);`}
       />
       <p>Semantics worth knowing:</p>
       <ul>
         <li>
-          The first bundle that resolves without throwing wins; its context
-          mutations (headers, <code>ctx.state</code>) are preserved.
+          The first bundle that resolves without throwing or returning a{" "}
+          <code>Response</code> wins. Its context mutations, including headers
+          and <code>ctx.state</code>, are preserved.
         </li>
         <li>
           A bundle that returns a <code>Response</code> is treated as a denial,
-          and the next bundle gets a chance. If every bundle denies, the first
-          denial wins.
+          and the next bundle gets a chance. If every bundle returns a denial,
+          the first <code>Response</code> is sent.
         </li>
         <li>
-          When the first denial is a thrown error, that error is rethrown, so
-          place the auth method whose <code>WWW-Authenticate</code> challenge
-          you want clients to see first.
+          When every bundle fails and the first denial was a thrown error, that
+          error is rethrown. Put the auth method whose status and{" "}
+          <code>WWW-Authenticate</code> challenge you want clients to see first.
         </li>
         <li>
-          Only the <code>beforeHandle</code> evaluation strategy changes; all
-          other phases still compose normally.
+          Only the <code>beforeHandle</code> selection strategy changes.{" "}
+          <code>afterHandle</code>, <code>onSend</code>, <code>onResponse</code>
+          , and <code>onError</code> from every bundle still compose normally.
         </li>
       </ul>
 
@@ -166,9 +188,9 @@ app.use(some(
         <code>except()</code>: apply everywhere but a few paths
       </h2>
       <p>
-        <code>except(when, hooks)</code> runs a bundle on every request{" "}
-        <em>except</em> those matching <code>when</code>. The canonical use is
-        &quot;apply auth everywhere except the public endpoints.&quot;
+        <code>except(when, hooks)</code> runs a bundle on every request except
+        those matching <code>when</code>. The canonical use is applying auth
+        everywhere except health checks, OpenAPI JSON, and docs assets.
       </p>
       <CodeBlock
         language="ts"
@@ -176,10 +198,12 @@ app.use(some(
 
 const app = new App();
 
-app.use(except(
-  ["/health", "/openapi.json", "/docs/**"],
-  bearerAuth({ validate: (token) => token === process.env.API_TOKEN }),
-));`}
+app.use(
+  except(
+    ["/health", "/openapi.json", "/docs/**"],
+    bearerAuth({ validate: (token) => token === process.env.API_TOKEN }),
+  ),
+);`}
       />
       <p>
         The <code>when</code> matcher accepts:
@@ -187,40 +211,58 @@ app.use(except(
       <ul>
         <li>
           A path string starting with <code>/</code>. <code>*</code> matches one
-          path segment (no slash); <code>**</code> matches any suffix (zero or
-          more segments).
+          path segment with no slash, and <code>**</code> matches any suffix.
         </li>
-        <li>An array of such path patterns.</li>
+        <li>An array of path patterns.</li>
         <li>
           A predicate function that receives the request context and returns{" "}
           <code>true</code> to skip the gated bundle.
         </li>
       </ul>
       <p>
-        Only the <code>beforeHandle</code> phase is gated. The surrounding{" "}
-        <code>onRequest</code>/<code>afterHandle</code>/<code>onSend</code>/
-        <code>onResponse</code> phases still run, so shared concerns like
-        request-id propagation are never accidentally exempted.
+        Path matching uses the same <code>new URL(request.url).pathname</code>{" "}
+        view the router sees. It is case-sensitive, exact for non-wildcard
+        patterns, and does not add a rewrite or extra decode step. That makes
+        exemptions fail closed for case changes, trailing-slash mismatches, and
+        encoded traversal tricks.
+      </p>
+      <p>
+        Only the wrapped bundle&apos;s <code>beforeHandle</code> phase is
+        skipped. Its <code>onRequest</code>, <code>afterHandle</code>,{" "}
+        <code>onSend</code>, and <code>onResponse</code> phases still run. Wrap
+        each bundle with <code>except()</code> individually if you need to gate
+        different phases with different rules.
       </p>
 
       <h2>Composing the three</h2>
       <p>
-        The primitives nest. A common production shape is &quot;run the full
-        security stack everywhere except the health and docs routes&quot;:
+        The primitives nest. A common production shape is to run correlation,
+        secure headers, and authentication everywhere, but skip the auth gate
+        for health and documentation endpoints.
       </p>
       <CodeBlock
         language="ts"
-        code={`import { App, every, except, requestId, secureHeaders, bearerAuth } from "@daloyjs/core";
+        code={`import {
+  App,
+  every,
+  except,
+  requestId,
+  secureHeaders,
+  bearerAuth,
+} from "@daloyjs/core";
 
 const app = new App();
 
 const protectedStack = every(
   requestId(),
   secureHeaders(),
-  bearerAuth({ validate: (token) => token === process.env.API_TOKEN }),
+  except(
+    ["/health", "/openapi.json", "/docs/**"],
+    bearerAuth({ validate: (token) => token === process.env.API_TOKEN }),
+  ),
 );
 
-app.use(except(["/health", "/openapi.json"], protectedStack));`}
+app.use(protectedStack);`}
       />
     </>
   );

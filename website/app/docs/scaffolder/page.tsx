@@ -100,7 +100,10 @@ bun  create daloy           my-api`}
         The CLI is interactive when arguments are missing. It will ask for a
         project name, a template, a package manager, whether to install
         dependencies, whether to initialize a git repository, and whether to add
-        the GitHub security bundle.
+        the GitHub security bundle. The dependency-install prompt defaults to{" "}
+        <code>no</code> for pnpm projects so you can review the generated{" "}
+        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code> guardrails before
+        the first install; other package managers default to <code>yes</code>.
       </p>
 
       <FlowDiagram
@@ -118,7 +121,7 @@ bun  create daloy           my-api`}
             tone: "success",
           },
         ]}
-        caption="When you omit flags the CLI prompts for each choice in order. Pass --yes to accept every default and skip the prompts entirely."
+        caption="When you omit flags the CLI prompts for each choice in order. Pass --yes to accept every default and skip the prompts entirely. Defaults are pnpm, node-basic, no pnpm install, the GitHub security bundle enabled, and the deploy starter enabled with it."
       />
 
       <h2>Non-interactive usage</h2>
@@ -144,7 +147,8 @@ bun  create daloy           my-api`}
         </li>
         <li>
           <code>--install</code> / <code>--no-install</code>: install
-          dependencies after scaffolding.
+          dependencies after scaffolding. Defaults to <code>no</code> for pnpm
+          projects and <code>yes</code> for npm, Yarn, and Bun projects.
         </li>
         <li>
           <code>--git</code> / <code>--no-git</code>: initialize a git
@@ -159,7 +163,7 @@ bun  create daloy           my-api`}
         <li>
           <code>--with-ci</code> / <code>--no-ci</code>: add hardened GitHub
           Actions, Dependabot, CODEOWNERS, <code>SECURITY.md</code>, and
-          lockfile-source verification.
+          lockfile-source verification. Defaults to <code>yes</code>.
         </li>
         <li>
           <code>--with-deploy</code> / <code>--no-deploy</code>: add or skip the
@@ -256,13 +260,12 @@ bun  create daloy           my-api`}
         <code>vercel deploy</code> scripts, <code>secureHeaders</code> +{" "}
         <code>requestId</code> enabled by default, smaller serverless-friendly
         body and timeout limits, and the same health and bookstore examples as
-        the Node starter. (The old <code>vercel</code> name still works as a
-        deprecated alias.)
+        the Node starter.
       </p>
       <p>
         The Vercel template also ships <code>/docs</code> (Scalar API reference)
         and <code>/openapi.json</code>
-        wired to the same app, so the deployed Edge URL serves API documentation
+        wired to the same app, so the deployed Vercel URL serves API documentation
         automatically.
       </p>
 

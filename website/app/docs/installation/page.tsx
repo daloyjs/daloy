@@ -97,7 +97,8 @@ export default function Page() {
       </p>
       <CodeBlock
         language="bash"
-        code={`pnpm create daloy@latest my-api
+        code={`# choose one package manager
+pnpm create daloy@latest my-api
 npm  create daloy@latest my-api
 yarn create daloy           my-api
 bun  create daloy           my-api`}
@@ -143,12 +144,16 @@ pnpm --version`}
       <h3>Install DaloyJS</h3>
       <CodeBlock
         language="bash"
-        code={`pnpm add @daloyjs/core zod
+        code={`# choose one package manager
+pnpm add @daloyjs/core zod
 npm  install @daloyjs/core zod
 yarn add     @daloyjs/core zod
 bun  add     @daloyjs/core zod
 # optional - only if you want to generate a typed SDK
-pnpm add -D @hey-api/openapi-ts`}
+pnpm add -D typescript @hey-api/openapi-ts prettier
+npm  install -D typescript @hey-api/openapi-ts prettier
+yarn add -D     typescript @hey-api/openapi-ts prettier
+bun  add -d     typescript @hey-api/openapi-ts prettier`}
       />
       <p>
         The framework package published to npm is{" "}
@@ -175,9 +180,8 @@ pnpm add -D @hey-api/openapi-ts`}
 strict-peer-dependencies=true
 prefer-frozen-lockfile=true
 verify-store-integrity=true
-# Optional, pnpm 10+:
-# minimum-release-age=1440   # wait 24h before installing fresh releases
-# ignore-scripts=true        # whitelist install scripts via approve-builds`}
+minimum-release-age=1440
+ignore-scripts=true`}
       />
 
       <p>

@@ -12,6 +12,8 @@ export const metadata = buildMetadata({
     "daloy CLI",
     "daloy inspect",
     "daloy dev",
+    "daloy doctor",
+    "daloy diff",
     "DaloyJS routes",
     "OpenAPI dump",
     "contract tests CLI",
@@ -56,6 +58,11 @@ export default function Page() {
             detail: "add --yaml for YAML",
           },
           {
+            eyebrow: "--asyncapi",
+            label: "AsyncAPI 3.0 document",
+            detail: "app.ws() surfaces",
+          },
+          {
             eyebrow: "--ai",
             label: "AI/codegen dump",
             detail: "schemas + meta.examples",
@@ -73,24 +80,28 @@ export default function Page() {
       <h2>Quick start</h2>
       <CodeBlock
         language="bash"
-        code={`pnpm daloy inspect             # also tries build-app/createApp-style factories
-pnpm daloy inspect ./src/server.ts
-pnpm daloy inspect --schemas
-pnpm daloy inspect --check        # exit 1 on contract errors
-pnpm daloy inspect --openapi > openapi.json
-pnpm daloy inspect --openapi --yaml > openapi.yaml
-pnpm daloy inspect --ai > routes.json
-pnpm daloy inspect --ai --yaml > routes.yaml      # ~30% fewer LLM tokens
-pnpm daloy inspect --tag Users
-pnpm daloy inspect --method post --json`}
+        code={`pnpm exec daloy inspect             # also tries build-app/createApp-style factories
+pnpm exec daloy inspect ./src/server.ts
+pnpm exec daloy inspect --schemas
+pnpm exec daloy inspect --check        # exit 1 on contract errors
+pnpm exec daloy inspect --openapi > openapi.json
+pnpm exec daloy inspect --openapi --yaml > openapi.yaml
+pnpm exec daloy inspect --asyncapi > asyncapi.json
+pnpm exec daloy inspect --asyncapi --yaml > asyncapi.yaml
+pnpm exec daloy inspect --ai > routes.json
+pnpm exec daloy inspect --ai --yaml > routes.yaml      # ~30% fewer LLM tokens
+pnpm exec daloy inspect --tag Users
+pnpm exec daloy inspect --method post --json
+pnpm exec daloy doctor
+pnpm exec daloy diff openapi.published.json openapi.json`}
       />
 
       <h2>Loading the App</h2>
       <p>
-        The entry file must export an <code>App</code> instance, either as the
-        default export or as a named export called <code>app</code>. It can also
-        export a zero-argument <code>buildApp</code>
-        or <code>createApp</code> factory that returns an <code>App</code>:
+        The entry file must export an <code>App</code> instance. The CLI accepts
+        a default export, named <code>app</code> or <code>default_app</code>{" "}
+        exports, a zero-argument <code>buildApp</code> or <code>createApp</code>{" "}
+        factory, or any named export that is already an <code>App</code>:
       </p>
       <CodeBlock
         language="ts"
@@ -110,9 +121,21 @@ export function buildApp() {
 }`}
       />
       <p>
-        TypeScript entry files are loaded via <code>tsx</code>.{" "}
-        <code>create-daloy</code> templates already include <code>tsx</code>; in
-        other projects install it with <code>pnpm add -D tsx</code>.
+        Without an explicit entry, <code>daloy inspect</code> tries{" "}
+        <code>src/app.ts</code>, <code>src/app.js</code>,{" "}
+        <code>src/build-app.ts</code>, <code>src/build-app.js</code>,{" "}
+        <code>app.ts</code>, <code>app.js</code>, <code>build-app.ts</code>, and{" "}
+        <code>build-app.js</code>. TypeScript entry files are loaded via{" "}
+        <code>tsx</code>. <code>create-daloy</code> templates already include{" "}
+        <code>tsx</code>; in other projects install it with{" "}
+        <code>pnpm add -D tsx</code>.
+      </p>
+      <p>
+        Point <code>inspect</code>, <code>doctor</code>, and <code>diff</code>{" "}
+        at import-safe app construction files, not files that call{" "}
+        <code>serve(...)</code> as a module side effect. When redirecting JSON
+        or YAML to a file, keep app-construction logs off stdout so the output
+        stays parseable.
       </p>
 
       <h2>Flags</h2>
@@ -137,6 +160,10 @@ export function buildApp() {
           <code>--openapi</code>: print the OpenAPI 3.1 document.
         </li>
         <li>
+          <code>--asyncapi</code>: print the AsyncAPI 3.0 document for{" "}
+          <code>app.ws()</code> WebSocket surfaces.
+        </li>
+        <li>
           <code>--ai</code>: print an AI/codegen-friendly dump of the route
           catalog with JSON Schemas and any <code>meta.examples</code> you
           authored. See the{" "}
@@ -144,11 +171,11 @@ export function buildApp() {
         </li>
         <li>
           <code>--yaml</code> · <code>--format &lt;json|yaml&gt;</code>: emit{" "}
-          <code>--openapi</code> or <code>--ai</code> output as YAML instead of
-          JSON. YAML drops braces, commas, and most quotes, so the payload is
-          typically ~30% smaller than the equivalent pretty-printed JSON, 
-          useful when pasting route metadata into an LLM system prompt where
-          every token counts.
+          <code>--openapi</code>, <code>--asyncapi</code>, or <code>--ai</code>{" "}
+          output as YAML instead of JSON. YAML drops braces, commas, and most
+          quotes, so the payload is typically ~30% smaller than the equivalent
+          pretty-printed JSON, useful when pasting route metadata into an LLM
+          system prompt where every token counts.
         </li>
         <li>
           <code>--tag &lt;tag&gt;</code>: only show routes that declare this
@@ -157,6 +184,19 @@ export function buildApp() {
         <li>
           <code>--method &lt;method&gt;</code>: only show routes for this HTTP
           method.
+        </li>
+        <li>
+          <code>--runtime &lt;node|bun|deno&gt;</code>: force the runtime for{" "}
+          <code>daloy dev</code>.
+        </li>
+        <li>
+          <code>--audit-secrets</code>: make <code>daloy doctor</code> scan
+          matching environment variables for known-weak placeholders and short
+          production secrets.
+        </li>
+        <li>
+          <code>--no-audit-defaults</code>: skip the default secure-defaults
+          audit in <code>daloy doctor</code>.
         </li>
         <li>
           <code>-h, --help</code> · <code>-v, --version</code>
@@ -173,8 +213,8 @@ export function buildApp() {
       </p>
       <CodeBlock
         language="bash"
-        code={`pnpm daloy dev                # auto-detects ./src/index.ts, ./src/main.ts, ...
-pnpm daloy dev ./src/server.ts`}
+        code={`pnpm exec daloy dev                # auto-detects ./src/index.ts, ./src/main.ts, ...
+pnpm exec daloy dev ./src/server.ts`}
       />
       <p>
         The exact command spawned depends on the runtime that hosts the CLI:
@@ -206,6 +246,41 @@ pnpm daloy dev ./src/server.ts`}
         this reason.
       </p>
 
+      <h2>
+        <code>daloy doctor</code>: secure-defaults audit
+      </h2>
+      <p>
+        <code>daloy doctor [entry]</code> loads the same <code>App</code> as{" "}
+        <code>inspect</code>, then audits the live configuration for
+        secure-by-default regressions. It exits 1 when it finds an error-level
+        issue, so it can guard CI or a container <code>HEALTHCHECK</code>:
+      </p>
+      <CodeBlock
+        language="bash"
+        code={`pnpm exec daloy doctor
+pnpm exec daloy doctor ./src/app.ts --json
+pnpm exec daloy doctor --audit-secrets`}
+      />
+      <p>
+        Warning-level findings are advisory and exit 0. In JSON mode,{" "}
+        <code>ok</code> is only true when there are no findings at all.
+      </p>
+
+      <h2>
+        <code>daloy diff</code>: OpenAPI change gate
+      </h2>
+      <p>
+        <code>daloy diff &lt;baseline&gt; &lt;current&gt;</code> compares two
+        OpenAPI 3.1 JSON files, reports added, removed, and changed operations,
+        and exits 1 when it detects a breaking change:
+      </p>
+      <CodeBlock
+        language="bash"
+        code={`pnpm exec daloy inspect --openapi > openapi.json
+pnpm exec daloy diff openapi.published.json openapi.json
+pnpm exec daloy diff --json openapi.published.json openapi.json`}
+      />
+
       <h2>CI usage</h2>
       <p>
         <code>daloy inspect --check</code> is a drop-in replacement for the
@@ -216,7 +291,10 @@ pnpm daloy dev ./src/server.ts`}
       <CodeBlock
         language="yaml"
         code={`- name: Contract checks
-  run: pnpm daloy inspect --check`}
+  run: pnpm exec daloy inspect --check
+
+- name: OpenAPI compatibility
+  run: pnpm exec daloy diff openapi.published.json openapi.json`}
       />
 
       <h2>Programmatic API</h2>

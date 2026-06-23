@@ -132,7 +132,7 @@ export default function Page() {
         <li>
           <strong>You want to run the same app everywhere.</strong> Express is
           tied to Node&apos;s <code>http</code> module. DaloyJS is built on
-          web-standard <code>Request</code>/<code>Response</code> and ships{" "}
+          web-standard <code>Request</code> / <code>Response</code> and ships{" "}
           <Link href="/docs/adapters">adapters</Link> for Node, Bun, Deno,
           Cloudflare Workers, Vercel, and more.
         </li>
@@ -229,9 +229,9 @@ export default function Page() {
         rewrite each <code>app.METHOD(path, handler)</code> as an{" "}
         <code>app.route({"{ ... }"})</code> declaration that returns a value
         instead of mutating <code>res</code>, replace your error middleware with
-        thrown <code>HttpError</code>s, and swap <code>app.listen()</code> for a{" "}
-        <Link href="/docs/adapters/node">runtime adapter</Link>. The rest of
-        this page is that sentence, expanded.
+        thrown <code>HttpError</code> values, and swap <code>app.listen()</code>{" "}
+        for a <Link href="/docs/adapters/node">runtime adapter</Link>. The rest
+        of this page is that sentence, expanded.
       </p>
 
       <h2>The mental model, side by side</h2>
@@ -346,25 +346,24 @@ app.listen(3000, () => console.log("listening on 3000"));`}
       <CodeBlock
         language="typescript"
         code={`// DaloyJS
+import { z } from "zod";
 import { App, requestId, secureHeaders } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const app = new App({
   bodyLimitBytes: 64 * 1024,   // secure default: cap request bodies
   requestTimeoutMs: 5_000,     // secure default: don't hang forever
-});
-
-// "middleware everywhere" -> hooks registered globally
-app.use(requestId());
-app.use(secureHeaders());
-
-app.route({
-  method: "GET",
-  path: "/",
-  operationId: "root",
-  responses: { 200: { description: "Greeting" } },
-  handler: async () => ({ status: 200, body: "hello world" }),
-});
+})
+  // "middleware everywhere" -> hooks registered globally
+  .use(requestId())
+  .use(secureHeaders())
+  .route({
+    method: "GET",
+    path: "/",
+    operationId: "root",
+    responses: { 200: { description: "Greeting", body: z.string() } },
+    handler: async () => ({ status: 200, body: "hello world" }),
+  });
 
 const { port } = serve(app, { port: 3000 });
 console.log(\`listening on http://localhost:\${port}\`);`}
@@ -416,11 +415,12 @@ app.route({
 // ...one app.route per Express route. PUT/DELETE/PATCH/OPTIONS all supported.`}
       />
       <p>
-        Supported methods: <code>GET</code>, <code>POST</code>, <code>PUT</code>
-        , <code>PATCH</code>, <code>DELETE</code>, <code>HEAD</code>,{" "}
-        <code>OPTIONS</code>. <code>HEAD</code> is auto-derived from a matching{" "}
-        <code>GET</code> when you don&apos;t declare it. See{" "}
-        <Link href="/docs/routing">Routing</Link> for the full reference.
+        Supported methods include <code>GET</code>, <code>POST</code>,{" "}
+        <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>,{" "}
+        <code>HEAD</code>, and <code>OPTIONS</code>. <code>HEAD</code> is
+        auto-derived from a matching <code>GET</code> when you don&apos;t
+        declare it. See <Link href="/docs/routing">Routing</Link> for the full
+        reference.
       </p>
 
       <h3>Path parameters</h3>
@@ -734,9 +734,11 @@ app.route({
               <code>express.urlencoded()</code>
             </td>
             <td>
-              Parse <code>application/x-www-form-urlencoded</code> in the
-              handler from <code>ctx.request</code>, or use a schema after
-              decoding. Multipart forms: see{" "}
+              Built in when the route declares a <code>request.body</code>{" "}
+              schema. DaloyJS parses{" "}
+              <code>application/x-www-form-urlencoded</code> into an object and
+              validates it, with the same body-size and prototype-pollution
+              guards as JSON. Multipart forms: see{" "}
               <Link href="/docs/multipart">multipart</Link>.
             </td>
           </tr>
@@ -768,7 +770,7 @@ app.route({
               <code>helmet</code>
             </td>
             <td>
-              <code>secureHeaders()</code>, on by default-grade headers (CSP,
+              <code>secureHeaders()</code> for production-grade headers (CSP,
               HSTS, frame options, nosniff, ...). See{" "}
               <Link href="/docs/security">Security</Link>.
             </td>
@@ -965,7 +967,7 @@ app.route({
       <p>
         One more nicety: because validation runs before your handler, the
         &quot;bad input&quot; error path (Express&apos;s most common manual
-        <code> if (!valid) return res.status(400)</code>) disappears entirely.
+        <code>if (!valid) return res.status(400)</code>) disappears entirely.
         DaloyJS returns the 422 for you.
       </p>
 
@@ -1472,6 +1474,7 @@ import { App, bearerAuth, secureHeaders, requestId, NotFoundError } from "@daloy
 import { serve } from "@daloyjs/core/node";
 
 const Book = z.object({ id: z.string(), title: z.string().min(1) });
+const books = new Map<string, z.infer<typeof Book>>([["1", { id: "1", title: "Dune" }]]);
 
 const app = new App({
   bodyLimitBytes: 64 * 1024,
@@ -1482,57 +1485,51 @@ const app = new App({
     securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
   },
   docs: true, // GET /docs + /openapi.json for free
-});
-
-app.use(requestId());
-app.use(secureHeaders());
-
-const books = new Map<string, z.infer<typeof Book>>([["1", { id: "1", title: "Dune" }]]);
-
-app.route({
-  method: "GET",
-  path: "/books",
-  operationId: "listBooks",
-  tags: ["Books"],
-  responses: { 200: { description: "All books", body: z.array(Book) } },
-  handler: async () => ({ status: 200, body: [...books.values()] }),
-});
-
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBook",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "Found", body: Book },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params }) => {
-    const book = books.get(params.id);
-    if (!book) throw new NotFoundError(\`No book \${params.id}\`);
-    return { status: 200, body: book };
-  },
-});
-
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  auth: { scheme: "bearer" },
-  hooks: bearerAuth({ validate: (t) => t === "secret" }),
-  request: { body: Book }, // validation replaces the manual if-check
-  responses: {
-    201: { description: "Created", body: Book },
-    401: { description: "Unauthorized" },
-    422: { description: "Validation error" },
-  },
-  handler: async ({ body }) => {
-    books.set(body.id, body);
-    return { status: 201, body };
-  },
-});
+})
+  .use(requestId())
+  .use(secureHeaders())
+  .route({
+    method: "GET",
+    path: "/books",
+    operationId: "listBooks",
+    tags: ["Books"],
+    responses: { 200: { description: "All books", body: z.array(Book) } },
+    handler: async () => ({ status: 200, body: [...books.values()] }),
+  })
+  .route({
+    method: "GET",
+    path: "/books/:id",
+    operationId: "getBook",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: Book },
+      404: { description: "Not found" },
+    },
+    handler: async ({ params }) => {
+      const book = books.get(params.id);
+      if (!book) throw new NotFoundError(\`No book \${params.id}\`);
+      return { status: 200, body: book };
+    },
+  })
+  .route({
+    method: "POST",
+    path: "/books",
+    operationId: "createBook",
+    tags: ["Books"],
+    auth: { scheme: "bearer" },
+    hooks: bearerAuth({ validate: (t) => t === "secret" }),
+    request: { body: Book }, // validation replaces the manual if-check
+    responses: {
+      201: { description: "Created", body: Book },
+      401: { description: "Unauthorized" },
+      422: { description: "Validation error" },
+    },
+    handler: async ({ body }) => {
+      books.set(body.id, body);
+      return { status: 201, body };
+    },
+  });
 
 const { port } = serve(app, { port: 3000 });
 console.log(\`up on \${port}\`);`}
@@ -1727,7 +1724,8 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </li>
         <li>
           Replace <code>next(err)</code> + error middleware with thrown{" "}
-          <code>HttpError</code>s and an optional <code>onError</code> hook.
+          <code>HttpError</code> values and an optional <code>onError</code>{" "}
+          hook.
         </li>
         <li>
           Turn routers into <code>app.group(...)</code> or{" "}

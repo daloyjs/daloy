@@ -99,25 +99,23 @@ import { serve } from "@daloyjs/core/node";
 const app = new App({
   bodyLimitBytes: 64 * 1024,
   requestTimeoutMs: 5_000,
-});
-
-app.use(requestId());
-app.use(secureHeaders());
-
-app.route({
-  method: "GET",
-  path: "/greet/:name",
-  operationId: "greet",
-  tags: ["Demo"],
-  request: { params: z.object({ name: z.string().min(1) }) },
-  responses: {
-    200: { description: "Greeting", body: z.object({ msg: z.string() }) },
-  },
-  handler: async ({ params }) => ({
-    status: 200,
-    body: { msg: \`Hello, \${params.name}!\` },
-  }),
-});
+})
+  .use(requestId())
+  .use(secureHeaders())
+  .route({
+    method: "GET",
+    path: "/greet/:name",
+    operationId: "greet",
+    tags: ["Demo"],
+    request: { params: z.object({ name: z.string().min(1) }) },
+    responses: {
+      200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+    },
+    handler: async ({ params }) => ({
+      status: 200,
+      body: { msg: \`Hello, \${params.name}!\` },
+    }),
+  });
 
 const { port } = serve(app, { port: 3000 });
 console.log(\`listening on http://localhost:\${port}\`);`}
@@ -287,19 +285,32 @@ console.log(r.status, r.body);`}
       <p>
         For consumers outside the monorepo, generate a fully typed fetch SDK:
       </p>
-      <CodeBlock language="bash" code={`pnpm add -D @hey-api/openapi-ts`} />
+      <CodeBlock
+        language="bash"
+        code={`pnpm add -D @hey-api/openapi-ts prettier`}
+      />
 
       <CodeBlock
         code={`// openapi-ts.config.ts
 import { defineConfig } from "@hey-api/openapi-ts";
 export default defineConfig({
   input: "./generated/openapi.json",
-  output: { path: "./generated/client", format: "prettier" },
+  output: { path: "./generated/client", postProcess: ["prettier"] },
   plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
 });`}
       />
 
-      <CodeBlock language="bash" code={`pnpm exec openapi-ts`} />
+      <p>
+        Keep the dev server from step two running, then write the live OpenAPI
+        document to disk before you run the SDK generator:
+      </p>
+
+      <CodeBlock
+        language="bash"
+        code={`mkdir -p generated
+curl http://localhost:3000/openapi.json -o generated/openapi.json
+pnpm exec openapi-ts`}
+      />
 
       <h2>Next steps</h2>
       <ul>

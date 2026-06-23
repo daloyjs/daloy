@@ -40,7 +40,7 @@ export default function Page() {
       <CodeBlock language="bash" code={`mkdir bookstore && cd bookstore
 pnpm init
 pnpm add @daloyjs/core zod
-pnpm add -D typescript tsx @types/node @hey-api/openapi-ts`} />
+pnpm add -D typescript tsx @types/node @hey-api/openapi-ts prettier`} />
 
       <CodeBlock language="json" code={`// package.json, replace with this
 {
@@ -174,7 +174,7 @@ console.log(\`wrote \${out}\`);`} />
 import { defineConfig } from "@hey-api/openapi-ts";
 export default defineConfig({
   input: "./generated/openapi.json",
-  output: { path: "./generated/client", format: "prettier" },
+  output: { path: "./generated/client", postProcess: ["prettier"] },
   plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
 });`} />
 

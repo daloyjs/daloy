@@ -36,16 +36,16 @@ export default function Page() {
           <Link href="/docs/tutorials/bookstore" className="rounded-xl border border-mist-200/80 bg-background/80 p-4 transition-colors hover:border-taupe-300 hover:bg-white/80 dark:border-mist-900/70 dark:bg-background/70 dark:hover:bg-taupe-950/20">
             <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">Hands-on</div>
             <div className="mt-2 text-base font-semibold text-foreground">Bookstore tutorial</div>
-            <div className="mt-1 text-sm leading-6 text-muted-foreground">Route-by-route walkthrough without the usual fake-app sadness.</div>
+            <div className="mt-1 text-sm leading-6 text-muted-foreground">Route-by-route walkthrough with a practical API shape.</div>
           </Link>
         </div>
       </div>
       <h1>Introduction to DaloyJS</h1>
       <p>
         <strong>DaloyJS</strong> is a runtime-portable TypeScript web framework with built-in
-        contract-first routing, validation, OpenAPI (via{" "}
-        <a href="https://heyapi.dev/openapi-ts/get-started" target="_blank" rel="noreferrer">Hey API</a>),
-        typed client generation, large-scale maintainability, and core security guardrails plus
+        contract-first routing, validation, OpenAPI 3.1 generation,{" "}
+        <a href="https://heyapi.dev/docs/openapi/typescript/get-started" target="_blank" rel="noreferrer">Hey API</a>{" "}
+        typed client codegen, large-scale maintainability, and core security guardrails plus
         first-party security middleware, backed by
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer"> pnpm</a> plus hardened install and release controls.
       </p>
@@ -65,7 +65,7 @@ export default function Page() {
         <li>OpenAPI ergonomics on par with FastAPI, built into the core, not bolted on.</li>
         <li>Vercel/serverless/edge fit on par with <a href="https://hono.dev/docs/" target="_blank" rel="noreferrer">Hono</a> - web-standard <code>Request → Response</code>.</li>
         <li>Mature plugin/lifecycle/ops story on par with <a href="https://fastify.dev/docs/latest/Reference/" target="_blank" rel="noreferrer">Fastify</a>.</li>
-        <li>TS-first DX on par with <a href="https://elysiajs.com/at-glance.html" target="_blank" rel="noreferrer">Elysia</a>: without forcing you onto Bun.</li>
+        <li>TS-first DX on par with <a href="https://elysiajs.com/at-glance" target="_blank" rel="noreferrer">Elysia</a>: without forcing you onto Bun.</li>
         <li>Hey API typed client generation as a first-class workflow.</li>
         <li>Supply-chain-hardened installs and publishing via pnpm plus hardened repo defaults.</li>
       </ul>
