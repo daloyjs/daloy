@@ -23,11 +23,21 @@
  *   curl -X POST localhost:3002/orders -d '{"item":"book","total":42}' -H 'content-type: application/json'
  *   curl localhost:3002/slow
  *   curl localhost:3002/boom
+ *   # Low-cardinality http.route: distinct ids collapse to ONE span name `GET /orders/:id`
+ *   curl localhost:3002/orders/123
+ *   curl localhost:3002/orders/456
+ *   # Secret-safe query: `token` is dropped, only `page`/`limit` kept on `url.query`
+ *   curl 'localhost:3002/orders?page=2&token=supersecret'
+ *   # Unknown method -> http.request.method="_OTHER" (+ method_original), span name `_OTHER /...`
+ *   curl -X PURGE localhost:3002/orders/123
  *   # Continue a trace started upstream (W3C traceparent):
  *   curl localhost:3002/orders -H 'traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'
  *
- * Then open Jaeger and pick the "daloy-otel-demo" service:
- *   http://localhost:16686
+ * What to look for in Jaeger (open http://localhost:16686, service "daloy-otel-demo"):
+ *   - span names are `<METHOD> <route-template>` (e.g. `GET /orders/:id`), not raw paths
+ *   - `http.route` attribute is the template; the concrete id is on `app.order.id`
+ *   - `/boom` spans are ERROR with `error.type` and an exception event
+ *   - `url.query` is absent unless it survived the redactor (page/limit only)
  */
 
 import { serve } from "../src/adapters/node.ts";
@@ -155,7 +165,7 @@ class DemoSpan implements TracingSpan {
   private ended = false;
 
   constructor(
-    private readonly name: string,
+    private name: string,
     private readonly kind: number,
     private readonly traceId: string,
     private readonly spanId: string,
@@ -171,6 +181,15 @@ class DemoSpan implements TracingSpan {
 
   setAttributes(attrs: TracingAttributes): void {
     Object.assign(this.attributes, attrs);
+  }
+
+  // `otelTracing` calls this in `beforeHandle` to rename the span from its
+  // creation-time `<METHOD> <pathname>` to the low-cardinality
+  // `<METHOD> <route-template>` (e.g. `GET /orders/123` -> `GET /orders/:id`).
+  // Implementing it is what makes the matched route visible as the span name in
+  // Jaeger; a tracer that omits it simply keeps the path-based name.
+  updateName(name: string): void {
+    this.name = name;
   }
 
   setStatus(status: { code: number; message?: string }): void {
@@ -306,6 +325,17 @@ const app = new App({
     contextFromRequest: (req) => parseTraceparent(req.headers.get("traceparent")),
     // Tag every span with the demo service so it groups in Jaeger.
     attributesFromRequest: (): TracingAttributes => ({ "service.name": SERVICE_NAME }),
+    // The query string is OMITTED from spans by default (it routinely carries
+    // tokens/PII). Opt back in with a redactor that strips sensitive keys — here
+    // we keep only `page`/`limit` and drop everything else (e.g. `?token=...`).
+    redactQuery: (search) => {
+      const safe = new URLSearchParams();
+      for (const [k, v] of new URLSearchParams(search)) {
+        if (k === "page" || k === "limit") safe.set(k, v);
+      }
+      const out = safe.toString();
+      return out.length > 0 ? out : undefined;
+    },
   }),
 });
 
@@ -342,6 +372,29 @@ app.route({
         ],
       },
     };
+  },
+});
+
+app.route({
+  method: "GET",
+  path: "/orders/:id",
+  operationId: "getOrder",
+  summary: "Get one order (parameterized — shows low-cardinality http.route)",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      description: "Order",
+      body: z.object({ id: z.string(), total: z.number() }),
+    },
+  },
+  handler: ({ params, state }) => {
+    // The span for `GET /orders/123` is renamed to `GET /orders/:id` and tagged
+    // `http.route=/orders/:id`, so a million distinct ids collapse to ONE span
+    // name / metric series instead of a million. The concrete id belongs on a
+    // separate, intentionally-chosen attribute — not the span name.
+    const span = (state as Record<string, unknown>).otelSpan as TracingSpan | undefined;
+    span?.setAttribute("app.order.id", params.id);
+    return { status: 200 as const, body: { id: params.id, total: 49.99 } };
   },
 });
 
@@ -406,4 +459,6 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 console.log(`DaloyJS OTel tracing demo running at http://localhost:${port}`);
 console.log(`Exporting OTLP spans to: ${OTLP_TRACES_URL}`);
 console.log(`Jaeger UI (after docker compose up jaeger): http://localhost:16686`);
-console.log(`Try:  curl localhost:${port}/orders  ·  curl localhost:${port}/boom`);
+console.log(`Try:  curl localhost:${port}/orders/123  (span -> "GET /orders/:id")`);
+console.log(`      curl 'localhost:${port}/orders?page=2&token=secret'  (token dropped from span)`);
+console.log(`      curl -X PURGE localhost:${port}/orders/123  (method -> _OTHER)  ·  curl localhost:${port}/boom`);
