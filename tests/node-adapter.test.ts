@@ -428,3 +428,35 @@ test("node adapter: Fetch-forbidden methods (TRACE/TRACK) are refused with 501, 
     await handle.close();
   }
 });
+
+test("node adapter: absolute-form request targets are routed by path and never 500", async () => {
+  // Regression from a live red-team probe: absolute-form request targets were
+  // concatenated as `http://localhttp://remote/path`, which reached the app as
+  // a malformed path and surfaced as a 500. Origin servers must tolerate
+  // absolute-form targets, but routing should still use only the path/query.
+  const app = buildEchoApp();
+  const { handle, port } = await startServer(app);
+  try {
+    const ok = await rawHttp(
+      port,
+      `GET http://169.254.169.254/hello?x=1 HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
+    );
+    const okStatus = ok.split("\r\n")[0] ?? "";
+    assert.match(okStatus, /^HTTP\/1\.1 200\b/, `absolute-form /hello should route, got: ${okStatus}`);
+    assert.match(ok, /"msg":"hi"/);
+
+    const missing = await rawHttp(
+      port,
+      `GET http://169.254.169.254/latest/meta-data/ HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
+    );
+    const missingStatus = missing.split("\r\n")[0] ?? "";
+    assert.match(
+      missingStatus,
+      /^HTTP\/1\.1 404\b/,
+      `absolute-form unknown path should be a normal 404, got: ${missingStatus}`,
+    );
+    assert.doesNotMatch(missingStatus, /\b500\b/, "absolute-form targets must not surface as 500");
+  } finally {
+    await handle.close();
+  }
+});

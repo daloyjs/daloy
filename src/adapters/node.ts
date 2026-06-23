@@ -426,7 +426,7 @@ function toWebRequest(
   const proto =
     forwardedProto ??
     ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
-  const url = `${proto}://${host}${req.url ?? "/"}`;
+  const url = `${proto}://${host}${normalizeRequestTarget(req.url)}`;
   // Build headers from `rawHeaders` (a flat [k0,v0,k1,v1,...] array) instead
   // of the parsed `req.headers` object. This matches @hono/node-server's
   // `newHeadersFromIncoming`: one `new Headers([[k,v],...])` constructor
@@ -475,6 +475,21 @@ function firstHeader(v: string | string[] | undefined): string | undefined {
   if (raw === undefined) return undefined;
   const comma = raw.indexOf(",");
   return (comma === -1 ? raw : raw.slice(0, comma)).trim() || undefined;
+}
+
+function normalizeRequestTarget(target: string | undefined): string {
+  const raw = target && target.length > 0 ? target : "/";
+  if (raw.charCodeAt(0) === 47 /* / */) return raw;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      const url = new URL(raw);
+      return `${url.pathname}${url.search}`;
+    } catch {
+      return "/";
+    }
+  }
+  if (raw.charCodeAt(0) === 63 /* ? */) return `/${raw}`;
+  return `/${raw}`;
 }
 
 function sendWebResponse(

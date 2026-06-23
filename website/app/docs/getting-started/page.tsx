@@ -225,7 +225,7 @@ const app = createApp({ docs: true });`}
         code={`const app = new App({
   openapi: { info: { title: "Hello", version: "1.0.0" } },
   docs: {
-    ui: "swagger", // "scalar" (default) | "swagger"
+    ui: "swagger", // "scalar" (default) | "swagger" | "redoc"
     path: "/docs", // optional, change if you want /reference, /api-docs, etc.
   },
 });`}
