@@ -14,8 +14,11 @@
  * - Same-origin paths must start with `/` and must not start with `//`
  *   or `/\` (which browsers interpret as protocol-relative URLs that
  *   escape your origin).
- * - Backslashes, control characters, and `CR`/`LF` are rejected to
- *   stop response-splitting and homograph tricks.
+ * - Backslashes, encoded backslashes, control characters, and `CR`/`LF`
+ *   are rejected to stop response-splitting and homograph tricks.
+ *   Percent-encoded protocol-relative path prefixes such as `/%2f%2f`
+ *   are also refused so downstream decoders cannot turn a same-origin
+ *   `Location` into an origin-escaping redirect.
  * - Absolute URLs are only allowed when their `origin` exactly matches
  *   one of the entries in `allowedOrigins`.
  * - `javascript:`, `data:`, `vbscript:`, and `file:` schemes are always
@@ -129,6 +132,10 @@ function classify(
   if (target.startsWith("//")) return { ok: false, reason: "protocol-relative" };
   // `/\evil.com` is interpreted by some browsers as protocol-relative too.
   if (target.startsWith("/\\")) return { ok: false, reason: "backslash-path" };
+  if (hasEncodedBackslash(target)) return { ok: false, reason: "backslash-path" };
+  if (hasEncodedProtocolRelativePrefix(target)) {
+    return { ok: false, reason: "protocol-relative" };
+  }
 
   if (target.startsWith("/")) {
     // Same-origin path. Backslashes anywhere in the path can confuse
@@ -161,6 +168,25 @@ function classify(
     return { ok: false, reason: "origin-not-allowed" };
   }
   return { ok: true, location: parsed.toString() };
+}
+
+function hasEncodedBackslash(value: string): boolean {
+  return /%5c/i.test(value);
+}
+
+function hasEncodedProtocolRelativePrefix(value: string): boolean {
+  let raw = value;
+  for (let i = 0; i < 3; i++) {
+    if (/^\/%2f/i.test(raw)) return true;
+    try {
+      const decoded = decodeURIComponent(raw);
+      if (decoded === raw) return false;
+      raw = decoded;
+    } catch {
+      return false;
+    }
+  }
+  return raw.startsWith("//");
 }
 
 /**

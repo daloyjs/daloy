@@ -88,6 +88,26 @@ test("safeRedirect: refuses backslashes embedded in same-origin paths", () => {
   );
 });
 
+test("safeRedirect: refuses encoded backslash paths before wildcard matching", () => {
+  for (const target of ["/%5cevil.com", "/%5C%5Cevil.com", "/foo%5cbar"]) {
+    assert.throws(
+      () => safeRedirect(target, { allowedPaths: ["/*"] }),
+      (err: unknown) =>
+        err instanceof OpenRedirectBlockedError && err.reason === "backslash-path",
+    );
+  }
+});
+
+test("safeRedirect: refuses encoded protocol-relative paths before wildcard matching", () => {
+  for (const target of ["/%2f%2fevil.com", "/%2F%2Fevil.com", "/%252f%252fevil.com"]) {
+    assert.throws(
+      () => safeRedirect(target, { allowedPaths: ["/*"] }),
+      (err: unknown) =>
+        err instanceof OpenRedirectBlockedError && err.reason === "protocol-relative",
+    );
+  }
+});
+
 test("safeRedirect: refuses CR/LF response-splitting payloads", () => {
   assert.throws(
     () =>
