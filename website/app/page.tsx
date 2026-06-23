@@ -639,7 +639,6 @@ export default function HomePage() {
               View source
             </a>
           </div>
-          <a rel="me" href="https://mastodon.social/@daloyjs">Mastodon</a>
         </div>
       </section>
 

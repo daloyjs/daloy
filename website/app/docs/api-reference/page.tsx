@@ -760,7 +760,7 @@ interface HtmlResponseOptions extends DocsContentSecurityPolicyOptions {
         <code>@daloyjs/core/streaming</code>
       </h2>
       <CodeBlock
-        code={`interface SSEMessage { data: unknown; event?: string; id?: string; retry?: number; comment?: string }
+        code={`interface SSEMessage { data?: unknown; event?: string; id?: string; retry?: number; comment?: string }
 
 sseStream  (source, opts?: SSEStreamOptions):   ReadableStream<Uint8Array>;
 sseResponse(source, opts?: SSEResponseOptions): Response;
