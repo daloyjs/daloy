@@ -28,10 +28,10 @@ export default function Page() {
       <h1>AsyncAPI for WebSockets</h1>
       <p>
         DaloyJS already turns every HTTP route into an OpenAPI 3.1 operation.
-        The same contract-first story extends to your
-        real-time surfaces: the <code>@daloyjs/core/asyncapi</code> module emits
-        a standards-compliant <strong>AsyncAPI 3.0</strong> document for the
-        WebSocket routes you register with <code>app.ws()</code>. It is{" "}
+        The same contract-first story extends to your real-time surfaces: the{" "}
+        <code>@daloyjs/core/asyncapi</code> module emits a standards-compliant{" "}
+        <strong>AsyncAPI 3.0</strong> document for the WebSocket routes you
+        register with <code>app.ws()</code>. It is{" "}
         <strong>built-in and dependency-free</strong>, the same posture as the
         OpenAPI generator, so it adds nothing to your runtime footprint.
       </p>
@@ -43,7 +43,8 @@ export default function Page() {
       <ul>
         <li>
           a <code>receive</code> operation for messages the server receives from
-          clients (always emitted, a socket can always be written to), and
+          clients (always emitted, because clients can send messages after the
+          upgrade), and
         </li>
         <li>
           an optional <code>send</code> operation for messages the server pushes
@@ -54,13 +55,27 @@ export default function Page() {
       <FlowDiagram
         title="From socket route to AsyncAPI"
         numbered
-        caption="The same contract-first flow as OpenAPI: each app.ws() route becomes one channel with a receive operation (a socket can always be written to) plus an optional send operation. The generator is read-only, it never mounts a route or changes your socket's security posture."
+        caption="The same contract-first flow as OpenAPI: each app.ws() route becomes one channel with a receive operation plus an optional send operation. The generator is read-only, it never mounts a route or changes your socket's security posture."
         steps={[
-          { label: "app.ws(\"/chat/:room\")", detail: "+ optional meta block", tone: "accent" },
-          { label: "generateAsyncAPI(app)", detail: "built-in, dependency-free" },
+          {
+            label: 'app.ws("/chat/:room")',
+            detail: "+ optional meta block",
+            tone: "accent",
+          },
+          {
+            label: "generateAsyncAPI(app)",
+            detail: "built-in, dependency-free",
+          },
           { label: "AsyncAPI 3.0 document", detail: "channels + operations" },
-          { label: "receive / send ops", detail: "receive always, send when declared" },
-          { label: "UI / YAML / codegen", detail: "GET /asyncapi, asyncapiToYAML, CLI", tone: "success" },
+          {
+            label: "receive / send ops",
+            detail: "receive always, send when declared",
+          },
+          {
+            label: "UI / YAML / codegen",
+            detail: "GET /asyncapi, asyncapiToYAML, CLI",
+            tone: "success",
+          },
         ]}
       />
 
@@ -78,6 +93,7 @@ import { writeFileSync } from "node:fs";
 const app = new App();
 
 app.ws("/chat/:room", {
+  allowedOrigins: "same-origin",
   open(conn, ctx) {
     conn.data = { room: ctx.params.room };
   },
@@ -96,10 +112,10 @@ writeFileSync("./generated/asyncapi.json", JSON.stringify(doc, null, 2));`}
 
       <h2>Serving an interactive UI</h2>
       <p>
-        You don&apos;t have to wire the spec up
-        yourself. Set <code>asyncapi: true</code> on the app and DaloyJS
-        auto-mounts the AsyncAPI surface, the WebSocket counterpart to{" "}
-        <code>docs: true</code> for OpenAPI (Scalar / Swagger / Redoc):
+        You don&apos;t have to wire the spec up yourself. Set{" "}
+        <code>asyncapi: true</code> on the app and DaloyJS auto-mounts the
+        AsyncAPI surface, the WebSocket counterpart to <code>docs: true</code>{" "}
+        for OpenAPI (Scalar / Swagger / Redoc):
       </p>
       <ul>
         <li>
@@ -110,17 +126,25 @@ writeFileSync("./generated/asyncapi.json", JSON.stringify(doc, null, 2));`}
         </li>
         <li>
           <code>GET /asyncapi.json</code> and <code>GET /asyncapi.yaml</code>:
-          the AsyncAPI 3.0 document, generated lazily so{" "}
-          <code>app.ws()</code> routes registered afterwards are included.
+          the AsyncAPI 3.0 document, generated lazily so <code>app.ws()</code>{" "}
+          routes registered afterwards are included.
         </li>
       </ul>
       <CodeBlock
-        code={`const app = new App({
+        code={`import { App } from "@daloyjs/core";
+
+const app = new App({
   asyncapi: true, // or "auto" (skips production), or an AsyncAPIRouteOptions object
   openapi: { info: { title: "Realtime API", version: "1.0.0" } },
 });
 
-app.ws("/chat/:room", { /* ... */ });
+app.ws("/chat/:room", {
+  allowedOrigins: "same-origin",
+  meta: { summary: "Room chat" },
+  message(conn, data) {
+    conn.send(data);
+  },
+});
 
 // GET /asyncapi        → interactive AsyncAPI UI
 // GET /asyncapi.json   → AsyncAPI 3.0 document
@@ -146,12 +170,19 @@ printStartupBanner({
         (jsDelivr by default) plus <code>connect-src &apos;self&apos;</code> so
         the component can fetch the served spec, <code>nosniff</code>, and{" "}
         <code>no-referrer</code>. Pin Subresource Integrity hashes or point at
-        self-hosted assets via the <code>assets</code> option
-        (<code>asyncapiScriptUrl</code> / <code>asyncapiScriptIntegrity</code> /{" "}
+        self-hosted assets via the <code>assets</code> option (
+        <code>asyncapiScriptUrl</code> / <code>asyncapiScriptIntegrity</code> /{" "}
         <code>asyncapiStyleUrl</code> / <code>asyncapiStyleIntegrity</code>) for
         supply-chain hardening, exactly as with the OpenAPI docs UIs. Use{" "}
         <code>asyncapi: &quot;auto&quot;</code> to mount everywhere except
         production.
+      </p>
+      <p>
+        The WebSocket route itself keeps the normal production guardrails. If
+        you run with secure defaults in production, each <code>app.ws()</code>{" "}
+        route still needs an <code>allowedOrigins</code> policy or an explicit{" "}
+        <code>acknowledgeCrossOriginUpgrade: true</code>. AsyncAPI generation is
+        descriptive; it never relaxes Cross-Site WebSocket Hijacking defenses.
       </p>
 
       <h2>Describing the messages</h2>
@@ -168,8 +199,8 @@ printStartupBanner({
           surfaced on the generated channel and operations.
         </li>
         <li>
-          <code>receive</code>: a Standard Schema describing messages the
-          server receives from clients. Falls back to the handler&apos;s{" "}
+          <code>receive</code>: a Standard Schema describing messages the server
+          receives from clients. Falls back to the handler&apos;s{" "}
           <code>request.body</code> schema (the same schema used for
           payload-size checks).
         </li>
@@ -189,6 +220,7 @@ const ClientMessage = z.object({ text: z.string() });
 const ServerMessage = z.object({ user: z.string(), text: z.string() });
 
 app.ws("/chat/:room", {
+  allowedOrigins: "same-origin",
   request: { body: ClientMessage },
   meta: {
     summary: "Room chat",
@@ -201,11 +233,12 @@ app.ws("/chat/:room", {
 });`}
       />
       <p>
-        Schemas that expose a <code>toJSONSchema()</code> method (Zod 4,
-        Valibot, ArkType, ...) are converted to JSON Schema for the message
-        payload. Anything else falls back to a permissive <code>{`{}`}</code>{" "}
-        placeholder rather than throwing, so generation never fails on an
-        unconvertible schema.
+        Schemas that expose a <code>toJSONSchema()</code> method are converted
+        to JSON Schema for the message payload. Zod 4 schemas expose that method
+        directly; other validators may need the same adapter they use for
+        OpenAPI output. Anything else still validates at runtime, but the
+        generated AsyncAPI payload falls back to a permissive{" "}
+        <code>{`{}`}</code> placeholder rather than throwing.
       </p>
 
       <h2>Generated document shape</h2>

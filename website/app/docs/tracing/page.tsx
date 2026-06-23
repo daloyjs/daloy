@@ -29,8 +29,8 @@ export default function Page() {
         <a href="https://www.npmjs.com/package/@opentelemetry/api">
           <code>@opentelemetry/api</code>
         </a>
-        . It starts a <strong>SERVER-kind span</strong> per HTTP
-        request, attaches the standard{" "}
+        . It starts a <strong>SERVER-kind span</strong> per HTTP request,
+        attaches the standard{" "}
         <a href="https://opentelemetry.io/docs/specs/semconv/http/http-spans/">
           HTTP semantic-convention attributes
         </a>
@@ -48,7 +48,7 @@ export default function Page() {
       <FlowDiagram
         title="One span per request"
         numbered
-        caption="The hook starts a SERVER span, attaches request attributes on beforeHandle, exposes the span on ctx.state for handlers, then records the status code (and any exception) on onSend before ending the span exactly once."
+        caption="The hook starts a SERVER span and attaches request attributes on onRequest, exposes the span on ctx.state during beforeHandle, then records the status code (and any exception) on onSend before ending the span exactly once."
         steps={[
           {
             label: "Extract context",
@@ -56,7 +56,7 @@ export default function Page() {
             detail: "contextFromRequest reads traceparent / B3",
           },
           {
-            label: "beforeHandle",
+            label: "onRequest",
             detail: "start SERVER span + http.request.method, url.path",
             tone: "accent",
           },
@@ -78,36 +78,36 @@ export default function Page() {
       />
 
       <h2>Quick start</h2>
-      <CodeBlock code={`import { trace } from "@opentelemetry/api";
+      <CodeBlock
+        code={`import { trace } from "@opentelemetry/api";
 import { App, otelTracing } from "@daloyjs/core";
 
 const tracer = trace.getTracer("my-service");
 
 const app = new App({
   hooks: otelTracing({ tracer }),
-});`} />
+});`}
+      />
 
-      <p>
-        That single hook gives every request:
-      </p>
+      <p>That single hook gives every request:</p>
       <ul>
         <li>
           <code>http.request.method</code>, <code>url.path</code>,{" "}
           <code>url.scheme</code>, <code>server.address</code> (host without
-          port), <code>server.port</code> (when present), <code>url.query</code>,{" "}
-          <code>user_agent.original</code> set on <code>beforeHandle</code>.
+          port), <code>server.port</code> (when present), <code>url.query</code>
+          , <code>user_agent.original</code> set on <code>onRequest</code>.
         </li>
         <li>
           <code>http.response.status_code</code> set on <code>onSend</code>.
         </li>
         <li>
-          <code>recordException</code> + <code>setStatus(ERROR)</code> on
-          thrown errors, and <code>ERROR</code> escalation for any{" "}
-          <code>5xx</code> response.
+          <code>recordException</code> + <code>setStatus(ERROR)</code> on thrown
+          errors, and <code>ERROR</code> escalation for any <code>5xx</code>{" "}
+          response.
         </li>
         <li>
-          A guaranteed single <code>span.end()</code> per request, even if
-          both <code>onError</code> and <code>onSend</code> fire.
+          A guaranteed single <code>span.end()</code> per request, even if both{" "}
+          <code>onError</code> and <code>onSend</code> fire.
         </li>
       </ul>
 
@@ -117,25 +117,41 @@ const app = new App({
         configurable via <code>stateKey</code>). Use it to add events, child
         spans, or extra attributes from inside a handler:
       </p>
-      <CodeBlock code={`app.route({
+      <CodeBlock
+        code={`import { type TracingSpan } from "@daloyjs/core";
+import { z } from "zod";
+
+const CreateOrder = z.object({
+  items: z.array(z.object({ sku: z.string(), quantity: z.number().int().positive() })),
+});
+
+app.route({
   method: "POST",
   path: "/orders",
   operationId: "createOrder",
-  responses: { 201: { description: "created" } },
+  request: { body: CreateOrder },
+  responses: {
+    201: {
+      description: "created",
+      body: z.object({ id: z.string(), itemCount: z.number() }),
+    },
+  },
   handler: async ({ state, body }) => {
-    const span = state.otelSpan as import("@daloyjs/core").TracingSpan | undefined;
+    const span = state.otelSpan as TracingSpan | undefined;
     span?.setAttribute("order.size", body.items.length);
     span?.setAttributes?.({ "tenant.id": state.tenantId as string });
-    return { status: 201 as const };
+    return { status: 201 as const, body: { id: "ord_123", itemCount: body.items.length } };
   },
-});`} />
+});`}
+      />
 
       <h2>Customizing span name and attributes</h2>
       <p>
         All extractors are optional. They are merged on top of the defaults so
         you only need to override what you care about.
       </p>
-      <CodeBlock code={`otelTracing({
+      <CodeBlock
+        code={`otelTracing({
   tracer,
   spanName: (req) => \`HTTP \${req.method} \${new URL(req.url).pathname}\`,
   attributesFromRequest: (req) => ({
@@ -144,7 +160,8 @@ const app = new App({
   attributesFromResponse: (res) => ({
     "http.response.body.size": Number(res.headers.get("content-length") ?? 0),
   }),
-});`} />
+});`}
+      />
 
       <h2>Propagating upstream context</h2>
       <p>
@@ -153,7 +170,8 @@ const app = new App({
         <code>contextFromRequest</code> to wire your propagator&apos;s{" "}
         <code>extract</code> in:
       </p>
-      <CodeBlock code={`import { context, propagation, trace } from "@opentelemetry/api";
+      <CodeBlock
+        code={`import { context, propagation, trace } from "@opentelemetry/api";
 
 otelTracing({
   tracer: trace.getTracer("my-service"),
@@ -165,7 +183,8 @@ otelTracing({
   onSpanStart: (_req, span) => {
     span.setAttribute("component", "daloy");
   },
-});`} />
+});`}
+      />
 
       <h2>End-to-end with Jaeger (OTLP)</h2>
       <p>
@@ -176,8 +195,8 @@ otelTracing({
         <code>TracingTracer</code> interface, the example wires in a{" "}
         <strong>dependency-free OTLP/HTTP exporter</strong> (about 120 lines of
         web-standard <code>fetch</code> + <code>crypto</code>) that ships spans
-        straight to Jaeger&apos;s OTLP receiver, no <code>@opentelemetry/*</code>{" "}
-        SDK required.
+        straight to Jaeger&apos;s OTLP receiver, no{" "}
+        <code>@opentelemetry/*</code> SDK required.
       </p>
       <h3>1. Start Jaeger</h3>
       <CodeBlock
@@ -218,8 +237,8 @@ curl localhost:3002/orders \\
         <code>trace.getTracer(&quot;svc&quot;)</code> from{" "}
         <code>@opentelemetry/api</code> backed by{" "}
         <code>@opentelemetry/sdk-node</code> and an OTLP exporter. The{" "}
-        <code>otelTracing()</code> call does not change; only the tracer you pass
-        in does.
+        <code>otelTracing()</code> call does not change; only the tracer you
+        pass in does.
       </p>
 
       <h2>Lifecycle and limitations</h2>
@@ -249,11 +268,13 @@ curl localhost:3002/orders \\
       </ul>
 
       <h2>Tree-shake-friendly subpath</h2>
-      <CodeBlock code={`// Main barrel:
+      <CodeBlock
+        code={`// Main barrel:
 import { otelTracing } from "@daloyjs/core";
 
 // Or, to keep your bundle minimal:
-import { otelTracing } from "@daloyjs/core/tracing";`} />
+import { otelTracing } from "@daloyjs/core/tracing";`}
+      />
     </>
   );
 }

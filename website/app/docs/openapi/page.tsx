@@ -116,10 +116,11 @@ const app = new App({
         Set <code>ui</code> to <code>&quot;scalar&quot;</code> (default),{" "}
         <code>&quot;swagger&quot;</code>, or <code>&quot;redoc&quot;</code>. All
         three render the same live spec, mount on the same paths, and ship the
-        same strict CSP and CDN-hosted assets, so switching is a one-word change.
-        Scalar and Swagger UI include a developer request console for protected
-        routes. Redoc is a read-only reference UI: it displays security
-        requirements, but it does not ship a built-in <em>Try it</em> console.
+        same strict CSP and CDN-hosted assets, so switching is a one-word
+        change. Scalar and Swagger UI include a developer request console for
+        protected routes. Redoc is a read-only reference UI: it displays
+        security requirements, but it does not ship a built-in <em>Try it</em>{" "}
+        console.
       </p>
       <CodeBlock
         code={`new App({
@@ -134,11 +135,11 @@ const app = new App({
 });`}
       />
       <p>
-        Swagger UI keeps authorizations from its <em>Authorize</em> dialog across
-        reloads by default. Scalar automatically selects the first configured
-        OpenAPI security scheme, so the auth form is ready for developers to
-        paste a bearer token or API key. If you want a different Scalar default,
-        set it explicitly:
+        Swagger UI keeps authorizations from its <em>Authorize</em> dialog
+        across reloads by default. Scalar automatically selects the first
+        configured OpenAPI security scheme, so the auth form is ready for
+        developers to paste a bearer token or API key. If you want a different
+        Scalar default, set it explicitly:
       </p>
       <CodeBlock
         code={`new App({
@@ -161,8 +162,8 @@ const app = new App({
         The <code>redoc</code> object is forwarded verbatim to{" "}
         <code>Redoc.init(specUrl, configuration, element)</code>. Because Redoc
         builds its search index in a <code>blob:</code> Web Worker, the
-        auto-mounted <code>/docs</code> route automatically widens that page&apos;s
-        CSP with <code>worker-src &apos;self&apos; blob:</code> for{" "}
+        auto-mounted <code>/docs</code> route automatically widens that
+        page&apos;s CSP with <code>worker-src &apos;self&apos; blob:</code> for{" "}
         <code>ui: &quot;redoc&quot;</code> only. Scalar and Swagger UI keep the
         tighter policy. The <code>scalar</code> option is ignored unless{" "}
         <code>ui</code> is <code>&quot;scalar&quot;</code>, and likewise for{" "}
@@ -261,7 +262,7 @@ console.log(\`wrote \${out}\`);`}
         language="json"
         code={`// package.json
 "scripts": {
-  "gen:openapi": "node --import tsx/esm scripts/dump-openapi.ts"
+  "gen:openapi": "node --import tsx scripts/dump-openapi.ts"
 }`}
       />
 
@@ -290,7 +291,7 @@ console.log(\`wrote \${out}\`);`}
       <h2>Webhooks</h2>
       <p>
         OpenAPI 3.1 lets a producer publish <strong>top-level webhooks</strong>{" "}
-, operations a consumer is expected to implement. Pass{" "}
+        , operations a consumer is expected to implement. Pass{" "}
         <code>webhooks</code> to <code>generateOpenAPI</code>
         and DaloyJS emits them under the document&apos;s top-level{" "}
         <code>webhooks</code> map.

@@ -69,17 +69,14 @@ pnpm add -D typescript tsx @types/node`}
 {
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx/esm --watch src/index.ts",
-    "start": "node --import tsx/esm src/index.ts"
+    "dev": "node --import tsx --watch src/index.ts",
+    "start": "node --import tsx src/index.ts"
   }
 }`}
       />
       <p>
-        We use the explicit <code>tsx/esm</code> loader subpath because the
-        project is <code>&quot;type&quot;: &quot;module&quot;</code>. The bare{" "}
-        <code>--import tsx</code> form also works on recent Node versions, but{" "}
-        <code>tsx/esm</code> is the canonical entrypoint for ESM projects and
-        avoids loader-resolution surprises in stricter setups.
+        We use <code>node --import tsx</code> so TypeScript entrypoints run
+        directly during local development without a separate build step.
       </p>
 
       <p>

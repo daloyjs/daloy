@@ -27,7 +27,7 @@ export default function Page() {
       <p>
         DaloyJS treats <code>multipart/form-data</code> as a first-class request
         shape. Two helpers, <code>fileField()</code> and{" "}
-        <code>multipartObject()</code>: let you describe an upload contract
+        <code>multipartObject()</code>, let you describe an upload contract
         once, get runtime validation (size caps, MIME allowlists, filename
         matchers), an end-to-end-typed handler, and a correct OpenAPI document
         with <code>multipart/form-data</code> media type and{" "}
@@ -95,10 +95,16 @@ app.route({
       }),
     }),
   },
-  responses: { 201: { description: "Created" } },
+  responses: {
+    201: {
+      description: "Created",
+      body: z.object({ ok: z.boolean() }),
+    },
+  },
   handler: async ({ body }) => {
     // body.file is a File; body.title is a validated string.
-    await uploadToS3(body.file.stream(), body.file.type);
+    const stream = body.file.stream(); // pass this to S3, disk, or another upstream
+    void stream;
     return { status: 201 as const, body: { ok: true } };
   },
 });`}
@@ -115,14 +121,21 @@ app.route({
           <code>&quot;image/*&quot;</code> / <code>&quot;*/*&quot;</code>).
         </li>
         <li>
-          <code>filename(name)</code>: predicate for filename validation,
-          useful for forcing extensions.
+          <code>filename(name)</code>: predicate for filename validation, useful
+          for forcing extensions.
         </li>
         <li>
           <code>magicBytes</code>: verify file signatures before the handler
           receives the upload. <code>true</code> derives known signatures from{" "}
           <code>accept</code> for PNG, JPEG, GIF, WebP, PDF, ZIP, and GZIP;
           custom signatures support domain-specific formats.
+        </li>
+        <li>
+          <code>rejectScriptableImages</code>: reject SVG, MVG, MSL, PostScript,
+          and EPS payloads that can execute inside renderers such as
+          ImageMagick. This is enabled automatically when{" "}
+          <code>magicBytes</code> is configured; set it to <code>false</code>{" "}
+          only when the renderer is sandboxed.
         </li>
         <li>
           <code>optional</code>: when <code>true</code>, accept{" "}
@@ -155,6 +168,23 @@ fileField({
     { mime: "application/x-daloy", bytes: [0x44, 0x4c, 0x59] },
   ],
 });`}
+      />
+
+      <h2>Strict form fields</h2>
+      <p>
+        By default, <code>multipartObject()</code> validates the fields you
+        declare and ignores extra form fields. Pass{" "}
+        <code>{`{ strict: true }`}</code> to reject undeclared fields and emit{" "}
+        <code>additionalProperties: false</code> in OpenAPI.
+      </p>
+      <CodeBlock
+        code={`const UploadBody = multipartObject(
+  {
+    title: z.string().min(1),
+    file: fileField({ accept: ["application/pdf"], magicBytes: true }),
+  },
+  { strict: true },
+);`}
       />
 
       <h2>App-level safety caps</h2>

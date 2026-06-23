@@ -31,20 +31,18 @@ export default function Page() {
         balancers, and on flaky mobile connections. For unsafe methods (
         <code>POST</code>, <code>PUT</code>, <code>PATCH</code>,{" "}
         <code>DELETE</code>) a blind retry can charge a card twice or create a
-        duplicate order. The{" "}
-        <code>idempotency()</code> middleware gives those requests an
-        exactly-once guarantee: the client sends a unique{" "}
+        duplicate order. The <code>idempotency()</code> middleware gives those
+        requests an exactly-once guarantee: the client sends a unique{" "}
         <code>Idempotency-Key</code> header, and DaloyJS makes sure the side
         effect runs at most once no matter how many times the request is
         replayed.
       </p>
       <p>
-        It is <strong>built-in and dependency-free</strong>, built on Web
-        Crypto and the Web-standard <code>Request</code>/<code>Response</code>,
-        so it runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel
-        Edge. The behavior mirrors the IETF{" "}
-        <em>Idempotency-Key HTTP Header Field</em> draft and the conventions
-        used by major payment processors.
+        It is <strong>built-in and dependency-free</strong>, built on Web Crypto
+        and the Web-standard <code>Request</code>/<code>Response</code>, so it
+        runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
+        The behavior mirrors the IETF <em>Idempotency-Key HTTP Header Field</em>{" "}
+        draft and the conventions used by major payment processors.
       </p>
 
       <h2>Quick start</h2>
@@ -81,8 +79,8 @@ app.route({
       <h2>How it works</h2>
       <p>
         For an applicable method that carries an <code>Idempotency-Key</code>{" "}
-        header, the middleware fingerprints the request (method + path + body)
-        and consults a pluggable store:
+        header, the middleware fingerprints the request (method + path + query
+        string + body) and consults a pluggable store:
       </p>
 
       <SequenceDiagram
@@ -182,6 +180,8 @@ app.route({
     cacheableStatus: (status) => status < 500,
     // Share one in-memory store across mounts with the same id.
     groupId: "payments",
+    // Namespace keys by caller. Default: hash of the Authorization header.
+    scope: (ctx) => (ctx.state.session as { id?: string } | undefined)?.id,
   }),
 );`}
         language="ts"
@@ -196,7 +196,9 @@ app.route({
         <code>SessionStore</code> and the rate-limit store: the one rule is that{" "}
         <code>reserve()</code> must be atomic (&ldquo;set if absent&rdquo;), the
         exact <code>SET key value NX</code> semantics of Redis, so two
-        concurrent requests cannot both win the reservation.
+        concurrent requests cannot both win the reservation. The{" "}
+        <code>key</code> passed to your store is already namespaced by{" "}
+        <code>groupId</code> and <code>scope</code>.
       </p>
       <CodeBlock
         code={`import type { IdempotencyStore, IdempotencyRecord } from "@daloyjs/core";
@@ -275,11 +277,14 @@ async function createChargeWithRetries(amount: number) {
           client&apos;s stored response. The store key is namespaced by the
           caller, defaulting to the <code>Authorization</code> header so the
           common bearer- / API-key case is isolated automatically. For
-          cookie-based sessions, pass a stable identity via{" "}
-          <code>scope</code>, e.g.{" "}
-          <code>scope: (ctx) =&gt; ctx.state.session?.id</code>. Unauthenticated
-          requests (no <code>Authorization</code>, no <code>scope</code>) still
-          dedupe by key alone.
+          cookie-based sessions, pass a stable identity via <code>scope</code>,
+          e.g.{" "}
+          <code>
+            scope: (ctx) =&gt; (ctx.state.session as {"{ id?: string }"} |
+            undefined)?.id
+          </code>
+          . Unauthenticated requests (no <code>Authorization</code>, no{" "}
+          <code>scope</code>) still dedupe by key alone.
         </li>
       </ul>
     </>

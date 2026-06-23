@@ -31,8 +31,8 @@ export default function Page() {
         A hot read endpoint often renders the same response over and over while
         nothing has changed. Re-running the handler (and its database or
         upstream calls) each time is pure waste. The{" "}
-        <code>responseCache()</code> middleware stores rendered response
-        bodies and replays them for matching requests, so the handler is{" "}
+        <code>responseCache()</code> middleware stores rendered response bodies
+        and replays them for matching requests, so the handler is{" "}
         <em>not invoked at all</em> while a cached representation is fresh.
       </p>
       <p>
@@ -94,7 +94,7 @@ app.route({
         source={{
           eyebrow: "request",
           label: "Eligible GET/HEAD, derive cache key",
-          detail: "method + URL (+ varyHeaders)",
+          detail: "method + path + query (+ varyHeaders)",
         }}
         branches={[
           {
@@ -212,6 +212,8 @@ app.use(
     cacheableStatus: (status) => status === 200,
     // Request headers whose values partition the cache (e.g. localization).
     varyHeaders: ["accept-language"],
+    // Cache Authorization-bearing requests only when responses are shareable.
+    cacheAuthenticatedRequests: false,
     // Custom cache key; return null to skip caching this request.
     keyGenerator: (ctx) => new URL(ctx.request.url).pathname,
     // Largest response body buffered + stored. Default: 1 MiB.
@@ -267,9 +269,9 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
             Requests carrying an <code>Authorization</code> header bypass the
             cache entirely (CWE-524, RFC&nbsp;9111&nbsp;§3.5).
           </strong>{" "}
-          A shared cache keyed on method + URL does not include the credential,
-          so caching an authenticated response would serve one user&apos;s
-          private data to the next caller of the same URL. Set{" "}
+          A shared cache keyed on method + path + query does not include the
+          credential, so caching an authenticated response would serve one
+          user&apos;s private data to the next caller of the same resource. Set{" "}
           <code>cacheAuthenticatedRequests: true</code> only for content that is
           genuinely shareable across principals, and pair it with{" "}
           <code>varyHeaders: [&quot;authorization&quot;]</code> (or a custom{" "}

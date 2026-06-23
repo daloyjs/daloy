@@ -9,7 +9,12 @@ export const metadata = buildMetadata({
   description:
     "Step-by-step DaloyJS tutorial: build a typed Bookstore REST API with contract-first routes, Zod validation, OpenAPI docs, and a generated TypeScript client.",
   path: "/docs/tutorials/bookstore",
-  keywords: ["DaloyJS tutorial", "Bookstore API tutorial", "TypeScript REST API tutorial", "OpenAPI tutorial"],
+  keywords: [
+    "DaloyJS tutorial",
+    "Bookstore API tutorial",
+    "TypeScript REST API tutorial",
+    "OpenAPI tutorial",
+  ],
   type: "article",
 });
 
@@ -18,8 +23,9 @@ export default function Page() {
     <>
       <h1>Tutorial: build a bookstore API</h1>
       <p>
-        We&apos;ll build a tiny bookstore service end-to-end: routes, validation, security, OpenAPI, a Hey
-        API typed SDK, and contract tests. By the end you&apos;ll have a production-shaped DaloyJS app.
+        We&apos;ll build a tiny bookstore service end-to-end: routes,
+        validation, security, OpenAPI, a Hey API typed SDK, and contract tests.
+        By the end you&apos;ll have a production-shaped DaloyJS app.
       </p>
 
       <FlowDiagram
@@ -27,43 +33,84 @@ export default function Page() {
         numbered
         steps={[
           { label: "Scaffold", detail: "pnpm add @daloyjs/core zod" },
-          { label: "buildApp factory", detail: "routes · Zod · security hooks", tone: "accent" },
+          {
+            label: "buildApp factory",
+            detail: "routes · Zod · security hooks",
+            tone: "accent",
+          },
           { label: "Serve", detail: "serve(app) on Node" },
           { label: "OpenAPI spec", detail: "generateOpenAPI(app)" },
           { label: "Typed SDK", detail: "Hey API openapi-ts" },
-          { label: "Contract tests", detail: "runContractTests(app)", tone: "success" },
+          {
+            label: "Contract tests",
+            detail: "runContractTests(app)",
+            tone: "success",
+          },
         ]}
         caption="A single buildApp factory is shared by the server, the OpenAPI dump, and the tests, so the spec, the typed client, and the contract tests can never drift apart."
       />
 
       <h2>1. Scaffold</h2>
-      <CodeBlock language="bash" code={`mkdir bookstore && cd bookstore
+      <CodeBlock
+        language="bash"
+        code={`mkdir bookstore && cd bookstore
 pnpm init
 pnpm add @daloyjs/core zod
-pnpm add -D typescript tsx @types/node @hey-api/openapi-ts prettier`} />
+pnpm add -D typescript tsx @types/node @hey-api/openapi-ts prettier`}
+      />
 
-      <CodeBlock language="json" code={`// package.json, replace with this
+      <CodeBlock
+        language="json"
+        code={`// package.json, replace with this
 {
   "name": "bookstore",
   "type": "module",
   "scripts": {
-    "dev":         "node --import tsx/esm src/server.ts",
-    "test":        "node --import tsx/esm --test tests/**/*.test.ts",
-    "gen:openapi": "node --import tsx/esm scripts/dump-openapi.ts",
+    "dev":         "node --import tsx src/server.ts",
+    "test":        "node --import tsx --test tests/**/*.test.ts",
+    "typecheck":   "tsc --noEmit",
+    "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
     "gen:client":  "openapi-ts",
     "gen":         "pnpm gen:openapi && pnpm gen:client"
   }
-}`} />
+}`}
+      />
 
-      <CodeBlock language="ini" code={`# .npmrc
+      <CodeBlock
+        language="json"
+        code={`// tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "openapi-ts.config.ts"]
+}`}
+      />
+
+      <CodeBlock
+        language="ini"
+        code={`# .npmrc
 auto-install-peers=true
 strict-peer-dependencies=true
 prefer-frozen-lockfile=true
-verify-store-integrity=true`} />
+verify-store-integrity=true`}
+      />
 
-      <h2>2. Build a shared <code>buildApp</code> factory</h2>
-      <p>Sharing the App between server, codegen, and tests is the secret to never having spec drift:</p>
-      <CodeBlock code={`// src/build-app.ts
+      <h2>
+        2. Build a shared <code>buildApp</code> factory
+      </h2>
+      <p>
+        Sharing the App between server, codegen, and tests is the secret to
+        never having spec drift:
+      </p>
+      <CodeBlock
+        code={`// src/build-app.ts
 import { z } from "zod";
 import { App, requestId, secureHeaders, cors, rateLimit, bearerAuth, NotFoundError } from "@daloyjs/core";
 
@@ -128,18 +175,23 @@ export function buildApp() {
   });
 
   return app;
-}`} />
+}`}
+      />
 
       <h2>3. Start the server</h2>
-      <CodeBlock code={`// src/server.ts
+      <CodeBlock
+        code={`// src/server.ts
 import { buildApp } from "./build-app.js";
 import { serve }    from "@daloyjs/core/node";
 
 const app = buildApp();
 const { port } = serve(app, { port: 3000 });
-console.log(\`bookstore listening on http://localhost:\${port}\`);`} />
+console.log(\`bookstore listening on http://localhost:\${port}\`);`}
+      />
 
-      <CodeBlock language="bash" code={`pnpm dev
+      <CodeBlock
+        language="bash"
+        code={`pnpm dev
 curl http://localhost:3000/books/1
 # {"id":"1","title":"Foundation","year":1951}
 
@@ -147,10 +199,12 @@ curl -X POST http://localhost:3000/books \\
   -H "authorization: Bearer demo-token" \\
   -H "content-type: application/json" \\
   -d '{"title":"Hyperion","year":1989}'
-# {"id":"3","title":"Hyperion","year":1989}`} />
+# {"id":"3","title":"Hyperion","year":1989}`}
+      />
 
       <h2>4. Generate the OpenAPI spec</h2>
-      <CodeBlock code={`// scripts/dump-openapi.ts
+      <CodeBlock
+        code={`// scripts/dump-openapi.ts
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname }          from "node:path";
 import { generateOpenAPI }  from "@daloyjs/core/openapi";
@@ -165,33 +219,42 @@ const doc  = generateOpenAPI(app, {
 
 await mkdir(dirname(out), { recursive: true });
 await writeFile(out, JSON.stringify(doc, null, 2));
-console.log(\`wrote \${out}\`);`} />
+console.log(\`wrote \${out}\`);`}
+      />
 
       <CodeBlock language="bash" code={`pnpm gen:openapi`} />
 
       <h2>5. Generate a typed Hey API SDK</h2>
-      <CodeBlock code={`// openapi-ts.config.ts
+      <CodeBlock
+        code={`// openapi-ts.config.ts
 import { defineConfig } from "@hey-api/openapi-ts";
 export default defineConfig({
   input: "./generated/openapi.json",
   output: { path: "./generated/client", postProcess: ["prettier"] },
   plugins: ["@hey-api/client-fetch", "@hey-api/typescript", "@hey-api/sdk"],
-});`} />
+});`}
+      />
 
-      <CodeBlock language="bash" code={`pnpm gen
-# generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}`} />
+      <CodeBlock
+        language="bash"
+        code={`pnpm gen
+# generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}`}
+      />
 
       <h2>6. Use the SDK from any TS consumer</h2>
-      <CodeBlock code={`import { client } from "../generated/client";
-import { getBookById, createBook } from "../generated/client/sdk.gen";
+      <CodeBlock
+        code={`import { client } from "../generated/client/client.gen.js";
+import { getBookById } from "../generated/client/sdk.gen.js";
 
 client.setConfig({ baseUrl: "http://localhost:3000" });
 
 const { data } = await getBookById({ path: { id: "1" } });
-console.log(data?.title); // string | undefined - fully typed`} />
+console.log(data?.title); // string | undefined - fully typed`}
+      />
 
       <h2>7. Add tests</h2>
-      <CodeBlock code={`// tests/books.test.ts
+      <CodeBlock
+        code={`// tests/books.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../src/build-app.js";
@@ -214,16 +277,23 @@ test("POST /books rejects without token", async () => {
     body: JSON.stringify({ title: "Hyperion" }),
   });
   assert.equal(res.status, 401);
-});`} />
+});`}
+      />
 
       <CodeBlock language="bash" code={`pnpm test`} />
 
       <h2>What you built</h2>
       <ul>
         <li>A typed, validated, secured HTTP API.</li>
-        <li>A real OpenAPI 3.1 document and a generated typed SDK, both staying in sync forever.</li>
+        <li>
+          A real OpenAPI 3.1 document and a generated typed SDK, both staying in
+          sync forever.
+        </li>
         <li>Contract tests guarding against drift in CI.</li>
-        <li>A hardened install pipeline using pnpm plus a locked-down <code>.npmrc</code>.</li>
+        <li>
+          A hardened install pipeline using pnpm plus a locked-down{" "}
+          <code>.npmrc</code>.
+        </li>
       </ul>
 
       <p>

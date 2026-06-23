@@ -51,8 +51,13 @@ export default function Page() {
       />
 
       <h2>In-process test client</h2>
-      <p>Every <code>App</code> exposes a <code>request()</code> method that round-trips a fetch <code>Request</code> through the same pipeline real traffic uses, no socket, no port:</p>
-      <CodeBlock code={`import test from "node:test";
+      <p>
+        Every <code>App</code> exposes a <code>request()</code> method that
+        round-trips a fetch <code>Request</code> through the same pipeline real
+        traffic uses, no socket, no port:
+      </p>
+      <CodeBlock
+        code={`import test from "node:test";
 import assert from "node:assert/strict";
 import { app } from "../src/server.js";
 
@@ -69,14 +74,22 @@ test("POST /books rejects unauthorized", async () => {
     body: JSON.stringify({ title: "Dune" }),
   });
   assert.equal(res.status, 401);
-});`} />
+});`}
+      />
 
       <h2>Mock mode</h2>
       <p>
-        For pure-contract testing (no DB, no side effects), enable <code>mockMode</code>. DaloyJS will return the first
-        declared <code>examples</code> entry from your response schema without ever invoking your handler:
+        For pure-contract testing (no DB, no side effects), enable{" "}
+        <code>mockMode</code>. DaloyJS returns the first declared response{" "}
+        <code>examples</code> entry for the first 2xx status without ever
+        invoking your handler. If no example is declared, the mocked body is{" "}
+        <code>null</code>.
       </p>
-      <CodeBlock code={`const app = new App({ mockMode: true });
+      <CodeBlock
+        code={`import { App } from "@daloyjs/core";
+import { z } from "zod";
+
+const app = new App({ mockMode: true });
 
 app.route({
   method: "GET",
@@ -89,15 +102,21 @@ app.route({
       examples: { default: { id: "u_1", name: "Alice" } },
     },
   },
-  handler: async () => { throw new Error("not called in mock mode"); },
-});`} />
+  handler: async () => {
+    throw new Error("not called in mock mode");
+  },
+});`}
+      />
 
       <h2>Contract test runner</h2>
       <p>
-        <code>runContractTests</code> walks your registered routes and verifies that every declared example
-        validates against its schema, every operationId is unique, and there are no obvious anti-patterns:
+        <code>runContractTests</code> walks your registered routes and verifies
+        that every declared response and <code>meta.examples</code> payload
+        validates against its schema, every required <code>operationId</code> is
+        present and unique, and there are no obvious anti-patterns:
       </p>
-      <CodeBlock code={`import { runContractTests } from "@daloyjs/core/contract";
+      <CodeBlock
+        code={`import { runContractTests } from "@daloyjs/core/contract";
 
 const report = await runContractTests(app, {
   requireOperationId: true,
@@ -108,7 +127,8 @@ if (!report.ok) {
   console.error(report.issues);
   process.exit(1);
 }
-console.log(\`\${report.checked} routes - all clean\`);`} />
+console.log(\`\${report.checked} routes - all clean\`);`}
+      />
 
       <BranchDiagram
         title="What the runner checks"
@@ -128,11 +148,11 @@ console.log(\`\${report.checked} routes - all clean\`);`} />
           },
           {
             label: "examples match schema",
-            detail: "each example validates",
+            detail: "response examples + meta.examples",
           },
           {
             label: "no body on safe methods",
-            detail: "GET / HEAD / DELETE",
+            detail: "GET / HEAD / DELETE warning",
           },
           {
             label: "responses declared",
@@ -141,61 +161,89 @@ console.log(\`\${report.checked} routes - all clean\`);`} />
         ]}
         converge={{
           label: "report.ok",
-          detail: "report.issues lists every failure",
+          detail: "false only for error-level issues",
         }}
-        caption="A single walk over your routes produces one pass/fail report. Any failed check lands in report.issues, which is exactly what the CI gate and pre-push hook key off."
+        caption="A single walk over your routes produces one report. Error-level issues make report.ok false; warnings, such as safe-method body schemas, stay in report.issues without failing the gate."
       />
 
       <p>The report flags:</p>
       <ul>
-        <li>Routes missing <code>operationId</code>.</li>
+        <li>
+          Routes missing <code>operationId</code>.
+        </li>
         <li>Duplicate operationIds.</li>
-        <li>Examples that don&apos;t match their schemas.</li>
-        <li>Body schemas declared on safe methods (<code>GET</code>, <code>HEAD</code>, <code>DELETE</code>).</li>
-        <li>Routes with no declared <code>responses</code>.</li>
+        <li>
+          Response examples and <code>meta.examples</code> payloads that
+          don&apos;t match their schemas.
+        </li>
+        <li>
+          Body schemas declared on safe methods (<code>GET</code>,{" "}
+          <code>HEAD</code>, <code>DELETE</code>) as warnings.
+        </li>
+        <li>
+          Routes with no declared <code>responses</code>.
+        </li>
       </ul>
 
       <h2>Wire into CI</h2>
-      <CodeBlock language="json" code={`{
+      <CodeBlock
+        language="json"
+        code={`{
   "scripts": {
-    "test":      "node --import tsx/esm --test tests/**/*.test.ts",
-    "test:contract": "node --import tsx/esm scripts/contract.ts"
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "contract": "daloy inspect --check src/build-app.ts"
   }
-}`} />
+}`}
+      />
       <p>
-        Or skip the script and let the CLI do it. <code>daloy inspect --check &lt;entry&gt;</code> loads your app, runs
-        the same checks, and exits non-zero on any error-level issue, so it drops straight into a CI step. The entry
-        must export your <code>App</code> as the default export or a named <code>app</code> export.
+        Or skip the script and let the CLI do it directly.{" "}
+        <code>daloy inspect --check &lt;entry&gt;</code> loads your app, runs
+        the same checks, and exits non-zero on any error-level issue, so it
+        drops straight into a CI step. The entry must export your{" "}
+        <code>App</code> as the default export or a named <code>app</code>{" "}
+        export.
       </p>
-      <CodeBlock language="bash" code={`daloy inspect --check src/app.ts`} />
+      <CodeBlock
+        language="bash"
+        code={`pnpm exec daloy inspect --check src/build-app.ts`}
+      />
       <p>
-        Every <code>create-daloy</code> template already ships this gate: a <code>tests/contract.test.ts</code>{" "}
-        (<code>tests/contract_test.ts</code> on Deno) that asserts <code>report.ok</code> for the real app and proves
-        the gate rejects a broken contract. It runs as part of the project&apos;s <code>test</code> task, so a missing
-        operationId or a mismatched example fails CI from the first commit.
+        Every <code>create-daloy</code> template already ships this gate: a{" "}
+        <code>tests/contract.test.ts</code> (<code>tests/contract_test.ts</code>{" "}
+        on Deno) that asserts <code>report.ok</code> for the real app and proves
+        the gate rejects a broken contract. It runs as part of the
+        project&apos;s <code>test</code> task, so a missing operationId or a
+        mismatched example fails CI from the first commit.
       </p>
 
       <h2>Gate it locally with a pre-push hook</h2>
       <p>
-        A contract check is an authoring-time concern, so it belongs on your machine, never on the
-        production request path. A <code>pre-push</code> git hook is the cleanest home for it: it is
-        localhost-only by construction (it cannot run in production), adds no server boot cost, and fires
-        right before code leaves your machine, with CI as the backstop.
+        A contract check is an authoring-time concern, so it belongs on your
+        machine, never on the production request path. A <code>pre-push</code>{" "}
+        git hook is the cleanest home for it: it is localhost-only by
+        construction (it cannot run in production), adds no server boot cost,
+        and fires right before code leaves your machine, with CI as the
+        backstop.
       </p>
       <p>
-        Every <code>create-daloy</code> template ships this hook under <code>.githooks/pre-push</code>, wired to
-        a <code>hooks:install</code> script. Enabling it is one command per clone: it points{" "}
-        <code>core.hooksPath</code> at the committed hook, so the whole team shares the same gate. The hook
-        skips gracefully when tooling is missing (it never blocks a push over an uninstalled dependency), and
-        you can always bypass it once with <code>git push --no-verify</code>.
+        Every <code>create-daloy</code> template ships this hook under{" "}
+        <code>.githooks/pre-push</code>, wired to a <code>hooks:install</code>{" "}
+        script. Enabling it is one command per clone: it points{" "}
+        <code>core.hooksPath</code> at the committed hook, so the whole team
+        shares the same gate. The hook skips gracefully when tooling is missing
+        (it never blocks a push over an uninstalled dependency), and you can
+        always bypass it once with <code>git push --no-verify</code>.
       </p>
-      <CodeBlock language="bash" code={`# Enable the contract gate for this clone (points core.hooksPath at .githooks)
-npm run hooks:install     # or: pnpm/yarn run hooks:install · bun run hooks:install · deno task hooks:install
+      <CodeBlock
+        language="bash"
+        code={`# Enable the contract gate for this clone (points core.hooksPath at .githooks)
+pnpm hooks:install
 
 # From then on, every \`git push\` runs the contract check first:
 #   .githooks/pre-push  ->  daloy inspect --check src/build-app.ts
 # Need to push past it once:
-git push --no-verify`} />
+git push --no-verify`}
+      />
     </>
   );
 }

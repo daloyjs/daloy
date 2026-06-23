@@ -30,10 +30,9 @@ export default function Page() {
       <p>
         List endpoints need a way to page through results that is stable under
         concurrent writes, cheap on the database, and self-describing in the
-        contract. DaloyJS ships{" "}
-        <strong>built-in, dependency-free</strong> cursor-pagination helpers
-        that cover all three concerns: an <strong>opaque cursor</strong> codec,
-        an{" "}
+        contract. DaloyJS ships <strong>built-in, dependency-free</strong>{" "}
+        cursor-pagination helpers that cover all three concerns: an{" "}
+        <strong>opaque cursor</strong> codec, an{" "}
         <strong>
           RFC 8288 <code>Link</code> header
         </strong>{" "}
@@ -203,8 +202,8 @@ set.headers.set("Link", linkHeader);
         Because <code>paginationQuery()</code> exposes a{" "}
         <code>toJSONSchema()</code> method, the OpenAPI generator emits the{" "}
         <code>cursor</code> and <code>limit</code> query parameters into the
-        contract automatically, with no duplicate parameter declarations, and the
-        typed client picks them up on the next <code>pnpm gen</code>.
+        contract automatically, with no duplicate parameter declarations, and
+        the typed client picks them up on the next <code>pnpm gen</code>.
       </p>
       <CodeBlock
         code={`// Generated for GET /books:
@@ -219,10 +218,9 @@ set.headers.set("Link", linkHeader);
       />
       <p>
         At runtime the same schema coerces <code>limit</code> from its string
-        query value to an integer, clamps it to{" "}
-        <code>[minLimit, maxLimit]</code>, and rejects out-of-range or
-        non-integer values at the request boundary with a <code>422</code>.
-        Customize the parameter names and bounds:
+        query value to an integer and rejects out-of-range or non-integer values
+        at the request boundary with a <code>422</code>. Customize the parameter
+        names and bounds:
       </p>
       <CodeBlock
         code={`paginationQuery({

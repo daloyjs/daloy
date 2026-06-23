@@ -127,7 +127,11 @@ if (r.status === 200) {
           { label: "openapi.json", detail: "OpenAPI 3.1 spec on disk" },
           { label: "openapi-ts", detail: "Hey API generator" },
           { label: "Typed SDK", detail: "sdk.gen.ts · types.gen.ts" },
-          { label: "Consumer", detail: "fully typed fetch calls", tone: "success" },
+          {
+            label: "Consumer",
+            detail: "fully typed fetch calls",
+            tone: "success",
+          },
         ]}
       />
 
@@ -151,7 +155,7 @@ export default defineConfig({
         language="json"
         code={`// package.json
 "scripts": {
-  "gen:openapi": "node --import tsx/esm scripts/dump-openapi.ts",
+  "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
   "gen:client":  "openapi-ts",
   "gen":         "pnpm gen:openapi && pnpm gen:client"
 }`}

@@ -48,7 +48,7 @@ export default function Page() {
       <FlowDiagram
         title="From request to scrape"
         numbered
-        caption="RED instrumentation records counters and the latency histogram on every request, the registry accumulates the series, then a Prometheus scrape hits the auth-guarded, rate-limited /metrics route and gets the rendered exposition text."
+        caption="RED instrumentation records counters and the latency histogram for routes registered after app.metrics(), the registry accumulates the series, then a Prometheus scrape hits the auth-guarded, rate-limited /metrics route and gets the rendered exposition text."
         steps={[
           {
             label: "Request handled",
@@ -79,22 +79,27 @@ export default function Page() {
       <h2>Quick start</h2>
       <p>
         Call <code>app.metrics()</code> <strong>before</strong> registering the
-        routes you want measured. It installs RED instrumentation and registers
-        the scrape route in one step.
+        routes you want measured. It installs RED instrumentation for later
+        routes and registers the scrape route in one step.
       </p>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
+import { z } from "zod";
 
 const app = new App();
 
 // Install instrumentation + the scrape route BEFORE your routes.
-app.metrics({ token: process.env.METRICS_TOKEN });
+app.metrics({ token: process.env.METRICS_TOKEN! });
+
+const BooksResponse = z.object({
+  items: z.array(z.object({ id: z.string(), title: z.string() })),
+});
 
 app.route({
   method: "GET",
   path: "/books",
   operationId: "listBooks",
-  responses: { 200: { description: "ok" } },
+  responses: { 200: { description: "ok", body: BooksResponse } },
   handler: () => ({ status: 200 as const, body: { items: [] } }),
 });
 
@@ -108,8 +113,10 @@ app.route({
       />
       <p>
         Because the instrumentation is installed as a group hook, it only wraps
-        routes registered <em>after</em> the <code>app.metrics()</code> call,
-        the same ordering rule as any <code>app.use(...)</code> middleware.
+        matched routes registered <em>after</em> the <code>app.metrics()</code>{" "}
+        call, the same ordering rule as any <code>app.use(...)</code>{" "}
+        middleware. Unmatched <code>404</code> paths and synthetic{" "}
+        <code>OPTIONS</code> preflights are not counted.
       </p>
 
       <h2>What gets exported</h2>
@@ -281,7 +288,7 @@ app.route({
       <CodeBlock
         code={`app.metrics({
   path: "/internal/metrics",
-  token: process.env.METRICS_TOKEN,
+  token: process.env.METRICS_TOKEN!,
   rateLimit: false,            // safe inside a private VPC
   buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.5, 1],
   exclude: (p) => p === "/healthz" || p === "/readyz",
@@ -301,7 +308,7 @@ app.route({
       </p>
       <CodeBlock
         code={`app.metrics({
-  token: process.env.METRICS_TOKEN,
+  token: process.env.METRICS_TOKEN!,
   // Group "/books/1", "/books/2", ... into a single series.
   route: (ctx) => new URL(ctx.request.url).pathname.replace(/\\/books\\/[^/]+/, "/books/:id"),
 });`}
@@ -326,7 +333,7 @@ const renderTime = registry.histogram(
 );
 
 const app = new App();
-app.metrics({ registry, token: process.env.METRICS_TOKEN });
+app.metrics({ registry, token: process.env.METRICS_TOKEN! });
 
 // Later, from your handlers / workers:
 ordersPlaced.inc({ channel: "web" });
@@ -347,20 +354,33 @@ renderTime.observe({ template: "invoice" }, 0.042);`}
         built-in scrape route, then render the registry from your own handler.
       </p>
       <CodeBlock
-        code={`import { App, MetricsRegistry, httpMetrics } from "@daloyjs/core";
+        code={`import {
+  App,
+  MetricsRegistry,
+  PROMETHEUS_CONTENT_TYPE,
+  httpMetrics,
+} from "@daloyjs/core";
+import { z } from "zod";
 
 const registry = new MetricsRegistry();
 const app = new App();
-app.use(httpMetrics({ registry, maxRouteCardinality: 50 }));
+app.use(httpMetrics({
+  registry,
+  maxRouteCardinality: 50,
+  exclude: (path) => path === "/metrics",
+}));
 
 app.route({
   method: "GET",
   path: "/metrics",
-  responses: { 200: { description: "ok" } },
+  responses: { 200: { description: "ok", body: z.string() } },
   handler: () => ({
     status: 200 as const,
     body: registry.render(),
-    headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
+    headers: {
+      "content-type": PROMETHEUS_CONTENT_TYPE,
+      "cache-control": "no-store",
+    },
   }),
 });`}
         language="ts"
