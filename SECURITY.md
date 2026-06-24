@@ -64,7 +64,7 @@ Each advisory also lists the CVSS v3.1 vector, the affected version range, the f
 
 ## EU Cyber Resilience Act (CRA) mapping
 
-Regulation [(EU) 2024/2847](https://eur-lex.europa.eu/eli/reg/2024/2847/oj) places binding cybersecurity obligations on the manufacturer of any "product with digital elements" placed on the EU market. Key deadlines:
+Regulation [(EU) 2024/2847](https://eur-lex.europa.eu/eli/reg/2024/2847/oj) (the European Commission's [Cyber Resilience Act policy hub](https://digital-strategy.ec.europa.eu/en/policies/cyber-resilience-act)) places binding cybersecurity obligations on the manufacturer of any "product with digital elements" placed on the EU market. Key deadlines:
 
 - **2026-09-11** — mandatory 24-hour reporting of actively exploited vulnerabilities and severe incidents to ENISA and the national CSIRT (Article 14).
 - **2027-12-11** — full conformity with Annex I before a product may bear the CE mark (Article 13).
@@ -536,6 +536,10 @@ Can a maintainer-dispute attack happen inside DaloyJS itself?
 
 What this does **not** cover: a consumer who depends on a different low-level package that hits its own fsnotify-shaped dispute (the consumer re-pins on a known-good lockfile, waits the 24 h cooldown, verifies provenance before adopting); two compromised Daloy maintainers acting in concert (mandatory hardware 2FA + off-boarding checklist make that expensive).
 
+### AI-generated-code incident risk (Aikido State-of-AI 2026 survey)
+
+Not an attack — a 450-practitioner survey ([State of AI in Security & Development 2026](https://www.aikido.dev/state-of-ai-security-development-2026)) whose findings (69% of orgs found AI-introduced vulnerabilities; 1 in 5 had a serious incident; tool sprawl and false positives drive risk; automated CI gates beat manual review) describe what *reduces* incidents. DaloyJS's design is that prescription: secure-by-default output means AI-generated code on DaloyJS starts safe, and the [`AGENTS.md`](AGENTS.md) "do not weaken a check" rule plus the fail-closed `verify:*` gates are automated, low-false-positive, in-pipeline guardrails on a single `pnpm verify:*` surface. NB: this survey does not itself cover slopsquatting — that thread is the ENISA §5.2 mapping above, defended by `verify:known-dep-names` + `minimum-release-age`.
+
 ### Container & base-image hardening
 
 `create-daloy` scaffolded container templates close most of this gap with free, open-source controls. Detailed mapping to Aikido x Root.io's hardening guide and Aikido's container-scanning guide is in [`website/app/docs/security`](website/app/docs/security). Highlights:
@@ -548,6 +552,45 @@ What this does **not** cover: a consumer who depends on a different low-level pa
 - **`_dockerignore`** excludes `.env*` (except `.env.example`), `.git`, `node_modules`, `coverage`, `dist`, `*.log`.
 
 Every scaffolded template ships the hardened `_Dockerfile` and `_dockerignore` above (with a runtime-appropriate base image via the `NODE_IMAGE` / `BUN_IMAGE` / `DENO_IMAGE` build-arg); the create-daloy test suite enforces this for all of them. For the serverless / edge platform templates (`vercel`, `cloudflare-worker`), production still rides the platform's managed runtime (`vercel deploy`, `wrangler deploy`), and their `Dockerfile` targets reproducible local development, CI, and self-hosting rather than the production runtime.
+
+### ENISA Technical Advisory for Secure Use of Package Managers (March 2026) mapping
+
+ENISA's [Technical Advisory for Secure Use of Package Managers](https://www.enisa.europa.eu/publications/enisa-technical-advisory-for-secure-use-of-package-managers) (v1.1, March 2026, [PDF](https://www.enisa.europa.eu/sites/default/files/2026-03/ENISA%20Technical%20Advisory%20-%20Package_Managers_Final.pdf)) is the EU reference checklist for *consuming* third-party packages. It organises controls across a four-stage life cycle — **Select → Integrate → Monitor → Mitigate**. DaloyJS implements the advisory's integration checklist **as shipped defaults**, including the two controls ENISA itself flags as "optional / situational" or "more suited for high-security environments." This is the evidence map.
+
+#### §4.1 Package selection / §4.2 Package integration
+
+| ENISA recommendation | DaloyJS control |
+| --- | --- |
+| **Installation script prevention** — `ignore-scripts=true` (ENISA: *"may be more suited for high-security or isolated environments"*) | **Default, not opt-in.** `ignore-scripts=true` in root [`.npmrc`](.npmrc) + every scaffolded template `_npmrc` + the publish flow; `pnpm verify:no-lifecycle-scripts` is the regression net. |
+| **Pinning versions + release-age delay** — lockfile + `npm ci`; ENISA also lists `npm install --before=<date>` to *"avoid newly published versions"* as "optional and situational" | **Default, not manual.** Committed `pnpm-lock.yaml` + `frozen-lockfile=true`; the cooldown is a standing policy: `minimum-release-age=1440` (24 h). |
+| **Integrity enforcement** — hash / lockfile verification (SHA-512) | `frozen-lockfile=true` + `verify-store-integrity=true` + committed lockfile + `pnpm verify:lockfile`. |
+| **Package source enforcement** — restrict to trusted registry, validate source URLs, reject tarball/`github:` installs | `registry=` pinned in `.npmrc`; `pnpm verify:lockfile-sources` ([`scripts/verify-lockfile-sources.ts`](scripts/verify-lockfile-sources.ts)) refuses any non-`registry.npmjs.org` source; `blockExoticSubdeps: true`. |
+| **SBOM creation** | Every tarball ships `dist/sbom.cdx.json` (CycloneDX 1.5) + `dist/sbom.spdx.json` (SPDX 2.3); `pnpm verify:sbom`. |
+| **Vulnerability checks in CI** — block builds on known-vulnerable components | `pnpm audit --prod` daily + in `ci.yml` and the pre-publish `verify` job; OSV-Scanner against the OpenSSF `malicious-packages` corpus. |
+| **Trusted source / Trusted Publishing + provenance** (ENISA cites npm Trusted Publishing) | **OIDC trusted publishing** (no long-lived `NPM_TOKEN`) + `--provenance` Sigstore attestation on every staged publish. See § npm publishing. |
+| **Package signing & integrity verification** | `--provenance` (Sigstore + Rekor) + SHA-512 lockfile integrity + `verify-store-integrity`. |
+| **Maintainer reputation / internal allowlist** (ENISA: *"where feasible, maintain an internal allowlist of approved packages or maintainers"*) | `pnpm verify:known-dep-names` ([`scripts/verify-known-dep-names.ts`](scripts/verify-known-dep-names.ts)) — exact-match top-level name allowlist; `@daloyjs/*` scope owned at the registry. |
+| **Reduce dependencies / "assess whether the dependency is actually needed"** | `@daloyjs/core` ships **zero runtime dependencies** (`pnpm verify:no-runtime-deps`) — the strongest possible form of attack-surface reduction. |
+| **Avoid pre/post-install scripts that download code from external URLs** | `pnpm verify:no-lifecycle-scripts` + `verify:no-remote-exec` + `verify:no-registry-exfiltration`. |
+
+#### §4.3 Package monitoring / §4.4 Vulnerability mitigation
+
+| ENISA recommendation | DaloyJS control |
+| --- | --- |
+| **Automate vulnerability scanning in CI; track CVEs/advisories; monitor outdated versions; SBOM-driven monitoring** | Daily `pnpm audit --prod` + OSV-Scanner (OSV.dev + `malicious-packages`) + Dependabot (npm + Actions, weekly) + the published SBOM as the correlation source. |
+| **Set alerts on maintainer ownership change / lapsed maintainer activity** | The quarterly disclosure exercise verifies every active contact's recovery-email-domain ownership (the `node-ipc` account-recovery-takeover vector); CODEOWNERS guards `package.json` / lockfile / `.npmrc`. |
+| **Assess — exploitability + reachability (CVSS / EPSS / KEV / VEX, call-graph analysis)** | CodeQL + Opengrep run reachability/SAST on DaloyJS's own `src/**`. **Per-app reachability triage of a CVE in a consumer's dependency tree is the consumer's job** — a framework cannot perform it for downstream apps. |
+| **Prioritise / Mitigate / Document & notify** | CVSS-keyed Patch SLA (§ Response Target); GHSA disclosure with CVSS vector + fixed version; SBOM updated on every release. |
+
+#### §5.2 AI-assisted development & "vibe-coding" — slopsquatting
+
+ENISA §5.2 names **slopsquatting** (attackers pre-registering hallucinated package names that AI tools confidently emit) as a first-class AI-era threat, and recommends: maintain visibility over AI-selected packages, review their necessity, automate selection/integration controls in CI, and strengthen vulnerability assessment since upfront scrutiny is reduced. DaloyJS closes both axes:
+
+- **Name axis** — `pnpm verify:known-dep-names` forces every top-level dependency onto an explicit allowlist, so a hallucinated `pnpm add <name>` cannot land without a reviewed PR diff.
+- **Time axis** — `minimum-release-age=1440` waits out the window in which a freshly-registered slop-squat is typically detected and unpublished.
+- ENISA's other three AI-dev mitigations (visibility, necessity review, CI automation) are exactly what the `verify:*` gate family enforces mechanically, plus the zero-runtime-deps posture that minimises what an AI can pull in through the framework.
+
+**Net:** DaloyJS meets or exceeds the ENISA integration checklist as defaults. The one area it does not (and structurally cannot) build in is per-consumer-app CVE reachability triage. Cross-references: the binding-law view of the same controls is the [§ EU Cyber Resilience Act (CRA) mapping](#eu-cyber-resilience-act-cra-mapping) above; the gate-by-gate campaign coverage is § Supply-chain attack classes blocked.
 
 ### Vibe-coder checklist (Aikido)
 
@@ -580,6 +623,7 @@ Optional defense-in-depth at the developer's keyboard:
 | Disclosure policy | This file, top |
 | Patch SLA | § Response Target → Patch SLA |
 | CRA Annex I evidence | § EU Cyber Resilience Act (CRA) mapping |
+| ENISA package-manager checklist | § ENISA Technical Advisory for Secure Use of Package Managers (March 2026) mapping |
 | Threat-class coverage | § Threat model → In scope |
 | Out-of-scope items | § Out of scope |
 | Supply-chain gates | § Supply-chain attack classes blocked |

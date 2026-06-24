@@ -18,6 +18,9 @@ export const metadata = buildMetadata({
     "GitHub Actions hardening",
     "quantum incident response",
     "Aikido safe-chain",
+    "ENISA package manager advisory",
+    "slopsquatting",
+    "Aikido State of AI 2026",
   ],
   type: "article",
 });
@@ -351,6 +354,158 @@ safe-chain setup`}
         the article recommends.
       </p>
 
+      <h2>Mapped to the ENISA package-manager advisory</h2>
+      <p>
+        ENISA&apos;s{" "}
+        <a
+          href="https://www.enisa.europa.eu/publications/enisa-technical-advisory-for-secure-use-of-package-managers"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Technical Advisory for Secure Use of Package Managers
+        </a>{" "}
+        (v1.1, March 2026) is the EU reference checklist for consuming
+        third-party packages, organised across a four-stage life cycle. DaloyJS
+        implements the integration checklist <strong>as shipped defaults</strong>
+        , including the two controls ENISA itself flags as &ldquo;optional&rdquo;
+        or &ldquo;more suited for high-security environments.&rdquo;
+      </p>
+      <FlowDiagram
+        title="ENISA package-consumption life cycle"
+        steps={[
+          {
+            eyebrow: "stage 1",
+            label: "Select",
+            detail: "trustworthy, verified, maintained",
+          },
+          {
+            eyebrow: "stage 2",
+            label: "Integrate",
+            detail: "integrity, source, scripts, pinning",
+            tone: "accent",
+          },
+          {
+            eyebrow: "stage 3",
+            label: "Monitor",
+            detail: "scan, track CVEs, ownership changes",
+          },
+          {
+            eyebrow: "stage 4",
+            label: "Mitigate",
+            detail: "assess, prioritise, patch, document",
+            tone: "success",
+          },
+        ]}
+        caption="DaloyJS meets or exceeds the Select and Integrate controls as defaults; Monitor is daily SCA plus Dependabot; per-app CVE reachability triage in Mitigate is the consumer's job."
+      />
+      <table>
+        <thead>
+          <tr>
+            <th>ENISA recommendation</th>
+            <th>DaloyJS control</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Installation script prevention (<code>ignore-scripts</code>; ENISA
+              flags as &ldquo;high-security&rdquo;)
+            </td>
+            <td>
+              Default, not opt-in: <code>ignore-scripts=true</code> +{" "}
+              <code>pnpm verify:no-lifecycle-scripts</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              Release-age delay (<code>--before</code>; ENISA flags as
+              &ldquo;optional and situational&rdquo;)
+            </td>
+            <td>
+              Standing policy: <code>minimum-release-age=1440</code> (24h)
+            </td>
+          </tr>
+          <tr>
+            <td>Integrity / lockfile verification (SHA-512)</td>
+            <td>
+              <code>frozen-lockfile</code> + <code>verify-store-integrity</code>{" "}
+              + <code>pnpm verify:lockfile</code>
+            </td>
+          </tr>
+          <tr>
+            <td>Package source enforcement (trusted registry only)</td>
+            <td>
+              <code>registry=</code> pinned +{" "}
+              <code>pnpm verify:lockfile-sources</code>
+            </td>
+          </tr>
+          <tr>
+            <td>SBOM creation</td>
+            <td>
+              CycloneDX 1.5 + SPDX 2.3 per release +{" "}
+              <code>pnpm verify:sbom</code>
+            </td>
+          </tr>
+          <tr>
+            <td>Trusted Publishing + provenance</td>
+            <td>
+              OIDC trusted publishing (no long-lived token) +{" "}
+              <code>--provenance</code> Sigstore
+            </td>
+          </tr>
+          <tr>
+            <td>Internal allowlist of approved package names</td>
+            <td>
+              <code>pnpm verify:known-dep-names</code>
+            </td>
+          </tr>
+          <tr>
+            <td>Reduce dependencies (&ldquo;is the dependency needed?&rdquo;)</td>
+            <td>
+              <code>@daloyjs/core</code> ships zero runtime deps (
+              <code>verify:no-runtime-deps</code>)
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        ENISA section 5.2 names <strong>slopsquatting</strong> (attackers
+        pre-registering hallucinated package names that AI tools emit) as a
+        first-class AI-era threat. DaloyJS closes both axes:{" "}
+        <code>verify:known-dep-names</code> forces every top-level dependency
+        onto an explicit allowlist (name axis), and{" "}
+        <code>minimum-release-age=1440</code> waits out the window in which a
+        slop-squat is typically detected and unpublished (time axis). Full
+        recommendation-by-control table:{" "}
+        <a
+          href="https://github.com/daloyjs/daloy/blob/main/SECURITY.md#enisa-technical-advisory-for-secure-use-of-package-managers-march-2026-mapping"
+          target="_blank"
+          rel="noreferrer"
+        >
+          SECURITY.md &rarr; ENISA mapping
+        </a>
+        .
+      </p>
+
+      <p>
+        ENISA section 5.2&apos;s concern is backed by survey data. Aikido&apos;s{" "}
+        <a
+          href="https://www.aikido.dev/state-of-ai-security-development-2026"
+          target="_blank"
+          rel="noreferrer"
+        >
+          State of AI in Security &amp; Development 2026
+        </a>{" "}
+        report (450 practitioners) found that 69% of organizations have
+        uncovered vulnerabilities introduced by AI-generated code and 1 in 5 had
+        a serious incident tied to it, and that automated CI gates reduce
+        incidents while manual review and tool sprawl do not. That is the case
+        for DaloyJS&apos;s posture here: secure-by-default output means
+        AI-generated code starts safe, and the fail-closed{" "}
+        <code>verify:*</code> gates are exactly the kind of automated,
+        low-false-positive guardrail the report associates with fewer incidents.
+      </p>
+
       <h2>What to do if a maintainer account is phished</h2>
       <p>
         The September 2025 chalk/debug compromise started with a single fake{" "}
@@ -480,6 +635,34 @@ safe-chain setup`}
             npm provenance documentation
           </a>
           .
+        </li>
+        <li>
+          <a
+            href="https://www.enisa.europa.eu/publications/enisa-technical-advisory-for-secure-use-of-package-managers"
+            target="_blank"
+            rel="noreferrer"
+          >
+            ENISA: Technical Advisory for Secure Use of Package Managers
+          </a>{" "}
+          (March 2026), and Socket&apos;s{" "}
+          <a
+            href="https://socket.dev/blog/enisa-technical-advisory-on-secure-package-manager-use"
+            target="_blank"
+            rel="noreferrer"
+          >
+            summary
+          </a>
+          .
+        </li>
+        <li>
+          <a
+            href="https://www.aikido.dev/state-of-ai-security-development-2026"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Aikido: State of AI in Security &amp; Development 2026
+          </a>{" "}
+          (survey of AI-generated-code incident rates).
         </li>
       </ul>
     </>
