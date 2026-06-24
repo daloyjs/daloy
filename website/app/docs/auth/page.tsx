@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Authentication & authorization for DaloyJS",
   description:
-    "Protect a DaloyJS API with JWT-based authentication and authorization from AWS Cognito, Microsoft Entra ID (MSAL), Auth0, Okta, or Clerk. Compares SDKs, runtime support, and the common bearer-auth plugin pattern.",
+    "Protect a DaloyJS API with authentication and authorization from AWS Cognito, Microsoft Entra ID (MSAL), Auth0, Okta, Clerk, LoginRadius, or Better Auth. Compares SDKs, runtime support, and the common bearer-auth plugin pattern.",
   path: "/docs/auth",
   keywords: [
     "DaloyJS authentication",
@@ -18,6 +18,8 @@ export const metadata = buildMetadata({
     "Auth0 DaloyJS",
     "Okta DaloyJS",
     "Clerk DaloyJS",
+    "LoginRadius DaloyJS",
+    "Better Auth DaloyJS",
     "JWT bearer auth",
   ],
   type: "article",
@@ -32,7 +34,7 @@ export default function Page() {
         ships primitives that make it easy to plug in a hosted identity provider
         (IdP). Your API receives a bearer token, verifies it with the
         provider&apos;s JWKS or SDK, and gates routes by scope, role, or
-        organization. The pages in this section show how to wire up the five
+        organization. The pages in this section show how to wire up the seven
         most common IdPs.
       </p>
       <p>
@@ -76,6 +78,19 @@ export default function Page() {
           <code>@clerk/backend</code> <code>authenticateRequest()</code> to
           authenticate any <code>Request</code>.
         </li>
+        <li>
+          <Link href={"/docs/auth/loginradius" as Route}>LoginRadius</Link>:
+          customer identity, social login, registration, and profile APIs. Use{" "}
+          <code>loginradius-sdk</code> to validate LoginRadius access tokens and
+          load profiles from a Node-style DaloyJS runtime.
+        </li>
+        <li>
+          <Link href={"/docs/auth/better-auth" as Route}>Better Auth</Link>:
+          self-hosted authentication for email/password, OAuth, sessions, and
+          plugins. Mount its standard <code>Request → Response</code> handler
+          under DaloyJS and guard API routes with{" "}
+          <code>auth.api.getSession()</code>.
+        </li>
       </ul>
 
       <BranchDiagram
@@ -92,6 +107,8 @@ export default function Page() {
           { label: "Auth0", detail: "jose" },
           { label: "Okta", detail: "@okta/jwt-verifier" },
           { label: "Clerk", detail: "@clerk/backend" },
+          { label: "LoginRadius", detail: "loginradius-sdk" },
+          { label: "Better Auth", detail: "auth.handler + getSession" },
         ]}
         caption="DaloyJS stays the resource server in every case. Each provider page swaps only the verifier SDK behind the same TokenVerifier interface, so the rest of your app stays IdP-agnostic."
       />
@@ -150,6 +167,24 @@ export default function Page() {
             </td>
             <td>Yes</td>
             <td>Yes</td>
+            <td>Yes</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td>
+              LoginRadius (<code>loginradius-sdk</code>)
+            </td>
+            <td>Yes (Node-style)</td>
+            <td>No</td>
+            <td>Node functions only</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td>
+              Better Auth (<code>better-auth</code>)
+            </td>
+            <td>Yes</td>
+            <td>Depends on database adapter</td>
             <td>Yes</td>
             <td>Yes</td>
           </tr>

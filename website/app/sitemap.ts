@@ -290,6 +290,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/deployment/render", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/deployment/railway", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/deployment/heroku", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/deployment/replit", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/testing", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/api-reference", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/orm", changeFrequency: "monthly", priority: 0.8 },
@@ -346,6 +347,8 @@ const STATIC_PATHS: Array<{
   { path: "/docs/auth/auth0", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/auth/okta", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/auth/clerk", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/auth/loginradius", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/auth/better-auth", changeFrequency: "monthly", priority: 0.7 },
   {
     path: "/docs/tutorials/bookstore",
     changeFrequency: "monthly",

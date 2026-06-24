@@ -129,6 +129,8 @@ export const docsNav: DocsNavSection[] = [
       { title: "Auth0", href: "/docs/auth/auth0" },
       { title: "Okta", href: "/docs/auth/okta" },
       { title: "Clerk", href: "/docs/auth/clerk" },
+      { title: "LoginRadius", href: "/docs/auth/loginradius" as Route },
+      { title: "Better Auth", href: "/docs/auth/better-auth" as Route },
     ],
   },
   {
@@ -181,6 +183,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "Render", href: "/docs/deployment/render" as Route },
       { title: "Railway", href: "/docs/deployment/railway" as Route },
       { title: "Heroku", href: "/docs/deployment/heroku" as Route },
+      { title: "Replit", href: "/docs/deployment/replit" as Route },
     ],
   },
   {

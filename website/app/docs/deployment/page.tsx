@@ -9,7 +9,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Deployment",
   description:
-    "Deploy DaloyJS REST APIs to containers, Node PaaS platforms, and edge or serverless providers. Production-ready guides for Docker, Fly.io, Render, Railway, Heroku, Vercel, Cloudflare Workers, Bun, and Deno.",
+    "Deploy DaloyJS REST APIs to containers, Node PaaS platforms, and edge or serverless providers. Production-ready guides for Docker, Fly.io, Render, Railway, Heroku, Replit, Vercel, Cloudflare Workers, Bun, and Deno.",
   path: "/docs/deployment",
   keywords: [
     "deploy DaloyJS",
@@ -18,6 +18,7 @@ export const metadata = buildMetadata({
     "Render deployment",
     "Railway deployment",
     "Heroku deployment",
+    "Replit deployment",
     "Cloudflare Workers deployment",
     "Vercel deployment",
   ],
@@ -54,6 +55,12 @@ const NODE_PLATFORMS: Target[] = [
     href: "/docs/deployment/heroku" as Route,
     blurb:
       "Procfile-based Node dyno on heroku-24 or heroku-26 with the heroku/nodejs buildpack.",
+  },
+  {
+    name: "Replit",
+    href: "/docs/deployment/replit" as Route,
+    blurb:
+      "Node web server on Autoscale or Reserved VM with Publishing commands, Secrets, and port checks.",
   },
 ];
 
@@ -241,22 +248,23 @@ await app.shutdown(15_000);`}
 
       <h2>Reverse proxy</h2>
       <p>
-        If you sit behind nginx / Caddy / a load balancer / a PaaS edge (Railway,
-        Render, Fly, Heroku), declare the proxy posture so DaloyJS resolves the
-        real client IP and stops refusing forwarded requests:
+        If you sit behind nginx / Caddy / a load balancer / a PaaS edge
+        (Railway, Render, Fly, Heroku), declare the proxy posture so DaloyJS
+        resolves the real client IP and stops refusing forwarded requests:
       </p>
       <ul>
         <li>
           Set <code>behindProxy: {"{ hops: N }"}</code> on{" "}
-          <code>new App({"{ ... }"})</code>, where <code>N</code> is the number of
-          trusted proxy hops in front of the app (a single edge proxy is{" "}
-          <code>1</code>; Cloudflare in front of one PaaS edge is <code>2</code>).
-          In production an <strong>unconfigured</strong> posture makes DaloyJS
-          return <code>500</code> on the first request carrying an{" "}
-          <code>X-Forwarded-*</code> header, so a misconfigured chain cannot feed
-          spoofable client IPs to <code>rateLimit()</code>, request-id propagation,
-          or audit logs. Use <code>behindProxy: &quot;none&quot;</code> when the app
-          faces the public internet directly.
+          <code>new App({"{ ... }"})</code>, where <code>N</code> is the number
+          of trusted proxy hops in front of the app (a single edge proxy is{" "}
+          <code>1</code>; Cloudflare in front of one PaaS edge is <code>2</code>
+          ). In production an <strong>unconfigured</strong> posture makes
+          DaloyJS return <code>500</code> on the first request carrying an{" "}
+          <code>X-Forwarded-*</code> header, so a misconfigured chain cannot
+          feed spoofable client IPs to <code>rateLimit()</code>, request-id
+          propagation, or audit logs. Use{" "}
+          <code>behindProxy: &quot;none&quot;</code> when the app faces the
+          public internet directly.
         </li>
         <li>
           Once the posture is declared, <code>rateLimit()</code> keys on the
@@ -285,8 +293,8 @@ await app.shutdown(15_000);`}
       <p>
         For a standalone Vercel REST API, create a single{" "}
         <code>api/index.ts</code> function and export the web-standard fetch
-        handler, plus a <code>vercel.json</code> rewrite so DaloyJS routes at the
-        site root (without it the root domain 404s):
+        handler, plus a <code>vercel.json</code> rewrite so DaloyJS routes at
+        the site root (without it the root domain 404s):
       </p>
       <CodeBlock
         language="ts"

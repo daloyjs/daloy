@@ -26,6 +26,7 @@ Run `pnpm lint` and `pnpm typecheck` before finishing code changes when relevant
 ## Repo notes
 
 - Docs navigation, sitemap entries, and search discovery are manually maintained. When changing docs routes, check [components/docs-sidebar.tsx](components/docs-sidebar.tsx), [components/docs-nav.ts](components/docs-nav.ts), [app/sitemap.ts](app/sitemap.ts), and [lib/docs-search.ts](lib/docs-search.ts). Run `pnpm verify:docs-links` from the repo root afterwards — it fails on broken internal `/docs` links, dangling nav/sitemap entries, pages missing from the sitemap, nav↔sitemap drift, and broken `#anchor` targets.
+- Every new documentation page under `app/docs/` must include a diagram that matches the current documentation style. Use the existing docs pages as the visual baseline so new pages keep the same diagram-led explanation pattern.
 - Database docs split SQL ORMs (`/docs/orm`) from ODMs (`/docs/odm`); Supabase is treated as a platform client, not an ORM.
 
 ## Blog authoring
