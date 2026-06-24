@@ -101,8 +101,10 @@ const CreateLineItem = z.object({
 
 const LineItem = z.object({
   id: z.string(),
+  tenantId: z.string(),
   sku: z.string(),
   qty: z.number().int().positive(),
+  dryRun: z.boolean(),
 });
 
 export const app = new App().route({
@@ -127,10 +129,18 @@ export const app = new App().route({
     422: { description: "Validation error" },
   },
   handler: async ({ params, query, headers, body }) => {
-    params.orderId;
-    query?.dryRun;
-    headers["x-tenant"];
-    return { status: 201, body: { id: "li_1", ...body } };
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
+    return {
+      status: 201,
+      body: {
+        id: \`\${params.orderId}:li_1\`,
+        tenantId,
+        ...body,
+        dryRun,
+      },
+    };
   },
 });`}
       />

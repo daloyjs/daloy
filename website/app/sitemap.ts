@@ -310,6 +310,7 @@ const STATIC_PATHS: Array<{
     priority: 0.7,
   },
   { path: "/docs/databases/turso", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/databases/duckdb", changeFrequency: "monthly", priority: 0.7 },
   {
     path: "/docs/databases/cloudflare-d1",
     changeFrequency: "monthly",

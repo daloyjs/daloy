@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 
 import { LayerStack } from "../../../components/diagram";
 
@@ -7,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Database hosting & serverless data providers",
   description:
-    "Pick the right managed database host for a DaloyJS API: Neon, PlanetScale, Supabase, Turso, Cloudflare D1, and AWS Aurora DSQL. Compares runtime support and which providers work on Cloudflare Workers and Vercel.",
+    "Pick the right managed database host or embedded analytical engine for a DaloyJS API: Neon, PlanetScale, Supabase, Turso, DuckDB, Cloudflare D1, and AWS Aurora DSQL. Compares runtime support and which providers work on Cloudflare Workers and Vercel.",
   path: "/docs/databases",
   keywords: [
     "DaloyJS database hosting",
@@ -16,6 +17,7 @@ export const metadata = buildMetadata({
     "Neon DaloyJS",
     "PlanetScale DaloyJS",
     "Turso DaloyJS",
+    "DuckDB DaloyJS",
     "Cloudflare D1 DaloyJS",
     "Aurora DSQL DaloyJS",
   ],
@@ -74,7 +76,7 @@ export default function Page() {
           {
             title: "Managed database host",
             detail: "Where your data actually lives",
-            items: ["Neon", "PlanetScale", "Turso", "D1", "Aurora DSQL"],
+            items: ["Neon", "PlanetScale", "Turso", "DuckDB", "D1"],
             tone: "muted",
           },
         ]}
@@ -102,6 +104,11 @@ export default function Page() {
           <Link href="/docs/databases/turso">Turso</Link>: distributed libSQL
           (SQLite fork) via <code>@libsql/client</code>; works over HTTP for
           edge runtimes.
+        </li>
+        <li>
+          <Link href={"/docs/databases/duckdb" as Route}>DuckDB</Link>:
+          embedded OLAP SQL engine for analytics, local files, Parquet, and ad
+          hoc reporting inside Node.js services.
         </li>
         <li>
           <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>:
@@ -166,6 +173,15 @@ export default function Page() {
             <td>Yes</td>
           </tr>
           <tr>
+            <td>DuckDB</td>
+            <td>embedded native library</td>
+            <td>Yes</td>
+            <td>Limited</td>
+            <td>No</td>
+            <td>Limited</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
             <td>Cloudflare D1</td>
             <td>Workers binding</td>
             <td>No (local dev only)</td>
@@ -210,6 +226,10 @@ export default function Page() {
         <li>
           <strong>You need SQLite-style data close to users</strong>: Turso or
           D1.
+        </li>
+        <li>
+          <strong>You need embedded analytics over files or local data</strong>:
+          DuckDB on Node.js or Lambda.
         </li>
       </ul>
 

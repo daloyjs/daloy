@@ -86,6 +86,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "Neon", href: "/docs/databases/neon" },
       { title: "PlanetScale", href: "/docs/databases/planetscale" },
       { title: "Turso (libSQL)", href: "/docs/databases/turso" },
+      { title: "DuckDB", href: "/docs/databases/duckdb" as Route },
       { title: "Cloudflare D1", href: "/docs/databases/cloudflare-d1" },
       { title: "AWS Aurora DSQL", href: "/docs/databases/aurora-dsql" },
     ],

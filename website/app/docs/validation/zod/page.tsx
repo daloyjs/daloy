@@ -111,8 +111,10 @@ const CreateOrder = z.object({
 
 const Order = z.object({
   id: z.string().uuid(),
+  tenantId: z.string(),
   sku: z.string(),
   qty: z.number().int().positive(),
+  dryRun: z.boolean(),
 });
 
 export const app = new App().route({
@@ -136,11 +138,18 @@ export const app = new App().route({
     422: { description: "Validation failed" },
   },
   handler: async ({ query, headers, body }) => {
-    query?.dryRun;
-    headers["x-tenant"];
+    const tenantId = headers["x-tenant"];
+    const dryRun = query?.dryRun ?? false;
+
     return {
       status: 201,
-      body: { id: crypto.randomUUID(), sku: body.sku, qty: body.qty },
+      body: {
+        id: crypto.randomUUID(),
+        tenantId,
+        sku: body.sku,
+        qty: body.qty,
+        dryRun,
+      },
     };
   },
 });`}

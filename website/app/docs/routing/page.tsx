@@ -42,10 +42,21 @@ import { z } from "zod";
 const UserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
+  tenantId: z.string(),
+  included: z.enum(["profile", "settings"]).optional(),
 });
 
-async function loadUser(id: string) {
-  return { id, email: "dev@example.com" };
+async function loadUser(input: {
+  id: string;
+  tenantId: string;
+  include?: "profile" | "settings";
+}) {
+  return {
+    id: input.id,
+    email: "dev@example.com",
+    tenantId: input.tenantId,
+    included: input.include,
+  };
 }
 
 export const app = new App().route({
@@ -67,9 +78,14 @@ export const app = new App().route({
   },
   handler: async ({ params, query, headers }) => {
     // params, query, and headers are inferred from the schemas above.
-    headers["x-tenant"];
-    query?.include;
-    return { status: 200, body: await loadUser(params.id) };
+    return {
+      status: 200,
+      body: await loadUser({
+        id: params.id,
+        tenantId: headers["x-tenant"],
+        include: query?.include,
+      }),
+    };
   },
 });`}
       />
