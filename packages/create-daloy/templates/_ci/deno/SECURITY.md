@@ -27,6 +27,9 @@ The `--with-ci` bundle adds these defaults:
   Semgrep, verified via sigstore cosign before execution), OpenSSF
   Scorecard, zizmor, Dependabot for GitHub Actions and Docker
 	base images, and CODEOWNERS are generated.
+- A daily scheduled `eol-scan.yml` checks pinned Deno versions in `deno.json`
+  and GitHub Actions against endoflife.date so a runtime that has stopped
+  receiving security patches does not stay unnoticed on `main`.
 - A `secret-scan.yml` workflow runs [gitleaks](https://github.com/gitleaks/gitleaks) against the working tree on every PR / push and against the **full git history** on a daily schedule. The gitleaks binary is downloaded from a pinned official release and verified by SHA-256 before execution so the scan does not introduce a new third-party action into the supply chain. Findings block the merge; matched values are redacted from the public log. The rationale (and the remediation playbook for a confirmed leak) follows Aikido's [Secrets Detection guide](https://www.aikido.dev/blog/secret-detection-application-security): a secret in any commit, branch, or tag should be treated as compromised, and detection must consider the entire history — not just the latest snapshot — alongside GitHub-native push protection.
 
 ## Cloud posture (operator checklist)

@@ -841,9 +841,11 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     await access(path.join(projectDir, ".github/workflows/dast.yml"));
     await access(path.join(projectDir, ".github/workflows/opengrep.yml"));
     await access(path.join(projectDir, ".github/workflows/secret-scan.yml"));
+    await access(path.join(projectDir, ".github/workflows/eol-scan.yml"));
     await access(path.join(projectDir, ".github/dependabot.yml"));
     await access(path.join(projectDir, "SECURITY.md"));
     await access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs"));
+    await access(path.join(projectDir, "scripts/verify-runtime-eol.mjs"));
 
     // create-daloy scaffolds REST API services, not libraries. The npm
     // publish workflow is intentionally omitted so fork PRs cannot reach
@@ -858,6 +860,10 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.equal(
       pkg.scripts["verify:lockfile"],
       "node scripts/verify-lockfile-sources.mjs",
+    );
+    assert.equal(
+      pkg.scripts["verify:runtime-eol"],
+      "node scripts/verify-runtime-eol.mjs",
     );
 
     const ci = await readFile(
@@ -932,6 +938,19 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(osvScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
     assert.match(osvScan, /cron: "47 6 \* \* \*"/);
     assert.doesNotMatch(osvScan, /uses:\s*google\/osv-scanner-action/);
+
+    const eolScan = await readFile(
+      path.join(projectDir, ".github/workflows/eol-scan.yml"),
+      "utf8",
+    );
+    assert.match(eolScan, /name: EOL runtime scan/);
+    assert.match(eolScan, /permissions:\s*\{\}/);
+    assert.match(eolScan, /pnpm install --frozen-lockfile --ignore-scripts/);
+    assert.match(eolScan, /pnpm verify:runtime-eol/);
+    assert.match(eolScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+    assert.match(eolScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(eolScan, /cron: "21 8 \* \* \*"/);
+    assert.doesNotMatch(eolScan, /__[A-Z_]+__/);
 
     const containerScan = await readFile(
       path.join(projectDir, ".github/workflows/container-scan.yml"),
@@ -1057,6 +1076,10 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
       pkg.scripts["verify:lockfile"],
       "node scripts/verify-lockfile-sources.mjs",
     );
+    assert.equal(
+      pkg.scripts["verify:runtime-eol"],
+      "node scripts/verify-runtime-eol.mjs",
+    );
 
     const ci = await readFile(
       path.join(projectDir, ".github/workflows/ci.yml"),
@@ -1068,6 +1091,15 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
     assert.match(ci, /npm test/);
     assert.doesNotMatch(ci, /pnpm\/action-setup/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
+
+    const eolScan = await readFile(
+      path.join(projectDir, ".github/workflows/eol-scan.yml"),
+      "utf8",
+    );
+    assert.match(eolScan, /npm ci --ignore-scripts/);
+    assert.match(eolScan, /npm run verify:runtime-eol/);
+    assert.doesNotMatch(eolScan, /pnpm\/action-setup/);
+    assert.doesNotMatch(eolScan, /__[A-Z_]+__/);
 
     const vulnScan = await readFile(
       path.join(projectDir, ".github/workflows/vuln-scan.yml"),
@@ -1333,13 +1365,16 @@ test("--with-deploy --no-ci scaffolds deploy.yml without the rest of the securit
     await access(path.join(projectDir, ".github/workflows/deploy.yml"));
     await assert.rejects(access(path.join(projectDir, ".github/workflows/ci.yml")));
     await assert.rejects(access(path.join(projectDir, ".github/workflows/secret-scan.yml")));
+    await assert.rejects(access(path.join(projectDir, ".github/workflows/eol-scan.yml")));
     await assert.rejects(access(path.join(projectDir, ".github/CODEOWNERS")));
     await assert.rejects(access(path.join(projectDir, ".github/dependabot.yml")));
     await assert.rejects(access(path.join(projectDir, "SECURITY.md")));
     await assert.rejects(access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs")));
+    await assert.rejects(access(path.join(projectDir, "scripts/verify-runtime-eol.mjs")));
 
     const pkg = JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8"));
     assert.equal(pkg.scripts["verify:lockfile"], undefined);
+    assert.equal(pkg.scripts["verify:runtime-eol"], undefined);
 
     // In deploy-only mode the verify:lockfile script does not exist on disk,
     // so the deploy workflow must omit the corresponding step rather than
@@ -1466,6 +1501,23 @@ test("--with-ci emits one Bun audit step when Bun is the package manager", async
     assert.match(vulnScan, /run: bun audit/);
     assert.doesNotMatch(vulnScan, /Audit full dependency tree \(advisory\)/);
     assert.doesNotMatch(vulnScan, /__[A-Z_]+__/);
+
+    const pkg = JSON.parse(
+      await readFile(path.join(tmpDir, projectName, "package.json"), "utf8"),
+    );
+    assert.equal(
+      pkg.scripts["verify:runtime-eol"],
+      "bun scripts/verify-runtime-eol.mjs",
+    );
+
+    const eolScan = await readFile(
+      path.join(tmpDir, projectName, ".github/workflows/eol-scan.yml"),
+      "utf8",
+    );
+    assert.match(eolScan, /oven-sh\/setup-bun@[0-9a-f]{40}\s+# v2/);
+    assert.match(eolScan, /bun install --frozen-lockfile --ignore-scripts/);
+    assert.match(eolScan, /bun run verify:runtime-eol/);
+    assert.doesNotMatch(eolScan, /__[A-Z_]+__/);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -1507,6 +1559,16 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     );
     await access(path.join(projectDir, ".github/workflows/container-scan.yml"));
     await access(path.join(projectDir, ".github/workflows/osv-scan.yml"));
+    await access(path.join(projectDir, ".github/workflows/eol-scan.yml"));
+    await access(path.join(projectDir, "scripts/verify-runtime-eol.mjs"));
+
+    const denoJson = JSON.parse(
+      await readFile(path.join(projectDir, "deno.json"), "utf8"),
+    );
+    assert.equal(
+      denoJson.tasks["verify:runtime-eol"],
+      "deno run --allow-read --allow-net=endoflife.date scripts/verify-runtime-eol.mjs",
+    );
 
     const ci = await readFile(
       path.join(projectDir, ".github/workflows/ci.yml"),
@@ -1534,6 +1596,19 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     assert.match(osvScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
     assert.match(osvScan, /cron: "47 6 \* \* \*"/);
     assert.doesNotMatch(osvScan, /uses:\s*google\/osv-scanner-action/);
+
+    const eolScan = await readFile(
+      path.join(projectDir, ".github/workflows/eol-scan.yml"),
+      "utf8",
+    );
+    assert.match(eolScan, /name: EOL runtime scan/);
+    assert.match(eolScan, /permissions:\s*\{\}/);
+    assert.match(eolScan, /denoland\/setup-deno@[0-9a-f]{40}\s+# v2\.0\.4/);
+    assert.match(eolScan, /deno task verify:runtime-eol/);
+    assert.match(eolScan, /step-security\/harden-runner@[0-9a-f]{40}\s+# v2/);
+    assert.match(eolScan, /actions\/checkout@[0-9a-f]{40}\s+# v6/);
+    assert.match(eolScan, /cron: "21 8 \* \* \*"/);
+    assert.doesNotMatch(eolScan, /__[A-Z_]+__/);
 
     const dependabot = await readFile(
       path.join(projectDir, ".github/dependabot.yml"),

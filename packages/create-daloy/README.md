@@ -196,6 +196,11 @@ For Node-style templates, the bundle adds the following.
   [npm-audit-guide](https://www.aikido.dev/blog/npm-audit-guide) write-ups warn
   about, and the Deno scaffold gets it too (Deno has no `audit` built in, so
   without OSV-Scanner a Deno scaffold would have no scheduled SCA at all).
+- `.github/workflows/eol-scan.yml` — daily runtime end-of-life detection for
+  pinned Node, Bun, and Deno versions in package metadata and GitHub Actions.
+  A runtime can keep running after it stops receiving security patches; this
+  job fails once a pinned runtime cycle is already EOL and warns within 90 days
+  of EOL.
 
 **Secret and static analysis**
 
@@ -235,8 +240,9 @@ out a reusable package, opt into npm trusted publishing yourself.
 For `deno-basic`, `--with-ci` generates a Deno-native CI workflow, a manual-only
 container publish starter for GHCR that is guarded to `main` or a tag by
 default, plus CodeQL, Opengrep, **OSV-Scanner** (the only scheduled SCA layer
-a Deno scaffold has, since Deno ships no `audit`), Scorecard, zizmor,
-Dependabot for GitHub Actions, CODEOWNERS, and `SECURITY.md`.
+a Deno scaffold has, since Deno ships no `audit`), runtime EOL scanning,
+Scorecard, zizmor, Dependabot for GitHub Actions, CODEOWNERS, and
+`SECURITY.md`.
 
 If you want the governance bundle but not the deployment starter, pass
 `--with-ci --no-deploy`. If you only want a deployment starter, pass

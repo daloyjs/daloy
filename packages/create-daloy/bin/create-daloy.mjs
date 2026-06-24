@@ -1137,12 +1137,24 @@ async function writePackageJson(dir, packageJson) {
   await writeFile(path.join(dir, "package.json"), JSON.stringify(packageJson, null, 2) + "\n", "utf8");
 }
 
-async function addLockfileVerifyScript(dir) {
+async function addSecurityScripts(dir, packageManager) {
   const packageJson = await readPackageJsonIfPresent(dir);
   if (!packageJson) return;
   packageJson.scripts ??= {};
   packageJson.scripts["verify:lockfile"] = "node scripts/verify-lockfile-sources.mjs";
+  packageJson.scripts["verify:runtime-eol"] =
+    packageManager === "bun" ? "bun scripts/verify-runtime-eol.mjs" : "node scripts/verify-runtime-eol.mjs";
   await writePackageJson(dir, packageJson);
+}
+
+async function addDenoSecurityTasks(dir) {
+  const file = path.join(dir, "deno.json");
+  if (!existsSync(file)) return;
+  const denoJson = JSON.parse(await readFile(file, "utf8"));
+  denoJson.tasks ??= {};
+  denoJson.tasks["verify:runtime-eol"] =
+    "deno run --allow-read --allow-net=endoflife.date scripts/verify-runtime-eol.mjs";
+  await writeFile(file, JSON.stringify(denoJson, null, 2) + "\n", "utf8");
 }
 
 function renderCiReplacements({ packageManager, template, packageJson, codeOwner, includeSecurityBundle = true }) {
@@ -1183,6 +1195,7 @@ function renderCiReplacements({ packageManager, template, packageJson, codeOwner
     ["__SETUP_BUN_RUNTIME_STEP__", needsBunRuntime ? setupBunStep() : ""],
     ["__INSTALL_COMMAND__", installCommand(packageManager)],
     ["__VERIFY_LOCKFILE_COMMAND__", runScriptCommand(packageManager, "verify:lockfile")],
+    ["__RUNTIME_EOL_COMMAND__", runScriptCommand(packageManager, "verify:runtime-eol")],
     ["__TYPECHECK_COMMAND__", runScriptCommand(packageManager, "typecheck")],
     ["__TEST_COMMAND__", runScriptCommand(packageManager, "test")],
     ["__BUILD_STEP__", buildStep],
@@ -1217,14 +1230,15 @@ async function replacePlaceholdersInTree(dir, replacements) {
 async function pruneCiBundle(targetDir, flavor, { includeSecurityBundle, includeDeployWorkflow }) {
   if (!includeSecurityBundle) {
     const workflowFiles = flavor === "deno"
-      ? ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "opengrep.yml", "osv-scan.yml", "scorecard.yml", "secret-scan.yml", "zizmor.yml"]
-      : ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "opengrep.yml", "osv-scan.yml", "scorecard.yml", "secret-scan.yml", "vuln-scan.yml", "zizmor.yml"];
+      ? ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "eol-scan.yml", "opengrep.yml", "osv-scan.yml", "scorecard.yml", "secret-scan.yml", "zizmor.yml"]
+      : ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "eol-scan.yml", "opengrep.yml", "osv-scan.yml", "scorecard.yml", "secret-scan.yml", "vuln-scan.yml", "zizmor.yml"];
     for (const file of workflowFiles) {
       await rm(path.join(targetDir, ".github", "workflows", file), { force: true });
     }
     await rm(path.join(targetDir, ".github", "dependabot.yml"), { force: true });
     await rm(path.join(targetDir, ".github", "CODEOWNERS"), { force: true });
     await rm(path.join(targetDir, "SECURITY.md"), { force: true });
+    await rm(path.join(targetDir, "scripts", "verify-runtime-eol.mjs"), { force: true });
     if (flavor === "node") {
       await rm(path.join(targetDir, "scripts", "verify-lockfile-sources.mjs"), { force: true });
     }
@@ -1264,6 +1278,9 @@ async function copyCiBundle(
         `Invalid --code-owner "${candidate}". Use a GitHub handle (@user), a team (@org/team), or an email address.`,
       );
     }
+    if (includeSecurityBundle) {
+      await addDenoSecurityTasks(targetDir);
+    }
     await replacePlaceholdersInTree(targetDir, new Map([["__CODE_OWNER__", owner]]));
     return;
   }
@@ -1274,7 +1291,7 @@ async function copyCiBundle(
         `Invalid --code-owner "${candidate}". Use a GitHub handle (@user), a team (@org/team), or an email address.`,
       );
     }
-    await addLockfileVerifyScript(targetDir);
+    await addSecurityScripts(targetDir, packageManager);
   }
   const packageJson = await readPackageJsonIfPresent(targetDir);
   await replacePlaceholdersInTree(
