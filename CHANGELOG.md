@@ -13,6 +13,44 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [1.0.0-beta.3] - 2026-06-24
+
+The fourth **1.0.0 beta**. This keeps the 1.0 line in beta, not release
+candidate, while shipping hardening and docs polish gathered after
+`1.0.0-beta.2`. Projects on `^1.0.0-beta.2` upgrade with a version bump.
+`@daloyjs/core`, `create-daloy`, and the JSR package `@daloyjs/daloy` move to
+`1.0.0-beta.3` in lockstep, and every `create-daloy` template now pins
+`@daloyjs/core@^1.0.0-beta.3`.
+
+### Added
+
+- **End-of-life runtime scanning for generated apps.** The `create-daloy`
+  `--with-ci` templates now include runtime EOL checks for Node, Bun, and Deno,
+  with matching SECURITY.md guidance and template coverage. Generated projects
+  can catch unsupported runtime majors before they become a deployment risk.
+- **Stripe payment integration docs.** The website now includes a Stripe guide
+  and navigation/sitemap entries alongside the existing payment docs.
+
+### Fixed
+
+- **Safe redirects reject encoded backslashes and protocol-relative paths.**
+  The redirect helper now blocks more bypass forms that can otherwise collapse
+  into attacker-controlled absolute URLs in downstream clients or proxies.
+- **Node adapter request-target normalization.** Malformed request targets are
+  normalized before URL construction so invalid paths no longer surface as
+  unexpected 500 responses.
+
+### Changed
+
+- **Version: `1.0.0-beta.2` → `1.0.0-beta.3`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, and JSR `@daloyjs/daloy`), with the
+  `create-daloy` templates, workshop, README status line, website version
+  reference, Deno adapter docs, and SBOMs synced to `1.0.0-beta.3`.
+- **Template pre-push hooks and docs were refreshed** to match the current
+  verification workflow and reduce stale generated-project guidance before GA.
+- **Framework docs received broad polish** across routing, validation, CLI,
+  AsyncAPI, plugins, testing, pagination, config, and migration pages.
+
 ## [1.0.0-beta.2] - 2026-06-22
 
 The third **1.0.0 beta**. The public API remains feature-complete and stable for
@@ -1502,7 +1540,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.2...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.3...HEAD
+[1.0.0-beta.3]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.0...v1.0.0-beta.1
 [1.0.0-beta.0]: https://github.com/daloyjs/daloy/compare/v0.44.0...v1.0.0-beta.0
