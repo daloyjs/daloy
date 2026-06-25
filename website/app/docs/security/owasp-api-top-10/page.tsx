@@ -266,8 +266,9 @@ export default function Page() {
               <a href="/docs/security/fetch-guard">SSRF guard</a>.
             </td>
             <td>
-              Use <code>safeFetch</code> for <em>every</em> outbound call whose
-              URL is influenced by user input.
+              Use the guarded fetch returned by <code>fetchGuard()</code> (e.g.{" "}
+              <code>const safeFetch = fetchGuard()</code>) for <em>every</em>{" "}
+              outbound call whose URL is influenced by user input.
             </td>
           </tr>
           <tr>
@@ -335,9 +336,10 @@ export default function Page() {
               <code>fetchGuard()</code> for outbound calls (blocks SSRF pivots
               through third-party redirects);{" "}
               <code>verifyWebhookSignature()</code> /{" "}
-              <code>signWebhookPayload()</code> at{" "}
-              <code>@daloyjs/core/hashing</code> for HMAC-verified inbound
-              webhooks (<code>sha256=</code>-prefixed only); Standard Schema
+              <code>signWebhookPayload()</code> from{" "}
+              <code>@daloyjs/core</code> for HMAC-verified inbound webhooks
+              (HMAC-SHA256 / 384 / 512, accepting GitHub-style{" "}
+              <code>sha256=</code> prefixes or raw hex); Standard Schema
               validation on third-party response bodies so a compromised vendor
               can&apos;t inject unexpected fields; request timeouts so a slow
               upstream can&apos;t exhaust your event loop.

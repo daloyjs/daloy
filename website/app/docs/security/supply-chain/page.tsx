@@ -116,10 +116,13 @@ export default function Page() {
         </li>
         <li>
           <strong>
-            No <code>pull_request_target</code>
-          </strong>, ever. The repository has a <code>zizmor</code> check on
-          every
-          PR that fails the build if anyone ever adds it.
+            No <code>pull_request_target</code> that runs fork code
+          </strong>
+          . CI uses the safe <code>pull_request</code> trigger; the one narrow
+          exception (a workflow that auto-closes external PRs) never checks out,
+          installs, or runs any PR code. A <code>zizmor</code> check on every PR
+          fails the build on the dangerous{" "}
+          <code>pull_request_target</code>-plus-fork-checkout pattern.
         </li>
         <li>
           <strong>Third-party GitHub Actions are SHA-pinned</strong> so a
@@ -300,8 +303,10 @@ strict-peer-dependencies=true`}
 }`}
       />
       <p>
-        This is the same pattern DaloyJS uses in its own root{" "}
-        <code>package.json</code>. Each entry should be reviewed in PR.
+        DaloyJS itself uses the pnpm 11+ equivalent, an <code>allowBuilds</code>{" "}
+        allowlist in <code>pnpm-workspace.yaml</code> (
+        <code>package.json#pnpm.onlyBuiltDependencies</code> is the pre-v11
+        form). Each entry should be reviewed in PR.
       </p>
 
       <h2>Avoid git and tarball dependencies</h2>
@@ -436,7 +441,7 @@ safe-chain setup`}
             <td>Package source enforcement (trusted registry only)</td>
             <td>
               <code>registry=</code> pinned +{" "}
-              <code>pnpm verify:lockfile-sources</code>
+              <code>pnpm verify:lockfile</code>
             </td>
           </tr>
           <tr>

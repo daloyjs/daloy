@@ -159,8 +159,10 @@ const app = new App();
 app.use(
   secureHeaders({
     contentSecurityPolicy: {
-      "default-src": ["'self'"],
-      "script-src": ["'self'"],
+      directives: {
+        "default-src": ["'self'"],
+        "script-src": ["'self'"],
+      },
     },
     // Modern Reporting-Endpoints header + legacy Report-To JSON.
     reportingEndpoints: { csp: "/__csp-report" },

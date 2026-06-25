@@ -98,7 +98,7 @@ export default function Page() {
               <code>z.enum([...])</code>, a tight regex, or{" "}
               <code>z.string().uuid()</code>, attacker shell metacharacters
               don&apos;t reach your handler in the first place; the request is
-              rejected with <strong>400 problem+json</strong>.
+              rejected with <strong>422 problem+json</strong>.
             </td>
           </tr>
           <tr>
@@ -178,7 +178,8 @@ export default function Page() {
         code={`import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { App, z } from "@daloyjs/core";
+import { App } from "@daloyjs/core";
+import { z } from "zod";
 
 const execFileAsync = promisify(execFile);
 const app = new App();
@@ -198,7 +199,7 @@ app.route({
   method: "POST",
   path: "/convert",
   operationId: "convert",
-  body: ConvertBody,
+  request: { body: ConvertBody },
   responses: { 200: { description: "ok" } },
   handler: async ({ body }) => {
     // 2) execFile with an argv array - no shell, no interpolation.

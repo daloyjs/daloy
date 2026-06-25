@@ -71,7 +71,7 @@ export default function Page() {
             <td>
               Routes declare <code>params</code>, <code>query</code>, and{" "}
               <code>body</code> shapes. Inputs that don&apos;t match the schema
-              are rejected with <strong>400 problem+json</strong> before your
+              are rejected with <strong>422 problem+json</strong> before your
               handler runs, so you almost never have to coerce raw strings into
               query parameters yourself.
             </td>
@@ -149,7 +149,8 @@ export default function Page() {
         caption="The same attacker string takes two paths. Spliced into the SQL text it becomes executable syntax; passed as a bound parameter it is only ever data, so the query structure can never change."
       />
       <CodeBlock
-        code={`import { App, z } from "@daloyjs/core";
+        code={`import { App } from "@daloyjs/core";
+import { z } from "zod";
 import { db } from "./db";
 import { users } from "./schema";
 import { eq } from "drizzle-orm";
@@ -161,7 +162,7 @@ app.route({
   path: "/users/:id",
   operationId: "getUser",
   // 1) The HTTP layer validates BEFORE the handler runs.
-  params: z.object({ id: z.string().uuid() }),
+  request: { params: z.object({ id: z.string().uuid() }) },
   responses: { 200: { description: "ok" } },
   handler: async ({ params }) => {
     // 2) The ORM emits a parameterized query - params.id is bound, never spliced.
@@ -262,7 +263,7 @@ await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
         slot is validated against a Zod schema before your handler runs, and
         Zod&apos;s primitive checks (<code>z.string()</code>,{" "}
         <code>z.string().email()</code>, <code>z.number()</code>, &hellip;)
-        reject nested objects with a <strong>400 problem+json</strong>. The
+        reject nested objects with a <strong>422 problem+json</strong>. The
         vulnerability shows up when developers route around that, usually with{" "}
         <code>z.any()</code>, <code>z.unknown()</code>, a pass-through{" "}
         <code>z.record()</code>, or by reading <code>await req.json()</code>{" "}
@@ -344,7 +345,7 @@ await state.db.user.findMany({ where });`}
         handler.
       </p>
       <CodeBlock
-        code={`import { z } from "@daloyjs/core";
+        code={`import { z } from "zod";
 
 // Map "API field name" -> "real column reference". The values are
 // owned by your code, never derived from the request.
@@ -364,7 +365,7 @@ app.route({
   method: "GET",
   path: "/users",
   operationId: "listUsers",
-  query: ListUsersQuery,
+  request: { query: ListUsersQuery },
   responses: { 200: { description: "ok" } },
   handler: async ({ query }) => {
     const column = SORT_COLUMNS[query.sort];           // guaranteed safe

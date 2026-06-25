@@ -79,7 +79,7 @@ export default function Page() {
             title: "Audit log",
             detail: "who did what, when, from where",
             tone: "success",
-            items: ["requestId()", "structured logger", "tracing()"],
+            items: ["requestId()", "structured logger", "otelTracing()"],
           },
         ]}
         caption="Each layer maps to one rule on Aikido's checklist. A leaked password alone clears none of them: it still has to come from the right network, carry an unthrottled per-admin token, survive CSRF, and leave an audit record."
@@ -111,7 +111,7 @@ export default function Page() {
       </ul>
       <CodeBlock
         language="ts"
-        code={`import { App, ipRestriction, secureHeaders, bearerAuth } from "@daloyjs/core";
+        code={`import { App, every, ipRestriction, bearerAuth } from "@daloyjs/core";
 
 const app = new App({ env: "production" });
 
@@ -131,13 +131,20 @@ app.route({
   path: "/admin/users/:id/disable",
   operationId: "adminDisableUser",
   internal: true,
-  hooks: [
-    ipRestriction({ allow: ["10.0.0.0/8", "203.0.113.4/32"] }),
+  // route.hooks is a SINGLE Hooks object: combine layers with every(...).
+  // Passing a raw array would silently apply no hooks at all.
+  hooks: every(
+    ipRestriction({
+      allow: ["10.0.0.0/8", "203.0.113.4/32"],
+      trustProxyHeaders: true, // resolve the real client IP behind your proxy/VPN
+    }),
     bearerAuth({
-      validate: (token, { state }) => verifyAdminToken(token, state),
+      // validate receives the token only; reach for verify(token, ctx) when
+      // you need per-request context.
+      validate: (token) => verifyAdminToken(token),
       realm: "daloy-admin",
     }),
-  ],
+  ),
   responses: { 204: { description: "ok" } },
   handler: async () => ({ status: 204 as const, body: undefined }),
 });`}
@@ -171,22 +178,28 @@ app.route({
           &quot;who did what, when, from where&quot; falls out for free.
         </li>
         <li>
-          <code>tracing()</code> ties the same request id into OpenTelemetry
+          <code>otelTracing()</code> ties the same request id into OpenTelemetry
           spans for long-term retention in your observability stack.
         </li>
       </ul>
       <CodeBlock
         language="ts"
-        code={`import { jwtVerify, requestId, logger } from "@daloyjs/core";
+        code={`import { every, jwk, ipRestriction, requestId } from "@daloyjs/core";
 
-app.use(requestId());
-app.use(logger({ level: "info" }));
+// The structured logger is an App option, not middleware:
+//   const app = new App({ env: "production", logger: { level: "info" } });
+app.use(requestId()); // stamps ctx.state.requestId + the x-request-id header
 
-const adminAuth = jwtVerify({
+// Verify per-admin JWTs against your IdP's JWKS (asymmetric only).
+const adminAuth = jwk({
+  jwks: "https://login.example.com/.well-known/jwks.json",
+  algorithms: ["RS256"],
   issuer: "https://login.example.com/",
   audience: "daloy-admin",
-  // Per-admin tokens carry the admin's subject + email + role claims.
-  required: { roles: ["admin"] },
+  // Require an "admin" role claim; verify() rejects with 403 on false.
+  verify: (payload) =>
+    Array.isArray((payload as { roles?: string[] }).roles) &&
+    (payload as { roles: string[] }).roles.includes("admin"),
 });
 
 app.route({
@@ -194,22 +207,26 @@ app.route({
   path: "/admin/feature-flags/:flag",
   operationId: "adminToggleFlag",
   internal: true,
-  hooks: [
-    ipRestriction({ allow: ["10.0.0.0/8"] }),
+  hooks: every(
+    ipRestriction({ allow: ["10.0.0.0/8"], trustProxyHeaders: true }),
     adminAuth,
     {
-      afterHandle: (_res, ctx) => {
+      // afterHandle receives (ctx, result), in that order.
+      afterHandle: (ctx) => {
+        const user = ctx.state.user as
+          | { sub?: string; claims?: { email?: string } }
+          | undefined;
         // Structured audit record - one line per sensitive change.
-        ctx.log.info({
+        app.log.info({
           event: "admin.flag.toggle",
-          actor: ctx.state.jwt?.sub,
-          actorEmail: ctx.state.jwt?.email,
+          actor: user?.sub,
+          actorEmail: user?.claims?.email,
           flag: ctx.params.flag,
-          requestId: ctx.requestId,
+          requestId: ctx.state.requestId,
         }, "admin toggled feature flag");
       },
     },
-  ],
+  ),
   responses: { 204: { description: "ok" } },
   handler: async () => ({ status: 204 as const, body: undefined }),
 });`}
@@ -246,14 +263,14 @@ app.route({
       </ul>
       <CodeBlock
         language="ts"
-        code={`import { rateLimit, session, csrf } from "@daloyjs/core";
+        code={`import { every, rateLimit, session, csrf } from "@daloyjs/core";
 
 const adminLoginLimit = () =>
   rateLimit({ windowMs: 60_000, max: 5, groupId: "admin-auth" });
 
 app.use(session({
   secret: process.env.ADMIN_SESSION_SECRET!,
-  cookieOptions: { secure: true, httpOnly: true, sameSite: "strict" },
+  cookieOptions: { secure: true, httpOnly: true, sameSite: "Strict" },
 }));
 app.use(csrf({ strategy: "fetch-metadata" }));
 
@@ -262,7 +279,8 @@ app.route({
   path: "/admin/login",
   operationId: "adminLogin",
   internal: true,
-  hooks: [adminLoginLimit() /* + your IdP verification */],
+  // Combine the limiter with your IdP verification via every(...).
+  hooks: every(adminLoginLimit() /* , verifyIdpLogin */),
   // …
 });
 app.route({
@@ -270,7 +288,7 @@ app.route({
   path: "/admin/otp",
   operationId: "adminOtp",
   internal: true,
-  hooks: [adminLoginLimit() /* + TOTP / WebAuthn verification */],
+  hooks: every(adminLoginLimit() /* , verifyTotpOrWebauthn */),
   // …
 });`}
       />
@@ -357,8 +375,8 @@ app.use(secureHeaders({
           <tr>
             <td>Action audit log</td>
             <td>
-              <code>requestId()</code> + <code>logger</code> structured JSON +{" "}
-              <code>tracing()</code> spans
+              <code>requestId()</code> + structured JSON logger +{" "}
+              <code>otelTracing()</code> spans
             </td>
           </tr>
           <tr>

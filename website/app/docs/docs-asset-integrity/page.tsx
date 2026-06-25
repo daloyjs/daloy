@@ -186,23 +186,31 @@ const app = new App({
         A typo in an SRI value is dangerous: browsers silently ignore an{" "}
         <em>unparseable</em> <code>integrity</code> attribute and load the asset
         anyway, giving you a false sense of protection. To prevent that, DaloyJS
-        validates every hash up front. A value that isn&apos;t one or more
-        space-separated <code>sha256-</code> / <code>sha384-</code> /{" "}
-        <code>sha512-</code> base64 digests throws a <code>TypeError</code> at
-        startup rather than shipping an unprotected page.
+        validates every hash when it builds the docs HTML. A value that
+        isn&apos;t one or more space-separated <code>sha256-</code> /{" "}
+        <code>sha384-</code> / <code>sha512-</code> base64 digests throws a{" "}
+        <code>TypeError</code> rather than shipping an unprotected page:
+        immediately from the <code>scalarHtml()</code> /{" "}
+        <code>swaggerUiHtml()</code> / <code>redocHtml()</code> helpers, and on
+        the auto-mounted <code>/docs</code> route as a loud <code>500</code>{" "}
+        (carrying this message) the first time the page renders.
       </p>
       <CodeBlock
         language="ts"
-        code={`// Throws: Invalid Subresource Integrity value: "md5-nope". ...
-new App({
-  docs: {
-    assets: {
-      scalarScriptUrl:
-        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
-      scalarScriptIntegrity: "md5-nope",
-    },
+        code={`import { scalarHtml } from "@daloyjs/core/docs";
+
+// Throws synchronously: Invalid Subresource Integrity value: "md5-nope". ...
+scalarHtml({
+  specUrl: "/openapi.json",
+  assets: {
+    scalarScriptUrl:
+      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
+    scalarScriptIntegrity: "md5-nope",
   },
-});`}
+});
+
+// The same invalid hash on the auto-mounted docs route
+// (new App({ docs: { assets } })) makes GET /docs fail with a 500.`}
       />
 
       <h2>Low-level helpers</h2>

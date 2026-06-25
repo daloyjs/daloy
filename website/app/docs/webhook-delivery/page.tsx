@@ -161,18 +161,27 @@ webhook-signature: sha256=9f8a...c2
         language="ts"
         code={`import { verifyWebhookSignature } from "@daloyjs/core";
 
-app.post("/hooks", async (c) => {
-  const body = await c.req.arrayBuffer();
-  const ok = await verifyWebhookSignature({
-    payload: new Uint8Array(body),
-    signature: c.req.header("webhook-signature")!,
-    secret: process.env.WEBHOOK_SIGNING_SECRET!,
-    timestamp: Number(c.req.header("webhook-timestamp")),
-    toleranceSeconds: 300,
-  });
-  if (!ok) return c.text("invalid signature", 401);
-  // ... handle the event
-  return c.text("ok");
+app.route({
+  method: "POST",
+  path: "/hooks",
+  operationId: "receiveWebhook",
+  responses: {
+    200: { description: "ok" },
+    401: { description: "invalid signature" },
+  },
+  handler: async ({ request }) => {
+    const body = new Uint8Array(await request.arrayBuffer());
+    const ok = await verifyWebhookSignature({
+      payload: body,
+      signature: request.headers.get("webhook-signature")!,
+      secret: process.env.WEBHOOK_SIGNING_SECRET!,
+      timestamp: Number(request.headers.get("webhook-timestamp")),
+      toleranceSeconds: 300,
+    });
+    if (!ok) return { status: 401 as const, body: { error: "invalid signature" } };
+    // ... handle the event
+    return { status: 200 as const, body: { ok: true } };
+  },
 });`}
       />
 

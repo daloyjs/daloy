@@ -94,7 +94,7 @@ export default function Page() {
             title: "Audit logging & supply chain",
             detail: "evidence trail for the dossier",
             tone: "success",
-            items: ["requestId + logs", "redactRecord()", "provenance", "SBOM"],
+            items: ["requestId + logs", "log redaction", "provenance", "SBOM"],
           },
         ]}
         caption="The same four control families show up in SOC 2, ISO 27001, HIPAA, GDPR, PCI, NIS2, DORA, and the UK CSR Bill under different names. The table below maps each framework's clause to the DaloyJS primitive that satisfies it."
@@ -205,9 +205,9 @@ export default function Page() {
           <tr>
             <td>Audit logging &amp; PII handling</td>
             <td>
-              Structured logger with request-id correlation and{" "}
-              <code>redactRecord()</code> for known secret/PII keys; opt-in
-              redaction for application-specific fields.
+              Structured logger with request-id correlation and default key
+              redaction (<code>DEFAULT_REDACT_KEYS</code>) for known secret/PII
+              keys; opt-in redaction for application-specific fields.
             </td>
             <td>
               <a href="/docs/tracing">Tracing &amp; logs</a>
@@ -475,9 +475,11 @@ export default function Page() {
           their breach notification with real numbers rather than aspirations.
         </li>
         <li>
-          <strong>Logging PII responsibly.</strong> The logger&apos;s{" "}
-          <code>redactRecord()</code> already masks well-known secret keys
-          (passwords, tokens, API keys). Extend the redaction list for
+          <strong>Logging PII responsibly.</strong> The logger&apos;s default
+          redaction (<code>DEFAULT_REDACT_KEYS</code> via{" "}
+          <code>createLogger({"{ redact }"})</code>) already masks well-known
+          secret keys (passwords, tokens, API keys). Extend the redaction list
+          for
           application-specific PII fields and never log raw request bodies on
           routes that process personal data.
         </li>
@@ -782,7 +784,7 @@ export default function Page() {
             <td>Annex I (1)(d), authentication and access control</td>
             <td>
               First-party <code>bearerAuth</code>, <code>basicAuth</code>,{" "}
-              <code>jwt()</code> (PS256 / RS256 / ES256 / EdDSA, JWKS rotation
+              <code>jwk()</code> (PS256 / RS256 / ES256 / EdDSA, JWKS rotation
               with <code>kid</code> pinning), signed-cookie{" "}
               <code>session()</code>, <code>timingSafeEqual()</code>; the{" "}
               <code>pnpm verify:secret-comparisons</code> gate rejects every
@@ -980,7 +982,7 @@ export default function Page() {
               Zero runtime dependencies in <code>@daloyjs/core</code> (enforced
               by <code>pnpm verify:no-runtime-deps</code>); npm provenance via
               Sigstore; CycloneDX SBOM published with every release;{" "}
-              <code>verify:lockfile-sources</code> refuses non-npm registry
+              <code>verify:lockfile</code> refuses non-npm registry
               origins and known-bad <code>name@version</code> IOCs; SHA-pinned
               third-party GitHub Actions audited by{" "}
               <code>verify-actions-pinned</code>; scaffolded projects ship{" "}
@@ -1189,7 +1191,7 @@ export default function Page() {
             </td>
             <td>
               First-party <code>bearerAuth</code>, <code>basicAuth</code>,{" "}
-              signed-cookie <code>session()</code>, <code>jwt()</code> with
+              signed-cookie <code>session()</code>, <code>jwk()</code> with
               algorithm allow-listing and JWKS rotation,{" "}
               <code>ipRestriction()</code>, <code>fetchGuard()</code>{" "}
               default-deny SSRF against cloud metadata IPs, HMAC algorithm
@@ -1271,7 +1273,7 @@ export default function Page() {
               Zero runtime dependencies in <code>@daloyjs/core</code> (enforced
               by <code>pnpm verify:no-runtime-deps</code>) keeps the third-party
               register short; CycloneDX + SPDX SBOMs shipped per release;{" "}
-              <code>verify:lockfile-sources</code> refuses non-npm registry
+              <code>verify:lockfile</code> refuses non-npm registry
               origins and known-bad <code>name@version</code> IOCs;{" "}
               <code>verify:dep-licenses</code> blocks copyleft drift. The
               framework itself does not call any external network endpoint at

@@ -97,14 +97,13 @@ app.route({
   method: "POST",
   path: "/import",
   operationId: "importFromUrl",
-  request: { json: z.object({ url: z.string().url() }) },
+  request: { body: z.object({ url: z.string().url() }) },
   responses: {
     200: { description: "ok" },
-    400: { description: "bad url" },
-    422: { description: "refused: ssrf" },
+    422: { description: "bad url or refused: ssrf" },
   },
-  handler: async ({ request }) => {
-    const { url } = await request.json();
+  handler: async ({ body }) => {
+    const { url } = body;
     try {
       const upstream = await safeFetch(url);
       const body = await upstream.text();

@@ -109,11 +109,11 @@ export default function Page() {
             </td>
           </tr>
           <tr>
-            <td>Path-traversal rejection</td>
+            <td>Path-traversal safety</td>
             <td>
-              A library check-out desk that refuses any call number containing
-              &quot;..&quot;, you can borrow books, not walk into the staff-only
-              basement.
+              A library desk that quietly rewrites any call number with
+              &quot;..&quot; in it back to a real shelf, you always end up at a
+              valid book, never in the staff-only basement.
             </td>
           </tr>
           <tr>
@@ -383,7 +383,7 @@ export default function Page() {
           {
             eyebrow: "route",
             label: "Router + method check",
-            detail: ".. segments reject; bad method to 405",
+            detail: ".. resolved to canonical path; bad method 405",
             tone: "danger",
           },
           {
@@ -428,8 +428,10 @@ export default function Page() {
           <tr>
             <td>Path traversal</td>
             <td>
-              Router rejects <code>..</code> segments and <code>{"//"}</code>{" "}
-              before walking.
+              Dot-segments (<code>.</code> / <code>..</code>) are resolved to a
+              canonical path before route matching, and empty{" "}
+              <code>{"//"}</code> segments are refused. Routes match exact
+              strings, so there is no directory to escape into.
             </td>
           </tr>
           <tr>
@@ -635,7 +637,6 @@ cross-origin-resource-policy: same-origin`}
       </p>
       <CodeBlock
         code={`import { secureHeaders } from "@daloyjs/core";
-import { htmlResponse } from "@daloyjs/core/docs";
 
 app.use(secureHeaders({
   contentSecurityPolicy: {
@@ -655,14 +656,27 @@ app.route({
   path: "/page",
   operationId: "page",
   responses: { 200: { description: "ok" } },
-  handler: async ({ state }) => htmlResponse(\`
-    <!doctype html>
-    <script nonce="\${state.cspNonce}">
-      // inline bootstrap is allowed only via this fresh nonce
-    </script>
-  \`),
+  // Return the HTML yourself so the secureHeaders nonce CSP is the one that ships.
+  handler: async ({ state }) => ({
+    status: 200,
+    body: \`<!doctype html>
+<script nonce="\${state.cspNonce}">
+  // inline bootstrap is allowed only via this fresh nonce
+</script>\`,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  }),
 });`}
       />
+      <p>
+        Do <strong>not</strong> render this page with{" "}
+        <code>htmlResponse()</code> from <code>@daloyjs/core/docs</code>: that
+        helper ships its own Content-Security-Policy (tuned for the Swagger /
+        Scalar docs UIs, with <code>&apos;unsafe-inline&apos;</code>) and would
+        override the strict nonce CSP above, so the nonce would no longer be the
+        thing gating inline scripts. Keep <code>htmlResponse()</code> for your
+        API-docs route, and return your own <code>Response</code> body for
+        nonce-protected pages.
+      </p>
 
       <h2>Auth</h2>
       <CodeBlock

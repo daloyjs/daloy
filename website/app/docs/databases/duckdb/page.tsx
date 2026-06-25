@@ -132,7 +132,7 @@ app.route({
   method: "GET",
   path: "/analytics/sales",
   operationId: "salesSummary",
-  query: z.object({ region: z.string().min(1).optional() }),
+  request: { query: z.object({ region: z.string().min(1).optional() }) },
   responses: {
     200: { description: "ok", body: z.array(SalesSummary) },
   },

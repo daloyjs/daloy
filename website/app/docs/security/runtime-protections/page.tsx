@@ -185,8 +185,10 @@ export default function Page() {
           <tr>
             <td>Path traversal</td>
             <td>
-              Router rejects <code>..</code> segments and <code>{"//"}</code>{" "}
-              before route resolution.
+              Dot-segments (<code>.</code> / <code>..</code>) are resolved to a
+              canonical path before route matching, and empty{" "}
+              <code>{"//"}</code> segments are refused. Routes match exact
+              strings, so there is no directory to escape into.
             </td>
           </tr>
           <tr>
@@ -206,19 +208,29 @@ export default function Page() {
           <tr>
             <td>Header-count flood / HTTP/2 Bomb</td>
             <td>
-              <code>maxHeaderCount</code> rejects requests carrying more than
-              100 header fields with <code>431</code> before routing; the Node
-              adapter sets <code>server.maxHeadersCount</code>. Portable
-              defence-in-depth against header-count amplification. Apply the
-              vendor HTTP/2 fix at any proxy that terminates HTTP/2.
+              <code>maxHeaderCount</code> (default 100) is a portable
+              application-tier guard that returns{" "}
+              <code>431 Request Header Fields Too Large</code> when a request
+              exceeds the cap (e.g. via <code>app.fetch()</code> or runtimes
+              without a native cap). The Node adapter also sets the native{" "}
+              <code>server.maxHeadersCount</code> to the same value, so on Node a
+              header-count flood is dropped at the HTTP parser as a{" "}
+              <code>400</code>-class client error before it ever becomes a
+              request. Either way it is defence-in-depth, apply the vendor HTTP/2
+              fix at any proxy that terminates HTTP/2.
             </td>
           </tr>
           <tr>
             <td>Bad reverse-proxy assumptions</td>
             <td>
-              <code>X-Forwarded-*</code> headers are not trusted by default.
-              First request returns <code>500</code> with a clear error until
-              you opt in via <code>behindProxy</code>.
+              <code>X-Forwarded-*</code> headers are never trusted by default.{" "}
+              <strong>In production</strong>, a request carrying one while{" "}
+              <code>trustProxy</code> / <code>behindProxy</code> is unconfigured
+              is refused with a <code>500</code> (and a clear log line) so a
+              spoofed source IP can&apos;t reach the rate limiter or audit log.
+              Dev and CI relax this so you can test forwarded headers locally.
+              Opt in via <code>behindProxy</code> (or{" "}
+              <code>trustProxy: false</code> to ignore the headers).
             </td>
           </tr>
           <tr>

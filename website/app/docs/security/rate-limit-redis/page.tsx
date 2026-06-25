@@ -50,7 +50,7 @@ export default function Page() {
             from: "Client",
             to: "Replica A",
             label: "Request lands on replica A",
-            detail: "key = daloy:rl:<client>",
+            detail: "key = daloy:rl:<key>",
             kind: "request",
           },
           {
@@ -141,6 +141,24 @@ pnpm add ioredis
 pnpm add redis        # node-redis v4+`}
       />
 
+      <h2>Run a Redis to point at</h2>
+      <p>
+        The adapter needs a Redis it can reach; DaloyJS does not start one for
+        you. For local development the quickest path is a container:
+      </p>
+      <CodeBlock
+        language="bash"
+        code={`docker run --rm -p 6379:6379 redis:7-alpine
+# then, in your app's environment:
+export REDIS_URL=redis://127.0.0.1:6379`}
+      />
+      <p>
+        In production use a managed Redis (Upstash, ElastiCache, Memorystore,
+        Redis Cloud) and read the URL from the environment. Keep exactly one
+        client per process and share it, see{" "}
+        <a href="#what-it-does-not-do">What it does not do</a> below.
+      </p>
+
       <h2>Quick start (ioredis)</h2>
       <CodeBlock
         code={`import IORedis from "ioredis";
@@ -185,6 +203,49 @@ app.use(
 );`}
       />
 
+      <h2>How clients are keyed</h2>
+      <p>
+        This is the part people get wrong. By default{" "}
+        <code>rateLimit()</code> derives a single shared key,{" "}
+        <code>global</code>, so <strong>every caller lands in one bucket</strong>{" "}
+        (the Redis key is <code>daloy:rl:global</code>). That is a deliberate
+        safe default: DaloyJS will not key off a spoofable client IP unless you
+        tell it to. To limit <em>per client</em> you have to opt in.
+      </p>
+      <ul>
+        <li>
+          <strong>Per authenticated user</strong> (preferred): pass a{" "}
+          <code>keyGenerator</code> that returns a stable id.
+        </li>
+        <li>
+          <strong>Per source IP</strong>: set{" "}
+          <code>trustProxyHeaders: true</code> <em>only</em> when you run behind
+          a trusted proxy or load balancer that <em>overwrites</em>{" "}
+          <code>X-Forwarded-For</code>. The key is then the first{" "}
+          <code>X-Forwarded-For</code> entry (or <code>X-Real-IP</code>), and
+          falls back to <code>global</code> when neither is present.
+        </li>
+      </ul>
+      <CodeBlock
+        code={`app.use(
+  rateLimit({
+    windowMs: 60_000,
+    max: 120,
+    store: redisRateLimitStore({ client: ioredisAdapter(redis) }),
+    // Per-user bucket; fall back to a single anonymous bucket otherwise.
+    keyGenerator: (ctx) => (ctx.state.user as { id?: string })?.id ?? "anonymous",
+  }),
+);`}
+      />
+      <blockquote>
+        <strong>Security:</strong> never set{" "}
+        <code>trustProxyHeaders: true</code> on a service reachable directly. A
+        client can send any <code>X-Forwarded-For</code> it likes, mint a fresh
+        bucket per spoofed IP, and walk straight past the limit. Behind a proxy
+        that rewrites the header it is safe; exposed directly it is an evasion
+        hole. When in doubt, key off the authenticated user instead.
+      </blockquote>
+
       <h2>Failure mode</h2>
       <p>
         By default the store is <strong>fail-open</strong>: if Redis throws
@@ -198,7 +259,8 @@ app.use(
         request, or hook the error into your structured logger:
       </p>
       <CodeBlock
-        code={`redisRateLimitStore({
+        code={`// logger here is your app's structured logger (e.g. createLogger()).
+redisRateLimitStore({
   client: ioredisAdapter(redis),
   onError: (err) => {
     logger.error({ err }, "redis rate-limit store failed");
@@ -206,6 +268,38 @@ app.use(
   },
 });`}
       />
+
+      <blockquote>
+        <strong>Fail-open only works if your Redis client fails fast.</strong> A
+        bare <code>new IORedis(url)</code> queues commands and retries while
+        disconnected, so during an outage a request blocks for{" "}
+        <em>tens of seconds</em> (until the client&apos;s retry budget, then the
+        app&apos;s <code>requestTimeoutMs</code>, give up) before it ever reaches{" "}
+        <code>onError</code>. That is neither fast-open nor fast-closed, just
+        slow, and it will exhaust your connections under load. Construct the
+        client to give up quickly:
+      </blockquote>
+      <CodeBlock
+        code={`// ioredis: fail fast so the store can fall back immediately
+const redis = new IORedis(process.env.REDIS_URL!, {
+  enableOfflineQueue: false,   // don't queue commands while disconnected
+  maxRetriesPerRequest: 1,     // give up after a single retry
+  connectTimeout: 500,
+});
+
+// node-redis equivalent
+const redis = createClient({
+  url: process.env.REDIS_URL,
+  disableOfflineQueue: true,
+  socket: { connectTimeout: 500, reconnectStrategy: (n) => Math.min(n * 50, 500) },
+});`}
+      />
+      <p>
+        With those options a Redis outage resolves in milliseconds: fail-open
+        allows the request immediately, fail-closed rejects it with a{" "}
+        <code>500</code> immediately. Without them you get the same decision
+        eventually, just after a long stall on every request.
+      </p>
 
       <h2>Custom Redis clients</h2>
       <p>
@@ -234,7 +328,7 @@ const myAdapter: RedisCommands = {
 });`}
       />
 
-      <h2>What it does not do</h2>
+      <h2 id="what-it-does-not-do">What it does not do</h2>
       <ul>
         <li>
           <strong>It does not pool connections for you.</strong> Reuse a single

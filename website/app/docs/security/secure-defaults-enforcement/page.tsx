@@ -207,8 +207,10 @@ secureHeaders({
 secureHeaders({
   frameOptions: false,
   contentSecurityPolicy: {
-    "default-src": ["'self'"],
-    "frame-ancestors": ["'none'"],
+    directives: {
+      "default-src": ["'self'"],
+      "frame-ancestors": ["'none'"],
+    },
   },
 });`}
       />

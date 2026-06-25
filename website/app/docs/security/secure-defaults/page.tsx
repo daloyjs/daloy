@@ -197,8 +197,13 @@ app.use(cors({ origin: ["https://app.example.com"] }));
       <p>
         New <code>route({"{ accepts: [...] }"})</code> field overrides the
         global <code>allowedContentTypes</code> allowlist for a single route.
-        Useful for legacy form-encoded webhook receivers without loosening the
-        default allowlist for the rest of your app.
+        The default allowlist already covers <code>application/json</code>,{" "}
+        <code>application/x-www-form-urlencoded</code>, and{" "}
+        <code>multipart/form-data</code>, so use <code>accepts</code> to{" "}
+        <em>restrict</em> a route to a subset (the example below accepts only
+        form-encoded and rejects JSON with <code>415</code>) or to accept a type
+        outside that set (e.g. <code>application/xml</code>) without touching the
+        global allowlist.
       </p>
       <CodeBlock
         code={`app.route({

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { CodeBlock } from "../../../components/code-block";
 import { BranchDiagram } from "../../../components/diagram";
 
@@ -22,31 +24,121 @@ export default function Page() {
       <h1>API reference</h1>
       <p>{`The complete public surface of DaloyJS v${CORE_PACKAGE_VERSION}, organized by import path. Every signature on this page is generated from the same TypeScript types your editor reads on hover, open the source files for fuller TSDoc, examples, and security rationale.`}</p>
 
+      <h2>Minimal server</h2>
+      <p>
+        This page is a reference, the signatures below are the source of truth,
+        not a step-by-step tutorial. If you are starting from scratch, the{" "}
+        <Link href="/docs/getting-started">getting-started guide</Link> walks
+        through scaffolding, validation, the typed client, and OpenAPI docs in
+        full. The snippet here is just enough to map the types below onto a
+        server you can actually run.
+      </p>
+      <CodeBlock
+        language="bash"
+        code={`pnpm add @daloyjs/core zod
+pnpm add -D tsx`}
+      />
+      <CodeBlock
+        code={`// index.ts
+import { z } from "zod";
+import { App } from "@daloyjs/core";          // root barrel
+import { serve } from "@daloyjs/core/node";   // adapters are subpath-only
+
+const app = new App({ title: "Hello API", version: "1.0.0" }).route({
+  method: "GET",
+  path: "/hello",
+  operationId: "hello",
+  responses: {
+    // A response \`body\` schema enables OWASP-API3 field stripping.
+    200: { description: "Greeting", body: z.object({ message: z.string() }) },
+  },
+  // The handler returns the discriminated union HandlerReturn<Res>:
+  // { status, body, headers? }, keyed by a status declared above.
+  handler: () => ({ status: 200, body: { message: "Hello from DaloyJS" } }),
+});
+
+const { port } = serve(app);                  // NodeServerOptions.port defaults to 3000
+console.log(\`listening on http://localhost:\${port}\`);`}
+      />
+      <p>
+        Run it with <code>node --import tsx index.ts</code> (Node 24+ can also
+        run <code>node index.ts</code> directly via type stripping). Every
+        response already carries the secure-by-default headers (
+        <code>secureHeaders</code>) and an <code>x-request-id</code> (
+        <code>requestId</code>); errors serialize to RFC 9457{" "}
+        <code>application/problem+json</code>. To serve <code>/docs</code> and{" "}
+        <code>/openapi.json</code>, pass <code>docs: true</code> to{" "}
+        <code>new App(...)</code> (it defaults to <code>false</code>).
+      </p>
+      <p>
+        If you drop the response <code>body</code> schema the route still works,
+        but DaloyJS logs a <code>security.response.bodySchemaMissing</code>{" "}
+        warning at startup: response field-level stripping (OWASP API3) cannot be
+        applied to a schema-less body. Declare the schema, or ignore the warning
+        for routes that intentionally return no body.
+      </p>
+
+      <h2>Subpath modules</h2>
       <p>Quick map of subpath modules exposed by the package:</p>
       <CodeBlock
-        code={`@daloyjs/core             // App, routing types, errors, middleware, security, JWT/JWK, ...
-@daloyjs/core/openapi     // OpenAPI 3.1 document generation + security-scheme builders
-@daloyjs/core/client      // Typed in-process client + Hey API SDK glue
-@daloyjs/core/contract    // Contract-tests harness (assert OpenAPI parity)
-@daloyjs/core/docs        // Scalar / Swagger UI / Redoc HTML + CSP helper
-@daloyjs/core/streaming   // SSE + NDJSON helpers
-@daloyjs/core/multipart   // File-field + multipart object schema helpers
-@daloyjs/core/session     // Cookie sessions + signed-value helpers
-@daloyjs/core/websocket   // WebSocket route helper + frame primitives
-@daloyjs/core/tracing     // OpenTelemetry tracing hook (interface-typed; no runtime dep)
-@daloyjs/core/hashing     // passwordHash / passwordVerify (scrypt)
-@daloyjs/core/rate-limit-redis  // Distributed rate-limit store
-@daloyjs/core/banner      // Pretty startup banner
-@daloyjs/core/cli         // CLI internals (used by bin/daloy.mjs)
+        code={`@daloyjs/core                       // App, routing types, errors, middleware, security, JWT/JWK, ...
+@daloyjs/core/openapi               // OpenAPI 3.1 document generation + security-scheme builders
+@daloyjs/core/openapi-diff          // Dependency-free OpenAPI 3.x breaking-change diffing
+@daloyjs/core/asyncapi              // AsyncAPI 3.0 generation for app.ws() WebSocket surfaces
+@daloyjs/core/client                // Typed in-process client + Hey API SDK glue
+@daloyjs/core/contract              // Contract-tests harness (assert OpenAPI parity)
+@daloyjs/core/docs                  // Scalar / Swagger UI / Redoc HTML + CSP helper
+@daloyjs/core/streaming             // SSE + NDJSON helpers
+@daloyjs/core/websocket             // WebSocket route helper + frame primitives
+@daloyjs/core/multipart             // File-field + multipart object schema helpers
+
+// Observability & ops
+@daloyjs/core/tracing               // OpenTelemetry tracing hook (interface-typed; no runtime dep)
+@daloyjs/core/metrics               // Prometheus / OpenMetrics exposition
+@daloyjs/core/banner                // Pretty startup banner
+@daloyjs/core/cli                   // CLI internals (used by bin/daloy.mjs)
+
+// Auth, sessions & crypto (also on the root barrel)
+@daloyjs/core/session               // Cookie sessions + signed-value helpers
+@daloyjs/core/hashing               // passwordHash / passwordVerify (scrypt)
+@daloyjs/core/jwt                   // createJwtSigner / createJwtVerifier (no "alg: none")
+@daloyjs/core/jwk                   // jwk() JWKS Bearer middleware (refuses HS*)
+@daloyjs/core/cookie                // Cookie serialization + attribute validation
+@daloyjs/core/time-claims           // assertTemporalClaims() (iat / nbf / exp)
+
+// HTTP features & API ergonomics
+@daloyjs/core/etag                  // etag() strong-validation 304 helper
+@daloyjs/core/compression           // compression() with BREACH-aware defaults
+@daloyjs/core/pagination            // Opaque-cursor pagination helpers
+@daloyjs/core/idempotency           // Idempotency-Key handling for unsafe-method retries
+@daloyjs/core/response-cache        // Server-side response caching (pluggable store)
+@daloyjs/core/tenancy               // Multitenancy: per-request tenant resolution
+@daloyjs/core/scheduler             // In-process scheduled (cron) tasks
+
+// Rate limiting, concurrency & access control
+@daloyjs/core/rate-limit-redis      // Distributed rate-limit store
+@daloyjs/core/concurrency-limit     // Per-route/client concurrency limit + FIFO queue
+@daloyjs/core/waf                   // WAF-lite inbound inspection (OWASP CRS-lite)
+@daloyjs/core/auto-ban              // Adaptive fail2ban-style escalating bans
+@daloyjs/core/bot-guard             // Bot / User-Agent management
+@daloyjs/core/ip-reputation         // Pluggable, refreshed IP abuse-feed denylist
+@daloyjs/core/geo-block             // ISO 3166-1 country allow/deny (BYO GeoIP lookup)
+@daloyjs/core/request-decompression // Inbound decompression-bomb guard
+@daloyjs/core/mtls                  // Mutual-TLS / client-certificate auth
+@daloyjs/core/http-signatures       // HTTP Message Signatures (RFC 9421) sign + verify
+
+// Outbound resilience
+@daloyjs/core/fetch-resilience      // resilientFetch(): circuit breaker + retry + timeout
+@daloyjs/core/webhook-delivery      // Outbound webhook delivery (signed, retried)
 
 // Runtime adapters
-@daloyjs/core/node        // Node.js (http) - serve(app, opts)
-@daloyjs/core/bun         // Bun.serve adapter
-@daloyjs/core/deno        // Deno.serve adapter
-@daloyjs/core/cloudflare  // Cloudflare Workers + generic { fetch } default export
-@daloyjs/core/vercel      // Vercel Functions / Edge / Next.js App Router
-@daloyjs/core/fastly      // Fastly Compute@Edge
-@daloyjs/core/lambda      // AWS Lambda (API Gateway v1 + v2 / Function URLs)`}
+@daloyjs/core/node                  // Node.js (http) - serve(app, opts)
+@daloyjs/core/bun                   // Bun.serve adapter
+@daloyjs/core/deno                  // Deno.serve adapter
+@daloyjs/core/cloudflare            // Cloudflare Workers + generic { fetch } default export
+@daloyjs/core/vercel                // Vercel Functions / Edge / Next.js App Router
+@daloyjs/core/fastly                // Fastly Compute@Edge
+@daloyjs/core/lambda                // AWS Lambda (API Gateway v1 + v2 / Function URLs)`}
       />
 
       <p>
@@ -113,7 +205,7 @@ interface AppOptions {
 
   // Request limits
   bodyLimitBytes?: number;             // default: 1 MiB
-  allowedContentTypes?: string[];      // default: ["application/json"]
+  allowedContentTypes?: string[];      // default: ["application/json", "application/x-www-form-urlencoded", "multipart/form-data"]
   requestTimeoutMs?: number;           // default: 30_000; 0 disables
   maxHeaderCount?: number;             // default: 100; 0 disables (header-count flood / HTTP/2-Bomb guard)
   multipart?: { maxFileBytes?: number; maxFields?: number; maxFiles?: number };
@@ -162,8 +254,8 @@ app.onShutdown        (listener: (info: ShutdownEvent)        => void | Promise<
 app.onClose           (cleanup:  () => void | Promise<void>): App
 
 // Built-in routes
-app.healthcheck    (opts?: HealthRouteOptions): App
-app.readinesscheck (opts?: HealthRouteOptions): App
+app.healthcheck    (opts?: HealthRouteOptions): App     // GET /healthz by default (opts.path to override)
+app.readinesscheck (opts?: HealthRouteOptions): App     // GET /readyz   by default (opts.path to override)
 app.cspReportRoute (opts?: CspReportRouteOptions): App
 
 // Dispatch + introspection
@@ -339,12 +431,13 @@ const WEAK_SECRET_STRINGS: ReadonlyArray<string>;
 // Webhook HMAC
 type WebhookHmacAlgorithm = "sha256" | "sha384" | "sha512";
 const WEBHOOK_DEFAULT_TOLERANCE_SECONDS = 300;
-signWebhookPayload(opts: { secret; body; algorithm?; timestamp?; }): Promise<string>;
+signWebhookPayload(opts: { secret; payload; algorithm?; timestamp?; }): Promise<string>;
 verifyWebhookSignature(opts: {
-  secret; body; signature; algorithm?;
+  secret; payload; signature; algorithm?;
   timestamp?: string | number;
   toleranceSeconds?: number;
-}): Promise<{ ok: true } | { ok: false; reason: string }>;
+  now?: () => number;
+}): Promise<boolean>;
 
 // Filesystem
 sanitizeFilename(name: string): string;
@@ -381,7 +474,8 @@ interface RateLimitOptions {
 }
 
 interface BearerAuthOptions {
-  validate: BearerAuthVerifyHook;   // (token, ctx) => boolean | AuthContext | Promise<...>
+  validate: (token: string) => boolean | Promise<boolean>;  // static check; token only
+  verify?: BearerAuthVerifyHook;    // (token, ctx) => boolean | void; per-request revalidation
   realm?: string;
 }`}
       />
@@ -390,13 +484,12 @@ interface BearerAuthOptions {
       <CodeBlock
         code={`every(...layers: Hooks[]): Hooks      // run every layer in order, pipeline-style
 some (...layers: Hooks[]): Hooks      // pass on first non-throwing beforeHandle (auth fallback chains)
-except(when: ExceptPredicate, hooks: Hooks): Hooks  // exempt paths/methods from a check
+except(when: ExceptPredicate, hooks: Hooks): Hooks  // exempt matching paths from a beforeHandle gate
 
 type ExceptPredicate =
-  | string                            // exact path
-  | RegExp
-  | { method?: HttpMethod | HttpMethod[]; path?: string | RegExp }
-  | ((req: Request) => boolean);`}
+  | string                            // path glob: "*" = one segment, "**" = any suffix
+  | string[]                          // any-of globs
+  | ((ctx) => boolean | Promise<boolean>);`}
       />
 
       <h3>Dependencies (typed DI chain)</h3>
@@ -489,15 +582,22 @@ class OpenRedirectBlockedError extends Error { readonly reason; readonly target 
       <CodeBlock
         code={`type CookieSameSite = "Strict" | "Lax" | "None";
 interface CookieAttributes {
-  domain?: string; path?: string; maxAge?: number; expires?: Date;
-  httpOnly?: boolean; secure?: boolean; sameSite?: CookieSameSite;
-  partitioned?: boolean;
+  sameSite?: CookieSameSite;   // default: "Strict"
+  secure?: boolean;            // default: true (required for __Secure-/__Host-)
+  httpOnly?: boolean;          // default: true (set false for client-readable tokens)
+  path?: string;               // default: "/" (must be "/" for __Host-)
+  domain?: string;             // forbidden with __Host-
+  maxAgeSeconds?: number;      // Max-Age= seconds; 0 omits it on writes
+  partitioned?: boolean;       // Partitioned (CHIPS); default: false
 }
 
-serializeCookie(name: string, value: string, attrs?: CookieAttributes): string;
-serializeClearCookie(name: string, attrs?: CookieAttributes): string;
-readRequestCookie(req: Request, name: string): string | undefined;
-assertCookieAttributes(attrs: CookieAttributes, where: string): void;`}
+serializeCookie(name: string, value: string, attrs?: CookieAttributes): string;  // URI-encodes value
+serializeClearCookie(name: string, attrs?: CookieAttributes): string;            // Max-Age=0
+readRequestCookie(header: string | null | undefined, name: string): string | null;
+  // null if absent OR the name appears more than once (cookie-tossing defense)
+assertCookieAttributes(opts: {
+  scope: string; name: string; attributes: CookieAttributes; isProduction?: boolean;
+}): void;`}
       />
 
       <h3>JWT signer &amp; verifier</h3>
@@ -528,21 +628,25 @@ const DEFAULT_JWT_MAX_LIFETIME_SECONDS = 30 * 24 * 60 * 60;  // 30d`}
       <h3>JWK / JWKS verification</h3>
       <CodeBlock
         code={`jwk(opts: JwkOptions): Hooks;
-  // verify hook: refuses HS* (confused-deputy), caches JWKS, honors kid,
-  // enforces issuer/audience and clock skew, then writes ctx.state.auth.
+  // refuses HS* (confused-deputy), caches JWKS by TTL, honors kid, enforces
+  // issuer/audience + clock skew, then stamps ctx.state.user = { sub, scopes, claims }.
 
 type JwkAlgorithm = Exclude<JwtAlgorithm, "HS256" | "HS384" | "HS512">;
-type JwkSource = { url: string; cacheMaxAgeMs?: number } | { keys: JwkSet["keys"] };
-interface JwkSet { keys: readonly JsonWebKey[] }
-type JwkVerifyHook = (ctx, verified: JwtVerified) => void | Promise<void>;
+type JwkSource = JwkSet | string | (() => JwkSet | Promise<JwkSet>);  // object | https URL | resolver
+interface JwkSet { keys: JsonWebKey[] }
+type JwkVerifyHook = (payload: Record<string, unknown>, ctx) =>
+  boolean | void | Promise<boolean | void>;   // return false to reject (403)
 
 interface JwkOptions {
-  source: JwkSource;
-  algorithms: readonly JwkAlgorithm[];   // required allowlist
-  issuer?: string | readonly string[];
-  audience?: string | readonly string[];
-  clockToleranceSeconds?: number;
-  fetch?: typeof fetch;                   // pair with fetchGuard()
+  jwks: JwkSource;                       // object, https:// URL, or resolver (http:// refused)
+  algorithms: JwkAlgorithm[];            // required, non-empty; HS* refused at construction
+  issuer?: string | string[];
+  audience?: string | string[];
+  clockSkewSeconds?: number;             // default: 0
+  realm?: string;                        // WWW-Authenticate realm; default: "api"
+  fetchTtlSeconds?: number;              // default: 300; URL sources only
+  maxStaleSeconds?: number;              // default: 3600; 0 disables; URL sources only
+  fetch?: typeof fetch;                  // pair with fetchGuard()
   verify?: JwkVerifyHook;
 }`}
       />
@@ -563,11 +667,21 @@ class TemporalClaimError extends Error { readonly code: TemporalClaimErrorCode }
       <CodeBlock
         code={`defineConfig<S extends StandardSchemaV1>(opts: {
   schema: S;
-  sources?: readonly ConfigSource[];   // process.env by default
-}): StandardSchemaV1.InferOutput<S>;
-  // Validates once at startup; refuses-to-boot on missing/invalid values.
+  source?: ConfigSource;               // default: "env" (process.env)
+  stderr?: { write(chunk: string): void } | false;
+}): Promise<StandardSchemaV1.InferOutput<S>>;
+  // Async. Validates once at startup; throws ConfigValidationError on missing/invalid values.
 
-class ConfigValidationError extends Error {}`}
+type ConfigSource =
+  | "env"
+  | { kind: "env";    env: Record<string, string | undefined> }
+  | { kind: "file";   path: string; parse?: (text: string) => unknown }
+  | { kind: "object"; data: Record<string, unknown> }
+  | { kind: "custom"; resolve: () => Promise<Record<string, unknown>> };
+
+class ConfigValidationError extends Error {
+  readonly issues: ReadonlyArray<{ key: string; message: string }>;
+}`}
       />
 
       <h3>Logging</h3>

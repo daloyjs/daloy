@@ -337,9 +337,12 @@ app.use(
 );
 
 // Authorize per route by scope/permission.
-app.get("/orders", {
+app.route({
+  method: "GET",
+  path: "/orders",
   hooks: requireScopes("orders:read"),
-  handler: (ctx) => ctx.json({ orders: [] }),
+  responses: { 200: { description: "ok" } },
+  handler: () => ({ status: 200, body: { orders: [] } }),
 });`}
       />
       <p>
