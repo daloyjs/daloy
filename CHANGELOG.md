@@ -13,6 +13,57 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [1.0.0-beta.4] - 2026-06-26
+
+The fifth **1.0.0 beta**. Keeps the 1.0 line in beta while adding a handler
+escape hatch, a routing-safety guard, and a broad documentation accuracy pass.
+Projects on `^1.0.0-beta.3` upgrade with a version bump. `@daloyjs/core`,
+`create-daloy`, and the JSR package `@daloyjs/daloy` move to `1.0.0-beta.4` in
+lockstep, and every `create-daloy` template now pins
+`@daloyjs/core@^1.0.0-beta.4`.
+
+### Added
+
+- **Raw `Response` return from handlers.** A route handler (or an `afterHandle`
+  transform) may now return a web-standard `Response` directly, an escape hatch
+  for streaming, proxying, or pre-built bodies (for example a Vercel AI SDK
+  `result.toUIMessageStreamResponse()` or a forwarded upstream `fetch()`). A
+  returned `Response` bypasses response-schema validation by design (no schema
+  can describe an opaque stream), but is finalized through the exact same
+  pipeline as every other response, so no security control is skipped: `ctx.set`
+  headers (`secureHeaders` / CORS) are copied on, `x-request-id` is added when
+  absent, `onSend` / `onResponse` hooks run, server-fingerprint headers are
+  stripped, and a `HEAD` request still yields an empty body. Prefer the
+  structured `{ status, body }` result whenever a schema can describe the payload.
+- **AI SDK, auth, and database guides.** New website docs for the Vercel AI SDK
+  integration, Better Auth, LoginRadius, DuckDB, and Replit deployment, plus a
+  streaming docs refresh.
+
+### Fixed
+
+- **Routing-safety guard: array or keyless `hooks` no longer silently no-op.**
+  `app.route({ hooks })` now throws when `hooks` is an array, or an object that
+  carries none of the recognized hook keys (`onRequest`, `beforeHandle`,
+  `afterHandle`, `onError`, `onSend`, `onResponse`). Previously such a value was
+  read as `undefined` and applied nothing, so a route that looked guarded
+  (`hooks: [ipRestriction(...), bearerAuth(...)]`) could ship wide open. Compose
+  multiple bundles with `every(...)` (all must pass) or `some(...)` (any may
+  pass). An empty `{}` stays an explicit, allowed no-op.
+- **Documentation accuracy pass.** Verified and corrected concrete examples
+  across the docs against the published framework: the errors page now lists
+  `ConflictError` (409) and `RequestHeaderFieldsTooLargeError` (431); the
+  response-cache `X-Cache` marker claim is scoped to requests the cache actually
+  handles; and the API reference plus the security, auth, geo-block,
+  webhook-delivery, and database guides were corrected to match the real route,
+  hook, and middleware APIs.
+
+### Changed
+
+- **Version: `1.0.0-beta.3` → `1.0.0-beta.4`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, and JSR `@daloyjs/daloy`), with the
+  `create-daloy` templates, workshop, README status line, website version
+  reference, Deno adapter docs, and SBOMs synced to `1.0.0-beta.4`.
+
 ## [1.0.0-beta.3] - 2026-06-24
 
 The fourth **1.0.0 beta**. This keeps the 1.0 line in beta, not release
@@ -1540,7 +1591,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.3...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.4...HEAD
+[1.0.0-beta.4]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.1...v1.0.0-beta.2
 [1.0.0-beta.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.0...v1.0.0-beta.1
