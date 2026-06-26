@@ -302,10 +302,22 @@ tenancy({
       <CodeBlock
         code={`import { tenantScope, rateLimit, concurrencyLimit, idempotency, responseCache } from "@daloyjs/core";
 
-rateLimit({ windowMs: 60_000, max: 100, keyGenerator: tenantScope() });
-concurrencyLimit({ maxConcurrent: 20, scope: tenantScope() });
-idempotency({ scope: tenantScope() });   // CWE-524 cross-tenant cached-response defense
-responseCache({ ttlMs: 30_000, scope: tenantScope() });`}
+const scope = tenantScope(); // (ctx) => "tenant:<id>"
+
+rateLimit({ windowMs: 60_000, max: 100, keyGenerator: scope });
+concurrencyLimit({ maxConcurrent: 20, scope });
+idempotency({ scope });   // CWE-524 cross-tenant cached-response defense
+
+// responseCache differs: its keyGenerator REPLACES the whole cache key, and it
+// takes ttlSeconds (not ttlMs). Fold the tenant in alongside the path yourself,
+// or every URL for a tenant would collide on one entry.
+responseCache({
+  ttlSeconds: 30,
+  keyGenerator: (ctx) => {
+    const u = new URL(ctx.request.url);
+    return \`\${scope(ctx)}:\${ctx.request.method} \${u.pathname}\${u.search}\`;
+  },
+});`}
         language="ts"
       />
       <p>
@@ -317,6 +329,40 @@ responseCache({ ttlMs: 30_000, scope: tenantScope() });`}
         <code>keyGenerator</code> / <code>scope</code> callback runs. If a
         limiter runs first, its key falls back to{" "}
         <code>tenant:unknown</code>.
+      </p>
+
+      <h2>Database isolation is yours to wire</h2>
+      <p>
+        This is the boundary worth being explicit about, because people coming
+        from &ldquo;the framework guarantees isolation with Row-Level
+        Security&rdquo; expect more than any Node framework can deliver.{" "}
+        <code>tenancy()</code> owns tenant <em>identity</em> (a verified,
+        normalized, non-spoofable <code>ctx.state.tenant</code>) and{" "}
+        <code>tenantScope()</code> owns per-tenant <em>resource</em> isolation
+        (rate-limit, concurrency, cache, and idempotency buckets). What it
+        deliberately does <em>not</em> do is reach into your database and enforce
+        row isolation, that last inch lives in your data layer. The clean,
+        trustworthy id is exactly what that layer needs:
+      </p>
+      <CodeBlock
+        code={`// (a) Scope every query with the verified id.
+const rows = await db.query(
+  "SELECT * FROM invoices WHERE tenant_id = $1",
+  [ctx.state.tenant],
+);
+
+// (b) Or drive Postgres Row-Level Security from a per-request session
+// variable, then let your RLS policies do the enforcing.
+await db.query("SET app.current_tenant = $1", [ctx.state.tenant]);
+// CREATE POLICY tenant_isolation ON invoices
+//   USING (tenant_id = current_setting('app.current_tenant'));`}
+        language="ts"
+      />
+      <p>
+        Either way, the value reaching your database was already validated and
+        normalized by <code>tenancy()</code>, so a spoofed header or a{" "}
+        <code>Host</code> outside your <code>baseDomain</code> can never become a
+        query parameter or an RLS session variable.
       </p>
 
       <h2>Typing <code>ctx.state.tenant</code></h2>

@@ -5,9 +5,9 @@
  * once per request, validates and normalizes it, and exposes it on
  * `ctx.state.tenant` for handlers and downstream middleware. It is the
  * single source of truth for "who is this request for" so the per-tenant
- * isolation knobs on the rest of the framework (`rateLimit` `keyGenerator`,
- * `concurrencyLimit` / `idempotency` / `responseCache` `scope`) can all key
- * off the same resolved value via {@link tenantScope}.
+ * isolation knobs on the rest of the framework (`rateLimit` /
+ * `responseCache` `keyGenerator`, `concurrencyLimit` / `idempotency` `scope`)
+ * can all key off the same resolved value via {@link tenantScope}.
  *
  * Secure-by-default posture:
  *
@@ -391,10 +391,19 @@ export interface TenantScopeOptions {
  * or poison another tenant's:
  *
  * ```ts
- * rateLimit({ windowMs: 60_000, max: 100, keyGenerator: tenantScope() });
- * concurrencyLimit({ maxConcurrent: 20, scope: tenantScope() });
- * idempotency({ scope: tenantScope() });    // CWE-524 cross-tenant cache defense
- * responseCache({ ttlMs: 30_000, scope: tenantScope() });
+ * const scope = tenantScope();
+ * rateLimit({ windowMs: 60_000, max: 100, keyGenerator: scope });
+ * concurrencyLimit({ maxConcurrent: 20, scope });
+ * idempotency({ scope });    // CWE-524 cross-tenant cache defense
+ * // responseCache's keyGenerator REPLACES the whole key and it takes
+ * // ttlSeconds, so fold the tenant in alongside the path yourself:
+ * responseCache({
+ *   ttlSeconds: 30,
+ *   keyGenerator: (ctx) => {
+ *     const u = new URL(ctx.request.url);
+ *     return `${scope(ctx)}:${ctx.request.method} ${u.pathname}${u.search}`;
+ *   },
+ * });
  * ```
  *
  * The `tenant:` prefix keeps these keys from colliding with other key spaces
