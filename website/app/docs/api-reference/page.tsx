@@ -378,10 +378,12 @@ class ForbiddenError             extends HttpError {} // 403
 class NotFoundError              extends HttpError {} // 404
 class MethodNotAllowedError      extends HttpError {} // 405 - sets Allow
 class RequestTimeoutError        extends HttpError {} // 408
+class ConflictError              extends HttpError {} // 409 - sets cache-control: no-store
 class PayloadTooLargeError       extends HttpError {} // 413
 class UnsupportedMediaTypeError  extends HttpError {} // 415
 class ValidationError            extends HttpError {} // 422 - carries StandardSchema issues
 class TooManyRequestsError       extends HttpError {} // 429 - sets Retry-After
+class RequestHeaderFieldsTooLargeError extends HttpError {} // 431 - maxHeaderCount guard
 class InternalError              extends HttpError {} // 500 - detail redacted in production
 
 // Defensive guard: throws MessageLeakError when a custom error response

@@ -48,6 +48,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "AI-friendly route metadata", href: "/docs/ai-metadata" },
       { title: "Typed clients (Hey API)", href: "/docs/typed-client" },
       { title: "Streaming (SSE & NDJSON)", href: "/docs/streaming" },
+      { title: "Vercel AI SDK", href: "/docs/ai-sdk" as Route },
       { title: "WebSocket primitives", href: "/docs/websocket" },
       { title: "AsyncAPI for WebSockets", href: "/docs/asyncapi" },
       { title: "Tracing (OpenTelemetry)", href: "/docs/tracing" },

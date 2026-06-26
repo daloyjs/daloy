@@ -29,8 +29,9 @@ pnpm add ai @ai-sdk/openai`;
 
 const CHAT = `// A streaming chat endpoint, compatible with the AI SDK's
 // useChat() hook on the client. The AI SDK produces a web-standard
-// Response whose body is a ReadableStream, and DaloyJS passes a
-// ReadableStream body straight through without buffering.
+// Response, and a DaloyJS handler can return a raw Response directly:
+// the framework still finalizes it (request id, secureHeaders, CORS,
+// fingerprint stripping) like any other response.
 import { z } from "zod";
 import { App } from "@daloyjs/core";
 import { streamText, convertToModelMessages } from "ai";
@@ -64,12 +65,8 @@ app.route({
       abortSignal: request.signal,
     });
 
-    const res = result.toUIMessageStreamResponse();
-    return {
-      status: 200,
-      headers: Object.fromEntries(res.headers),
-      body: res.body!, // ReadableStream, passed through unbuffered
-    };
+    // Return the Response as-is. No mapping, no adapter.
+    return result.toUIMessageStreamResponse();
   },
 });`;
 
@@ -164,8 +161,7 @@ app.route({
       abortSignal: request.signal,
     });
 
-    const res = result.toUIMessageStreamResponse();
-    return { status: 200, headers: Object.fromEntries(res.headers), body: res.body! };
+    return result.toUIMessageStreamResponse();
   },
 });`;
 
@@ -277,9 +273,12 @@ export default function Page() {
       <h2>Streaming chat</h2>
       <p>
         The AI SDK&apos;s <code>result.toUIMessageStreamResponse()</code> returns
-        a web-standard <code>Response</code>. Copy its status, headers, and
-        stream body into a DaloyJS handler result and the stream passes straight
-        through, backpressure and all. This endpoint works with the AI SDK&apos;s{" "}
+        a web-standard <code>Response</code>, and a DaloyJS handler can return a
+        raw <code>Response</code> directly. The stream passes through,
+        backpressure and all, and the framework still finalizes it: it adds the
+        request id, applies <code>secureHeaders()</code> and CORS, runs your{" "}
+        <code>onSend</code> hooks, and strips fingerprint headers, exactly as it
+        does for a structured result. This endpoint works with the AI SDK&apos;s{" "}
         <code>useChat()</code> hook on the client with no extra wiring.
       </p>
       <CodeBlock language="ts" code={CHAT} />
