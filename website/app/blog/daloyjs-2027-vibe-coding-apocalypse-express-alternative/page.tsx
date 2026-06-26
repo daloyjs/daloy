@@ -104,7 +104,7 @@ app.route({
 });`;
 
 const JWT_JWK = `import { jwk } from "@daloyjs/core/jwk";
-import { requireScopes } from "@daloyjs/core";
+import { requireScopes, every } from "@daloyjs/core";
 
 // Verify tokens against your identity provider's JWKS.
 const auth = jwk({
@@ -118,7 +118,9 @@ app.route({
   path: "/projects/:id",
   operationId: "deleteProject",
   auth: { scheme: "bearer" },
-  hooks: [auth, requireScopes(["projects:write"])],
+  // Compose multiple guards with every(...) — both must pass.
+  // (An array here would silently apply NO hooks; the framework refuses it.)
+  hooks: every(auth, requireScopes(["projects:write"])),
   request: { params: z.object({ id: z.string() }) },
   responses: {
     204: { description: "Deleted" },

@@ -13,6 +13,16 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
+    slug: "state-of-ai-security-2026-what-the-report-means-for-backends",
+    title:
+      "The State of AI in Security 2026: 450 Teams, One Uncomfortable Pattern, and What Your Backend Can Do About It",
+    description:
+      "Aikido and Sapio Research surveyed 450 developers, CISOs, and AppSec engineers. The headline: AI now writes a quarter of production code, 1 in 5 teams had a serious incident because of it, and buying more tools makes things measurably worse. The data, with charts, and the structural lesson for anyone shipping an API.",
+    date: "2026-06-25",
+    readingTime: "14 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "daloyjs-1-0-0-beta-is-here",
     title: "DaloyJS 1.0.0-beta.0 Is Here (and Nothing Broke, On Purpose)",
     description:

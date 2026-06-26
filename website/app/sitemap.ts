@@ -14,6 +14,11 @@ const STATIC_PATHS: Array<{
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
   {
+    path: "/blog/state-of-ai-security-2026-what-the-report-means-for-backends",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/daloyjs-1-0-0-beta-is-here",
     changeFrequency: "monthly",
     priority: 0.7,
@@ -224,6 +229,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/ai-metadata", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/typed-client", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/streaming", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/ai-sdk", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/tracing", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/metrics", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/websocket", changeFrequency: "monthly", priority: 0.8 },

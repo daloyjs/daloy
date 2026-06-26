@@ -147,6 +147,29 @@ const res = sseResponse(async function* () {
   yield { event: "ping", data: "hi" };
 });`}
       />
+      <p>
+        A handler may also <strong>return a raw <code>Response</code></strong>{" "}
+        directly, instead of the <code>{"{ status, body, headers }"}</code>{" "}
+        shape. It bypasses response-schema validation (there is no schema for an
+        opaque stream) but is still finalized like any other response: the
+        request id, <code>secureHeaders()</code>, CORS, your <code>onSend</code>{" "}
+        hooks, and fingerprint stripping all still apply. This is what lets you
+        forward a stream from a library such as the{" "}
+        <a href="/docs/ai-sdk">Vercel AI SDK</a> in one line:
+      </p>
+      <CodeBlock
+        code={`app.route({
+  method: "GET",
+  path: "/ping",
+  operationId: "ping",
+  responses: { 200: { description: "SSE stream" } },
+  // Return the Response as-is. Useful for AI SDK streams or a
+  // forwarded upstream fetch() response.
+  handler: () => sseResponse(async function* () {
+    yield { event: "ping", data: "hi" };
+  }),
+});`}
+      />
 
       <h3>Keep-alive comments</h3>
       <p>

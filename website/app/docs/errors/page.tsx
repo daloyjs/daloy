@@ -55,17 +55,19 @@ export default function Page() {
 
       <h2>Built-in error classes</h2>
       <CodeBlock code={`import {
-  BadRequestError,            // 400
-  ValidationError,            // 422
-  UnauthorizedError,          // 401
-  ForbiddenError,             // 403
-  NotFoundError,              // 404
-  MethodNotAllowedError,      // 405 + Allow header
-  PayloadTooLargeError,       // 413
-  UnsupportedMediaTypeError,  // 415
-  RequestTimeoutError,        // 408
-  TooManyRequestsError,       // 429 + Retry-After
-  InternalError,              // 500 (detail redacted in production)
+  BadRequestError,                   // 400
+  UnauthorizedError,                 // 401
+  ForbiddenError,                    // 403
+  NotFoundError,                     // 404
+  MethodNotAllowedError,             // 405 + Allow header
+  RequestTimeoutError,               // 408
+  ConflictError,                     // 409 + cache-control: no-store
+  PayloadTooLargeError,              // 413
+  UnsupportedMediaTypeError,         // 415
+  ValidationError,                   // 422
+  TooManyRequestsError,              // 429 + Retry-After
+  RequestHeaderFieldsTooLargeError,  // 431
+  InternalError,                     // 500 (detail redacted in production)
 } from "@daloyjs/core";`} />
 
       <h2>Throwing in a handler</h2>
