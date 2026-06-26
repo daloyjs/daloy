@@ -1,0 +1,258 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { z } from "zod";
+import {
+  App,
+  bearerAuth,
+  cors,
+  requestId,
+  secureHeaders,
+  sseResponse,
+} from "../src/index.js";
+
+// A handler may return a raw web-standard `Response` as an escape hatch for
+// streaming / proxying / pre-built bodies (e.g. an AI SDK
+// `result.toUIMessageStreamResponse()`). These tests pin the two things that
+// matter: (1) the Response is delivered as the handler built it, and (2) it is
+// still finalized through the same path as every other response, so no
+// security control is skipped.
+
+test("a handler can return a raw Response (status, headers, body preserved)", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "rawResponse",
+    responses: { 200: { description: "raw" } },
+    handler: () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 201,
+        headers: { "content-type": "application/json", "x-custom": "yes" },
+      }),
+  });
+
+  const res = await app.request("/raw");
+  assert.equal(res.status, 201);
+  assert.equal(res.headers.get("content-type"), "application/json");
+  assert.equal(res.headers.get("x-custom"), "yes");
+  // The request id is added by default even on a raw Response.
+  assert.ok((res.headers.get("x-request-id") ?? "").length > 0);
+  assert.deepEqual(await res.json(), { ok: true });
+});
+
+test("a streaming Response from a handler passes through (AI SDK shape)", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/stream",
+    operationId: "streamResponse",
+    responses: { 200: { description: "stream" } },
+    // sseResponse() returns a web-standard Response with a ReadableStream
+    // body, mirroring an AI SDK result.toUIMessageStreamResponse().
+    handler: () =>
+      sseResponse(async function* () {
+        yield { event: "tick", data: 1 };
+        yield { event: "tick", data: 2 };
+      }),
+  });
+
+  const res = await app.request("/stream");
+  assert.equal(res.status, 200);
+  assert.equal(
+    res.headers.get("content-type"),
+    "text/event-stream; charset=utf-8",
+  );
+  const body = await res.text();
+  assert.match(body, /data: 1\n\n/);
+  assert.match(body, /data: 2\n\n/);
+});
+
+test("secureHeaders still apply to a handler-returned Response", async () => {
+  const app = new App({ logger: false });
+  app.use(secureHeaders());
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "rawSecure",
+    responses: { 200: { description: "raw" } },
+    handler: () => new Response("hi", { status: 200 }),
+  });
+
+  const res = await app.request("/raw");
+  assert.equal(res.status, 200);
+  // The deployment-time guardrail is NOT skipped just because the handler
+  // returned a raw Response. This is the security invariant.
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+});
+
+test("an onSend hook can observe a handler-returned Response", async () => {
+  const app = new App({ logger: false });
+  app.use({
+    onSend: (res: Response) => {
+      res.headers.set("x-seen-by-onsend", "1");
+      return undefined;
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "rawOnSend",
+    responses: { 200: { description: "raw" } },
+    handler: () => new Response("hi", { status: 200 }),
+  });
+
+  const res = await app.request("/raw");
+  assert.equal(res.headers.get("x-seen-by-onsend"), "1");
+});
+
+test("server-fingerprint headers are stripped from a handler-returned Response", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "rawStrip",
+    responses: { 200: { description: "raw" } },
+    handler: () =>
+      new Response("hi", {
+        status: 200,
+        headers: { server: "secretd/1.2", "x-powered-by": "leak" },
+      }),
+  });
+
+  const res = await app.request("/raw");
+  assert.equal(res.headers.get("server"), null);
+  assert.equal(res.headers.get("x-powered-by"), null);
+});
+
+test("a user-set x-request-id on the Response is preserved", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "rawReqId",
+    responses: { 200: { description: "raw" } },
+    handler: () =>
+      new Response("hi", {
+        status: 200,
+        headers: { "x-request-id": "mine-123" },
+      }),
+  });
+
+  const res = await app.request("/raw");
+  assert.equal(res.headers.get("x-request-id"), "mine-123");
+});
+
+test("HEAD on a raw-Response GET route yields an empty body with headers intact", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "rawHead",
+    responses: { 200: { description: "raw" } },
+    handler: () =>
+      new Response("a body that HEAD must not return", {
+        status: 200,
+        headers: { "content-type": "text/plain", "x-marker": "kept" },
+      }),
+  });
+
+  const res = await app.request("/raw", { method: "HEAD" });
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "");
+  assert.equal(res.headers.get("x-marker"), "kept");
+});
+
+test("a raw Response bypasses response-schema validation (documented escape hatch)", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "rawNoValidate",
+    // The schema says { n: number }, but a raw Response is opaque: there is no
+    // schema that can describe an arbitrary stream, so validation is skipped
+    // by design. Structured `{ status, body }` results are still validated
+    // (covered in response-body-schema-audit.test.ts).
+    responses: {
+      200: { description: "ok", body: z.object({ n: z.number() }) as never },
+    },
+    handler: () =>
+      new Response("not json at all", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+  });
+
+  const res = await app.request("/raw");
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "not json at all");
+});
+
+test("SECURITY PARITY: a raw-Response route gets the identical guardrails as a structured route", async () => {
+  // Full deployment-time stack: auth (beforeHandle), CORS, secureHeaders,
+  // requestId. We then prove a raw-Response route is treated identically to a
+  // structured one, so the change skips NO built-in security control.
+  const build = () => {
+    const app = new App({ logger: false });
+    app.use(bearerAuth({ validate: (t) => t === "good" }));
+    app.use(cors({ origin: "https://app.example", credentials: true }));
+    app.use(secureHeaders());
+    app.use(requestId());
+    app.route({
+      method: "GET",
+      path: "/structured",
+      operationId: "parityStructured",
+      responses: { 200: { description: "ok" } },
+      handler: () => ({ status: 200 as const, body: { ok: true } }),
+    });
+    app.route({
+      method: "GET",
+      path: "/raw",
+      operationId: "parityRaw",
+      responses: { 200: { description: "ok" } },
+      handler: () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+    return app;
+  };
+
+  const app = build();
+  const origin = "https://app.example";
+
+  // 1) Pre-handler auth STILL guards the raw-Response route: no token -> 401.
+  //    (Proves beforeHandle runs before the handler regardless of return type.)
+  const noAuth = await app.request("/raw", { headers: { origin } });
+  assert.equal(noAuth.status, 401);
+
+  // 2) Authenticated requests: the raw route must carry every header the
+  //    fully-guarded structured route carries (secureHeaders + CORS + ...),
+  //    modulo per-request / body-dependent headers.
+  const headers = { authorization: "Bearer good", origin };
+  const s = await app.request("/structured", { headers });
+  const r = await app.request("/raw", { headers });
+  assert.equal(s.status, 200);
+  assert.equal(r.status, 200);
+
+  const bodyOrPerRequest = new Set(["content-length", "date", "x-request-id"]);
+  for (const [key, value] of s.headers) {
+    if (bodyOrPerRequest.has(key)) continue;
+    assert.equal(
+      r.headers.get(key),
+      value,
+      `raw-Response route must apply the same '${key}' as the structured route`,
+    );
+  }
+
+  // 3) Deployment-time invariants on the raw route specifically.
+  assert.ok((r.headers.get("x-request-id") ?? "").length > 0, "request id present");
+  assert.equal(r.headers.get("server"), null, "fingerprint stripped");
+  assert.equal(r.headers.get("x-powered-by"), null, "fingerprint stripped");
+  assert.equal(r.headers.get("x-content-type-options"), "nosniff", "secureHeaders applied");
+  assert.equal(
+    r.headers.get("access-control-allow-origin"),
+    origin,
+    "CORS applied to the raw route",
+  );
+})

@@ -1573,6 +1573,49 @@ export class App<
    * a misconfigured surface.
    */
   private assertSecureHookConfig(hooks: Hooks): void {
+    // Always-on correctness guard (independent of secureDefaults / environment).
+    // A hook bundle must be a single Hooks object. Passing an ARRAY — or any
+    // object carrying none of the recognized hook keys — is a silent no-op: the
+    // framework reads `.beforeHandle` / `.onSend` / ... off it, finds
+    // `undefined`, and applies NOTHING. A route that looks guarded
+    // (`hooks: [ipRestriction(...), bearerAuth(...)]`) would then ship wide open.
+    // TypeScript already rejects an array literal here; this catches JS callers,
+    // spreads, and `as`-casts, where the silent runtime skip is the dangerous part.
+    if (hooks !== null && typeof hooks === "object") {
+      const HOOK_KEYS = [
+        "onRequest",
+        "beforeHandle",
+        "afterHandle",
+        "onError",
+        "onSend",
+        "onResponse",
+      ] as const;
+      const carriesAHook = HOOK_KEYS.some(
+        (k) => typeof (hooks as Record<string, unknown>)[k] === "function",
+      );
+      if (!carriesAHook) {
+        if (Array.isArray(hooks)) {
+          throw new Error(
+            "Hooks must be a single Hooks object, not an array. To run multiple " +
+              "hook bundles (e.g. ipRestriction + bearerAuth) on one route, compose " +
+              "them with every(...) (all must pass) or some(...) (any may pass) from " +
+              "@daloyjs/core. Passing an array silently applies NO hooks, leaving the " +
+              "route unguarded.",
+          );
+        }
+        if (Object.keys(hooks).length > 0) {
+          throw new Error(
+            "Hooks object carries none of the recognized hook keys (onRequest, " +
+              "beforeHandle, afterHandle, onError, onSend, onResponse), so it would " +
+              "silently apply no hooks. To compose multiple hook bundles use " +
+              "every(...) / some(...) from @daloyjs/core.",
+          );
+        }
+        // An empty object `{}` carries no hook and makes no false promise of one;
+        // it is an explicit no-op, equivalent to omitting `hooks`, and is allowed.
+      }
+    }
+
     if (this.options.secureDefaults === false) return;
     const record = hooks as Record<PropertyKey, unknown>;
     if (!this.isProduction()) {
@@ -2562,11 +2605,9 @@ export class App<
   private registerHealthRoute(
     kind: "healthcheck" | "readinesscheck",
     opts: HealthRouteOptions,
-    handler: () => {
-      status: 200 | 503;
-      body: { status: string };
-      headers?: Record<string, string>;
-    },
+    handler: () =>
+      | { status: 200; body: { status: string }; headers?: Record<string, string> }
+      | { status: 503; body: { status: string }; headers?: Record<string, string> },
   ): void {
     const isHealth = kind === "healthcheck";
     const defaultPath = (isHealth ? "/healthz" : "/readyz") as PathString;
@@ -3438,6 +3479,37 @@ export class App<
         const afterResult = allHooks.afterHandle(ctx, result);
         const afterReturn = isPromiseLike(afterResult) ? await afterResult : afterResult;
         if (afterReturn !== undefined) result = afterReturn;
+      }
+
+      // Escape hatch: a handler (or an `afterHandle` transform) may return a
+      // raw web-standard `Response` — an AI SDK stream, a forwarded upstream
+      // response, or any pre-built body that no response schema can describe.
+      // It bypasses response-schema validation by design, but is finalized
+      // through the exact same path as every other response (and as the
+      // `beforeHandle` `Response` passthrough above), so no security control
+      // is skipped: `ctx.set` headers (secureHeaders / CORS) are copied on, the
+      // request id is added when absent, `onSend` / `onResponse` hooks run,
+      // fingerprint headers are stripped, and `HEAD` yields an empty body.
+      if (result instanceof Response) {
+        copyContextHeaders(ctx, result);
+        if (!result.headers.has("x-request-id")) {
+          result.headers.set("x-request-id", requestId);
+        }
+        let finalizedRaw: Response;
+        if (hasFinalizeHook) {
+          const fin = finalizeResponse(result, ctx, allHooks, stripFingerprint);
+          finalizedRaw = isPromiseLike(fin) ? await fin : fin;
+        } else {
+          finalizedRaw = finalizeFast(result, stripFingerprint);
+        }
+        if (method === "HEAD") {
+          return new Response(null, {
+            status: finalizedRaw.status,
+            statusText: finalizedRaw.statusText,
+            headers: finalizedRaw.headers,
+          });
+        }
+        return finalizedRaw;
       }
 
       const serializeResultRes = serializeResult(

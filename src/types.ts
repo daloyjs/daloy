@@ -489,9 +489,34 @@ export interface RouteDefinition<
 
   hooks?: Hooks;
 
+  /**
+   * The route handler. Receives the typed, validated {@link BaseContext} and
+   * returns either:
+   *
+   * - a structured result `{ status, body, headers? }` whose `body` is
+   *   validated against the route's response schema and typed end-to-end into
+   *   the OpenAPI document and generated client (the common case), or
+   * - a raw web-standard {@link Response} as an escape hatch for streaming,
+   *   proxying, or pre-built bodies (for example an AI SDK
+   *   `result.toUIMessageStreamResponse()`, or an upstream `fetch()` response
+   *   forwarded verbatim).
+   *
+   * A returned `Response` **bypasses response-schema validation and the
+   * typed-client body type by design** — there is no schema that can describe
+   * an opaque stream. It is still finalized exactly like every other response,
+   * so no security control is skipped: headers set via `ctx.set` (including
+   * `secureHeaders()` and CORS) are copied onto it, `x-request-id` is added
+   * when absent, any `onSend` / `onResponse` hooks run, server-fingerprint
+   * headers (`server`, `x-powered-by`) are stripped, and a `HEAD` request still
+   * yields an empty body. This mirrors the existing `beforeHandle` `Response`
+   * passthrough. Prefer the structured result whenever a schema can describe
+   * the payload; reach for `Response` only when it genuinely cannot.
+   *
+   * @since 0.1.0
+   */
   handler: (
     ctx: BaseContext<P, Req>
-  ) => HandlerReturn<Res> | Promise<HandlerReturn<Res>>;
+  ) => HandlerReturn<Res> | Response | Promise<HandlerReturn<Res> | Response>;
 }
 
 // ---------- Callbacks ----------

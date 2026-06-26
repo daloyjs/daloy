@@ -81,9 +81,12 @@ app.route({
         language="ts"
       />
       <p>
-        Each response carries an <code>X-Cache</code> marker (<code>HIT</code>,{" "}
-        <code>MISS</code>, or <code>STALE</code>) plus an <code>Age</code>{" "}
-        header on a hit, so caches and clients can observe the outcome.
+        Each response the cache handles carries an <code>X-Cache</code> marker
+        (<code>HIT</code>, <code>MISS</code>, or <code>STALE</code>), plus an{" "}
+        <code>Age</code> header on a hit, so caches and clients can observe the
+        outcome. A request that bypasses the cache entirely (a non-GET/HEAD
+        method, an <code>Authorization</code> header, or a request{" "}
+        <code>Cache-Control: no-store</code>) passes through unmarked.
       </p>
 
       <h2>How it works</h2>
@@ -116,7 +119,7 @@ app.route({
             tone: "muted",
           },
         ]}
-        caption="Every response carries an X-Cache marker (HIT, STALE, or MISS). On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry."
+        caption="A handled request's response carries an X-Cache marker (HIT, STALE, or MISS); a request that bypasses the cache (non-GET/HEAD, an Authorization header, or Cache-Control: no-store) carries none. On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry."
       />
 
       <ul>
