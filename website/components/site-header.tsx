@@ -14,6 +14,7 @@ import {
 import { buttonVariants } from "./ui/button";
 import { LogoMark } from "./daloyjs-logo";
 import { NavLink } from "./nav-link";
+import { PwaInstallButton } from "./pwa-install-button";
 import { ThemeSwitcher } from "./theme-switcher";
 import { CORE_PACKAGE_VERSION } from "@/lib/seo";
 
@@ -150,6 +151,7 @@ export function SiteHeader() {
             </NavLink>
 
             <ThemeSwitcher />
+            <PwaInstallButton />
 
             <div className="hidden items-center gap-2 xl:flex">
               {socialLinks.map((link) => {
