@@ -619,6 +619,12 @@ export default function HomePage() {
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Link
+              href="/docs/installation"
+              className={buttonVariants({ size: "lg" })}
+            >
+              Install DaloyJS
+            </Link>
+            <Link
               href="/docs/tutorials/bookstore"
               className={buttonVariants({ size: "lg", variant: "outline" })}
             >
