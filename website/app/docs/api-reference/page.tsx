@@ -73,9 +73,9 @@ console.log(\`listening on http://localhost:\${port}\`);`}
       <p>
         If you drop the response <code>body</code> schema the route still works,
         but DaloyJS logs a <code>security.response.bodySchemaMissing</code>{" "}
-        warning at startup: response field-level stripping (OWASP API3) cannot be
-        applied to a schema-less body. Declare the schema, or ignore the warning
-        for routes that intentionally return no body.
+        warning at startup: response field-level stripping (OWASP API3) cannot
+        be applied to a schema-less body. Declare the schema, or ignore the
+        warning for routes that intentionally return no body.
       </p>
 
       <h2>Subpath modules</h2>
@@ -143,9 +143,9 @@ console.log(\`listening on http://localhost:\${port}\`);`}
 
       <p>
         You can import any feature two ways: from the root{" "}
-        <code>@daloyjs/core</code> barrel (convenient and tree-shakeable), or from
-        its own subpath (for example <code>@daloyjs/core/jwt</code>) for the
-        smallest possible bundle without relying on a bundler&apos;s
+        <code>@daloyjs/core</code> barrel (convenient and tree-shakeable), or
+        from its own subpath (for example <code>@daloyjs/core/jwt</code>) for
+        the smallest possible bundle without relying on a bundler&apos;s
         tree-shaking. Both resolve to the same code. Runtime{" "}
         <strong>adapters</strong> are the one exception: they are available{" "}
         <em>only</em> as subpaths (for example <code>@daloyjs/core/node</code>),
@@ -361,6 +361,38 @@ interface IntrospectedRoute {
   meta?: RouteMeta;
 }`}
       />
+
+      <h3>Hook dispatch order &amp; when the body is read</h3>
+      <p>
+        Per matched request, hooks fire in this order:{" "}
+        <code>onRequest(req)</code> &rarr; <em>route match</em> &rarr; validate{" "}
+        <code>params</code>/<code>query</code>/<code>headers</code>{" "}
+        <strong>and read &amp; parse the request body</strong> when the route
+        declares a <code>request.body</code> schema &rarr;{" "}
+        <code>beforeHandle(ctx)</code> &rarr; <code>handler(ctx)</code> &rarr;{" "}
+        <code>afterHandle(ctx, result)</code> &rarr; <code>onSend(res)</code>{" "}
+        &rarr; <code>onResponse(res)</code>.
+      </p>
+      <p>
+        The body is read and validated <strong>before</strong>{" "}
+        <code>beforeHandle</code> <em>by design</em>: body-aware guards that run
+        in <code>beforeHandle</code> need the parsed <code>ctx.body</code>;{" "}
+        <code>waf()</code> inspects it for NoSQL-operator injection and other
+        inbound attack signatures, and <code>idempotency()</code> derives its
+        dedup key from it. Deferring the read would silently turn those into
+        no-ops.
+      </p>
+      <p>
+        Consequence: a cheap <code>beforeHandle</code> guard (e.g.{" "}
+        <code>bearerAuth()</code>, <code>rateLimit()</code>) on a route with a
+        body schema runs <em>after</em> the body has been read, so an
+        unauthenticated client still pays for the (bounded) body read before
+        being rejected. The cost is capped by <code>bodyLimitBytes</code> (1 MiB
+        default). To gate traffic <strong>before any body I/O</strong>, put the
+        guard in <code>App({"{ hooks }"})</code> <code>onRequest</code>, which
+        runs before routing and before the body is touched, or run that surface
+        in an app with a stricter <code>bodyLimitBytes</code> setting.
+      </p>
 
       <h3>Errors</h3>
       <CodeBlock
