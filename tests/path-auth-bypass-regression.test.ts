@@ -37,12 +37,7 @@ import { App, bearerAuth, except } from "../src/index.js";
 
 function protectedApp() {
   const app = new App({ env: "development" });
-  app.use(
-    except(
-      ["/health", "/public/**"],
-      bearerAuth({ validate: (token) => token === "good" }),
-    ),
-  );
+  app.use(except(["/health", "/public/**"], bearerAuth({ validate: (token) => token === "good" })));
   app.route({
     method: "GET",
     path: "/api/admin",
@@ -99,9 +94,15 @@ test("Qinglong CVE-2026-3965: no implicit URL rewrite — /open/* does not reach
   // does not also expose it under `/open/admin`.
   const app = protectedApp();
   const res = await app.fetch(new Request("http://x/open/admin"));
-  // 404 is the correct outcome — the handler at /api/admin is NOT
-  // reachable via /open/admin, with or without auth.
-  assert.equal(res.status, 404);
+  // The security property under test is that the /api/admin handler is NOT
+  // reachable via /open/admin (no implicit URL rewrite) — i.e. never a 200.
+  // Because protectedApp() installs auth globally via app.use(except(...)),
+  // perimeter guards now run on the cold (no-match) path too, so an
+  // unauthenticated request to an unmatched path is rejected with 401 rather
+  // than 404 (route-enumeration resistance). Either is acceptable here; a 200
+  // would be the CVE.
+  assert.notEqual(res.status, 200);
+  assert.equal(res.status, 401);
 });
 
 test("except() pattern uses the same url.pathname the router sees (no double-decode)", async () => {

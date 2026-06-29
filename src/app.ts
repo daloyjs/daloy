@@ -1216,6 +1216,21 @@ export class App<
     return this._globalCorsAllowsCache;
   }
 
+  /**
+   * Cached merge of `options.hooks` plus every `app.use()` group hook, used on
+   * the cold dispatch path (404, 405, and OPTIONS preflight) so perimeter
+   * `beforeHandle` guards registered via `app.use()` still cover requests that
+   * match no route.
+   */
+  private _coldPathHooksCache: Hooks | undefined;
+
+  private get coldPathHooks(): Hooks {
+    if (this._coldPathHooksCache === undefined) {
+      this._coldPathHooksCache = mergeHooks([this.options.hooks ?? {}, ...this.groupHooks]);
+    }
+    return this._coldPathHooksCache;
+  }
+
   constructor(options: AppOptions = {}) {
     const resolved = applySecurityPreset(options);
     this.options = {
@@ -2490,6 +2505,7 @@ export class App<
         exclude,
       }),
     );
+    this._coldPathHooksCache = undefined;
 
     const buckets = rateLimitConfig
       ? new Map<string, { count: number; resetMs: number }>()
@@ -2913,6 +2929,7 @@ export class App<
       if (autoIdx >= 0) this.groupHooks.splice(autoIdx, 1);
     }
     this.groupHooks.push(hooks);
+    this._coldPathHooksCache = undefined;
     if ((hooks as Record<PropertyKey, unknown>)[CORS_HOOK_MARKER] === true) {
       this.corsOriginAllows = corsOriginAllowsFromHooks(this.groupHooks);
     }
@@ -2956,6 +2973,7 @@ export class App<
       const hooks: Hooks = { [ext.event]: ext.handler } as unknown as Hooks;
       this.groupHooks.push(hooks);
     }
+    this._coldPathHooksCache = undefined;
   }
 
   decorate<K extends string, V>(
@@ -3345,9 +3363,11 @@ export class App<
         // `decorations`, iterate headers, or materialize a `Headers`
         // instance just to be thrown away. The 204 OPTIONS preflight branch
         // below uses its own `synthCtx`, so this skip is safe for it too.
+        const coldGuards =
+          method === "OPTIONS" ? undefined : this.coldPathHooks.beforeHandle;
         const needsCtx = allowed.length > 0 && method === "OPTIONS"
           ? false // OPTIONS path builds synthCtx
-          : activeErrorHook !== undefined;
+          : activeErrorHook !== undefined || coldGuards !== undefined;
         if (needsCtx) {
           // `query` and `headers` are materialized lazily — the common
           // `onError` hook reads `requestId` / path and never touches them,
@@ -3376,12 +3396,29 @@ export class App<
             set headers(v: any) { _headers = v; },
             body: undefined,
             state: { ...this.decorations, requestId, log },
-            set: { headers: new Headers() },
+            set: new LazyResponseSet(),
             // Cast through `unknown`: this is a deliberately minimal bootstrap
             // context for the cold 404 path (no user state populated yet), so
             // it must compile even when a consumer augments `AppState`.
           } as unknown as BaseContext<any, any>;
           ctx.set.headers.set("x-request-id", requestId);
+        }
+        if (coldGuards !== undefined) {
+          const guardResult = coldGuards(ctx!);
+          const guarded = isPromiseLike(guardResult) ? await guardResult : guardResult;
+          if (guarded instanceof Response) {
+            copyContextHeaders(ctx!, guarded);
+            if (!guarded.headers.has("x-request-id")) {
+              guarded.headers.set("x-request-id", requestId);
+            }
+            const fin = finalizeResponse(
+              guarded,
+              ctx!,
+              this.coldPathHooks,
+              stripFingerprint,
+            );
+            return isPromiseLike(fin) ? await fin : fin;
+          }
         }
         if (allowed.length > 0) {
           if (method === "OPTIONS") {
@@ -3396,12 +3433,9 @@ export class App<
               headers: headersToObject(request.headers),
               body: undefined,
               state: { ...this.decorations, requestId, log },
-              set: { headers: new Headers() },
+              set: new LazyResponseSet(),
             } as unknown as BaseContext<any, any>;
-            const preflightHooks = mergeHooks([
-              this.options.hooks ?? {},
-              ...this.groupHooks,
-            ]);
+            const preflightHooks = this.coldPathHooks;
             const interceptedResult = preflightHooks.beforeHandle?.(synthCtx);
             const intercepted = isPromiseLike(interceptedResult) ? await interceptedResult : interceptedResult;
             if (intercepted instanceof Response) {

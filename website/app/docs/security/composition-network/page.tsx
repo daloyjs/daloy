@@ -132,6 +132,39 @@ app.use(some(
         </li>
       </ul>
 
+      <blockquote>
+        <strong>Perimeter guards run on unmatched requests too.</strong>{" "}
+        <code>beforeHandle</code> guards registered with{" "}
+        <code>app.use(...)</code>, such as <code>rateLimit()</code>,{" "}
+        <code>ipRestriction()</code>, <code>csrf()</code>, and your own WAF
+        bundles, also run on the cold dispatch path: a request that matches no
+        route (<code>404</code>), hits a registered path with the wrong method
+        and gets <code>405</code>, or arrives as an <code>OPTIONS</code>{" "}
+        preflight.
+        Without this, an attacker could flood random paths to slip past a{" "}
+        <code>rateLimit()</code> that an operator reasonably expects to cover
+        every request. Two consequences worth knowing:
+      </blockquote>
+      <ul>
+        <li>
+          A flood of <code>404</code>s is now throttled / IP-fenced just like
+          traffic to a real route.
+        </li>
+        <li>
+          When auth is installed globally (e.g.{" "}
+          <code>app.use(except(exempt, bearerAuth(...)))</code>), an
+          unauthenticated request to an <em>unmatched</em> path is rejected with{" "}
+          <code>401</code> rather than <code>404</code>. This is intentional
+          route-enumeration resistance: the perimeter answers the same way
+          whether or not the route exists. Per-route hooks are unaffected, and
+          no handler is ever reached. Need public unknown paths to stay plain{" "}
+          <code>404</code>s instead? Avoid global <code>app.use()</code> auth
+          for that surface; use route/group-scoped hooks for auth and reserve{" "}
+          <code>App({"{ hooks }"})</code> <code>onRequest</code> for checks that
+          should truly run before routing.
+        </li>
+      </ul>
+
       <h2>
         3. <code>ipRestriction()</code>: CIDR allow / deny
       </h2>
@@ -161,13 +194,13 @@ app.use(ipRestriction({
       />
       <p>
         Invalid IP literals, invalid CIDR prefixes, and calls with neither an{" "}
-        <code>allow</code> nor <code>deny</code> list throw at construction time
-, bugs that would otherwise hide until production traffic hits. By
-        default the helper fails closed because Web-standard requests do not
-        expose the peer address. Supply <code>resolveIp</code> if your adapter
-        exposes connection metadata or if you sit behind a CDN that sends the
-        real client through a custom header (<code>cf-connecting-ip</code>,{" "}
-        <code>true-client-ip</code>, …).
+        <code>allow</code> nor <code>deny</code> list throw at construction
+        time, catching bugs that would otherwise hide until production traffic
+        hits. By default the helper fails closed because Web-standard requests
+        do not expose the peer address. Supply <code>resolveIp</code> if your
+        adapter exposes connection metadata or if you sit behind a CDN that
+        sends the real client through a custom header such as{" "}
+        <code>cf-connecting-ip</code> or <code>true-client-ip</code>.
       </p>
 
       <h2>
@@ -175,7 +208,7 @@ app.use(ipRestriction({
       </h2>
       <p>
         Mark a route as <code>internal: true</code> and the public{" "}
-        <code>app.fetch(...)</code> entry point returns <code>404</code>: 
+        <code>app.fetch(...)</code> entry point returns <code>404</code>:
         existence cannot be probed. The same route runs normally through{" "}
         <code>app.inject(request)</code>, which is meant for cron jobs, admin
         scripts, and integration tests. Internal routes are also excluded from
