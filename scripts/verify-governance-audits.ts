@@ -350,6 +350,98 @@ interface WorkflowFile {
   readonly text: string;
 }
 
+/**
+ * Audit one workflow file's governance floor from an in-memory string.
+ *
+ * @param file - Display path used in findings.
+ * @param text - Workflow YAML source to inspect.
+ * @returns Findings for missing top-level permissions, missing harden-runner,
+ * unpinned third-party actions, or checkout credentials left on disk.
+ */
+export function auditWorkflowGovernanceText(
+  file: string,
+  text: string,
+): readonly Finding[] {
+  const out: Finding[] = [];
+  const lines = text.split(/\r?\n/);
+  // Top-level `permissions:` declaration must exist (an empty `{}` or a
+  // narrow per-scope opt-in are both acceptable; the failure mode is a
+  // workflow with NO top-level permissions block, which inherits the
+  // GITHUB_TOKEN's broad default).
+  const hasTopLevelPerms = lines.some((l) =>
+    /^permissions\s*:/.test(l),
+  );
+  if (!hasTopLevelPerms) {
+    out.push({
+      audit: "6. governance-floor",
+      file,
+      line: 0,
+      text: "permissions:",
+      message:
+        "Workflow must declare a top-level `permissions:` block " +
+        "(typically `permissions: {}`) so jobs opt in to the minimum " +
+        "tokens they need.",
+    });
+  }
+  // Collect third-party `uses:` references for the SHA-pin and
+  // harden-runner checks below.
+  const usesRe = /^\s*-?\s*uses\s*:\s*([^\s@#]+)@([^\s#]+)/;
+  let thirdPartyUses = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const m = usesRe.exec(lines[i]!);
+    if (!m) continue;
+    const target = m[1]!;
+    const ref = m[2]!;
+    if (target.startsWith("./") || target.startsWith("../")) continue;
+    thirdPartyUses++;
+    if (!/^[0-9a-f]{40}$/.test(ref)) {
+      out.push({
+        audit: "6. governance-floor",
+        file,
+        line: i + 1,
+        text: `${target}@${ref}`,
+        message:
+          "Third-party actions must be pinned to a 40-hex commit SHA " +
+          "(managed by Dependabot). Tags and floating refs are " +
+          "forbidden by the governance floor.",
+      });
+    }
+  }
+  if (thirdPartyUses > 0 && !/step-security\/harden-runner@/.test(text)) {
+    out.push({
+      audit: "6. governance-floor",
+      file,
+      line: 0,
+      text: "step-security/harden-runner",
+      message:
+        "Workflow uses third-party actions and must therefore call " +
+        "`step-security/harden-runner` so unexpected egress is detected " +
+        "and runner tampering is reported.",
+    });
+  }
+  // Every `actions/checkout` must be paired with `persist-credentials:
+  // false`. Walk lines and look for any checkout call without the flag
+  // in the following ~12 lines (the `with:` block).
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (!/\bactions\/checkout@/.test(line)) continue;
+    const window = lines.slice(i, Math.min(i + 12, lines.length)).join("\n");
+    if (!/persist-credentials\s*:\s*false/.test(window)) {
+      out.push({
+        audit: "6. governance-floor",
+        file,
+        line: i + 1,
+        text: line.trim(),
+        message:
+          "Every `actions/checkout` invocation must set " +
+          "`persist-credentials: false` so the workflow's GITHUB_TOKEN " +
+          "is not left on disk.",
+      });
+    }
+  }
+  return out;
+}
+
 async function listWorkflowFiles(): Promise<readonly WorkflowFile[]> {
   let entries;
   try {
@@ -393,82 +485,7 @@ export async function auditGovernanceFloor(): Promise<readonly Finding[]> {
     return out;
   }
   for (const wf of workflows) {
-    const lines = wf.text.split(/\r?\n/);
-    // Top-level `permissions:` declaration must exist (an empty `{}` or a
-    // narrow per-scope opt-in are both acceptable; the failure mode is a
-    // workflow with NO top-level permissions block, which inherits the
-    // GITHUB_TOKEN's broad default).
-    const hasTopLevelPerms = lines.some((l) =>
-      /^permissions\s*:/.test(l),
-    );
-    if (!hasTopLevelPerms) {
-      out.push({
-        audit: "6. governance-floor",
-        file: wf.rel,
-        line: 0,
-        text: "permissions:",
-        message:
-          "Workflow must declare a top-level `permissions:` block " +
-          "(typically `permissions: {}`) so jobs opt in to the minimum " +
-          "tokens they need.",
-      });
-    }
-    // Collect third-party `uses:` references for the SHA-pin and
-    // harden-runner checks below.
-    const usesRe = /^\s*-?\s*uses\s*:\s*([^\s@#]+)@([^\s#]+)/;
-    let thirdPartyUses = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const m = usesRe.exec(lines[i]!);
-      if (!m) continue;
-      const target = m[1]!;
-      const ref = m[2]!;
-      if (target.startsWith("./") || target.startsWith("../")) continue;
-      thirdPartyUses++;
-      if (!/^[0-9a-f]{40}$/.test(ref)) {
-        out.push({
-          audit: "6. governance-floor",
-          file: wf.rel,
-          line: i + 1,
-          text: `${target}@${ref}`,
-          message:
-            "Third-party actions must be pinned to a 40-hex commit SHA " +
-            "(managed by Dependabot). Tags and floating refs are " +
-            "forbidden by the governance floor.",
-        });
-      }
-    }
-    if (thirdPartyUses > 0 && !/step-security\/harden-runner@/.test(wf.text)) {
-      out.push({
-        audit: "6. governance-floor",
-        file: wf.rel,
-        line: 0,
-        text: "step-security/harden-runner",
-        message:
-          "Workflow uses third-party actions and must therefore call " +
-          "`step-security/harden-runner` so unexpected egress is detected " +
-          "and runner tampering is reported.",
-      });
-    }
-    // Every `actions/checkout` must be paired with `persist-credentials:
-    // false`. Walk lines and look for any checkout call without the flag
-    // in the following ~12 lines (the `with:` block).
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      if (!/\bactions\/checkout@/.test(line)) continue;
-      const window = lines.slice(i, Math.min(i + 12, lines.length)).join("\n");
-      if (!/persist-credentials\s*:\s*false/.test(window)) {
-        out.push({
-          audit: "6. governance-floor",
-          file: wf.rel,
-          line: i + 1,
-          text: line.trim(),
-          message:
-            "Every `actions/checkout` invocation must set " +
-            "`persist-credentials: false` so the workflow's GITHUB_TOKEN " +
-            "is not left on disk.",
-        });
-      }
-    }
+    out.push(...auditWorkflowGovernanceText(wf.rel, wf.text));
   }
   // CODEOWNERS exists.
   try {

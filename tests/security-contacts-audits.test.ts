@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 
 import {
   auditSecurityContactsText,
+  auditWorkflowGovernanceText,
   daysBetween,
   parseSecurityContacts,
   runGovernanceAudits,
@@ -28,8 +29,7 @@ test("governance: all static audits pass on the live source tree", async () => {
   if (errors.length > 0) {
     const summary = errors
       .map(
-        (f) =>
-          `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}: ${f.message}`,
+        (f) => `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}: ${f.message}`
       )
       .join("\n");
     assert.fail(`Governance audit gates flagged ${errors.length} error(s):\n${summary}`);
@@ -87,7 +87,7 @@ test("governance: auditSecurityContactsText warns after the quarterly target", (
 <!-- END ACTIVE -->
 <!-- last-exercise: 2026-01-01 -->
 `,
-    new Date(Date.UTC(2026, 3, 15)),
+    new Date(Date.UTC(2026, 3, 15))
   );
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.level, "warn");
@@ -101,11 +101,58 @@ test("governance: auditSecurityContactsText rejects future exercise dates", () =
 <!-- END ACTIVE -->
 <!-- last-exercise: 2026-05-21 -->
 `,
-    new Date(Date.UTC(2026, 4, 20)),
+    new Date(Date.UTC(2026, 4, 20))
   );
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.level, undefined);
   assert.match(findings[0]!.message, /future/);
+});
+
+test("governance: auditWorkflowGovernanceText catches missing CI governance controls", () => {
+  const findings = auditWorkflowGovernanceText(
+    ".github/workflows/unsafe.yml",
+    `name: unsafe
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm test
+`
+  );
+
+  assert.deepEqual(
+    findings.map((f) => f.text),
+    [
+      "permissions:",
+      "actions/checkout@v4",
+      "step-security/harden-runner",
+      "- uses: actions/checkout@v4",
+    ]
+  );
+});
+
+test("governance: auditWorkflowGovernanceText accepts the hardened workflow floor", () => {
+  const sha = "0123456789abcdef0123456789abcdef01234567";
+  const findings = auditWorkflowGovernanceText(
+    ".github/workflows/safe.yml",
+    `name: safe
+on: [push]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@${sha}
+      - uses: actions/checkout@${sha}
+        with:
+          persist-credentials: false
+      - run: pnpm test
+`
+  );
+
+  assert.deepEqual(findings, []);
 });
 
 // ---------- daysBetween ----------
