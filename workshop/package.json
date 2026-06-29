@@ -66,8 +66,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.97.1",
-    "@types/node": "^25.7.0",
+    "@hey-api/openapi-ts": "^0.99.0",
+    "@types/node": "^26.0.1",
     "prettier": "^3.8.3",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
