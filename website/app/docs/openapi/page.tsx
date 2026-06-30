@@ -159,6 +159,40 @@ const app = new App({
 });`}
       />
       <p>
+        If your docs need a visible login entry point, add{" "}
+        <code>docs.auth</code>. The same button is rendered for Scalar, Swagger
+        UI, and Redoc. Point it at a local login form, Better Auth route, Clerk
+        sign-in URL, or an OIDC authorization URL from Auth0, Okta, Microsoft
+        Entra ID, Cognito, Keycloak, or another provider:
+      </p>
+      <CodeBlock
+        code={`new App({
+  openapi: {
+    info: { title: "My API", version: "1.0.0" },
+    securitySchemes: {
+      oidc: {
+        type: "oauth2",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "https://login.example.com/oauth2/v2.0/authorize",
+            tokenUrl: "https://login.example.com/oauth2/v2.0/token",
+            scopes: { "api.read": "Read API data" },
+          },
+        },
+      },
+    },
+  },
+  docs: {
+    ui: "redoc", // also works with "scalar" and "swagger"
+    auth: {
+      loginUrl: "/login", // or your provider's authorize/sign-in URL
+      label: "Sign in",
+      target: "popup",
+    },
+  },
+});`}
+      />
+      <p>
         The <code>redoc</code> object is forwarded verbatim to{" "}
         <code>Redoc.init(specUrl, configuration, element)</code>. Because Redoc
         builds its search index in a <code>blob:</code> Web Worker, the

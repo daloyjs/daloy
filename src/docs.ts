@@ -12,9 +12,7 @@
 export type ScalarJsonPrimitive = string | number | boolean | null;
 /** Recursive JSON value accepted by Scalar configuration fields. */
 export type ScalarJsonValue =
-  | ScalarJsonPrimitive
-  | ScalarJsonValue[]
-  | { [key: string]: ScalarJsonValue | undefined };
+  ScalarJsonPrimitive | ScalarJsonValue[] | { [key: string]: ScalarJsonValue | undefined };
 
 /** Built-in Scalar API Reference color theme names. */
 export type ScalarTheme =
@@ -261,6 +259,43 @@ export interface DocsAssetOptions {
   crossOrigin?: "anonymous" | "use-credentials";
 }
 
+/**
+ * Provider-neutral login launcher rendered into generated docs pages.
+ *
+ * Use this when the OpenAPI docs should expose a visible authorization control
+ * that sends developers to a local login form or to an external identity
+ * provider such as Entra ID, Auth0, Better Auth, Clerk, Okta, Keycloak, or any
+ * other OAuth2/OIDC front end. The launcher only opens the configured URL; it
+ * never stores tokens or bypasses the OpenAPI UI's normal security-scheme
+ * handling.
+ *
+ * @since 0.43.0
+ */
+export interface DocsAuthLauncherOptions {
+  /**
+   * Absolute `http(s)` URL or same-origin/relative URL for the login or
+   * authorization entry point. `javascript:`, `data:`, and other executable
+   * schemes are refused when the HTML is generated.
+   */
+  loginUrl: string;
+  /** Button text. Defaults to `"Authorize"`. */
+  label?: string;
+  /**
+   * Accessible helper text shown as the button title and screen-reader label.
+   * Defaults to `"Open login or identity provider"`.
+   */
+  description?: string;
+  /**
+   * How to open {@link DocsAuthLauncherOptions.loginUrl}. Defaults to
+   * `"popup"` so docs remain open while the provider flow runs.
+   */
+  target?: "popup" | "_blank" | "_self";
+  /** Popup width in CSS/device pixels. Defaults to `520`. */
+  popupWidth?: number;
+  /** Popup height in CSS/device pixels. Defaults to `720`. */
+  popupHeight?: number;
+}
+
 /** Shared options for {@link scalarHtml}, {@link swaggerUiHtml}, and {@link redocHtml}. */
 export interface DocsOptions {
   /** Absolute or relative URL of the OpenAPI document to render. */
@@ -274,6 +309,14 @@ export interface DocsOptions {
   assets?: DocsAssetOptions;
   /** CSP `nonce` to apply to inline/script tags; must match the response CSP. */
   scriptNonce?: string;
+  /**
+   * Optional authorization launcher rendered into the docs page. It gives
+   * Scalar, Swagger UI, and Redoc a consistent visible button that opens a
+   * local login form or third-party identity-provider authorization URL.
+   *
+   * @since 0.43.0
+   */
+  auth?: DocsAuthLauncherOptions;
 }
 
 /** Options for {@link scalarHtml}; adds Scalar-specific UI configuration. */
@@ -414,14 +457,14 @@ function nonceAttr(nonce: string | undefined): string {
  */
 function integrityAttr(
   integrity: string | undefined,
-  crossOrigin: DocsAssetOptions["crossOrigin"],
+  crossOrigin: DocsAssetOptions["crossOrigin"]
 ): string {
   if (integrity === undefined) return "";
   const tokens = integrity.trim().split(/\s+/);
   if (integrity.trim() === "" || tokens.some((t) => !SRI_HASH.test(t))) {
     throw new TypeError(
       `Invalid Subresource Integrity value: ${JSON.stringify(integrity)}. ` +
-        `Expected one or more space-separated "sha256-"/"sha384-"/"sha512-" base64 hashes.`,
+        `Expected one or more space-separated "sha256-"/"sha384-"/"sha512-" base64 hashes.`
     );
   }
   const co = crossOrigin ?? "anonymous";
@@ -439,18 +482,11 @@ export function scalarHtml(opts: ScalarHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Reference");
   const url = escapeHtml(opts.specUrl);
   const scriptUrl = escapeHtml(
-    opts.assets?.scalarScriptUrl ??
-      `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference`,
+    opts.assets?.scalarScriptUrl ?? `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference`
   );
-  const scriptSri = integrityAttr(
-    opts.assets?.scalarScriptIntegrity,
-    opts.assets?.crossOrigin,
-  );
+  const scriptSri = integrityAttr(opts.assets?.scalarScriptIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
-  const configuration = scalarConfigurationAttr(
-    opts.specUrl,
-    opts.configuration,
-  );
+  const configuration = scalarConfigurationAttr(opts.specUrl, opts.configuration);
   return `<!doctype html>
 <html><head>
 <meta charset="utf-8" />
@@ -459,6 +495,7 @@ export function scalarHtml(opts: ScalarHtmlOptions): string {
 </head><body>
 <script id="api-reference" data-url="${url}"${configuration}${nonce}></script>
 <script src="${scriptUrl}"${scriptSri}${nonce}></script>
+${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
 </body></html>`;
 }
 
@@ -473,21 +510,13 @@ export function scalarHtml(opts: ScalarHtmlOptions): string {
 export function swaggerUiHtml(opts: SwaggerUiHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Docs");
   const cssUrl = escapeHtml(
-    opts.assets?.swaggerUiCssUrl ??
-      `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist/swagger-ui.css`,
+    opts.assets?.swaggerUiCssUrl ?? `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist/swagger-ui.css`
   );
   const bundleUrl = escapeHtml(
-    opts.assets?.swaggerUiBundleUrl ??
-      `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist/swagger-ui-bundle.js`,
+    opts.assets?.swaggerUiBundleUrl ?? `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist/swagger-ui-bundle.js`
   );
-  const cssSri = integrityAttr(
-    opts.assets?.swaggerUiCssIntegrity,
-    opts.assets?.crossOrigin,
-  );
-  const bundleSri = integrityAttr(
-    opts.assets?.swaggerUiBundleIntegrity,
-    opts.assets?.crossOrigin,
-  );
+  const cssSri = integrityAttr(opts.assets?.swaggerUiCssIntegrity, opts.assets?.crossOrigin);
+  const bundleSri = integrityAttr(opts.assets?.swaggerUiBundleIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
   const configuration = jsonForScript({
     persistAuthorization: true,
@@ -505,6 +534,7 @@ export function swaggerUiHtml(opts: SwaggerUiHtmlOptions): string {
 <div id="swagger"></div>
 <script src="${bundleUrl}"${bundleSri}${nonce}></script>
 <script${nonce}>window.onload=()=>SwaggerUIBundle(${configuration});</script>
+${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
 </body></html>`;
 }
 
@@ -525,13 +555,9 @@ export function swaggerUiHtml(opts: SwaggerUiHtmlOptions): string {
 export function redocHtml(opts: RedocHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Docs");
   const scriptUrl = escapeHtml(
-    opts.assets?.redocScriptUrl ??
-      `${JSDELIVR_ORIGIN}/npm/redoc/bundles/redoc.standalone.js`,
+    opts.assets?.redocScriptUrl ?? `${JSDELIVR_ORIGIN}/npm/redoc/bundles/redoc.standalone.js`
   );
-  const scriptSri = integrityAttr(
-    opts.assets?.redocScriptIntegrity,
-    opts.assets?.crossOrigin,
-  );
+  const scriptSri = integrityAttr(opts.assets?.redocScriptIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
   const specArg = jsonForScript(opts.specUrl);
   const optionsArg = jsonForScript(opts.configuration ?? {});
@@ -544,6 +570,7 @@ export function redocHtml(opts: RedocHtmlOptions): string {
 <div id="redoc"></div>
 <script src="${scriptUrl}"${scriptSri}${nonce}></script>
 <script${nonce}>Redoc.init(${specArg},${optionsArg},document.getElementById("redoc"));</script>
+${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
 </body></html>`;
 }
 
@@ -567,25 +594,17 @@ export function asyncapiHtml(opts: AsyncApiHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "AsyncAPI");
   const scriptUrl = escapeHtml(
     opts.assets?.asyncapiScriptUrl ??
-      `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component/browser/standalone/index.js`,
+      `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component/browser/standalone/index.js`
   );
   const styleUrl = escapeHtml(
     opts.assets?.asyncapiStyleUrl ??
-      `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component/styles/default.min.css`,
+      `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component/styles/default.min.css`
   );
-  const scriptSri = integrityAttr(
-    opts.assets?.asyncapiScriptIntegrity,
-    opts.assets?.crossOrigin,
-  );
-  const styleSri = integrityAttr(
-    opts.assets?.asyncapiStyleIntegrity,
-    opts.assets?.crossOrigin,
-  );
+  const scriptSri = integrityAttr(opts.assets?.asyncapiScriptIntegrity, opts.assets?.crossOrigin);
+  const styleSri = integrityAttr(opts.assets?.asyncapiStyleIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
   const specArg = jsonForScript(opts.specUrl);
-  const configArg = jsonForScript(
-    opts.configuration ?? { show: { sidebar: true, errors: true } },
-  );
+  const configArg = jsonForScript(opts.configuration ?? { show: { sidebar: true, errors: true } });
   return `<!doctype html>
 <html><head>
 <meta charset="utf-8" />
@@ -606,9 +625,7 @@ export function asyncapiHtml(opts: AsyncApiHtmlOptions): string {
  * Allows `'self'` plus the listed `assetOrigins` (default: jsDelivr) and
  * either `'unsafe-inline'` or the provided `scriptNonce` for scripts.
  */
-export function docsContentSecurityPolicy(
-  opts: DocsContentSecurityPolicyOptions = {},
-): string {
+export function docsContentSecurityPolicy(opts: DocsContentSecurityPolicyOptions = {}): string {
   const assetOrigins = opts.assetOrigins ?? [JSDELIVR_ORIGIN];
   const scriptSrc = ["'self'", ...assetOrigins];
   if (opts.scriptNonce) scriptSrc.push(`'nonce-${opts.scriptNonce}'`);
@@ -638,10 +655,7 @@ export function docsContentSecurityPolicy(
  * `text/html` content type, `nosniff`, `no-referrer`, and a CSP from
  * {@link docsContentSecurityPolicy} (or a caller-supplied override).
  */
-export function htmlResponse(
-  html: string,
-  opts: HtmlResponseOptions = {},
-): Response {
+export function htmlResponse(html: string, opts: HtmlResponseOptions = {}): Response {
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
@@ -663,10 +677,7 @@ export function htmlResponse(
 function escapeHtml(s: string): string {
   return s.replace(
     /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ]!,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!
   );
 }
 
@@ -680,13 +691,60 @@ function escapeHtml(s: string): string {
 function jsonForScript(value: unknown): string {
   return JSON.stringify(value).replace(
     /[<\u2028\u2029]/g,
-    (c) => ({ "<": "\\u003c", "\u2028": "\\u2028", "\u2029": "\\u2029" })[c]!,
+    (c) => ({ "<": "\\u003c", "\u2028": "\\u2028", "\u2029": "\\u2029" })[c]!
   );
+}
+
+function docsAuthLauncherHtml(
+  auth: DocsAuthLauncherOptions | undefined,
+  scriptNonce: string | undefined
+): string {
+  if (!auth) return "";
+  const loginUrl = normalizeDocsAuthLoginUrl(auth.loginUrl);
+  const label = auth.label ?? "Authorize";
+  const description = auth.description ?? "Open login or identity provider";
+  const target = auth.target ?? "popup";
+  const popupWidth = positiveIntegerOrDefault(auth.popupWidth, 520);
+  const popupHeight = positiveIntegerOrDefault(auth.popupHeight, 720);
+  const payload = jsonForScript({
+    loginUrl,
+    target,
+    popupWidth,
+    popupHeight,
+  });
+  const nonce = nonceAttr(scriptNonce);
+  return `<style>
+.daloy-docs-auth{position:fixed;right:16px;top:16px;z-index:2147483647;display:inline-flex;align-items:center;gap:8px;border:1px solid #1d4ed8;border-radius:6px;background:#2563eb;color:#fff;font:600 14px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:10px 14px;box-shadow:0 8px 24px rgba(15,23,42,.18);cursor:pointer}
+.daloy-docs-auth:focus{outline:3px solid rgba(37,99,235,.35);outline-offset:2px}
+</style>
+<button type="button" class="daloy-docs-auth" data-daloy-docs-auth title="${escapeHtml(description)}" aria-label="${escapeHtml(description)}">${escapeHtml(label)}</button>
+<script${nonce}>(()=>{const o=${payload};const b=document.querySelector("[data-daloy-docs-auth]");if(!b)return;b.addEventListener("click",()=>{if(o.target==="_self"){window.location.assign(o.loginUrl);return;}if(o.target==="_blank"){window.open(o.loginUrl,"_blank","noopener,noreferrer");return;}const left=Math.max(0,Math.round((window.screenX||0)+((window.outerWidth||o.popupWidth)-o.popupWidth)/2));const top=Math.max(0,Math.round((window.screenY||0)+((window.outerHeight||o.popupHeight)-o.popupHeight)/2));const features="popup=yes,width="+o.popupWidth+",height="+o.popupHeight+",left="+left+",top="+top+",noopener,noreferrer";window.open(o.loginUrl,"daloy_docs_auth",features);});})();</script>`;
+}
+
+function normalizeDocsAuthLoginUrl(loginUrl: string): string {
+  if (typeof loginUrl !== "string" || loginUrl.trim() === "") {
+    throw new TypeError("docs auth loginUrl must be a non-empty string");
+  }
+  const trimmed = loginUrl.trim();
+  const parsed = new URL(trimmed, "https://daloyjs.local");
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new TypeError(
+      `docs auth loginUrl must be an http(s) or relative URL; got ${JSON.stringify(loginUrl)}`
+    );
+  }
+  return trimmed;
+}
+
+function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  return fallback;
 }
 
 function scalarConfigurationAttr(
   specUrl: string,
-  configuration: ScalarReferenceConfiguration | undefined,
+  configuration: ScalarReferenceConfiguration | undefined
 ): string {
   if (!configuration) return "";
   const {

@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import {
-  App,
-  createApp,
-  httpBearerScheme,
-  _resetPackageJsonCacheForTests,
-} from "../src/index.js";
+import { App, createApp, httpBearerScheme, _resetPackageJsonCacheForTests } from "../src/index.js";
+import { scalarHtml } from "../src/docs.js";
 
 function withRoute(app: App): App {
   app.route({
@@ -31,7 +27,10 @@ function withRoute(app: App): App {
 
 test("docs option is off by default: /docs and /openapi.json are not registered", async () => {
   const app = withRoute(new App({ logger: false }));
-  const ids = app.introspect().map((r) => r.operationId).sort();
+  const ids = app
+    .introspect()
+    .map((r) => r.operationId)
+    .sort();
   assert.deepEqual(ids, ["getBookById"]);
   const docs = await app.request("/docs");
   assert.equal(docs.status, 404);
@@ -45,7 +44,7 @@ test("docs: true mounts /docs (scalar by default) and /openapi.json", async () =
       logger: false,
       docs: true,
       openapi: { info: { title: "Bookstore API", version: "1.0.0" } },
-    }),
+    })
   );
 
   const spec = await app.request("/openapi.json");
@@ -63,10 +62,7 @@ test("docs: true mounts /docs (scalar by default) and /openapi.json", async () =
 
   const docs = await app.request("/docs");
   assert.equal(docs.status, 200);
-  assert.match(
-    docs.headers.get("content-type") ?? "",
-    /^text\/html/,
-  );
+  assert.match(docs.headers.get("content-type") ?? "", /^text\/html/);
   // Scalar UI is the default.
   const html = await docs.text();
   assert.match(html, /api-reference/);
@@ -85,7 +81,7 @@ test("docs: { ui: 'swagger' } selects Swagger UI", async () => {
       docs: { ui: "swagger" },
       title: "Swagger Demo",
       version: "2.0.0",
-    }),
+    })
   );
 
   const docs = await app.request("/docs");
@@ -115,7 +111,7 @@ test("docs: { ui: 'swagger', swagger } forwards config and allows API server con
           bearer: httpBearerScheme({ bearerFormat: "JWT" }),
         },
       },
-    }),
+    })
   );
   app.route({
     method: "POST",
@@ -154,7 +150,7 @@ test("docs: { ui: 'redoc' } selects Redoc and grants worker-src blob in CSP", as
       docs: { ui: "redoc" },
       title: "Redoc Demo",
       version: "3.0.0",
-    }),
+    })
   );
 
   const docs = await app.request("/docs");
@@ -183,7 +179,7 @@ test("docs: { ui: 'redoc', redoc } forwards Redoc configuration to Redoc.init", 
         },
       },
       openapi: { info: { title: "Configured Redoc", version: "1.0.0" } },
-    }),
+    })
   );
   const docs = await app.request("/docs");
   assert.equal(docs.status, 200);
@@ -195,6 +191,55 @@ test("docs: { ui: 'redoc', redoc } forwards Redoc configuration to Redoc.init", 
   assert.match(html, /"primary":\{"main":"#2563eb"\}/);
 });
 
+test("docs: auth launcher renders for Scalar, Swagger UI, and Redoc", async () => {
+  for (const ui of ["scalar", "swagger", "redoc"] as const) {
+    const app = withRoute(
+      new App({
+        logger: false,
+        docs: {
+          ui,
+          auth: {
+            loginUrl: "/login?provider=auth0",
+            label: "Sign in",
+            description: "Open Auth0 login",
+          },
+        },
+        openapi: {
+          info: { title: `${ui} Auth`, version: "1.0.0" },
+          securitySchemes: {
+            bearer: httpBearerScheme({ bearerFormat: "JWT" }),
+          },
+        },
+      })
+    );
+
+    const docs = await app.request("/docs");
+    assert.equal(docs.status, 200);
+    const html = await docs.text();
+    assert.match(html, /data-daloy-docs-auth/);
+    assert.match(html, />Sign in<\/button>/);
+    assert.match(html, /Open Auth0 login/);
+    assert.match(html, /"loginUrl":"\/login\?provider=auth0"/);
+    if (ui === "scalar") {
+      assert.match(
+        html,
+        /&quot;authentication&quot;:\{&quot;preferredSecurityScheme&quot;:&quot;bearer&quot;\}/
+      );
+    }
+  }
+});
+
+test("docs: auth launcher refuses executable login URLs", () => {
+  assert.throws(
+    () =>
+      scalarHtml({
+        specUrl: "/openapi.json",
+        auth: { loginUrl: "javascript:alert(1)" },
+      }),
+    /docs auth loginUrl must be an http\(s\) or relative URL/
+  );
+});
+
 test("docs: scalar and swagger UIs keep the tighter CSP without worker-src", async () => {
   for (const ui of ["scalar", "swagger"] as const) {
     const app = withRoute(
@@ -202,10 +247,9 @@ test("docs: scalar and swagger UIs keep the tighter CSP without worker-src", asy
         logger: false,
         docs: { ui },
         openapi: { info: { title: "T", version: "1" } },
-      }),
+      })
     );
-    const csp =
-      (await app.request("/docs")).headers.get("content-security-policy") ?? "";
+    const csp = (await app.request("/docs")).headers.get("content-security-policy") ?? "";
     assert.doesNotMatch(csp, /worker-src/);
   }
 });
@@ -226,7 +270,7 @@ test("docs: { scalar } forwards Scalar UI configuration", async () => {
       },
       title: "Styled Docs",
       version: "2.0.0",
-    }),
+    })
   );
 
   const docs = await app.request("/reference");
@@ -250,7 +294,7 @@ test("docs: scalar selects the first configured security scheme by default", asy
           bearer: httpBearerScheme({ bearerFormat: "JWT" }),
         },
       },
-    }),
+    })
   );
 
   const docs = await app.request("/docs");
@@ -258,7 +302,7 @@ test("docs: scalar selects the first configured security scheme by default", asy
   const html = await docs.text();
   assert.match(
     html,
-    /&quot;authentication&quot;:\{&quot;preferredSecurityScheme&quot;:&quot;bearer&quot;\}/,
+    /&quot;authentication&quot;:\{&quot;preferredSecurityScheme&quot;:&quot;bearer&quot;\}/
   );
 });
 
@@ -278,7 +322,7 @@ test("docs: scalar respects an explicit preferred security scheme", async () => 
           apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
         },
       },
-    }),
+    })
   );
 
   const docs = await app.request("/docs");
@@ -286,7 +330,7 @@ test("docs: scalar respects an explicit preferred security scheme", async () => 
   const html = await docs.text();
   assert.match(
     html,
-    /&quot;authentication&quot;:\{&quot;preferredSecurityScheme&quot;:&quot;apiKey&quot;\}/,
+    /&quot;authentication&quot;:\{&quot;preferredSecurityScheme&quot;:&quot;apiKey&quot;\}/
   );
   assert.doesNotMatch(html, /preferredSecurityScheme&quot;:&quot;bearer/);
 });
@@ -297,14 +341,12 @@ test("docs: { assets } pins SRI hashes on the auto-mounted docs UI", async () =>
       logger: false,
       docs: {
         assets: {
-          scalarScriptUrl:
-            "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
-          scalarScriptIntegrity:
-            "sha384-abcDEF123+/456ghiJKL789mnoPQR012stuVWX",
+          scalarScriptUrl: "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
+          scalarScriptIntegrity: "sha384-abcDEF123+/456ghiJKL789mnoPQR012stuVWX",
         },
       },
       openapi: { info: { title: "Pinned Docs", version: "1.0.0" } },
-    }),
+    })
   );
 
   const docs = await app.request("/docs");
@@ -312,7 +354,7 @@ test("docs: { assets } pins SRI hashes on the auto-mounted docs UI", async () =>
   const html = await docs.text();
   assert.match(
     html,
-    /src="https:\/\/cdn\.jsdelivr\.net\/npm\/@scalar\/api-reference@1\.25\.0" integrity="sha384-abcDEF123\+\/456ghiJKL789mnoPQR012stuVWX" crossorigin="anonymous"/,
+    /src="https:\/\/cdn\.jsdelivr\.net\/npm\/@scalar\/api-reference@1\.25\.0" integrity="sha384-abcDEF123\+\/456ghiJKL789mnoPQR012stuVWX" crossorigin="anonymous"/
   );
 });
 
@@ -322,7 +364,7 @@ test("docs: { path, openapiPath } honours custom mount points", async () => {
       logger: false,
       docs: { path: "/api/docs", openapiPath: "/api/openapi.json" },
       openapi: { info: { title: "Custom", version: "0.1.0" } },
-    }),
+    })
   );
 
   assert.equal((await app.request("/docs")).status, 404);
@@ -340,7 +382,7 @@ test("docs: { path, openapiPath } honours custom mount points", async () => {
 test("docs auto-mount rejects duplicate docs and OpenAPI paths", () => {
   assert.throws(
     () => new App({ logger: false, docs: { path: "/same", openapiPath: "/same" } }),
-    /Duplicate route/,
+    /Duplicate route/
   );
 });
 
@@ -351,7 +393,7 @@ test("docs auto-mount rejects duplicate OpenAPI JSON and YAML paths", () => {
         logger: false,
         docs: { openapiPath: "/spec", openapiYamlPath: "/spec" },
       }),
-    /Duplicate route/,
+    /Duplicate route/
   );
 });
 
@@ -366,7 +408,7 @@ test("docs auto-mount rejects later user routes that collide with docs", () => {
         responses: { 200: { description: "ok" } },
         handler: async () => ({ status: 200 as const, body: undefined }),
       }),
-    /Duplicate route/,
+    /Duplicate route/
   );
 });
 
@@ -376,7 +418,7 @@ test("docs: disabled YAML path returns 404", async () => {
       logger: false,
       docs: { openapiYamlPath: false },
       openapi: { info: { title: "T", version: "1" } },
-    }),
+    })
   );
   assert.equal((await app.request("/openapi.json")).status, 200);
   assert.equal((await app.request("/openapi.yaml")).status, 404);
@@ -384,24 +426,20 @@ test("docs: disabled YAML path returns 404", async () => {
 
 test("docs: false explicitly disables the auto-mount", async () => {
   const app = withRoute(
-    new App({ logger: false, docs: false, openapi: { info: { title: "X", version: "1" } } }),
+    new App({ logger: false, docs: false, openapi: { info: { title: "X", version: "1" } } })
   );
   assert.equal((await app.request("/docs")).status, 404);
   assert.equal((await app.request("/openapi.json")).status, 404);
 });
 
 test("docs: 'auto' is enabled when production is false", async () => {
-  const app = withRoute(
-    new App({ logger: false, docs: "auto", production: false }),
-  );
+  const app = withRoute(new App({ logger: false, docs: "auto", production: false }));
   const docs = await app.request("/docs");
   assert.equal(docs.status, 200);
 });
 
 test("docs: 'auto' is disabled when production is true", async () => {
-  const app = withRoute(
-    new App({ logger: false, docs: "auto", production: true }),
-  );
+  const app = withRoute(new App({ logger: false, docs: "auto", production: true }));
   assert.equal((await app.request("/docs")).status, 404);
   assert.equal((await app.request("/openapi.json")).status, 404);
 });
@@ -412,7 +450,7 @@ test("docs: { enabled: 'auto' } object form respects production flag", async () 
       logger: false,
       docs: { enabled: "auto" },
       production: false,
-    }),
+    })
   );
   assert.equal((await dev.request("/docs")).status, 200);
 
@@ -421,7 +459,7 @@ test("docs: { enabled: 'auto' } object form respects production flag", async () 
       logger: false,
       docs: { enabled: "auto" },
       production: true,
-    }),
+    })
   );
   assert.equal((await prod.request("/docs")).status, 404);
 });
@@ -469,7 +507,7 @@ test("docs: explicit openapi.info overrides package.json autofill", async () => 
         logger: false,
         docs: true,
         openapi: { info: { title: "Explicit", version: "9.9.9" } },
-      }),
+      })
     );
     const json: any = await (await app.request("/openapi.json")).json();
     assert.equal(json.info.title, "Explicit");
@@ -488,7 +526,7 @@ test("docs: top-level title/version override package.json autofill", async () =>
         docs: true,
         title: "Top-Level",
         version: "1.2.3",
-      }),
+      })
     );
     const json: any = await (await app.request("/openapi.json")).json();
     assert.equal(json.info.title, "Top-Level");
@@ -505,7 +543,7 @@ test("createApp({ docs: true }) behaves identically to new App({ docs: true })",
       logger: false,
       docs: true,
       openapi: { info: { title: "Factory", version: "1.0.0" } },
-    }),
+    })
   );
   const res = await app.request("/openapi.json");
   assert.equal(res.status, 200);
@@ -528,7 +566,7 @@ test("docs: top-level title/version/description flow into the spec info", async 
       title: "Books",
       version: "3.2.1",
       description: "A library service",
-    }),
+    })
   );
   const json: any = await (await app.request("/openapi.json")).json();
   assert.equal(json.info.title, "Books");
@@ -544,7 +582,7 @@ test("docs: openapi.info overrides top-level title/version/description", async (
       title: "Fallback",
       version: "0.0.0",
       openapi: { info: { title: "Override", version: "9.9.9" } },
-    }),
+    })
   );
   const json: any = await (await app.request("/openapi.json")).json();
   assert.equal(json.info.title, "Override");
@@ -557,7 +595,7 @@ test("docs: tags option overrides the default ['Docs'] tag", async () => {
       logger: false,
       docs: { tags: ["Meta"] },
       openapi: { info: { title: "T", version: "1" } },
-    }),
+    })
   );
   const json: any = await (await app.request("/openapi.json")).json();
   assert.deepEqual(json.paths["/docs"].get.tags, ["Meta"]);
@@ -570,7 +608,7 @@ test("docs: empty tags array omits the tags field on auto-mounted ops", async ()
       logger: false,
       docs: { tags: [] },
       openapi: { info: { title: "T", version: "1" } },
-    }),
+    })
   );
   const json: any = await (await app.request("/openapi.json")).json();
   assert.equal(json.paths["/docs"].get.tags, undefined);
@@ -611,7 +649,7 @@ test("docs auto-mount respects the openapi.servers and securitySchemes options",
           bearerAuth: { type: "http", scheme: "bearer" },
         },
       },
-    }),
+    })
   );
   const json: any = await (await app.request("/openapi.json")).json();
   assert.deepEqual(json.servers, [{ url: "https://api.example.com" }]);
@@ -631,7 +669,7 @@ test("docs: deno.json autofills info when no package.json is present", async () 
       name: "my-deno-app",
       version: "4.2.0",
       description: "deno-only project",
-    }),
+    })
   );
   const realCwd = process.cwd;
   (process as { cwd: () => string }).cwd = () => dir;
@@ -662,7 +700,7 @@ test("docs: deno.jsonc autofills info and strips JSONC line + block comments", a
   /* multi-line
      block comment */
   "version": "1.1.1"
-}`,
+}`
   );
   const realCwd = process.cwd;
   (process as { cwd: () => string }).cwd = () => dir;
@@ -684,10 +722,7 @@ test("docs: deno.json ignores empty-string name/version/description fields", asy
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const dir = mkdtempSync(join(tmpdir(), "daloy-empty-"));
-  writeFileSync(
-    join(dir, "deno.json"),
-    JSON.stringify({ name: "", version: "", description: "" }),
-  );
+  writeFileSync(join(dir, "deno.json"), JSON.stringify({ name: "", version: "", description: "" }));
   const realCwd = process.cwd;
   (process as { cwd: () => string }).cwd = () => dir;
   _resetPackageJsonCacheForTests();

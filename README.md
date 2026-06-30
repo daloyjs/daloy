@@ -36,7 +36,7 @@ Most backend code is now written with AI. Non-developers describe an app and shi
 
 DaloyJS is built for exactly this moment, from two directions at once:
 
-- **A secure-by-default runtime.** Body limits, prototype-pollution-safe JSON, path-traversal rejection, request timeouts, header-injection guards, real `405`s, and RFC 9457 problem+json with prod-mode redaction are on in the constructor — the dangerous things are off when nobody remembered to turn them off. The app also *refuses to boot* on unsafe configuration (wildcard CORS with credentials, weak session secrets, a state-changing session route with no CSRF protection, unconfigured `X-Forwarded-*` in production).
+- **A secure-by-default runtime.** Body limits, prototype-pollution-safe JSON, path-traversal rejection, request timeouts, header-injection guards, real `405`s, and RFC 9457 problem+json with prod-mode redaction are on in the constructor — the dangerous things are off when nobody remembered to turn them off. The app also _refuses to boot_ on unsafe configuration (wildcard CORS with credentials, weak session secrets, a state-changing session route with no CSRF protection, unconfigured `X-Forwarded-*` in production).
 - **A hardened supply chain.** `@daloyjs/core` ships **zero runtime dependencies**, is published with npm provenance and CycloneDX + SPDX SBOMs, and the pnpm posture (`ignore-scripts`, a 24-hour release-age cooldown, source-verified lockfiles) plus the CI `verify:*` gates shrink the blast radius of the campaigns making headlines.
 
 The point is that none of this costs you developer experience or portability: you keep contract-first DX in the league of ts-rest, Elysia, and FastAPI, and Hono-grade portability across Node, Bun, Deno, Workers, Vercel, Fastly, and Lambda. The secure path is simply the path of least resistance. See [Vibe Coding Security: what DaloyJS already blocks](https://daloyjs.dev/blog/vibe-coding-security-what-daloyjs-already-blocks) and the [security docs](https://daloyjs.dev/docs/security).
@@ -45,19 +45,19 @@ The point is that none of this costs you developer experience or portability: yo
 
 DaloyJS exists to be the framework you'd build if you took the best ideas from each modern stack:
 
-| You want                                                | Today's best-of                                       | What DaloyJS gives you                                                                                                                               |
-| ------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Best **OpenAPI ergonomics**                                | [FastAPI](https://fastapi.tiangolo.com)                               | OpenAPI 3.1 from a single route definition; `docs: true` mounts `/docs` and `/openapi.json`.                          |
-| Best **Vercel / serverless / edge fit**                    | [Hono](https://hono.dev/docs/)                                        | Web-standard `Request → Response` core with adapters for Node, Bun, Deno, Cloudflare, Vercel, Fastly, and Lambda.     |
-| Mature **Swagger / docs / ops** in Node                    | [Fastify](https://fastify.dev/docs/latest/Reference/)                 | Encapsulated plugins, structured logger, graceful shutdown, request ids, and lifecycle hooks — all first-party.       |
-| Modern **TS-first DX**, Bun acceptable                     | [Elysia](https://elysiajs.com/at-glance.html)                         | End-to-end typed handlers, typed context, and a typed in-process client — no codegen step required.                   |
-| Best-in-class **typed client codegen** for any consumer    | [Hey API](https://heyapi.dev/openapi-ts/get-started)                  | One `pnpm gen` command emits a fully-typed fetch SDK from your live OpenAPI spec.                                     |
-| **Contract-first typed client, no codegen**                | [ts-rest](https://ts-rest.com/)                                       | Your route definition *is* the contract: an in-process typed client with zero codegen, plus OpenAPI 3.1 + a Hey API SDK for consumers that can't import your types. |
-| Opinionated **DI / module architecture** for large teams   | [NestJS](https://docs.nestjs.com/)                                    | Plugin encapsulation, `register()` prefixes, and `defineDependency()` typed-DI with per-request dedup — no decorators. |
-| Minimalist **async middleware cascade**                    | [Koa](https://koajs.com/)                                             | Koa-style `Context` on a web-standard core, with validation, OpenAPI, errors, and security headers in-box.            |
-| **Services + real-time** API framework                     | [FeathersJS](https://feathersjs.com/)                                 | First-party `app.ws()` with CSWSH refuse-to-boot guards, plus SSE / NDJSON streaming and raw `Response` passthrough (return a Vercel AI SDK stream straight from a handler) over explicit OpenAPI routes.    |
-| Battle-tested **Node middleware compatibility**            | [Express v5](https://expressjs.com/en/blog/2024-10-15-v5-release)     | Regex-free trie router, schema-validated routes, RFC 9457 problem+json, and refuse-to-boot guards on every runtime.   |
-| **Portable supply-chain hardening** for the apps you build | [pnpm](https://pnpm.io/motivation) defaults + a zero-runtime-dep core | Hardened `.npmrc`, source-verified lockfiles, zero runtime deps, CycloneDX + SPDX SBOM, and npm provenance attestations. |
+| You want                                                   | Today's best-of                                                       | What DaloyJS gives you                                                                                                                                                                                    |
+| ---------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Best **OpenAPI ergonomics**                                | [FastAPI](https://fastapi.tiangolo.com)                               | OpenAPI 3.1 from a single route definition; `docs: true` mounts `/docs` and `/openapi.json`.                                                                                                              |
+| Best **Vercel / serverless / edge fit**                    | [Hono](https://hono.dev/docs/)                                        | Web-standard `Request → Response` core with adapters for Node, Bun, Deno, Cloudflare, Vercel, Fastly, and Lambda.                                                                                         |
+| Mature **Swagger / docs / ops** in Node                    | [Fastify](https://fastify.dev/docs/latest/Reference/)                 | Encapsulated plugins, structured logger, graceful shutdown, request ids, and lifecycle hooks — all first-party.                                                                                           |
+| Modern **TS-first DX**, Bun acceptable                     | [Elysia](https://elysiajs.com/at-glance.html)                         | End-to-end typed handlers, typed context, and a typed in-process client — no codegen step required.                                                                                                       |
+| Best-in-class **typed client codegen** for any consumer    | [Hey API](https://heyapi.dev/openapi-ts/get-started)                  | One `pnpm gen` command emits a fully-typed fetch SDK from your live OpenAPI spec.                                                                                                                         |
+| **Contract-first typed client, no codegen**                | [ts-rest](https://ts-rest.com/)                                       | Your route definition _is_ the contract: an in-process typed client with zero codegen, plus OpenAPI 3.1 + a Hey API SDK for consumers that can't import your types.                                       |
+| Opinionated **DI / module architecture** for large teams   | [NestJS](https://docs.nestjs.com/)                                    | Plugin encapsulation, `register()` prefixes, and `defineDependency()` typed-DI with per-request dedup — no decorators.                                                                                    |
+| Minimalist **async middleware cascade**                    | [Koa](https://koajs.com/)                                             | Koa-style `Context` on a web-standard core, with validation, OpenAPI, errors, and security headers in-box.                                                                                                |
+| **Services + real-time** API framework                     | [FeathersJS](https://feathersjs.com/)                                 | First-party `app.ws()` with CSWSH refuse-to-boot guards, plus SSE / NDJSON streaming and raw `Response` passthrough (return a Vercel AI SDK stream straight from a handler) over explicit OpenAPI routes. |
+| Battle-tested **Node middleware compatibility**            | [Express v5](https://expressjs.com/en/blog/2024-10-15-v5-release)     | Regex-free trie router, schema-validated routes, RFC 9457 problem+json, and refuse-to-boot guards on every runtime.                                                                                       |
+| **Portable supply-chain hardening** for the apps you build | [pnpm](https://pnpm.io/motivation) defaults + a zero-runtime-dep core | Hardened `.npmrc`, source-verified lockfiles, zero runtime deps, CycloneDX + SPDX SBOM, and npm provenance attestations.                                                                                  |
 
 ```
 framework test suite passing · ≥90% line + function coverage / ≥90% branch coverage · typechecks on TypeScript 6 with `strict: true`
@@ -164,13 +164,7 @@ For maintainers, the safe rule is: use one publish path per version. Either publ
 
 ```ts
 import { z } from "zod";
-import {
-  App,
-  NotFoundError,
-  secureHeaders,
-  rateLimit,
-  requestId,
-} from "@daloyjs/core";
+import { App, NotFoundError, secureHeaders, rateLimit, requestId } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const app = new App({ bodyLimitBytes: 1024 * 1024, requestTimeoutMs: 5_000 });
@@ -282,6 +276,11 @@ new App({
       docExpansion: "none",
       displayRequestDuration: true,
     },
+    auth: {
+      loginUrl: "/login", // or Auth0 / Entra ID / Okta / Clerk / Better Auth
+      label: "Sign in",
+      target: "popup",
+    },
     tags: ["Docs"],
   },
 });
@@ -311,6 +310,9 @@ HTML helper. The `swagger` option is forwarded to `SwaggerUIBundle` with Daloy
 owning `url` / `dom_id`. Redoc spins up a `blob:` Web Worker for search, so the
 auto-mounted `/docs` page widens its CSP with `worker-src 'self' blob:` for
 `ui: "redoc"` only — Scalar and Swagger UI keep the tighter default.
+Add `docs.auth` when you want all three docs UIs to expose the same visible
+authorization launcher; point it at a local login route or any OAuth2/OIDC
+provider entry point.
 
 Prefer to mount manually? Import the helpers directly:
 
@@ -354,26 +356,26 @@ path is used. Others are first-party middleware so applications can choose the
 right CORS policy, rate-limit key, CSP, session secret, or CSRF rollout for their
 deployment.
 
-| Threat                           | Built-in behavior                                                                                                                                                                                                     |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Body-size DoS**                | Core-enforced streamed read with a hard cap (default 1 MiB); `Content-Length` checked first.                                                                                                                          |
-| **Prototype pollution**          | Core JSON parser strips `__proto__` / `constructor` / `prototype` via reviver.                                                                                                                                        |
-| **Header / response splitting**  | Core header sanitizers reject CRLF + NUL.                                                                                                                                                                             |
-| **Path traversal**               | Core router rejects `..` segments and `//` before walking.                                                                                                                                                            |
-| **Slow-loris / hung handlers**   | Core `requestTimeoutMs` aborts handlers (default 30 s); Node adapter sets `requestTimeout` + `headersTimeout` + `maxHeaderSize`.                                                                                      |
-| **HTTP/2 Bomb / header-count flood** | Core `maxHeaderCount` rejects requests with more than 100 header fields (`431`) before routing; Node adapter sets `server.maxHeadersCount`. See [SECURITY.md](SECURITY.md) for the upstream HTTP/2 mitigations.   |
-| **MIME sniffing**                | First-party `secureHeaders()` sets `X-Content-Type-Options: nosniff`; scaffolded apps enable it.                                                                                                                      |
-| **Clickjacking**                 | First-party `secureHeaders()` sets `X-Frame-Options: DENY` + CSP `frame-ancestors 'none'`; scaffolded apps enable it.                                                                                                 |
-| **XSS via injected scripts**     | First-party `secureHeaders()` provides a strict CSP `default-src 'self'` baseline; the directives-object form supports per-request **nonces** and **Trusted Types** (`require-trusted-types-for 'script'`).           |
-| **Cross-origin leakage**         | First-party `secureHeaders()` sets `cross-origin-opener-policy` + `cross-origin-resource-policy` to `same-origin`; scaffolded apps enable it.                                                                         |
-| **CSRF**                         | First-party `csrf()` ships two strategies: **double-submit cookie** (default) and **Fetch-Metadata** (`Sec-Fetch-Site`-based, tokenless); both with timing-safe verification.                                         |
-| **Information disclosure (5xx)** | Production mode strips `detail` from 5xx problem+json automatically.                                                                                                                                                  |
-| **Credential timing attacks**    | First-party `timingSafeEqual()` helper for tokens & signatures.                                                                                                                                                       |
-| **Brute-force / scraping**       | First-party `rateLimit()` with token-bucket + `Retry-After`; Node/Bun/Deno scaffolded apps enable it.                                                                                                                 |
-| **Method confusion**             | Real **405** with `Allow` header, not a misleading 404.                                                                                                                                                               |
-| **CORS misconfig**               | First-party `cors()` requires an explicit allowlist and throws for `*` with credentials.                                                                                                                              |
-| **Request correlation**          | First-party `requestId()` uses cryptographic ids; scaffolded apps enable it.                                                                                                                                          |
-| **Supply chain (portable)**      | pnpm scaffolds keep `ignore-scripts=true`, `minimum-release-age=1440`, verified store, reproducible lockfile, and `pnpm verify:lockfile` source verification; every app also installs a zero-runtime-dependency `@daloyjs/core` published with CycloneDX + SPDX SBOM and npm provenance you can verify on install — regardless of where you host your repo. |
+| Threat                               | Built-in behavior                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Body-size DoS**                    | Core-enforced streamed read with a hard cap (default 1 MiB); `Content-Length` checked first.                                                                                                                                                                                                                                                                |
+| **Prototype pollution**              | Core JSON parser strips `__proto__` / `constructor` / `prototype` via reviver.                                                                                                                                                                                                                                                                              |
+| **Header / response splitting**      | Core header sanitizers reject CRLF + NUL.                                                                                                                                                                                                                                                                                                                   |
+| **Path traversal**                   | Core router rejects `..` segments and `//` before walking.                                                                                                                                                                                                                                                                                                  |
+| **Slow-loris / hung handlers**       | Core `requestTimeoutMs` aborts handlers (default 30 s); Node adapter sets `requestTimeout` + `headersTimeout` + `maxHeaderSize`.                                                                                                                                                                                                                            |
+| **HTTP/2 Bomb / header-count flood** | Core `maxHeaderCount` rejects requests with more than 100 header fields (`431`) before routing; Node adapter sets `server.maxHeadersCount`. See [SECURITY.md](SECURITY.md) for the upstream HTTP/2 mitigations.                                                                                                                                             |
+| **MIME sniffing**                    | First-party `secureHeaders()` sets `X-Content-Type-Options: nosniff`; scaffolded apps enable it.                                                                                                                                                                                                                                                            |
+| **Clickjacking**                     | First-party `secureHeaders()` sets `X-Frame-Options: DENY` + CSP `frame-ancestors 'none'`; scaffolded apps enable it.                                                                                                                                                                                                                                       |
+| **XSS via injected scripts**         | First-party `secureHeaders()` provides a strict CSP `default-src 'self'` baseline; the directives-object form supports per-request **nonces** and **Trusted Types** (`require-trusted-types-for 'script'`).                                                                                                                                                 |
+| **Cross-origin leakage**             | First-party `secureHeaders()` sets `cross-origin-opener-policy` + `cross-origin-resource-policy` to `same-origin`; scaffolded apps enable it.                                                                                                                                                                                                               |
+| **CSRF**                             | First-party `csrf()` ships two strategies: **double-submit cookie** (default) and **Fetch-Metadata** (`Sec-Fetch-Site`-based, tokenless); both with timing-safe verification.                                                                                                                                                                               |
+| **Information disclosure (5xx)**     | Production mode strips `detail` from 5xx problem+json automatically.                                                                                                                                                                                                                                                                                        |
+| **Credential timing attacks**        | First-party `timingSafeEqual()` helper for tokens & signatures.                                                                                                                                                                                                                                                                                             |
+| **Brute-force / scraping**           | First-party `rateLimit()` with token-bucket + `Retry-After`; Node/Bun/Deno scaffolded apps enable it.                                                                                                                                                                                                                                                       |
+| **Method confusion**                 | Real **405** with `Allow` header, not a misleading 404.                                                                                                                                                                                                                                                                                                     |
+| **CORS misconfig**                   | First-party `cors()` requires an explicit allowlist and throws for `*` with credentials.                                                                                                                                                                                                                                                                    |
+| **Request correlation**              | First-party `requestId()` uses cryptographic ids; scaffolded apps enable it.                                                                                                                                                                                                                                                                                |
+| **Supply chain (portable)**          | pnpm scaffolds keep `ignore-scripts=true`, `minimum-release-age=1440`, verified store, reproducible lockfile, and `pnpm verify:lockfile` source verification; every app also installs a zero-runtime-dependency `@daloyjs/core` published with CycloneDX + SPDX SBOM and npm provenance you can verify on install — regardless of where you host your repo. |
 
 **Portable vs. GitHub-only.** The runtime protections and the published `@daloyjs/core` SBOM/provenance travel with every app you scaffold, no matter which CI host you use — GitLab, Bitbucket, Azure DevOps, Jenkins, on-prem, or laptop. The strongest install-time bundle is available when you choose pnpm, because `minimum-release-age`, `blockExoticSubdeps`, and the workspace gates are pnpm features. The **`@daloyjs/core` release pipeline itself** is separately hardened on GitHub Actions — no `pull_request_target`, no Actions cache, top-level `permissions: {}`, `step-security/harden-runner`, a protected `release.yml`, npm trusted publishing with `--provenance`, CodeQL + Opengrep dual SAST, OpenSSF Scorecard, zizmor, Dependabot, and CODEOWNERS — and `create-daloy --with-ci` ships the app-safe parts as an **optional GitHub Actions bundle** for teams on GitHub. See [SECURITY.md](SECURITY.md) and the [supply-chain security docs](https://daloyjs.dev/docs/security/supply-chain).
 
@@ -383,7 +385,7 @@ deployment.
 
 DaloyJS is a **resource server** (and a toolkit for building a relying party),
 **not** an identity provider. Like Hono, Express, Fastify, or ASP.NET Core, it
-*verifies* and *enforces* tokens on each request — it does **not** ship a login
+_verifies_ and _enforces_ tokens on each request — it does **not** ship a login
 UI, a user database, or an OAuth2 authorization server. It is **not** an
 "IdentityServer": it cannot, on its own, do what Duende IdentityServer,
 Keycloak, or Auth0 do (run login pages, manage clients/consent, mint tokens).
@@ -425,7 +427,7 @@ miss                        4,763,878 ops/sec
 For deployments where every millisecond of startup matters (Lambda, Vercel, Cloudflare Workers, Fastly Compute), import `App` from the deep entry point instead of the barrel:
 
 ```ts
-import { App } from "@daloyjs/core/app";   // ~13 ms faster cold start than "@daloyjs/core"
+import { App } from "@daloyjs/core/app"; // ~13 ms faster cold start than "@daloyjs/core"
 import { serve } from "@daloyjs/core/node";
 ```
 
@@ -514,7 +516,7 @@ DaloyJS is now in the **`1.0.0` beta** (`1.0.0-beta.4`). The public API is featu
 ### Routing, validation, and docs
 
 - Contract-first routing with Standard Schema validation (Zod 4, Valibot, ArkType, TypeBox) and OpenAPI 3.1 generated from a single source of truth.
-- Live OpenAPI 3.1 spec served as both JSON (`GET /openapi.json`) and YAML (`GET /openapi.yaml`) when `docs: true`, with a choice of Scalar (default), Swagger UI, or Redoc via `docs.ui`, plus Scalar theming/custom CSS/auth defaults via `docs.scalar`, Swagger UI options via `docs.swagger` (including persisted Authorize credentials), and Redoc options via `docs.redoc`.
+- Live OpenAPI 3.1 spec served as both JSON (`GET /openapi.json`) and YAML (`GET /openapi.yaml`) when `docs: true`, with a choice of Scalar (default), Swagger UI, or Redoc via `docs.ui`, plus Scalar theming/custom CSS/auth defaults via `docs.scalar`, Swagger UI options via `docs.swagger` (including persisted Authorize credentials), Redoc options via `docs.redoc`, and a provider-neutral `docs.auth` launcher for local login routes or third-party OAuth2/OIDC providers.
 - Zero-config OpenAPI `info` autofill from `package.json` (Node / Bun) or `deno.json` / `deno.jsonc` (Deno); explicit `openapi.info` values always win.
 - RFC 7231 + RFC 5789 HTTP-method allowlist enforced inside `app.route()` (WebDAV, `TRACE`, `CONNECT` rejected at the framework boundary).
 - AI-friendly route metadata via optional `meta: { examples, extensions, summary, description, tags }`; examples are validated against your schemas at build time, surfaced as OpenAPI `examples` + `x-daloy-*` extensions, and dumped as `routes.json` / `routes.yaml` via `daloy inspect --ai`.
@@ -608,6 +610,7 @@ The framework refuses to start (or to construct) when configuration is unsafe:
   - an Origin policy (`allowedOrigins: "same-origin"` / `string[]` / predicate) or `acknowledgeCrossOriginUpgrade: true`.
 
   This closes the Cross-Site WebSocket Hijacking (CSWSH) class of bug — Storybook's [CVE-2026-27148](https://www.aikido.dev/blog/storybooks-websockets-attack) is the representative case: cookie auth alone does not stop a malicious site from opening an authenticated WS handshake from a victim's browser. The Origin check runs **before** `beforeUpgrade` in both adapters.
+
 - Contract-first **AsyncAPI 3.0** generation for `app.ws()` surfaces via `@daloyjs/core/asyncapi` (`generateAsyncAPI()` / `asyncapiToYAML()`) and `daloy inspect --asyncapi`. Each route becomes a channel (address + path params) with a `receive` operation for inbound client messages and an optional `send` operation for outbound messages, described via an optional handler `meta` block (`summary` / `description` / `tags` / `send` / `receive` / `operationId`). Set `asyncapi: true` (mirroring `docs: true`) to **auto-mount an interactive AsyncAPI UI** at `/asyncapi` plus `/asyncapi.json` + `/asyncapi.yaml` — the WebSocket counterpart to the Scalar / Swagger / Redoc OpenAPI viewers, served from a CDN with the same SRI + strict-CSP hardening.
 
 ### Lifecycle and ops
@@ -663,7 +666,7 @@ DaloyJS is **public and MIT-licensed, but contributions-closed**. Pull requests
 from accounts that are not invited maintainers or explicit repository
 collaborators are closed automatically. Bug reports, feature requests, and
 security disclosures are very welcome; see [CONTRIBUTING.md](./CONTRIBUTING.md)
-and [SECURITY.md](./SECURITY.md) for the channels that *are* open.
+and [SECURITY.md](./SECURITY.md) for the channels that _are_ open.
 
 ## License
 
