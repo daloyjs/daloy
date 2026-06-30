@@ -2,11 +2,11 @@
 name: daloyjs-best-practices
 description: >-
   Best practices for building, testing, and hardening this DaloyJS REST API on
-  Vercel (Node.js runtime). Use when adding or changing HTTP routes, Zod
-  schemas, middleware, or error handling; regenerating the OpenAPI spec or the
-  typed Hey API client; keeping the single Vercel Functions entrypoint and
-  Web-Standard handler; or working on auth, rate limits, secrets, and the
-  project's quality gates.
+  Vercel (Node.js runtime). Use when adding or changing HTTP routes,
+  Zod/Standard Schema validation schemas, middleware, route metadata, or error
+  handling; regenerating the OpenAPI spec or typed Hey API client; keeping the
+  single Vercel Functions entrypoint and Web-Standard handler; running contract
+  gates; or working on auth, rate limits, secrets, and security defaults.
 license: MIT
 ---
 
@@ -42,7 +42,8 @@ DaloyJS is a **contract-first** framework. On Vercel, additionally:
    then drop `node:` modules.
 2. **The route definition is the contract.** Method, path, request
    schemas, and response schemas live in one place (`app.route({...})`).
-3. **Zod schemas validate at every boundary.**
+3. **Validation schemas protect every boundary.** This template uses Zod,
+   and Daloy accepts any Standard Schema-compatible library.
 4. **Preserve literal types.** Return `status: 200 as const`.
 5. **Secure by default.** `requestId()`, `secureHeaders()`, and
    `rateLimit()` are registered before route definitions. Note the
@@ -53,6 +54,9 @@ DaloyJS is a **contract-first** framework. On Vercel, additionally:
    and `vercel.json` rewrites every path (`/(.*)` → `/api`) to it, so
    DaloyJS owns all routing at the site root and generates a unified
    OpenAPI spec. Removing the rewrite makes the root domain 404.
+7. **Contract gates are part of done.** Keep `operationId` values stable,
+   examples schema-valid, declared error responses accurate, and the
+   generated OpenAPI contract in sync with the live route table.
 
 ## Project shape
 
@@ -73,11 +77,14 @@ DaloyJS is a **contract-first** framework. On Vercel, additionally:
 pnpm dev          # local Node dev server (src/dev.ts) on http://localhost:3000
 pnpm typecheck    # tsc --noEmit
 pnpm test         # run test suite
+pnpm contract     # daloy inspect --check api/index.ts
 pnpm deploy       # deploy to Vercel
 pnpm audit        # supply-chain audit
 ```
 
 Always run `pnpm typecheck` and `pnpm test` before declaring a task done.
+`pnpm test` includes the contract gate; if you need a focused contract
+check, run `pnpm contract`.
 
 ## OpenAPI & docs routes
 
@@ -97,17 +104,32 @@ On Vercel the YAML serializer is pure-string (no extra deps) and adds
 <1KB to the bundle. For hand-rolled mounting, `openapiToYAML` is exported
 from `@daloyjs/core/openapi`.
 
+## AI-ready contract metadata
+
+Daloy can expose route metadata to OpenAPI and agent tooling. Add metadata
+when it helps consumers understand or safely automate the route:
+
+- Use `summary`, `description`, and `tags` for concise human-facing docs.
+- Use `meta.examples` for realistic happy-path and unhappy-path examples.
+  Examples must match the declared schemas; the contract gate rejects drift.
+- Use `meta.extensions` for stable `x-*` fields consumed by internal tools.
+- Use `deprecated` and `sunset` when changing API lifecycle. Do not remove
+  a route or response shape silently if generated clients may depend on it.
+
 ## Workflow: add a new route
 
 1. **Open `api/index.ts`.**
 2. **Design schemas first.** Use `z.object({...}).strict()` for inputs.
 3. **Call `app.route({...})`** with `method`, `path`, `operationId`,
    `tags`, `responses`, `handler` (plus `request` when accepting input).
+   Add `meta` examples / descriptions when the route is user-facing or
+   consumed by agents.
 4. **Return `{ status, body, headers? }`** with `status: 200 as const`.
 5. **Throw typed errors** (`NotFoundError`, `BadRequestError`, etc.)
    from `@daloyjs/core`.
 6. **Add a test** under `tests/` using in-process `app.request(...)`.
-7. **Run the quality gates**: `pnpm typecheck && pnpm test`.
+7. **Run the contract gate**: `pnpm contract` or `pnpm test`.
+8. **Run the quality gates**: `pnpm typecheck && pnpm test`.
 
 ### Example: a typed route
 
@@ -146,6 +168,8 @@ app.route({
 - **Pagination**: standardize on `{ items, nextCursor }` cursor
   pagination.
 - **Discriminated unions**: `z.discriminatedUnion("kind", [...])`.
+- Keep response examples close to the route definition and schema-valid.
+  The contract test intentionally fails invalid examples.
 
 ## Error handling
 
@@ -183,6 +207,8 @@ Cover **happy paths and unhappy paths** for every route: valid input,
 validation failures (400), auth failures (401/403), not-found (404),
 conflict (409), rate limiting (429). For external services, inject an
 in-memory fake during tests.
+The shipped contract test should fail invalid examples, duplicate/missing
+`operationId`, or missing responses.
 
 Aim for **100% line and function coverage** on the routes you add.
 
@@ -191,6 +217,10 @@ Aim for **100% line and function coverage** on the routes you add.
 - Keep `secureHeaders()`, `requestId()`, and `rateLimit()` enabled. For
   production traffic, back rate-limiting with Vercel KV or another
   shared store so limits apply across instances.
+- Never make a failing test pass by deleting or weakening a security guard.
+  If a guard blocks a legitimate route, add the narrowest per-route
+  override or configuration knob and cover both the allowed and rejected
+  paths in tests.
 - Never log secrets — filter `authorization`, `cookie`, etc.
 - Read secrets from `process.env` (available on Node.js Functions).
   Validate via Zod at module load.
@@ -200,6 +230,9 @@ Aim for **100% line and function coverage** on the routes you add.
 - Validate redirects against an allowlist.
 - Set `bodyLimitBytes` and `requestTimeoutMs` on `new App({...})` to
   mitigate DoS.
+- For outbound HTTP, prefer `fetchGuard()` or a transport layered on top
+  of it when URLs can be influenced by users or tenants. SSRF protections
+  should fail closed for private ranges and cloud metadata endpoints.
 - Serverless functions still have bundle-size and cold-start costs; be
   cautious about adding heavy dependencies. Inspect bundle size during
   deploy.
@@ -229,6 +262,8 @@ Aim for **100% line and function coverage** on the routes you add.
   Edge runtime, use `toWebHandler(app)` with `export const runtime = "edge"`.
 - Do not import `@daloyjs/core/node`, `@daloyjs/core/bun`, etc. — only
   `@daloyjs/core` and `@daloyjs/core/vercel`.
+- Do not hand-edit OpenAPI paths or client types. Fix the route definition,
+  schema, or metadata and regenerate.
 - Node APIs (`Buffer`, `fs`, full `process`) are available on the Node.js
   runtime, but keep handlers Web-Standard where practical so the app can
   also run on the Edge runtime unchanged.
@@ -241,6 +276,8 @@ Aim for **100% line and function coverage** on the routes you add.
 - Every new feature ships with happy-path and unhappy-path tests.
 - Bug fixes include a regression test.
 - `pnpm typecheck` and `pnpm test` must pass before completion.
+- When route metadata, examples, lifecycle flags, or operation IDs change,
+  run the contract gate and inspect the relevant generated OpenAPI diff.
 - For deploys, ensure the user is logged in via `vercel login`; do not
   authenticate on their behalf.
 - Keep `README.md`, this `SKILL.md`, and `AGENTS.md` consistent.

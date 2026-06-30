@@ -2,10 +2,10 @@
 name: daloyjs-best-practices
 description: >-
   Best practices for building, testing, and hardening this DaloyJS REST API on
-  the Bun runtime. Use when adding or changing HTTP routes, Zod schemas,
-  middleware, or error handling; regenerating the OpenAPI spec or the typed
-  Hey API client; or working on auth, rate limits, secrets, and the project's
-  quality gates.
+  the Bun runtime. Use when adding or changing HTTP routes, Zod/Standard Schema
+  validation schemas, middleware, route metadata, or error handling;
+  regenerating the OpenAPI spec or typed Hey API client; running contract
+  gates; or working on auth, rate limits, secrets, and security defaults.
 license: MIT
 ---
 
@@ -37,8 +37,9 @@ recommendation below follows from them:
    and response schemas live in one place (`app.route({...})`). The OpenAPI
    spec, the typed client, and the runtime validation are all derived from
    it.
-2. **Zod schemas validate at every boundary.** Body, params, query, and
-   headers go through Zod.
+2. **Validation schemas protect every boundary.** This template uses Zod,
+   and Daloy accepts any Standard Schema-compatible library. Body, params,
+   query, and headers go through the declared schema.
 3. **Preserve literal types.** Return `status: 200 as const` and use
    `z.literal(...)` / `as const` on discriminator fields so the typed
    client can narrow responses.
@@ -47,6 +48,9 @@ recommendation below follows from them:
    codegen and tests import `buildApp()` without side effects.
 5. **Secure by default.** `requestId()`, `secureHeaders()`, and
    `rateLimit()` are registered before route definitions.
+6. **Contract gates are part of done.** Keep `operationId` values stable,
+   examples schema-valid, declared error responses accurate, and generated
+   OpenAPI / client artifacts in sync with the live route table.
 
 ## Project shape
 
@@ -69,12 +73,15 @@ bun run typecheck     # tsc --noEmit
 bun test              # Bun's native test runner
 bun run gen:openapi   # write generated/openapi.json
 bun run gen:client    # write generated/client/
+bun run contract      # run the focused contract test
 bun run build         # produce dist/
 ```
 
 Always run `bun run typecheck` and `bun test` before declaring a task done.
-If a change touches route shapes, also rerun `bun run gen:openapi && bun
-run gen:client` so the client stays in sync.
+`bun test` includes the contract gate; if you need a focused contract check,
+run `bun run contract`. If a change touches route shapes, also rerun
+`bun run gen:openapi && bun run gen:client` so the OpenAPI spec and client
+stay in sync.
 
 ## OpenAPI & docs routes
 
@@ -93,6 +100,18 @@ mount only outside production, or `docs: false` to disable all three.
 For hand-rolled mounting, `openapiToYAML` is exported from
 `@daloyjs/core/openapi`.
 
+## AI-ready contract metadata
+
+Daloy can expose route metadata to OpenAPI and agent tooling. Add metadata
+when it helps consumers understand or safely automate the route:
+
+- Use `summary`, `description`, and `tags` for concise human-facing docs.
+- Use `meta.examples` for realistic happy-path and unhappy-path examples.
+  Examples must match the declared schemas; the contract gate rejects drift.
+- Use `meta.extensions` for stable `x-*` fields consumed by internal tools.
+- Use `deprecated` and `sunset` when changing API lifecycle. Do not remove
+  a route or response shape silently if generated clients may depend on it.
+
 ## Workflow: add a new route
 
 1. **Open `src/build-app.ts`.**
@@ -100,7 +119,9 @@ For hand-rolled mounting, `openapiToYAML` is exported from
    response body per status code. Prefer `z.object({...}).strict()` for
    inputs so unknown keys are rejected at the boundary.
 3. **Call `app.route({...})`** with `method`, `path`, `operationId`, `tags`,
-   `responses`, `handler` (plus `request` when accepting input).
+   `responses`, `handler` (plus `request` when accepting input). Add `meta`
+   examples / descriptions when the route is user-facing or consumed by
+   agents.
 4. **Return `{ status, body, headers? }` from the handler.** Always use
    `status: 200 as const` so the typed client can narrow.
 5. **Throw typed errors**, do not return raw error responses. Use
@@ -108,9 +129,10 @@ For hand-rolled mounting, `openapiToYAML` is exported from
    `ForbiddenError`, `ConflictError`, etc.
 6. **Add a test in `tests/<route>.test.ts`** using `app.request(...)` for
    in-process testing — no port needed.
-7. **Regenerate the contract**: `bun run gen:openapi && bun run gen:client`.
+7. **Run the contract gate**: `bun run contract` or `bun test`.
+8. **Regenerate the contract artifacts**: `bun run gen:openapi && bun run gen:client`.
    Inspect `generated/openapi.json` to confirm the operation shows up.
-8. **Run the quality gates**: `bun run typecheck && bun test`.
+9. **Run the quality gates**: `bun run typecheck && bun test`.
 
 ### Example: a typed route
 
@@ -150,6 +172,8 @@ app.route({
   `.nullable()` for "explicitly null". They differ in OpenAPI output.
 - **Pagination**: standardize on `{ items, nextCursor }` cursor pagination.
 - **Discriminated unions**: use `z.discriminatedUnion("kind", [...])`.
+- Keep response examples close to the route definition and schema-valid.
+  The contract test intentionally fails invalid examples.
 - **Never** call `JSON.parse` or read `req.body` directly. Let the
   framework validate and pass the typed object to your handler.
 
@@ -168,8 +192,8 @@ Register middleware **before** route definitions. Order matters.
 Keep the secure baseline:
 
 ```ts
-app.use(requestId());      // x-request-id for log correlation
-app.use(secureHeaders());  // strict security headers
+app.use(requestId()); // x-request-id for log correlation
+app.use(secureHeaders()); // strict security headers
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 ```
 
@@ -198,12 +222,18 @@ Cover both **happy paths and unhappy paths** for every route: valid input,
 validation failures (400), auth failures (401/403), not-found (404),
 conflicts (409), rate limiting (429). For external services, inject an
 in-memory fake via `buildApp({ store })` rather than mocking `fetch`.
+The shipped contract test should fail invalid examples, duplicate/missing
+`operationId`, or missing responses.
 
 Aim for **100% line and function coverage** on routes you add.
 
 ## Security best practices
 
 - Keep `secureHeaders()`, `requestId()`, and `rateLimit()` enabled.
+- Never make a failing test pass by deleting or weakening a security guard.
+  If a guard blocks a legitimate route, add the narrowest per-route
+  override or configuration knob and cover both the allowed and rejected
+  paths in tests.
 - Never log secrets — filter `authorization`, `cookie`, and any
   token-bearing fields.
 - Validate secrets from `process.env` (or `Bun.env`) through a Zod schema
@@ -215,6 +245,9 @@ Aim for **100% line and function coverage** on routes you add.
   mitigate DoS.
 - Use parameterized queries for database access — never interpolate user
   input into SQL.
+- For outbound HTTP, prefer `fetchGuard()` or a transport layered on top
+  of it when URLs can be influenced by users or tenants. SSRF protections
+  should fail closed for private ranges and cloud metadata endpoints.
 - Bun ships its own audit story; check `bun pm audit` periodically and
   pin versions in `bun.lockb`.
 
@@ -236,6 +269,8 @@ Aim for **100% line and function coverage** on routes you add.
 - Never import `@daloyjs/core/bun` from `src/build-app.ts` or any script
   under `scripts/`. That would boot an HTTP listener during codegen.
 - Do not edit files under `generated/` by hand — they are overwritten.
+- Do not hand-edit OpenAPI paths or client types. Fix the route definition,
+  schema, or metadata and regenerate.
 - Do not weaken response literal types (`as const`); the typed client
   depends on them.
 - Do not return errors as `{ status: 4xx, body: {...} }`. Throw a typed
@@ -252,6 +287,8 @@ Aim for **100% line and function coverage** on routes you add.
 - `bun run typecheck` and `bun test` must pass before completion.
 - Run `bun run gen:openapi && bun run gen:client` when route shapes
   change; commit the updated artifacts.
+- When route metadata, examples, lifecycle flags, or operation IDs change,
+  run the contract gate and inspect the relevant generated OpenAPI diff.
 - Keep `README.md`, this `SKILL.md`, and `AGENTS.md` consistent with the
   code.
 

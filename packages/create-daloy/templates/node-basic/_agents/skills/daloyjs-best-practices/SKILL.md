@@ -2,9 +2,10 @@
 name: daloyjs-best-practices
 description: >-
   Best practices for building, testing, and hardening this DaloyJS REST API on
-  Node.js. Use when adding or changing HTTP routes, Zod schemas, middleware, or
-  error handling; regenerating the OpenAPI spec or the typed Hey API client; or
-  working on auth, rate limits, secrets, and the project's quality gates.
+  Node.js. Use when adding or changing HTTP routes, Zod/Standard Schema
+  validation schemas, middleware, route metadata, or error handling;
+  regenerating the OpenAPI spec or typed Hey API client; running contract
+  gates; or working on auth, rate limits, secrets, and security defaults.
 license: MIT
 ---
 
@@ -38,9 +39,10 @@ recommendation below follows from them:
    spec, the typed client, and the runtime validation are all derived from
    it. Never duplicate that information by hand-writing fetch calls, types,
    or `openapi.json` entries.
-2. **Zod schemas validate at every boundary.** Body, params, query, and
-   headers go through Zod. If a field is not in the schema, it is not part
-   of the contract.
+2. **Validation schemas protect every boundary.** This template uses Zod,
+   and Daloy accepts any Standard Schema-compatible library. Body, params,
+   query, and headers go through the declared schema. If a field is not in
+   the schema, it is not part of the contract.
 3. **Preserve literal types.** Return `status: 200 as const` and use
    `z.literal(...)` / `as const` on discriminator fields. The typed client
    needs narrow types to do useful response narrowing.
@@ -51,6 +53,9 @@ recommendation below follows from them:
 5. **Secure by default.** `requestId()`, `secureHeaders()`, and
    `rateLimit()` are registered before route definitions. Do not remove
    them unless the user explicitly asks.
+6. **Contract gates are part of done.** Keep `operationId` values stable,
+   examples schema-valid, declared error responses accurate, and generated
+   OpenAPI / client artifacts in sync with the live route table.
 
 ## Project shape
 
@@ -74,13 +79,15 @@ pnpm test         # Node built-in test runner
 pnpm gen          # gen:openapi + gen:client
 pnpm gen:openapi  # write generated/openapi.json
 pnpm gen:client   # write generated/client/
+pnpm contract     # daloy inspect --check src/build-app.ts
 pnpm build        # emit dist/
 pnpm audit        # supply-chain audit
 ```
 
 Always run `pnpm typecheck` and `pnpm test` before declaring a task done.
-If a change touches route shapes, also run `pnpm gen` so the client stays
-in sync.
+`pnpm test` includes the contract gate; if you need a focused contract
+check, run `pnpm contract`. If a change touches route shapes, also run
+`pnpm gen` so the OpenAPI spec and client stay in sync.
 
 ## OpenAPI & docs routes
 
@@ -104,6 +111,18 @@ exported from the openapi subpath:
 import { generateOpenAPI, openapiToYAML } from "@daloyjs/core/openapi";
 ```
 
+## AI-ready contract metadata
+
+Daloy can expose route metadata to OpenAPI and agent tooling. Add metadata
+when it helps consumers understand or safely automate the route:
+
+- Use `summary`, `description`, and `tags` for concise human-facing docs.
+- Use `meta.examples` for realistic happy-path and unhappy-path examples.
+  Examples must match the declared schemas; the contract gate rejects drift.
+- Use `meta.extensions` for stable `x-*` fields consumed by internal tools.
+- Use `deprecated` and `sunset` when changing API lifecycle. Do not remove
+  a route or response shape silently if generated clients may depend on it.
+
 ## Workflow: add a new route
 
 Follow these steps in order. Skipping any of them is a common source of
@@ -118,7 +137,8 @@ bugs (drifted client SDK, missing test, broken codegen).
    keys are rejected at the boundary.
 3. **Call `app.route({...})`.** Required keys: `method`, `path`,
    `operationId`, `tags`, `responses`, `handler`. Add `request` when the
-   route accepts input.
+   route accepts input, and add `meta` examples / descriptions when the
+   route is user-facing or consumed by agents.
 4. **Return `{ status, body, headers? }` from the handler.** Always use
    `status: 200 as const` (or whatever code) so the typed client can
    narrow. For literal discriminators in `body`, use `as const` or
@@ -129,10 +149,12 @@ bugs (drifted client SDK, missing test, broken codegen).
    framework maps them to RFC 7807 problem responses.
 6. **Add a test in `tests/<route>.test.ts`.** Use `app.request(...)` for
    in-process tests — no port needed (see "Testing best practices").
-7. **Regenerate the contract.** Run `pnpm gen`. Inspect
+7. **Run the contract gate.** Run `pnpm contract` or `pnpm test` before
+   trusting the OpenAPI output.
+8. **Regenerate the contract artifacts.** Run `pnpm gen`. Inspect
    `generated/openapi.json` to confirm the operation shows up with the
    expected schemas and status codes.
-8. **Run the quality gates.** `pnpm typecheck && pnpm test`.
+9. **Run the quality gates.** `pnpm typecheck && pnpm test`.
 
 ### Example: a typed route
 
@@ -178,6 +200,8 @@ app.route({
 - **Discriminated unions** (e.g. for response variants): use
   `z.discriminatedUnion("kind", [...])` and tag each branch with
   `z.literal("...")` so codegen produces a narrow TypeScript union.
+- Keep response examples close to the route definition and schema-valid.
+  The contract test intentionally fails invalid examples.
 - **Never** call `JSON.parse` or `req.body` directly in a handler. Let the
   framework validate via the schema and read the typed object passed to
   the handler.
@@ -202,8 +226,8 @@ Order matters — earlier middleware wraps later middleware and routes.
 Keep these as the secure baseline:
 
 ```ts
-app.use(requestId());      // x-request-id for log correlation
-app.use(secureHeaders());  // strict security headers
+app.use(requestId()); // x-request-id for log correlation
+app.use(secureHeaders()); // strict security headers
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 ```
 
@@ -245,6 +269,8 @@ Cover both **happy paths** and **unhappy paths** for every route:
 - Not found: unknown id → `404`.
 - Conflict: duplicate create → `409`.
 - Rate limit: hammer the route → `429` after the configured threshold.
+- Contract failure: invalid examples, duplicate/missing `operationId`, or
+  missing responses should fail through the shipped contract test.
 
 For routes that touch external services, write a thin in-memory fake
 inside the test and inject it via the factory pattern (`buildApp({ store })`).
@@ -259,6 +285,10 @@ honor them.
 
 - Keep `secureHeaders()`, `requestId()`, and `rateLimit()` enabled. They
   ship the OWASP-recommended baseline.
+- Never make a failing test pass by deleting or weakening a security guard.
+  If a guard blocks a legitimate route, add the narrowest per-route
+  override or configuration knob and cover both the allowed and rejected
+  paths in tests.
 - Never log secrets. Filter `authorization`, `cookie`, and any header /
   body field that may contain tokens before logging.
 - Read secrets from `process.env`, validated through a Zod schema at
@@ -273,6 +303,9 @@ honor them.
 - Set `requestTimeoutMs` so slow clients cannot tie up workers.
 - For database access, use parameterized queries / a query builder. Never
   interpolate user input into SQL strings.
+- For outbound HTTP, prefer `fetchGuard()` or a transport layered on top
+  of it when URLs can be influenced by users or tenants. SSRF protections
+  should fail closed for private ranges and cloud metadata endpoints.
 - Review `pnpm audit` output before releases. Avoid lowering the
   install cooldown without reason; new package versions can be malicious.
 
@@ -303,6 +336,8 @@ honor them.
   start an HTTP listener as a side effect of codegen.
 - Do not edit files under `generated/` by hand — they are overwritten by
   `pnpm gen`.
+- Do not hand-edit OpenAPI paths or client types. Fix the route definition,
+  schema, or metadata and regenerate.
 - Do not weaken response literal types (`as const`); the typed client
   depends on them.
 - Do not return errors as `{ status: 4xx, body: {...} }`. Throw a typed
@@ -321,6 +356,8 @@ honor them.
   declaring the task complete.
 - When route shapes change, also run `pnpm gen` and commit the updated
   `generated/openapi.json` + client.
+- When route metadata, examples, lifecycle flags, or operation IDs change,
+  run the contract gate and inspect the relevant generated OpenAPI diff.
 - Keep `README.md`, this `SKILL.md`, and `AGENTS.md` consistent with the
   code. If you add a workflow, document it here.
 

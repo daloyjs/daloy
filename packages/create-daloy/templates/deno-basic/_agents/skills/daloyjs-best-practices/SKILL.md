@@ -2,10 +2,11 @@
 name: daloyjs-best-practices
 description: >-
   Best practices for building, testing, and hardening this DaloyJS REST API on
-  the Deno runtime. Use when adding or changing HTTP routes, Zod schemas,
-  middleware, or error handling; regenerating the OpenAPI spec; managing Deno
-  permissions and tasks; or working on auth, rate limits, secrets, and the
-  project's quality gates.
+  the Deno runtime. Use when adding or changing HTTP routes, Zod/Standard
+  Schema validation schemas, middleware, route metadata, or error handling;
+  regenerating the OpenAPI spec; running contract gates; managing Deno
+  permissions and tasks; or working on auth, rate limits, secrets, and
+  security defaults.
 license: MIT
 ---
 
@@ -35,7 +36,8 @@ DaloyJS is a **contract-first** framework. Internalize these rules:
 
 1. **The route definition is the contract.** Method, path, request schemas,
    and response schemas live in one place (`app.route({...})`).
-2. **Zod schemas validate at every boundary.**
+2. **Validation schemas protect every boundary.** This template uses Zod,
+   and Daloy accepts any Standard Schema-compatible library.
 3. **Preserve literal types.** Return `status: 200 as const`; use
    `z.literal(...)` / `as const` on discriminator fields.
 4. **`buildApp()` is pure.** Construction never opens sockets. The HTTP
@@ -45,6 +47,9 @@ DaloyJS is a **contract-first** framework. Internalize these rules:
 6. **Deno permissions are part of the contract.** Tasks declare exactly
    the permissions they need (`--allow-net`, `--allow-env`, `--allow-read`).
    Do not broaden them casually.
+7. **Contract gates are part of done.** Keep `operationId` values stable,
+   examples schema-valid, declared error responses accurate, and generated
+   OpenAPI artifacts in sync with the live route table.
 
 ## Project shape
 
@@ -65,6 +70,7 @@ DaloyJS is a **contract-first** framework. Internalize these rules:
 deno task dev           # watch-mode server on http://localhost:3000
 deno task typecheck     # deno check
 deno task test          # deno test
+deno task contract      # run the focused contract test
 deno task gen:openapi   # write generated/openapi.json
 ```
 
@@ -76,7 +82,8 @@ npx @hey-api/openapi-ts -i generated/openapi.json -o generated/client
 ```
 
 Always run `deno task typecheck` and `deno task test` before declaring a
-task done.
+task done. `deno task test` includes the contract gate; if you need a
+focused contract check, run `deno task contract`.
 
 ## OpenAPI & docs routes
 
@@ -95,6 +102,18 @@ mount only outside production, or `docs: false` to disable all three.
 For hand-rolled mounting, `openapiToYAML` is exported from
 `@daloyjs/core/openapi`.
 
+## AI-ready contract metadata
+
+Daloy can expose route metadata to OpenAPI and agent tooling. Add metadata
+when it helps consumers understand or safely automate the route:
+
+- Use `summary`, `description`, and `tags` for concise human-facing docs.
+- Use `meta.examples` for realistic happy-path and unhappy-path examples.
+  Examples must match the declared schemas; the contract gate rejects drift.
+- Use `meta.extensions` for stable `x-*` fields consumed by internal tools.
+- Use `deprecated` and `sunset` when changing API lifecycle. Do not remove
+  a route or response shape silently if generated clients may depend on it.
+
 ## Workflow: add a new route
 
 1. **Open `src/build-app.ts`.**
@@ -103,14 +122,17 @@ For hand-rolled mounting, `openapiToYAML` is exported from
    inputs.
 3. **Call `app.route({...})`** with `method`, `path`, `operationId`,
    `tags`, `responses`, `handler` (plus `request` when accepting input).
+   Add `meta` examples / descriptions when the route is user-facing or
+   consumed by agents.
 4. **Return `{ status, body, headers? }` from the handler.** Always
    `status: 200 as const`.
 5. **Throw typed errors** (`NotFoundError`, `BadRequestError`, etc.) from
    `@daloyjs/core`.
 6. **Add a test in `tests/<route>.test.ts`** using `app.request(...)` for
    in-process tests.
-7. **Regenerate the contract**: `deno task gen:openapi`.
-8. **Run the quality gates**: `deno task typecheck && deno task test`.
+7. **Run the contract gate**: `deno task contract` or `deno task test`.
+8. **Regenerate the contract artifacts**: `deno task gen:openapi`.
+9. **Run the quality gates**: `deno task typecheck && deno task test`.
 
 ### Example: a typed route
 
@@ -149,6 +171,8 @@ app.route({
 - **Pagination**: standardize on `{ items, nextCursor }` cursor
   pagination.
 - **Discriminated unions**: `z.discriminatedUnion("kind", [...])`.
+- Keep response examples close to the route definition and schema-valid.
+  The contract test intentionally fails invalid examples.
 - **Never** parse `req.body` directly — let the framework validate.
 
 ## Error handling
@@ -194,14 +218,20 @@ Cover **happy paths and unhappy paths**: valid input, validation failures
 (400), auth failures (401/403), not-found (404), conflict (409), rate
 limiting (429). For external services, inject an in-memory fake via
 `buildApp({ store })`.
+The shipped contract test should fail invalid examples, duplicate/missing
+`operationId`, or missing responses.
 
 Aim for **100% line and function coverage** on routes you add.
 
 ## Security best practices
 
 - Keep `secureHeaders()`, `requestId()`, and `rateLimit()` enabled.
+- Never make a failing test pass by deleting or weakening a security guard.
+  If a guard blocks a legitimate route, add the narrowest per-route
+  override or configuration knob and cover both the allowed and rejected
+  paths in tests.
 - Permissions for the `dev` task are intentionally narrow: `--allow-net
-  --allow-env --allow-read`. If a change requires more permissions, add
+--allow-env --allow-read`. If a change requires more permissions, add
   them explicitly to the relevant task in `deno.json` and call it out to
   the user — never `--allow-all`.
 - Never log secrets — filter `authorization`, `cookie`, etc.
@@ -212,6 +242,9 @@ Aim for **100% line and function coverage** on routes you add.
 - Validate redirects against an allowlist.
 - Set `bodyLimitBytes` and `requestTimeoutMs` on `new App({...})` to
   mitigate DoS.
+- For outbound HTTP, prefer `fetchGuard()` or a transport layered on top
+  of it when URLs can be influenced by users or tenants. SSRF protections
+  should fail closed for private ranges and cloud metadata endpoints.
 - Pin `npm:` and `jsr:` specifiers in `deno.json` to exact or
   caret-locked versions; review changes in `deno.lock` before committing.
 
@@ -231,6 +264,8 @@ Aim for **100% line and function coverage** on routes you add.
 - Never import `@daloyjs/core/deno` from `src/build-app.ts` or any
   script under `scripts/`. That would boot a listener during codegen.
 - Do not edit files under `generated/` by hand.
+- Do not hand-edit OpenAPI paths or client types. Fix the route definition,
+  schema, or metadata and regenerate.
 - Do not weaken response literal types (`as const`).
 - Do not return errors as `{ status: 4xx, body }`. Throw a typed error.
 - Use `deno task ...`, not `npm`/`pnpm`. There is no `package.json`.
@@ -244,6 +279,8 @@ Aim for **100% line and function coverage** on routes you add.
 - `deno task typecheck` and `deno task test` must pass before completion.
 - Run `deno task gen:openapi` when route shapes change; commit the
   updated `generated/openapi.json`.
+- When route metadata, examples, lifecycle flags, or operation IDs change,
+  run the contract gate and inspect the relevant generated OpenAPI diff.
 - Keep `README.md`, this `SKILL.md`, and `AGENTS.md` consistent with the
   code.
 

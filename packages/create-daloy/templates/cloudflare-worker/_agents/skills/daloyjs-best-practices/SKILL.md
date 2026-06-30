@@ -2,10 +2,10 @@
 name: daloyjs-best-practices
 description: >-
   Best practices for building, testing, and hardening this DaloyJS REST API on
-  Cloudflare Workers. Use when adding or changing HTTP routes, Zod schemas,
-  middleware, or error handling; wiring Worker bindings (KV, D1, R2, Queues,
-  env, secrets); or working on auth, rate limits, and the project's quality
-  gates.
+  Cloudflare Workers. Use when adding or changing HTTP routes, Zod/Standard
+  Schema validation schemas, middleware, route metadata, or error handling;
+  wiring Worker bindings (KV, D1, R2, Queues, env, secrets); running contract
+  gates; or working on auth, rate limits, and security defaults.
 license: MIT
 ---
 
@@ -34,11 +34,12 @@ Do **not** use this skill for tasks unrelated to the API itself.
 DaloyJS is a **contract-first** framework. On Workers, additionally:
 
 1. **Stay on the Workers runtime.** Only Web Standards APIs and
-  Cloudflare-specific bindings. No `node:` modules unless the user
-  explicitly adds `nodejs_compat` to `wrangler.toml` and opts in.
+   Cloudflare-specific bindings. No `node:` modules unless the user
+   explicitly adds `nodejs_compat` to `wrangler.toml` and opts in.
 2. **The route definition is the contract.** Method, path, request
    schemas, and response schemas live in one place (`app.route({...})`).
-3. **Zod schemas validate at every boundary.**
+3. **Validation schemas protect every boundary.** This template uses Zod,
+   and Daloy accepts any Standard Schema-compatible library.
 4. **Preserve literal types.** Return `status: 200 as const`.
 5. **Secure by default.** `requestId()`, `secureHeaders()`, and
    `rateLimit()` are registered. Note: the in-memory rate limiter resets
@@ -46,6 +47,9 @@ DaloyJS is a **contract-first** framework. On Workers, additionally:
    rate-limit binding.
 6. **Bindings flow through `env`.** Read KV/D1/R2/secrets from the
    `env` argument to `fetch`, never from globals.
+7. **Contract gates are part of done.** Keep `operationId` values stable,
+   examples schema-valid, declared error responses accurate, and the
+   generated OpenAPI contract in sync with the live route table.
 
 ## Project shape
 
@@ -64,11 +68,14 @@ DaloyJS is a **contract-first** framework. On Workers, additionally:
 pnpm dev          # wrangler dev on http://localhost:8787
 pnpm typecheck    # tsc --noEmit
 pnpm test         # run test suite
+pnpm contract     # daloy inspect --check src/index.ts
 pnpm deploy       # wrangler deploy
 pnpm audit        # supply-chain audit
 ```
 
 Always run `pnpm typecheck` and `pnpm test` before declaring a task done.
+`pnpm test` includes the contract gate; if you need a focused contract
+check, run `pnpm contract`.
 
 ## OpenAPI & docs routes
 
@@ -89,18 +96,33 @@ On Workers the Scalar UI adds the most weight; consider
 For hand-rolled mounting, `openapiToYAML` is exported from
 `@daloyjs/core/openapi`.
 
+## AI-ready contract metadata
+
+Daloy can expose route metadata to OpenAPI and agent tooling. Add metadata
+when it helps consumers understand or safely automate the route:
+
+- Use `summary`, `description`, and `tags` for concise human-facing docs.
+- Use `meta.examples` for realistic happy-path and unhappy-path examples.
+  Examples must match the declared schemas; the contract gate rejects drift.
+- Use `meta.extensions` for stable `x-*` fields consumed by internal tools.
+- Use `deprecated` and `sunset` when changing API lifecycle. Do not remove
+  a route or response shape silently if generated clients may depend on it.
+
 ## Workflow: add a new route
 
 1. **Open `src/index.ts`.**
 2. **Design schemas first.** Use `z.object({...}).strict()` for inputs.
 3. **Call `app.route({...})`** with `method`, `path`, `operationId`,
    `tags`, `responses`, `handler` (plus `request` when accepting input).
+   Add `meta` examples / descriptions when the route is user-facing or
+   consumed by agents.
 4. **Return `{ status, body, headers? }`** with `status: 200 as const`.
 5. **Throw typed errors** (`NotFoundError`, `BadRequestError`, etc.).
 6. **Add a test** under `tests/`. Use `app.request(...)` for pure logic;
    use `unstable_dev` (Wrangler) or `@cloudflare/vitest-pool-workers`
    when you need bindings.
-7. **Run the quality gates**: `pnpm typecheck && pnpm test`.
+7. **Run the contract gate**: `pnpm contract` or `pnpm test`.
+8. **Run the quality gates**: `pnpm typecheck && pnpm test`.
 
 ### Example: a typed route with bindings
 
@@ -158,6 +180,8 @@ export default {
 - **Pagination**: standardize on `{ items, nextCursor }` cursor
   pagination.
 - **Discriminated unions**: `z.discriminatedUnion("kind", [...])`.
+- Keep response examples close to the route definition and schema-valid.
+  The contract test intentionally fails invalid examples.
 
 ## Error handling
 
@@ -197,6 +221,8 @@ Cover **happy paths and unhappy paths** for every route: valid input,
 validation failures (400), auth failures (401/403), not-found (404),
 conflict (409), rate limiting (429). For external services, inject an
 in-memory fake into `buildApp(env)` during tests.
+The shipped contract test should fail invalid examples, duplicate/missing
+`operationId`, or missing responses.
 
 Aim for **100% line and function coverage** on the routes you add.
 
@@ -205,6 +231,10 @@ Aim for **100% line and function coverage** on the routes you add.
 - Keep `secureHeaders()`, `requestId()`, and `rateLimit()` enabled. For
   high-traffic routes, attach Cloudflare's native rate-limit binding so
   limits are shared across isolates.
+- Never make a failing test pass by deleting or weakening a security guard.
+  If a guard blocks a legitimate route, add the narrowest per-route
+  override or configuration knob and cover both the allowed and rejected
+  paths in tests.
 - Never log secrets — filter `authorization`, `cookie`, etc.
 - Read secrets via `wrangler secret put`, never via plain `[vars]` in
   `wrangler.toml`.
@@ -213,6 +243,9 @@ Aim for **100% line and function coverage** on the routes you add.
 - Validate redirects against an allowlist.
 - Set `bodyLimitBytes` and `requestTimeoutMs` on `new App({...})` to
   mitigate DoS.
+- For outbound HTTP, prefer `fetchGuard()` or a transport layered on top
+  of it when URLs can be influenced by users or tenants. SSRF protections
+  should fail closed for private ranges and cloud metadata endpoints.
 - Workers have CPU and bundle-size limits; be cautious about adding
   heavy dependencies. Run `wrangler deploy --dry-run --outdir=dist` to
   inspect bundle size.
@@ -242,6 +275,8 @@ Aim for **100% line and function coverage** on the routes you add.
   hand-roll a `fetch(req, env, ctx)` adapter.
 - Do not import `@daloyjs/core/node`, `@daloyjs/core/bun`, etc. — only
   `@daloyjs/core` and `@daloyjs/core/cloudflare`.
+- Do not hand-edit OpenAPI paths or client types. Fix the route definition,
+  schema, or metadata and regenerate.
 - Avoid Node-only APIs (`Buffer`, `fs`, `process` beyond
   `process.env`) unless `nodejs_compat` is enabled and required.
 - Do not weaken response literal types (`as const`).
@@ -255,6 +290,8 @@ Aim for **100% line and function coverage** on the routes you add.
 - Every new feature ships with happy-path and unhappy-path tests.
 - Bug fixes include a regression test.
 - `pnpm typecheck` and `pnpm test` must pass before completion.
+- When route metadata, examples, lifecycle flags, or operation IDs change,
+  run the contract gate and inspect the relevant generated OpenAPI diff.
 - For deploys, ask the user to run `wrangler login` first if needed —
   do not attempt to authenticate on their behalf.
 - Keep `README.md`, this `SKILL.md`, and `AGENTS.md` consistent.
