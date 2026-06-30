@@ -28,7 +28,7 @@
  * What this script does:
  *
  *   1. Collect every Node.js major version Daloy explicitly endorses:
- *      - `engines.node` minimum in every workspace `package.json`
+ *      - `engines.node` supported major(s) in every workspace `package.json`
  *      - `node-version:` value pinned in every `.github/workflows/*.yml`
  *   2. Fetch `https://endoflife.date/api/nodejs.json` (the public CDN the
  *      Aikido article recommends; same JSON shape consumed by Scorecard,
@@ -90,16 +90,36 @@ const PACKAGE_JSON_GLOBS = [
 ];
 
 /**
- * Extract the minimum supported Node major from an `engines.node` value
- * like `">=24.0.0"`, `"^24.1.0"`, `"24.x"`, or `"24"`. Returns `null`
- * when the value cannot be parsed; the caller decides whether to error.
+ * Extract every supported Node major lower-bound from an `engines.node` value
+ * like `">=24.0.0"`, `"^24.1.0"`, `"24.x"`, `"24"`, or a disjoint range
+ * like `"^24.0.0 || >=26.0.0"`. Upper-bound-only comparators such as
+ * `"<25.0.0"` are ignored because they describe exclusions, not endorsed
+ * runtime lines.
+ */
+export function parseEnginesNodeMajors(spec: string | undefined): readonly number[] {
+  if (typeof spec !== "string") return [];
+  const found: number[] = [];
+  const parts = spec.split("||");
+  for (const part of parts) {
+    const matches = part.matchAll(/(?:^|\s)([<>=~^]*?)\s*v?(\d+)(?:\.(?:\d+|x|\*))*/gi);
+    for (const match of matches) {
+      const comparator = match[1] ?? "";
+      if (comparator.includes("<")) continue;
+      const n = Number.parseInt(match[2]!, 10);
+      if (Number.isFinite(n) && n > 0 && !found.includes(n)) found.push(n);
+      break;
+    }
+  }
+  return found;
+}
+
+/**
+ * Extract the first supported Node major from an `engines.node` value. Returns
+ * `null` when the value cannot be parsed. Use {@link parseEnginesNodeMajors}
+ * when the caller needs to inspect every disjoint supported runtime line.
  */
 export function parseEnginesNodeMajor(spec: string | undefined): number | null {
-  if (typeof spec !== "string") return null;
-  const match = spec.match(/(\d+)/);
-  if (!match) return null;
-  const n = Number.parseInt(match[1]!, 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return parseEnginesNodeMajors(spec)[0] ?? null;
 }
 
 /**
@@ -130,8 +150,9 @@ async function collectEndorsedVersions(cwd: string): Promise<EndorsedVersion[]> 
       const pkg = (await readJson(join(cwd, rel))) as {
         engines?: { node?: string };
       };
-      const major = parseEnginesNodeMajor(pkg.engines?.node);
-      if (major !== null) found.push({ source: rel, major });
+      for (const major of parseEnginesNodeMajors(pkg.engines?.node)) {
+        found.push({ source: rel, major });
+      }
     } catch {
       // Missing workspace package.json is fine; the verify-* scripts run
       // from the repo root in CI and only a subset of these paths exist

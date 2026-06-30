@@ -295,18 +295,13 @@ export default function HomePage() {
               className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
-              The runtime-portable TypeScript framework with supply-chain-aware
-              defaults
+              The secure TypeScript API framework that runs anywhere
             </h1>
             <p
               className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              Most backend code is now AI-written and shipped before anyone
-              reviews it. DaloyJS makes the safe path the easy one: a
-              secure-by-default runtime, blocked install scripts,
-              source-verified lockfiles, a zero-runtime-dependency core, and an
-              optional hardened GitHub Actions bundle for teams on GitHub.
+              DaloyJS gives teams a runtime-portable backend with supply-chain-aware defaults for safely shipping AI-assisted services.
             </p>
             <ContractFlowVisual />
             <p
@@ -363,7 +358,7 @@ export default function HomePage() {
               <span aria-hidden>·</span>
               <span>≥90% line, function, and branch coverage gates</span>
               <span aria-hidden>·</span>
-              <span>Node 24+, Bun, Deno, Cloudflare, Vercel</span>
+              <span>Node 24 LTS, Node 26+, Bun, Deno, Cloudflare, Vercel</span>
             </div>
           </div>
         </div>

@@ -34,7 +34,7 @@ const RUNTIMES: Target[] = [
     name: "Node.js",
     href: "/docs/adapters/node" as Route,
     blurb:
-      "Long-lived process on Node 24+. Sane request/header/keep-alive timeouts and SIGTERM-driven graceful shutdown.",
+      "Long-lived process on Node 24 LTS or Node 26+. Sane request/header/keep-alive timeouts and SIGTERM-driven graceful shutdown.",
   },
   {
     name: "Bun",

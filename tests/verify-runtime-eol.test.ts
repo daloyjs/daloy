@@ -4,18 +4,32 @@ import {
   evaluateFindings,
   groupBySource,
   parseEnginesNodeMajor,
+  parseEnginesNodeMajors,
   parseWorkflowNodeMajors,
   type NodeEolCycle,
 } from "../scripts/verify-runtime-eol.ts";
 
-test("parseEnginesNodeMajor extracts major from >=, ^, x, and bare forms", () => {
+test("parseEnginesNodeMajors extracts majors from >=, ^, x, bare, and disjoint forms", () => {
+  assert.deepEqual(parseEnginesNodeMajors(">=24.0.0"), [24]);
+  assert.deepEqual(parseEnginesNodeMajors("^24.1.0"), [24]);
+  assert.deepEqual(parseEnginesNodeMajors("24.x"), [24]);
+  assert.deepEqual(parseEnginesNodeMajors("24"), [24]);
+  assert.deepEqual(parseEnginesNodeMajors("^24.0.0 || >=26.0.0"), [24, 26]);
+  assert.deepEqual(parseEnginesNodeMajors(">=24.0.0 <25.0.0 || >=26.0.0"), [24, 26]);
+});
+
+test("parseEnginesNodeMajor extracts first major from >=, ^, x, bare, and disjoint forms", () => {
   assert.equal(parseEnginesNodeMajor(">=24.0.0"), 24);
   assert.equal(parseEnginesNodeMajor("^24.1.0"), 24);
   assert.equal(parseEnginesNodeMajor("24.x"), 24);
   assert.equal(parseEnginesNodeMajor("24"), 24);
+  assert.equal(parseEnginesNodeMajor("^24.0.0 || >=26.0.0"), 24);
 });
 
-test("parseEnginesNodeMajor returns null for missing/garbage", () => {
+test("parseEnginesNodeMajor helpers return empty/null for missing/garbage", () => {
+  assert.deepEqual(parseEnginesNodeMajors(undefined), []);
+  assert.deepEqual(parseEnginesNodeMajors(""), []);
+  assert.deepEqual(parseEnginesNodeMajors("latest"), []);
   assert.equal(parseEnginesNodeMajor(undefined), null);
   assert.equal(parseEnginesNodeMajor(""), null);
   assert.equal(parseEnginesNodeMajor("latest"), null);

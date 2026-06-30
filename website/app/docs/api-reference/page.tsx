@@ -61,8 +61,8 @@ const { port } = serve(app);                  // NodeServerOptions.port defaults
 console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
-        Run it with <code>node --import tsx index.ts</code> (Node 24+ can also
-        run <code>node index.ts</code> directly via type stripping). Every
+        Run it with <code>node --import tsx index.ts</code> (supported Node
+        versions can also run <code>node index.ts</code> directly via type stripping). Every
         response already carries the secure-by-default headers (
         <code>secureHeaders</code>) and an <code>x-request-id</code> (
         <code>requestId</code>); errors serialize to RFC 9457{" "}

@@ -83,8 +83,9 @@ pnpm dev    # hot-reload via daloy dev`}
 
       <h2>Install</h2>
       <p>
-        Requires <strong>Node.js 24 LTS or newer</strong>. The adapter ships
-        with <code>@daloyjs/core</code>; no extra dependency.
+        Requires <strong>Node.js 24 LTS or Node.js 26+</strong>. The adapter ships
+        with <code>@daloyjs/core</code>; no extra dependency. Node.js 25 is not
+        supported because it is already end-of-life.
       </p>
       <CodeBlock language="bash" code={`pnpm add @daloyjs/core`} />
 
@@ -129,7 +130,7 @@ await close();`}
           SIGTERM / SIGINT handlers that call <code>server.close()</code>{" "}
           followed by <code>server.closeAllConnections()</code> after{" "}
           <code>shutdownTimeoutMs</code>: the pattern that became stable in Node
-          18.2 and is recommended on Node 24+.
+          18.2 and is recommended on supported Node versions.
         </li>
         <li>
           When <code>trustProxy: true</code>, the adapter reads{" "}

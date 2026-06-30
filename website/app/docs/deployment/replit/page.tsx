@@ -46,7 +46,7 @@ export default function Page() {
           },
           {
             label: "Install",
-            detail: "pnpm install, Node 24+",
+            detail: "pnpm install, Node 24 LTS / 26+",
           },
           {
             label: "Build",
@@ -82,8 +82,9 @@ export default function Page() {
 
       <h2>1. Check Node and pnpm</h2>
       <p>
-        DaloyJS requires <strong>Node.js 24 or newer</strong> and pnpm 11 or
-        newer. In Replit Shell, verify the runtime before publishing:
+        DaloyJS requires <strong>Node.js 24 LTS or Node.js 26+</strong> and
+        pnpm 11 or newer. Node.js 25 is not supported because it is already
+        end-of-life. In Replit Shell, verify the runtime before publishing:
       </p>
       <CodeBlock
         language="bash"
@@ -99,7 +100,7 @@ pnpm --version`}
         language="json"
         code={`{
   "engines": {
-    "node": ">=24.0.0",
+    "node": "^24.0.0 || >=26.0.0",
     "pnpm": ">=11.0.0"
   },
   "packageManager": "pnpm@11.0.0"
@@ -219,7 +220,7 @@ TRUST_PROXY_HOPS=1`}
         code={`# DaloyJS API on Replit
 
 - Package manager: pnpm only.
-- Runtime: Node.js 24 or newer.
+- Runtime: Node.js 24 LTS or Node.js 26+.
 - Build: pnpm build.
 - Start: pnpm start.
 - Server must bind to process.env.PORT and hostname 0.0.0.0.
