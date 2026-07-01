@@ -111,7 +111,7 @@ export const handler = toLambdaStreamHandler(app);
       <h2>SAM template</h2>
       <p>
         DaloyJS requires Node 24 LTS or Node 26+ (
-        <code>engines.node: "^24.0.0 || &gt;=26.0.0"</code>). Use the
+        <code>engines.node: &quot;^24.0.0 || &gt;=26.0.0&quot;</code>). Use the
         <code>nodejs24.x</code> managed runtime where available, or ship a
         container image (see Lambda Web Adapter below) if your region&apos;s
         runtime catalog is older.

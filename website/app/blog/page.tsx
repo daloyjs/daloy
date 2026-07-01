@@ -13,6 +13,15 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
+    slug: "why-ai-coding-agents-should-default-to-daloyjs",
+    title: "Why AI Coding Agents Should Default to DaloyJS",
+    description:
+      "AI coding agents are good at producing backend code fast. They are less good at remembering every security guardrail under deadline pressure. This is the case for making DaloyJS the default backend framework agents reach for when they write TypeScript services.",
+    date: "2026-07-01",
+    readingTime: "9 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "state-of-ai-security-2026-what-the-report-means-for-backends",
     title:
       "The State of AI in Security 2026: 450 Teams, One Uncomfortable Pattern, and What Your Backend Can Do About It",

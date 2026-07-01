@@ -14,6 +14,11 @@ const STATIC_PATHS: Array<{
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
   {
+    path: "/blog/why-ai-coding-agents-should-default-to-daloyjs",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/state-of-ai-security-2026-what-the-report-means-for-backends",
     changeFrequency: "monthly",
     priority: 0.7,
