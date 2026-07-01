@@ -363,6 +363,7 @@ ${heading("Usage")}
   ${color(COLORS.cyan, "npm")}  create daloy@latest ${color(COLORS.dim, "[project-name] [options]")}
   ${color(COLORS.cyan, "yarn")} create daloy       ${color(COLORS.dim, "[project-name] [options]")}
   ${color(COLORS.cyan, "bun")}  create daloy       ${color(COLORS.dim, "[project-name] [options]")}
+  ${color(COLORS.dim, "Use . as the project name to scaffold into the current directory.")}
 
 ${heading("Options")}
   ${color(COLORS.green, "--template <name>")}          ${TEMPLATES.join(" | ")}  ${color(COLORS.dim, "(default: node-basic)")}
@@ -568,12 +569,17 @@ const VALID_CODE_OWNER =
 
 function validateProjectName(name) {
   if (!name || !name.trim()) return "Project name cannot be empty.";
-  if (name === "." || name === "..") return "Use a real directory name.";
+  if (name === ".") return true;
+  if (name === "..") return "Use a real directory name.";
   if (name.length > 214) return "Project name is too long (max 214 chars).";
   if (!VALID_NAME.test(name)) {
     return "Project name must be a valid npm package name (lowercase, no spaces, no leading dot/underscore).";
   }
   return true;
+}
+
+function projectPackageName(projectName, cwd) {
+  return projectName === "." ? path.basename(cwd).toLowerCase() : projectName;
 }
 
 async function isDirEmpty(dir) {
@@ -1677,7 +1683,7 @@ function createSpinner(initialMessage) {
   };
 }
 
-function printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy, missingTools = [] }) {
+function printSummary({ projectName, shouldChangeDirectory = true, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy, missingTools = [] }) {
   const templateMeta = TEMPLATE_OPTIONS.find((option) => option.value === template);
   const templateLabel = templateMeta ? `${templateMeta.title} ${color(COLORS.dim, `(${template})`)}` : template;
   const summaryLines = [
@@ -1703,7 +1709,9 @@ function printSummary({ projectName, template, packageManager, installDeps, skip
 
   const arrow = color(COLORS.cyan, SYMBOLS.arrow);
   console.log(`${color(COLORS.bold, "Next steps")}`);
-  console.log(`  ${arrow} ${color(COLORS.cyan, `cd ${projectName}`)}`);
+  if (shouldChangeDirectory) {
+    console.log(`  ${arrow} ${color(COLORS.cyan, `cd ${projectName}`)}`);
+  }
   if (skipPackageManager) {
     console.log(`  ${arrow} ${color(COLORS.cyan, "deno task dev")}`);
   } else {
@@ -1835,7 +1843,14 @@ async function main() {
       process.exit(1);
     }
 
-    const targetDir = path.resolve(process.cwd(), projectName);
+    const cwd = process.cwd();
+    const packageName = projectPackageName(projectName, cwd);
+    const packageNameCheck = projectName === "." ? validateProjectName(packageName) : true;
+    if (packageNameCheck !== true) {
+      logError(`Current directory name "${packageName}" cannot be used as a package name. ${packageNameCheck}`);
+      process.exit(1);
+    }
+    const targetDir = projectName === "." ? cwd : path.resolve(cwd, projectName);
     if (existsSync(targetDir)) {
       const empty = await isDirEmpty(targetDir);
       if (!empty && !opts.force) {
@@ -1927,8 +1942,8 @@ async function main() {
       logStep("Minimal mode applied", `${count} file${count === 1 ? "" : "s"} trimmed`);
     }
     if (!skipPackageManager) {
-      await patchPackageJson(targetDir, projectName, packageManager);
-      logStep("Package metadata written", projectName);
+      await patchPackageJson(targetDir, packageName, packageManager);
+      logStep("Package metadata written", packageName);
       await patchTemplateTextFiles(targetDir, packageManager);
       await patchDockerignoreForPackageManager(targetDir, packageManager);
       if (packageManager !== "pnpm") {
@@ -1985,13 +2000,23 @@ async function main() {
         if (tail.trim().length > 0) {
           console.error(color(COLORS.dim, tail));
         }
-        logWarn(`Retry inside ${projectName} with: ${packageManager} install`);
+        logWarn(`Retry inside ${projectName === "." ? "this directory" : projectName} with: ${packageManager} install`);
       } else {
         spinner.stop(`Installed dependencies with ${color(COLORS.cyan, packageManager)}`);
       }
     }
 
-    printSummary({ projectName, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy, missingTools });
+    printSummary({
+      projectName: packageName,
+      shouldChangeDirectory: projectName !== ".",
+      template,
+      packageManager,
+      installDeps,
+      skipPackageManager,
+      withCi,
+      withDeploy,
+      missingTools,
+    });
   } catch (err) {
     rl?.close();
     if (err && err.message === "Cancelled") {

@@ -17,6 +17,9 @@ pnpm create daloy@latest my-api
 npm  create daloy@latest my-api
 yarn create daloy           my-api
 bun  create daloy           my-api
+
+# scaffold into the current directory
+pnpm create daloy@latest .
 ```
 
 The CLI is interactive when arguments are missing. It will ask you for:

@@ -801,6 +801,68 @@ test("non-pnpm scaffolds do not keep pnpm-specific .npmrc or pnpm-workspace.yaml
   }
 });
 
+test("dot project target scaffolds into the current directory", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectDir = path.join(tmpDir, "dot-target");
+  try {
+    await mkdir(projectDir);
+    const result = await runCreateDaloy(
+      [
+        ".",
+        "--template",
+        "node-basic",
+        "--package-manager",
+        "pnpm",
+        "--no-install",
+        "--no-git",
+        "--no-ci",
+        "--no-deploy",
+        "--yes",
+      ],
+      { cwd: projectDir },
+    );
+    assert.equal(result.exitCode, 0, result.output);
+
+    const pkg = JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8"));
+    assert.equal(pkg.name, "dot-target");
+    await access(path.join(projectDir, "src/build-app.ts"));
+    await assert.rejects(access(path.join(projectDir, "dot-target/package.json")));
+    assert.doesNotMatch(result.output, /cd dot-target/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("dot project target still rejects a non-empty current directory without force", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  const projectDir = path.join(tmpDir, "dot-non-empty");
+  try {
+    await mkdir(projectDir);
+    await writeFile(path.join(projectDir, "existing.txt"), "keep me", "utf8");
+    const result = await runCreateDaloy(
+      [
+        ".",
+        "--template",
+        "node-basic",
+        "--package-manager",
+        "pnpm",
+        "--no-install",
+        "--no-git",
+        "--no-ci",
+        "--no-deploy",
+        "--yes",
+      ],
+      { cwd: projectDir },
+    );
+
+    assert.equal(result.exitCode, 1, result.output);
+    assert.match(result.output, /Directory \. is not empty/);
+    await assert.rejects(access(path.join(projectDir, "package.json")));
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test("--with-ci scaffolds hardened GitHub security files for pnpm projects", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   const projectName = "pnpm-ci";
