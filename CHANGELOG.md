@@ -13,6 +13,34 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [1.0.0-beta.6] - 2026-07-01
+
+The seventh **1.0.0 beta**. Adds a dependency-free **Model Context Protocol
+(MCP)** Streamable HTTP server helper to `@daloyjs/core` and advances the
+lockstep version train. Projects on `^1.0.0-beta.5` upgrade with a version
+bump. `@daloyjs/core`, `create-daloy`, and the JSR package `@daloyjs/daloy`
+move to `1.0.0-beta.6` in lockstep, and every `create-daloy` template now pins
+`@daloyjs/core@^1.0.0-beta.6`.
+
+### Added
+
+- **MCP Streamable HTTP helpers** at `@daloyjs/core/mcp` (and the main barrel):
+  `createMcpHandler()` exposes tools, resources, and prompts over JSON-RPC 2.0,
+  and `mcpRoutes("/mcp", handler)` mounts the `POST` / `GET` / `OPTIONS` Daloy
+  routes for a dedicated MCP service. `McpToolError` marks caller-correctable
+  tool failures. The helper adds no runtime dependencies, ships protocol-level
+  guards (256 KiB body cap, UTF-8/JSON validation, batch rejection,
+  protocol-version allowlist, `application/json` enforcement, and prod-mode
+  error redaction), and composes with existing middleware (`bearerAuth`,
+  `rateLimit`, `secureHeaders`) for auth and rate limits.
+
+### Changed
+
+- **Version: `1.0.0-beta.5` → `1.0.0-beta.6`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, and JSR `@daloyjs/daloy`), with the
+  `create-daloy` templates, workshop, README status line, website version
+  reference, Deno adapter docs, and SBOMs synced to `1.0.0-beta.6`.
+
 ## [1.0.0-beta.5] - 2026-07-01
 
 The sixth **1.0.0 beta**. A lockstep maintenance release that advances the
@@ -1607,7 +1635,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.5...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...HEAD
+[1.0.0-beta.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.5...v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.2...v1.0.0-beta.3

@@ -2,10 +2,10 @@
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
-  "name": "create-daloy-1.0.0-beta.5",
-  "documentNamespace": "https://github.com/daloyjs/daloy/sbom/create-daloy-1.0.0-beta.5-62dcd57a-bcf2-5064-b07d-1f5c09245e3f",
+  "name": "create-daloy-1.0.0-beta.6",
+  "documentNamespace": "https://github.com/daloyjs/daloy/sbom/create-daloy-1.0.0-beta.6-a6556289-c209-558a-b63e-97f02f351f55",
   "creationInfo": {
-    "created": "2026-07-01T12:31:17.203Z",
+    "created": "2026-07-01T21:50:30.122Z",
     "creators": [
       "Tool: daloy-generate-sbom",
       "Organization: DaloyJS"
@@ -16,7 +16,7 @@
     {
       "SPDXID": "SPDXRef-Package-create-daloy",
       "name": "create-daloy",
-      "versionInfo": "1.0.0-beta.5",
+      "versionInfo": "1.0.0-beta.6",
       "downloadLocation": "https://github.com/daloyjs/daloy",
       "filesAnalyzed": false,
       "licenseConcluded": "MIT",
@@ -27,7 +27,7 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:npm/create-daloy@1.0.0-beta.5"
+          "referenceLocator": "pkg:npm/create-daloy@1.0.0-beta.6"
         }
       ]
     }

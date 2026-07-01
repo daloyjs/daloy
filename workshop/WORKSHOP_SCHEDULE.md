@@ -80,7 +80,7 @@ The 8-hour track lives under [`src/challenges/8-hour/`](./src/challenges/8-hour)
 
 ## How to Use
 
-1. `pnpm install` - installs the same `@daloyjs/core@^1.0.0-beta.5` range used by `create-daloy@1.0.0-beta.5` templates.
+1. `pnpm install` - installs the same `@daloyjs/core@^1.0.0-beta.6` range used by `create-daloy@1.0.0-beta.6` templates.
 2. `pnpm dev:4:0` — run 4-hour exercise 0.
 3. Open `http://localhost:3000/docs` (Scalar UI).
 4. Edit `src/challenges/4-hour/exercise-0.ts`. Hot reload reflects your changes immediately.
