@@ -4408,15 +4408,32 @@ async function readBody(
     // in memory on runtimes whose adapter does not cap at the socket layer
     // (Workers / Deno / Vercel). `readBodyLimited` streams the body and
     // throws `PayloadTooLargeError` the instant it exceeds `limit`; we then
-    // re-parse the bounded bytes with the standard `formData()` parser,
-    // preserving the multipart boundary via the original Content-Type. This is
+    // re-parse the bounded bytes with the standard `formData()` parser. This is
     // Web-standard only (`Request` + `formData`), so it stays runtime-portable.
     const bytes = await readBodyLimited(req, limit);
-    const fd = await new Request(req.url, {
-      method: "POST",
-      headers: { "content-type": ct },
-      body: bytes as BodyInit,
-    }).formData();
+    // The `ct` argument is lower-cased by the caller for case-insensitive
+    // media-type matching, but multipart boundaries are case-SENSITIVE (RFC
+    // 2046 §5.1.1). Reconstructing the Request with the lower-cased boundary
+    // would stop it matching the delimiter in the raw body, so the platform
+    // parser throws and every upload from a client that uses a mixed-case
+    // boundary — Chromium/WebKit browsers (`----WebKitFormBoundary…`) and curl
+    // (`------------------------…`) — fails. Re-read the ORIGINAL-case
+    // Content-Type header to preserve the boundary verbatim.
+    const rawContentType = req.headers.get("content-type") ?? ct;
+    let fd: FormData;
+    try {
+      fd = await new Request(req.url, {
+        method: "POST",
+        headers: { "content-type": rawContentType },
+        body: bytes as BodyInit,
+      }).formData();
+    } catch {
+      // A body the platform parser cannot read is a malformed client request,
+      // not a server fault: surface it as an RFC 9457 400 rather than letting
+      // the raw parser TypeError bubble up as a generic 500 (which would also
+      // pollute server-error monitoring with client-controlled input).
+      throw new BadRequestError("Malformed multipart/form-data body");
+    }
     const out: Record<string, unknown> = {};
     let fields = 0;
     let files = 0;

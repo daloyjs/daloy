@@ -13,6 +13,23 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [Unreleased]
+
+### Fixed
+
+- **Multipart uploads from real-world clients no longer fail with `500`.** The
+  request body parser lower-cased the whole `Content-Type` header for its
+  case-insensitive media-type check and then reused that string — including the
+  `boundary=` parameter — when reconstructing the request for `formData()`.
+  Multipart boundaries are case-sensitive (RFC 2046 §5.1.1), so any upload whose
+  boundary contained uppercase letters — every Chromium/WebKit browser
+  (`----WebKitFormBoundary…`) and curl (`------------------------…`) — failed to
+  parse and returned `500 Internal Server Error`. Native `fetch`/undici (which
+  emits an all-lowercase boundary) worked, masking the bug. The parser now
+  preserves the original-case `Content-Type` when reparsing, and a body the
+  platform parser cannot read is surfaced as an RFC 9457 `400 Bad Request`
+  instead of a generic `500`.
+
 ## [1.0.0-beta.6] - 2026-07-01
 
 The seventh **1.0.0 beta**. Adds a dependency-free **Model Context Protocol

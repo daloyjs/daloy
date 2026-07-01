@@ -357,6 +357,80 @@ test("end-to-end: app returns 422 when a file fails validation", async () => {
   assert.equal(body.errors[0]!.path, "file");
 });
 
+test("end-to-end: parses a mixed-case boundary (browser / curl regression)", async () => {
+  // Regression: the body parser used to lower-case the whole Content-Type
+  // header (for case-insensitive media-type matching) and then reuse that
+  // string — including the now-lower-cased `boundary=` parameter — when
+  // reconstructing the Request for `formData()`. Multipart boundaries are
+  // case-SENSITIVE (RFC 2046 §5.1.1), so any upload whose boundary contained
+  // uppercase letters — every Chromium/WebKit browser (`----WebKitFormBoundary…`)
+  // and curl (`------------------------…`) — failed to parse and returned 500.
+  // A native FormData body (undici's boundary is all-lowercase) masked it.
+  const app = new App({ logger: false });
+  let received: any = null;
+  app.route({
+    method: "POST",
+    path: "/upload",
+    operationId: "uploadMixedCaseBoundary",
+    request: {
+      body: multipartObject({
+        title: z.string(),
+        file: fileField({ maxBytes: 1024, accept: ["text/plain"] }),
+      }),
+    },
+    responses: { 201: { description: "ok" } },
+    handler: async ({ body }) => {
+      received = body;
+      return { status: 201, body: null };
+    },
+  });
+
+  const boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+  const rawBody =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="title"\r\n\r\n` +
+    `hi\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="x.txt"\r\n` +
+    `Content-Type: text/plain\r\n\r\n` +
+    `abc\r\n` +
+    `--${boundary}--\r\n`;
+  const req = new Request("http://test.local/upload", {
+    method: "POST",
+    // Mixed-case boundary parameter — must survive verbatim to the parser.
+    headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+    body: rawBody,
+  });
+  const res = await app.fetch(req);
+  assert.equal(res.status, 201);
+  assert.equal(received.title, "hi");
+  assert.equal(received.file.size, 3);
+});
+
+test("end-to-end: a malformed multipart body is a 400, not a 500", async () => {
+  // A body the platform parser cannot read is a client error (RFC 9457 400),
+  // not a server fault (500). Declaring one boundary while the body uses
+  // another makes `formData()` throw; the framework must translate that into
+  // a 400 rather than letting the raw TypeError surface as a generic 500.
+  const app = new App({ logger: false });
+  app.route({
+    method: "POST",
+    path: "/upload",
+    operationId: "uploadMalformed",
+    request: { body: multipartObject({ file: fileField() }) },
+    responses: { 201: { description: "ok" } },
+    handler: async () => ({ status: 201, body: null }),
+  });
+
+  const req = new Request("http://test.local/upload", {
+    method: "POST",
+    headers: { "content-type": "multipart/form-data; boundary=DECLARED" },
+    body: "--WRONG\r\nnot a valid multipart part\r\n--WRONG--\r\n",
+  });
+  const res = await app.fetch(req);
+  assert.equal(res.status, 400);
+});
+
 test("AppOptions.multipart enforces maxFileBytes", async () => {
   const app = new App({
     logger: false,
