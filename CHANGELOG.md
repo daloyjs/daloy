@@ -13,6 +13,22 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [1.0.0-beta.5] - 2026-07-01
+
+The sixth **1.0.0 beta**. A lockstep maintenance release that advances the
+version train and keeps every package, template, and doc reference in sync.
+Projects on `^1.0.0-beta.4` upgrade with a version bump. `@daloyjs/core`,
+`create-daloy`, and the JSR package `@daloyjs/daloy` move to `1.0.0-beta.5` in
+lockstep, and every `create-daloy` template now pins
+`@daloyjs/core@^1.0.0-beta.5`.
+
+### Changed
+
+- **Version: `1.0.0-beta.4` → `1.0.0-beta.5`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, and JSR `@daloyjs/daloy`), with the
+  `create-daloy` templates, workshop, README status line, website version
+  reference, Deno adapter docs, and SBOMs synced to `1.0.0-beta.5`.
+
 ## [1.0.0-beta.4] - 2026-06-26
 
 The fifth **1.0.0 beta**. Keeps the 1.0 line in beta while adding a handler
@@ -1591,7 +1607,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.4...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.5...HEAD
+[1.0.0-beta.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.2...v1.0.0-beta.3
 [1.0.0-beta.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.1...v1.0.0-beta.2
