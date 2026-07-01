@@ -324,3 +324,300 @@ test("createMcpHandler refuses duplicate capability names at construction", () =
     /tool names must be unique/
   );
 });
+
+test("createMcpHandler validates serverInfo, protocol, and body-size options at construction", () => {
+  assert.throws(
+    () => createMcpHandler({ serverInfo: { name: "  ", version: "1.0.0" } }),
+    /name is required/
+  );
+  assert.throws(
+    () => createMcpHandler({ serverInfo: { name: "x", version: "  " } }),
+    /version is required/
+  );
+  assert.throws(
+    () => createMcpHandler({ serverInfo: { name: "x", version: "1.0.0" }, protocolVersions: [] }),
+    /at least one version/
+  );
+  assert.throws(
+    () =>
+      createMcpHandler({
+        serverInfo: { name: "x", version: "1.0.0" },
+        protocolVersions: ["2025-06-18"],
+        preferredProtocolVersion: "1999-01-01",
+      }),
+    /preferredProtocolVersion/
+  );
+  assert.throws(
+    () => createMcpHandler({ serverInfo: { name: "x", version: "1.0.0" }, maxBodyBytes: 0 }),
+    /maxBodyBytes/
+  );
+  assert.throws(
+    () => createMcpHandler({ serverInfo: { name: "x", version: "1.0.0" }, maxBodyBytes: 1.5 }),
+    /maxBodyBytes/
+  );
+});
+
+test("createMcpHandler refuses duplicate resource URIs and prompt names at construction", () => {
+  assert.throws(
+    () =>
+      createMcpHandler({
+        serverInfo: { name: "x", version: "1.0.0" },
+        resources: [
+          { uri: "u", name: "a", read: () => ({ uri: "u", text: "1" }) },
+          { uri: "u", name: "b", read: () => ({ uri: "u", text: "2" }) },
+        ],
+      }),
+    /resource URIs must be unique/
+  );
+  assert.throws(
+    () =>
+      createMcpHandler({
+        serverInfo: { name: "x", version: "1.0.0" },
+        prompts: [
+          { name: "p", get: () => ({ messages: [] }) },
+          { name: "p", get: () => ({ messages: [] }) },
+        ],
+      }),
+    /prompt names must be unique/
+  );
+});
+
+test("createMcpHandler returns method-not-found and invalid-params for unknown targets", async () => {
+  const handler = createTestHandler();
+
+  const unknownMethod = await rpc(handler, { jsonrpc: "2.0", id: 1, method: "does/not/exist" });
+  assert.equal(unknownMethod.json.error?.code, -32601);
+
+  const unknownTool = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: { name: "nope" },
+  });
+  assert.equal(unknownTool.json.error?.code, -32602);
+  assert.match(unknownTool.json.error?.message ?? "", /Unknown tool/);
+
+  const unknownResource = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "resources/read",
+    params: { uri: "missing://x" },
+  });
+  assert.equal(unknownResource.json.error?.code, -32602);
+
+  const unknownPrompt = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 4,
+    method: "prompts/get",
+    params: { name: "missing" },
+  });
+  assert.equal(unknownPrompt.json.error?.code, -32602);
+});
+
+test("createMcpHandler maps recoverable resource/prompt errors and redacts unexpected ones", async () => {
+  const handler = createMcpHandler({
+    serverInfo: { name: "err", version: "1.0.0" },
+    resources: [
+      {
+        uri: "err://recoverable",
+        name: "r1",
+        read: () => {
+          throw new McpToolError("bad resource argument");
+        },
+      },
+      {
+        uri: "err://boom",
+        name: "r2",
+        read: () => {
+          throw new Error("db offline");
+        },
+      },
+    ],
+    prompts: [
+      {
+        name: "recoverable",
+        get: () => {
+          throw new McpToolError("bad prompt argument");
+        },
+      },
+      {
+        name: "boom",
+        get: () => {
+          throw new Error("db offline");
+        },
+      },
+    ],
+    exposeInternalErrors: false,
+  });
+
+  const recoverableResource = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "resources/read",
+    params: { uri: "err://recoverable" },
+  });
+  assert.equal(recoverableResource.json.error?.code, -32602);
+  assert.equal(recoverableResource.json.error?.message, "bad resource argument");
+
+  const brokenResource = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "resources/read",
+    params: { uri: "err://boom" },
+  });
+  assert.equal(brokenResource.json.error?.code, -32603);
+  assert.equal(brokenResource.json.error?.data, undefined);
+
+  const recoverablePrompt = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "prompts/get",
+    params: { name: "recoverable" },
+  });
+  assert.equal(recoverablePrompt.json.error?.code, -32602);
+
+  const brokenPrompt = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 4,
+    method: "prompts/get",
+    params: { name: "boom" },
+  });
+  assert.equal(brokenPrompt.json.error?.code, -32603);
+});
+
+test("createMcpHandler exposes internal error detail when configured", async () => {
+  const handler = createMcpHandler({
+    serverInfo: { name: "dev", version: "1.0.0" },
+    exposeInternalErrors: true,
+    tools: [
+      {
+        name: "fail",
+        description: "always throws",
+        inputSchema: { type: "object" },
+        handler: () => {
+          throw new Error("kaboom");
+        },
+      },
+    ],
+  });
+  const { json } = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "fail", arguments: {} },
+  });
+  assert.equal(json.error?.code, -32603);
+  assert.deepEqual(json.error?.data, { detail: "kaboom" });
+});
+
+test("createMcpHandler rejects invalid JSON, batches, and non-JSON-RPC envelopes", async () => {
+  const handler = createTestHandler();
+
+  const badJson = await post(handler, "{ not valid json");
+  assert.equal(badJson.status, 400);
+  assert.equal(((await badJson.json()) as RpcResponse).error?.code, -32700);
+
+  const batch = await post(handler, [{ jsonrpc: "2.0", id: 1, method: "ping" }]);
+  assert.equal(batch.status, 400);
+  assert.equal(((await batch.json()) as RpcResponse).error?.code, -32600);
+
+  const notRpc = await post(handler, { id: 1, method: "ping" });
+  assert.equal(notRpc.status, 400);
+  assert.equal(((await notRpc.json()) as RpcResponse).error?.code, -32600);
+
+  const badId = await post(handler, { jsonrpc: "2.0", id: { bad: true }, method: "ping" });
+  assert.equal(badId.status, 400);
+
+  const badMethod = await post(handler, { jsonrpc: "2.0", id: 1, method: 42 });
+  assert.equal(badMethod.status, 400);
+
+  const emptyEnvelope = await post(handler, { jsonrpc: "2.0", id: 1 });
+  assert.equal(emptyEnvelope.status, 400);
+  assert.equal(((await emptyEnvelope.json()) as RpcResponse).error?.code, -32600);
+});
+
+test("createMcpHandler rejects non-UTF-8 request bodies", async () => {
+  const handler = createTestHandler();
+  const res = await handler(
+    new Request(ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: new Uint8Array([0xff, 0xfe, 0xfd]),
+    })
+  );
+  assert.equal(res.status, 400);
+  assert.equal(((await res.json()) as RpcResponse).error?.code, -32700);
+});
+
+test("createMcpHandler handles OPTIONS, GET discovery, and unsupported methods", async () => {
+  const handler = createTestHandler();
+
+  const options = await handler(new Request(ENDPOINT, { method: "OPTIONS" }));
+  assert.equal(options.status, 204);
+  assert.equal(options.headers.get("allow"), "GET, POST, OPTIONS");
+
+  const get = await handler(new Request(ENDPOINT, { method: "GET" }));
+  assert.equal(get.status, 405);
+  const discovery = (await get.json()) as { transport: string; capabilities: { tools: string[] } };
+  assert.equal(discovery.transport, "streamable-http");
+  assert.ok(Array.isArray(discovery.capabilities.tools));
+
+  const del = await handler(new Request(ENDPOINT, { method: "DELETE" }));
+  assert.equal(del.status, 405);
+});
+
+test("createMcpHandler applies custom response headers and echoes a header protocol version", async () => {
+  const handler = createMcpHandler({
+    serverInfo: { name: "x", version: "1.0.0" },
+    headers: { "x-mcp": "yes" },
+  });
+  const ping = await rpc(handler, { jsonrpc: "2.0", id: 1, method: "ping" });
+  assert.equal(ping.res.headers.get("x-mcp"), "yes");
+
+  const negotiated = await rpc(
+    createTestHandler(),
+    { jsonrpc: "2.0", id: 2, method: "initialize" },
+    { "mcp-protocol-version": "2025-06-18" }
+  );
+  assert.equal(negotiated.json.result.protocolVersion, "2025-06-18");
+});
+
+test("createMcpHandler normalizes string tool results and multi-content resources", async () => {
+  const handler = createMcpHandler({
+    serverInfo: { name: "x", version: "1.0.0" },
+    tools: [
+      {
+        name: "echo",
+        description: "echo back a fixed string",
+        inputSchema: { type: "object" },
+        handler: () => "hello world",
+      },
+    ],
+    resources: [
+      {
+        uri: "multi://doc",
+        name: "multi",
+        read: () => [
+          { uri: "multi://doc#1", text: "a" },
+          { uri: "multi://doc#2", text: "b" },
+        ],
+      },
+    ],
+  });
+
+  const echoed = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "echo", arguments: {} },
+  });
+  assert.equal(echoed.json.result.content[0].text, "hello world");
+
+  const multi = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "resources/read",
+    params: { uri: "multi://doc" },
+  });
+  assert.equal(multi.json.result.contents.length, 2);
+});
