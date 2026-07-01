@@ -15,7 +15,7 @@ export const MCP_PROTOCOL_VERSION = "2025-11-25";
  *
  * @since 1.0.0
  */
-export const MCP_PROTOCOL_VERSIONS = Object.freeze([
+export const MCP_PROTOCOL_VERSIONS: readonly string[] = Object.freeze([
   "2024-11-05",
   "2025-03-26",
   "2025-06-18",
