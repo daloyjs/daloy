@@ -46,6 +46,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "OpenAPI generation", href: "/docs/openapi" },
       { title: "API lifecycle & breaking changes", href: "/docs/api-lifecycle" },
       { title: "AI-friendly route metadata", href: "/docs/ai-metadata" },
+      { title: "Model Context Protocol (MCP)", href: "/docs/mcp" as Route },
       { title: "Typed clients (Hey API)", href: "/docs/typed-client" },
       { title: "Streaming (SSE & NDJSON)", href: "/docs/streaming" },
       { title: "Vercel AI SDK", href: "/docs/ai-sdk" as Route },

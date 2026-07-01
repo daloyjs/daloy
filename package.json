@@ -20,6 +20,7 @@
     "framework",
     "http",
     "openapi",
+    "mcp",
     "hey-api",
     "contract-first",
     "typescript",
@@ -84,6 +85,10 @@
     "./openapi-diff": {
       "types": "./dist/openapi-diff.d.ts",
       "import": "./dist/openapi-diff.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
     },
     "./asyncapi": {
       "types": "./dist/asyncapi.d.ts",

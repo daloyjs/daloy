@@ -14,6 +14,7 @@
     "./client": "./src/client.ts",
     "./openapi": "./src/openapi.ts",
     "./openapi-diff": "./src/openapi-diff.ts",
+    "./mcp": "./src/mcp.ts",
     "./asyncapi": "./src/asyncapi.ts",
     "./docs": "./src/docs.ts",
     "./contract": "./src/contract.ts",

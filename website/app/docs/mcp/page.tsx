@@ -1,0 +1,306 @@
+import { CodeBlock } from "../../../components/code-block";
+import { FlowDiagram } from "../../../components/diagram";
+
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Model Context Protocol (MCP)",
+  description:
+    "Build a dedicated Model Context Protocol server with DaloyJS. Expose tools, resources, and prompts over MCP Streamable HTTP while keeping @daloyjs/core dependency-free and secure by default.",
+  path: "/docs/mcp",
+  keywords: [
+    "DaloyJS MCP",
+    "Model Context Protocol",
+    "MCP Streamable HTTP",
+    "MCP tools",
+    "MCP resources",
+    "MCP prompts",
+    "AI agent backend",
+    "createMcpHandler",
+  ],
+  type: "article",
+});
+
+const INSTALL = `# MCP support ships in @daloyjs/core.
+# No @modelcontextprotocol/sdk dependency is required.
+pnpm add @daloyjs/core`;
+
+const SERVER = `import {
+  App,
+  McpToolError,
+  bearerAuth,
+  createMcpHandler,
+  mcpRoutes,
+  rateLimit,
+} from "@daloyjs/core";
+import { serve } from "@daloyjs/core/node";
+
+const mcp = createMcpHandler({
+  serverInfo: {
+    name: "inventory-mcp",
+    title: "Inventory MCP",
+    version: "1.0.0",
+  },
+  instructions:
+    "Use this server to inspect inventory and prepare stock reports.",
+  tools: [
+    {
+      name: "inventory_lookup",
+      title: "Inventory lookup",
+      description: "Look up available inventory units by SKU.",
+      inputSchema: {
+        type: "object",
+        properties: { sku: { type: "string", minLength: 1 } },
+        required: ["sku"],
+        additionalProperties: false,
+      },
+      handler: async (args) => {
+        const sku = typeof args.sku === "string" ? args.sku : "";
+        if (!sku) {
+          throw new McpToolError("sku is required.");
+        }
+
+        const units = await inventory.countAvailable(sku);
+        return {
+          content: [{ type: "text", text: \`\${sku}: \${units} units\` }],
+          structuredContent: { sku, units },
+        };
+      },
+    },
+  ],
+  resources: [
+    {
+      uri: "daloy://schemas/inventory",
+      name: "inventory_schema",
+      title: "Inventory schema",
+      mimeType: "application/json",
+      read: () => ({
+        uri: "daloy://schemas/inventory",
+        mimeType: "application/json",
+        text: JSON.stringify({
+          sku: "string",
+          units: "number",
+          warehouseId: "string",
+        }),
+      }),
+    },
+  ],
+  prompts: [
+    {
+      name: "stock_report",
+      title: "Stock report",
+      description: "Draft a stock report for one SKU.",
+      arguments: [{ name: "sku", required: true }],
+      get: (args) => ({
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: \`Prepare a stock report for SKU \${String(args.sku)}.\`,
+            },
+          },
+        ],
+      }),
+    },
+  ],
+});
+
+const app = new App({
+  bodyLimitBytes: 64 * 1024,
+  requestTimeoutMs: 10_000,
+});
+
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+app.use(
+  bearerAuth({
+    realm: "inventory-mcp",
+    validate: (token) => token === process.env.MCP_TOKEN,
+  })
+);
+
+for (const route of mcpRoutes("/mcp", mcp)) {
+  app.route(route);
+}
+
+serve(app, { port: 3001 });`;
+
+const CLIENT_CONFIG = `{
+  "mcpServers": {
+    "inventory": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer \${MCP_TOKEN}"
+      }
+    }
+  }
+}`;
+
+const ERROR_HANDLING = `import { McpToolError, createMcpHandler } from "@daloyjs/core/mcp";
+
+const mcp = createMcpHandler({
+  serverInfo: { name: "inventory-mcp", version: "1.0.0" },
+  tools: [
+    {
+      name: "inventory_lookup",
+      description: "Look up inventory by SKU.",
+      inputSchema: {
+        type: "object",
+        properties: { sku: { type: "string" } },
+        required: ["sku"],
+        additionalProperties: false,
+      },
+      handler: async (args) => {
+        const sku = typeof args.sku === "string" ? args.sku.trim() : "";
+        if (!sku) {
+          throw new McpToolError("sku is required.");
+        }
+
+        const row = await inventory.findBySku(sku);
+        if (!row) {
+          throw new McpToolError(\`No inventory record found for \${sku}.\`);
+        }
+
+        return \`\${row.sku}: \${row.units} units\`;
+      },
+    },
+  ],
+});`;
+
+export default function Page() {
+  return (
+    <>
+      <h1>Model Context Protocol (MCP)</h1>
+      <p>
+        DaloyJS can host a dedicated{" "}
+        <a
+          href="https://modelcontextprotocol.io/docs/getting-started/intro"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          Model Context Protocol
+        </a>{" "}
+        server for AI clients that need tools, resources, and prompts. The core
+        helper implements MCP Streamable HTTP with JSON-RPC 2.0, so a company
+        that already runs a DaloyJS REST API can run a second DaloyJS service at
+        <code>/mcp</code> with a different auth policy and a smaller, agent-safe
+        surface area.
+      </p>
+      <p>
+        Keep the REST API and the MCP server separate when the callers,
+        permissions, or rate limits differ. MCP tools are model-callable
+        operations, so they deserve the same care as any production API route,
+        plus tighter descriptions and schemas because the caller may be an AI
+        client acting on a user&apos;s behalf.
+      </p>
+
+      <FlowDiagram
+        title="Dedicated MCP boundary"
+        steps={[
+          {
+            label: "AI client",
+            detail: "Claude, Cursor, VS Code",
+            tone: "accent",
+          },
+          {
+            label: "DaloyJS MCP app",
+            detail: "POST /mcp JSON-RPC",
+            tone: "default",
+          },
+          {
+            label: "Tools and context",
+            detail: "tools, resources, prompts",
+            tone: "default",
+          },
+          {
+            label: "Existing systems",
+            detail: "database, REST API, queues",
+            tone: "muted",
+          },
+        ]}
+        caption="Run MCP as its own DaloyJS service when it has a different trust boundary than your REST API. The app still gets body limits, request timeouts, rate limits, auth middleware, and problem+json errors."
+      />
+
+      <h2>Install</h2>
+      <CodeBlock code={INSTALL} language="bash" />
+
+      <h2>Create an MCP server</h2>
+      <p>
+        Use <code>createMcpHandler()</code> for the MCP protocol layer and{" "}
+        <code>mcpRoutes()</code> to mount <code>POST</code>, <code>GET</code>,
+        and <code>OPTIONS</code> on a DaloyJS app. The <code>POST</code> route
+        is the actual MCP transport. <code>GET</code> returns a JSON hint
+        instead of opening a server-initiated SSE stream, and{" "}
+        <code>OPTIONS</code> supports browser-based clients when CORS middleware
+        is installed.
+      </p>
+      <CodeBlock code={SERVER} />
+
+      <h2>Client config</h2>
+      <p>
+        Point an MCP-compatible client at the deployed endpoint. The exact
+        config file differs by client, but remote Streamable HTTP servers use a
+        URL and whatever headers your auth middleware requires.
+      </p>
+      <CodeBlock code={CLIENT_CONFIG} language="json" />
+
+      <h2>What core supports</h2>
+      <ul>
+        <li>
+          <code>initialize</code>, <code>ping</code>, <code>tools/list</code>,{" "}
+          <code>tools/call</code>, <code>resources/list</code>,{" "}
+          <code>resources/read</code>, <code>prompts/list</code>, and{" "}
+          <code>prompts/get</code>.
+        </li>
+        <li>
+          Protocol-version negotiation, <code>MCP-Protocol-Version</code>{" "}
+          rejection for unsupported versions, JSON-RPC parse errors, accepted
+          notifications, and bounded request bodies.
+        </li>
+        <li>
+          Dependency-free TypeScript types for tools, resources, prompts, JSON
+          schemas, content blocks, structured tool output, and handler context.
+        </li>
+      </ul>
+
+      <h2>What stays out of core</h2>
+      <p>
+        DaloyJS does not bundle the official MCP SDK, stdio process management,
+        OAuth server metadata, persistent MCP sessions, server-initiated SSE, or
+        experimental tasks. Those pieces either add dependency weight or need a
+        product-specific security model. Keep them in your application or a
+        separate integration package until your use case needs them.
+      </p>
+
+      <h2>Error handling</h2>
+      <p>
+        Throw <code>McpToolError</code> when the model can fix the call, for
+        example missing arguments or a domain object that does not exist. The
+        client receives an MCP tool result with <code>isError: true</code>.
+        Unexpected errors become JSON-RPC internal errors and are redacted in
+        production.
+      </p>
+      <CodeBlock code={ERROR_HANDLING} />
+
+      <h2>Security checklist</h2>
+      <ul>
+        <li>
+          Put auth in DaloyJS middleware before the MCP route. Bearer tokens,
+          mTLS, IP restrictions, and per-client rate limits all work normally.
+        </li>
+        <li>
+          Validate tool arguments inside handlers. The advertised JSON Schema
+          helps clients, but it is not a substitute for server-side validation.
+        </li>
+        <li>
+          Keep tool descriptions precise. A vague tool is easier for a model to
+          misuse and harder for a human to approve.
+        </li>
+        <li>
+          Route outbound calls through <code>fetchGuard()</code> when a tool
+          fetches URLs influenced by users, prompts, or external content.
+        </li>
+      </ul>
+    </>
+  );
+}

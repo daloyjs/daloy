@@ -232,6 +232,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/openapi", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/api-lifecycle", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/ai-metadata", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/docs/mcp", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/typed-client", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/streaming", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/ai-sdk", changeFrequency: "monthly", priority: 0.8 },

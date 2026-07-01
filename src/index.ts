@@ -89,6 +89,39 @@ export type { StandardSchemaV1 } from "./schema.js";
 export { validate, isStandardSchema } from "./schema.js";
 export { diffOpenAPI, hasBreakingChanges } from "./openapi-diff.js";
 export type { ChangeSeverity, OpenAPIChange, OpenAPIDiffResult } from "./openapi-diff.js";
+export {
+  MCP_DEFAULT_MAX_BODY_BYTES,
+  MCP_PROTOCOL_VERSION,
+  MCP_PROTOCOL_VERSIONS,
+  McpToolError,
+  createMcpHandler,
+  mcpRoutes,
+} from "./mcp.js";
+export type {
+  McpContent,
+  McpEmbeddedResourceContent,
+  McpHandler,
+  McpHandlerOptions,
+  McpImageContent,
+  McpJsonObject,
+  McpJsonRpcId,
+  McpJsonSchema,
+  McpJsonValue,
+  McpPrompt,
+  McpPromptArgument,
+  McpPromptDefinition,
+  McpPromptMessage,
+  McpPromptResult,
+  McpRequestContext,
+  McpResource,
+  McpResourceContents,
+  McpResourceDefinition,
+  McpServerInfo,
+  McpTextContent,
+  McpTool,
+  McpToolHandler,
+  McpToolResult,
+} from "./mcp.js";
 
 export {
   readBodyLimited,
