@@ -405,6 +405,16 @@ test("discriminatedUnion() validates by discriminator and emits oneOf+discrimina
   assert.ok(unknown.issues);
   assert.match(unknown.issues![0]!.message, /Unknown discriminator/);
 
+  // Regression: a discriminator value naming an inherited Object.prototype
+  // member must be treated as unknown, NOT resolved to that member (which
+  // would slip past the guard and throw a TypeError on `["~standard"]` →
+  // unauthenticated 500 / error-log flood). Must return a clean issue.
+  for (const evil of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__", "isPrototypeOf"]) {
+    const res = await validate(Animal, { kind: evil });
+    assert.ok(res.issues, `expected issues for inherited key ${evil}`);
+    assert.match(res.issues![0]!.message, /Unknown discriminator/, `for ${evil}`);
+  }
+
   // Variant-level failure surfaces from inner schema.
   const variantFail = await validate(Animal, { kind: "cat", meow: "loud" });
   assert.ok(variantFail.issues);

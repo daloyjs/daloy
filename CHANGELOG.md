@@ -29,6 +29,36 @@ For the forward-looking plan and the full thematic release log, see
   preserves the original-case `Content-Type` when reparsing, and a body the
   platform parser cannot read is surfaced as an RFC 9457 `400 Bad Request`
   instead of a generic `500`.
+- **`discriminatedUnion()` no longer 500s on an inherited-property discriminator
+  value.** The variant lookup used a bare `variants[discriminatorValue]`, so a
+  request whose discriminator named an inherited `Object.prototype` member
+  (`constructor`, `toString`, `valueOf`, `hasOwnProperty`, `__proto__`,
+  `isPrototypeOf`) resolved to that member, slipped past the "unknown value"
+  guard, and then threw an uncaught `TypeError` on `variant["~standard"]` —
+  surfacing as an unauthenticated `500` (and error-log flood) on any route with
+  a `discriminatedUnion` body schema. The lookup now requires an **own**
+  property (`Object.hasOwn`), so these values return the intended clean
+  `400`/validation issue.
+
+### Security
+
+- **`waf()` query inspection now matches the application's own query parser.**
+  The WAF decoded the query string with `decodeURIComponent`, which does **not**
+  turn `+` into a space, while the framework parses the query with
+  `URLSearchParams`, which does. An attacker could therefore replace spaces with
+  `+` (`1+OR+1=1`) to slip a signature past the WAF while the handler still
+  received the space-separated payload (`1 OR 1=1`) — a parser differential. The
+  WAF now also scans each `URLSearchParams`-decoded key/value, closing the gap.
+  (Decoding remains deliberately single-pass; recursive decoding is intentionally
+  avoided to prevent false positives, and a double-encoded payload stays inert
+  all the way to the handler.)
+- **`waf()` inline-event-handler XSS signature broadened.** The handler
+  allowlist covered only `onerror|onload|onclick|onmouseover|onfocus|onsubmit|ontoggle|onanimationstart`,
+  letting paren-less evasions using other handlers (`onpointerover`, `onfocusin`,
+  `onwheel`, `onauxclick`, `oncontextmenu`, `onbeforetoggle`, touch/drag/clipboard
+  events, …) through. The signature now covers the commonly-abused handler set
+  via an explicit alternation (still not `on\w+`, to avoid false-positives on
+  benign params such as `online=`/`once=`), verified linear-time (no ReDoS).
 
 ## [1.0.0-beta.6] - 2026-07-01
 

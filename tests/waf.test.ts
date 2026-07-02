@@ -160,6 +160,46 @@ test("command substitution in query is blocked", async () => {
   assert.equal(res.status, 403);
 });
 
+// ---------- query normalization (parser-differential evasion) ----------
+
+test("`+`-encoded spaces cannot evade the query scan (URLSearchParams parity)", async () => {
+  // The framework parses the query with URLSearchParams, which decodes `+` to a
+  // space; a plain decodeURIComponent does NOT. Scanning only the latter let
+  // `1+OR+1=1` slip past the WAF while the handler still received `1 OR 1=1`.
+  const app = queryApp();
+  const res = await app.fetch(new Request("http://x/search?q=1+OR+1=1"));
+  assert.equal(res.status, 403);
+});
+
+// ---------- broadened inline-event-handler coverage ----------
+
+for (const handler of [
+  "onpointerover",
+  "onfocusin",
+  "ontoggle",
+  "onwheel",
+  "onauxclick",
+  "oncontextmenu",
+]) {
+  test(`XSS handler ${handler} in query is blocked`, async () => {
+    const app = queryApp();
+    const res = await app.fetch(
+      new Request(
+        "http://x/search?q=" + encodeURIComponent(`<img src=x ${handler}=alert(1)>`),
+      ),
+    );
+    assert.equal(res.status, 403);
+  });
+}
+
+test("benign query params that merely start with 'on' are NOT flagged (no false positive)", async () => {
+  const app = queryApp();
+  for (const q of ["online=true", "once=1", "onboarding=yes", "hello world"]) {
+    const res = await app.fetch(new Request("http://x/search?q=" + encodeURIComponent(q)));
+    assert.equal(res.status, 200, `expected 200 for benign q=${q}`);
+  }
+});
+
 // ---------- NoSQLi rule ----------
 
 test("NoSQL operator object in body is blocked structurally", async () => {

@@ -140,7 +140,16 @@ export function discriminatedUnion<
           ],
         };
       }
-      const variant = variants[discriminatorValue];
+      // Only accept an OWN property of the variant map. A bare
+      // `variants[discriminatorValue]` lookup would resolve inherited
+      // `Object.prototype` members (`constructor`, `toString`, `valueOf`,
+      // `hasOwnProperty`, `__proto__`, …) to a truthy non-variant, slipping
+      // past the `!variant` guard below; the subsequent `variant["~standard"]`
+      // access then throws an uncaught `TypeError` that the app surfaces as an
+      // unauthenticated 500 (and error-log flood) instead of a clean 400.
+      const variant = Object.hasOwn(variants, discriminatorValue)
+        ? variants[discriminatorValue]
+        : undefined;
       if (!variant) {
         return {
           issues: [

@@ -106,7 +106,12 @@ const XSS_SIGNATURES: readonly RegExp[] = Object.freeze([
   /<script[\s\S]{0,40}?>/i,
   /<\/script\s*>/i,
   /javascript:\s*\S/i,
-  /\bon(?:error|load|click|mouseover|focus|submit|toggle|animationstart)\s*=/i,
+  // Inline event-handler attributes. Explicit alternation (not `on\w+`) to
+  // avoid false-positives on benign params like `online=`/`once=`, but broadened
+  // well beyond the classic four to cover the paren-less handlers commonly used
+  // to evade keyword blocklists (pointer/focus/touch/wheel/toggle events — see
+  // the ES6-for-pentesters technique in the cure53-web-frontend-offense skill).
+  /\bon(?:error|load|click|dblclick|aux(?:click)?|contextmenu|mouse(?:over|enter|move|down|up|out|leave)|pointer(?:over|enter|down|up|move|rawupdate|leave)|touch(?:start|move|end)|focus(?:in|out)?|blur|input|change|submit|reset|toggle|beforetoggle|scroll|wheel|drag|drop|copy|cut|paste|play|playing|canplay|show|hashchange|popstate|pageshow|pagehide|message|animation(?:start|end|iteration)|transitionend|key(?:down|up|press)|load(?:start|end)|progress)\s*=/i,
   /<iframe[\s>]/i,
   /<img[\s\S]{0,80}?\bonerror\s*=/i,
   /<svg[\s\S]{0,40}?\bonload\s*=/i,
@@ -330,6 +335,7 @@ function safeDecode(value: string): string {
   }
 }
 
+
 /**
  * Collect up to `maxNodes` string values from a parsed body value (object /
  * array / scalar), each truncated to `maxValueLength`. Depth and node count are
@@ -460,10 +466,25 @@ export function waf(opts: WafOptions = {}): Hooks {
       if (inspectQuery && url.search.length > 1) {
         // Scan both the raw query string and a best-effort decoded form so an
         // encoded payload (`%27%20OR%201=1`) is caught after normalization.
+        // This is a SINGLE decode on purpose: the framework's request path also
+        // decodes the query exactly once, so the WAF sees the same bytes the
+        // handler will. Recursive decoding is deliberately avoided — it would
+        // false-positive on values that legitimately contain percent-encoded
+        // text, and a double-encoded payload stays inert (`%3Cscript%3E`) all
+        // the way to the handler. See red-team-attacks-6 "DOCUMENTED LIMITATION".
         const raw = url.search.slice(1);
         scanValue(raw, "query", rules, scored);
         const decoded = safeDecode(raw);
         if (decoded !== raw) scanValue(decoded, "query", rules, scored);
+        // Additionally inspect each key/value the way the app's OWN query parser
+        // (`URLSearchParams`) decodes them: notably `+` becomes a space, which a
+        // plain `decodeURIComponent` does NOT do. Without this, `1+OR+1=1` slipped
+        // past the WAF while the handler still received `1 OR 1=1` (a parser
+        // differential — the WAF must inspect the bytes the app actually parses).
+        for (const [k, v] of url.searchParams) {
+          scanValue(k, "query", rules, scored);
+          scanValue(v, "query", rules, scored);
+        }
       }
 
       if (headerAllowlist.length > 0) {
