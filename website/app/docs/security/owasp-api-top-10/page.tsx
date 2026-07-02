@@ -162,7 +162,7 @@ export default function Page() {
               secrets/keys on a schedule.
             </td>
           </tr>
-          <tr>
+          <tr id="api3">
             <td>
               <strong>
                 API3: Broken Object Property Level Authorization
@@ -185,7 +185,14 @@ export default function Page() {
               <code>2xx</code> response declares a <code>body</code> schema, so{" "}
               <code>daloy doctor</code> emits{" "}
               <code>audit.response.bodySchema</code> (and a dev-mode boot
-              warning) for any success response that has none.
+              warning) for any success response that has none. For routes that
+              intentionally return an opaque or framework-controlled body (a
+              raw <code>Response</code>, HTML, a proxied payload), set{" "}
+              <code>acknowledgeNoResponseBodySchema: true</code> on the route
+              to record that intent and silence the finding. Framework-mounted
+              routes (<code>/openapi.json</code>, <code>/docs</code>,{" "}
+              <code>/asyncapi</code>, health, metrics) acknowledge themselves —
+              the warning only ever names routes you wrote.
             </td>
           </tr>
           <tr>

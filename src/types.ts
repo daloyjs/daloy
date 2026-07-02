@@ -414,6 +414,20 @@ export interface RouteDefinition<
   version?: string;
 
   /**
+   * Acknowledge that this route's `2xx` responses intentionally carry no
+   * response body schema — an opaque, framework-controlled, or non-JSON body
+   * (a raw `Response`, an HTML page, a spec document, a proxied payload).
+   *
+   * Setting this suppresses the `security.response.bodySchemaMissing` boot
+   * warning and the `audit.response.bodySchema` `daloy doctor` finding for
+   * this route only. It documents intent; it does not add protection —
+   * response field-level stripping (OWASP API3) still does not run for a
+   * `2xx` response without a body schema, so never set this on a route whose
+   * handler builds JSON from domain objects.
+   */
+  acknowledgeNoResponseBodySchema?: boolean;
+
+  /**
    * Mark the endpoint as scheduled for removal at a specific date (RFC 8594
    * "The Sunset HTTP Header Field"). Accepts an ISO-8601 string, any string
    * parseable by `new Date(...)`, or a `Date`. When set, the framework:

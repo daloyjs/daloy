@@ -1945,6 +1945,9 @@ export class App<
       operationId: "getOpenAPIDocument",
       ...(tags.length ? { tags } : {}),
       summary: "OpenAPI 3.1 document",
+      // Framework-owned body (the generated spec document); the missing
+      // schema is intentional, not an OWASP API3 leak risk.
+      acknowledgeNoResponseBodySchema: true,
       responses: {
         200: { description: "OpenAPI 3.1 document for this application." },
       },
@@ -1961,6 +1964,7 @@ export class App<
         operationId: "getOpenAPIDocumentYaml",
         ...(tags.length ? { tags } : {}),
         summary: "OpenAPI 3.1 document (YAML)",
+        acknowledgeNoResponseBodySchema: true,
         responses: {
           200: { description: "OpenAPI 3.1 document for this application, in YAML." },
         },
@@ -2001,6 +2005,7 @@ export class App<
       operationId: "getDocsUI",
       ...(tags.length ? { tags } : {}),
       summary: "Interactive API reference",
+      acknowledgeNoResponseBodySchema: true,
       responses: {
         200: { description: "Interactive API documentation UI." },
       },
@@ -2106,6 +2111,8 @@ export class App<
       operationId: "getAsyncAPIDocument",
       ...(tags.length ? { tags } : {}),
       summary: "AsyncAPI 3.0 document",
+      // Framework-owned bodies on the AsyncAPI surface, like mountDocs above.
+      acknowledgeNoResponseBodySchema: true,
       responses: {
         200: { description: "AsyncAPI 3.0 document for this application's WebSocket channels." },
       },
@@ -2119,6 +2126,7 @@ export class App<
         operationId: "getAsyncAPIDocumentYaml",
         ...(tags.length ? { tags } : {}),
         summary: "AsyncAPI 3.0 document (YAML)",
+        acknowledgeNoResponseBodySchema: true,
         responses: {
           200: { description: "AsyncAPI 3.0 document for this application, in YAML." },
         },
@@ -2142,6 +2150,7 @@ export class App<
       operationId: "getAsyncAPIUI",
       ...(tags.length ? { tags } : {}),
       summary: "Interactive AsyncAPI reference",
+      acknowledgeNoResponseBodySchema: true,
       responses: {
         200: { description: "Interactive AsyncAPI documentation UI." },
       },
@@ -2521,6 +2530,8 @@ export class App<
       operationId: "metrics",
       tags: ["Observability"],
       summary: "Prometheus metrics scrape endpoint",
+      // Prometheus text exposition rendered by the framework registry.
+      acknowledgeNoResponseBodySchema: true,
       handler: async ({ request }: BaseContext<any, any>) => {
         if (buckets && rateLimitConfig) {
           const key = healthRouteKey(request);
@@ -2659,6 +2670,8 @@ export class App<
       operationId: isHealth ? "healthcheck" : "readinesscheck",
       tags: ["Health"],
       summary: isHealth ? "Liveness probe" : "Readiness probe",
+      // Framework-serialized probe payload; missing schema is intentional.
+      acknowledgeNoResponseBodySchema: true,
       handler: async ({ request }: BaseContext<any, any>) => {
         if (buckets && rateLimitConfig) {
           const key = healthRouteKey(request);
@@ -3651,8 +3664,10 @@ export class App<
       },
       `${offending.length} route(s) declare a 2xx response with no body schema; ` +
         "response field-level stripping (OWASP API3) is not applied there, so a handler that " +
-        "returns undeclared fields will leak them. Declare a response body schema, or ignore if " +
-        "the route intentionally returns no body. Run `daloy doctor` to list them."
+        "returns undeclared fields will leak them. Declare a response body schema, or set " +
+        "`acknowledgeNoResponseBodySchema: true` on routes that intentionally return an opaque " +
+        "or body-less response. Run `daloy doctor` to list them. " +
+        "See https://daloyjs.dev/docs/security/owasp-api-top-10#api3"
     );
   }
 
@@ -4215,17 +4230,24 @@ function hasRequestSchema(request: RequestSchemas | undefined, key: keyof Reques
  * It powers both the `daloy doctor` `audit.response.bodySchema` finding and
  * the development-mode boot warning emitted on the first request. The result
  * is advisory — a route may legitimately return no body — so callers treat
- * it as a `warn`, never a hard error.
+ * it as a `warn`, never a hard error. Routes that set
+ * `acknowledgeNoResponseBodySchema: true` (including the framework-mounted
+ * docs, AsyncAPI, health, and metrics routes, whose bodies DaloyJS itself
+ * serializes) are skipped: the missing schema is declared intentional.
  *
  * @param routes - Route definitions to inspect (typically `app.routes`).
  * @returns One entry per offending route with the affected `2xx` status codes.
  * @since 0.40.0
  */
 export function findRoutesMissingResponseBodySchema(
-  routes: readonly Pick<RouteDefinition<any, any, any, any>, "method" | "path" | "responses">[]
+  routes: readonly Pick<
+    RouteDefinition<any, any, any, any>,
+    "method" | "path" | "responses" | "acknowledgeNoResponseBodySchema"
+  >[]
 ): Array<{ method: string; path: string; statuses: number[] }> {
   const offending: Array<{ method: string; path: string; statuses: number[] }> = [];
   for (const route of routes) {
+    if (route.acknowledgeNoResponseBodySchema === true) continue;
     const statuses: number[] = [];
     const responses = route.responses as Record<number, { body?: unknown } | undefined>;
     for (const key of Object.keys(responses)) {

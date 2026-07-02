@@ -509,7 +509,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status
 
-DaloyJS is now in the **`1.0.0` beta** (`1.0.0-beta.6`). The public API is feature-complete and stable for the 1.0 line; from `1.0.0` onward, breaking changes follow SemVer and deprecations get at least one minor cycle. Small adjustments are still possible before the `1.0.0` GA if beta feedback surfaces something. The framework is already in use for production trials.
+DaloyJS is now in the **`1.0.0` beta** (`1.0.0-beta.7`). The public API is feature-complete and stable for the 1.0 line; from `1.0.0` onward, breaking changes follow SemVer and deprecations get at least one minor cycle. Small adjustments are still possible before the `1.0.0` GA if beta feedback surfaces something. The framework is already in use for production trials.
 
 **Release quality bar.** Every release ships with **≥90% line + function coverage and ≥90% branch coverage**, strict TypeScript, OpenSSF Scorecard, CodeQL + Opengrep dual SAST, zizmor workflow linting, and npm provenance. Coverage was relaxed from a former 100% gate so complex security work isn't blocked chasing throwaway tests for unreachable defensive branches or tsx source-map phantoms; see [AGENTS.md](AGENTS.md) for the policy.
 
@@ -520,7 +520,7 @@ DaloyJS is now in the **`1.0.0` beta** (`1.0.0-beta.6`). The public API is featu
 - Zero-config OpenAPI `info` autofill from `package.json` (Node / Bun) or `deno.json` / `deno.jsonc` (Deno); explicit `openapi.info` values always win.
 - RFC 7231 + RFC 5789 HTTP-method allowlist enforced inside `app.route()` (WebDAV, `TRACE`, `CONNECT` rejected at the framework boundary).
 - AI-friendly route metadata via optional `meta: { examples, extensions, summary, description, tags }`; examples are validated against your schemas at build time, surfaced as OpenAPI `examples` + `x-daloy-*` extensions, and dumped as `routes.json` / `routes.yaml` via `daloy inspect --ai`.
-- Dependency-free MCP Streamable HTTP server helpers at `@daloyjs/core/mcp`: `createMcpHandler()` exposes tools, resources, and prompts over JSON-RPC 2.0, while `mcpRoutes("/mcp", handler)` mounts the POST / GET / OPTIONS Daloy routes for a dedicated MCP service with the same auth, rate-limit, body-limit, and timeout middleware as any other app.
+- Dependency-free MCP Streamable HTTP server helpers at `@daloyjs/core/mcp`: `createMcpHandler()` exposes tools (with `outputSchema`, `annotations`, and icons), resources, RFC 6570 resource templates, and prompts (with required-argument enforcement) over JSON-RPC 2.0 and validates `Origin` against DNS rebinding (with an `allowedOrigins` allowlist), while `mcpRoutes("/mcp", handler)` mounts the POST / GET / OPTIONS Daloy routes — with the JSON-RPC envelope schema surfaced in OpenAPI — for a dedicated MCP service with the same auth, rate-limit, body-limit, and timeout middleware as any other app.
 - API lifecycle and breaking-change detection: mark routes `deprecated` or give them a `sunset` date to emit RFC 8594 `Deprecation` / `Sunset` headers and an `x-sunset` OpenAPI extension, then gate CI with `diffOpenAPI()` / the `daloy diff` command, which fail on a breaking change versus the last published spec.
 - In-process test client (`app.request()`), contract-test runner (gated in CI via `daloy inspect --check` and shipped as a default test in every `create-daloy` template), in-process typed client, and Hey API codegen via `pnpm gen`.
 

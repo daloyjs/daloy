@@ -48,6 +48,22 @@ test("[helper] flags 2xx responses without a body schema, ignores the rest", () 
   ]);
 });
 
+test("[helper] skips routes that acknowledge an intentionally schema-less body", () => {
+  const routes = [
+    {
+      method: "POST",
+      path: "/proxy",
+      acknowledgeNoResponseBodySchema: true,
+      responses: { 200: { description: "opaque upstream payload" } },
+    },
+    // Still flagged: acknowledgement is per-route, not global.
+    { method: "GET", path: "/leaky", responses: { 200: { description: "ok" } } },
+  ] as any;
+  assert.deepEqual(findRoutesMissingResponseBodySchema(routes), [
+    { method: "GET", path: "/leaky", statuses: [200] },
+  ]);
+});
+
 test("[helper] returns empty when every 2xx response declares a body schema", () => {
   const routes = [
     {
@@ -115,6 +131,53 @@ test("[boot-warning] no warning when every 2xx response declares a body schema",
     warns.filter((w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing")
       .length,
     0,
+  );
+});
+
+test("[boot-warning] acknowledged routes do not warn; unacknowledged ones still do", async () => {
+  const { logger, warns } = capturingLogger();
+  const app = new App({ env: "development", logger: logger as any });
+  app.route({
+    method: "POST",
+    path: "/mcp",
+    operationId: "mcpOpaque",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "MCP JSON-RPC response" } },
+    handler: async () => new Response("{}", { headers: { "content-type": "application/json" } }),
+  });
+  await app.request("/mcp", { method: "POST" });
+  assert.equal(
+    warns.filter(
+      (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
+    ).length,
+    0,
+    "an acknowledged opaque route must not trip the warning"
+  );
+});
+
+test("[boot-warning] framework-mounted docs routes never warn about themselves", async () => {
+  const { logger, warns } = capturingLogger();
+  // The feedback repro: `docs: true` mounts /openapi.json, /openapi.yaml and
+  // /docs — none of them are user-authored, so none may trip the warning.
+  const app = new App({ env: "development", docs: true, logger: logger as any });
+  await app.request("/openapi.json");
+  const hits = warns.filter(
+    (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
+  );
+  assert.equal(hits.length, 0, "framework-owned routes must be pre-acknowledged");
+});
+
+test("[boot-warning] framework health and metrics routes never warn about themselves", async () => {
+  const { logger, warns } = capturingLogger();
+  const app = new App({ env: "development", logger: logger as any });
+  app.healthcheck({ acknowledgeUnauthenticated: true });
+  app.metrics({ acknowledgeUnauthenticated: true });
+  await app.request("/healthz");
+  assert.equal(
+    warns.filter(
+      (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
+    ).length,
+    0
   );
 });
 

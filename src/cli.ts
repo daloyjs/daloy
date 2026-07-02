@@ -898,7 +898,8 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
           `${missingBody.length} route(s) declare a 2xx response with no body schema, so ` +
           `response field-level stripping (OWASP API3) is not applied: ${sample}` +
           `${missingBody.length > 5 ? ", …" : ""}. Declare a response body schema so undeclared ` +
-          "handler fields cannot leak, or ignore if the route intentionally returns no body.",
+          "handler fields cannot leak, or set `acknowledgeNoResponseBodySchema: true` on routes " +
+          "that intentionally return an opaque or body-less response.",
       });
     }
   }

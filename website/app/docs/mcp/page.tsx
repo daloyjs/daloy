@@ -167,6 +167,50 @@ const MCP_SEARCH_CALL = `{
   }
 }`;
 
+const ORIGINS = `const mcp = createMcpHandler({
+  serverInfo: { name: "inventory-mcp", version: "1.0.0" },
+  // Streamable HTTP DNS-rebinding defense (spec requirement) is built in:
+  // requests without an Origin header (Claude, Cursor, CLIs), same-origin
+  // requests, and loopback origins (localhost, *.localhost, 127.0.0.1, [::1])
+  // are allowed. Every other browser origin gets 403 unless listed here.
+  allowedOrigins: ["https://app.example.com"],
+  tools: [/* ... */],
+});`;
+
+const TEMPLATES = `const mcp = createMcpHandler({
+  serverInfo: { name: "inventory-mcp", version: "1.0.0" },
+  resourceTemplates: [
+    {
+      uriTemplate: "daloy://records/{table}/{id}",
+      name: "record",
+      description: "Read one record by table and id.",
+      mimeType: "application/json",
+      // {table} and {id} each match one URI segment. The values are raw,
+      // untrusted strings: validate them before touching your database.
+      read: async (uri, variables) => {
+        const row = await db.findRecord(variables.table, variables.id);
+        if (!row) throw new McpToolError(\`No record \${variables.id}.\`);
+        return { uri, mimeType: "application/json", text: JSON.stringify(row) };
+      },
+    },
+  ],
+});`;
+
+const ACKNOWLEDGE = `// Hand-rolled MCP mount (instead of mcpRoutes()): the response is an opaque
+// JSON-RPC envelope built by createMcpHandler, so acknowledge the missing
+// response body schema instead of leaving the boot warning unanswered.
+app.route({
+  method: "POST",
+  path: "/mcp",
+  operationId: "mcpStreamableHttp",
+  acknowledgeNoResponseBodySchema: true,
+  responses: {
+    200: { description: "MCP JSON-RPC response" },
+    202: { description: "Accepted (notification, no content)" },
+  },
+  handler: ({ request }) => mcp(request),
+});`;
+
 const ERROR_HANDLING = `import { McpToolError, createMcpHandler } from "@daloyjs/core/mcp";
 
 const mcp = createMcpHandler({
@@ -307,19 +351,62 @@ export default function Page() {
         <li>
           <code>initialize</code>, <code>ping</code>, <code>tools/list</code>,{" "}
           <code>tools/call</code>, <code>resources/list</code>,{" "}
-          <code>resources/read</code>, <code>prompts/list</code>, and{" "}
-          <code>prompts/get</code>.
+          <code>resources/templates/list</code>, <code>resources/read</code>{" "}
+          (including template-matched URIs), <code>prompts/list</code>, and{" "}
+          <code>prompts/get</code> with required-argument enforcement.
         </li>
         <li>
           Protocol-version negotiation, <code>MCP-Protocol-Version</code>{" "}
-          rejection for unsupported versions, JSON-RPC parse errors, accepted
-          notifications, and bounded request bodies.
+          rejection for unsupported versions (headerless requests assume{" "}
+          <code>2025-03-26</code> per the spec), JSON-RPC parse errors, accepted
+          notifications, unknown-pagination-cursor rejection, and bounded
+          request bodies.
         </li>
         <li>
-          Dependency-free TypeScript types for tools, resources, prompts, JSON
-          schemas, content blocks, structured tool output, and handler context.
+          Built-in <code>Origin</code> validation against DNS rebinding, with
+          an <code>allowedOrigins</code> allowlist for browser-based clients.
+        </li>
+        <li>
+          MCP 2025-11-25 metadata: server <code>description</code>,{" "}
+          <code>websiteUrl</code>, and <code>icons</code>; tool{" "}
+          <code>outputSchema</code>, <code>annotations</code> (read-only,
+          destructive, idempotent, open-world hints), and <code>icons</code>;
+          icons on resources, templates, and prompts. Tool results that return
+          only <code>structuredContent</code> get a serialized text block
+          backfilled for older clients.
+        </li>
+        <li>
+          Dependency-free TypeScript types for tools, resources, resource
+          templates, prompts, JSON schemas, content blocks, structured tool
+          output, and handler context.
         </li>
       </ul>
+
+      <h2>Origin validation (DNS rebinding)</h2>
+      <p>
+        The MCP Streamable HTTP spec requires servers to validate the{" "}
+        <code>Origin</code> header so a malicious web page cannot use DNS
+        rebinding to drive a local MCP server. <code>createMcpHandler()</code>{" "}
+        does this on every request. Non-browser clients that send no{" "}
+        <code>Origin</code> header work unchanged; browser clients must be
+        same-origin, loopback, or explicitly allowlisted, and everything else
+        receives <code>403</code>.
+      </p>
+      <CodeBlock code={ORIGINS} />
+
+      <h2>Resource templates</h2>
+      <p>
+        Concrete resources cover fixed documents; resource templates cover
+        families of them. A template advertises an RFC 6570 style URI pattern
+        through <code>resources/templates/list</code>, and{" "}
+        <code>resources/read</code> matches non-listed URIs against your
+        templates, passing the extracted variables to your <code>read</code>{" "}
+        handler. Only simple <code>{"{name}"}</code> variables are supported,
+        and each matches a single URI segment; operator expressions like{" "}
+        <code>{"{+path}"}</code> are rejected at construction so the server
+        never advertises a pattern it cannot serve.
+      </p>
+      <CodeBlock code={TEMPLATES} />
 
       <h2>What stays out of core</h2>
       <p>
@@ -340,11 +427,40 @@ export default function Page() {
       </p>
       <CodeBlock code={ERROR_HANDLING} />
 
+      <h2>
+        The <code>bodySchemaMissing</code> warning and MCP
+      </h2>
+      <p>
+        DaloyJS warns in development when a route declares a <code>2xx</code>{" "}
+        response without a body schema, because OWASP API3 response-field
+        stripping cannot run there (see the{" "}
+        <a href="/docs/security/owasp-api-top-10#api3">API3 mapping</a>). MCP
+        responses are opaque JSON-RPC envelopes produced by{" "}
+        <code>createMcpHandler()</code>, so the routes from{" "}
+        <code>mcpRoutes()</code> ship with an envelope schema attached: they do
+        not trip the warning, and the JSON-RPC envelope shows up in your
+        generated OpenAPI document. Framework-mounted routes such as{" "}
+        <code>/openapi.json</code> and <code>/docs</code> acknowledge
+        themselves, so the warning only ever names routes you wrote.
+      </p>
+      <p>
+        If you mount the MCP handler on a hand-rolled route instead (for
+        example to add extra <code>beforeHandle</code> hooks), declare that the
+        opaque body is intentional with{" "}
+        <code>acknowledgeNoResponseBodySchema: true</code>:
+      </p>
+      <CodeBlock code={ACKNOWLEDGE} />
+
       <h2>Security checklist</h2>
       <ul>
         <li>
           Put auth in DaloyJS middleware before the MCP route. Bearer tokens,
           mTLS, IP restrictions, and per-client rate limits all work normally.
+        </li>
+        <li>
+          Leave the built-in <code>Origin</code> validation alone and prefer
+          adding trusted web apps to <code>allowedOrigins</code> over any
+          wildcard CORS layer in front of the endpoint.
         </li>
         <li>
           Validate tool arguments inside handlers. The advertised JSON Schema

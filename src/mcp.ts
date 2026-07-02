@@ -31,18 +31,56 @@ export const MCP_PROTOCOL_VERSIONS: readonly string[] = Object.freeze([
  */
 export const MCP_DEFAULT_MAX_BODY_BYTES = 1 << 18;
 
+/**
+ * Protocol revision assumed when an HTTP request carries no
+ * `MCP-Protocol-Version` header, as required by the Streamable HTTP spec for
+ * backwards compatibility with pre-2025-06-18 clients.
+ */
+const LEGACY_ASSUMED_PROTOCOL_VERSION = "2025-03-26";
+
 const PARSE_ERROR = -32700;
 const INVALID_REQUEST = -32600;
 const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
 const INTERNAL_ERROR = -32603;
 
-const MCP_JSON_RESPONSE_SCHEMA: StandardSchemaV1 = {
+/**
+ * JSON Schema for the JSON-RPC 2.0 envelope every MCP response uses. Exposed
+ * through `toJSONSchema()` so the generated OpenAPI document describes the
+ * `/mcp` route honestly instead of leaving it an undocumented blind spot.
+ */
+const MCP_JSONRPC_ENVELOPE_JSON_SCHEMA = {
+  type: "object",
+  description: "JSON-RPC 2.0 envelope produced by the MCP Streamable HTTP endpoint.",
+  properties: {
+    jsonrpc: { type: "string", const: "2.0" },
+    id: { oneOf: [{ type: "string" }, { type: "number" }, { type: "null" }] },
+    result: { description: "Method result. Present on success; shape varies by MCP method." },
+    error: {
+      type: "object",
+      properties: {
+        code: { type: "integer" },
+        message: { type: "string" },
+        data: {},
+      },
+      required: ["code", "message"],
+      additionalProperties: false,
+    },
+  },
+  required: ["jsonrpc"],
+} as const;
+
+const MCP_JSON_RESPONSE_SCHEMA: StandardSchemaV1 & {
+  toJSONSchema(): typeof MCP_JSONRPC_ENVELOPE_JSON_SCHEMA;
+} = {
   "~standard": {
     version: 1,
     vendor: "daloyjs",
+    // Pass-through: the MCP handler fully controls the envelope it builds, so
+    // re-validating (or field-stripping) it here would only burn cycles.
     validate: (value) => ({ value }),
   },
+  toJSONSchema: () => MCP_JSONRPC_ENVELOPE_JSON_SCHEMA,
 };
 
 /**
@@ -78,6 +116,23 @@ export type McpJsonSchema = McpJsonObject;
 export type McpJsonRpcId = string | number | null;
 
 /**
+ * Icon metadata clients may render next to a server, tool, resource, or
+ * prompt (MCP 2025-11-25, SEP-973).
+ *
+ * @since 1.0.0
+ */
+export interface McpIcon {
+  /** Icon URL. Prefer `https:` or `data:` URIs that clients can fetch safely. */
+  src: string;
+  /** Optional icon media type, e.g. `"image/png"`. */
+  mimeType?: string;
+  /** Optional pixel sizes the icon is available in, e.g. `["48x48"]`. */
+  sizes?: string[];
+  /** Optional theme the icon is designed for. */
+  theme?: "light" | "dark";
+}
+
+/**
  * Identity block returned from the MCP `initialize` handshake.
  *
  * @since 1.0.0
@@ -89,6 +144,12 @@ export interface McpServerInfo {
   title?: string;
   /** Server version surfaced to clients for debugging and compatibility. */
   version: string;
+  /** Optional human-readable server description (MCP 2025-11-25). */
+  description?: string;
+  /** Optional homepage URL for this server (MCP 2025-11-25). */
+  websiteUrl?: string;
+  /** Optional icons clients may display for this server (MCP 2025-11-25). */
+  icons?: McpIcon[];
 }
 
 /**
@@ -100,9 +161,10 @@ export interface McpRequestContext {
   /** The original HTTP request received by the DaloyJS route. */
   request: Request;
   /**
-   * Protocol version selected for this call. Before `initialize`, this is the
-   * version from the `MCP-Protocol-Version` header when present, otherwise the
-   * handler's preferred protocol version.
+   * Protocol version selected for this call. `initialize` negotiates it from
+   * `params.protocolVersion`; other calls take the `MCP-Protocol-Version`
+   * header, falling back to `2025-03-26` (the spec's assumption for
+   * headerless requests) when supported, otherwise the preferred version.
    */
   protocolVersion: string;
   /** JSON-RPC id for request/response correlation. */
@@ -169,12 +231,36 @@ export type McpContent = McpTextContent | McpImageContent | McpEmbeddedResourceC
  * @since 1.0.0
  */
 export interface McpToolResult {
-  /** Human or model-readable content blocks returned to the MCP client. */
-  content: McpContent[];
+  /**
+   * Human or model-readable content blocks returned to the MCP client. When
+   * omitted, {@link createMcpHandler} backfills a text block serializing
+   * `structuredContent` so pre-2025-06-18 clients still receive output.
+   */
+  content?: McpContent[];
   /** Optional structured payload for clients that can consume typed output. */
   structuredContent?: McpJsonObject;
   /** Set to `true` for domain/tool errors the model may recover from. */
   isError?: boolean;
+}
+
+/**
+ * Behavioral hints a tool can advertise to MCP clients. Hints are untrusted
+ * metadata for UX decisions (confirmation prompts, badges); clients must not
+ * rely on them for security decisions.
+ *
+ * @since 1.0.0
+ */
+export interface McpToolAnnotations {
+  /** Human-readable title for the tool. */
+  title?: string;
+  /** Hint that the tool does not modify its environment. */
+  readOnlyHint?: boolean;
+  /** Hint that the tool may perform destructive updates. */
+  destructiveHint?: boolean;
+  /** Hint that repeated calls with the same arguments have no extra effect. */
+  idempotentHint?: boolean;
+  /** Hint that the tool interacts with external entities. */
+  openWorldHint?: boolean;
 }
 
 /**
@@ -215,6 +301,16 @@ export interface McpTool<TArgs extends Record<string, unknown> = Record<string, 
   description: string;
   /** JSON Schema for `params.arguments`. */
   inputSchema: McpJsonSchema;
+  /**
+   * Optional JSON Schema describing `structuredContent` in tool results
+   * (MCP 2025-06-18). When set, handlers should return `structuredContent`
+   * matching it.
+   */
+  outputSchema?: McpJsonSchema;
+  /** Optional behavioral hints for clients. */
+  annotations?: McpToolAnnotations;
+  /** Optional icons clients may display for this tool (MCP 2025-11-25). */
+  icons?: McpIcon[];
   /** Execute the tool with untrusted JSON arguments. */
   handler: McpToolHandler<TArgs>;
 }
@@ -235,6 +331,8 @@ export interface McpResource {
   description?: string;
   /** MIME type returned by `resources/read`, such as `"application/json"`. */
   mimeType?: string;
+  /** Optional icons clients may display for this resource (MCP 2025-11-25). */
+  icons?: McpIcon[];
 }
 
 /**
@@ -281,6 +379,60 @@ export interface McpResourceDefinition extends McpResource {
 }
 
 /**
+ * Resource template metadata returned from `resources/templates/list`.
+ *
+ * @since 1.0.0
+ */
+export interface McpResourceTemplate {
+  /**
+   * URI template for this resource family, e.g. `"daloy://records/{id}"`.
+   * DaloyJS supports simple `{name}` variables (RFC 6570 level 1); each
+   * variable matches one URI segment (no `/`).
+   */
+  uriTemplate: string;
+  /** Stable template name. */
+  name: string;
+  /** Optional human-readable title. */
+  title?: string;
+  /** Optional description shown by clients. */
+  description?: string;
+  /** MIME type of resources produced by this template. */
+  mimeType?: string;
+  /** Optional icons clients may display for this template (MCP 2025-11-25). */
+  icons?: McpIcon[];
+}
+
+/**
+ * Definition of a parameterized MCP resource template.
+ *
+ * Templates answer `resources/read` for URIs that match `uriTemplate` but are
+ * not listed as concrete resources. Template variables arrive as raw URI
+ * segment strings; validate them before touching databases or files.
+ *
+ * @since 1.0.0
+ */
+export interface McpResourceTemplateDefinition extends McpResourceTemplate {
+  /**
+   * Read a resource instantiated from this template for `resources/read`.
+   *
+   * @param uri - The full resource URI requested by the client.
+   * @param variables - Template variable values extracted from `uri`.
+   * @param ctx - Request metadata and the original HTTP request.
+   * @returns One or more content entries for this resource.
+   * @throws {McpToolError} for caller-correctable failures such as an unknown
+   *   record id; these become JSON-RPC invalid-params errors.
+   */
+  read: (
+    uri: string,
+    variables: Record<string, string>,
+    ctx: McpRequestContext
+  ) =>
+    | McpResourceContents
+    | McpResourceContents[]
+    | Promise<McpResourceContents | McpResourceContents[]>;
+}
+
+/**
  * Argument metadata for an MCP prompt.
  *
  * @since 1.0.0
@@ -306,8 +458,14 @@ export interface McpPrompt {
   title?: string;
   /** Optional prompt description. */
   description?: string;
-  /** Prompt arguments clients may supply to `prompts/get`. */
+  /**
+   * Prompt arguments clients may supply to `prompts/get`. Arguments marked
+   * `required: true` are enforced by {@link createMcpHandler}: a `prompts/get`
+   * call missing one fails with a JSON-RPC invalid-params error.
+   */
   arguments?: McpPromptArgument[];
+  /** Optional icons clients may display for this prompt (MCP 2025-11-25). */
+  icons?: McpIcon[];
 }
 
 /**
@@ -390,8 +548,25 @@ export interface McpHandlerOptions {
   tools?: readonly McpTool[];
   /** Readable resources exposed through `resources/list` and `resources/read`. */
   resources?: readonly McpResourceDefinition[];
+  /**
+   * Parameterized resource templates exposed through
+   * `resources/templates/list` and matched by `resources/read` when a URI is
+   * not a listed concrete resource.
+   */
+  resourceTemplates?: readonly McpResourceTemplateDefinition[];
   /** Reusable prompts exposed through `prompts/list` and `prompts/get`. */
   prompts?: readonly McpPromptDefinition[];
+  /**
+   * Extra `Origin` header values allowed on MCP requests, e.g.
+   * `"https://app.example.com"` (or the literal `"null"` for opaque origins).
+   *
+   * The MCP Streamable HTTP spec requires servers to validate `Origin` to
+   * prevent DNS rebinding attacks. DaloyJS always allows requests without an
+   * `Origin` header (non-browser MCP clients), same-origin requests, and
+   * loopback origins (`localhost`, `*.localhost`, `127.0.0.1`, `[::1]`); every
+   * other origin is rejected with `403` unless listed here.
+   */
+  allowedOrigins?: readonly string[];
   /** Accepted MCP protocol versions. Defaults to {@link MCP_PROTOCOL_VERSIONS}. */
   protocolVersions?: readonly string[];
   /**
@@ -500,8 +675,21 @@ function publicPrompt(prompt: McpPromptDefinition): McpPrompt {
   return rest;
 }
 
+function publicResourceTemplate(template: McpResourceTemplateDefinition): McpResourceTemplate {
+  const { read: _read, ...rest } = template;
+  return rest;
+}
+
 function normalizeToolResult(value: string | McpToolResult): McpToolResult {
-  return typeof value === "string" ? { content: [{ type: "text", text: value }] } : value;
+  if (typeof value === "string") return { content: [{ type: "text", text: value }] };
+  if (value.content && value.content.length > 0) return value;
+  // Backwards compatibility: clients that predate `structuredContent` only
+  // read `content`, so mirror the structured payload into a text block.
+  const content: McpContent[] =
+    value.structuredContent !== undefined
+      ? [{ type: "text", text: JSON.stringify(value.structuredContent) }]
+      : [];
+  return { ...value, content };
 }
 
 function selectedProtocolVersion(
@@ -512,15 +700,97 @@ function selectedProtocolVersion(
   return supported.has(requested) ? requested : preferred;
 }
 
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+interface CompiledUriTemplate {
+  template: McpResourceTemplateDefinition;
+  regex: RegExp;
+  variables: string[];
+}
+
+/**
+ * Compile a simple RFC 6570 level-1 URI template into a matcher. Each
+ * `{name}` variable matches exactly one URI segment (`[^/]+`). Operators such
+ * as `{+path}` or `{?query}` are rejected so the handler never advertises a
+ * template it cannot match.
+ */
+function compileUriTemplate(template: McpResourceTemplateDefinition): CompiledUriTemplate {
+  const { uriTemplate } = template;
+  const variables: string[] = [];
+  let pattern = "";
+  let index = 0;
+  while (index < uriTemplate.length) {
+    const open = uriTemplate.indexOf("{", index);
+    if (open === -1) {
+      pattern += escapeRegExp(uriTemplate.slice(index));
+      break;
+    }
+    pattern += escapeRegExp(uriTemplate.slice(index, open));
+    const close = uriTemplate.indexOf("}", open);
+    if (close === -1) {
+      throw new TypeError(`MCP resource template "${uriTemplate}" has an unterminated "{".`);
+    }
+    const name = uriTemplate.slice(open + 1, close);
+    if (!/^[A-Za-z0-9_]+$/.test(name)) {
+      throw new TypeError(
+        `MCP resource template "${uriTemplate}" uses an unsupported expression "{${name}}"; ` +
+          "only simple {name} variables are supported."
+      );
+    }
+    variables.push(name);
+    pattern += "([^/]+)";
+    index = close + 1;
+  }
+  return { template, regex: new RegExp(`^${pattern}$`), variables };
+}
+
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Streamable HTTP DNS-rebinding defense: decide whether a browser `Origin`
+ * may talk to this MCP endpoint. Same-origin and loopback origins are always
+ * allowed; anything else must be explicitly allowlisted.
+ */
+function isAllowedOrigin(
+  origin: string,
+  request: Request,
+  allowlist: ReadonlySet<string>
+): boolean {
+  const normalized = origin.toLowerCase();
+  if (allowlist.has(normalized)) return true;
+  if (normalized === "null") return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    return false;
+  }
+  const hostname = parsed.hostname;
+  if (LOOPBACK_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost")) return true;
+  try {
+    return parsed.host === new URL(request.url).host;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Create a dependency-free MCP Streamable HTTP endpoint handler.
  *
  * The handler implements the server side of MCP over one HTTP endpoint:
  * `initialize`, `ping`, `tools/list`, `tools/call`, `resources/list`,
- * `resources/read`, `prompts/list`, and `prompts/get`. It accepts JSON-RPC
- * requests over `POST`, acknowledges notifications with `202`, validates the
- * `MCP-Protocol-Version` header, bounds request bodies, and returns JSON-RPC
- * errors for malformed input.
+ * `resources/templates/list`, `resources/read`, `prompts/list`, and
+ * `prompts/get`. It accepts JSON-RPC requests over `POST`, acknowledges
+ * notifications with `202`, validates the `MCP-Protocol-Version` header,
+ * bounds request bodies, enforces required prompt arguments, and returns
+ * JSON-RPC errors for malformed input.
+ *
+ * Security: per the Streamable HTTP spec's DNS-rebinding guidance, every
+ * request bearing an `Origin` header is validated. Same-origin and loopback
+ * origins pass; anything else is rejected with `403` unless listed in
+ * {@link McpHandlerOptions.allowedOrigins}.
  *
  * It intentionally does not spawn stdio servers, manage OAuth metadata, keep
  * durable sessions, or open server-initiated SSE streams. Use DaloyJS
@@ -531,6 +801,9 @@ function selectedProtocolVersion(
  * @param options - Server identity, capabilities, limits, and response headers.
  * @returns A Fetch-compatible request handler suitable for {@link mcpRoutes}
  *   or for direct use in any web-standard runtime.
+ * @throws {TypeError} at construction for invalid serverInfo, protocol
+ *   versions, body limits, duplicate names/URIs, malformed `allowedOrigins`
+ *   entries, or unsupported URI template expressions.
  *
  * @example
  * ```ts
@@ -579,6 +852,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
 
   const tools = options.tools ?? [];
   const resources = options.resources ?? [];
+  const resourceTemplates = options.resourceTemplates ?? [];
   const prompts = options.prompts ?? [];
   const toolMap = new Map(tools.map((tool) => [tool.name, tool]));
   const resourceMap = new Map(resources.map((resource) => [resource.uri, resource]));
@@ -588,24 +862,75 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
   if (resourceMap.size !== resources.length)
     throw new TypeError("MCP resource URIs must be unique.");
   if (promptMap.size !== prompts.length) throw new TypeError("MCP prompt names must be unique.");
+  if (new Set(resourceTemplates.map((template) => template.uriTemplate)).size !==
+    resourceTemplates.length) {
+    throw new TypeError("MCP resource template URIs must be unique.");
+  }
+  const compiledTemplates = resourceTemplates.map(compileUriTemplate);
+
+  const allowedOrigins = new Set<string>();
+  for (const entry of options.allowedOrigins ?? []) {
+    const normalized = entry.toLowerCase();
+    if (normalized === "null") {
+      allowedOrigins.add(normalized);
+      continue;
+    }
+    let parsed: URL | undefined;
+    try {
+      parsed = new URL(normalized);
+    } catch {
+      parsed = undefined;
+    }
+    if (!parsed || parsed.origin !== normalized) {
+      throw new TypeError(
+        `MCP allowedOrigins entry "${entry}" must be a bare origin such as "https://app.example.com".`
+      );
+    }
+    allowedOrigins.add(normalized);
+  }
 
   const exposeInternalErrors =
     options.exposeInternalErrors ??
     (typeof process === "object" && process.env?.NODE_ENV !== "production");
   const headers = options.headers;
 
+  const legacyAssumed = supported.has(LEGACY_ASSUMED_PROTOCOL_VERSION)
+    ? LEGACY_ASSUMED_PROTOCOL_VERSION
+    : preferred;
+
   async function handleRpcRequest(message: JsonRpcMessage, request: Request): Promise<Response> {
     const id = (message.id ?? null) as McpJsonRpcId;
     const method = message.method as string;
     const params = asRecord(message.params);
-    const protocolVersion = selectedProtocolVersion(
-      typeof params.protocolVersion === "string"
-        ? params.protocolVersion
-        : (request.headers.get("mcp-protocol-version") ?? ""),
-      supported,
-      preferred
-    );
+    const headerVersion = request.headers.get("mcp-protocol-version");
+    // Per the Streamable HTTP spec, a request without the header is assumed
+    // to speak 2025-03-26; `initialize` negotiates via params instead.
+    const protocolVersion =
+      method === "initialize"
+        ? selectedProtocolVersion(
+            typeof params.protocolVersion === "string"
+              ? params.protocolVersion
+              : (headerVersion ?? ""),
+            supported,
+            preferred
+          )
+        : headerVersion !== null
+          ? selectedProtocolVersion(headerVersion, supported, preferred)
+          : legacyAssumed;
     const ctx: McpRequestContext = { request, protocolVersion, id, method };
+
+    const cursor = params.cursor;
+    if (
+      cursor !== undefined &&
+      (method === "tools/list" ||
+        method === "resources/list" ||
+        method === "resources/templates/list" ||
+        method === "prompts/list")
+    ) {
+      // This handler returns complete lists and never issues cursors, so any
+      // client-supplied cursor is unknown by definition.
+      return rpcError(id, INVALID_PARAMS, "Unknown pagination cursor.", undefined, 200, headers);
+    }
 
     switch (method) {
       case "initialize":
@@ -615,7 +940,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
             protocolVersion,
             capabilities: {
               ...(tools.length > 0 ? { tools: {} } : {}),
-              ...(resources.length > 0 ? { resources: {} } : {}),
+              ...(resources.length > 0 || resourceTemplates.length > 0 ? { resources: {} } : {}),
               ...(prompts.length > 0 ? { prompts: {} } : {}),
             },
             serverInfo: options.serverInfo,
@@ -663,23 +988,15 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
       }
       case "resources/list":
         return rpcResult(id, { resources: resources.map(publicResource) }, headers);
+      case "resources/templates/list":
+        return rpcResult(
+          id,
+          { resourceTemplates: resourceTemplates.map(publicResourceTemplate) },
+          headers
+        );
       case "resources/read": {
         const uri = typeof params.uri === "string" ? params.uri : "";
-        const resource = resourceMap.get(uri);
-        if (!resource) {
-          return rpcError(
-            id,
-            INVALID_PARAMS,
-            `Unknown resource: ${uri || "<missing>"}`,
-            undefined,
-            200,
-            headers
-          );
-        }
-        try {
-          const read = await resource.read(ctx);
-          return rpcResult(id, { contents: Array.isArray(read) ? read : [read] }, headers);
-        } catch (error) {
+        const readError = (error: unknown): Response => {
           const message = error instanceof McpToolError ? error.message : "Resource read failed.";
           const data =
             error instanceof McpToolError
@@ -693,7 +1010,40 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
             200,
             headers
           );
+        };
+        const resource = resourceMap.get(uri);
+        if (resource) {
+          try {
+            const read = await resource.read(ctx);
+            return rpcResult(id, { contents: Array.isArray(read) ? read : [read] }, headers);
+          } catch (error) {
+            return readError(error);
+          }
         }
+        if (uri) {
+          for (const compiled of compiledTemplates) {
+            const match = compiled.regex.exec(uri);
+            if (!match) continue;
+            const variables: Record<string, string> = {};
+            compiled.variables.forEach((name, position) => {
+              variables[name] = match[position + 1] ?? "";
+            });
+            try {
+              const read = await compiled.template.read(uri, variables, ctx);
+              return rpcResult(id, { contents: Array.isArray(read) ? read : [read] }, headers);
+            } catch (error) {
+              return readError(error);
+            }
+          }
+        }
+        return rpcError(
+          id,
+          INVALID_PARAMS,
+          `Unknown resource: ${uri || "<missing>"}`,
+          undefined,
+          200,
+          headers
+        );
       }
       case "prompts/list":
         return rpcResult(id, { prompts: prompts.map(publicPrompt) }, headers);
@@ -710,8 +1060,22 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
             headers
           );
         }
+        const promptArgs = asRecord(params.arguments);
+        const missing = (prompt.arguments ?? [])
+          .filter((argument) => argument.required && promptArgs[argument.name] === undefined)
+          .map((argument) => argument.name);
+        if (missing.length > 0) {
+          return rpcError(
+            id,
+            INVALID_PARAMS,
+            `Missing required prompt arguments: ${missing.join(", ")}`,
+            undefined,
+            200,
+            headers
+          );
+        }
         try {
-          return rpcResult(id, await prompt.get(asRecord(params.arguments), ctx), headers);
+          return rpcResult(id, await prompt.get(promptArgs, ctx), headers);
         } catch (error) {
           const message =
             error instanceof McpToolError ? error.message : "Prompt rendering failed.";
@@ -742,6 +1106,20 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
   }
 
   return async function handleMcpRequest(request: Request): Promise<Response> {
+    // Streamable HTTP requires Origin validation on every request to defeat
+    // DNS rebinding; invalid browser origins are refused with 403.
+    const origin = request.headers.get("origin");
+    if (origin !== null && !isAllowedOrigin(origin, request, allowedOrigins)) {
+      return rpcError(
+        null,
+        INVALID_REQUEST,
+        "Origin is not allowed for this MCP endpoint.",
+        undefined,
+        403,
+        headers
+      );
+    }
+
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -757,6 +1135,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
           capabilities: {
             tools: tools.map((tool) => tool.name),
             resources: resources.map((resource) => resource.uri),
+            resourceTemplates: resourceTemplates.map((template) => template.uriTemplate),
             prompts: prompts.map((prompt) => prompt.name),
           },
           hint: "Send JSON-RPC 2.0 over HTTP POST to this endpoint.",
@@ -936,6 +1315,7 @@ export function mcpRoutes(
     202: { description: "MCP notification accepted", body: MCP_JSON_RESPONSE_SCHEMA },
     204: { description: "CORS preflight accepted" },
     400: { description: "Invalid MCP request" },
+    403: { description: "Origin not allowed" },
     405: { description: "Unsupported MCP transport method" },
     413: { description: "MCP request body too large" },
   };

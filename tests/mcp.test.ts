@@ -621,3 +621,313 @@ test("createMcpHandler normalizes string tool results and multi-content resource
   });
   assert.equal(multi.json.result.contents.length, 2);
 });
+
+// ---------------------------------------------------------------------------
+// Streamable HTTP Origin validation (DNS-rebinding defense)
+// ---------------------------------------------------------------------------
+
+test("createMcpHandler rejects cross-site Origins with 403 on every HTTP method", async () => {
+  const handler = createTestHandler();
+
+  const postRes = await post(
+    handler,
+    { jsonrpc: "2.0", id: 1, method: "ping" },
+    { origin: "https://evil.example.com" }
+  );
+  assert.equal(postRes.status, 403);
+  const body = (await postRes.json()) as RpcResponse;
+  assert.equal(body.error?.code, -32600);
+  assert.equal(body.id, null);
+
+  const getRes = await handler(
+    new Request(ENDPOINT, { headers: { origin: "https://evil.example.com" } })
+  );
+  assert.equal(getRes.status, 403);
+
+  const optionsRes = await handler(
+    new Request(ENDPOINT, { method: "OPTIONS", headers: { origin: "https://evil.example.com" } })
+  );
+  assert.equal(optionsRes.status, 403);
+});
+
+test("createMcpHandler allows missing, same-origin, and loopback Origins", async () => {
+  const handler = createTestHandler();
+
+  const noOrigin = await rpc(handler, { jsonrpc: "2.0", id: 1, method: "ping" });
+  assert.equal(noOrigin.res.status, 200);
+
+  // ENDPOINT is http://test.local/mcp, so http://test.local is same-origin.
+  const sameOrigin = await rpc(
+    handler,
+    { jsonrpc: "2.0", id: 2, method: "ping" },
+    { origin: "http://test.local" }
+  );
+  assert.equal(sameOrigin.res.status, 200);
+
+  for (const origin of [
+    "http://localhost:5173",
+    "http://127.0.0.1:6274",
+    "http://[::1]:8080",
+    "http://dev.localhost:3000",
+  ]) {
+    const res = await post(handler, { jsonrpc: "2.0", id: 3, method: "ping" }, { origin });
+    assert.equal(res.status, 200, `loopback origin ${origin} must be allowed`);
+  }
+});
+
+test("createMcpHandler honors allowedOrigins and rejects opaque 'null' by default", async () => {
+  const open = createMcpHandler({
+    serverInfo: { name: "x", version: "1.0.0" },
+    allowedOrigins: ["https://app.example.com", "null"],
+  });
+  const allowed = await post(
+    open,
+    { jsonrpc: "2.0", id: 1, method: "ping" },
+    { origin: "https://APP.example.com" }
+  );
+  assert.equal(allowed.status, 200, "allowlisted origins compare case-insensitively");
+  const opaqueAllowed = await post(open, { jsonrpc: "2.0", id: 2, method: "ping" }, { origin: "null" });
+  assert.equal(opaqueAllowed.status, 200);
+
+  const strict = createTestHandler();
+  const opaqueRejected = await post(strict, { jsonrpc: "2.0", id: 3, method: "ping" }, { origin: "null" });
+  assert.equal(opaqueRejected.status, 403, "opaque origins are rejected unless allowlisted");
+});
+
+test("createMcpHandler validates allowedOrigins entries at construction", () => {
+  for (const entry of ["https://app.example.com/", "app.example.com", "not a url", ""]) {
+    assert.throws(
+      () =>
+        createMcpHandler({
+          serverInfo: { name: "x", version: "1.0.0" },
+          allowedOrigins: [entry],
+        }),
+      /allowedOrigins/,
+      `entry ${JSON.stringify(entry)} must be refused`
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Resource templates
+// ---------------------------------------------------------------------------
+
+function createTemplateHandler(): McpHandler {
+  return createMcpHandler({
+    serverInfo: { name: "tpl", version: "1.0.0" },
+    resourceTemplates: [
+      {
+        uriTemplate: "daloy://records/{table}/{id}",
+        name: "record",
+        description: "Read one record by table and id.",
+        mimeType: "application/json",
+        read: (uri, variables) => {
+          if (variables.table !== "books") throw new McpToolError(`Unknown table: ${variables.table}`);
+          return { uri, mimeType: "application/json", text: JSON.stringify(variables) };
+        },
+      },
+    ],
+  });
+}
+
+test("createMcpHandler lists resource templates and advertises the resources capability", async () => {
+  const handler = createTemplateHandler();
+
+  const init = await rpc(handler, { jsonrpc: "2.0", id: 1, method: "initialize" });
+  assert.deepEqual(init.json.result.capabilities, { resources: {} });
+
+  const listed = await rpc(handler, { jsonrpc: "2.0", id: 2, method: "resources/templates/list" });
+  assert.equal(listed.json.result.resourceTemplates.length, 1);
+  assert.equal(listed.json.result.resourceTemplates[0].uriTemplate, "daloy://records/{table}/{id}");
+  assert.equal("read" in listed.json.result.resourceTemplates[0], false);
+});
+
+test("createMcpHandler reads template-matched URIs with extracted variables", async () => {
+  const handler = createTemplateHandler();
+  const read = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "resources/read",
+    params: { uri: "daloy://records/books/42" },
+  });
+  assert.deepEqual(JSON.parse(read.json.result.contents[0].text), { table: "books", id: "42" });
+});
+
+test("createMcpHandler maps template read failures and non-matching URIs to invalid params", async () => {
+  const handler = createTemplateHandler();
+
+  const recoverable = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "resources/read",
+    params: { uri: "daloy://records/users/1" },
+  });
+  assert.equal(recoverable.json.error?.code, -32602);
+  assert.match(recoverable.json.error?.message ?? "", /Unknown table/);
+
+  const noMatch = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "resources/read",
+    params: { uri: "daloy://records/too/many/segments" },
+  });
+  assert.equal(noMatch.json.error?.code, -32602);
+  assert.match(noMatch.json.error?.message ?? "", /Unknown resource/);
+});
+
+test("createMcpHandler refuses duplicate, unterminated, and operator URI templates", () => {
+  const base = { serverInfo: { name: "x", version: "1.0.0" } };
+  const read = () => ({ uri: "u", text: "" });
+  assert.throws(
+    () =>
+      createMcpHandler({
+        ...base,
+        resourceTemplates: [
+          { uriTemplate: "a://{id}", name: "a", read },
+          { uriTemplate: "a://{id}", name: "b", read },
+        ],
+      }),
+    /must be unique/
+  );
+  assert.throws(
+    () => createMcpHandler({ ...base, resourceTemplates: [{ uriTemplate: "a://{id", name: "a", read }] }),
+    /unterminated/
+  );
+  assert.throws(
+    () =>
+      createMcpHandler({ ...base, resourceTemplates: [{ uriTemplate: "a://{+path}", name: "a", read }] }),
+    /unsupported expression/
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Spec fidelity: cursors, prompt arguments, structured output, versions
+// ---------------------------------------------------------------------------
+
+test("createMcpHandler rejects unknown pagination cursors on every list method", async () => {
+  const handler = createTestHandler();
+  for (const method of ["tools/list", "resources/list", "resources/templates/list", "prompts/list"]) {
+    const { json } = await rpc(handler, {
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: { cursor: "opaque-cursor" },
+    });
+    assert.equal(json.error?.code, -32602, `${method} must reject unknown cursors`);
+  }
+});
+
+test("createMcpHandler enforces required prompt arguments before invoking the prompt", async () => {
+  const handler = createTestHandler();
+  const { json } = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "prompts/get",
+    params: { name: "stock_report", arguments: {} },
+  });
+  assert.equal(json.error?.code, -32602);
+  assert.match(json.error?.message ?? "", /Missing required prompt arguments: sku/);
+});
+
+test("createMcpHandler backfills a text block for structured-only tool results", async () => {
+  const handler = createMcpHandler({
+    serverInfo: { name: "x", version: "1.0.0" },
+    tools: [
+      {
+        name: "structured",
+        description: "returns structured content only",
+        inputSchema: { type: "object" },
+        outputSchema: {
+          type: "object",
+          properties: { total: { type: "number" } },
+          required: ["total"],
+        },
+        handler: () => ({ structuredContent: { total: 7 } }),
+      },
+    ],
+  });
+  const { json } = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "structured", arguments: {} },
+  });
+  assert.deepEqual(json.result.structuredContent, { total: 7 });
+  assert.deepEqual(JSON.parse(json.result.content[0].text), { total: 7 });
+});
+
+test("createMcpHandler advertises outputSchema, annotations, icons, and server metadata", async () => {
+  const handler = createMcpHandler({
+    serverInfo: {
+      name: "meta",
+      version: "1.0.0",
+      description: "Metadata-rich test server.",
+      websiteUrl: "https://example.com",
+      icons: [{ src: "https://example.com/icon.png", mimeType: "image/png" }],
+    },
+    tools: [
+      {
+        name: "annotated",
+        description: "annotated tool",
+        inputSchema: { type: "object" },
+        outputSchema: { type: "object" },
+        annotations: { readOnlyHint: true, idempotentHint: true },
+        icons: [{ src: "https://example.com/tool.png" }],
+        handler: () => "ok",
+      },
+    ],
+  });
+
+  const init = await rpc(handler, { jsonrpc: "2.0", id: 1, method: "initialize" });
+  assert.equal(init.json.result.serverInfo.description, "Metadata-rich test server.");
+  assert.equal(init.json.result.serverInfo.websiteUrl, "https://example.com");
+  assert.equal(init.json.result.serverInfo.icons[0].src, "https://example.com/icon.png");
+
+  const listed = await rpc(handler, { jsonrpc: "2.0", id: 2, method: "tools/list" });
+  const tool = listed.json.result.tools[0];
+  assert.deepEqual(tool.outputSchema, { type: "object" });
+  assert.deepEqual(tool.annotations, { readOnlyHint: true, idempotentHint: true });
+  assert.equal(tool.icons[0].src, "https://example.com/tool.png");
+  assert.equal("handler" in tool, false);
+});
+
+test("createMcpHandler assumes protocol 2025-03-26 for headerless non-initialize requests", async () => {
+  const seen: string[] = [];
+  const handler = createMcpHandler({
+    serverInfo: { name: "x", version: "1.0.0" },
+    tools: [
+      {
+        name: "version_echo",
+        description: "echo the negotiated protocol version",
+        inputSchema: { type: "object" },
+        handler: (_args, ctx) => {
+          seen.push(ctx.protocolVersion);
+          return ctx.protocolVersion;
+        },
+      },
+    ],
+  });
+
+  await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "version_echo", arguments: {} },
+  });
+  assert.deepEqual(seen, ["2025-03-26"], "headerless requests assume the legacy revision");
+
+  await rpc(
+    handler,
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "version_echo", arguments: {} } },
+    { "mcp-protocol-version": "2025-11-25" }
+  );
+  assert.equal(seen[1], "2025-11-25", "the header wins when present");
+});
+
+test("mcpRoutes exposes the JSON-RPC envelope schema to OpenAPI generation", () => {
+  const [postRoute] = mcpRoutes("/mcp", createTestHandler());
+  const schema = (postRoute!.responses[200] as { body?: { toJSONSchema?: () => unknown } }).body;
+  const jsonSchema = schema?.toJSONSchema?.() as { properties?: Record<string, unknown> };
+  assert.ok(jsonSchema?.properties?.jsonrpc, "envelope schema must describe the jsonrpc field");
+  assert.ok(jsonSchema?.properties?.error, "envelope schema must describe the error field");
+});
