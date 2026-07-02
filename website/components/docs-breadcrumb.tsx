@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { CaretRightIcon } from "@phosphor-icons/react";
 
+import { useClientPathname } from "@/hooks/use-client-pathname";
 import { docsNav } from "./docs-nav";
 
 /**
@@ -11,12 +11,15 @@ import { docsNav } from "./docs-nav";
  *
  * Resolves the current page's section and title from {@link docsNav}. The
  * current page is plain text (`aria-current="page"`); ancestors link back.
- * Renders nothing on the docs index or off-nav paths.
+ * Renders nothing on the docs index or off-nav paths. Uses
+ * {@link useClientPathname} (null until mounted) so prerendered HTML stays
+ * identical across the proxy rewrites — `usePathname` here caused hydration
+ * text mismatches.
  *
  * @returns The breadcrumb navigation, or `null` when there is no trail.
  */
 export function DocsBreadcrumb() {
-  const pathname = usePathname();
+  const pathname = useClientPathname();
 
   if (pathname === "/docs") {
     return null;

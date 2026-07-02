@@ -415,12 +415,17 @@
     @apply border-l-2 border-border pl-4 text-muted-foreground italic;
   }
 
-  /* Hover "#" deep-link injected next to h2/h3 headings by <DocsToc>. */
-  .docs-prose .heading-anchor {
-    @apply ms-2 font-normal text-muted-foreground no-underline opacity-0 transition-opacity hover:text-primary focus-visible:opacity-100;
+  /* Hover "#" deep-link affordance on h2/h3 headings. Drawn with ::after
+     (never injected into the DOM — the article subtree hydrates lazily and
+     mutating it causes hydration mismatches); <DocsToc> makes it clickable
+     via a delegated listener. */
+  .docs-prose :is(h2, h3)[id]::after {
+    content: "#";
+    @apply ms-2 align-middle font-normal text-muted-foreground opacity-0 transition-opacity;
+    cursor: pointer;
   }
 
-  .docs-prose :is(h2, h3):hover .heading-anchor {
+  .docs-prose :is(h2, h3)[id]:hover::after {
     @apply opacity-100;
   }
 }

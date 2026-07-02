@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { CaretDownIcon } from "@phosphor-icons/react";
 
 import { useClientPathname } from "@/hooks/use-client-pathname";
 import { docsNav, type DocsNavSection } from "./docs-nav";
-import { NavLink } from "./nav-link";
 import { cn } from "../lib/utils";
 
 /**
@@ -22,9 +22,14 @@ function sectionContains(section: DocsNavSection, pathname: string | null) {
  *
  * Before hydration every section is expanded (so crawlers and no-JS readers
  * see all links); once the pathname is known, only the section containing
- * the current page stays open by default. Manual toggles are kept across
- * navigations, except that the newly active section is always re-opened.
- * On desktop the active link is scrolled into view within the sticky rail.
+ * the current page is open by default. Manual toggles are kept across
+ * navigations. On desktop the active link is scrolled into view within the
+ * sticky rail.
+ *
+ * Active-state is computed once here (via {@link useClientPathname}) and the
+ * items render as plain `Link`s: with ~140 links in two sidebar instances,
+ * a per-link mounted-state hook schedules hundreds of cascading hydration
+ * updates and trips React's nested-update limit.
  *
  * @returns The sidebar navigation element.
  */
@@ -35,35 +40,25 @@ export function DocsSidebar() {
     {}
   );
 
-  const isOpen = React.useCallback(
-    (section: DocsNavSection) =>
-      overrides[section.title] ??
-      (pathname === null || sectionContains(section, pathname)),
-    [overrides, pathname]
-  );
+  const isOpen = (section: DocsNavSection) =>
+    overrides[section.title] ??
+    (pathname === null || sectionContains(section, pathname));
 
-  // Re-open the section that owns the new page, then bring the active link
-  // into view inside the desktop scroll rail (never scroll the page itself).
+  // Bring the active link into view inside the desktop scroll rail
+  // (never scroll the page itself).
   React.useEffect(() => {
     if (pathname === null) return;
-
-    const active = docsNav.find((section) =>
-      sectionContains(section, pathname)
-    );
-
-    if (active) {
-      setOverrides((current) =>
-        current[active.title] === false
-          ? { ...current, [active.title]: true }
-          : current
-      );
-    }
 
     const nav = navRef.current;
     const container = nav?.closest<HTMLElement>("[data-sidebar-scroll]");
     const link = nav?.querySelector<HTMLElement>('a[aria-current="page"]');
 
-    if (!container || !link || nav.getBoundingClientRect().height === 0) {
+    if (
+      !nav ||
+      !container ||
+      !link ||
+      nav.getBoundingClientRect().height === 0
+    ) {
       return;
     }
 
@@ -113,24 +108,26 @@ export function DocsSidebar() {
               hidden={!open}
               className="mt-2 space-y-1.5 border-s border-border/70 ps-3"
             >
-              {section.items.map((item) => (
-                <li key={item.href}>
-                  <NavLink
-                    href={item.href}
-                    exact
-                    className={({ isActive }) =>
-                      cn(
+              {section.items.map((item) => {
+                const isActive = pathname === item.href;
+
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
                         "relative block rounded-e-lg border-s-2 px-3 py-2 leading-6 transition-[color,background-color,border-color] duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
                         isActive
                           ? "border-primary bg-muted/80 font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                           : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground"
-                      )
-                    }
-                  >
-                    {item.title}
-                  </NavLink>
-                </li>
-              ))}
+                      )}
+                    >
+                      {item.title}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         );

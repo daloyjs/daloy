@@ -12,9 +12,12 @@ type TocEntry = {
 };
 
 /**
- * Collect the `h2[id]` / `h3[id]` headings of the current docs article and
- * inject a hover "#" anchor link into each one (idempotent, so cached or
- * restored pages are not double-decorated).
+ * Collect the `h2[id]` / `h3[id]` headings of the current docs article.
+ *
+ * Read-only: the article subtree may not have hydrated yet, and mutating it
+ * (e.g. injecting anchor elements) causes hydration text mismatches. The
+ * hover "#" affordance is drawn with CSS (`::after`) instead, and
+ * {@link handleHeadingClick} makes it clickable.
  *
  * @param article - The rendered docs article element.
  * @returns The table-of-contents entries in document order.
@@ -23,33 +26,50 @@ function collectHeadings(article: HTMLElement): TocEntry[] {
   const headings = article.querySelectorAll<HTMLHeadingElement>(
     "h2[id], h3[id]"
   );
-  const entries: TocEntry[] = [];
 
-  for (const heading of headings) {
-    entries.push({
-      id: heading.id,
-      text: heading.textContent?.replace(/\s*#\s*$/, "").trim() ?? heading.id,
-      level: heading.tagName === "H2" ? 2 : 3,
-    });
+  return Array.from(headings, (heading) => ({
+    id: heading.id,
+    text: heading.textContent?.trim() ?? heading.id,
+    level: heading.tagName === "H2" ? (2 as const) : (3 as const),
+  }));
+}
 
-    if (!heading.querySelector(".heading-anchor")) {
-      const anchor = document.createElement("a");
-      anchor.href = `#${heading.id}`;
-      anchor.className = "heading-anchor";
-      anchor.setAttribute("aria-label", "Link to this section");
-      anchor.textContent = "#";
-      heading.append(anchor);
-    }
+/**
+ * Delegated click handler that turns the CSS-drawn "#" after each heading
+ * into a deep link: clicks landing past the heading's text (i.e. on the
+ * `::after` pseudo-element) set the URL hash. Clicks on the text itself are
+ * ignored so selecting or copying heading text never jumps the page.
+ *
+ * @param event - The click event from the docs article.
+ */
+function handleHeadingClick(event: MouseEvent) {
+  const target = event.target;
+
+  if (!(target instanceof Element)) {
+    return;
   }
 
-  return entries;
+  const heading = target.closest<HTMLHeadingElement>("h2[id], h3[id]");
+
+  if (!heading) {
+    return;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(heading);
+
+  if (event.clientX <= range.getBoundingClientRect().right) {
+    return;
+  }
+
+  window.location.hash = heading.id;
 }
 
 /**
  * Sticky "On this page" table of contents for docs articles.
  *
  * Reads the heading ids from the rendered article after each navigation,
- * decorates headings with hover anchor links, and highlights the section
+ * wires up the CSS-drawn hover "#" deep links, and highlights the section
  * currently in view via a passive scroll listener. Renders nothing on pages
  * with fewer than two headings.
  *
@@ -61,26 +81,38 @@ export function DocsToc() {
   const [activeId, setActiveId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const article = document.querySelector<HTMLElement>("[data-docs-content]");
+    // Deferred a tick so we read the article DOM after the commit instead of
+    // setting state synchronously inside the effect. queueMicrotask (not
+    // requestAnimationFrame) so it also runs in background tabs, where rAF
+    // is suspended.
+    let cancelled = false;
+    let article: HTMLElement | null = null;
 
-    if (!article) {
-      setEntries([]);
-      return;
-    }
+    queueMicrotask(() => {
+      if (cancelled) return;
 
-    setEntries(collectHeadings(article));
+      article = document.querySelector<HTMLElement>("[data-docs-content]");
+      article?.addEventListener("click", handleHeadingClick);
+      setEntries(article ? collectHeadings(article) : []);
+    });
+
+    return () => {
+      cancelled = true;
+      article?.removeEventListener("click", handleHeadingClick);
+    };
   }, [pathname]);
 
   React.useEffect(() => {
     if (entries.length === 0) {
-      setActiveId(null);
       return;
     }
 
+    let cancelled = false;
     let frame = 0;
 
     const update = () => {
       frame = 0;
+      if (cancelled) return;
       // The heading whose top has most recently crossed under the sticky
       // header (~96px, matching the headings' scroll-mt-24) is "active".
       let current: string | null = entries[0]?.id ?? null;
@@ -104,11 +136,13 @@ export function DocsToc() {
       }
     };
 
-    update();
+    // Initial highlight via microtask (rAF is suspended in background tabs).
+    queueMicrotask(update);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
 
     return () => {
+      cancelled = true;
       if (frame !== 0) cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);

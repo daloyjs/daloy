@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { ArrowLeftIcon, ArrowRightIcon } from "@phosphor-icons/react";
 
+import { useClientPathname } from "@/hooks/use-client-pathname";
 import { docsNav, type DocsNavItem } from "./docs-nav";
 import { cn } from "../lib/utils";
 
@@ -14,12 +14,15 @@ const FLAT_NAV: DocsNavItem[] = docsNav.flatMap((section) => section.items);
  *
  * Derives the reading order from {@link docsNav} (the same order as the
  * sidebar) and renders links to the pages before and after the current one.
- * Renders nothing on paths that are not part of the docs navigation.
+ * Renders nothing on paths that are not part of the docs navigation. Uses
+ * {@link useClientPathname} (null until mounted) so prerendered HTML stays
+ * identical across the proxy rewrites — `usePathname` here caused hydration
+ * text mismatches.
  *
  * @returns The pager footer, or `null` off the docs nav.
  */
 export function DocsPager() {
-  const pathname = usePathname();
+  const pathname = useClientPathname();
   const index = FLAT_NAV.findIndex((item) => item.href === pathname);
 
   if (index === -1) {
