@@ -13,7 +13,39 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
-## [Unreleased]
+## [1.0.0-beta.7] - 2026-07-02
+
+### Added
+
+- **MCP spec catch-up (2025-06-18 / 2025-11-25 server features).**
+  `createMcpHandler()` now supports RFC 6570 resource templates
+  (`resourceTemplates` + `resources/templates/list`, with `{name}` variable
+  extraction on `resources/read`), tool `outputSchema` and `annotations`
+  (read-only / destructive / idempotent / open-world hints), icons on the
+  server, tools, resources, templates, and prompts, and `description` /
+  `websiteUrl` on `serverInfo`. Tool results that return only
+  `structuredContent` get a serialized text block backfilled for older
+  clients; unknown pagination cursors are rejected with invalid-params on all
+  list methods; `prompts/get` enforces `required` prompt arguments; and
+  headerless non-`initialize` requests assume protocol `2025-03-26` per the
+  Streamable HTTP backwards-compatibility rule.
+- **`acknowledgeNoResponseBodySchema` route flag.** The documented escape
+  hatch for the `security.response.bodySchemaMissing` boot warning and the
+  `audit.response.bodySchema` doctor finding: set it on routes that
+  intentionally return an opaque or framework-controlled body (a raw
+  `Response`, HTML, a proxied payload). The warning message now names the
+  flag and links to the OWASP API3 docs.
+
+### Changed
+
+- **Framework-mounted routes no longer trip the framework's own
+  `bodySchemaMissing` warning.** The `docs: true` routes (`/openapi.json`,
+  `/openapi.yaml`, `/docs`), the AsyncAPI surface (`/asyncapi.json`,
+  `/asyncapi.yaml`, `/asyncapi`), and the health / metrics probes serialize
+  framework-controlled bodies, so they now acknowledge themselves — the
+  diagnostic only ever names routes the application authored. `mcpRoutes()`
+  additionally exposes the JSON-RPC 2.0 envelope as a real JSON Schema in the
+  generated OpenAPI document instead of an empty placeholder.
 
 ### Fixed
 
@@ -42,6 +74,12 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Security
 
+- **MCP Streamable HTTP endpoints now validate `Origin` (DNS-rebinding
+  defense).** The spec requires it; `createMcpHandler()` previously accepted
+  any origin. Requests without an `Origin` header (non-browser MCP clients),
+  same-origin requests, and loopback origins (`localhost`, `*.localhost`,
+  `127.0.0.1`, `[::1]`) are allowed; every other browser origin is rejected
+  with `403` unless listed in the new `allowedOrigins` option.
 - **`waf()` query inspection now matches the application's own query parser.**
   The WAF decoded the query string with `decodeURIComponent`, which does **not**
   turn `+` into a space, while the framework parses the query with
@@ -1683,6 +1721,7 @@ scaffolded projects pin the latest peer.
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...HEAD
+[1.0.0-beta.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.5...v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.3...v1.0.0-beta.4

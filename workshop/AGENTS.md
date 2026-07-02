@@ -20,8 +20,8 @@ Do not collapse these layers into a single file when adding new exercises. Senio
 
 | Category    | Technology         | Version    |
 | ----------- | ------------------ | ---------- |
-| Scaffolder  | create-daloy       | 1.0.0-beta.6  |
-| Framework   | @daloyjs/core      | ^1.0.0-beta.6 |
+| Scaffolder  | create-daloy       | 1.0.0-beta.7  |
+| Framework   | @daloyjs/core      | ^1.0.0-beta.7 |
 | Runtime     | Node.js            | >= 24.0.0  |
 | Language    | TypeScript         | ^6.0.3     |
 | Validator   | Zod                | ^4         |
