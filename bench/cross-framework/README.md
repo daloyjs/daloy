@@ -31,7 +31,7 @@ For each framework, a minimal HTTP server exposing the same three endpoints:
 > "everyone doing the least," not a router/dispatch deficiency (the router
 > micro-bench in [`../router.bench.ts`](../router.bench.ts) clocks daloy's
 > core at tens of millions of lookups/sec). For closer-to-fair tiers, see the
-> `*-nozod` and `*-validated` server variants under
+> `daloy-bare`, `*-nozod`, and `*-validated` server variants under
 > [`servers/throughput/`](servers/throughput/).
 
 Each server is hit by [autocannon](https://github.com/mcollina/autocannon) on
@@ -82,6 +82,16 @@ If you need any of these, fork the runner.
 Every server uses `JSON.stringify` / built-in body parsing only. No
 framework-specific perf tricks (no Fastify response schema, no DaloyJS
 typed-client client-side cache).
+
+Besides `daloy`, the default `run.mjs` matrix includes two first-party
+variants:
+
+- **`daloy-bare`** — validation work (Zod) and browser-facing guards stripped
+  to the same posture as the bare routers (`hono.ts`, `fastify.ts`). This is
+  the closest apple-to-apple row.
+- **`daloy-shed`** — same full contract as `daloy`, plus connection-cap
+  admission control and event-loop-delay load shedding. Compare against
+  `daloy` under `--sweep=connections` for the overload / tail-latency story.
 
 ## Running
 
@@ -146,6 +156,8 @@ spawning, machine-info capture, and statistics helpers, and write their own
 | `streaming.mjs`        | Large `ReadableStream` response throughput in MiB/s and req/s.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `middleware-stack.mjs` | Same scenarios as `run.mjs` but with the production middleware stack on (CORS, secure headers, request-id, rate-limit, JWT verify).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `logging.mjs`          | Same scenarios as `run.mjs` but with one structured Pino access log emitted per completed response. Defaults to `LOG_DEST=/dev/null` to avoid terminal or collector backpressure.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `profile-imports.mjs`  | Cold-process import cost per module: each candidate is imported in its own fresh Node process so the loader cache never warms across samples.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `smoke.mjs`            | Runs every bench script above with minimal durations/iterations to verify the harness wiring end-to-end (`pnpm bench:smoke`). CI-suitable; measures nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ### Server layout
 
@@ -165,6 +177,7 @@ servers/
 
 Daloy/Hono A/B variants that don't generalize across frameworks keep their
 descriptive suffix inside the relevant folder (e.g.
+`throughput/daloy-bare.ts`, `throughput/daloy-shed.ts`,
 `throughput/daloy-minimal.ts`, `throughput/daloy-nozod.ts`,
 `throughput/hono-validated.ts`, `scale/daloy-nozod.ts`,
 `scale/hono-validated.ts`).
@@ -252,8 +265,8 @@ machine with `--max-old-space-size` left at default.
   nothing on the GET routes and at most do a one-line `typeof` check on
   `POST /echo`. None of the others validate response bodies at all. Read the
   default table as "daloy with its safety rails on vs. everyone else with
-  theirs off," and use the `daloy-nozod` / `hono-validated` variants if you
-  want a like-for-like tier.
+  theirs off," and use the `daloy-bare` / `daloy-nozod` / `hono-validated`
+  variants if you want a like-for-like tier.
 - The numbers can shift ±10% between runs depending on CPU thermal state.
   Run twice if a number looks off.
 - Elysia on `@elysiajs/node` is **not** representative of Elysia on Bun.
