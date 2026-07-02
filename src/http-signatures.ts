@@ -640,6 +640,10 @@ function parseComponentSpec(spec: string): ComponentId {
  * Compute HTTP Message Signature header values (RFC 9421) over the described
  * message.
  *
+ * @param opts - Message description, covered components, algorithm, and key;
+ *   see {@link SignMessageOptions}.
+ * @returns The `Signature-Input` / `Signature` header values plus the exact
+ *   signature base that was signed.
  * @throws {TypeError} for unsupported algorithms, weak HMAC keys, or
  *   unserializable parameter values.
  * @throws {Error} when a covered component cannot be resolved (e.g. a covered
@@ -705,6 +709,11 @@ export type SignRequestOptions = Omit<
  * `Signature` and `Signature-Input` headers attached. The original request is
  * not mutated.
  *
+ * @param request - The outbound request to sign; its method, URL, and headers
+ *   form the signature base.
+ * @param opts - Signing options minus the per-message fields; see
+ *   {@link SignRequestOptions}.
+ * @returns A new `Request` carrying the signature headers.
  * @since 0.37.0
  */
 export async function signRequest(
@@ -741,6 +750,7 @@ export interface KeyResolutionInfo {
 
 /** Successful verification result. */
 export interface VerifySuccess {
+  /** Discriminant: always `true` on success. */
   valid: true;
   /** The verified signature label. */
   label: string;
@@ -762,6 +772,7 @@ export interface VerifySuccess {
 
 /** Failed verification result. Never throws on a bad signature. */
 export interface VerifyFailure {
+  /** Discriminant: always `false` on failure. */
   valid: false;
   /** Stable machine-readable reason code. */
   reason: string;
@@ -833,6 +844,13 @@ function fail(reason: string): VerifyFailure {
  * structured result and never throws on a bad/forged signature — only on a
  * programming error (e.g. WebCrypto unavailable).
  *
+ * @param opts - Received message plus verification policy (algorithm
+ *   allowlist, key resolver, freshness / replay checks); see
+ *   {@link VerifyMessageOptions}.
+ * @returns A {@link VerifySuccess} with the verified parameters, or a
+ *   {@link VerifyFailure} with a stable `reason` code.
+ * @throws {TypeError} when the `algorithms` allowlist is missing or empty;
+ *   there is no implicit "accept any" mode.
  * @since 0.37.0
  */
 export async function verifyMessage(
@@ -990,6 +1008,9 @@ export async function verifyMessage(
  * over {@link verifyMessage} that pulls the method, URL, and headers from the
  * request.
  *
+ * @param request - The inbound request carrying `Signature` / `Signature-Input`.
+ * @param opts - Verification policy minus the per-message fields.
+ * @returns The {@link VerifyResult}; never rejects on a bad signature.
  * @since 0.37.0
  */
 export function verifyRequest(
@@ -1034,6 +1055,9 @@ export interface HttpSignatureAuthOptions
  * a missing (unless `optional`) or invalid signature it throws
  * {@link UnauthorizedError} (`401` + `Cache-Control: no-store`).
  *
+ * @param opts - Verification policy plus middleware knobs; see
+ *   {@link HttpSignatureAuthOptions}.
+ * @returns A {@link Hooks} object to pass to `app.use()` or a route's `hooks`.
  * @since 0.37.0
  */
 export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
@@ -1075,6 +1099,10 @@ function toBytes(body: Uint8Array | string): Uint8Array {
  * bind the request body into the signature, then re-check it against the
  * received body with {@link verifyContentDigest}.
  *
+ * @param body - Raw body bytes, or a string encoded as UTF-8.
+ * @param opts - Optional `algorithm` choice. Defaults to `"sha-256"`.
+ * @returns The structured-field header value, e.g. `sha-256=:<base64>:`.
+ * @throws {TypeError} for an unsupported digest algorithm.
  * @since 0.37.0
  */
 export async function contentDigest(
@@ -1097,6 +1125,10 @@ export async function contentDigest(
  * Returns `false` for any malformed header or mismatch (never throws on bad
  * input). Only `sha-256` / `sha-512` members are considered.
  *
+ * @param header - The received `Content-Digest` header value.
+ * @param body - Raw body bytes, or a string encoded as UTF-8.
+ * @returns `true` only when at least one supported digest member matched
+ *   (compared in constant time); `false` for mismatch or malformed input.
  * @since 0.37.0
  */
 export async function verifyContentDigest(

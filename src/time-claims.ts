@@ -27,6 +27,7 @@
  * @since 0.27.0
  */
 export class TemporalClaimError extends Error {
+  /** Machine-readable failure code identifying which claim check failed. */
   readonly code: TemporalClaimErrorCode;
   constructor(code: TemporalClaimErrorCode, message: string) {
     super(message);
@@ -35,7 +36,13 @@ export class TemporalClaimError extends Error {
   }
 }
 
-/** @since 0.27.0 */
+/**
+ * Failure codes for {@link TemporalClaimError}. `invalid_*` codes mean the
+ * claim (or option) was present but not a finite number; the remaining codes
+ * mean a well-formed claim failed its RFC 7519 time comparison.
+ *
+ * @since 0.27.0
+ */
 export type TemporalClaimErrorCode =
   | "invalid_exp"
   | "token_expired"
@@ -53,12 +60,20 @@ export type TemporalClaimErrorCode =
  * @since 0.27.0
  */
 export interface TemporalClaims {
+  /** Expiration time (RFC 7519 `exp`), unix seconds. Validated when present. */
   readonly exp?: unknown;
+  /** Not-before time (RFC 7519 `nbf`), unix seconds. Validated when present. */
   readonly nbf?: unknown;
+  /** Issued-at time (RFC 7519 `iat`), unix seconds. Rejected if in the future. */
   readonly iat?: unknown;
 }
 
-/** @since 0.27.0 */
+/**
+ * Options for {@link assertTemporalClaims}: the reference clock and the
+ * symmetric clock-skew tolerance.
+ *
+ * @since 0.27.0
+ */
 export interface AssertTemporalClaimsOptions {
   /** Current unix-seconds timestamp. Injectable for tests. */
   readonly now: number;
@@ -85,6 +100,11 @@ function isFiniteNumber(v: unknown): v is number {
  *  - `iat` rejected when `iat - skew > now` (issued in the future — the
  *    issuer's clock is wrong, or someone pre-issued a token).
  *
+ * @param claims Decoded payload; only the claims that are present are checked.
+ * @param opts Reference clock (`now`, unix seconds) and optional
+ *   `clockSkewSeconds` tolerance (defaults to `0`).
+ * @throws TemporalClaimError on the first failing check, including malformed
+ *   (non-finite) claim values or an invalid `now` / negative skew.
  * @since 0.27.0
  */
 export function assertTemporalClaims(

@@ -40,6 +40,7 @@ export interface DependencyOptions<TName extends string, TValue, TStateKey exten
 
 /** Hooks bundle returned by {@link defineDependency} (carries metadata). */
 export interface DependencyHooks extends Hooks {
+  /** Non-enumerable dependency metadata (`name` + `dependsOn`) used for dedup and cycle checks. */
   readonly [DEPENDENCY_MARKER]: {
     readonly name: string;
     readonly dependsOn: readonly string[];
@@ -52,6 +53,9 @@ export interface DependencyHooks extends Hooks {
  * `ctx.state[stateKey]` (default `name`). Composing the same dependency
  * twice in one chain runs `resolve()` exactly once.
  *
+ * @param opts - Dependency `name`, optional `dependsOn` / `stateKey`, and the `resolve` function.
+ * @returns A {@link DependencyHooks} bundle to compose via `app.use()` / route hooks.
+ * @throws {Error} When `name` is empty or the dependency declares itself in `dependsOn` (cycle).
  * @since 0.24.0
  */
 export function defineDependency<

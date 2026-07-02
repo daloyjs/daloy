@@ -85,6 +85,9 @@ async function tryLoadPerfHooks(): Promise<PerfHooksAPI | undefined> {
  *   retryAfterSeconds: 5,
  * }));
  * ```
+ *
+ * @param opts - Pressure thresholds (event-loop delay default 1000 ms, ELU default 0.98, optional heap/RSS byte caps), sampling interval, `Retry-After` seconds, and an optional custom `healthCheck`.
+ * @returns A {@link Hooks} bundle that sheds requests with `503` + `Retry-After` while pressure thresholds are exceeded.
  */
 export function loadShedding(opts: LoadSheddingOptions = {}): Hooks {
   const maxDelay = opts.maxEventLoopDelayMs ?? 1000;

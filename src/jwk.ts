@@ -49,6 +49,7 @@ const ALLOWED_JWK_ALGS: ReadonlySet<JwkAlgorithm> = new Set([
 
 /** Minimal JWKS document shape (RFC 7517 §5). */
 export interface JwkSet {
+  /** Public JWKs; each entry should carry a `kid` so tokens can select their key. */
   keys: JsonWebKey[];
 }
 
@@ -67,7 +68,11 @@ export type JwkVerifyHook = (
   ctx: BaseContext<any, any>,
 ) => boolean | void | Promise<boolean | void>;
 
-/** Options for {@link jwk}. */
+/**
+ * Options for {@link jwk}: the JWKS source and asymmetric algorithm allowlist
+ * are required; issuer / audience / clock-skew checks, JWKS fetch caching,
+ * and a per-request revalidation hook are opt-in.
+ */
 export interface JwkOptions {
   /** JWKS source (object, URL, or resolver). */
   jwks: JwkSource;
@@ -265,6 +270,12 @@ function makeJwksLoader(
  * });
  * ```
  *
+ * @param opts - JWKS source, algorithm allowlist, and claim checks; see
+ *   {@link JwkOptions}.
+ * @returns A {@link Hooks} object to pass to `app.use()` or a route's `hooks`;
+ *   failed auth yields a `401` problem+json with `WWW-Authenticate`.
+ * @throws {Error} at construction for missing options, an empty or
+ *   symmetric-containing allowlist, invalid TTLs, or a malformed realm.
  * @since 0.22.0
  */
 export function jwk(opts: JwkOptions): Hooks {

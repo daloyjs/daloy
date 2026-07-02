@@ -57,14 +57,19 @@ export interface IpRestrictionOptions {
 
 /** @internal Parsed IP address (shared with `fetchGuard()`). */
 export interface ParsedIp {
+  /** Big-endian address bytes: 4 bytes for IPv4, 16 for IPv6. */
   bytes: Uint8Array;
+  /** Address family: `4` for IPv4, `6` for IPv6. */
   family: 4 | 6;
 }
 
 /** @internal Compiled CIDR matcher (shared with `fetchGuard()`). */
 export interface IpMatcher {
+  /** Address family the matcher applies to: `4` or `6`. */
   family: 4 | 6;
+  /** CIDR prefix length in bits (0-32 for IPv4, 0-128 for IPv6). */
   prefix: number;
+  /** Network address bytes with all host bits masked to zero. */
   bytes: Uint8Array;
 }
 
@@ -86,6 +91,12 @@ export interface IpMatcher {
  * On reject the middleware throws a {@link ForbiddenError}, which Daloy
  * renders as RFC 9457 `application/problem+json`.
  *
+ * @param opts Allow/deny lists plus IP-resolution options; see
+ *   {@link IpRestrictionOptions}. Deny matches always win over allow.
+ * @returns A {@link Hooks} object whose `beforeHandle` enforces the lists,
+ *   failing closed (403) when the client IP cannot be resolved or parsed.
+ * @throws Error at setup time when neither `allow` nor `deny` is provided,
+ *   or when a pattern is not a valid IP/CIDR.
  * @since 0.19.0
  */
 export function ipRestriction(opts: IpRestrictionOptions): Hooks {
@@ -126,7 +137,16 @@ function forwardedIpResolver(ctx: BaseContext<any, any>): string | undefined {
   return headers.get("x-real-ip") ?? undefined;
 }
 
-/** @internal */
+/**
+ * Test whether a parsed IP falls inside a compiled CIDR matcher, comparing
+ * only the matcher's prefix bits. IPv4-mapped IPv6 addresses
+ * (`::ffff:a.b.c.d`) are normalized so they match IPv4 matchers.
+ *
+ * @param ip Parsed client address from {@link parseIp}.
+ * @param m Compiled matcher from {@link compileCidrMatcher}.
+ * @returns `true` when the address is within the matcher's range.
+ * @internal
+ */
 export function matchesMatcher(ip: ParsedIp, m: IpMatcher): boolean {
   const candidate = normalizeFamily(ip, m.family);
   if (!candidate) return false;
@@ -143,7 +163,16 @@ export function matchesMatcher(ip: ParsedIp, m: IpMatcher): boolean {
   return ((candidate[fullBytes]! ^ expected[fullBytes]!) & mask) === 0;
 }
 
-/** @internal */
+/**
+ * Compile an IP or CIDR pattern (e.g. `"10.0.0.0/8"`, `"::1"`) into an
+ * {@link IpMatcher}. A bare address gets a full-length prefix (/32 or /128);
+ * host bits beyond the prefix are masked to zero.
+ *
+ * @param input IPv4/IPv6 address, optionally with a `/prefix` suffix.
+ * @returns The compiled matcher used by {@link matchesMatcher}.
+ * @throws Error when the address or CIDR prefix is invalid.
+ * @internal
+ */
 export function compileCidrMatcher(input: string): IpMatcher {
   let addr = input;
   let prefixStr: string | undefined;
@@ -200,7 +229,15 @@ function applyPrefixMask(bytes: Uint8Array, prefix: number): Uint8Array {
   return out;
 }
 
-/** @internal */
+/**
+ * Parse an IPv4 or IPv6 address string into raw bytes. Supports IPv6 `::`
+ * compression and IPv4-mapped tails (`::ffff:1.2.3.4`).
+ *
+ * @param input Address string; surrounding whitespace is trimmed.
+ * @returns The parsed address, or `undefined` when the input is not a valid
+ *   IP (callers treat unparseable addresses as a rejection, failing closed).
+ * @internal
+ */
 export function parseIp(input: string): ParsedIp | undefined {
   const trimmed = input.trim();
   if (trimmed.includes(":")) return parseIPv6(trimmed);

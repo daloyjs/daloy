@@ -20,7 +20,9 @@ import type { RouteDefinition, RouteMeta } from "./types.js";
 
 /** I/O hooks used by {@link runCli} to read modules, write output, and spawn child processes. */
 export interface CliIO {
+  /** Write a chunk to standard output (tables, JSON/YAML dumps). */
   stdout: (chunk: string) => void;
+  /** Write a chunk to standard error (usage errors, diagnostics). */
   stderr: (chunk: string) => void;
   /** Resolve a user-provided entry specifier to a module to import. */
   importEntry: (specifier: string) => Promise<unknown>;
@@ -46,16 +48,23 @@ export interface CliIO {
 
 /** Return value of {@link runCli}. The caller wires `exitCode` into `process.exit(...)`. */
 export interface CliResult {
+  /** Process exit code: `0` on success, `1` on load failures or failed checks, `2` on usage errors. */
   exitCode: number;
 }
 
 /** Parsed CLI flags accepted by {@link runCli}. See {@link parseArgs}. */
 export interface CliOptions {
+  /** `--json`: print machine-readable JSON instead of a table. */
   json: boolean;
+  /** `--check`: run the contract test suite; exit 1 on errors. */
   check: boolean;
+  /** `--schemas`: include per-route schema presence (body/query/params/headers). */
   schemas: boolean;
+  /** `--openapi`: print the App's OpenAPI 3.1 document. */
   openapi: boolean;
+  /** `--asyncapi`: print the AsyncAPI 3.0 document for the App's WebSocket surfaces. */
   asyncapi: boolean;
+  /** `--ai`: print the AI/codegen-friendly route-catalog dump ({@link buildAiDump}). */
   ai: boolean;
   /**
    * Output format for `--ai` and `--openapi`. Defaults to `"json"`.
@@ -66,10 +75,15 @@ export interface CliOptions {
    * @since 0.14.2
    */
   format?: "json" | "yaml";
+  /** `--tag <tag>`: only show routes that declare this tag. */
   tag?: string;
+  /** `--method <method>`: only show routes for this HTTP method (uppercased by {@link parseArgs}). */
   method?: string;
+  /** Entry file to load the App from (last positional argument). */
   entry?: string;
+  /** `-h` / `--help`: print usage and exit 0. */
   help: boolean;
+  /** `-v` / `--version`: print the CLI version and exit 0. */
   version: boolean;
   /** Override runtime detection for `daloy dev`. */
   runtime?: DevRuntime;
@@ -191,6 +205,7 @@ export type DevRuntime = "node" | "bun" | "deno";
  * Detect which JS runtime is hosting the CLI. Inspects
  * `globalThis.process.versions` for Bun/Deno markers; falls back to Node.
  *
+ * @returns `"bun"`, `"deno"`, or `"node"` (the default when no marker is found).
  * @since 0.3.0
  */
 export function detectRuntime(): DevRuntime {
@@ -214,6 +229,9 @@ export function detectRuntime(): DevRuntime {
  * `runCli()` callers and tests so the invariant holds regardless of how the
  * entry value was produced.
  *
+ * @param entry - Entry path to validate.
+ * @param context - Label prefixed to error messages (e.g. `"daloy dev"`).
+ * @throws Error when the path is empty, contains NUL/CR/LF, or starts with `-`.
  * @internal
  */
 export function assertSafeEntryPath(entry: string, context: string): void {
@@ -240,6 +258,8 @@ export function assertSafeEntryPath(entry: string, context: string): void {
  * paths like `src/server.ts` are rewritten to `./src/server.ts`. This is
  * the second half of the {@link assertSafeEntryPath} defense.
  *
+ * @param entry - Entry path to anchor.
+ * @returns The path unchanged if already absolute or `./`/`../`-anchored (Windows drive paths included); otherwise `./` + path.
  * @internal
  */
 export function normalizeEntryArg(entry: string): string {
@@ -269,6 +289,10 @@ export function normalizeEntryArg(entry: string): string {
  * `SECURITY.md` § "CLI threat model" for the full rationale (and why we
  * are not vulnerable to the class of bug Snyk reported as CVE-2022-22984).
  *
+ * @param runtime - Host runtime to build the command for.
+ * @param entry - Entry file to run; validated and `./`-anchored before use.
+ * @returns The executable name and argv array to pass to `spawn({ shell: false })`.
+ * @throws Error via {@link assertSafeEntryPath} when the entry path is unsafe.
  * @since 0.3.0
  */
 export function buildDevCommand(runtime: DevRuntime, entry: string): { command: string; args: string[] } {
@@ -319,6 +343,10 @@ async function resolveDevEntry(entry: string | undefined): Promise<string> {
 /**
  * Parse a process-style argv (without the `node`/`daloy` prefix) into a
  * `{ command, opts }` pair. Throws on unknown flags or invalid enum values.
+ *
+ * @param argv - Arguments after the binary name, e.g. `["inspect", "--json", "./src/server.ts"]`.
+ * @returns The resolved command (default `"inspect"`) and parsed {@link CliOptions}.
+ * @throws Error on unknown `-`-prefixed flags, missing flag values, or invalid `--format`/`--runtime` values.
  */
 export function parseArgs(argv: readonly string[]): { command: string; opts: CliOptions } {
   const opts: CliOptions = {
@@ -421,6 +449,10 @@ function readFlagValue(argv: readonly string[], index: number, flag: string): st
  * Execute the CLI against the supplied argv and {@link CliIO}. Does not read
  * `process.argv`, write to process stdio, or call `process.exit()` directly,
  * so tests can drive `inspect`/`dev`/`doctor` with in-memory stdio.
+ *
+ * @param argv - Process-style arguments (without the `node`/`daloy` prefix); see {@link parseArgs}.
+ * @param io - I/O hooks for stdout/stderr, module import, spawning, and file reads.
+ * @returns A {@link CliResult} whose `exitCode` the caller feeds to `process.exit()`.
  */
 export async function runCli(argv: readonly string[], io: CliIO): Promise<CliResult> {
   let parsed: ReturnType<typeof parseArgs>;
@@ -941,6 +973,9 @@ async function runDev(opts: CliOptions, io: CliIO): Promise<CliResult> {
  * stable and self-describing so LLMs and SDK builders can consume it
  * without round-tripping through OpenAPI.
  *
+ * @param app - Loaded App whose route registry is dumped.
+ * @param opts - Parsed CLI options; `--tag` / `--method` filter the catalog.
+ * @returns JSON-serializable dump with `daloy.ai` version marker, `generatedAt`, and the `routes` array.
  * @since 0.14.0
  */
 export function buildAiDump(app: App, opts: CliOptions): Record<string, unknown> {

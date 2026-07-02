@@ -357,6 +357,9 @@ async function compressBytes(
  * app.use(compression());
  * ```
  *
+ * @param opts Compression tuning ({@link CompressionOptions}); `minimumSize` defaults to `1024` bytes.
+ * @returns A {@link Hooks} bundle whose `onSend` compresses eligible response bodies.
+ * @throws TypeError if `compressLevel` is passed or `minimumSize` is not a finite non-negative integer.
  * @since 0.25.0
  */
 export function compression(opts: CompressionOptions = {}): Hooks {

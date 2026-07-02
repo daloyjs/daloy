@@ -12,13 +12,21 @@ export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
  * thin adapter; the default implementation is {@link createLogger}.
  */
 export interface Logger {
+  /** Minimum level emitted; records below this level are dropped. */
   level: LogLevel;
+  /** Log at `trace` level. Pass a fields object plus optional message, or a message string. */
   trace(obj: object | string, msg?: string): void;
+  /** Log at `debug` level. Pass a fields object plus optional message, or a message string. */
   debug(obj: object | string, msg?: string): void;
+  /** Log at `info` level. Pass a fields object plus optional message, or a message string. */
   info(obj: object | string, msg?: string): void;
+  /** Log at `warn` level. Pass a fields object plus optional message, or a message string. */
   warn(obj: object | string, msg?: string): void;
+  /** Log at `error` level. Pass a fields object plus optional message, or a message string. */
   error(obj: object | string, msg?: string): void;
+  /** Log at `fatal` level. Pass a fields object plus optional message, or a message string. */
   fatal(obj: object | string, msg?: string): void;
+  /** Return a derived logger whose records always include `bindings` merged into each record. */
   child(bindings: Record<string, unknown>): Logger;
 }
 
@@ -121,7 +129,9 @@ export const DEFAULT_REDACT_KEYS: readonly string[] = Object.freeze([
 
 /** Options for {@link createLogger}. */
 export interface ConsoleLoggerOptions {
+  /** Minimum level to emit. Defaults to `"info"`. */
   level?: LogLevel;
+  /** Fields merged into every record emitted by this logger and its children. */
   bindings?: Record<string, unknown>;
   /** Where to write. Defaults to process.stdout.write or console.log. */
   write?: (line: string) => void;
@@ -203,6 +213,9 @@ function redactString(value: string, cfg: ResolvedRedaction): string {
  * `cfg.redactJwt` is on) with `cfg.censor`. Exported for direct use by
  * custom logger implementations that want the same defaults.
  *
+ * @param record - Log record to redact. Mutated in place (cycle-safe, depth-capped).
+ * @param cfg - Resolved redaction settings (key set, censor, JWT/credential toggles, max depth).
+ * @returns The same `record` object, for chaining.
  * @since 0.15.0
  */
 export function redactRecord(

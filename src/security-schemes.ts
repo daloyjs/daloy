@@ -16,6 +16,7 @@ export type ApiKeyLocation = "header" | "query" | "cookie";
 export interface HttpBearerSchemeOptions {
   /** Hint about the bearer token format (e.g. "JWT"). */
   bearerFormat?: string;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
   /** Require payload/body authentication for routes using this scheme. */
   requirePayloadAuth?: boolean;
@@ -23,6 +24,7 @@ export interface HttpBearerSchemeOptions {
 
 /** Options for {@link httpBasicScheme}. */
 export interface HttpBasicSchemeOptions {
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
   /** Require payload/body authentication for routes using this scheme. */
   requirePayloadAuth?: boolean;
@@ -30,8 +32,11 @@ export interface HttpBasicSchemeOptions {
 
 /** Options for {@link apiKeyScheme}. */
 export interface ApiKeySchemeOptions {
+  /** Where the key is presented: `"header"`, `"query"`, or `"cookie"`. */
   in: ApiKeyLocation;
+  /** Name of the header, query parameter, or cookie that carries the key. */
   name: string;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
   /** Require payload/body authentication for routes using this scheme. */
   requirePayloadAuth?: boolean;
@@ -39,44 +44,63 @@ export interface ApiKeySchemeOptions {
 
 /** OAuth2 Implicit flow object (deprecated in OAuth 2.1 but still part of OpenAPI). */
 export interface OAuth2ImplicitFlow {
+  /** Authorization endpoint URL (OpenAPI `authorizationUrl`; must be TLS). */
   authorizationUrl: string;
+  /** Optional URL for obtaining refresh tokens. */
   refreshUrl?: string;
+  /** Map of scope name to short description. May be empty. */
   scopes: Record<string, string>;
 }
 
 /** OAuth2 Resource Owner Password Credentials flow object. */
 export interface OAuth2PasswordFlow {
+  /** Token endpoint URL (OpenAPI `tokenUrl`; must be TLS). */
   tokenUrl: string;
+  /** Optional URL for obtaining refresh tokens. */
   refreshUrl?: string;
+  /** Map of scope name to short description. May be empty. */
   scopes: Record<string, string>;
 }
 
 /** OAuth2 Client Credentials flow object. */
 export interface OAuth2ClientCredentialsFlow {
+  /** Token endpoint URL (OpenAPI `tokenUrl`; must be TLS). */
   tokenUrl: string;
+  /** Optional URL for obtaining refresh tokens. */
   refreshUrl?: string;
+  /** Map of scope name to short description. May be empty. */
   scopes: Record<string, string>;
 }
 
 /** OAuth2 Authorization Code flow object (the recommended interactive flow). */
 export interface OAuth2AuthorizationCodeFlow {
+  /** Authorization endpoint URL (OpenAPI `authorizationUrl`; must be TLS). */
   authorizationUrl: string;
+  /** Token endpoint URL (OpenAPI `tokenUrl`; must be TLS). */
   tokenUrl: string;
+  /** Optional URL for obtaining refresh tokens. */
   refreshUrl?: string;
+  /** Map of scope name to short description. May be empty. */
   scopes: Record<string, string>;
 }
 
 /** Container for all OAuth2 flows supported by a single scheme. At least one entry is required. */
 export interface OAuth2Flows {
+  /** Implicit flow (deprecated in OAuth 2.1; avoid for new APIs). */
   implicit?: OAuth2ImplicitFlow;
+  /** Resource Owner Password Credentials flow. */
   password?: OAuth2PasswordFlow;
+  /** Client Credentials flow (machine-to-machine). */
   clientCredentials?: OAuth2ClientCredentialsFlow;
+  /** Authorization Code flow (the recommended interactive flow). */
   authorizationCode?: OAuth2AuthorizationCodeFlow;
 }
 
 /** Options for {@link oauth2Scheme}. */
 export interface OAuth2SchemeOptions {
+  /** Supported OAuth2 flows. At least one entry is required. */
   flows: OAuth2Flows;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
   /** Require payload/body authentication for routes using this scheme. */
   requirePayloadAuth?: boolean;
@@ -84,7 +108,9 @@ export interface OAuth2SchemeOptions {
 
 /** Options for {@link openIdConnectScheme}. */
 export interface OpenIdConnectSchemeOptions {
+  /** OpenID Connect Discovery URL (typically ends in `/.well-known/openid-configuration`). */
   openIdConnectUrl: string;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
   /** Require payload/body authentication for routes using this scheme. */
   requirePayloadAuth?: boolean;
@@ -95,43 +121,61 @@ export const REQUIRE_PAYLOAD_AUTH_EXTENSION = "x-daloy-require-payload-auth" as 
 
 /** Mixin shape for schemes that opt into payload authentication via {@link REQUIRE_PAYLOAD_AUTH_EXTENSION}. */
 export interface RequirePayloadAuthExtension {
+  /** Set to `true` when routes using this scheme must also pass payload (signed body) authentication. */
   readonly [REQUIRE_PAYLOAD_AUTH_EXTENSION]?: true;
 }
 
 /** OpenAPI HTTP Bearer security scheme returned by {@link httpBearerScheme}. */
 export interface HttpBearerScheme extends RequirePayloadAuthExtension {
+  /** OpenAPI security scheme `type` discriminant. Always `"http"`. */
   type: "http";
+  /** HTTP auth scheme name per RFC 9110. Always `"bearer"`. */
   scheme: "bearer";
+  /** Hint about the bearer token format (e.g. "JWT"). */
   bearerFormat?: string;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
 }
 
 /** OpenAPI HTTP Basic security scheme returned by {@link httpBasicScheme}. */
 export interface HttpBasicScheme extends RequirePayloadAuthExtension {
+  /** OpenAPI security scheme `type` discriminant. Always `"http"`. */
   type: "http";
+  /** HTTP auth scheme name per RFC 9110. Always `"basic"`. */
   scheme: "basic";
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
 }
 
 /** OpenAPI API-key security scheme returned by {@link apiKeyScheme}. */
 export interface ApiKeyScheme extends RequirePayloadAuthExtension {
+  /** OpenAPI security scheme `type` discriminant. Always `"apiKey"`. */
   type: "apiKey";
+  /** Where the key is presented: `"header"`, `"query"`, or `"cookie"`. */
   in: ApiKeyLocation;
+  /** Name of the header, query parameter, or cookie that carries the key. */
   name: string;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
 }
 
 /** OpenAPI OAuth2 security scheme returned by {@link oauth2Scheme}. */
 export interface OAuth2Scheme extends RequirePayloadAuthExtension {
+  /** OpenAPI security scheme `type` discriminant. Always `"oauth2"`. */
   type: "oauth2";
+  /** Supported OAuth2 flows (at least one entry). */
   flows: OAuth2Flows;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
 }
 
 /** OpenAPI OpenID Connect security scheme returned by {@link openIdConnectScheme}. */
 export interface OpenIdConnectScheme extends RequirePayloadAuthExtension {
+  /** OpenAPI security scheme `type` discriminant. Always `"openIdConnect"`. */
   type: "openIdConnect";
+  /** OpenID Connect Discovery URL (typically ends in `/.well-known/openid-configuration`). */
   openIdConnectUrl: string;
+  /** Human-readable description shown in the generated docs (CommonMark). */
   description?: string;
 }
 
@@ -157,6 +201,9 @@ function markRequirePayloadAuth<T extends RequirePayloadAuthExtension>(
  * Returns `true` when `scheme` opts into payload (signed body) authentication
  * via either the legacy `requirePayloadAuth` flag or the canonical
  * {@link REQUIRE_PAYLOAD_AUTH_EXTENSION} OpenAPI extension.
+ *
+ * @param scheme - Candidate security scheme object (non-objects are tolerated).
+ * @returns `true` when payload auth is required; `false` otherwise.
  */
 export function securitySchemeRequiresPayloadAuth(scheme: unknown): boolean {
   if (!scheme || typeof scheme !== "object") return false;
@@ -171,6 +218,9 @@ export function securitySchemeRequiresPayloadAuth(scheme: unknown): boolean {
  * Normalize a builder output into a spec-compliant OpenAPI security scheme by
  * stripping the convenience `requirePayloadAuth` flag and emitting the
  * canonical {@link REQUIRE_PAYLOAD_AUTH_EXTENSION} extension instead.
+ *
+ * @param scheme - Candidate security scheme object (non-objects pass through untouched).
+ * @returns A copy without `requirePayloadAuth` (extension set when it was `true`), or the input itself when no normalization is needed.
  */
 export function toOpenAPISecurityScheme(scheme: unknown): unknown {
   if (!scheme || typeof scheme !== "object") return scheme;

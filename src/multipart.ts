@@ -124,6 +124,7 @@ export type UploadedFile = Blob & { readonly name?: string };
  */
 export interface FileFieldSchema<Output = UploadedFile>
   extends StandardSchemaV1<unknown, Output> {
+  /** Resolved {@link FileFieldOptions} (with `format` defaulted) stamped on the schema for OpenAPI generation. */
   readonly [FILE_FIELD_MARKER]: Required<Pick<FileFieldOptions, "format">> &
     FileFieldOptions;
 }
@@ -355,13 +356,29 @@ async function verifyMagicBytes(
  * Use inside a `multipartObject({...})` body schema, or directly inside any
  * Standard-Schema-compatible object schema (Zod, Valibot, ...). DaloyJS
  * keeps the underlying `File` reference so handlers can stream the body.
+ *
+ * @param options - Field constraints with `optional: true`; `null`/`undefined` values pass through.
+ * @returns A {@link FileFieldSchema} whose output may be `null`/`undefined`.
  */
 export function fileField(
   options: FileFieldOptions & { optional: true }
 ): FileFieldSchema<UploadedFile | null | undefined>;
-/** Validator for a required single uploaded `File`/`Blob` field. */
+/**
+ * Validator for a required single uploaded `File`/`Blob` field.
+ *
+ * @param options - Field constraints (`maxBytes`, `accept`, `filename`, `magicBytes`, ...).
+ * @returns A {@link FileFieldSchema} that rejects missing or non-file values.
+ */
 export function fileField(options?: FileFieldOptions): FileFieldSchema<UploadedFile>;
-/** Shared implementation for the `fileField` overloads above. */
+/**
+ * Shared implementation for the `fileField` overloads above.
+ *
+ * @param options - Field constraints; `format` defaults to `"binary"`, and
+ *   the scriptable-image guard defaults to on whenever `magicBytes` is set.
+ * @returns The marker-carrying {@link FileFieldSchema} validator.
+ * @throws Error at construction when `magicBytes` config is malformed (bad
+ *   offset, empty/out-of-range bytes, or `true` without a sniffable `accept`).
+ */
 export function fileField(
   options: FileFieldOptions = {}
 ): FileFieldSchema<UploadedFile | null | undefined> {
@@ -452,7 +469,12 @@ export function fileField(
   return schema;
 }
 
-/** Type-only check used by the OpenAPI generator. */
+/**
+ * Type-only check used by the OpenAPI generator.
+ *
+ * @param s - Candidate value to test for the `FILE_FIELD_MARKER` key.
+ * @returns `true` when `s` is a {@link fileField}-produced schema.
+ */
 export function isFileFieldSchema(
   s: unknown
 ): s is FileFieldSchema {
@@ -485,6 +507,12 @@ interface MultipartSchema<S extends MultipartShape>
  * body. Each entry in `shape` validates one form field by name. File fields
  * should use {@link fileField}; non-file fields can use any Standard-Schema
  * validator (`z.string()`, `v.number()`, ...).
+ *
+ * @param shape - Record mapping form-field names to per-field validators.
+ * @param options - `strict: true` rejects undeclared extra fields. Defaults
+ *   to `{ strict: false }` (extras pass through unvalidated).
+ * @returns A marker-carrying schema the OpenAPI generator renders as
+ *   `multipart/form-data`; validation issues are prefixed with the field name.
  */
 export function multipartObject<S extends MultipartShape>(
   shape: S,
@@ -536,14 +564,25 @@ export function multipartObject<S extends MultipartShape>(
   return schema;
 }
 
-/** Type-only check used by the OpenAPI generator and request-body parser. */
+/**
+ * Type-only check used by the OpenAPI generator and request-body parser.
+ *
+ * @param s - Candidate value to test for the `MULTIPART_SCHEMA_MARKER` key.
+ * @returns `true` when `s` is a {@link multipartObject}-produced schema.
+ */
 export function isMultipartObjectSchema(
   s: unknown
 ): s is MultipartSchema<MultipartShape> {
   return !!s && typeof s === "object" && MULTIPART_SCHEMA_MARKER in (s as object);
 }
 
-/** Internal: pull the multipart shape so the OpenAPI generator can walk it. */
+/**
+ * Internal: pull the multipart shape so the OpenAPI generator can walk it.
+ *
+ * @param s - Candidate schema value.
+ * @returns The `{ shape, strict }` config stored under the multipart marker,
+ *   or `undefined` when `s` is not a {@link multipartObject} schema.
+ */
 export function getMultipartShape(
   s: unknown
 ): { shape: MultipartShape; strict: boolean } | undefined {
@@ -553,7 +592,13 @@ export function getMultipartShape(
   ];
 }
 
-/** Internal: read the file-field options used for OpenAPI documentation. */
+/**
+ * Internal: read the file-field options used for OpenAPI documentation.
+ *
+ * @param s - Candidate schema value.
+ * @returns The resolved {@link FileFieldOptions} stored under the file-field
+ *   marker, or `undefined` when `s` is not a {@link fileField} schema.
+ */
 export function getFileFieldOptions(
   s: unknown
 ): (Required<Pick<FileFieldOptions, "format">> & FileFieldOptions) | undefined {

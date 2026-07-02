@@ -98,12 +98,34 @@ export interface CspDirectivesOptions {
 
 /** Options for {@link secureHeaders}. Every field can be disabled with `false`. */
 export interface SecureHeadersOptions {
+  /**
+   * `Content-Security-Policy` value: a raw header string, a
+   * {@link CspDirectivesOptions} object (enables nonces / Trusted Types),
+   * or `false` to omit. Defaults to
+   * `"default-src 'self'; frame-ancestors 'none'"`.
+   */
   contentSecurityPolicy?: string | false | CspDirectivesOptions;
+  /**
+   * `Strict-Transport-Security` settings (`maxAgeSeconds` in seconds).
+   * Defaults to `{ maxAgeSeconds: 31536000, includeSubDomains: true }`.
+   */
   hsts?: { maxAgeSeconds: number; includeSubDomains?: boolean; preload?: boolean } | false;
+  /**
+   * `X-Frame-Options` value. Defaults to `"DENY"`. Disabling it with
+   * `false` while the CSP also lacks `frame-ancestors` throws at
+   * construction time (clickjacking guard).
+   */
   frameOptions?: "DENY" | "SAMEORIGIN" | false;
+  /** `Referrer-Policy` value. Defaults to `"no-referrer"`. */
   referrerPolicy?: string | false;
+  /**
+   * `Permissions-Policy` value. Defaults to
+   * `"camera=(), microphone=(), geolocation=(), clipboard-write=()"`.
+   */
   permissionsPolicy?: string | false;
+  /** `Cross-Origin-Opener-Policy` value. Defaults to `"same-origin"`. */
   crossOriginOpenerPolicy?: string | false;
+  /** `Cross-Origin-Resource-Policy` value. Defaults to `"same-origin"`. */
   crossOriginResourcePolicy?: string | false;
   /**
    * `Cross-Origin-Embedder-Policy` (COEP). Off by default because
@@ -117,7 +139,12 @@ export interface SecureHeadersOptions {
    * @since 0.37.0
    */
   crossOriginEmbedderPolicy?: "require-corp" | "credentialless" | "unsafe-none" | false;
+  /** Emit `X-Content-Type-Options: nosniff`. Defaults to `true`. */
   noSniff?: boolean;
+  /**
+   * Emit `X-XSS-Protection: 0` (disables the legacy XSS auditor, per
+   * modern guidance). Defaults to `false` (header omitted).
+   */
   xssProtection?: boolean;
   /**
    * Reporting API endpoint declarations rendered as the
@@ -260,6 +287,11 @@ export const SECURE_HEADERS_MARKER: unique symbol = Symbol.for("daloyjs.middlewa
  * {@link SecureHeadersOptions} for the full list). Pass `false` for any
  * field to disable that header; handler-set headers always win.
  *
+ * @param opts - Per-header overrides. Pass `false` to disable a header.
+ * @returns A {@link Hooks} bundle ready for `app.use(...)`, stamped with
+ * {@link SECURE_HEADERS_MARKER}.
+ * @throws {Error} When `frameOptions: false` is combined with a CSP that has
+ * no `frame-ancestors` directive (would disable every clickjacking defense).
  * @since 0.1.0
  */
 export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
@@ -604,11 +636,30 @@ export type CorsOriginAllow = (origin: string) => boolean;
 
 /** Options for {@link cors}. */
 export interface CorsOptions {
+  /**
+   * Allowed cross-origin caller(s): a single origin string, an array of
+   * origins, or a predicate. `"*"` is rejected with `credentials: true`
+   * and refused at boot on production `secureDefaults` apps.
+   */
   origin: string | string[] | ((origin: string) => boolean);
+  /**
+   * Verbs advertised on preflight (`Access-Control-Allow-Methods`).
+   * Defaults to `["GET", "HEAD", "POST"]`. `"*"` is rejected.
+   */
   methods?: string[];
+  /**
+   * Request headers advertised on preflight (`Access-Control-Allow-Headers`).
+   * Defaults to `["content-type", "authorization"]`.
+   */
   allowedHeaders?: string[];
+  /** Response headers exposed to browser JS (`Access-Control-Expose-Headers`). None by default. */
   exposedHeaders?: string[];
+  /**
+   * Emit `Access-Control-Allow-Credentials: true`. Defaults to `false`.
+   * Cannot be combined with a wildcard `origin`.
+   */
   credentials?: boolean;
+  /** Preflight cache lifetime in seconds (`Access-Control-Max-Age`). Defaults to `600`. */
   maxAgeSeconds?: number;
 }
 
@@ -742,6 +793,11 @@ export function cors(opts: CorsOptions): Hooks {
  * (`@daloyjs/core/rate-limit-redis`).
  */
 export interface RateLimitStore {
+  /**
+   * Record one request for `key` in the window of `windowMs` milliseconds
+   * and return the updated `count` plus the window's absolute reset time
+   * (`resetMs`, epoch milliseconds).
+   */
   hit(key: string, windowMs: number): Promise<{ count: number; resetMs: number }>;
 }
 
@@ -963,6 +1019,9 @@ function wait(ms: number): Promise<void> {
  * same `groupId`) across related routes so an attacker cannot bypass the limit
  * by rotating between password, OTP, and reset endpoints.
  *
+ * @param opts - Throttle tuning (see {@link LoginThrottleOptions}); every field has a safe default.
+ * @returns A {@link Hooks} bundle ready for `app.use(...)` or per-route `hooks`.
+ * @throws {Error} When `windowMs`/`max` are not positive integers or the delay options are negative.
  * @since 0.23.0
  */
 export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
@@ -1305,6 +1364,11 @@ function csrfCookieAttributes(
  *   allowedOrigins: ["https://app.example.com"],
  * }));
  * ```
+ *
+ * @param opts - Strategy, cookie/header names, and cookie attributes (see {@link CsrfOptions}).
+ * @returns A {@link Hooks} bundle ready for `app.use(...)`, stamped with {@link CSRF_HOOK_MARKER}.
+ * @throws {Error} When `strategy` is unknown or the cookie name/attributes are invalid
+ * (e.g. `__Host-` prefix without `secure: true`, `path: "/"`, and no `domain`).
  */
 export function csrf(opts: CsrfOptions = {}): Hooks {
   const strategy = opts.strategy ?? "double-submit";
@@ -1634,6 +1698,10 @@ function readUserScopes(user: unknown): ReadonlySet<string> | null {
  * });
  * ```
  *
+ * @param scopes - Required scope strings; must be non-empty and free of RFC 6749 illegal characters.
+ * @returns A {@link Hooks} bundle ready for `app.use(...)` or per-route `hooks`,
+ * stamped with {@link REQUIRE_SCOPES_HOOK_MARKER}.
+ * @throws {Error} When `scopes` is empty or contains a non-string, empty, or illegal-character scope.
  * @since 0.21.0
  */
 export function requireScopes(scopes: readonly string[]): Hooks {

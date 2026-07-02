@@ -90,14 +90,23 @@ export interface SecuritySchemeMap {
  * (no execution path on the producer side).
  */
 export interface WebhookDefinition {
+  /** HTTP method the producer uses when delivering the webhook. */
   method: HttpMethod;
+  /** Stable operation id for codegen. Omitted from the document when unset. */
   operationId?: string;
+  /** Short one-line summary shown in docs UIs. */
   summary?: string;
+  /** Longer CommonMark description of the webhook operation. */
   description?: string;
+  /** Tags used to group the operation in docs UIs. */
   tags?: string[];
+  /** Mark the webhook operation as deprecated in the document. */
   deprecated?: boolean;
+  /** Request schemas (body, headers, ...) the producer sends. Same shape as route `request`. */
   request?: RequestSchemas;
+  /** Map of status code to response schema the consumer is expected to return. */
   responses: ResponsesMap;
+  /** Security requirement(s) documented on the webhook operation (e.g. a signature scheme). */
   auth?: AuthSpec;
   /**
    * Optional OpenAPI 3.1 callbacks attached to this webhook operation.
@@ -623,17 +632,14 @@ function yamlEmit(value: unknown, indent: string): string {
 }
 
 /**
- * Serialize an OpenAPI document (or any JSON-safe object) as YAML 1.2.
+ * Serialize an OpenAPI document (from {@link generateOpenAPI}) — or any
+ * JSON-safe object — to YAML 1.2 using a minimal built-in emitter. Pure
+ * transform with no runtime dependency; output is the form consumed by
+ * `/swagger.yaml`-style endpoints and build-time artifacts.
  *
- * Pure function with no runtime dependency. Output is the canonical form
- * consumed by Swagger UI's `/swagger.yaml` style endpoints.
- *
+ * @param doc - JSON-safe object to serialize (typically the generated document).
+ * @returns The YAML text, without a leading newline.
  * @since 0.13.1
- */
-/**
- * Serialize an OpenAPI document (from {@link generateOpenAPI}) to YAML using a
- * minimal built-in emitter. No external dependencies; suitable for build-time
- * artifacts. Reads/writes nothing; pure transform.
  */
 export function openapiToYAML(doc: Record<string, unknown>): string {
   const result = yamlEmit(doc, "");

@@ -23,6 +23,7 @@ import { validate, type StandardSchemaV1 } from "./schema.js";
  * dashboard, a startup probe, or a custom error renderer.
  */
 export class ConfigValidationError extends Error {
+  /** Every validation issue, as `{ key, message }` pairs (`key` is the dotted path, `"<root>"`/`"<source>"` for top-level failures). */
   readonly issues: ReadonlyArray<{ key: string; message: string }>;
   constructor(issues: ReadonlyArray<{ key: string; message: string }>) {
     const summary = issues
@@ -134,6 +135,9 @@ function pathToKey(path: ReadonlyArray<PropertyKey | { key: PropertyKey }>): str
  * export const config = await defineConfig({ schema: Config });
  * ```
  *
+ * @param opts - Schema, source (default `"env"`), optional `transform`, and the stderr sink.
+ * @returns The validated, typed configuration object.
+ * @throws {ConfigValidationError} When the source cannot be read or the schema reports issues.
  * @since 0.20.0
  */
 export async function defineConfig<S extends StandardSchemaV1>(

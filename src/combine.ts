@@ -31,6 +31,8 @@ import type { Hooks, BaseContext } from "./types.js";
  * app.use(adminStack);
  * ```
  *
+ * @param layers Hook bundles to compose, executed in the order given.
+ * @returns A single merged {@link Hooks} bundle preserving all lifecycle phases.
  * @since 0.19.0
  */
 export function every(...layers: Hooks[]): Hooks {
@@ -66,6 +68,8 @@ export function every(...layers: Hooks[]): Hooks {
  * ));
  * ```
  *
+ * @param layers Candidate hook bundles; the first `beforeHandle` that passes wins.
+ * @returns A merged {@link Hooks} bundle with the OR-style `beforeHandle` strategy.
  * @since 0.19.0
  */
 export function some(...layers: Hooks[]): Hooks {
@@ -131,6 +135,10 @@ export type ExceptPredicate =
  * exempted. Wrap each bundle with {@link except} individually when you
  * need to gate other phases.
  *
+ * @param when Paths or predicate ({@link ExceptPredicate}) that exempt a request.
+ * @param hooks The hook bundle whose `beforeHandle` is skipped on a match.
+ * @returns A {@link Hooks} bundle whose `beforeHandle` is gated by `when`.
+ * @throws Error at composition time if a string pattern does not start with `/`.
  * @since 0.19.0
  */
 export function except(when: ExceptPredicate, hooks: Hooks): Hooks {

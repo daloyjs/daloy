@@ -146,6 +146,11 @@ export function assertCookieAttributes(input: {
  * The value is URI-encoded so binary signature bytes and base64 padding
  * round-trip safely.
  *
+ * @param name Cookie name; `__Host-`/`__Secure-` prefixes are enforced by validation.
+ * @param value Cookie value; URI-encoded before serialization.
+ * @param attributes Cookie attributes. Defaults: `SameSite=Strict`, `Secure`, `HttpOnly`, `Path=/`.
+ * @returns A single `Set-Cookie` header value.
+ * @throws Error if the name or attributes fail {@link assertCookieAttributes} validation.
  * @since 0.27.0
  */
 export function serializeCookie(
@@ -176,6 +181,10 @@ export function serializeCookie(
  * `Max-Age=0` per RFC 6265 §5.2.2 and preserves the original attributes so
  * intermediaries match the original cookie when deciding what to delete.
  *
+ * @param name Name of the cookie to clear.
+ * @param attributes Attributes of the original cookie; must match for deletion to apply.
+ * @returns A `Set-Cookie` header value with an empty value and `Max-Age=0`.
+ * @throws Error if the name or attributes fail {@link assertCookieAttributes} validation.
  * @since 0.27.0
  */
 export function serializeClearCookie(name: string, attributes: CookieAttributes = {}): string {
@@ -218,6 +227,9 @@ export function serializeClearCookie(name: string, attributes: CookieAttributes 
  * parser-level guard is defense-in-depth for developers who customize the
  * cookie name or read other cookies through this helper.
  *
+ * @param header The raw `Cookie` request header, or `null`/`undefined` when absent.
+ * @param name Exact cookie name to read (case-sensitive).
+ * @returns The decoded cookie value, or `null` when absent or duplicated.
  * @since 0.27.0
  */
 export function readRequestCookie(header: string | null | undefined, name: string): string | null {

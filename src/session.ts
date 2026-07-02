@@ -65,8 +65,11 @@ export interface SessionRecord {
  * lazily delete expired records.
  */
 export interface SessionStore {
+  /** Load the record for a session id, or `null` when missing/expired. */
   get(sid: string): SessionRecord | null | Promise<SessionRecord | null>;
+  /** Persist (create or overwrite) the record for a session id. */
   set(sid: string, record: SessionRecord): void | Promise<void>;
+  /** Delete the record for a session id; a no-op when it does not exist. */
   destroy(sid: string): void | Promise<void>;
   /** Optional fast-path for rolling sessions; falls back to `set()` if omitted. */
   touch?(sid: string, expiresAt: number): void | Promise<void>;
@@ -320,6 +323,7 @@ function makeSessionContext(
 export class MemorySessionStore implements SessionStore {
   private readonly map = new Map<string, SessionRecord>();
 
+  /** Load a record; expired records are deleted and reported as `null`. */
   get(sid: string): SessionRecord | null {
     const rec = this.map.get(sid);
     if (!rec) return null;
@@ -330,14 +334,17 @@ export class MemorySessionStore implements SessionStore {
     return rec;
   }
 
+  /** Store (or overwrite) a record for a session id. */
   set(sid: string, record: SessionRecord): void {
     this.map.set(sid, record);
   }
 
+  /** Remove the record for a session id, if present. */
   destroy(sid: string): void {
     this.map.delete(sid);
   }
 
+  /** Extend an existing record's expiry (ms since epoch) without rewriting data. */
   touch(sid: string, expiresAt: number): void {
     const rec = this.map.get(sid);
     if (rec) rec.expiresAt = expiresAt;
@@ -374,6 +381,14 @@ export class MemorySessionStore implements SessionStore {
  * const app = new App();
  * app.use(session({ secret: process.env.SESSION_SECRET! }));
  * ```
+ *
+ * @param opts Secrets, cookie attributes, store, TTL, and rolling behavior;
+ *   see {@link SessionOptions}. Cookies default to `__Host-` prefixed,
+ *   `HttpOnly`, `Secure`, `SameSite=Lax`.
+ * @returns A {@link Hooks} object that loads/verifies the session before the
+ *   handler and persists mutations plus the `Set-Cookie` header afterwards.
+ * @throws Error at setup time on missing/short secrets, invalid cookie
+ *   attribute combinations, or a non-positive `ttlSeconds`.
  */
 export function session(opts: SessionOptions): Hooks {
   const cookieName = opts.cookieName ?? DEFAULT_COOKIE_NAME;
@@ -633,6 +648,12 @@ function stableSnapshot(value: unknown): string {
  * session key-rotation arrays: old cookies verify with any configured secret
  * and rotated cookies are re-signed with the first/current secret.
  *
+ * @param opts Which session keys (or computed value) to watch, and whether
+ *   payload data survives rotation (`keepData`, default `true`); see
+ *   {@link RotateSessionOptions}.
+ * @returns A {@link Hooks} object that snapshots the watched value before the
+ *   handler and regenerates the session id when it changed afterwards
+ *   (session-fixation defense).
  * @since 0.23.0
  */
 export function rotateSession(opts: RotateSessionOptions = {}): Hooks {
@@ -665,9 +686,13 @@ export function rotateSession(opts: RotateSessionOptions = {}): Hooks {
 // ---------- Low-level signing helpers (re-exported for advanced use) ----------
 
 /**
- * Sign an arbitrary string with HMAC-SHA256. Returns `${value}.${sig}` where
- * `sig` is URL-safe base64. Useful for building custom signed cookies or
- * tokens that do not need a session store.
+ * Sign an arbitrary string with HMAC-SHA256. Useful for building custom
+ * signed cookies or tokens that do not need a session store.
+ *
+ * @param value String to sign; must not contain `.` (the separator).
+ * @param secret HMAC key, at least 16 characters.
+ * @returns `${value}.${sig}` where `sig` is URL-safe base64.
+ * @throws Error when `value` contains `.` or the secret is too short.
  */
 export async function signValue(value: string, secret: string): Promise<string> {
   if (value.includes(".")) {
@@ -679,8 +704,12 @@ export async function signValue(value: string, secret: string): Promise<string> 
 }
 
 /**
- * Verify a `signValue()`-produced string. Returns the original value when the
- * signature checks out, otherwise `null`. Constant-time on the signature.
+ * Verify a `signValue()`-produced string. Constant-time on the signature
+ * comparison.
+ *
+ * @param signed The `${value}.${sig}` string to verify.
+ * @param secret HMAC key(s); an array lets rotated old secrets still verify.
+ * @returns The original value when any secret's signature matches, else `null`.
  */
 export async function verifySignedValue(
   signed: string,

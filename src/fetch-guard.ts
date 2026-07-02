@@ -113,8 +113,11 @@ export type SsrfBlockReason =
  * @since 0.34.0
  */
 export class SsrfBlockedError extends Error {
+  /** The request URL (or redirect target) that was refused. */
   readonly url: string;
+  /** Machine-readable {@link SsrfBlockReason} explaining the refusal. */
   readonly reason: SsrfBlockReason;
+  /** The resolved IP that tripped the guard, when the block was address-based. */
   readonly address?: string;
   constructor(url: string, reason: SsrfBlockReason, address?: string) {
     const where = address ? ` -> ${address}` : "";
@@ -284,6 +287,10 @@ const UNIQUE_LOCAL = ["fc00::/7"];
  * });
  * ```
  *
+ * @param options - Guard configuration; see {@link FetchGuardOptions}. Omit
+ *   for the strict default posture (public IPs over `http:`/`https:` only).
+ * @returns A `fetch`-compatible function that validates every hop (including
+ *   redirects) and throws {@link SsrfBlockedError} on refusal.
  * @since 0.34.0
  */
 export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {

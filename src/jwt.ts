@@ -84,6 +84,7 @@ export const DEFAULT_JWT_MAX_LIFETIME_SECONDS = 30 * 24 * 60 * 60;
 
 /** Structured error thrown by every JWT helper. */
 export class JwtError extends Error {
+  /** Stable machine-readable error code (e.g. `"alg_none_refused"`, `"weak_hs_secret"`). */
   readonly code: string;
   constructor(code: string, message: string) {
     super(`[${code}] ${message}`);
@@ -94,7 +95,9 @@ export class JwtError extends Error {
 
 /** Result of a successful verify. */
 export interface JwtVerified {
+  /** Decoded JOSE header (`alg`, `kid`, `typ`, ...). */
   readonly header: Record<string, unknown>;
+  /** Decoded claims payload after signature and time-claim checks passed. */
   readonly payload: Record<string, unknown>;
 }
 
@@ -103,7 +106,9 @@ export type JwtKeyMaterial = CryptoKey | Uint8Array | JsonWebKey;
 
 /** Options for {@link createJwtSigner}. */
 export interface JwtSignerOptions {
+  /** Signing algorithm. `"none"` is always refused. */
   alg: JwtAlgorithm;
+  /** Signing key. HS* secrets shorter than 32 bytes and RSA keys under 2048 bits are refused. */
   key: JwtKeyMaterial;
   /**
    * Maximum allowed `exp - iat` window in seconds. Required: refuse-at-
@@ -371,6 +376,10 @@ function buildSignAlgorithm(alg: JwtAlgorithm): AlgorithmIdentifier | RsaPssPara
  * `acknowledgeNoExp: true` was set at construction outside production) and
  * refuses payloads whose `exp - (iat | now)` exceeds `maxLifetimeSeconds`.
  *
+ * @param opts - Algorithm, key, and lifetime policy; see {@link JwtSignerOptions}.
+ * @returns An object whose `sign(payload)` resolves to the compact JWS string.
+ * @throws {JwtError} for `alg: "none"`, unknown algorithms, weak keys, a
+ *   missing/invalid `maxLifetimeSeconds`, or `acknowledgeNoExp` in production.
  * @since 0.21.0
  */
 export function createJwtSigner(opts: JwtSignerOptions): { sign(payload: Record<string, unknown>): Promise<string> } {
@@ -505,6 +514,11 @@ function normalizeStringSet(value: string | string[] | undefined): ReadonlySet<s
  * refuses-at-construction when a symmetric algorithm (`HS*`) is mixed with
  * a JWK / JWKS-shaped key source (the documented confused-deputy attack).
  *
+ * @param opts - Allowlist, key source, and claim checks; see {@link JwtVerifierOptions}.
+ * @returns An object whose `verify(token)` resolves to the decoded
+ *   {@link JwtVerified} or rejects with {@link JwtError}.
+ * @throws {JwtError} at construction for an empty/invalid allowlist, `"none"`
+ *   in the allowlist, weak HS* secrets, or HS* mixed with a JWK source.
  * @since 0.21.0
  */
 export function createJwtVerifier(opts: JwtVerifierOptions): { verify(token: string): Promise<JwtVerified> } {

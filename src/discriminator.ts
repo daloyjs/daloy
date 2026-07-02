@@ -30,6 +30,11 @@ export interface DiscriminatorObject {
  * Build an OpenAPI 3.1 Discriminator Object. Throws on an empty
  * `propertyName` so misconfigurations fail at boot rather than producing a
  * silently invalid spec.
+ *
+ * @param propertyName Name of the property that selects the variant schema.
+ * @param mapping Optional explicit discriminator-value-to-$ref map.
+ * @returns A {@link DiscriminatorObject} ready to embed in an OpenAPI schema.
+ * @throws TypeError if `propertyName` is not a non-empty string.
  */
 export function discriminator(
   propertyName: string,
@@ -86,6 +91,14 @@ export type DiscriminatedUnion<
  * const Cat = z.object({ kind: z.literal("cat"), meow: z.boolean() });
  * const Dog = z.object({ kind: z.literal("dog"), bark: z.boolean() });
  * const Animal = discriminatedUnion("kind", { cat: Cat, dog: Dog });
+ *
+ * @param propertyName Discriminator property read off the incoming value.
+ * @param variants Map from discriminator value to variant schema. Only own
+ *   properties are consulted, so prototype names like `constructor` cannot
+ *   be abused to bypass variant lookup.
+ * @param opts Optional {@link DiscriminatedUnionOptions} (explicit `mapping`, `vendor`).
+ * @returns A {@link DiscriminatedUnion} usable as validator and OpenAPI emitter.
+ * @throws TypeError if `propertyName` is empty or `variants` has no entries.
  */
 export function discriminatedUnion<
   P extends string,

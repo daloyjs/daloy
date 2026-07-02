@@ -40,7 +40,9 @@ import {
 
 /** Options for the Node.js {@link serve} entry point. */
 export interface NodeServerOptions {
+  /** TCP port to listen on. Defaults to `3000`. */
   port?: number;
+  /** Interface to bind. Defaults to `"0.0.0.0"`. */
   hostname?: string;
   /**
    * Connection-level timeout in ms, applied to BOTH `headersTimeout` and
@@ -106,9 +108,22 @@ export interface NodeServerOptions {
 }
 
 /** Handle returned by {@link serve} exposing the underlying Node `Server` plus a `close()` for graceful shutdown. */
-export interface NodeServerHandle { server: Server; port: number; close(): Promise<void>; }
+export interface NodeServerHandle {
+  /** The underlying `node:http` `Server` instance, for advanced wiring (extra listeners, address introspection). */
+  server: Server;
+  /** Port the server was asked to listen on ({@link NodeServerOptions.port}, default `3000`). */
+  port: number;
+  /** Graceful shutdown: drains {@link App.shutdown} hooks, destroys WebSocket sockets, then closes the server. Idempotent. */
+  close(): Promise<void>;
+}
 
-/** Start a Node.js HTTP (and optional WebSocket) server bound to the given {@link App}. */
+/**
+ * Start a Node.js HTTP (and optional WebSocket) server bound to the given {@link App}.
+ *
+ * @param app - The DaloyJS {@link App} whose `fetch` (and WebSocket routes) serve requests.
+ * @param opts - Listener, timeout, proxy-trust, and hardening options; see {@link NodeServerOptions}.
+ * @returns A {@link NodeServerHandle} exposing the Node `Server`, the `port`, and a graceful `close()`.
+ */
 export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle {
   const trustProxy = opts.trustProxy === true;
   const bufferedBodyMaxBytes =

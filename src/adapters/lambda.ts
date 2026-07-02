@@ -15,34 +15,53 @@ import type { App } from "../app.js";
  * provides the standard `Request`/`Response`/`atob`/`btoa` globals.
  */
 
+/** API Gateway REST API event (payload format v1.0). */
 export interface LambdaEventV1 {
+  /** Payload format version; `"1.0"` or absent for REST API events. */
   version?: "1.0" | string;
+  /** URL path of the request (e.g. `/users/42`). */
   path?: string;
+  /** HTTP method (e.g. `GET`). */
   httpMethod?: string;
+  /** Request headers, one value per name (last value wins in v1.0). */
   headers?: Record<string, string | undefined>;
+  /** Request headers with every value per name; `cookie` values are re-joined with `; `. */
   multiValueHeaders?: Record<string, string[] | undefined>;
+  /** Query parameters, one value per name. Used only when the multi-value map is empty. */
   queryStringParameters?: Record<string, string | undefined> | null;
+  /** Query parameters with every value per name; preferred over the single-value map. */
   multiValueQueryStringParameters?: Record<string, string[] | undefined> | null;
+  /** Request context; `domainName` is the host fallback and `path` the path fallback. */
   requestContext?: {
     domainName?: string;
     path?: string;
   };
+  /** Raw request body; base64-encoded when {@link LambdaEventV1.isBase64Encoded} is true. */
   body?: string;
+  /** True when `body` is base64-encoded (binary payloads). */
   isBase64Encoded?: boolean;
 }
 
 /** API Gateway HTTP API or Lambda Function URL event (payload format v2.0). */
 export interface LambdaEventV2 {
+  /** Payload format version; `"2.0"` for HTTP API / Function URL events. */
   version?: string;
+  /** URL path of the request, without the query string. */
   rawPath?: string;
+  /** Raw query string without the leading `?` (empty string when none). */
   rawQueryString?: string;
+  /** Request headers; multi-value headers arrive comma-joined in v2.0. */
   headers?: Record<string, string | undefined>;
+  /** Request cookies as individual strings; re-joined with `; ` into a `cookie` header. */
   cookies?: string[];
+  /** Request context; `http.method`/`http.path` carry the method and path, `domainName` the host fallback. */
   requestContext?: {
     http?: { method?: string; path?: string };
     domainName?: string;
   };
+  /** Raw request body; base64-encoded when {@link LambdaEventV2.isBase64Encoded} is true. */
   body?: string;
+  /** True when `body` is base64-encoded (binary payloads). */
   isBase64Encoded?: boolean;
 }
 
@@ -51,21 +70,33 @@ export type LambdaEvent = LambdaEventV1 | LambdaEventV2;
 
 /** Lambda response shape required by API Gateway REST API (payload format v1.0). */
 export interface LambdaResponseV1 {
+  /** HTTP status code of the response. */
   statusCode: number;
+  /** Response headers, one value per name (`set-cookie` excluded; see `multiValueHeaders`). */
   headers: Record<string, string>;
+  /** Multi-value headers; used to carry each `set-cookie` value separately in v1.0. */
   multiValueHeaders?: Record<string, string[]>;
+  /** Never present in v1.0 responses; cookies travel via `multiValueHeaders`. */
   cookies?: never;
+  /** Response body; base64-encoded when {@link LambdaResponseV1.isBase64Encoded} is true. */
   body: string;
+  /** True when `body` is base64-encoded (non-text content types). */
   isBase64Encoded: boolean;
 }
 
 /** Lambda response shape required by API Gateway HTTP API and Function URLs (payload format v2.0). */
 export interface LambdaResponseV2 {
+  /** HTTP status code of the response. */
   statusCode: number;
+  /** Response headers, one value per name (`set-cookie` excluded; see `cookies`). */
   headers: Record<string, string>;
+  /** Response cookies, one `set-cookie` value per entry (v2.0's cookie channel). */
   cookies?: string[];
+  /** Never present in v2.0 responses; cookies travel via `cookies`. */
   multiValueHeaders?: never;
+  /** Response body; base64-encoded when {@link LambdaResponseV2.isBase64Encoded} is true. */
   body: string;
+  /** True when `body` is base64-encoded (non-text content types). */
   isBase64Encoded: boolean;
 }
 
@@ -76,7 +107,12 @@ export type LambdaHandler = (event: LambdaEvent) => Promise<LambdaResponse>;
 
 const TEXT_TYPE_RE = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded|.*\+json|.*\+xml))/i;
 
-/** Wrap an {@link App} as a Lambda/Netlify handler accepting either v1.0 or v2.0 event payloads. */
+/**
+ * Wrap an {@link App} as a Lambda/Netlify handler accepting either v1.0 or v2.0 event payloads.
+ *
+ * @param app - The DaloyJS {@link App} that serves each translated request.
+ * @returns A {@link LambdaHandler} that converts the event to a `Request`, calls {@link App.fetch}, and emits the matching v1.0/v2.0 response shape.
+ */
 export function toLambdaHandler(app: App): LambdaHandler {
   return async (event) => {
     const request = eventToRequest(event);

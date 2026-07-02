@@ -19,6 +19,7 @@ import type { App } from "../app.js";
 
 /** Module shape expected by the Cloudflare Workers runtime as `export default`. */
 export interface ExportedFetchHandler<Env = unknown> {
+  /** Worker entry point: forwards the request to {@link App.fetch}. `env`/`ctx` are accepted but unused by the adapter. */
   fetch: (request: Request, env?: Env, ctx?: ExecutionContextLike) => Promise<Response>;
 }
 
@@ -27,7 +28,12 @@ interface ExecutionContextLike {
   passThroughOnException?: () => void;
 }
 
-/** Wrap an {@link App} in the `{ fetch }` object expected by Cloudflare Workers and other web-standard hosts. */
+/**
+ * Wrap an {@link App} in the `{ fetch }` object expected by Cloudflare Workers and other web-standard hosts.
+ *
+ * @param app - The DaloyJS {@link App} that serves each incoming request.
+ * @returns An {@link ExportedFetchHandler} suitable as the module's `export default`.
+ */
 export function toFetchHandler<Env = unknown>(app: App): ExportedFetchHandler<Env> {
   return {
     fetch: (req) => app.fetch(req),

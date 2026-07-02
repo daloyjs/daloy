@@ -119,10 +119,15 @@ export interface WebSocketConnection<TData = unknown> {
  * been read.
  */
 export interface WebSocketContext<P extends string = string, S = AppState> {
+  /** The original RFC 6455 upgrade `Request`. */
   request: Request;
+  /** Path parameters extracted from the matched route pattern. */
   params: PathParams<P>;
+  /** Query-string parameters from the upgrade URL. */
   query: Record<string, string>;
+  /** Upgrade request headers, lower-cased keys. */
   headers: Record<string, string>;
+  /** Per-app state produced by the route's state factory. */
   state: S;
   /** Subprotocols offered by the client (parsed from `Sec-WebSocket-Protocol`). */
   protocols: string[];
@@ -258,34 +263,49 @@ export interface WebSocketHandler<
    * @since 0.33.0
    */
   acknowledgeCrossOriginUpgrade?: boolean;
+  /**
+   * Auth/decision hook run before the 101 response is sent (after the
+   * {@link WebSocketHandler.allowedOrigins} check). Return a `Response` to
+   * reject, a string to select that subprotocol, or `undefined` to accept.
+   */
   beforeUpgrade?(
     request: Request,
     ctx: WebSocketContext<P, S>,
   ): Response | string | undefined | Promise<Response | string | undefined>;
+  /** Called once after the upgrade completes and the connection is open. */
   open?(
     conn: WebSocketConnection<TData>,
     ctx: WebSocketContext<P, S>,
   ): void | Promise<void>;
+  /** Called for each complete inbound message; `data` is a string for text frames, bytes for binary (`isBinary: true`). */
   message?(
     conn: WebSocketConnection<TData>,
     data: string | Uint8Array | ArrayBuffer,
     isBinary: boolean,
   ): void | Promise<void>;
+  /** Called when the connection closes, with the RFC 6455 close code and reason. */
   close?(
     conn: WebSocketConnection<TData>,
     code: number,
     reason: string,
   ): void | Promise<void>;
+  /** Called when a socket or handler error occurs on the connection. */
   error?(conn: WebSocketConnection<TData>, err: unknown): void | Promise<void>;
+  /** Called when the socket's send buffer drains after backpressure. */
   drain?(conn: WebSocketConnection<TData>): void | Promise<void>;
 }
 
 /** Result of {@link normalizeWebSocketOptions}: fully resolved limits applied by the adapter. */
 export interface NormalizedWebSocketOptions {
+  /** Close the connection when queued outbound bytes exceed `backpressureLimit`. Defaults to `true`. */
   closeOnBackpressureLimit: boolean;
+  /** Maximum queued outbound bytes before backpressure handling triggers. Defaults to 1 MiB. */
   backpressureLimit: number;
+  /** Per-message compression flag. Defaults to `false`; refused in production under secureDefaults. */
   perMessageDeflate: boolean;
+  /** Idle timeout in seconds. Defaults to `120`. */
   idleTimeout: number;
+  /** Maximum inbound message payload length in bytes. Defaults to 1 MiB. */
   maxPayloadLength: number;
 }
 
@@ -342,6 +362,11 @@ function declaredSchemaMaxBytes(schema: StandardSchemaV1 | undefined): number | 
  * Resolve a user-supplied {@link WebSocketHandler} into the strict
  * {@link NormalizedWebSocketOptions} the adapter consumes. Applies defaults,
  * runs production safety checks, and throws on invalid values.
+ *
+ * @param handler The user-supplied handler whose option fields are validated.
+ * @param context Environment flags: `production` and `secureDefaults` gate the perMessageDeflate refusal.
+ * @returns The fully resolved options applied by the runtime adapter.
+ * @throws Error when a limit is not a positive integer, `allowedOrigins` is malformed, `perMessageDeflate` is enabled in production under secureDefaults, or `maxPayloadLength` exceeds the body schema maximum.
  */
 export function normalizeWebSocketOptions(
   handler: WebSocketHandler<any, any, any>,
@@ -394,6 +419,8 @@ export type WebSocketBeforeUpgrade<P extends string = string, S = AppState> = No
  * a `beforeUpgrade` handler to spend from the same shared buckets as HTTP
  * routes (for example, login and WebSocket session-establishment endpoints).
  *
+ * @param options The same {@link RateLimitOptions} accepted by the HTTP `rateLimit` middleware.
+ * @returns A `beforeUpgrade` hook that returns the 429 (or error) `Response` when the limit is exceeded, or `undefined` to allow the upgrade. Rate-limit headers are copied onto rejection responses.
  * @since 0.23.0
  */
 export function wsRateLimit<P extends string = string, S = AppState>(
@@ -434,7 +461,12 @@ function copyWsRateLimitHeaders(headers: Headers, response: Response): void {
   });
 }
 
-/** Helper for declaring a handler with full type-inference. */
+/**
+ * Helper for declaring a handler with full type-inference.
+ *
+ * @param handler The {@link WebSocketHandler} to type-check; returned as-is.
+ * @returns The same handler object, with `P`/`S`/`TData` inferred.
+ */
 export function defineWebSocket<
   P extends string,
   S = AppState,
@@ -447,9 +479,13 @@ export function defineWebSocket<
 
 /** Entry stored inside {@link WebSocketRegistry} for a single WS route. */
 export interface WebSocketRouteEntry {
+  /** Route path pattern the entry was registered under (may contain `:param` segments). */
   path: PathString;
+  /** The user-supplied lifecycle handler for this route. */
   handler: WebSocketHandler<any, any, any>;
+  /** Factory producing the per-upgrade `state` object handed to the context. */
   createState: WebSocketStateFactory;
+  /** Resolved limits from {@link normalizeWebSocketOptions} applied by the adapter. */
   options: NormalizedWebSocketOptions;
 }
 
@@ -465,6 +501,14 @@ type WebSocketStateFactory = () => Record<string, unknown>;
 export class WebSocketRegistry {
   private router = new Router<WebSocketRouteEntry>(); private _size = 0;
   private entries: WebSocketRouteEntry[] = [];
+  /**
+   * Register a WebSocket route.
+   *
+   * @param path Route path pattern (supports `:param` segments).
+   * @param handler Lifecycle handler for connections on this route.
+   * @param createState Per-upgrade state factory. Defaults to `() => ({})`.
+   * @param options Resolved limits; defaults to normalizing `handler` with dev-mode secure defaults.
+   */
   add(
     path: PathString,
     handler: WebSocketHandler<any, any, any>,
@@ -480,6 +524,12 @@ export class WebSocketRegistry {
     this._size += 1;
   }
 
+  /**
+   * Match a request pathname against the registered WS routes.
+   *
+   * @param pathname URL pathname of the upgrade request.
+   * @returns The matched entry plus extracted params, or `undefined` when no route matches.
+   */
   find(pathname: string): RouteMatch<WebSocketRouteEntry> | undefined {
     return this.router.find("GET", pathname);
   }
@@ -498,10 +548,20 @@ export class WebSocketRegistry {
     return [...this.entries];
   }
 
+  /** Number of registered WebSocket routes. */
   get size(): number {
     return this._size;
   }
 
+  /**
+   * Aggregate the per-route options into a single set for runtimes (Bun) that
+   * take one server-wide WebSocket config: `closeOnBackpressureLimit` only when
+   * every route enables it, largest `backpressureLimit`/`maxPayloadLength`,
+   * smallest `idleTimeout`, and `perMessageDeflate` if any route enables it.
+   * Returns the secure defaults when no routes are registered.
+   *
+   * @returns The merged {@link NormalizedWebSocketOptions} for the whole app.
+   */
   runtimeOptions(): NormalizedWebSocketOptions {
     if (this.entries.length === 0) {
       return {
@@ -549,6 +609,10 @@ function getSubtle(): SubtleCrypto {
  * `Sec-WebSocket-Key` per RFC 6455 §4.2.2:
  *
  * `base64(SHA1(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))`
+ *
+ * @param key - The client's `Sec-WebSocket-Key` header value.
+ * @returns The base64-encoded accept token for the 101 response.
+ * @throws Error when Web Crypto (`crypto.subtle`) is unavailable.
  */
 export async function computeAcceptKey(key: string): Promise<string> {
   const digest = await getSubtle().digest("SHA-1", enc.encode(key + WS_GUID));
@@ -558,6 +622,9 @@ export async function computeAcceptKey(key: string): Promise<string> {
 /**
  * Parse the offered subprotocols from a `Sec-WebSocket-Protocol` header.
  * Returns trimmed, non-empty tokens in client preference order.
+ *
+ * @param header - Raw header value; `null`/`undefined` yields an empty list.
+ * @returns The offered subprotocol tokens, most-preferred first.
  */
 export function parseSubprotocols(header: string | null | undefined): string[] {
   if (!header) return [];
@@ -573,6 +640,12 @@ const WS_TOKEN_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
  * Validate a server-selected subprotocol before it is written to the 101
  * response. RFC 6455 requires the value to be one of the client-offered
  * tokens; enforcing it also prevents accidental response-header injection.
+ *
+ * @param protocol - The subprotocol the server wants to select.
+ * @param offered - Tokens the client offered (from {@link parseSubprotocols}).
+ * @returns The validated `protocol`, unchanged.
+ * @throws WebSocketProtocolError when `protocol` is not a valid HTTP token
+ *   or was not offered by the client.
  */
 export function validateSelectedSubprotocol(
   protocol: string,
@@ -604,6 +677,12 @@ export type HandshakeResult =
  * Validate the upgrade request headers and compute the accept key when
  * valid. This helper does **not** touch the wire — it only decides whether
  * the handshake should succeed and what the response key should be.
+ *
+ * @param headers - Header accessor for the upgrade request (any object with
+ *   a `Headers`-style `get`).
+ * @returns `{ ok: true, acceptKey, protocols }` when the RFC 6455 handshake
+ *   headers are valid, or `{ ok: false, status, reason }` describing the
+ *   error response the adapter should send.
  */
 export async function validateUpgrade(headers: {
   get(name: string): string | null;
@@ -667,6 +746,10 @@ function isValidWebSocketKey(key: string): boolean {
  * `{ ok: false, reason }` with a short human-readable reason suitable for
  * the upgrade-error body.
  *
+ * @param request - The upgrade request whose `Origin` header is checked.
+ * @param policy - The route's `allowedOrigins` value: `undefined` (allow
+ *   all), `"same-origin"`, a string allowlist, or a predicate function.
+ * @returns `{ ok: true }` when permitted, otherwise `{ ok: false, reason }`.
  * @since 0.33.0
  */
 export function checkWebSocketOrigin(
@@ -721,8 +804,11 @@ export function checkWebSocketOrigin(
 
 /** A single decoded RFC 6455 frame, as returned by {@link parseFrame}. */
 export interface ParsedFrame {
+  /** FIN bit — `true` when this frame ends a message. */
   fin: boolean;
+  /** Frame opcode (see `WS_OPCODE`): continuation, text, binary, close, ping, or pong. */
   opcode: number;
+  /** Unmasked payload bytes — a subarray view over the input buffer, not a copy. */
   payload: Uint8Array;
   /** Number of bytes consumed from the input buffer (header + payload). */
   consumed: number;
@@ -739,6 +825,15 @@ export const FRAME_INCOMPLETE = Symbol("daloy.ws.frameIncomplete");
  * The parser unmasks payloads in-place when needed. The returned `payload`
  * is a subarray view over `buf`; copy it if you intend to retain it past
  * the next call.
+ *
+ * @param buf - Buffered socket bytes beginning at a frame boundary.
+ * @param opts - `requireMask: true` enforces the RFC 6455 rule that
+ *   client-to-server frames are masked. Defaults to `{}` (not enforced).
+ * @returns The decoded {@link ParsedFrame}, or {@link FRAME_INCOMPLETE}
+ *   when more bytes are needed.
+ * @throws WebSocketProtocolError on RSV bits, unknown opcodes, fragmented
+ *   or oversized control frames, unmasked client frames, or payload lengths
+ *   above `Number.MAX_SAFE_INTEGER`.
  */
 export function parseFrame(
   buf: Uint8Array,
@@ -835,6 +930,12 @@ export function parseFrame(
  * Encode a single frame. By default the frame is emitted unmasked (server
  * → client). Pass `mask: true` to generate a client-style masked frame (used
  * mainly for testing).
+ *
+ * @param opts - Frame parts: `opcode` (required), `payload` (default empty),
+ *   `fin` (default `true`), and `mask` (default `false`).
+ * @returns The wire-ready frame bytes (header + payload).
+ * @throws WebSocketProtocolError when a control-frame payload exceeds 125
+ *   bytes; Error when masking is requested without Web Crypto.
  */
 export function encodeFrame(opts: {
   fin?: boolean;
@@ -907,7 +1008,14 @@ export function encodeFrame(opts: {
   return out;
 }
 
-/** Encode a CLOSE frame payload (`uint16 code` + optional UTF-8 reason). */
+/**
+ * Encode a CLOSE frame payload (`uint16 code` + optional UTF-8 reason).
+ *
+ * @param code - RFC 6455 close status code, written big-endian.
+ * @param reason - Optional human-readable reason. Defaults to `""`.
+ * @returns The 2+N byte close payload.
+ * @throws WebSocketProtocolError when the encoded reason exceeds 123 bytes.
+ */
 export function encodeClosePayload(code: number, reason = ""): Uint8Array {
   const reasonBytes = enc.encode(reason);
   if (reasonBytes.length > WS_MAX_CONTROL_PAYLOAD - 2) {
@@ -920,7 +1028,14 @@ export function encodeClosePayload(code: number, reason = ""): Uint8Array {
   return out;
 }
 
-/** Decode a CLOSE frame payload. Returns `{ code: 1005, reason: "" }` when empty. */
+/**
+ * Decode a CLOSE frame payload. Returns `{ code: 1005, reason: "" }` when empty.
+ *
+ * @param payload - Unmasked close-frame payload bytes.
+ * @returns The close `code` and decoded UTF-8 `reason`.
+ * @throws WebSocketProtocolError when the payload is exactly 1 byte or the
+ *   reason is not valid UTF-8.
+ */
 export function decodeClosePayload(payload: Uint8Array): {
   code: number;
   reason: string;
@@ -971,10 +1086,15 @@ export interface MessageEvent {
 
 /** Callbacks supplied to a {@link FrameSink} by an adapter to receive decoded frames and protocol events. */
 export interface FrameSinkEvents {
+  /** A complete (possibly reassembled) text or binary message arrived. */
   onMessage(ev: MessageEvent): void;
+  /** A PING control frame arrived; `payload` is a copied buffer. */
   onPing(payload: Uint8Array): void;
+  /** A PONG control frame arrived; `payload` is a copied buffer. */
   onPong(payload: Uint8Array): void;
+  /** A CLOSE frame arrived; the sink stops processing further input. */
   onClose(code: number, reason: string): void;
+  /** An RFC 6455 violation was detected; the adapter should CLOSE(1002). */
   onProtocolError(err: WebSocketProtocolError): void;
 }
 
@@ -997,6 +1117,13 @@ export class FrameSink {
     },
   ) {}
 
+  /**
+   * Feed raw socket bytes into the assembler. Complete frames trigger the
+   * configured callbacks; partial frames are buffered until more bytes
+   * arrive. No-op after a CLOSE frame or protocol error.
+   *
+   * @param chunk - The next bytes read from the socket.
+   */
   push(chunk: Uint8Array): void {
     if (this.closed) return;
     if (this.buffer.length === 0) {
@@ -1100,7 +1227,13 @@ export class FrameSink {
 
 // ---------- Helpers shared by adapters ----------
 
-/** Coerce arbitrary `send()` payloads to a `Uint8Array` + opcode pair. */
+/**
+ * Coerce arbitrary `send()` payloads to a `Uint8Array` + opcode pair.
+ *
+ * @param data - A string (sent as TEXT) or any `ArrayBuffer`/view (sent as
+ *   BINARY without copying when possible).
+ * @returns The `WS_OPCODE` to use and the payload bytes to frame.
+ */
 export function encodeSendPayload(
   data: string | ArrayBufferLike | ArrayBufferView,
 ): { opcode: number; payload: Uint8Array } {

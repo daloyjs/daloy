@@ -76,6 +76,9 @@ const CONN_INFO_SYMBOL: unique symbol = Symbol.for("daloyjs.connInfo");
  * @internal Adapter helper — attach {@link ConnInfo} to a `Request`. Called
  * by the Node / Bun / Deno / Cloudflare / Vercel / Lambda adapters before
  * `app.fetch(request)`.
+ *
+ * @param request - Incoming request to tag (stored under a private symbol).
+ * @param info - Connection metadata gathered by the adapter.
  */
 export function setConnInfo(request: Request, info: ConnInfo): void {
   (request as unknown as Record<PropertyKey, unknown>)[CONN_INFO_SYMBOL] = info;
@@ -86,6 +89,8 @@ export function setConnInfo(request: Request, info: ConnInfo): void {
  * `undefined` when the adapter does not expose connection metadata (e.g.
  * Cloudflare Workers without `cf` enabled).
  *
+ * @param request - Request previously tagged by {@link setConnInfo}.
+ * @returns The attached {@link ConnInfo}, or `undefined` when absent.
  * @since 0.24.0
  */
 export function getConnInfo(request: Request): ConnInfo | undefined {
@@ -98,6 +103,9 @@ export function getConnInfo(request: Request): ConnInfo | undefined {
  * Refuses-at-construction on malformed {@link BehindProxyConfig}. Called once
  * during `new App({ behindProxy })`.
  *
+ * @param cfg - Proxy posture to validate; `undefined` is accepted as "unset".
+ * @throws Error when `hops` is not an integer in [0, 64], when `cidrs` is
+ *   empty or contains non-string entries, or when the shape is unrecognized.
  * @since 0.24.0
  */
 export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
@@ -136,6 +144,10 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
  * `undefined` when the header is shorter than the configured hop count
  * (caller falls back to the immediate peer).
  *
+ * @param header - Raw `X-Forwarded-For` header value, or `null` when absent.
+ * @param hops - Declared number of trusted proxy hops (must be >= 1).
+ * @returns The client IP at the declared hop, or `undefined` when the chain
+ *   is too short or `hops < 1`.
  * @internal
  */
 export function pickForwardedForByHops(
@@ -159,6 +171,10 @@ export function pickForwardedForByHops(
  * available (the caller — rate-limit, ipRestriction, audit-log — must fail
  * closed rather than guess).
  *
+ * @param request - Incoming request whose client IP should be resolved.
+ * @param cfg - The app's `behindProxy` posture; `undefined` behaves as `"none"`.
+ * @returns The trusted client IP, or `undefined` when neither the peer
+ *   address nor a trusted `X-Forwarded-For` slot is available.
  * @since 0.24.0
  */
 export function resolveClientIp(
@@ -193,18 +209,35 @@ export function resolveClientIp(
  * `undefined` rather than allocating a plain object so the IP cannot be
  * serialized into logs by accident.
  *
+ * @param ctx - Request context whose adapter-attached {@link ConnInfo} is read.
+ * @returns The immediate peer address, or `undefined` when the adapter did
+ *   not attach connection metadata.
  * @since 0.24.0
  */
 export function readRemoteAddress(ctx: BaseContext<any, any>): string | undefined {
   return getConnInfo(ctx.request)?.remoteAddress;
 }
 
-/** @since 0.24.0 */
+/**
+ * Lazy accessor for `ctx.remotePort` (the immediate peer's TCP port).
+ *
+ * @param ctx - Request context whose adapter-attached {@link ConnInfo} is read.
+ * @returns The immediate peer port, or `undefined` when the adapter did not
+ *   attach connection metadata.
+ * @since 0.24.0
+ */
 export function readRemotePort(ctx: BaseContext<any, any>): number | undefined {
   return getConnInfo(ctx.request)?.remotePort;
 }
 
-/** @internal Test-only helper. */
+/**
+ * Test-only helper that shallow-copies a {@link ConnInfo} into a mutable shape
+ * so tests can tweak fields without casting away `readonly`.
+ *
+ * @param info - Connection metadata to copy.
+ * @returns A mutable shallow copy of `info`.
+ * @internal
+ */
 export function _makeConnInfoForTests(info: ConnInfo): MutableConnInfo {
   return { ...info };
 }

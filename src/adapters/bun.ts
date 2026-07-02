@@ -34,7 +34,9 @@ export interface BunTLSOptions {
 
 /** Options forwarded to `Bun.serve` by {@link serve}. */
 export interface BunServeOptions {
+  /** TCP port to listen on. Ignored when `unix` is set. Defaults to `3000`. */
   port?: number;
+  /** Interface to bind. Ignored when `unix` is set. Defaults to `"0.0.0.0"`. */
   hostname?: string;
   /** Maximum request body bytes (Bun-level cap). Default: 16 MiB. */
   maxRequestBodySize?: number;
@@ -50,12 +52,22 @@ export interface BunServeOptions {
 
 /** Handle returned by {@link serve} for shutdown and listener introspection. */
 export interface BunServerHandle {
+  /** Port the server is actually listening on (as reported by Bun). */
   port: number;
+  /** Server URL as reported by `Bun.serve` (e.g. for startup logging), if available. */
   url: URL | undefined;
+  /** Graceful stop: drains {@link App.shutdown} hooks first, then force-stops the Bun server. */
   stop: () => Promise<void>;
 }
 
-/** Start `Bun.serve` bound to the given {@link App}, wiring HTTP and WebSocket routes. */
+/**
+ * Start `Bun.serve` bound to the given {@link App}, wiring HTTP and WebSocket routes.
+ *
+ * @param app - The DaloyJS {@link App} whose `fetch` (and WebSocket routes) serve requests.
+ * @param opts - Listener options forwarded to `Bun.serve`; see {@link BunServeOptions}.
+ * @returns A {@link BunServerHandle} exposing the bound `port`, `url`, and a graceful `stop()`.
+ * @throws Error when the Bun runtime (`globalThis.Bun.serve`) is not detected.
+ */
 export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
   const Bun = (
     globalThis as {

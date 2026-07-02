@@ -24,6 +24,7 @@ import type { App } from "../app.js";
 export type WebHandler = (req: Request) => Promise<Response>;
 /** Default export shape for Vercel's web-standard `{ fetch }` runtime. */
 export interface FetchHandler {
+  /** Request entry point: forwards the request to {@link App.fetch}. */
   fetch: WebHandler;
 }
 
@@ -31,7 +32,12 @@ const NEXT_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"
 /** Record of per-method handlers expected by a Next.js App Router `route.ts` file. */
 export type RouteHandlers = Record<(typeof NEXT_METHODS)[number], WebHandler>;
 
-/** Wrap an {@link App} as a single web-standard fetch handler. */
+/**
+ * Wrap an {@link App} as a single web-standard fetch handler.
+ *
+ * @param app - The DaloyJS {@link App} that serves each incoming request.
+ * @returns A {@link WebHandler} delegating to {@link App.fetch}.
+ */
 export function toWebHandler(app: App): WebHandler {
   return (req) => app.fetch(req);
 }
@@ -39,6 +45,9 @@ export function toWebHandler(app: App): WebHandler {
 /**
  * Build the default `{ fetch }` export expected by Vercel Node.js Functions
  * in the `/api` directory.
+ *
+ * @param app - The DaloyJS {@link App} that serves each incoming request.
+ * @returns A {@link FetchHandler} object suitable as the module's `export default`.
  */
 export function toFetchHandler(app: App): FetchHandler {
   return { fetch: toWebHandler(app) };
@@ -50,6 +59,9 @@ export const toEdgeHandler = toWebHandler;
 /**
  * Build the `{ GET, POST, ... }` object expected by Next.js App Router
  * `route.ts` files when a DaloyJS app is mounted inside an existing Next app.
+ *
+ * @param app - The DaloyJS {@link App} that serves each incoming request.
+ * @returns A {@link RouteHandlers} record mapping every supported HTTP method to the same {@link WebHandler}.
  */
 export function toRouteHandlers(app: App): RouteHandlers {
   const handler = toWebHandler(app);

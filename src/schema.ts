@@ -7,46 +7,71 @@
  * `~standard`. No vendor lock-in.
  */
 export interface StandardSchemaV1<Input = unknown, Output = Input> {
+  /** The Standard Schema contract object every compatible validator exposes. */
   readonly "~standard": StandardSchemaV1.Props<Input, Output>;
 }
 
 export namespace StandardSchemaV1 {
+  /**
+   * The `~standard` contract exposed by a Standard Schema validator: spec
+   * version, vendor tag, and the vendor-neutral `validate` entry point.
+   */
   export interface Props<Input = unknown, Output = Input> {
+    /** Spec version implemented by the validator. Always `1`. */
     readonly version: 1;
+    /** Name of the validator library (e.g. `"zod"`, `"valibot"`). */
     readonly vendor: string;
+    /** Validates a value; may be sync or async. Returns `{ value }` on success or `{ issues }` on failure. */
     readonly validate: (
       value: unknown
     ) => Result<Output> | Promise<Result<Output>>;
+    /** Type-only carrier for {@link InferInput}/{@link InferOutput}; never populated at runtime. */
     readonly types?: Types<Input, Output>;
   }
 
+  /** Outcome of {@link Props.validate}: a {@link SuccessResult} or a {@link FailureResult}. */
   export type Result<Output> = SuccessResult<Output> | FailureResult;
 
+  /** Successful validation: the parsed/coerced output value and no issues. */
   export interface SuccessResult<Output> {
+    /** The validated (and possibly transformed) output value. */
     readonly value: Output;
+    /** Always `undefined` on success; lets `result.issues` discriminate the union. */
     readonly issues?: undefined;
   }
 
+  /** Failed validation: one or more {@link Issue}s and no output value. */
   export interface FailureResult {
+    /** The validation problems found; always non-empty on failure. */
     readonly issues: ReadonlyArray<Issue>;
   }
 
+  /** One validation problem reported by a validator. */
   export interface Issue {
+    /** Human-readable description of the problem. */
     readonly message: string;
+    /** Location of the problem as a key path from the root; omitted for root-level issues. */
     readonly path?: ReadonlyArray<PropertyKey | PathSegment>;
   }
 
+  /** Object-wrapped path entry used by validators that attach extra metadata to path keys. */
   export interface PathSegment {
+    /** The property key this segment addresses. */
     readonly key: PropertyKey;
   }
 
+  /** Type-level input/output carrier referenced by {@link Props.types}; runtime value is never read. */
   export interface Types<Input, Output> {
+    /** The type accepted by the validator before parsing/coercion. */
     readonly input: Input;
+    /** The type produced by the validator after parsing/coercion. */
     readonly output: Output;
   }
 
+  /** Infers the input (pre-validation) type of a Standard Schema validator. */
   export type InferInput<S extends StandardSchemaV1> =
     NonNullable<S["~standard"]["types"]>["input"];
+  /** Infers the output (post-validation) type of a Standard Schema validator. */
   export type InferOutput<S extends StandardSchemaV1> =
     NonNullable<S["~standard"]["types"]>["output"];
 }

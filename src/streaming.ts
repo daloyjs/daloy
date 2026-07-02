@@ -39,8 +39,11 @@ const TEXT_ENCODER = new TextEncoder();
  * and reconnection control without sending an event payload.
  */
 export interface SSEMessage {
+  /** Event payload. Strings are sent verbatim; other values are `JSON.stringify`-ed. */
   data?: unknown;
+  /** Event name (`event:` field). Newlines are replaced with spaces to prevent frame injection. */
   event?: string;
+  /** Last-event ID (`id:` field). Newlines are replaced with spaces to prevent frame injection. */
   id?: string;
   /** Reconnection delay in milliseconds. */
   retry?: number;
@@ -142,6 +145,10 @@ function encodeNDJSON(value: unknown): Uint8Array {
  * Build a backpressure-safe `ReadableStream` from an async iterable of SSE
  * messages. The iterator is only advanced when the consumer pulls the next
  * chunk, so a slow client cannot cause unbounded buffering.
+ *
+ * @param source Async/sync iterable (or factory) yielding {@link SSEMessage}s or plain strings.
+ * @param opts Abort signal and optional keep-alive interval; see {@link SSEStreamOptions}.
+ * @returns A `ReadableStream<Uint8Array>` of encoded `text/event-stream` frames.
  */
 export function sseStream(
   source: IterableSource<SSEMessage | string>,
@@ -222,6 +229,10 @@ export function sseStream(
 /**
  * Wrap `sseStream` in a `Response` with the proper SSE headers
  * (`text/event-stream`, no caching, keep-alive). Caller-supplied headers win.
+ *
+ * @param source Async/sync iterable (or factory) yielding {@link SSEMessage}s or plain strings.
+ * @param opts Status, headers, abort signal, and keep-alive; see {@link SSEResponseOptions}.
+ * @returns A streaming `Response` (default status `200`) with SSE headers applied.
  */
 export function sseResponse(
   source: IterableSource<SSEMessage | string>,
@@ -242,6 +253,10 @@ export function sseResponse(
  * JSON) records from an async iterable. Each yielded value is encoded with
  * `JSON.stringify` and terminated with `\n`. Values that stringify to
  * `undefined` throw because they cannot be represented as valid NDJSON.
+ *
+ * @param source Async/sync iterable (or factory) yielding JSON-serializable values.
+ * @param opts Optional abort signal; see {@link StreamOptions}.
+ * @returns A `ReadableStream<Uint8Array>` of newline-terminated JSON records.
  */
 export function ndjsonStream<T>(
   source: IterableSource<T>,
@@ -306,6 +321,10 @@ export function ndjsonStream<T>(
 /**
  * Wrap `ndjsonStream` in a `Response` with `application/x-ndjson` and
  * cache-busting headers. Caller-supplied headers win.
+ *
+ * @param source Async/sync iterable (or factory) yielding JSON-serializable values.
+ * @param opts Status, headers, and abort signal; see {@link NDJSONResponseOptions}.
+ * @returns A streaming `Response` (default status `200`) with NDJSON headers applied.
  */
 export function ndjsonResponse<T>(
   source: IterableSource<T>,

@@ -50,6 +50,8 @@ export interface ContractTestOptions {
  * routes don't carry body schemas by accident, and that `meta.examples`
  * reference declared response statuses.
  *
+ * @param app The {@link App} whose registered routes are inspected.
+ * @param opts Check toggles ({@link ContractTestOptions}); `requireOperationId` defaults to `true`.
  * @returns A {@link ContractReport}. In CI, exit non-zero when `report.ok` is `false`.
  */
 export async function runContractTests(

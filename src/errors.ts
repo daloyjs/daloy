@@ -92,6 +92,7 @@ export const SAFE_CUSTOM_ERROR_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
  * @since 0.32.0
  */
 export class MessageLeakError extends Error {
+  /** The refused headers, each with its name and the reason it was disallowed. */
   readonly offendingHeaders: ReadonlyArray<{ name: string; reason: string }>;
   constructor(
     offendingHeaders: ReadonlyArray<{ name: string; reason: string }>,
@@ -113,6 +114,10 @@ export class MessageLeakError extends Error {
 /**
  * @internal — header-safety check applied by {@link httpError} when a custom
  * `res` is supplied. Exported for audits and tests.
+ *
+ * @param headers Headers of the caller-supplied custom error `Response`.
+ * @returns The disallowed headers (name plus refusal reason); an empty array
+ *   means every header passed the safe-error-response allowlist.
  */
 export function checkCustomErrorResponseHeaders(
   headers: Headers,
@@ -185,7 +190,9 @@ function shouldCopyCustomErrorHeader(name: string, value: string): boolean {
  * @since 0.32.0
  */
 export interface HttpErrorOptions {
+  /** HTTP status code for the rendered problem+json response. */
   status: number;
+  /** RFC 9457 problem document fields; `title` is required. */
   problem: Partial<ProblemDetails> & { title: string };
   /** Plain headers merged onto the rendered response. */
   headers?: Record<string, string>;
@@ -212,6 +219,12 @@ export interface HttpErrorOptions {
  * Build an {@link HttpError} with optional safe-header extraction from a
  * custom `Response`. See {@link HttpErrorOptions}.
  *
+ * @param opts Status, problem document, plain headers, and the optional
+ *   custom `res` whose safe headers are merged (never overwriting
+ *   caller-supplied headers; `Content-Length` is always dropped).
+ * @returns The constructed {@link HttpError}, ready to be thrown.
+ * @throws MessageLeakError in production under `secureDefaults` when the
+ *   custom `res` carries headers outside the safe allowlist.
  * @since 0.32.0
  */
 export function httpError(opts: HttpErrorOptions): HttpError {
@@ -274,8 +287,11 @@ export function httpError(opts: HttpErrorOptions): HttpError {
  * @since 0.1.0
  */
 export class HttpError extends Error {
+  /** HTTP status code of the rendered response. */
   readonly status: number;
+  /** RFC 9457 problem document; `type` defaults to `https://httpstatuses.io/<status>`. */
   readonly problem: ProblemDetails;
+  /** Extra response headers (e.g. `Retry-After`, `Allow`) merged onto the response. */
   readonly headers?: Record<string, string>;
 
   constructor(

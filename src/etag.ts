@@ -87,6 +87,8 @@ function inmMatches(headerValue: string, candidate: string): boolean {
  * app.use(etag());
  * ```
  *
+ * @param opts - `weak: true` emits `W/"..."` weak validators (default strong); `generator` replaces the default SHA-1 body digest.
+ * @returns A {@link Hooks} bundle (an `onSend` hook) to compose via `app.use()`.
  * @since 0.21.0
  */
 export function etag(opts: ETagOptions = {}): Hooks {

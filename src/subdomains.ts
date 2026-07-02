@@ -148,6 +148,10 @@ export interface SubdomainsResult {
  * // => { baseDomain: "bar.s3.amazonaws.com", subdomain: "foo", labels: ["foo"] }
  * ```
  *
+ * @param hostname - Hostname to split (lowercased; a trailing FQDN dot is stripped).
+ * @param opts - Optional pinned `baseDomain`, `extraSuffixes`, and the `production` staleness gate.
+ * @returns The registrable {@link SubdomainsResult} (`baseDomain`, `subdomain`, `labels`).
+ * @throws {Error} On an empty hostname, a host outside a declared `baseDomain`, or a stale PSL snapshot in production.
  * @since 0.24.0
  */
 export function subdomains(

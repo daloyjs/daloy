@@ -116,6 +116,9 @@ function visibleWidth(s: string): number {
 /**
  * Build the multi-line startup banner string without printing it. Useful for
  * tests, custom loggers, or wrapping the output in additional context.
+ *
+ * @param options Banner content and rendering flags ({@link StartupBannerOptions}).
+ * @returns The framed banner as a single string with `\n` line separators.
  */
 export function formatStartupBanner(options: StartupBannerOptions): string {
   const useColor = options.color ?? detectColor();
@@ -162,6 +165,9 @@ export function formatStartupBanner(options: StartupBannerOptions): string {
 /**
  * Print {@link formatStartupBanner} to stdout (or a custom writer). Designed to
  * replace ad-hoc `console.log("listening on …")` calls in starter templates.
+ *
+ * @param options Banner content and rendering flags ({@link StartupBannerOptions}).
+ * @param write Output sink for the banner text. Defaults to `process.stdout.write`.
  */
 export function printStartupBanner(
   options: StartupBannerOptions,

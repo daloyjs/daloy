@@ -117,7 +117,9 @@ export interface McpRequestContext {
  * @since 1.0.0
  */
 export interface McpTextContent {
+  /** Discriminator literal identifying this block as text. */
   type: "text";
+  /** The plain-text payload of the block. */
   text: string;
 }
 
@@ -130,8 +132,11 @@ export interface McpTextContent {
  * @since 1.0.0
  */
 export interface McpImageContent {
+  /** Discriminator literal identifying this block as an image. */
   type: "image";
+  /** Base64-encoded image bytes. */
   data: string;
+  /** Image media type, e.g. `"image/png"`. */
   mimeType: string;
 }
 
@@ -141,7 +146,9 @@ export interface McpImageContent {
  * @since 1.0.0
  */
 export interface McpEmbeddedResourceContent {
+  /** Discriminator literal identifying this block as an embedded resource. */
   type: "resource";
+  /** The embedded resource contents (uri plus text or base64 blob). */
   resource: McpResourceContents;
 }
 

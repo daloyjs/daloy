@@ -38,62 +38,119 @@ export type ScalarTheme =
  */
 export interface ScalarReferenceConfiguration {
   [key: string]: ScalarJsonValue | undefined;
+  /** Built-in color theme name. See {@link ScalarTheme}. */
   theme?: ScalarTheme;
+  /** Extra CSS injected into the reference UI. */
   customCss?: string;
+  /** Start the UI in dark mode. */
   darkMode?: boolean;
+  /** Pin the color scheme and hide the user's ability to change it. */
   forceDarkModeState?: "dark" | "light";
+  /** Load Scalar's default fonts (Inter/JetBrains Mono) from its CDN. */
   withDefaultFonts?: boolean;
+  /** URL of the favicon shown in the browser tab. */
   favicon?: string;
+  /** Overall page layout: `"modern"` (default) or `"classic"`. */
   layout?: "modern" | "classic";
+  /** Hide the "Open API Client" button. */
   hideClientButton?: boolean;
+  /** Hide the dark-mode toggle. */
   hideDarkModeToggle?: boolean;
+  /** Hide the Models (schemas) section. */
   hideModels?: boolean;
+  /** Hide the search bar. */
   hideSearch?: boolean;
+  /** Hide the "Test Request" button on operations. */
   hideTestRequestButton?: boolean;
+  /** Show each operation's `operationId` next to its title. */
   showOperationId?: boolean;
+  /** Show the navigation sidebar. */
   showSidebar?: boolean;
+  /** When to expose Scalar's developer tools panel. */
   showDeveloperTools?: "always" | "localhost" | "never";
+  /** Expand the first tag's operations on load. */
   defaultOpenFirstTag?: boolean;
+  /** Expand every tag's operations on load. */
   defaultOpenAllTags?: boolean;
+  /** Expand all model (schema) sections on load. */
   expandAllModelSections?: boolean;
+  /** Expand all response sections on load. */
   expandAllResponses?: boolean;
+  /** Which spec download button(s) to offer, or `"none"` to hide them. */
   documentDownloadType?: "json" | "yaml" | "both" | "direct" | "none";
+  /** Label operations by their `summary` or by their `path`. */
   operationTitleSource?: "summary" | "path";
+  /** List required schema properties before optional ones. */
   orderRequiredPropertiesFirst?: boolean;
+  /** Sort schema properties alphabetically or keep spec order. */
   orderSchemaPropertiesBy?: "alpha" | "preserve";
+  /** Keyboard key that focuses search, e.g. `"k"` for Ctrl/Cmd+K. */
   searchHotKey?: string;
+  /** Base URL prepended to relative server URLs in the spec. */
   baseServerURL?: string;
+  /** Proxy URL used by "Test Request" calls to avoid CORS issues. */
   proxyUrl?: string;
+  /** Redirect URI used by the OAuth2 authorization-code flow. */
   oauth2RedirectUri?: string;
+  /** Persist entered credentials in browser storage across reloads. */
   persistAuth?: boolean;
+  /** Enable Scalar's anonymous usage telemetry. */
   telemetry?: boolean;
+  /** Sort tags alphabetically. */
   tagsSorter?: "alpha";
+  /** Sort operations alphabetically or by HTTP method. */
   operationsSorter?: "alpha" | "method";
+  /** Prefill security-scheme credentials (JSON-only Scalar `authentication` object). */
   authentication?: { [key: string]: ScalarJsonValue | undefined };
+  /** Snippet target preselected in the client picker, e.g. `{ targetKey, clientKey }`. */
   defaultHttpClient?: { [key: string]: ScalarJsonValue | undefined };
+  /** Extra HTML meta tags (title, description, Open Graph, ...) for the page. */
   metaData?: { [key: string]: ScalarJsonValue | undefined };
+  /** Scalar MCP integration settings (JSON-only). */
   mcp?: { [key: string]: ScalarJsonValue | undefined };
+  /** Use path-based routing for deep links, e.g. `{ basePath }`. */
   pathRouting?: { [key: string]: ScalarJsonValue | undefined };
+  /** Override the spec's `servers` list shown in the UI. */
   servers?: ScalarJsonValue[];
+  /** Not serializable; the spec is always loaded from {@link DocsOptions.specUrl}. */
   content?: never;
+  /** Function-valued option; cannot cross the server-to-HTML boundary. */
   fetch?: never;
+  /** Function-valued option; cannot cross the server-to-HTML boundary. */
   generateHeadingSlug?: never;
+  /** Function-valued option; cannot cross the server-to-HTML boundary. */
   generateModelSlug?: never;
+  /** Function-valued option; cannot cross the server-to-HTML boundary. */
   generateOperationSlug?: never;
+  /** Function-valued option; cannot cross the server-to-HTML boundary. */
   generateTagSlug?: never;
+  /** Function-valued option; cannot cross the server-to-HTML boundary. */
   generateWebhookSlug?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onBeforeRequest?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onDocumentSelect?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onLoaded?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onRequestSent?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onServerChange?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onShowMore?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onSidebarClick?: never;
+  /** Function-valued callback; cannot cross the server-to-HTML boundary. */
   onSpecUpdate?: never;
+  /** Function-valued Scalar plugins; cannot cross the server-to-HTML boundary. */
   plugins?: never;
+  /** Function-valued option; cannot cross the server-to-HTML boundary. */
   redirect?: never;
+  /** Multi-document sources are not serializable here; serve one spec per page. */
   sources?: never;
+  /** Internal URL wiring owned by DaloyJS. Use {@link DocsOptions.specUrl} instead. */
   spec?: never;
+  /** Internal URL wiring owned by DaloyJS. Use {@link DocsOptions.specUrl} instead. */
   url?: never;
 }
 
@@ -477,6 +534,10 @@ function integrityAttr(
  * The output is a single HTML document with configurable external assets;
  * pair it with {@link htmlResponse} (or your own `Response`) and serve from
  * any route.
+ *
+ * @param opts Spec URL, page title, asset overrides, CSP nonce, and Scalar configuration.
+ * @returns The complete HTML document as a string.
+ * @throws {TypeError} when an SRI integrity value or `auth.loginUrl` is invalid.
  */
 export function scalarHtml(opts: ScalarHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Reference");
@@ -506,6 +567,10 @@ ${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
  * Developer-entered credentials are persisted by default
  * (`persistAuthorization: true`) so routes with OpenAPI security requirements
  * can be exercised after using Swagger UI's Authorize dialog.
+ *
+ * @param opts Spec URL, page title, asset overrides, CSP nonce, and Swagger UI configuration.
+ * @returns The complete HTML document as a string.
+ * @throws {TypeError} when an SRI integrity value or `auth.loginUrl` is invalid.
  */
 export function swaggerUiHtml(opts: SwaggerUiHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Docs");
@@ -550,6 +615,9 @@ ${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
  * you). The spec URL and configuration are embedded with `<`-escaped JSON so
  * an attacker-controlled value cannot break out of the inline `<script>`.
  *
+ * @param opts Spec URL, page title, asset overrides, CSP nonce, and Redoc configuration.
+ * @returns The complete HTML document as a string.
+ * @throws {TypeError} when an SRI integrity value or `auth.loginUrl` is invalid.
  * @since 0.39.0
  */
 export function redocHtml(opts: RedocHtmlOptions): string {
@@ -588,6 +656,9 @@ ${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
  * and configuration are embedded with `<`-escaped JSON so an attacker-controlled
  * value cannot break out of the inline `<script>`.
  *
+ * @param opts Spec URL, page title, asset overrides, CSP nonce, and AsyncAPI configuration.
+ * @returns The complete HTML document as a string.
+ * @throws {TypeError} when an SRI integrity value is invalid.
  * @since 0.42.0
  */
 export function asyncapiHtml(opts: AsyncApiHtmlOptions): string {
@@ -624,6 +695,9 @@ export function asyncapiHtml(opts: AsyncApiHtmlOptions): string {
  *
  * Allows `'self'` plus the listed `assetOrigins` (default: jsDelivr) and
  * either `'unsafe-inline'` or the provided `scriptNonce` for scripts.
+ *
+ * @param opts Asset/connect origins, script nonce, inline-style, and blob-worker toggles.
+ * @returns The policy string, ready for a `content-security-policy` header.
  */
 export function docsContentSecurityPolicy(opts: DocsContentSecurityPolicyOptions = {}): string {
   const assetOrigins = opts.assetOrigins ?? [JSDELIVR_ORIGIN];
@@ -654,6 +728,10 @@ export function docsContentSecurityPolicy(opts: DocsContentSecurityPolicyOptions
  * Wrap a docs HTML string in a `Response` with safe defaults:
  * `text/html` content type, `nosniff`, `no-referrer`, and a CSP from
  * {@link docsContentSecurityPolicy} (or a caller-supplied override).
+ *
+ * @param html The HTML document body to serve.
+ * @param opts CSP options, or a verbatim `contentSecurityPolicy` override.
+ * @returns A `Response` with the HTML body and hardened security headers.
  */
 export function htmlResponse(html: string, opts: HtmlResponseOptions = {}): Response {
   return new Response(html, {

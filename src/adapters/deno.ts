@@ -10,7 +10,9 @@ import type { App } from "../app.js";
 
 /** Options forwarded to `Deno.serve` by {@link serve}. */
 export interface DenoServeOptions {
+  /** TCP port to listen on. Defaults to `3000`. */
   port?: number;
+  /** Interface to bind. Defaults to `"0.0.0.0"`. */
   hostname?: string;
   /** Optional external signal that triggers graceful shutdown. */
   signal?: AbortSignal;
@@ -30,10 +32,18 @@ export interface DenoServeOptions {
 
 /** Handle returned by {@link serve}; call `shutdown()` to drain. */
 export interface DenoServerHandle {
+  /** Graceful shutdown: drains {@link App.shutdown} hooks, then stops the Deno server. Idempotent. */
   shutdown: () => Promise<void>;
 }
 
-/** Start `Deno.serve` bound to the given {@link App} with graceful-shutdown wiring. */
+/**
+ * Start `Deno.serve` bound to the given {@link App} with graceful-shutdown wiring.
+ *
+ * @param app - The DaloyJS {@link App} whose `fetch` serves each request.
+ * @param opts - Listener/TLS/shutdown options; see {@link DenoServeOptions}.
+ * @returns A {@link DenoServerHandle} whose `shutdown()` drains in-flight requests.
+ * @throws Error when the Deno runtime (`globalThis.Deno.serve`) is not detected.
+ */
 export function serve(app: App, opts: DenoServeOptions = {}): DenoServerHandle {
   const D = (globalThis as {
     Deno?: {

@@ -52,10 +52,15 @@ export type TracingAttributes = Record<string, TracingAttributeValue>;
  * `Span` (extra OTel methods are ignored).
  */
 export interface TracingSpan {
+  /** Set a single attribute on the span. */
   setAttribute(key: string, value: TracingAttributeValue): void;
+  /** Optional bulk attribute setter; DaloyJS falls back to `setAttribute` per key. */
   setAttributes?(attrs: TracingAttributes): void;
+  /** Set the span status (e.g. {@link TRACING_SPAN_STATUS_ERROR} on failure). */
   setStatus(status: { code: number; message?: string }): void;
+  /** Optional exception recorder; called with the thrown error on failures. */
   recordException?(err: unknown): void;
+  /** End the span. DaloyJS calls this exactly once per request. */
   end(endTime?: number): void;
 }
 
@@ -69,6 +74,7 @@ export interface TracingStartSpanOptions {
 
 /** Minimum tracer surface DaloyJS needs. Compatible with `@opentelemetry/api`'s `Tracer`. */
 export interface TracingTracer {
+  /** Create a span; `context` carries the extracted upstream parent context, if any. */
   startSpan(name: string, options?: TracingStartSpanOptions, context?: unknown): TracingSpan;
 }
 
@@ -146,6 +152,12 @@ function endOnce(entry: TracingEntry, attrs?: TracingAttributes): void {
  * Middleware that wraps every request in an OpenTelemetry-compatible span.
  * Pass any tracer that matches the {@link TracingTracer} surface; DaloyJS
  * does not import `@opentelemetry/api` itself.
+ *
+ * @param opts Tracer plus optional span naming, attribute, and context
+ *   extraction hooks; see {@link OtelTracingOptions}.
+ * @returns A {@link Hooks} object that starts a SERVER span per request,
+ *   exposes it on `ctx.state[stateKey]`, records exceptions, marks 5xx
+ *   responses as errors, and ends the span exactly once on send.
  */
 export function otelTracing(opts: OtelTracingOptions): Hooks {
   const stateKey = opts.stateKey ?? "otelSpan";

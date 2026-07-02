@@ -524,6 +524,10 @@ function isAbortError(err: unknown): boolean {
  * const safeFetch = resilientFetch({ fetch: fetchGuard(), timeoutMs: 2_000 });
  * ```
  *
+ * @param options - Timeout (default 10000 ms), retry policy (default 2 retries, exponential backoff with jitter, `Retry-After` respected), circuit-breaker config (`false` disables), and the base `fetch`.
+ * @returns A drop-in `fetch` replacement applying the configured resilience layers.
+ * @throws {Error} When no global `fetch` exists and `options.fetch` is not provided.
+ * @throws {RangeError} When `timeoutMs` is negative/non-finite or `retries` is not a non-negative integer.
  * @since 0.37.0
  */
 export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetch {

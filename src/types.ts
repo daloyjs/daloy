@@ -82,9 +82,13 @@ export type PathParams<P extends string> = {
  * @since 0.1.0
  */
 export interface RequestSchemas {
+  /** Validator for path parameters. Without it, `ctx.params` is raw {@link PathParams} strings. */
   params?: StandardSchemaV1;
+  /** Validator for the parsed query string. Without it, `ctx.query` is a raw string record. */
   query?: StandardSchemaV1;
+  /** Validator for request headers. Without it, `ctx.headers` is a raw string record. */
   headers?: StandardSchemaV1;
+  /** Validator for the parsed request body. Without it, `ctx.body` is `unknown`. Prefer `.strict()` object schemas so unexpected keys are rejected. */
   body?: StandardSchemaV1;
 }
 
@@ -134,9 +138,13 @@ export type InferRequest<R extends RequestSchemas | undefined, P extends string>
  * @since 0.1.0
  */
 export interface ResponseSpec {
+  /** Human-readable description emitted into the OpenAPI response object. Required. */
   description: string;
+  /** Response-body validator; handler return values are checked against it when `AppOptions.validateResponses` is on. */
   body?: StandardSchemaV1;
+  /** Documented response headers keyed by header name; surfaced in the OpenAPI document. */
   headers?: Record<string, { description?: string; schema?: StandardSchemaV1 }>;
+  /** Named example payloads emitted into OpenAPI and served when `AppOptions.mockMode` is enabled. */
   examples?: Record<string, unknown>;
 }
 
@@ -254,9 +262,18 @@ export type AuthScheme =
   | "session"
   | "apiKey";
 
-/** @since 0.24.0 */
+/**
+ * Verified-identity envelope written to `ctx.state.auth` by the first-party
+ * auth helpers. The `scheme` discriminant keeps per-scheme logic (revocation
+ * lists, audit logs) from being applied to credentials issued by a different
+ * scheme (see {@link AuthScheme}).
+ *
+ * @since 0.24.0
+ */
 export interface AuthContext<TCredentials = unknown> {
+  /** Discriminant naming the auth helper that verified the request (e.g. `"jwt"`, `"session"`). */
   readonly scheme: AuthScheme;
+  /** The verified credential payload (decoded JWT claims, session record, ...); shape depends on the scheme. */
   readonly credentials: TCredentials;
 }
 
@@ -274,11 +291,15 @@ export interface AuthContext<TCredentials = unknown> {
  * @since 0.1.0
  */
 export interface BaseContext<P extends string, R extends RequestSchemas | undefined> {
+  /** The original web-standard `Request`. Its body stream may already be consumed when a `body` schema triggered parsing. */
   request: Request;
   /** Validated request data (or raw fallbacks if no schema). */
   params: InferRequest<R, P>["params"];
+  /** Validated query params; raw `Record<string, string | string[] | undefined>` without a schema. */
   query: InferRequest<R, P>["query"];
+  /** Validated request headers; raw `Record<string, string | undefined>` without a schema. */
   headers: InferRequest<R, P>["headers"];
+  /** Validated request body; `unknown` without a schema. Parsed prototype-pollution-safe (forbidden keys rejected). */
   body: InferRequest<R, P>["body"];
   /** Mutable per-request state. Plugin-augmented context lives here. */
   state: AppState & Record<string, unknown>;
@@ -311,12 +332,16 @@ export interface BaseContext<P extends string, R extends RequestSchemas | undefi
  * @since 0.1.0
  */
 export interface Hooks {
+  /** Runs first, before validation or context building. Receives the raw web-standard `Request`. */
   onRequest?: (req: Request) => void | Promise<void>;
+  /** Runs with the validated {@link BaseContext} before the handler. Returning a `Response` short-circuits the handler entirely (useful for auth guards). */
   beforeHandle?: (ctx: BaseContext<any, any>) => void | Response | Promise<void | Response>;
+  /** Runs after the handler with its raw return value. Return a non-`undefined` value to replace the result before serialization and response-schema validation. */
   afterHandle?: (
     ctx: BaseContext<any, any>,
     result: unknown
   ) => void | unknown | Promise<void | unknown>;
+  /** Runs on the error path before serialization. `ctx` is `undefined` if the error occurred before context was built. Return a `Response` to replace the default RFC 9457 problem+json error response. */
   onError?: (err: unknown, ctx: BaseContext<any, any> | undefined) => void | Response | Promise<void | Response>;
   /**
    * Symmetric to `beforeHandle`, but for outgoing responses. Runs after the Response
@@ -329,6 +354,7 @@ export interface Hooks {
     res: Response,
     ctx: BaseContext<any, any> | undefined
   ) => void | Response | Promise<void | Response>;
+  /** Fire-and-forget observer of the final outgoing `Response` (logging, metrics). Runs last; cannot alter the response. */
   onResponse?: (res: Response) => void | Promise<void>;
 }
 
@@ -368,15 +394,23 @@ export interface RouteDefinition<
   Req extends RequestSchemas | undefined = undefined,
   Res extends ResponsesMap = ResponsesMap
 > {
+  /** HTTP method to match (uppercase, e.g. `"GET"`). See {@link HttpMethod}. */
   method: M;
+  /** URL path pattern starting with `/`; `:name` segments become typed path params (e.g. `"/books/:id"`). */
   path: P;
 
   // OpenAPI / introspection metadata
+  /** Stable unique operation id for OpenAPI and the generated client (drives SDK method names). Omitted from the spec when unset. */
   operationId?: string;
+  /** One-line summary shown in OpenAPI docs UIs. */
   summary?: string;
+  /** Longer free-form description for the OpenAPI operation (CommonMark allowed). */
   description?: string;
+  /** OpenAPI tags used to group the operation in docs UIs; merged with {@link RouteMeta.tags}. */
   tags?: string[];
+  /** Emits `deprecated: true` on the OpenAPI operation. Set implicitly when {@link RouteDefinition.sunset} is present. */
   deprecated?: boolean;
+  /** Optional per-route API version label. Informational metadata only; not emitted into the OpenAPI document. */
   version?: string;
 
   /**
@@ -413,9 +447,12 @@ export interface RouteDefinition<
    */
   sunset?: string | Date;
 
+  /** Standard Schemas ({@link RequestSchemas}) validating `params`/`query`/`headers`/`body`. Parts without a schema arrive untyped; validation failures return 400/422 before the handler runs. */
   request?: Req;
+  /** Map of status code to {@link ResponseSpec}. Drives response-body validation, the handler's allowed return types, OpenAPI responses, and the typed client. */
   responses: Res;
 
+  /** Declarative auth requirement ({@link AuthSpec}); surfaces as the OpenAPI `security` requirement for this operation. */
   auth?: AuthSpec;
 
   /**
@@ -487,6 +524,7 @@ export interface RouteDefinition<
    */
   meta?: RouteMeta;
 
+  /** Per-route lifecycle {@link Hooks}. Run after global and group hooks in the pipeline. */
   hooks?: Hooks;
 
   /**
@@ -527,14 +565,23 @@ export interface RouteDefinition<
  * `handler` (no execution path on the producer side).
  */
 export interface CallbackOperation {
+  /** HTTP method the producer uses when invoking the callback URL. */
   method: HttpMethod;
+  /** Stable unique operation id for the callback operation in the OpenAPI document. */
   operationId?: string;
+  /** One-line summary shown in OpenAPI docs UIs. */
   summary?: string;
+  /** Longer free-form description for the callback operation. */
   description?: string;
+  /** OpenAPI tags grouping the callback operation in docs UIs. */
   tags?: string[];
+  /** Emits `deprecated: true` on the callback operation. */
   deprecated?: boolean;
+  /** Schemas describing the outgoing callback request (documentation only; never executed by the framework). */
   request?: RequestSchemas;
+  /** Responses the producer expects back from the consumer, keyed by status code. */
   responses: ResponsesMap;
+  /** Auth requirement the callback request is documented to carry ({@link AuthSpec}). */
   auth?: AuthSpec;
 }
 
@@ -575,14 +622,18 @@ export interface CallbackMap {
  * @since 0.14.0
  */
 export interface RouteExample {
+  /** One-line label for the example, surfaced as the OpenAPI example `summary`. */
   summary?: string;
+  /** Longer explanation of what the example demonstrates. */
   description?: string;
+  /** Sample inbound request. `body` is validated against the route's request body schema by `runContractTests()`. */
   request?: {
     params?: Record<string, string>;
     query?: Record<string, unknown>;
     headers?: Record<string, string>;
     body?: unknown;
   };
+  /** Sample response. `status` must be declared in the route's `responses`; `body` is validated against that status's schema. */
   response?: {
     status: number;
     body?: unknown;
@@ -607,9 +658,14 @@ export interface RouteExample {
  * @since 0.14.0
  */
 export interface RouteMeta {
+  /** Fallback operation summary; the route-level `summary` wins when both are set. */
   summary?: string;
+  /** Fallback operation description; the route-level `description` wins when both are set. */
   description?: string;
+  /** Extra OpenAPI tags, merged (deduplicated) with the route-level `tags`. */
   tags?: string[];
+  /** Named request/response examples ({@link RouteExample}); validated against the route's schemas by `runContractTests()`. */
   examples?: Record<string, RouteExample>;
+  /** Free-form vendor extensions emitted as `x-<key>` on the OpenAPI operation; keys are auto-prefixed with `x-` when missing. */
   extensions?: Record<string, unknown>;
 }

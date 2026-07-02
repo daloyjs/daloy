@@ -244,7 +244,9 @@ const CANONICAL_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set<HttpMethod>([
 export interface AppOptions {
   /** OpenAPI document metadata */
   title?: string;
+  /** OpenAPI `info.version`. Falls back to the host package manifest version, then `"0.0.0"`. */
   version?: string;
+  /** OpenAPI `info.description`. Falls back to the host package manifest description. */
   description?: string;
 
   /**
@@ -567,9 +569,13 @@ export interface AppOptions {
  * @since 0.3.0
  */
 export interface AppOpenAPIOptions {
+  /** OpenAPI `info` object. `title`/`version` fall back to {@link AppOptions.title} / {@link AppOptions.version}, then the host package manifest. */
   info?: Partial<OpenAPIInfo>;
+  /** `servers` array published in the generated document. */
   servers?: OpenAPIOptions["servers"];
+  /** Security schemes stitched into `components.securitySchemes`. */
   securitySchemes?: OpenAPIOptions["securitySchemes"];
+  /** OpenAPI 3.1 top-level `webhooks` operations, keyed by webhook name. */
   webhooks?: OpenAPIOptions["webhooks"];
 }
 
@@ -899,18 +905,31 @@ export interface CspReportRouteOptions {
  * @since 0.1.0
  */
 export interface IntrospectedRoute {
+  /** HTTP method the route responds to (e.g. `"GET"`). */
   method: HttpMethod;
+  /** Route path pattern as registered, including any group prefix (e.g. `/users/:id`). */
   path: string;
+  /** OpenAPI operationId, when declared on the route. */
   operationId?: string;
+  /** OpenAPI tags, when declared on the route or inherited from a group. */
   tags?: string[];
+  /** One-line OpenAPI summary, when declared. */
   summary?: string;
+  /** Longer OpenAPI description, when declared. */
   description?: string;
+  /** `true` when the route is marked deprecated in OpenAPI. */
   deprecated?: boolean;
+  /** Whether the route declares a request body schema. */
   hasBody: boolean;
+  /** Whether the route declares a query-string schema. */
   hasQuery: boolean;
+  /** Whether the route declares a path-params schema. */
   hasParams: boolean;
+  /** Whether the route declares a request-headers schema. */
   hasHeaders: boolean;
+  /** Declared response status codes (e.g. `[200, 404]`). */
   responses: number[];
+  /** Security scheme name and required scopes, when the route declares `auth`. */
   auth?: { scheme: string; scopes?: string[] };
   /**
    * Optional AI-friendly metadata declared via `route({ meta: ... })`.
@@ -1096,6 +1115,18 @@ type AppendRoute<
   : readonly [...Routes, R];
 
 /**
+ * The DaloyJS application: a contract-first router plus a web-standard
+ * `fetch(Request): Promise<Response>` handler that runs unchanged on Node,
+ * Bun, Deno, Cloudflare Workers, and Vercel via the adapters.
+ *
+ * Routes registered with {@link App.route} are validated against their
+ * declared schemas on the way in and out, accumulate in the typed
+ * {@link App.routes} tuple (powering OpenAPI generation and the typed
+ * client), and are served with secure defaults: body limits, request
+ * timeouts, security headers, and prod-mode error redaction.
+ *
+ * @typeParam Routes - Compile-time tuple of registered route definitions,
+ * grown by each {@link App.route} call.
  * @since 0.1.0
  */
 export class App<
@@ -1106,10 +1137,16 @@ export class App<
     any
   >[],
 > {
+  /**
+   * Resolved constructor options. The security-relevant trio is always
+   * populated: `validateResponses` (default `true`), `bodyLimitBytes`
+   * (default 1 MiB), and `requestTimeoutMs` (default 30_000 ms).
+   */
   readonly options: Required<
     Pick<AppOptions, "validateResponses" | "bodyLimitBytes" | "requestTimeoutMs">
   > &
     AppOptions;
+  /** Structured logger for the app. Defaults to a JSON-lines console logger; override via `options.logger`. */
   readonly log: Logger;
   /**
    * Public registry: enables OpenAPI gen, typed-client gen, dead-route detection.
@@ -2879,6 +2916,21 @@ export class App<
   }
 
   /**
+   * Apply an ordered list of plugin extensions to the
+   * group-level hook chain. Each extension's `handler` is wrapped into a
+   * single-event {@link Hooks} bundle so subsequent route registrations
+   * pick it up via the normal hook composition path.
+   * @internal
+   */
+  private applyExtensions(ordered: PluginExtension[]): void {
+    for (const ext of ordered) {
+      const hooks: Hooks = { [ext.event]: ext.handler } as unknown as Hooks;
+      this.groupHooks.push(hooks);
+    }
+    this._coldPathHooksCache = undefined;
+  }
+
+  /**
    * Decorate `ctx.state` with a value available inside every handler and hook.
    *
    * Augment the {@link AppState} interface to type the decoration globally:
@@ -2900,23 +2952,10 @@ export class App<
    *
    * @param key - Property name on `ctx.state`.
    * @param value - Value bound to that property on every request.
+   * @param opts - Pass `{ override: true }` to replace an existing decoration (logged as a warning).
    * @returns This `App` instance for chaining.
+   * @throws Error if `key` is already decorated and `opts.override` is not `true`.
    */
-  /**
-   * Apply an ordered list of plugin extensions to the
-   * group-level hook chain. Each extension's `handler` is wrapped into a
-   * single-event {@link Hooks} bundle so subsequent route registrations
-   * pick it up via the normal hook composition path.
-   * @internal
-   */
-  private applyExtensions(ordered: PluginExtension[]): void {
-    for (const ext of ordered) {
-      const hooks: Hooks = { [ext.event]: ext.handler } as unknown as Hooks;
-      this.groupHooks.push(hooks);
-    }
-    this._coldPathHooksCache = undefined;
-  }
-
   decorate<K extends string, V>(key: K, value: V, opts: { override?: boolean } = {}): this {
     if (Object.prototype.hasOwnProperty.call(this.decorations, key) && opts.override !== true) {
       // Namespace-protected decorators. Refuse to silently
@@ -3592,13 +3631,6 @@ export class App<
   }
 
   /**
-   * Return a JSON-serializable summary of every registered route. Useful for
-   * dead-route detection, dashboards, and tests that want to assert against
-   * the route table without parsing the OpenAPI document.
-   *
-   * @returns Array of one {@link IntrospectedRoute} per registered route.
-   */
-  /**
    * Emit a one-time development warning when any route declares a `2xx`
    * response without a body schema, because response-field stripping
    * (OWASP API3) does not run for those responses — a handler returning
@@ -3624,6 +3656,13 @@ export class App<
     );
   }
 
+  /**
+   * Return a JSON-serializable summary of every registered route. Useful for
+   * dead-route detection, dashboards, and tests that want to assert against
+   * the route table without parsing the OpenAPI document.
+   *
+   * @returns Array of one {@link IntrospectedRoute} per registered route.
+   */
   introspect(): IntrospectedRoute[] {
     return this.routes.map((r) => {
       const route: IntrospectedRoute = {
@@ -3786,6 +3825,12 @@ function detectHeaderMutatingMiddleware(layers: Hooks[]): string[] {
 /**
  * Topological sort of plugin extensions. Refuses-at-call
  * on cyclic ordering with a structured error naming the cycle.
+ *
+ * @param exts - Extensions to order by their `before` / `after` constraints (Kahn's algorithm).
+ * @returns The extensions in a valid execution order.
+ * @throws Error on duplicate extension names, on a `before`/`after` cycle
+ * (naming the members), or when two extensions mutate the same response
+ * header without declaring an ordering between each other.
  * @internal
  */
 export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): PluginExtension[] {
@@ -4659,6 +4704,8 @@ function serializeErr(err: unknown): Record<string, unknown> {
  * for ergonomics and matches the factory pattern used by Express, Fastify,
  * and Hono adapters.
  *
+ * @param options - Same {@link AppOptions} accepted by the `App` constructor. Default: `{}`.
+ * @returns A new {@link App} instance.
  * @since 0.3.0
  */
 export function createApp(options: AppOptions = {}): App {

@@ -95,6 +95,9 @@ const CLIENT_CERT_SYMBOL: unique symbol = Symbol.for("daloyjs.clientCertificate"
  * Pass a thunk to defer the read until {@link getClientCertificate} is first
  * called; the resolved value is cached back onto the request.
  *
+ * @param request The incoming request to stash the certificate on.
+ * @param source The certificate, a lazy thunk producing one, or `undefined`
+ *   when the connection presented no client certificate.
  * @since 0.37.0
  */
 export function setClientCertificate(
@@ -110,6 +113,8 @@ export function setClientCertificate(
  * adapter does not expose TLS peer info). If a lazy thunk was stashed, it is
  * resolved once and the result cached.
  *
+ * @param request The request previously seen by {@link setClientCertificate}.
+ * @returns The attached certificate, or `undefined` when none was presented.
  * @since 0.37.0
  */
 export function getClientCertificate(request: Request): ClientCertificate | undefined {
@@ -131,12 +136,19 @@ export function getClientCertificate(request: Request): ClientCertificate | unde
  * @since 0.37.0
  */
 export interface PeerCertificateLike {
+  /** Subject RDN attributes keyed by short name (e.g. `CN`, `O`). */
   subject?: Record<string, string | string[]> | null;
+  /** Issuer RDN attributes keyed by short name. */
   issuer?: Record<string, string | string[]> | null;
+  /** Validity start as a Node-formatted date string. */
   valid_from?: string;
+  /** Validity end as a Node-formatted date string. */
   valid_to?: string;
+  /** SHA-256 fingerprint, colon-delimited hex as Node emits it. */
   fingerprint256?: string;
+  /** Certificate serial number as a hex string. */
   serialNumber?: string;
+  /** Subject Alternative Names rendered as `DNS:a, IP Address:1.2.3.4, ...`. */
   subjectaltname?: string;
 }
 
@@ -148,6 +160,9 @@ export interface PeerCertificateLike {
  * @param raw - The structured peer-certificate object from the TLS socket.
  * @param verified - Whether the socket reported `authorized === true` (the
  *   chain was verified against the configured CA).
+ * @returns The normalized certificate, or `undefined` when `raw` is missing
+ *   or carries no identifying fields (no subject, issuer, fingerprint, or
+ *   serial).
  * @since 0.37.0
  */
 export function normalizePeerCertificate(
@@ -286,8 +301,10 @@ function cnFromDN(dn: string | undefined): string | undefined {
  * and is the one returned. Because Envoy only emits XFCC for connections it
  * mutually authenticated, the result is marked `verified: true`.
  *
- * Returns `undefined` for an empty or unparseable header.
- *
+ * @param headerValue Raw XFCC header value; `null`/`undefined` are tolerated.
+ * @returns The certificate parsed from the first XFCC element, or `undefined`
+ *   for an empty or unparseable header. Only trust this header behind a proxy
+ *   you control that strips client-supplied XFCC.
  * @since 0.37.0
  */
 export function parseForwardedClientCert(

@@ -62,9 +62,13 @@ export class CronParseError extends Error {
  * @since 0.37.0
  */
 export interface SchedulerLogger {
+  /** Log at debug level (task definitions as they are registered). */
   debug(obj: object | string, msg?: string): void;
+  /** Log at info level (scheduler started / stopped lifecycle events). */
   info(obj: object | string, msg?: string): void;
+  /** Log at warn level (overrun-skipped runs, stop grace-period timeouts). */
   warn(obj: object | string, msg?: string): void;
+  /** Log at error level (a task handler threw or rejected). */
   error(obj: object | string, msg?: string): void;
 }
 

@@ -127,6 +127,7 @@ export interface WebhookDeadLetter {
  * @since 0.37.0
  */
 export interface WebhookDeadLetterSink {
+  /** Persist a permanently-failed delivery. May be async; the sender awaits it. */
   add(letter: WebhookDeadLetter): void | Promise<void>;
 }
 
@@ -331,6 +332,11 @@ function randomId(): string {
  * const result = await send({ url, eventType: "user.created", payload: { id } });
  * ```
  *
+ * @param options - Signing secret plus delivery policy; see
+ *   {@link WebhookSenderOptions} for the per-field defaults.
+ * @returns A `send(event)` function that resolves to a
+ *   {@link WebhookDeliveryResult}.
+ * @throws Error at construction when `secret` is missing or empty.
  * @since 0.37.0
  */
 export function createWebhookSender(

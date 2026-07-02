@@ -57,7 +57,9 @@ export type SafeRedirectBlockReason =
 
 /** Thrown when {@link safeRedirect} refuses a candidate URL and no `fallback` is configured. */
 export class OpenRedirectBlockedError extends Error {
+  /** Machine-readable {@link SafeRedirectBlockReason} explaining the refusal. */
   readonly reason: SafeRedirectBlockReason;
+  /** The candidate URL that was refused, verbatim. */
   readonly target: string;
   constructor(reason: SafeRedirectBlockReason, target: string) {
     super(`safeRedirect: refused redirect (${reason})`);
@@ -196,6 +198,10 @@ function hasEncodedProtocolRelativePrefix(value: string): boolean {
  *
  * @param target - User-supplied URL candidate (path or absolute URL).
  * @param options - Allowlist + response configuration.
+ * @returns A redirect `Response` (default `303`) with `Location` set to the
+ *   validated target (or the `fallback`) and `Cache-Control: no-store`.
+ * @throws {TypeError} for a non-redirect `status` or malformed
+ *   `allowedPaths` / `allowedOrigins` / `fallback` entries.
  *
  * @since 0.35.0
  */

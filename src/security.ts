@@ -209,6 +209,17 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
+// Cache the Web Crypto entry points at module load so randomId() doesn't pay
+// for a `globalThis.crypto` + optional-chain property lookup per request.
+// Falls back to the runtime lookup path if Web Crypto is patched/replaced
+// after module load (test harnesses, custom runtimes) — the cache is only
+// trusted when `globalThis.crypto` is still the same reference, otherwise
+// the stubbed object would be silently bypassed.
+const _webCrypto: Crypto | undefined = (globalThis as any).crypto;
+const _randomUUID: (() => string) | undefined =
+  _webCrypto && typeof _webCrypto.randomUUID === "function"
+    ? _webCrypto.randomUUID.bind(_webCrypto)
+    : undefined;
 /**
  * Generate a cryptographically strong, URL-safe identifier (~22 chars).
  *
@@ -224,17 +235,6 @@ export function timingSafeEqual(a: string, b: string): boolean {
  * @returns A random URL-safe id string.
  * @since 0.1.0
  */
-// Cache the Web Crypto entry points at module load so randomId() doesn't pay
-// for a `globalThis.crypto` + optional-chain property lookup per request.
-// Falls back to the runtime lookup path if Web Crypto is patched/replaced
-// after module load (test harnesses, custom runtimes) — the cache is only
-// trusted when `globalThis.crypto` is still the same reference, otherwise
-// the stubbed object would be silently bypassed.
-const _webCrypto: Crypto | undefined = (globalThis as any).crypto;
-const _randomUUID: (() => string) | undefined =
-  _webCrypto && typeof _webCrypto.randomUUID === "function"
-    ? _webCrypto.randomUUID.bind(_webCrypto)
-    : undefined;
 export function randomId(): string {
   const c: Crypto | undefined = (globalThis as any).crypto;
   if (c === _webCrypto && _randomUUID !== undefined) return _randomUUID();
@@ -273,6 +273,7 @@ export const SMUGGLING_SINGLETON_HEADERS: readonly string[] = Object.freeze([
  * Throws {@link BadRequestError} so the framework returns a structured
  * `400 problem+json` instead of forwarding a smuggling-class request.
  *
+ * @param headers - Normalized request headers to inspect.
  * @since 0.15.0
  */
 export function assertNoDuplicateSingletonHeaders(headers: Headers): void {
@@ -322,6 +323,7 @@ export const RESERVED_INBOUND_HEADER_PREFIXES: readonly string[] = Object.freeze
  * `400 problem+json` instead of routing a request that may be probing
  * for an internal-dispatch bypass.
  *
+ * @param headers - Normalized request headers to inspect (names arrive lowercased).
  * @since 0.36.0
  */
 export function assertNoReservedInternalHeaders(headers: Headers): void {
@@ -446,6 +448,8 @@ const WEAK_SECRET_SET = new Set(WEAK_SECRET_STRINGS.map((s) => s.toLowerCase()))
  * The thrown `Error` includes the `scope` argument (e.g. `"session"`) so
  * the developer sees which subsystem rejected the secret.
  *
+ * @param secret - Candidate secret value to vet.
+ * @param scope - Subsystem name used to prefix the thrown error message.
  * @since 0.17.0
  */
 export function assertStrongSecret(secret: unknown, scope: string): void {
@@ -654,6 +658,11 @@ function buildSignedPayloadBytes(
  * });
  * ```
  *
+ * @param opts - Payload, expected signature, shared secret, and optional
+ *   `algorithm` (defaults to `"sha256"`), `timestamp`, `toleranceSeconds`,
+ *   and `now` clock for replay-window checks.
+ * @returns `true` only when the signature matches the HMAC of the (optionally
+ *   timestamp-prefixed) payload and the timestamp is within tolerance.
  * @since 0.15.0
  */
 export async function verifyWebhookSignature(opts: {
@@ -745,6 +754,11 @@ export async function verifyWebhookSignature(opts: {
  * companion of {@link verifyWebhookSignature}; useful for tests, for
  * outbound webhook senders, and for diffing implementations.
  *
+ * @param opts - Payload, shared secret, optional `algorithm` (defaults to
+ *   `"sha256"`), and optional `timestamp` to bind the signature to.
+ * @returns The hex-encoded HMAC digest.
+ * @throws TypeError on an unsupported algorithm or malformed timestamp;
+ *   Error when WebCrypto is unavailable.
  * @since 0.15.0
  */
 export async function signWebhookPayload(opts: {
@@ -960,6 +974,8 @@ function walkForMongoOperators(value: unknown): boolean {
  * Returns `true` on the first hit. Use before passing untrusted data
  * into a query object that may be interpreted as an operator expression.
  *
+ * @param value - Parsed, untrusted JSON value to scan recursively.
+ * @returns `true` when any nested key starts with `$`; `false` otherwise.
  * @since 0.35.0
  */
 export function hasMongoOperatorKeys(value: unknown): boolean {
@@ -972,6 +988,8 @@ export function hasMongoOperatorKeys(value: unknown): boolean {
  * threading it into a NoSQL driver — closes the
  * `{"password": {"$ne": null}}` authentication-bypass class of bug.
  *
+ * @param value - Parsed, untrusted JSON value to scan recursively.
+ * @throws BadRequestError when any nested key starts with `$`.
  * @since 0.35.0
  */
 export function assertNoMongoOperators(value: unknown): void {
