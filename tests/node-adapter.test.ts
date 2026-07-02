@@ -460,3 +460,174 @@ test("node adapter: absolute-form request targets are routed by path and never 5
     await handle.close();
   }
 });
+
+// ---------- LightRequest / LightResponse (lazy undici construction) ----------
+//
+// The Node adapter hands dispatch a lazily-materializing Request shim (and
+// gets back a lazily-materializing Response on the serializeResult hot
+// path). These tests pin the WHATWG semantics that the shims must preserve:
+// instanceof, direct body reads, single-read enforcement, clone(), and the
+// body-limit rejection on the pre-buffered path.
+
+function buildLightApp(): App {
+  const app = new App({ logger: false, secureHeaders: false });
+  app.route({
+    method: "POST",
+    path: "/raw-json",
+    operationId: "rawJson",
+    responses: { 200: { description: "ok" } },
+    // Schema-less: reads the body straight off the WHATWG surface, like the
+    // daloy-bare bench server — exercises LightRequest.json() directly.
+    handler: async ({ request }) => ({
+      status: 200 as const,
+      body: { echoed: await request.json(), isRequest: request instanceof Request },
+    }),
+  });
+  app.route({
+    method: "POST",
+    path: "/double-read",
+    operationId: "doubleRead",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }) => {
+      await request.text();
+      const usedAfterFirst = request.bodyUsed;
+      let secondReadRejected = false;
+      try {
+        await request.text();
+      } catch (e) {
+        secondReadRejected = e instanceof TypeError;
+      }
+      let cloneAfterReadThrew = false;
+      try {
+        request.clone();
+      } catch (e) {
+        cloneAfterReadThrew = e instanceof TypeError;
+      }
+      return {
+        status: 200 as const,
+        body: { usedAfterFirst, secondReadRejected, cloneAfterReadThrew },
+      };
+    },
+  });
+  app.route({
+    method: "POST",
+    path: "/clone-first",
+    operationId: "cloneFirst",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }) => {
+      // clone() BEFORE reading must return a real, readable Request.
+      const clone = request.clone();
+      const fromClone = await clone.text();
+      const fromOriginal = await request.text();
+      return { status: 200 as const, body: { fromClone, fromOriginal } };
+    },
+  });
+  return app;
+}
+
+test("node adapter: LightRequest serves json() from buffered bytes and passes instanceof", async () => {
+  const { handle, port } = await startServer(buildLightApp());
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/raw-json`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ a: 1 }),
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { echoed: { a: 1 }, isRequest: true });
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: LightRequest enforces single-read body semantics", async () => {
+  const { handle, port } = await startServer(buildLightApp());
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/double-read`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: "hello",
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), {
+      usedAfterFirst: true,
+      secondReadRejected: true,
+      cloneAfterReadThrew: true,
+    });
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: LightRequest clone() before read yields an independent readable body", async () => {
+  const { handle, port } = await startServer(buildLightApp());
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/clone-first`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: "payload",
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { fromClone: "payload", fromOriginal: "payload" });
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: pre-buffered body over bodyLimitBytes is rejected 413", async () => {
+  // Unhappy path for readBodyBytesFast: the adapter buffers the bytes (they
+  // fit its 256 KiB pre-buffer), but the app-level bodyLimitBytes is
+  // smaller — the framework's limit re-check must still reject.
+  const app = new App({ logger: false, secureHeaders: false, bodyLimitBytes: 8 });
+  app.route({
+    method: "POST",
+    path: "/tiny",
+    operationId: "tinyLimit",
+    request: { body: z.object({ x: z.string() }) as any },
+    responses: { 200: { description: "ok" } },
+    handler: ({ body }) => ({ status: 200 as const, body }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/tiny`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ x: "way-over-eight-bytes" }),
+    });
+    assert.equal(res.status, 413);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: onSend hook can read a LightResponse body via clone()", async () => {
+  // LightResponse must survive hooks that inspect the outgoing body — the
+  // delegation path materializes a real Response on demand.
+  let hookSaw: string | undefined;
+  const app = new App({
+    logger: false,
+    secureHeaders: false,
+    hooks: {
+      onSend: async (res) => {
+        hookSaw = await res.clone().text();
+        return undefined;
+      },
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/inspect",
+    operationId: "inspectLight",
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/inspect`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true });
+    assert.equal(hookSaw, JSON.stringify({ ok: true }));
+  } finally {
+    await handle.close();
+  }
+});

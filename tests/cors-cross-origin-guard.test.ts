@@ -415,3 +415,128 @@ test("per-route accepts rejects unlisted text content types", async () => {
   });
   assert.equal(res.status, 415);
 });
+
+// ---------- getOriginFast fast-path parity (string-slice origin compare) ----------
+//
+// The cross-origin guard compares origins via a string-slice fast path and
+// falls back to full WHATWG `new URL()` parsing for anything not trivially
+// normalized. These tests pin the accept/reject semantics across both paths
+// so the fast path can never silently diverge from the URL-based comparison.
+
+function buildGuardApp(): App {
+  const app = new App({ logger: false, secureHeaders: false });
+  app.route({
+    method: "POST",
+    path: "/mutate",
+    operationId: "guardMutate",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  return app;
+}
+
+test("origin guard fast path: same lowercase origin is allowed", async () => {
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "http://api.example.com" },
+  });
+  assert.equal(res.status, 200);
+});
+
+test("origin guard fast path: same origin with explicit non-default port is allowed", async () => {
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com:8080/mutate", {
+    method: "POST",
+    headers: { origin: "http://api.example.com:8080" },
+  });
+  assert.equal(res.status, 200);
+});
+
+test("origin guard fast path: cross-origin POST without cors() is rejected 403", async () => {
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "http://evil.example.com" },
+  });
+  assert.equal(res.status, 403);
+});
+
+test("origin guard fallback: explicit default port equals implicit (http :80)", async () => {
+  // ":80" is elided by URL.origin — the fast path must fall back so
+  // "http://h:80" and "http://h" still compare equal.
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "http://api.example.com:80" },
+  });
+  assert.equal(res.status, 200);
+});
+
+test("origin guard fallback: explicit default port equals implicit (https :443)", async () => {
+  const app = buildGuardApp();
+  const res = await app.request("https://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "https://api.example.com:443" },
+  });
+  assert.equal(res.status, 200);
+});
+
+test("origin guard fallback: uppercase Origin header still matches after URL normalization", async () => {
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "HTTP://API.EXAMPLE.COM" },
+  });
+  assert.equal(res.status, 200);
+});
+
+test("origin guard fallback: leading-zero port normalizes before comparing", async () => {
+  // "0080" parses to port 80 under URL, which is then elided for http —
+  // must be treated as same-origin against an implicit-port request URL.
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "http://api.example.com:0080" },
+  });
+  assert.equal(res.status, 200);
+});
+
+test("origin guard: out-of-range Origin port is rejected as malformed (403)", async () => {
+  // new URL("http://h:99999") throws, so the guard must reject — the fast
+  // path is required to fall back rather than string-compare it as valid.
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "http://api.example.com:99999" },
+  });
+  assert.equal(res.status, 403);
+});
+
+test("origin guard: userinfo in Origin does not defeat the comparison", async () => {
+  // URL.origin strips userinfo; the fast path must fall back on "@" so an
+  // attacker cannot smuggle "evil.com@api.example.com".
+  const app = buildGuardApp();
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "http://api.example.com@evil.example.com" },
+  });
+  assert.equal(res.status, 403);
+});
+
+test("origin guard: cross-origin rejected on fast path still honors cors() allow", async () => {
+  const app = new App({ logger: false, secureHeaders: false });
+  app.use(cors({ origin: ["http://spa.example.com"] }));
+  app.route({
+    method: "POST",
+    path: "/mutate",
+    operationId: "guardMutateCors",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const res = await app.request("http://api.example.com/mutate", {
+    method: "POST",
+    headers: { origin: "http://spa.example.com" },
+  });
+  assert.equal(res.status, 200);
+});

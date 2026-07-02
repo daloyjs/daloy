@@ -12,7 +12,12 @@ import {
 import { Readable } from "node:stream";
 import type { Duplex } from "node:stream";
 import type { App } from "../app.js";
-import { DALOY_RAW_BODY, DALOY_RAW_STREAM, DALOY_REQUEST_RAW_BODY } from "../app.js";
+import {
+  DALOY_RAW_BODY,
+  DALOY_RAW_STREAM,
+  DALOY_REQUEST_RAW_BODY,
+  DALOY_LIGHT_RESPONSE_OK,
+} from "../app.js";
 import {
   setClientCertificate,
   normalizePeerCertificate,
@@ -425,6 +430,207 @@ function writeAdapterError(res: ServerResponse, e: unknown): void {
   }
 }
 
+/**
+ * Lazily-materializing stand-in for an incoming WHATWG `Request`.
+ *
+ * Constructing a real (undici) `Request` costs ~4µs for GET and far more for
+ * POST-with-body (the constructor wraps the body bytes in a WHATWG
+ * `ReadableStream` that DaloyJS then bypasses anyway via the
+ * `DALOY_REQUEST_RAW_BODY` fast path). The dispatch hot path only ever reads
+ * `url`, `method`, `headers`, `signal`, and the raw-body symbol — so this
+ * shell carries those directly and defers the real `Request` until one of the
+ * less common surfaces (`json()`, `clone()`, `body`, `formData()`, …) is
+ * actually touched.
+ *
+ * Fidelity notes:
+ * - `instanceof Request` holds (prototype chain is re-rooted onto
+ *   `Request.prototype`), and every WHATWG method/getter is overridden here,
+ *   so nothing hits undici's brand-checked prototype accessors.
+ * - `signal` is an inert per-instance `AbortSignal`. This matches the real
+ *   adapter behaviour today: the Node adapter never wires socket aborts into
+ *   the request signal, so the signal never fires in either implementation.
+ * - Passing this object directly to `fetch()` is not supported (undici
+ *   brand-checks its input) — forward with `request.clone()` instead, which
+ *   returns a real `Request`. This mirrors @hono/node-server's shim.
+ *
+ * Security parity: the `Headers` instance is built eagerly from `rawHeaders`
+ * exactly as before, so the duplicate-singleton / reserved-header /
+ * header-count guards in `App.dispatch` see the identical view they saw with
+ * a real `Request`.
+ */
+/** Shared decoder for LightRequest's direct body reads. */
+const LIGHT_TEXT_DECODER = new TextDecoder();
+
+class LightRequest {
+  #url: string;
+  #method: string;
+  #headers: Headers;
+  #bodyBytes: Uint8Array | undefined;
+  #real: Request | undefined;
+  #signal: AbortSignal | undefined;
+
+  constructor(url: string, method: string, headers: Headers, bodyBytes: Uint8Array | undefined) {
+    this.#url = url;
+    this.#method = method;
+    this.#headers = headers;
+    this.#bodyBytes = bodyBytes;
+  }
+
+  /** Build (once) and return the real undici `Request` for rare surfaces. */
+  #materialize(): Request {
+    return (this.#real ??=
+      this.#bodyBytes !== undefined
+        ? new Request(this.#url, {
+            method: this.#method,
+            headers: this.#headers,
+            body: this.#bodyBytes as BodyInit,
+          })
+        : new Request(this.#url, { method: this.#method, headers: this.#headers }));
+  }
+
+  get url(): string {
+    return this.#url;
+  }
+  get method(): string {
+    return this.#method;
+  }
+  get headers(): Headers {
+    return this.#headers;
+  }
+  get signal(): AbortSignal {
+    // Inert, lazily created: the Node adapter has never wired socket
+    // teardown into the request signal, so a never-firing signal is
+    // behaviourally identical to the one a real `Request` would carry.
+    return (this.#signal ??= new AbortController().signal);
+  }
+  get body(): ReadableStream<Uint8Array> | null {
+    return this.#materialize().body;
+  }
+  get bodyUsed(): boolean {
+    if (this.#real !== undefined) return this.#real.bodyUsed;
+    return this.#directlyConsumed;
+  }
+  /**
+   * Set when a body method served the pre-buffered bytes directly (no real
+   * `Request` ever existed). Subsequent body reads reject with a `TypeError`
+   * exactly like a consumed WHATWG body would.
+   */
+  #directlyConsumed = false;
+
+  /**
+   * Serve a body read straight from the pre-buffered bytes when possible.
+   * Returns `undefined` when the caller must delegate to the materialized
+   * real `Request` (no buffered bytes, or a real `Request` already owns the
+   * body state). Enforces single-read semantics via {@link #directlyConsumed}.
+   */
+  #consumeBytes(): Uint8Array | undefined {
+    if (this.#real !== undefined || this.#bodyBytes === undefined) return undefined;
+    if (this.#directlyConsumed) {
+      throw new TypeError("Body is unusable: Body has already been read");
+    }
+    this.#directlyConsumed = true;
+    return this.#bodyBytes;
+  }
+  // Spec-constant getters: these are exactly the values undici assigns to a
+  // server-side `new Request(url, { method, headers, body })`, hardcoded so
+  // reading them does not force materialization.
+  get cache(): RequestCache {
+    return "default";
+  }
+  get credentials(): RequestCredentials {
+    return "same-origin";
+  }
+  get destination(): RequestDestination {
+    return "" as RequestDestination;
+  }
+  get integrity(): string {
+    return "";
+  }
+  get keepalive(): boolean {
+    return false;
+  }
+  get mode(): RequestMode {
+    return "cors";
+  }
+  get redirect(): RequestRedirect {
+    return "follow";
+  }
+  get referrer(): string {
+    return "about:client";
+  }
+  get referrerPolicy(): ReferrerPolicy {
+    return "" as ReferrerPolicy;
+  }
+  arrayBuffer(): Promise<ArrayBuffer> {
+    try {
+      const bytes = this.#consumeBytes();
+      if (bytes === undefined) return this.#materialize().arrayBuffer();
+      // Copy: the underlying buffer is also the framework's raw-body cache.
+      return Promise.resolve(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+      );
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+  blob(): Promise<Blob> {
+    return this.#materialize().blob();
+  }
+  bytes(): Promise<Uint8Array> {
+    try {
+      const bytes = this.#consumeBytes();
+      if (bytes === undefined) return this.#materialize().bytes();
+      return Promise.resolve(new Uint8Array(bytes));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+  formData(): Promise<FormData> {
+    return this.#materialize().formData();
+  }
+  json(): Promise<unknown> {
+    try {
+      const bytes = this.#consumeBytes();
+      if (bytes === undefined) return this.#materialize().json();
+      // JSON.parse (not the framework's safeJsonParse): request.json() is the
+      // raw WHATWG surface, and its error semantics (SyntaxError rejection)
+      // must match a real Request exactly. Framework-parsed bodies go through
+      // readBody()/safeJsonParse and never hit this method.
+      return Promise.resolve(JSON.parse(LIGHT_TEXT_DECODER.decode(bytes)));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+  text(): Promise<string> {
+    try {
+      const bytes = this.#consumeBytes();
+      if (bytes === undefined) return this.#materialize().text();
+      return Promise.resolve(LIGHT_TEXT_DECODER.decode(bytes));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+  /**
+   * Returns a real, fully-branded `Request` clone — safe to pass to `fetch()`.
+   * Throws a `TypeError` if the body has already been read, per spec.
+   */
+  clone(): Request {
+    if (this.#directlyConsumed) {
+      throw new TypeError("Request body is already used");
+    }
+    return this.#materialize().clone();
+  }
+}
+// `instanceof Request` must hold for handler code and the framework's own
+// checks. Every own getter/method above shadows the brand-checked undici
+// accessors, so the re-rooted chain is only consulted for identity.
+Object.setPrototypeOf(LightRequest.prototype, Request.prototype);
+// This adapter consumes responses via status/headers/DALOY_RAW_BODY only
+// (see sendWebResponse), so serializeResult may skip the undici Response
+// construction for requests dispatched through this shim. Set once on the
+// prototype: zero per-request cost.
+(LightRequest.prototype as unknown as Record<symbol, unknown>)[DALOY_LIGHT_RESPONSE_OK] = true;
+
 function toWebRequest(
   req: IncomingMessage,
   trustProxy: boolean,
@@ -461,18 +667,20 @@ function toWebRequest(
   const headers = new Headers(headerPairs);
   const method = req.method ?? "GET";
   if (method === "GET" || method === "HEAD") {
-    return new Request(url, { method, headers });
+    // LightRequest: skips the ~4µs undici Request constructor on the GET
+    // hot path. Headers are still built eagerly above, so every header
+    // guard sees the same view as before.
+    return new LightRequest(url, method, headers, undefined) as unknown as Request;
   }
   if (bufferedBody !== undefined) {
-    const req2 = new Request(url, {
-      method,
-      headers,
-      body: bufferedBody as BodyInit,
-    });
-    // Stash the validated bytes so readBodyLimited (and any other internal
-    // body reader) can skip the WHATWG ReadableStream reader loop. The
-    // adapter has already enforced BUFFERED_BODY_MAX_BYTES + Content-Length
-    // here; readBodyLimited re-checks against the caller's limit.
+    // LightRequest with the pre-buffered bytes: skips the (much more
+    // expensive) body-wrapping undici Request constructor. The bytes are
+    // stashed via DALOY_REQUEST_RAW_BODY so readBodyLimited (and any other
+    // internal body reader) skips the WHATWG ReadableStream reader loop.
+    // The adapter has already enforced BUFFERED_BODY_MAX_BYTES +
+    // Content-Length here; readBodyLimited re-checks against the caller's
+    // limit.
+    const req2 = new LightRequest(url, method, headers, bufferedBody) as unknown as Request;
     (req2 as unknown as Record<symbol, unknown>)[DALOY_REQUEST_RAW_BODY] = bufferedBody;
     return req2;
   }

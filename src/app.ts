@@ -1048,6 +1048,104 @@ export const DALOY_REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
 export const DALOY_RAW_STREAM = Symbol.for("daloyjs.response.rawStream");
 
 /**
+ * Internal Symbol an adapter sets (once, on its request shim's prototype) to
+ * declare: "the object that ultimately consumes this request's `Response`
+ * only reads `status` / `headers` / {@link DALOY_RAW_BODY} — it never needs a
+ * branded WHATWG `Response`". When present on the incoming request,
+ * {@link serializeResult} may return a {@link LightResponse} and skip the
+ * ~2µs undici `Response` construction per request. Requests without the
+ * marker (Bun / Deno / Workers adapters, tests, direct `app.fetch()` callers)
+ * always get a real `Response`, so the public contract is unchanged.
+ */
+export const DALOY_LIGHT_RESPONSE_OK = Symbol.for("daloyjs.response.lightOk");
+
+/**
+ * Minimal `Response` stand-in returned on the Node-adapter hot path (gated by
+ * {@link DALOY_LIGHT_RESPONSE_OK}). Carries `status` + a real `Headers`
+ * instance + the raw body bytes via {@link DALOY_RAW_BODY}; every other
+ * WHATWG surface (body streams, `json()`, `clone()`, …) delegates to a
+ * lazily-materialized real `Response`, so hook code that inspects the
+ * response body still behaves exactly as before — it just pays the
+ * construction cost only when it actually does so. `instanceof Response`
+ * holds via prototype re-rooting; all overridden accessors below shadow
+ * undici's brand-checked ones.
+ */
+class LightResponse {
+  #status: number;
+  #headers: Headers;
+  #rawBody: Uint8Array | null;
+  #real: Response | undefined;
+
+  constructor(status: number, headers: Headers, rawBody: Uint8Array | null) {
+    this.#status = status;
+    this.#headers = headers;
+    this.#rawBody = rawBody;
+    (this as unknown as Record<symbol, unknown>)[DALOY_RAW_BODY] = rawBody;
+  }
+
+  /** Build (once) and return an equivalent real `Response` for rare surfaces. */
+  #materialize(): Response {
+    return (this.#real ??= new Response(this.#rawBody as BodyInit | null, {
+      status: this.#status,
+      headers: this.#headers,
+    }));
+  }
+
+  get status(): number {
+    return this.#status;
+  }
+  get headers(): Headers {
+    return this.#headers;
+  }
+  get ok(): boolean {
+    return this.#status >= 200 && this.#status <= 299;
+  }
+  // Spec constants for a synthesized (non-network) Response.
+  get statusText(): string {
+    return "";
+  }
+  get type(): ResponseType {
+    return "default";
+  }
+  get url(): string {
+    return "";
+  }
+  get redirected(): boolean {
+    return false;
+  }
+  get body(): ReadableStream<Uint8Array> | null {
+    return this.#materialize().body;
+  }
+  get bodyUsed(): boolean {
+    return this.#real !== undefined ? this.#real.bodyUsed : false;
+  }
+  arrayBuffer(): Promise<ArrayBuffer> {
+    return this.#materialize().arrayBuffer();
+  }
+  blob(): Promise<Blob> {
+    return this.#materialize().blob();
+  }
+  bytes(): Promise<Uint8Array> {
+    return this.#materialize().bytes();
+  }
+  formData(): Promise<FormData> {
+    return this.#materialize().formData();
+  }
+  json(): Promise<unknown> {
+    return this.#materialize().json();
+  }
+  text(): Promise<string> {
+    return this.#materialize().text();
+  }
+  clone(): Response {
+    return this.#materialize().clone();
+  }
+}
+// `instanceof Response` must hold for hook code and adapter checks. Every
+// own getter/method above shadows undici's brand-checked accessors.
+Object.setPrototypeOf(LightResponse.prototype, Response.prototype);
+
+/**
  * Contract-first HTTP application.
  *
  * `App` is the top-level entry point: register {@link RouteDefinition routes}
@@ -1587,6 +1685,27 @@ export class App<
     }
     const origin = request.headers.get("origin");
     if (!origin || origin === "null") return;
+    // Fast path: when both the Origin header and the request URL are in the
+    // trivially-normalized shape (lowercase ASCII scheme://host[:port] with
+    // no userinfo / percent-escapes / IPv6 brackets), their origins can be
+    // compared as plain strings without two `new URL()` constructions per
+    // request. Anything unusual returns `undefined` and falls back to the
+    // exact WHATWG comparison below — the guard's accept/reject semantics
+    // are identical on both paths.
+    const fastHeaderOrigin = getOriginFast(origin);
+    if (fastHeaderOrigin !== undefined) {
+      const fastReqOrigin =
+        typeof requestUrl === "string" ? getOriginFast(requestUrl) : requestUrl.origin;
+      if (fastReqOrigin !== undefined) {
+        if (fastHeaderOrigin === fastReqOrigin) return;
+        if (corsOriginAllows.some((allows) => allows(origin))) return;
+        throw new ForbiddenError(
+          `Cross-origin ${method} from "${fastHeaderOrigin}" rejected: no registered cors() policy allows that origin. ` +
+            `Register cors({ origin: [...] }) via app.use(...) to allow it, or pass ` +
+            `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`
+        );
+      }
+    }
     let originUrl: URL;
     try {
       originUrl = new URL(origin);
@@ -3441,7 +3560,11 @@ export class App<
         if (isPromiseLike(routeOnRequestResult)) await routeOnRequestResult;
       }
 
-      ctx = await buildContext(request, getUrl, match.params, def, this.options);
+      // buildContext is sync unless a schema validator or body read actually
+      // suspends — branch on the promise so the fully-sync case never
+      // schedules a microtask.
+      const builtCtx = buildContext(request, getUrl, match.params, def, this.options);
+      ctx = isPromiseLike(builtCtx) ? await builtCtx : builtCtx;
       // Stable two-field write keeps `ctx.state`'s hidden class consistent across
       // requests for the common no-decorator case. The decorations spread only
       // fires when `app.decorate()` was actually called.
@@ -3516,7 +3639,11 @@ export class App<
       const serializeResultRes = serializeResult(
         result,
         def,
-        this.options.validateResponses ?? true
+        this.options.validateResponses ?? true,
+        // Adapter shims set this marker on their request prototype to declare
+        // that the response consumer only reads status/headers/raw-body — see
+        // DALOY_LIGHT_RESPONSE_OK. Everyone else gets a real Response.
+        (request as unknown as Record<symbol, unknown>)[DALOY_LIGHT_RESPONSE_OK] === true
       );
       let response: Response = isPromiseLike(serializeResultRes)
         ? await serializeResultRes
@@ -3967,6 +4094,82 @@ function getPathnameFast(url: string): string {
   return url.slice(pathStart, end);
 }
 
+/**
+ * Extract the WHATWG origin (`scheme://host[:port]`) from an absolute
+ * `http`/`https` URL or Origin-header value without constructing a `URL`.
+ * Companion to {@link getPathnameFast}, used by the cross-origin guard on
+ * state-changing requests.
+ *
+ * Returns `undefined` — signalling "fall back to `new URL(...).origin`" —
+ * whenever the input is not in the trivially-normalized shape a `URL` parse
+ * would return unchanged: non-`http(s)` schemes, uppercase characters
+ * (scheme/host case-folding), userinfo (`user@host`, which `URL.origin`
+ * strips), percent-escapes, non-ASCII hosts (IDNA/punycode), IPv6 literals
+ * (zero-compression normalization), empty hosts, backslashes (URL treats
+ * `\` as `/`), and explicit default ports (`:80` / `:443`, which
+ * `URL.origin` elides). The fast path therefore never *disagrees* with the
+ * WHATWG origin — it only answers when the answer is unambiguous.
+ */
+function getOriginFast(url: string): string | undefined {
+  let hostStart: number;
+  if (url.startsWith("http://")) hostStart = 7;
+  else if (url.startsWith("https://")) hostStart = 8;
+  else return undefined;
+  // Find the end of the authority: first "/", "?", or "#" after the scheme.
+  let end = url.length;
+  for (let i = hostStart; i < url.length; i++) {
+    const c = url.charCodeAt(i);
+    if (c === 47 /* / */ || c === 63 /* ? */ || c === 35 /* # */) {
+      end = i;
+      break;
+    }
+  }
+  if (end === hostStart) return undefined; // empty host
+  for (let i = hostStart; i < end; i++) {
+    const c = url.charCodeAt(i);
+    // Reject anything that could normalize differently under a real URL
+    // parse: uppercase A-Z, userinfo "@", percent "%", IPv6 "[", backslash
+    // "\", raw whitespace/controls, and all non-ASCII.
+    if (
+      (c >= 65 && c <= 90) /* A-Z */ ||
+      c === 64 /* @ */ ||
+      c === 37 /* % */ ||
+      c === 91 /* [ */ ||
+      c === 92 /* \ */ ||
+      c <= 32 /* controls + space */ ||
+      c >= 127 /* DEL + non-ASCII */
+    ) {
+      return undefined;
+    }
+  }
+  const authority = url.slice(hostStart, end);
+  const colon = authority.indexOf(":");
+  if (colon !== -1) {
+    const port = authority.slice(colon + 1);
+    // Trailing ":" alone, an empty port, or a default port all normalize to
+    // no port under URL — fall back rather than replicate that here. A
+    // second ":" (malformed / IPv6-ish) also falls back.
+    if (port.length === 0 || port.indexOf(":") !== -1) return undefined;
+    if (
+      (hostStart === 7 && port === "80") /* http default */ ||
+      (hostStart === 8 && port === "443") /* https default */
+    ) {
+      return undefined;
+    }
+    // Port must be all digits; anything else is not trivially normalized.
+    for (let i = 0; i < port.length; i++) {
+      const c = port.charCodeAt(i);
+      if (c < 48 || c > 57) return undefined;
+    }
+    // Leading zeros normalize away under URL ("0080" -> "80"), and ports
+    // above 65535 make the URL constructor *throw* (the guard's malformed-
+    // origin rejection) — both must take the exact WHATWG path.
+    if (port.length > 1 && port.charCodeAt(0) === 48 /* 0 */) return undefined;
+    if (port.length > 5 || (port.length === 5 && Number(port) > 65535)) return undefined;
+  }
+  return url.slice(0, end);
+}
+
 function mergeHooks(layers: Hooks[]): Hooks {
   const pick = <K extends keyof Hooks>(key: K): NonNullable<Hooks[K]>[] =>
     layers.map((h) => h[key]).filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
@@ -4330,7 +4533,7 @@ function buildContext(
     allowedContentTypes?: string[];
     multipart?: AppOptions["multipart"];
   }
-): BaseContext<any, any> | Promise<BaseContext<any, any>> {
+): BaseContext<any, any> | PromiseLike<BaseContext<any, any>> {
   const set = new LazyResponseSet();
   const hasHeadersSchema = !!def.request?.headers;
   const hasQuerySchema = !!def.request?.query;
@@ -4371,41 +4574,89 @@ function buildContext(
     return finishContext();
   }
 
-  return (async () => {
-    if (def.request?.params) {
-      const r = await validate(def.request.params, rawParams);
-      if (r.issues) throw new ValidationError("params", toIssues(r.issues));
-      params = r.value;
-    }
-    if (hasQuerySchema) {
-      const r = await validate(def.request!.query, buildQuery());
-      if (r.issues) throw new ValidationError("query", toIssues(r.issues));
-      query = r.value;
-    }
-    if (hasHeadersSchema) {
-      const r = await validate(def.request!.headers, buildHeaders());
-      if (r.issues) throw new ValidationError("headers", toIssues(r.issues));
-      headers = r.value;
-    }
-    if (def.request?.body) {
-      const ct = (request.headers.get("content-type") ?? "").toLowerCase();
-      const allowed = def.accepts ??
-        opts.allowedContentTypes ?? [
-          "application/json",
-          "application/x-www-form-urlencoded",
-          "multipart/form-data",
-        ];
-      if (!allowed.some((a) => ct.includes(a))) {
-        throw new UnsupportedMediaTypeError(ct || "(none)", allowed);
-      }
-      const raw = await readBody(request, ct, opts.bodyLimitBytes, opts.multipart);
-      const r = await validate(def.request.body, raw);
-      if (r.issues) throw new ValidationError("body", toIssues(r.issues));
-      body = r.value;
-    }
+  // Sync-first validation pipeline. Each step calls the Standard Schema
+  // validator directly (same pattern as serializeResult) so a sync validator
+  // — the overwhelmingly common case with Zod — never touches the microtask
+  // queue; only a genuinely async validator (or a streaming body read)
+  // suspends, and only from that step onward. Order and error semantics are
+  // identical to the previous implementation: params -> query -> headers ->
+  // body, each throwing the same ValidationError on failure.
+  type Ctx = BaseContext<any, any>;
+  type StdResult = { issues?: unknown; value?: unknown };
+  const applyChecked = (
+    r: StdResult,
+    part: "params" | "query" | "headers" | "body"
+  ): unknown => {
+    if (r.issues) throw new ValidationError(part, toIssues(r.issues as any));
+    return r.value;
+  };
 
+  const validateBodyAndFinish = (raw: unknown): Ctx | PromiseLike<Ctx> => {
+    const r = def.request!.body!["~standard"].validate(raw);
+    if (isPromiseLike(r)) {
+      return r.then((resolved) => {
+        body = applyChecked(resolved as StdResult, "body");
+        return finishContext();
+      });
+    }
+    body = applyChecked(r as StdResult, "body");
     return finishContext();
-  })();
+  };
+
+  const stepBody = (): Ctx | PromiseLike<Ctx> => {
+    if (!def.request?.body) return finishContext();
+    const ct = (request.headers.get("content-type") ?? "").toLowerCase();
+    const allowed = def.accepts ??
+      opts.allowedContentTypes ?? [
+        "application/json",
+        "application/x-www-form-urlencoded",
+        "multipart/form-data",
+      ];
+    if (!allowed.some((a) => ct.includes(a))) {
+      throw new UnsupportedMediaTypeError(ct || "(none)", allowed);
+    }
+    const raw = readBody(request, ct, opts.bodyLimitBytes, opts.multipart);
+    if (isPromiseLike(raw)) return raw.then(validateBodyAndFinish);
+    return validateBodyAndFinish(raw);
+  };
+
+  const stepHeaders = (): Ctx | PromiseLike<Ctx> => {
+    if (!hasHeadersSchema) return stepBody();
+    const r = def.request!.headers!["~standard"].validate(buildHeaders());
+    if (isPromiseLike(r)) {
+      return r.then((resolved) => {
+        headers = applyChecked(resolved as StdResult, "headers");
+        return stepBody();
+      });
+    }
+    headers = applyChecked(r as StdResult, "headers");
+    return stepBody();
+  };
+
+  const stepQuery = (): Ctx | PromiseLike<Ctx> => {
+    if (!hasQuerySchema) return stepHeaders();
+    const r = def.request!.query!["~standard"].validate(buildQuery());
+    if (isPromiseLike(r)) {
+      return r.then((resolved) => {
+        query = applyChecked(resolved as StdResult, "query");
+        return stepHeaders();
+      });
+    }
+    query = applyChecked(r as StdResult, "query");
+    return stepHeaders();
+  };
+
+  if (def.request?.params) {
+    const r = def.request.params["~standard"].validate(rawParams);
+    if (isPromiseLike(r)) {
+      return r.then((resolved) => {
+        params = applyChecked(resolved as StdResult, "params");
+        return stepQuery();
+      });
+    }
+    params = applyChecked(r as StdResult, "params");
+  }
+  return stepQuery();
 }
 
 function headersToObject(h: Headers): Record<string, string> {
@@ -4439,29 +4690,87 @@ function toIssues(issues: ReadonlyArray<{ message: string; path?: ReadonlyArray<
   }));
 }
 
-async function readBody(
+/** Shared decoder for request-body text. Allocating one per request is wasted work. */
+const TEXT_DECODER = new TextDecoder();
+
+/**
+ * Synchronous fast path for {@link readBodyLimited}: returns the adapter's
+ * pre-buffered body bytes when they are available on the request via
+ * {@link DALOY_REQUEST_RAW_BODY}, or `undefined` when the caller must fall
+ * back to the async streaming read. Runs the exact same Content-Length
+ * validation and size-limit checks (in the same order, throwing the same
+ * errors) as `readBodyLimited`, so the security posture is identical — the
+ * only difference is that a symbol-cache hit never touches the microtask
+ * queue.
+ *
+ * @throws {BadRequestError} When `Content-Length` is present but invalid.
+ * @throws {PayloadTooLargeError} When the declared or actual size exceeds `limit`.
+ */
+function readBodyBytesFast(req: Request, limit: number): Uint8Array | undefined {
+  const cl = req.headers.get("content-length");
+  if (cl) {
+    const n = Number(cl);
+    if (!Number.isFinite(n) || n < 0) throw new BadRequestError("Invalid Content-Length");
+    if (n > limit) throw new PayloadTooLargeError(limit);
+  }
+  const cached = (req as unknown as Record<symbol, unknown>)[DALOY_REQUEST_RAW_BODY];
+  if (cached instanceof Uint8Array) {
+    if (cached.byteLength > limit) throw new PayloadTooLargeError(limit);
+    return cached;
+  }
+  return undefined;
+}
+
+function parseJsonBodyBytes(bytes: Uint8Array): unknown {
+  if (bytes.byteLength === 0) return undefined;
+  return safeJsonParse(TEXT_DECODER.decode(bytes));
+}
+
+function parseUrlencodedBodyBytes(bytes: Uint8Array): Record<string, string> {
+  const params = new URLSearchParams(TEXT_DECODER.decode(bytes));
+  // Same Spring4Shell-class defense as queryToObject: Object.fromEntries
+  // would set __proto__ / constructor / prototype as own properties.
+  const out: Record<string, string> = {};
+  for (const [k, v] of params) {
+    if (isForbiddenObjectKey(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Read and parse a request body according to its content type. Plain
+ * (non-`async`) on purpose: when the adapter pre-buffered the body bytes
+ * (the common JSON POST case on Node), the parse completes synchronously and
+ * the caller stays on the sync dispatch fast path. Falls back to the
+ * streaming `readBodyLimited` promise otherwise. All parsing keeps the
+ * prototype-pollution-safe semantics of the previous implementation.
+ */
+function readBody(
+  req: Request,
+  ct: string,
+  limit: number,
+  multipart?: AppOptions["multipart"]
+): unknown | Promise<unknown> {
+  if (ct.includes("application/json")) {
+    const fast = readBodyBytesFast(req, limit);
+    if (fast !== undefined) return parseJsonBodyBytes(fast);
+    return readBodyLimited(req, limit).then(parseJsonBodyBytes);
+  }
+  if (ct.includes("application/x-www-form-urlencoded")) {
+    const fast = readBodyBytesFast(req, limit);
+    if (fast !== undefined) return parseUrlencodedBodyBytes(fast);
+    return readBodyLimited(req, limit).then(parseUrlencodedBodyBytes);
+  }
+  return readBodySlow(req, ct, limit, multipart);
+}
+
+async function readBodySlow(
   req: Request,
   ct: string,
   limit: number,
   multipart?: AppOptions["multipart"]
 ): Promise<unknown> {
-  if (ct.includes("application/json")) {
-    const bytes = await readBodyLimited(req, limit);
-    if (bytes.byteLength === 0) return undefined;
-    return safeJsonParse(new TextDecoder().decode(bytes));
-  }
-  if (ct.includes("application/x-www-form-urlencoded")) {
-    const bytes = await readBodyLimited(req, limit);
-    const params = new URLSearchParams(new TextDecoder().decode(bytes));
-    // Same Spring4Shell-class defense as queryToObject: Object.fromEntries
-    // would set __proto__ / constructor / prototype as own properties.
-    const out: Record<string, string> = {};
-    for (const [k, v] of params) {
-      if (isForbiddenObjectKey(k)) continue;
-      out[k] = v;
-    }
-    return out;
-  }
   if (ct.includes("multipart/form-data")) {
     // Fast-fail on an honestly-declared oversize body.
     const cl = req.headers.get("content-length");
@@ -4559,7 +4868,8 @@ function normalizeSunset(value: string | Date, method: string, path: string): st
 function serializeResult(
   result: { status: number; body: unknown; headers?: Record<string, string> },
   def: RouteDefinition<any, any, any, any>,
-  validateResponses: boolean
+  validateResponses: boolean,
+  lightOk = false
 ): Response | PromiseLike<Response> {
   const spec = def.responses[result.status];
   if (!spec) {
@@ -4619,6 +4929,13 @@ function serializeResult(
       setContentLength(headers, bytes.byteLength);
       body = bytes;
       rawBody = bytes;
+    }
+    // Node-adapter hot path (opt-in via DALOY_LIGHT_RESPONSE_OK on the
+    // incoming request): skip the ~2µs undici Response construction. Only
+    // buffer-backed bodies qualify — streams keep the real Response so the
+    // adapter's stream plumbing is untouched.
+    if (lightOk && !isStream) {
+      return new LightResponse(result.status, headers, rawBody) as unknown as Response;
     }
     const response = new Response(body, { status: result.status, headers });
     if (!isStream) {
