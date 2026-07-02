@@ -136,6 +136,37 @@ const CLIENT_CONFIG = `{
   }
 }`;
 
+const SCALAR_SEARCH_BODY = `{
+  "query": "How do I enable OpenAPI docs and Scalar UI in DaloyJS?",
+  "limit": 2
+}`;
+
+const SCALAR_SEARCH_RESPONSE = `{
+  "results": [
+    {
+      "slug": "docs/openapi",
+      "title": "OpenAPI generation",
+      "heading": "Scalar UI",
+      "url": "https://daloyjs.dev/docs/openapi",
+      "text": "Enable OpenAPI generation and Scalar UI from your DaloyJS app.",
+      "score": 0.82
+    }
+  ]
+}`;
+
+const MCP_SEARCH_CALL = `{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "search_docs",
+    "arguments": {
+      "query": "How do I enable OpenAPI docs and Scalar UI in DaloyJS?",
+      "limit": 2
+    }
+  }
+}`;
+
 const ERROR_HANDLING = `import { McpToolError, createMcpHandler } from "@daloyjs/core/mcp";
 
 const mcp = createMcpHandler({
@@ -243,6 +274,33 @@ export default function Page() {
         URL and whatever headers your auth middleware requires.
       </p>
       <CodeBlock code={CLIENT_CONFIG} language="json" />
+
+      <h2>Testing in Scalar</h2>
+      <p>
+        Scalar is best for testing normal REST endpoints. If your app exposes a
+        regular docs search route and an MCP route, use{" "}
+        <code>POST /search</code> in Scalar for the normal API request. Do not
+        paste the search body into <code>POST /mcp</code>; MCP uses JSON-RPC
+        envelopes, not plain REST request bodies.
+      </p>
+      <CodeBlock code={SCALAR_SEARCH_BODY} language="json" />
+      <p>
+        The REST endpoint should return <code>200 OK</code> with a response like
+        this:
+      </p>
+      <CodeBlock code={SCALAR_SEARCH_RESPONSE} language="json" />
+      <p>
+        Use <code>POST /mcp</code> only with an MCP-compatible client or with a
+        JSON-RPC request. If you see <code>202 Accepted</code> with an empty
+        body while testing <code>/mcp</code>, that means the MCP request did not
+        ask for a JSON-RPC response. Add an <code>id</code> and call the tool
+        through <code>tools/call</code>:
+      </p>
+      <CodeBlock code={MCP_SEARCH_CALL} language="json" />
+      <p>
+        Short version: test normal APIs on <code>/search</code> in Scalar, and
+        reserve <code>/mcp</code> for MCP clients or explicit JSON-RPC requests.
+      </p>
 
       <h2>What core supports</h2>
       <ul>
