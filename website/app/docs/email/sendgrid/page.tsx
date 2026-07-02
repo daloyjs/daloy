@@ -80,7 +80,7 @@ export default function Page() {
         caption="The plugin sets the API key once, then sgMail.send() POSTs to the v3 Mail Send API. SendGrid replies 202 with an X-Message-Id, and later posts delivery events to your Event Webhook."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Create a SendGrid account, enable 2FA, then go to{" "}
@@ -102,17 +102,17 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @sendgrid/mail`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxx
 SENDGRID_FROM="Acme <no-reply@acme.example.com>"`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/sendgrid.ts
 import sgMail from "@sendgrid/mail";
@@ -154,7 +154,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -190,7 +190,7 @@ app.route({
 });`}
       />
 
-      <h2>Dynamic templates</h2>
+      <h2 id="dynamic-templates">Dynamic templates</h2>
       <p>
         For server-side templating, create a{" "}
         <a
@@ -214,7 +214,7 @@ app.route({
 });`}
       />
 
-      <h2>Error handling</h2>
+      <h2 id="error-handling">Error handling</h2>
       <p>
         On non-2xx responses the SDK throws an error with{" "}
         <code>response.body.errors</code> describing each failure. Surface those
@@ -223,7 +223,7 @@ app.route({
         raw text.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>@sendgrid/mail</code> package is Node-oriented (it uses{" "}
         <code>@sendgrid/client</code> with Node&apos;s HTTPS module). For{" "}

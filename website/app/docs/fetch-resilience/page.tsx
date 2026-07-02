@@ -80,7 +80,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <p>
         Layer <code>resilientFetch()</code> over <code>fetchGuard()</code> so
         the SSRF floor stays underneath the resilience logic.
@@ -105,7 +105,7 @@ const res = await safeFetch("https://api.example.com/things");`}
         call <code>fetch</code>.
       </p>
 
-      <h2>Per-call timeout</h2>
+      <h2 id="per-call-timeout">Per-call timeout</h2>
       <p>
         Each attempt (including every retry) gets a fresh{" "}
         <code>timeoutMs</code> budget (default <code>10_000</code>). A timeout
@@ -130,7 +130,7 @@ try {
         language="ts"
       />
 
-      <h2>Retry-with-backoff</h2>
+      <h2 id="retry-with-backoff">Retry-with-backoff</h2>
       <p>
         Retries only fire for <strong>idempotent</strong> methods (
         <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>,{" "}
@@ -171,7 +171,7 @@ try {
         language="ts"
       />
 
-      <h2>Circuit breaker</h2>
+      <h2 id="circuit-breaker">Circuit breaker</h2>
       <p>
         After <code>failureThreshold</code> consecutive failures the breaker
         trips <strong>open</strong>: every subsequent call fails fast with{" "}
@@ -214,7 +214,7 @@ try {
         across several clients targeting the same upstream.
       </p>
 
-      <h2>The standalone CircuitBreaker</h2>
+      <h2 id="the-standalone-circuitbreaker">The standalone CircuitBreaker</h2>
       <p>
         The breaker is exported on its own so you can protect any non-{" "}
         <code>fetch</code> dependency (a database driver, a gRPC client) with
@@ -230,7 +230,7 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
         language="ts"
       />
 
-      <h2>Security posture</h2>
+      <h2 id="security-posture">Security posture</h2>
       <ul>
         <li>
           <strong>SSRF protection is preserved.</strong>{" "}

@@ -34,7 +34,7 @@ export default function Page() {
         A/B providers later.
       </p>
 
-      <h2>Supported providers</h2>
+      <h2 id="supported-providers">Supported providers</h2>
       <BranchDiagram
         title="One abstraction, many gateways"
         source={{
@@ -131,7 +131,7 @@ export default function Page() {
         application without rewriting routes.
       </p>
 
-      <h2>What every payment integration needs</h2>
+      <h2 id="what-every-payment-integration-needs">What every payment integration needs</h2>
       <ul>
         <li>
           <strong>Server-side secrets only.</strong> Secret keys, webhook
@@ -166,7 +166,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Common plugin shape</h2>
+      <h2 id="common-plugin-shape">Common plugin shape</h2>
       <FlowDiagram
         title="Plugin lifecycle"
         numbered

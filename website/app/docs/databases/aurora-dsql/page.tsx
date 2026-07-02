@@ -37,7 +37,7 @@ export default function Page() {
         managed AWS-native stack.
       </p>
 
-      <h2>1. Provision a cluster</h2>
+      <h2 id="1-provision-a-cluster">1. Provision a cluster</h2>
       <p>
         Create a cluster in the AWS console or via the CLI. Note the endpoint hostname and the AWS region.
       </p>
@@ -45,10 +45,10 @@ export default function Page() {
         code={`aws dsql create-cluster --region us-east-1`}
       />
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add pg @aws-sdk/dsql-signer`} />
 
-      <h2>3. Generate a token and connect</h2>
+      <h2 id="3-generate-a-token-and-connect">3. Generate a token and connect</h2>
       <p>
         DSQL tokens expire (default ~15 minutes), so build a connection helper that refreshes the
         password before opening a connection. For Lambda, create one client per invocation; for long-lived
@@ -110,7 +110,7 @@ export async function createDsqlClient() {
 }`}
       />
 
-      <h2>4. Plugin pattern (long-lived Node)</h2>
+      <h2 id="4-plugin-pattern-long-lived-node">4. Plugin pattern (long-lived Node)</h2>
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
@@ -128,7 +128,7 @@ export const dsqlPlugin = {
 };`}
       />
 
-      <h2>5. Lambda pattern (per-invocation)</h2>
+      <h2 id="5-lambda-pattern-per-invocation">5. Lambda pattern (per-invocation)</h2>
       <p>
         On the <Link href="/docs/adapters">Lambda adapter</Link>, create the client inside the handler
         and close it at the end so the IAM token doesn&apos;t expire between cold starts:
@@ -150,7 +150,7 @@ export const handler = async (event) => {
 };`}
       />
 
-      <h2>6. Augment app state</h2>
+      <h2 id="6-augment-app-state">6. Augment app state</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { Client } from "pg";
@@ -162,7 +162,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>With Drizzle ORM</h2>
+      <h2 id="with-drizzle-orm">With Drizzle ORM</h2>
       <CodeBlock
         code={`pnpm add drizzle-orm
 // src/db/drizzle.ts
@@ -175,7 +175,7 @@ export async function createDb() {
 }`}
       />
 
-      <h2>With Prisma</h2>
+      <h2 id="with-prisma">With Prisma</h2>
       <p>
         Use the <a href="https://www.prisma.io/docs/orm/overview/databases/postgresql" target="_blank" rel="noreferrer">
           pg Driver Adapter
@@ -184,7 +184,7 @@ export async function createDb() {
         expire, so refresh per Lambda invocation.
       </p>
 
-      <h2>Things to remember</h2>
+      <h2 id="things-to-remember">Things to remember</h2>
       <ul>
         <li>
           DSQL is <strong>TCP</strong>-only, so it does <em>not</em> work on Cloudflare Workers or Vercel

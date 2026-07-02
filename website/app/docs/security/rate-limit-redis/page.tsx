@@ -92,7 +92,7 @@ export default function Page() {
         caption="Every replica increments the same Redis key, so switching doors does not reset the count. With the in-memory store each replica keeps its own counter and a client can get N times the limit."
       />
 
-      <h2>When to use Redis (and when not to)</h2>
+      <h2 id="when-to-use-redis-and-when-not-to">When to use Redis (and when not to)</h2>
       <p>
         The Redis store is built for{" "}
         <strong>long-lived multi-replica deployments</strong>: VPS, containers,
@@ -128,7 +128,7 @@ export default function Page() {
         shown below is just the most common case.
       </p>
 
-      <h2>Install your Redis client</h2>
+      <h2 id="install-your-redis-client">Install your Redis client</h2>
       <p>
         DaloyJS does not bundle a Redis client. Pick whichever is already in
         your stack; there are first-class adapters for the two most common
@@ -141,7 +141,7 @@ pnpm add ioredis
 pnpm add redis        # node-redis v4+`}
       />
 
-      <h2>Run a Redis to point at</h2>
+      <h2 id="run-a-redis-to-point-at">Run a Redis to point at</h2>
       <p>
         The adapter needs a Redis it can reach; DaloyJS does not start one for
         you. For local development the quickest path is a container:
@@ -159,7 +159,7 @@ export REDIS_URL=redis://127.0.0.1:6379`}
         <a href="#what-it-does-not-do">What it does not do</a> below.
       </p>
 
-      <h2>Quick start (ioredis)</h2>
+      <h2 id="quick-start-ioredis">Quick start (ioredis)</h2>
       <CodeBlock
         code={`import IORedis from "ioredis";
 import { App, rateLimit } from "@daloyjs/core";
@@ -181,7 +181,7 @@ app.use(
 );`}
       />
 
-      <h2>Quick start (node-redis v4+)</h2>
+      <h2 id="quick-start-node-redis-v4">Quick start (node-redis v4+)</h2>
       <CodeBlock
         code={`import { createClient } from "redis";
 import { App, rateLimit } from "@daloyjs/core";
@@ -203,7 +203,7 @@ app.use(
 );`}
       />
 
-      <h2>How clients are keyed</h2>
+      <h2 id="how-clients-are-keyed">How clients are keyed</h2>
       <p>
         This is the part people get wrong. By default{" "}
         <code>rateLimit()</code> derives a single shared key,{" "}
@@ -246,7 +246,7 @@ app.use(
         hole. When in doubt, key off the authenticated user instead.
       </blockquote>
 
-      <h2>Failure mode</h2>
+      <h2 id="failure-mode">Failure mode</h2>
       <p>
         By default the store is <strong>fail-open</strong>: if Redis throws
         (network blip, restart), the request is treated as if it were the only
@@ -301,7 +301,7 @@ const redis = createClient({
         eventually, just after a long stall on every request.
       </p>
 
-      <h2>Custom Redis clients</h2>
+      <h2 id="custom-redis-clients">Custom Redis clients</h2>
       <p>
         The store talks to Redis through a tiny contract: a single{" "}
         <code>eval()</code> method. Anything that can run a Lua script can be
@@ -315,7 +315,7 @@ const myAdapter: RedisCommands = {
 };`}
       />
 
-      <h2>Key namespacing</h2>
+      <h2 id="key-namespacing">Key namespacing</h2>
       <p>
         Every key is prefixed with <code>daloy:rl:</code> by default. Override{" "}
         <code>prefix</code> per app or environment to avoid collisions on a

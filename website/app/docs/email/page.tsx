@@ -57,7 +57,7 @@ export default function Page() {
         caption="One tiny plugin decorates app.state with a provider client behind a shared EmailSender contract, so route handlers call state.email.send() and never know which provider is wired in. Swapping providers is a one-file change."
       />
 
-      <h2>Supported providers</h2>
+      <h2 id="supported-providers">Supported providers</h2>
       <ul>
         <li>
           <Link href="/docs/email/aws-ses">AWS SES (SESv2)</Link>: pay-as-you-go
@@ -92,7 +92,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Runtime compatibility at a glance</h2>
+      <h2 id="runtime-compatibility-at-a-glance">Runtime compatibility at a glance</h2>
       <p>
         Most provider SDKs are HTTPS-based and work on every runtime DaloyJS
         targets, but a few depend on Node-only APIs (filesystem, TCP, AWS
@@ -163,7 +163,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>Common pattern</h2>
+      <h2 id="common-pattern">Common pattern</h2>
       <p>
         Every guide in this section follows the same three steps: install the
         SDK, register a DaloyJS plugin that puts the client on{" "}
@@ -232,7 +232,7 @@ declare module "@daloyjs/core" {
         SDK so the rest of your app stays provider-agnostic.
       </p>
 
-      <h2>Security checklist</h2>
+      <h2 id="security-checklist">Security checklist</h2>
       <ul>
         <li>
           <strong>Keep API keys in environment variables.</strong> Never commit

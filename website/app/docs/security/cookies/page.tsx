@@ -41,7 +41,7 @@ export default function Page() {
         session and CSRF flows.
       </p>
 
-      <h2>Secure by default</h2>
+      <h2 id="secure-by-default">Secure by default</h2>
       <p>
         When you omit attributes, the helpers choose the safest interpretation:
       </p>
@@ -60,7 +60,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Writing a cookie</h2>
+      <h2 id="writing-a-cookie">Writing a cookie</h2>
       <p>
         <code>serializeCookie(name, value, attributes?)</code> returns a single{" "}
         <code>Set-Cookie</code> header value. The value is URI-encoded so binary
@@ -96,7 +96,7 @@ app.route({
         of silently shipping a cookie the browser drops.
       </p>
 
-      <h2>Reading a cookie</h2>
+      <h2 id="reading-a-cookie">Reading a cookie</h2>
       <p>
         <code>readRequestCookie(header, name)</code> parses a single cookie out
         of the request <code>Cookie</code> header, returning <code>null</code>{" "}
@@ -150,7 +150,7 @@ app.route({
 });`}
       />
 
-      <h2>Clearing a cookie</h2>
+      <h2 id="clearing-a-cookie">Clearing a cookie</h2>
       <p>
         <code>serializeClearCookie(name, attributes?)</code> emits a{" "}
         <code>Set-Cookie</code> value with <code>Max-Age=0</code>, preserving
@@ -168,7 +168,7 @@ return {
 };`}
       />
 
-      <h2>Validating attributes up front</h2>
+      <h2 id="validating-attributes-up-front">Validating attributes up front</h2>
       <p>
         <code>assertCookieAttributes()</code> throws on the first RFC 6265bis or
         secure-default violation. <code>serializeCookie()</code> and{" "}
@@ -199,7 +199,7 @@ assertCookieAttributes({
         down.
       </p>
 
-      <h2>When to use the built-ins instead</h2>
+      <h2 id="when-to-use-the-built-ins-instead">When to use the built-ins instead</h2>
       <p>
         For authenticated sessions reach for <code>session()</code>, and for
         CSRF protection reach for <code>csrf()</code>. They already route

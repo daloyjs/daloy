@@ -37,12 +37,12 @@ export default function Page() {
         before/after code for each one.
       </p>
 
-      <h2>The five W&apos;s (and one H), up front</h2>
+      <h2 id="the-five-w-and-apos-s-and-one-h-up-front">The five W&apos;s (and one H), up front</h2>
       <p>
         Before any code, let&apos;s answer the questions you should be asking.
       </p>
 
-      <h3>What is this migration, really?</h3>
+      <h3 id="what-is-this-migration-really">What is this migration, really?</h3>
       <p>
         Express is a <strong>routing + middleware</strong> framework. An Express
         app is, in its own words, &quot;essentially a series of middleware
@@ -103,7 +103,7 @@ export default function Page() {
         caption="In Express you bolt these on separately (swagger-jsdoc, a validator, a hand-written client) and hope they stay in sync. In DaloyJS they all fall out of the one route declaration."
       />
 
-      <h3>Why would you migrate at all?</h3>
+      <h3 id="why-would-you-migrate-at-all">Why would you migrate at all?</h3>
       <ul>
         <li>
           <strong>You want OpenAPI + typed clients for free.</strong> In Express
@@ -148,7 +148,7 @@ export default function Page() {
         next question.
       </p>
 
-      <h3>When should you migrate (and when should you not)?</h3>
+      <h3 id="when-should-you-migrate-and-when-should-you-not">When should you migrate (and when should you not)?</h3>
       <p>Good times to migrate:</p>
       <ul>
         <li>
@@ -203,7 +203,7 @@ export default function Page() {
         over one at a time.
       </p>
 
-      <h3>Where does DaloyJS fit?</h3>
+      <h3 id="where-does-daloyjs-fit">Where does DaloyJS fit?</h3>
       <p>
         DaloyJS targets <strong>JSON/HTTP APIs and services</strong>: REST
         backends, BFFs, internal microservices, webhook receivers, serverless
@@ -213,7 +213,7 @@ export default function Page() {
         <Link href="/docs/where-to-use">where-to-use guide</Link> first.
       </p>
 
-      <h3>Who should do this?</h3>
+      <h3 id="who-should-do-this">Who should do this?</h3>
       <p>
         Any TypeScript-comfortable developer. You do not need to be a framework
         expert. DaloyJS is TypeScript-first, so the biggest prerequisite is a{" "}
@@ -223,7 +223,7 @@ export default function Page() {
         because the contract-first model leans on inference.
       </p>
 
-      <h3>How, in one sentence?</h3>
+      <h3 id="how-in-one-sentence">How, in one sentence?</h3>
       <p>
         Stand up an empty DaloyJS app, port your middleware to hooks/plugins,
         rewrite each <code>app.METHOD(path, handler)</code> as an{" "}
@@ -234,7 +234,7 @@ export default function Page() {
         of this page is that sentence, expanded.
       </p>
 
-      <h2>The mental model, side by side</h2>
+      <h2 id="the-mental-model-side-by-side">The mental model, side by side</h2>
       <p>
         Hold these two pictures in your head. Everything else follows from the
         difference.
@@ -286,8 +286,8 @@ app.listen(3000)                      serve(app, { port: 3000 })  // from an ada
         </li>
       </ul>
 
-      <h2>Before you start</h2>
-      <h3>Prerequisites</h3>
+      <h2 id="before-you-start">Before you start</h2>
+      <h3 id="prerequisites">Prerequisites</h3>
       <ul>
         <li>
           Node.js &gt;= 24 (DaloyJS also runs on Bun, Deno, Workers, etc.).
@@ -299,7 +299,7 @@ app.listen(3000)                      serve(app, { port: 3000 })  // from an ada
         </li>
       </ul>
 
-      <h3>Install</h3>
+      <h3 id="install">Install</h3>
       <p>
         Either scaffold a fresh project with{" "}
         <Link href="/docs/scaffolder">create-daloy</Link> and copy your logic
@@ -324,7 +324,7 @@ pnpm add -D typescript tsx @types/node`}
         <code>tsconfig.json</code> DaloyJS expects.
       </p>
 
-      <h2>Step 1: Bootstrap the app</h2>
+      <h2 id="step-1-bootstrap-the-app">Step 1: Bootstrap the app</h2>
       <p>
         The classic Express hello-world becomes an <code>App</code> instance
         plus a runtime adapter. Notice that DaloyJS asks you to set a body limit
@@ -377,7 +377,7 @@ console.log(\`listening on http://localhost:\${port}\`);`}
         without extra packages.
       </p>
 
-      <h2>Step 2: Routing</h2>
+      <h2 id="step-2-routing">Step 2: Routing</h2>
       <p>
         Every <code>app.get</code> / <code>app.post</code> / etc. becomes one{" "}
         <code>app.route(...)</code> call. The HTTP method moves <em>inside</em>{" "}
@@ -423,7 +423,7 @@ app.route({
         reference.
       </p>
 
-      <h3>Path parameters</h3>
+      <h3 id="path-parameters">Path parameters</h3>
       <p>
         Express and DaloyJS use the same <code>:name</code> syntax in the path.
         The difference is where the value shows up: Express puts it on{" "}
@@ -471,7 +471,7 @@ app.route({
         empty segments are rejected by the router before your handler runs.
       </p>
 
-      <h3>Query strings and request bodies</h3>
+      <h3 id="query-strings-and-request-bodies">Query strings and request bodies</h3>
       <p>
         In Express you read <code>req.query</code> and <code>req.body</code>{" "}
         (after wiring up <code>express.json()</code>), both untyped, both
@@ -519,7 +519,7 @@ app.route({
         <Link href="/docs/validation">Validation</Link>.
       </p>
 
-      <h2>Step 3: Middleware becomes hooks</h2>
+      <h2 id="step-3-middleware-becomes-hooks">Step 3: Middleware becomes hooks</h2>
       <p>
         This is the biggest conceptual change, so go slow here. An Express
         middleware is a function <code>(req, res, next)</code> that can do work,
@@ -643,7 +643,7 @@ app.route({
         with the route&apos;s <code>hooks</code> field.
       </p>
 
-      <h3>A logging middleware</h3>
+      <h3 id="a-logging-middleware">A logging middleware</h3>
       <CodeBlock
         language="typescript"
         code={`// Express
@@ -662,7 +662,7 @@ app.use({
 });`}
       />
 
-      <h3>An auth guard middleware</h3>
+      <h3 id="an-auth-guard-middleware">An auth guard middleware</h3>
       <p>
         In Express a guard either calls <code>next()</code> or ends the response
         early. In DaloyJS, <code>beforeHandle</code> returns a{" "}
@@ -707,7 +707,7 @@ app.route({
         <code>{`hooks: bearerAuth({ validate: (t) => ... })`}</code>.
       </p>
 
-      <h3>The built-in &amp; third-party middleware mapping table</h3>
+      <h3 id="the-built-in-and-third-party-middleware-mapping-table">The built-in &amp; third-party middleware mapping table</h3>
       <p>
         Here is the part you actually came for: what to do with each Express
         middleware you are using today.
@@ -885,7 +885,7 @@ app.route({
         <code>except</code> your webhook routes.
       </p>
 
-      <h2>Step 4: Error handling</h2>
+      <h2 id="step-4-error-handling">Step 4: Error handling</h2>
       <p>
         Express centralizes errors in a special four-argument middleware{" "}
         <code>(err, req, res, next)</code>, and you signal errors by calling{" "}
@@ -971,7 +971,7 @@ app.route({
         DaloyJS returns the 422 for you.
       </p>
 
-      <h2>Step 5: Routers become groups (and plugins)</h2>
+      <h2 id="step-5-routers-become-groups-and-plugins">Step 5: Routers become groups (and plugins)</h2>
       <p>
         Express <code>express.Router()</code> &quot;mini-apps&quot; mounted with{" "}
         <code>app.use(&quot;/prefix&quot;, router)</code> map to two DaloyJS
@@ -1058,14 +1058,14 @@ await app.ready();`}
         decorations are fully typed in every handler.
       </p>
 
-      <h2>Step 6: Request and response object cheat-sheet</h2>
+      <h2 id="step-6-request-and-response-object-cheat-sheet">Step 6: Request and response object cheat-sheet</h2>
       <p>
         Express gives you fat <code>req</code> and <code>res</code> objects.
         DaloyJS gives you a typed <code>ctx</code> and you return a value. Here
         is the translation for the things you reach for most.
       </p>
 
-      <h3>Reading the request</h3>
+      <h3 id="reading-the-request">Reading the request</h3>
       <table>
         <thead>
           <tr>
@@ -1143,7 +1143,7 @@ await app.ready();`}
         </tbody>
       </table>
 
-      <h3>Writing the response</h3>
+      <h3 id="writing-the-response">Writing the response</h3>
       <table>
         <thead>
           <tr>
@@ -1390,7 +1390,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Step 7: Start the server (and shut it down cleanly)</h2>
+      <h2 id="step-7-start-the-server-and-shut-it-down-cleanly">Step 7: Start the server (and shut it down cleanly)</h2>
       <p>
         <code>app.listen()</code> is replaced by a runtime adapter&apos;s{" "}
         <code>serve()</code>. On Node that is <code>@daloyjs/core/node</code>,
@@ -1420,7 +1420,7 @@ console.log(\`up on \${port}\`);
         <code>http</code> module.
       </p>
 
-      <h2>A full before/after example</h2>
+      <h2 id="a-full-before-after-example">A full before/after example</h2>
       <p>
         Here is a small but complete Express API, a tiny book service with
         listing, fetch-by-id, create, auth, and error handling, followed by its
@@ -1592,7 +1592,7 @@ console.log(\`up on \${port}\`);`}
         once.
       </p>
 
-      <h2>Testing your migration</h2>
+      <h2 id="testing-your-migration">Testing your migration</h2>
       <p>
         Every <code>App</code> exposes <code>app.request(input, init?)</code>,
         an in-process client that takes a URL or <code>Request</code> and
@@ -1618,7 +1618,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         accidental breaking changes during the migration.
       </p>
 
-      <h2>Gotchas and FAQ</h2>
+      <h2 id="gotchas-and-faq">Gotchas and FAQ</h2>
       <dl>
         <dt>
           <strong>
@@ -1696,7 +1696,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </dd>
       </dl>
 
-      <h2>Migration checklist</h2>
+      <h2 id="migration-checklist">Migration checklist</h2>
       <ul>
         <li>
           Create the DaloyJS <code>App</code> with a body limit + request
@@ -1749,7 +1749,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </li>
       </ul>
 
-      <h2>Where to go next</h2>
+      <h2 id="where-to-go-next">Where to go next</h2>
       <ul>
         <li>
           <Link href="/docs/getting-started">Getting started</Link>, build a

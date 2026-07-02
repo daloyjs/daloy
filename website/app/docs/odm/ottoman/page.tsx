@@ -54,10 +54,10 @@ export default function Page() {
         caption="Ottoman connects once and runs ottoman.start() to build indexes before traffic arrives. Handlers then read the decorated state.db model surface."
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock code={`pnpm add ottoman couchbase`} />
 
-      <h2>2. Define a schema and model</h2>
+      <h2 id="2-define-a-schema-and-model">2. Define a schema and model</h2>
       <CodeBlock
         code={`// src/db/ottoman.ts
 import { Ottoman, Schema, model } from "ottoman";
@@ -80,7 +80,7 @@ export const User = model("User", userSchema);
 export const db = { ottoman, User };`}
       />
 
-      <h2>3. Create an Ottoman plugin</h2>
+      <h2 id="3-create-an-ottoman-plugin">3. Create an Ottoman plugin</h2>
       <p>
         Connect once during app startup, build indexes with{" "}
         <code>ottoman.start()</code>, decorate the app with the models you want
@@ -111,7 +111,7 @@ export const ottomanPlugin = {
 };`}
       />
 
-      <h2>4. Augment app state types</h2>
+      <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { db } from "../db/ottoman";
@@ -123,7 +123,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in routes</h2>
+      <h2 id="5-use-it-in-routes">5. Use it in routes</h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -170,7 +170,7 @@ await app.ready();
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Indexes and queries</h2>
+      <h2 id="indexes-and-queries">Indexes and queries</h2>
       <p>
         Define indexes next to the schema and run <code>ottoman.start()</code>{" "}
         during startup so query helpers are ready before the server accepts
@@ -193,7 +193,7 @@ serve(app, { port: 3000 });`}
 });`}
       />
 
-      <h2>Transactions</h2>
+      <h2 id="transactions">Transactions</h2>
       <p>
         Ottoman is best for model-centric Couchbase document access. If a
         workflow requires Couchbase distributed transactions, expose the
@@ -201,7 +201,7 @@ serve(app, { port: 3000 });`}
         transaction boundary inside the handler that owns the unit of work.
       </p>
 
-      <h2>Runtime constraints</h2>
+      <h2 id="runtime-constraints">Runtime constraints</h2>
       <p>
         Ottoman depends on the Couchbase Node.js SDK, so it is a Node.js-first
         ODM. It is not a fit for Cloudflare Workers or Vercel. For

@@ -53,7 +53,7 @@ export default function Page() {
         caption="A thrown HttpError becomes a problem+json document automatically. In production the detail field on 5xx responses is redacted so stack traces and SQL fragments never reach the client, while the full error still goes to your onError hook."
       />
 
-      <h2>Built-in error classes</h2>
+      <h2 id="built-in-error-classes">Built-in error classes</h2>
       <CodeBlock code={`import {
   BadRequestError,                   // 400
   UnauthorizedError,                 // 401
@@ -70,7 +70,7 @@ export default function Page() {
   InternalError,                     // 500 (detail redacted in production)
 } from "@daloyjs/core";`} />
 
-      <h2>Throwing in a handler</h2>
+      <h2 id="throwing-in-a-handler">Throwing in a handler</h2>
       <CodeBlock code={`import { NotFoundError } from "@daloyjs/core";
 
 app.route({
@@ -85,7 +85,7 @@ app.route({
   },
 });`} />
 
-      <h2>Wire format</h2>
+      <h2 id="wire-format">Wire format</h2>
       <p>
         The request id is returned to the client in two places: the <code>x-request-id</code> response
         header, and (per <a href="https://www.rfc-editor.org/rfc/rfc9457#name-members-of-a-problem-detail" target="_blank" rel="noreferrer">RFC&nbsp;9457 §3.1</a>)
@@ -105,14 +105,14 @@ x-request-id: c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431
   "instance": "urn:request:c9aa8e1c-7a6e-4f1e-9f44-c2e5d2c4a431"
 }`} />
 
-      <h2>Production redaction</h2>
+      <h2 id="production-redaction">Production redaction</h2>
       <p>
         When <code>NODE_ENV=production</code>, DaloyJS strips the <code>detail</code> field on any 5xx response
         so internal stack traces and SQL fragments don&apos;t leak to clients. The full error is still emitted
         to your logger via the <code>onError</code> hook.
       </p>
 
-      <h2>Custom error classes</h2>
+      <h2 id="custom-error-classes">Custom error classes</h2>
       <CodeBlock code={`import { HttpError } from "@daloyjs/core";
 
 export class QuotaExceededError extends HttpError {
@@ -125,7 +125,7 @@ export class QuotaExceededError extends HttpError {
   }
 }`} />
 
-      <h2>Custom <code>onError</code></h2>
+      <h2 id="custom-onerror">Custom <code>onError</code></h2>
       <CodeBlock code={`app.use({
   onError: async (error, ctx) => {
     logger.error({ err: error, requestId: ctx?.requestId }, "request failed");

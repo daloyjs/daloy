@@ -45,7 +45,7 @@ export default function Page() {
         draft and the conventions used by major payment processors.
       </p>
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <p>
         Mount <code>idempotency()</code> ahead of the routes that need
         exactly-once semantics. That is all: clients opt in per request by
@@ -76,7 +76,7 @@ app.route({
         language="ts"
       />
 
-      <h2>How it works</h2>
+      <h2 id="how-it-works">How it works</h2>
       <p>
         For an applicable method that carries an <code>Idempotency-Key</code>{" "}
         header, the middleware fingerprints the request (method + path + query
@@ -158,7 +158,7 @@ app.route({
         default).
       </p>
 
-      <h2>Options</h2>
+      <h2 id="options">Options</h2>
       <CodeBlock
         code={`app.use(
   idempotency({
@@ -187,7 +187,7 @@ app.route({
         language="ts"
       />
 
-      <h2>Pluggable stores</h2>
+      <h2 id="pluggable-stores">Pluggable stores</h2>
       <p>
         The default <code>MemoryIdempotencyStore</code> is process-local,
         perfect for tests and single-instance deployments. For a multi-instance
@@ -224,7 +224,7 @@ app.use(idempotency({ store: redisIdempotencyStore }));`}
         language="ts"
       />
 
-      <h2>Client usage</h2>
+      <h2 id="client-usage">Client usage</h2>
       <p>
         Clients generate a unique key per logical operation (a UUID is ideal)
         and reuse it across retries of that same operation:
@@ -250,7 +250,7 @@ async function createChargeWithRetries(amount: number) {
         language="ts"
       />
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           Keys are validated up front: empty, over-long (

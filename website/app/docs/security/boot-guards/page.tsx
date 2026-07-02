@@ -89,7 +89,7 @@ export default function Page() {
         caption="In production each guard turns a common misconfiguration into a refuse-to-boot or first-request 500 instead of a silent vulnerability under load. Dev and CI keep working with sample secrets."
       />
 
-      <h2>1. Weak session secret refuse-to-boot</h2>
+      <h2 id="1-weak-session-secret-refuse-to-boot">1. Weak session secret refuse-to-boot</h2>
       <p>
         <code>
           app.use(session({"{"} secret {"}"}))
@@ -128,7 +128,7 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));`}
         in your own boot code.
       </p>
 
-      <h2>
+      <h2 id="2-cors-refuse-to-boot">
         2.{" "}
         <code>
           cors({"{"} origin: &quot;*&quot; {"}"})
@@ -157,7 +157,7 @@ app.use(cors({ origin: ["https://app.example.com"] }));
 app.use(cors({ origin: (o) => o.endsWith(".example.com") }));`}
       />
 
-      <h2>
+      <h2 id="3-session-state-changing-route-without-csrf">
         3. <code>session()</code> + state-changing route without{" "}
         <code>csrf()</code>
       </h2>
@@ -197,7 +197,7 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
 // state-changing routes ok without csrf()`}
       />
 
-      <h2>
+      <h2 id="4-x-forwarded-with-trustproxy-unset-returns-500">
         4. <code>X-Forwarded-*</code> with <code>trustProxy</code> unset returns
         500
       </h2>
@@ -231,7 +231,7 @@ const app = new App({ env: "production", secureDefaults: false });`}
         a latch, so a flood of forged requests does not flood your logs.
       </p>
 
-      <h2>Migration checklist</h2>
+      <h2 id="migration-checklist">Migration checklist</h2>
       <ul>
         <li>
           Audit every{" "}

@@ -52,7 +52,7 @@ export default function Page() {
         the rest.
       </p>
 
-      <h2>What Daloy already does for you</h2>
+      <h2 id="what-daloy-already-does-for-you">What Daloy already does for you</h2>
       <p>
         These are core-enforced and require no opt-in. They don&apos;t replace
         parameterized queries, but they shrink the attack surface that reaches
@@ -119,7 +119,7 @@ export default function Page() {
         grep for them in code review.
       </p>
 
-      <h2>The shape of a safe Daloy route</h2>
+      <h2 id="the-shape-of-a-safe-daloy-route">The shape of a safe Daloy route</h2>
       <p>
         Validated input + parameterized query is the whole pattern.
         Aikido&apos;s report calls it out as defense #1 and #2; Daloy gives you
@@ -182,9 +182,9 @@ app.route({
         those in a Daloy handler, treat it as a bug.
       </p>
 
-      <h2>Safe vs. unsafe per ORM</h2>
+      <h2 id="safe-vs-unsafe-per-orm">Safe vs. unsafe per ORM</h2>
 
-      <h3>Prisma</h3>
+      <h3 id="prisma">Prisma</h3>
       <CodeBlock
         code={`// SAFE, Prisma always parameterizes \`where\` arguments.
 await prisma.user.findUnique({ where: { id: params.id } });
@@ -197,7 +197,7 @@ await prisma.$queryRaw\`SELECT * FROM "User" WHERE id = \${params.id}\`;
 await prisma.$queryRawUnsafe(\`SELECT * FROM "User" WHERE id = '\${params.id}'\`);`}
       />
 
-      <h3>Drizzle</h3>
+      <h3 id="drizzle">Drizzle</h3>
       <CodeBlock
         code={`import { sql, eq } from "drizzle-orm";
 
@@ -212,7 +212,7 @@ await db.execute(sql\`SELECT * FROM users WHERE email = \${params.email}\`);
 await db.execute(sql.raw(\`SELECT * FROM users WHERE email = '\${params.email}'\`));`}
       />
 
-      <h3>Kysely</h3>
+      <h3 id="kysely">Kysely</h3>
       <CodeBlock
         code={`// SAFE, typed builder, parameterized at the driver level.
 await db.selectFrom("users").where("email", "=", params.email).selectAll().execute();
@@ -224,7 +224,7 @@ await sql\`SELECT * FROM users WHERE email = \${params.email}\`.execute(db);
 await sql.raw(\`SELECT * FROM users WHERE email = '\${params.email}'\`).execute(db);`}
       />
 
-      <h3>node-postgres / mysql2 (no ORM)</h3>
+      <h3 id="node-postgres-mysql2-no-orm">node-postgres / mysql2 (no ORM)</h3>
       <CodeBlock
         code={`// SAFE, placeholders are bound by the driver.
 await pg.query("SELECT * FROM users WHERE email = $1", [params.email]);
@@ -234,7 +234,7 @@ await mysql.execute("SELECT * FROM users WHERE email = ?", [params.email]);
 await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
       />
 
-      <h2>
+      <h2 id="operator-injection-the-and-ldquo-nosql-injection-in-prisma-and-rdquo-trap">
         Operator injection (the &ldquo;NoSQL injection in Prisma&rdquo; trap)
       </h2>
       <p>
@@ -333,7 +333,7 @@ await state.db.user.findMany({ where });`}
         </li>
       </ul>
 
-      <h2>Dynamic SQL: when you can&apos;t parameterize</h2>
+      <h2 id="dynamic-sql-when-you-can-and-apos-t-parameterize">Dynamic SQL: when you can&apos;t parameterize</h2>
       <p>
         Bind parameters cover values, not identifiers. <code>ORDER BY</code>{" "}
         columns, table names, direction (<code>ASC</code>/<code>DESC</code>),
@@ -397,7 +397,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Things to grep for in code review</h2>
+      <h2 id="things-to-grep-for-in-code-review">Things to grep for in code review</h2>
       <p>
         Aikido&apos;s report says vulnerable organizations average ~30 separate
         SQLi sites. The fastest way to keep that number at zero is a periodic
@@ -422,7 +422,7 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
         clever as a SAST tool, but it&apos;s free and runs in 200 ms.
       </p>
 
-      <h2>Defense in depth: runtime firewalls</h2>
+      <h2 id="defense-in-depth-runtime-firewalls">Defense in depth: runtime firewalls</h2>
       <p>
         Daloy intentionally does <strong>not</strong> ship a heuristic
         SQLi-detector middleware. Pattern-matching <code>&apos; OR 1=1 --</code>{" "}
@@ -446,7 +446,7 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
         </li>
       </ul>
 
-      <h2>Reporting</h2>
+      <h2 id="reporting">Reporting</h2>
       <p>
         Found a SQLi-shaped weakness in Daloy itself (e.g. a sanitizer that
         leaks DB-meaningful characters, or a code example that demonstrates an

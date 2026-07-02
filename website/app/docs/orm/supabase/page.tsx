@@ -74,17 +74,17 @@ export default function Page() {
         ]}
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock code={`pnpm add @supabase/supabase-js`} />
 
-      <h2>2. Generate database types</h2>
+      <h2 id="2-generate-database-types">2. Generate database types</h2>
       <p>Use the Supabase CLI to generate a fully typed schema:</p>
       <CodeBlock
         code={`pnpm dlx supabase login
 pnpm dlx supabase gen types typescript --project-id <your-ref> --schema public > src/db/supabase.types.ts`}
       />
 
-      <h2>3. Create a Supabase plugin</h2>
+      <h2 id="3-create-a-supabase-plugin">3. Create a Supabase plugin</h2>
       <p>
         Create a long-lived service-role client for server-to-server calls. For
         per-request, user-scoped clients (RLS), instantiate inside the handler
@@ -112,7 +112,7 @@ export const supabasePlugin = {
 };`}
       />
 
-      <h2>4. Augment app state types</h2>
+      <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { Db } from "../db/supabase";
@@ -124,7 +124,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in routes</h2>
+      <h2 id="5-use-it-in-routes">5. Use it in routes</h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -186,7 +186,7 @@ await app.ready();
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Per-request, RLS-aware clients</h2>
+      <h2 id="per-request-rls-aware-clients">Per-request, RLS-aware clients</h2>
       <p>
         For row-level security, derive a client from the caller&apos;s bearer
         token in a hook so each handler gets a Supabase client scoped to that
@@ -208,7 +208,7 @@ app.use({
 });`}
       />
 
-      <h2>Auth: validating Supabase JWTs</h2>
+      <h2 id="auth-validating-supabase-jwts">Auth: validating Supabase JWTs</h2>
       <CodeBlock
         code={`import { HttpError } from "@daloyjs/core";
 
@@ -223,14 +223,14 @@ app.use({
 });`}
       />
 
-      <h2>Realtime, storage, and edge functions</h2>
+      <h2 id="realtime-storage-and-edge-functions">Realtime, storage, and edge functions</h2>
       <p>
         The same <code>supabase</code> client exposes <code>storage</code>,{" "}
         <code>functions</code>, and <code>realtime</code>. Use them inside
         handlers exactly the same way, DaloyJS doesn&apos;t care.
       </p>
 
-      <h2>Mapping Supabase errors</h2>
+      <h2 id="mapping-supabase-errors">Mapping Supabase errors</h2>
       <p>
         Translate <code>PostgrestError</code> codes into typed framework errors
         so they serialize as <Link href="/docs/errors">problem+json</Link>:

@@ -55,7 +55,7 @@ export default function Page() {
         caption="Fastly Compute still uses the fetch-event listener model. installFastlyListener registers it for you and forwards event.request into app.fetch. Outbound fetch() calls must be declared as backends in fastly.toml."
       />
 
-      <h2>When to choose Fastly Compute</h2>
+      <h2 id="when-to-choose-fastly-compute">When to choose Fastly Compute</h2>
       <ul>
         <li>
           You already use Fastly&apos;s edge network and want REST API logic on
@@ -70,14 +70,14 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <CodeBlock
         language="bash"
         code={`pnpm add @daloyjs/core @fastly/js-compute
 pnpm add -D @fastly/cli`}
       />
 
-      <h2>Entrypoint</h2>
+      <h2 id="entrypoint">Entrypoint</h2>
       <CodeBlock
         language="ts"
         code={`// src/index.ts
@@ -95,7 +95,7 @@ installFastlyListener(app);`}
 );`}
       />
 
-      <h2>fastly.toml</h2>
+      <h2 id="fastly-toml">fastly.toml</h2>
       <p>
         Fastly Compute requires <code>manifest_version = 3</code>. The{" "}
         <code>[scripts]</code> <code>build</code> command has to{" "}
@@ -134,14 +134,14 @@ build = "esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile
         for the full schema.
       </p>
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <CodeBlock
         language="bash"
         code={`pnpm fastly compute serve     # local dev
 pnpm fastly compute publish    # deploy`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           No <code>node:*</code> modules. Avoid the Node session store, the
@@ -161,7 +161,7 @@ pnpm fastly compute publish    # deploy`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

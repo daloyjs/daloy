@@ -97,7 +97,7 @@ export default function Page() {
         caption="The DaloyJS API verifies the v2.0 token against the tenant's JWKS with jose. Keys refresh automatically on a missing kid, so signing-key rollover needs no redeploy. Multi-tenant apps must also validate the tid claim against an allowlist."
       />
 
-      <h2>1. Register the API in Entra ID</h2>
+      <h2 id="1-register-the-api-in-entra-id">1. Register the API in Entra ID</h2>
       <ol>
         <li>
           In the <a href="https://entra.microsoft.com" target="_blank" rel="noreferrer">Microsoft
@@ -126,14 +126,14 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add jose`} />
       <p>
         Add <code>@azure/msal-node</code> as well only if the API itself needs
         to acquire downstream tokens (see below).
       </p>
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 ENTRA_TENANT_ID=11111111-2222-3333-4444-555555555555
@@ -141,7 +141,7 @@ ENTRA_API_AUDIENCE=api://my-daloy-api   # or the API app's client ID GUID
 ENTRA_REQUIRED_SCOPE=access_as_user`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/entra.ts
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
@@ -201,7 +201,7 @@ declare module "@daloyjs/core" {
         a missing <code>kid</code>, so key rollover is handled automatically.
       </p>
 
-      <h2>5. Guard a route</h2>
+      <h2 id="5-guard-a-route">5. Guard a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -235,7 +235,7 @@ app.route({
         you support both shapes.
       </p>
 
-      <h2>Acquiring downstream tokens with MSAL Node</h2>
+      <h2 id="acquiring-downstream-tokens-with-msal-node">Acquiring downstream tokens with MSAL Node</h2>
       <p>
         If your API needs to call Microsoft Graph or another protected service{" "}
         <em>on behalf of</em> the user, use MSAL Node&apos;s{" "}
@@ -268,7 +268,7 @@ console.log(result?.accessToken);`}
         secret manager.
       </p>
 
-      <h2>Notes</h2>
+      <h2 id="notes">Notes</h2>
       <ul>
         <li>
           The <code>issuer</code> for v2.0 tokens is{" "}

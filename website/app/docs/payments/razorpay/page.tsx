@@ -44,7 +44,7 @@ export default function Page() {
         and <code>validateWebhookSignature</code> for IPN.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>Two signatures, not one.</strong> Razorpay signs two different
@@ -80,7 +80,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Sign in to the{" "}
@@ -110,10 +110,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add razorpay`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 RAZORPAY_KEY_ID=rzp_test_replace_me            # public-ish, used by Checkout JS too
@@ -122,7 +122,7 @@ RAZORPAY_WEBHOOK_SECRET=replace_me             # webhook secret; verifies IPN
 APP_URL=https://your-app.example.com`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/razorpay.ts
 import Razorpay from "razorpay";
@@ -238,7 +238,7 @@ declare module "@daloyjs/core" {
         over <code>node:crypto</code>; no SDK instance needed.
       </p>
 
-      <h2>5. Create an order</h2>
+      <h2 id="5-create-an-order">5. Create an order</h2>
       <p>
         The frontend uses{" "}
         <a
@@ -304,7 +304,7 @@ app.route({
 });`}
       />
 
-      <h2>6. Verify the client callback</h2>
+      <h2 id="6-verify-the-client-callback">6. Verify the client callback</h2>
       <SequenceDiagram
         title="Order + client callback verification"
         participants={["Browser", "DaloyJS route", "Razorpay"]}
@@ -391,7 +391,7 @@ app.route({
 });`}
       />
 
-      <h2>7. Webhook</h2>
+      <h2 id="7-webhook">7. Webhook</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Razorpay", "DaloyJS route", "Your queue"]}
@@ -477,7 +477,7 @@ app.route({
         backoff for up to 24 hours.
       </p>
 
-      <h2>8. Refunds</h2>
+      <h2 id="8-refunds">8. Refunds</h2>
       <CodeBlock
         code={`// Full refund \u2014 omit amount.
 await state.razorpay.refund({ paymentId: "pay_xxx" });
@@ -491,7 +491,7 @@ await state.razorpay.refund({
 });`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>razorpay</code> SDK ships CJS and depends on Node&apos;s{" "}
         <code>https</code> module, it runs on Node 18+ but is not edge-runtime
@@ -503,7 +503,7 @@ await state.razorpay.refund({
         <code>crypto.subtle</code> if you don&apos;t want the bundled ones.
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Razorpay throws errors with a structured <code>error.error</code> object
         containing <code>code</code>, <code>description</code>,{" "}
@@ -513,7 +513,7 @@ await state.razorpay.refund({
         can match them later.
       </p>
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>Use Orders, not bare payment links.</strong> The Orders flow

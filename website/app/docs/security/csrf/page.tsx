@@ -88,7 +88,7 @@ export default function Page() {
         caption="A forged cross-site request rides the cookie automatically but cannot read it to populate the x-csrf-token header, so the constant-time compare fails and the middleware returns 403. Only a same-origin client that read the token can match it."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { App, csrf } from "@daloyjs/core";
 
@@ -118,7 +118,7 @@ app.route({
 });`}
       />
 
-      <h2>How clients send the token</h2>
+      <h2 id="how-clients-send-the-token">How clients send the token</h2>
       <p>
         Browsers cache the token cookie automatically; your client code only
         needs to read it and echo it on the next mutating call. From a SPA:
@@ -141,7 +141,7 @@ await fetch("/transfer", {
 });`}
       />
 
-      <h2>Defaults</h2>
+      <h2 id="defaults">Defaults</h2>
       <table>
         <thead>
           <tr>
@@ -234,7 +234,7 @@ await fetch("/transfer", {
         falling back to predictable randomness.
       </p>
 
-      <h2>
+      <h2 id="the-host-prefix">
         The <code>__Host-</code> prefix
       </h2>
       <p>
@@ -256,7 +256,7 @@ await fetch("/transfer", {
 }));`}
       />
 
-      <h2>Custom header names and methods</h2>
+      <h2 id="custom-header-names-and-methods">Custom header names and methods</h2>
       <p>
         Some clients (Angular, Axios) read <code>XSRF-TOKEN</code> and reflect
         it as <code>X-XSRF-TOKEN</code>. To match that convention, override both
@@ -276,7 +276,7 @@ await fetch("/transfer", {
 }));`}
       />
 
-      <h2>
+      <h2 id="what-is-not-covered">
         What is <em>not</em> covered
       </h2>
       <ul>
@@ -299,7 +299,7 @@ await fetch("/transfer", {
         </li>
       </ul>
 
-      <h2>Fetch-Metadata strategy (tokenless, recommended for new apps)</h2>
+      <h2 id="fetch-metadata-strategy-tokenless-recommended-for-new-apps">Fetch-Metadata strategy (tokenless, recommended for new apps)</h2>
       <p>
         The <code>csrf()</code> middleware also implements the modern{" "}
         <strong>Fetch Metadata</strong>

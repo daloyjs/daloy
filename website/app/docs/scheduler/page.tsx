@@ -91,7 +91,7 @@ export default function Page() {
         caption="Each tick is armed fixed-rate before the run starts. If the previous run is still in flight the overlapping tick is skipped, not started concurrently, so a slow task degrades to back-to-back runs instead of piling up."
       />
 
-      <h2>
+      <h2 id="quick-start-with-app-cron">
         Quick start with <code>app.cron()</code>
       </h2>
       <p>
@@ -127,7 +127,7 @@ app.scheduledTasks?.getState("heartbeat"); // one task's snapshot
 await app.scheduledTasks?.runNow("purge-sessions"); // out-of-band run`}
       />
 
-      <h2>Cron expressions</h2>
+      <h2 id="cron-expressions">Cron expressions</h2>
       <p>
         The <code>cron</code> field accepts a standard 5-field expression (
         <code>minute hour day-of-month month day-of-week</code>) with wildcards,
@@ -164,7 +164,7 @@ app.cron({ name: "first-of-month", cron: "@monthly" }, run);    // 00:00 on the 
         runtime.
       </p>
 
-      <h2>Single-flight &amp; overruns</h2>
+      <h2 id="single-flight-and-overruns">Single-flight &amp; overruns</h2>
       <p>
         Schedules are <strong>fixed-rate</strong>: the next tick is armed before
         the current run starts. If a run outlasts its interval, the overlapping
@@ -184,7 +184,7 @@ state.lastDurationMs;  // wall-clock duration of the last run
 state.nextRunAt;       // epoch ms of the next scheduled run`}
       />
 
-      <h2>Per-run timeouts</h2>
+      <h2 id="per-run-timeouts">Per-run timeouts</h2>
       <p>
         Set <code>timeoutMs</code> to bound a run. When it elapses the
         run&apos;s <code>signal</code> is aborted; forward it to your I/O so the
@@ -206,7 +206,7 @@ state.nextRunAt;       // epoch ms of the next scheduled run`}
 );`}
       />
 
-      <h2>
+      <h2 id="using-the-scheduler-directly">
         Using the <code>Scheduler</code> directly
       </h2>
       <p>
@@ -235,7 +235,7 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
         matching <code>Date</code>.
       </p>
 
-      <h2>When to reach for a real queue instead</h2>
+      <h2 id="when-to-reach-for-a-real-queue-instead">When to reach for a real queue instead</h2>
       <p>
         This scheduler runs in-process: each instance of your app runs its own
         timers. That is exactly what you want for idempotent maintenance, but

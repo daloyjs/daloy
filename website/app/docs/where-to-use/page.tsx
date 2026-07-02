@@ -52,7 +52,7 @@ export default function Page() {
         endpoint behind them.
       </p>
 
-      <h2>The quick verdict</h2>
+      <h2 id="the-quick-verdict">The quick verdict</h2>
       <p>For each role, here is the short answer.</p>
       <div className="not-prose my-6 overflow-x-auto rounded-md border border-border">
         <table className="w-full text-sm">
@@ -170,7 +170,7 @@ export default function Page() {
         </table>
       </div>
 
-      <h2>Plain-English definitions</h2>
+      <h2 id="plain-english-definitions">Plain-English definitions</h2>
       <p>
         Before we go role-by-role, here is what each term actually means. If
         you&apos;ve been nodding along in meetings without being sure, this is
@@ -255,9 +255,9 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Role by role</h2>
+      <h2 id="role-by-role">Role by role</h2>
 
-      <h3>1. API server: the home position</h3>
+      <h3 id="1-api-server-the-home-position">1. API server: the home position</h3>
       <p>
         This is what DaloyJS was designed for. You declare a route once, get
         validation, OpenAPI docs, a typed in-process client, and an
@@ -286,7 +286,7 @@ serve(app, { port: 3000 });`}
         <Link href="/docs/routing">Routing</Link>.
       </p>
 
-      <h3>2. Web server (HTML and static files)</h3>
+      <h3 id="2-web-server-html-and-static-files">2. Web server (HTML and static files)</h3>
       <p>
         DaloyJS can return any <code>Response</code>, so you <em>can</em> serve
         HTML or files from it. But:
@@ -302,7 +302,7 @@ serve(app, { port: 3000 });`}
         host, or Next.js in front and let DaloyJS be the JSON layer.
       </p>
 
-      <h3>3. Microservice (one of many)</h3>
+      <h3 id="3-microservice-one-of-many">3. Microservice (one of many)</h3>
       <p>
         DaloyJS is a strong fit here, with one small twist: when a service runs
         behind a mesh, sidecar, or private network, you don&apos;t need the
@@ -326,7 +326,7 @@ const app = new App({
         (you don&apos;t need a fleet of services to start).
       </p>
 
-      <h3>4. Backend-for-Frontend (BFF): the sweet spot</h3>
+      <h3 id="4-backend-for-frontend-bff-the-sweet-spot">4. Backend-for-Frontend (BFF): the sweet spot</h3>
       <p>
         BFF is arguably where DaloyJS is at its best. The combination you want
         is all first-party:
@@ -369,7 +369,7 @@ const app = new App({
         needs.
       </p>
 
-      <h3>
+      <h3 id="5-api-gateway-strong-as-in-app-gateway-not-a-replacement-for-kong">
         5. API gateway, strong as &quot;in-app gateway&quot;, not a replacement
         for Kong
       </h3>
@@ -416,7 +416,7 @@ const app = new App({
         / Envoy and put DaloyJS services <em>behind</em> it.
       </p>
 
-      <h3>6. Load balancer: no</h3>
+      <h3 id="6-load-balancer-no">6. Load balancer: no</h3>
       <p>
         Load balancing is a TCP-level job. Use NGINX, HAProxy, AWS ALB/NLB, GCP
         Load Balancing, or Cloudflare. DaloyJS sits <em>behind</em> the LB and
@@ -425,7 +425,7 @@ const app = new App({
         <code>X-Forwarded-*</code> headers when the LB terminates TLS.
       </p>
 
-      <h3>7. Server-side renderer (SSR): no</h3>
+      <h3 id="7-server-side-renderer-ssr-no">7. Server-side renderer (SSR): no</h3>
       <p>
         There is no JSX, React, Vue, or Svelte renderer in DaloyJS. No
         <code>renderToString</code>, no hydration, no file-system page router,
@@ -439,7 +439,7 @@ const app = new App({
         <Link href="/docs/adapters/vercel">the Vercel adapter</Link>.
       </p>
 
-      <h3>8. Webhook receiver: excellent</h3>
+      <h3 id="8-webhook-receiver-excellent">8. Webhook receiver: excellent</h3>
       <p>Webhooks are just HTTP POSTs with a signature header. DaloyJS has:</p>
       <ul>
         <li>
@@ -457,7 +457,7 @@ const app = new App({
         <li>RFC 9457 error responses that webhook senders can parse</li>
       </ul>
 
-      <h3>9. WebSocket server: excellent, with CSWSH guard</h3>
+      <h3 id="9-websocket-server-excellent-with-cswsh-guard">9. WebSocket server: excellent, with CSWSH guard</h3>
       <p>
         First-party WebSocket primitives run on the Node and Bun adapters with a
         Bun-style handler shape (<code>open</code>, <code>message</code>,{" "}
@@ -475,7 +475,7 @@ const app = new App({
         See <Link href="/docs/websocket">WebSocket primitives</Link>.
       </p>
 
-      <h3>10. MCP server (HTTP transport): strong</h3>
+      <h3 id="10-mcp-server-http-transport-strong">10. MCP server (HTTP transport): strong</h3>
       <p>
         The Model Context Protocol is JSON-RPC 2.0, transported over either
         stdio or Streamable HTTP. Streamable HTTP uses POST and GET requests,
@@ -504,7 +504,7 @@ const app = new App({
         servers, implement the MCP authorization metadata and OAuth flow on top.
       </p>
 
-      <h3>11. gRPC server: no</h3>
+      <h3 id="11-grpc-server-no">11. gRPC server: no</h3>
       <p>
         gRPC needs HTTP/2 with Protobuf framing and trailers. DaloyJS is a REST
         framework around web-standard <code>Request</code> /{" "}
@@ -514,7 +514,7 @@ const app = new App({
         if you want the external surface to be JSON.
       </p>
 
-      <h3>12. GraphQL server: possible, not the framework&apos;s shape</h3>
+      <h3 id="12-graphql-server-possible-not-the-framework-and-apos-s-shape">12. GraphQL server: possible, not the framework&apos;s shape</h3>
       <p>
         DaloyJS is contract-first REST: one route, one schema, one OpenAPI
         operation. GraphQL is one route, one schema, many shapes. They&apos;re
@@ -528,7 +528,7 @@ const app = new App({
         framework).
       </p>
 
-      <h3>13. SOAP server: no</h3>
+      <h3 id="13-soap-server-no">13. SOAP server: no</h3>
       <p>
         SOAP is XML-over-HTTP with WSDL contracts. DaloyJS speaks JSON contracts
         via Standard Schema. There is no built-in XML parser, no WSDL generator,
@@ -538,7 +538,7 @@ const app = new App({
         translate to a clean DaloyJS REST API behind.
       </p>
 
-      <h2>Cheat sheet: pick the right tool</h2>
+      <h2 id="cheat-sheet-pick-the-right-tool">Cheat sheet: pick the right tool</h2>
       <div className="not-prose my-6 overflow-x-auto rounded-md border border-border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
@@ -644,7 +644,7 @@ const app = new App({
         </table>
       </div>
 
-      <h2>A common deployment shape</h2>
+      <h2 id="a-common-deployment-shape">A common deployment shape</h2>
       <p>
         Most real systems use several of these tools together. A typical
         production layout looks like this:
@@ -722,7 +722,7 @@ const app = new App({
         better at their specific job.
       </p>
 
-      <h2>Where to go next</h2>
+      <h2 id="where-to-go-next">Where to go next</h2>
       <ul>
         <li>
           <Link href="/docs/getting-started">

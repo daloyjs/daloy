@@ -50,7 +50,7 @@ export default function Page() {
         unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel.
       </p>
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <p>
         Mount <code>responseCache()</code> ahead of the read routes whose
         rendered bodies are safe to reuse for a short window. By default only{" "}
@@ -89,7 +89,7 @@ app.route({
         <code>Cache-Control: no-store</code>) passes through unmarked.
       </p>
 
-      <h2>How it works</h2>
+      <h2 id="how-it-works">How it works</h2>
       <p>For an eligible request the middleware derives a cache key and:</p>
 
       <BranchDiagram
@@ -139,7 +139,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Cache-Control orchestration</h2>
+      <h2 id="cache-control-orchestration">Cache-Control orchestration</h2>
       <p>
         Freshness is derived from the response&rsquo;s own{" "}
         <code>Cache-Control</code> when present (<code>s-maxage</code> wins over{" "}
@@ -177,7 +177,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>stale-while-revalidate</h2>
+      <h2 id="stale-while-revalidate">stale-while-revalidate</h2>
       <p>
         With <code>staleWhileRevalidateSeconds</code> plus a{" "}
         <code>revalidate</code> callback (typically wired to{" "}
@@ -199,7 +199,7 @@ app.use(
         language="ts"
       />
 
-      <h2>Options</h2>
+      <h2 id="options">Options</h2>
       <CodeBlock
         code={`app.use(
   responseCache({
@@ -230,7 +230,7 @@ app.use(
         language="ts"
       />
 
-      <h2>Pluggable stores</h2>
+      <h2 id="pluggable-stores">Pluggable stores</h2>
       <p>
         The default <code>MemoryResponseCacheStore</code> is process-local,
         perfect for tests and single-instance deployments. For a multi-instance
@@ -259,7 +259,7 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
         language="ts"
       />
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           Credentialed and per-user responses are never shared by default:

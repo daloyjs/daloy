@@ -91,7 +91,7 @@ export default function Page() {
         caption="The allowlist wins first. After that an empty User-Agent, a blocked pattern, or a crawler that fails reverse-DNS plus forward-confirm is rejected with a 403 by default, so a spoofed Googlebot cannot impersonate a trusted crawler."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { createApp } from "@daloyjs/core";
@@ -113,7 +113,7 @@ app.use(
         rejected with <code>403 Forbidden</code> RFC 9457 problem+json.
       </p>
 
-      <h2>Blocking empty &amp; abusive User-Agents</h2>
+      <h2 id="blocking-empty-and-abusive-user-agents">Blocking empty &amp; abusive User-Agents</h2>
       <p>
         <code>blockEmptyUserAgent</code> defaults to <code>true</code>. A plain
         string in <code>blockedUserAgents</code> matches case-insensitively as a
@@ -129,7 +129,7 @@ app.use(
 );`}
       />
 
-      <h2>Allowlist wins</h2>
+      <h2 id="allowlist-wins">Allowlist wins</h2>
       <p>
         <code>allowUserAgents</code> is consulted first and bypasses{" "}
         <strong>every</strong> other rule (including empty-UA blocking and
@@ -146,7 +146,7 @@ app.use(
 );`}
       />
 
-      <h2>Verifying declared crawlers</h2>
+      <h2 id="verifying-declared-crawlers">Verifying declared crawlers</h2>
       <p>
         Spoofing <code>User-Agent: Googlebot</code> is trivial. The only
         reliable check is the one Google and Bing publish: reverse-DNS the
@@ -188,7 +188,7 @@ app.use(
         hot path.
       </p>
 
-      <h2>Monitor mode &amp; callbacks</h2>
+      <h2 id="monitor-mode-and-callbacks">Monitor mode &amp; callbacks</h2>
       <p>
         Roll it out safely with <code>mode: &quot;log&quot;</code>: nothing is
         blocked, but every match fires <code>onBlock</code> so you can measure
@@ -217,7 +217,7 @@ app.use(
         <code>&quot;unverifiable-bot&quot;</code>.
       </p>
 
-      <h2>Custom DNS resolver</h2>
+      <h2 id="custom-dns-resolver">Custom DNS resolver</h2>
       <p>
         The default resolver lazily imports <code>node:dns/promises</code>. On a
         runtime without it (Workers, Deno without <code>--allow-net</code>) or

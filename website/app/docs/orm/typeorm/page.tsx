@@ -62,7 +62,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock
         code={`pnpm add typeorm reflect-metadata pg
 pnpm add -D @types/node`}
@@ -81,7 +81,7 @@ pnpm add -D @types/node`}
 }`}
       />
 
-      <h2>2. Define an entity</h2>
+      <h2 id="2-define-an-entity">2. Define an entity</h2>
       <CodeBlock
         code={`// src/db/entities/User.ts
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from "typeorm";
@@ -102,7 +102,7 @@ export class User {
 }`}
       />
 
-      <h2>3. Configure the DataSource</h2>
+      <h2 id="3-configure-the-datasource">3. Configure the DataSource</h2>
       <CodeBlock
         code={`// src/db/data-source.ts
 import "reflect-metadata";
@@ -119,7 +119,7 @@ export const AppDataSource = new DataSource({
 });`}
       />
 
-      <h2>4. Create a TypeORM plugin</h2>
+      <h2 id="4-create-a-typeorm-plugin">4. Create a TypeORM plugin</h2>
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
@@ -139,7 +139,7 @@ export const typeormPlugin = {
 };`}
       />
 
-      <h2>5. Augment app state types</h2>
+      <h2 id="5-augment-app-state-types">5. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { DataSource } from "typeorm";
@@ -151,7 +151,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>6. Use repositories in routes</h2>
+      <h2 id="6-use-repositories-in-routes">6. Use repositories in routes</h2>
       <CodeBlock
         code={`// src/server.ts
 import "reflect-metadata";
@@ -206,7 +206,7 @@ await app.ready();
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Transactions</h2>
+      <h2 id="transactions">Transactions</h2>
       <CodeBlock
         code={`handler: async ({ body, state }) => {
   return state.db.transaction(async (manager) => {
@@ -217,13 +217,13 @@ serve(app, { port: 3000 });`}
 }`}
       />
 
-      <h2>Migrations</h2>
+      <h2 id="migrations">Migrations</h2>
       <CodeBlock
         code={`pnpm typeorm migration:generate src/db/migrations/InitUser -d src/db/data-source.ts
 pnpm typeorm migration:run -d src/db/data-source.ts`}
       />
 
-      <h2>Runtime notes</h2>
+      <h2 id="runtime-notes">Runtime notes</h2>
       <ul>
         <li>
           TypeORM uses Node-only APIs (filesystem, native drivers). It does{" "}

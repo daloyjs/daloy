@@ -81,7 +81,7 @@ export default function Page() {
         caption="Postmark returns an ErrorCode rather than throwing, so the plugin checks ErrorCode === 0 and surfaces the MessageID as { id }. Pick the outbound or broadcast MessageStream per send."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Create a Postmark server under <strong>Servers → New server</strong>,
@@ -107,10 +107,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add postmark`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 POSTMARK_SERVER_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -118,7 +118,7 @@ POSTMARK_FROM="Acme <no-reply@acme.example.com>"
 POSTMARK_STREAM=outbound`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/postmark.ts
 import { ServerClient } from "postmark";
@@ -163,7 +163,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -200,7 +200,7 @@ app.route({
 });`}
       />
 
-      <h2>Server-side templates</h2>
+      <h2 id="server-side-templates">Server-side templates</h2>
       <p>
         Create a template in <strong>Templates</strong> (Mustachio syntax), then
         send it by <code>TemplateAlias</code>:
@@ -219,7 +219,7 @@ app.route({
 });`}
       />
 
-      <h2>Batch sending</h2>
+      <h2 id="batch-sending">Batch sending</h2>
       <p>
         Use <code>client.sendEmailBatch([...])</code> or{" "}
         <code>client.sendEmailBatchWithTemplates([...])</code> to send up to 500
@@ -227,7 +227,7 @@ app.route({
         message so you can inspect per-recipient errors.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>postmark</code> SDK currently uses <code>axios</code> under
         the hood, so it targets Node and Node-compatible runtimes (Bun,

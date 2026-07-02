@@ -98,7 +98,7 @@ export default function Page() {
         caption="DaloyJS is the resource server: jose verifies the RS256 token against your tenant's JWKS and enforces scopes or permissions. Auth0 owns login and is the only party that mints tokens."
       />
 
-      <h2>1. Configure an Auth0 API</h2>
+      <h2 id="1-configure-an-auth0-api">1. Configure an Auth0 API</h2>
       <ol>
         <li>
           In the Auth0 dashboard, go to{" "}
@@ -120,10 +120,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add jose`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 AUTH0_DOMAIN=dev-abc123.us.auth0.com
@@ -131,7 +131,7 @@ AUTH0_AUDIENCE=https://api.acme.example.com
 AUTH0_REQUIRED_SCOPE=read:items`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/auth0.ts
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
@@ -180,7 +180,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Guard a route</h2>
+      <h2 id="5-guard-a-route">5. Guard a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -207,7 +207,7 @@ app.route({
 });`}
       />
 
-      <h2>Permissions (RBAC)</h2>
+      <h2 id="permissions-rbac">Permissions (RBAC)</h2>
       <p>
         If you enabled <em>Add Permissions in the Access Token</em>, the JWT
         carries a <code>permissions</code> array. Tighten the overview&apos;s{" "}
@@ -227,7 +227,7 @@ app.route({
 }`}
       />
 
-      <h2>Auth0 Actions &amp; custom claims</h2>
+      <h2 id="auth0-actions-and-custom-claims">Auth0 Actions &amp; custom claims</h2>
       <p>
         Add custom claims through an{" "}
         <a
@@ -242,14 +242,14 @@ app.route({
         required for non-reserved claims to be included.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>jose</code> uses Web Crypto, so this setup runs on Node 18+, Bun,
         Deno, Cloudflare Workers, Vercel, and AWS Lambda. No need to swap
         libraries between environments.
       </p>
 
-      <h2>Notes</h2>
+      <h2 id="notes">Notes</h2>
       <ul>
         <li>
           The <code>iss</code> claim Auth0 issues includes a{" "}

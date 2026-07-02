@@ -111,7 +111,7 @@ export default function Page() {
         caption="The preset only disables the topology-dependent, browser-facing guards (top row). Every guard that protects the service from malformed input, confused dependencies, or compromised callers stays on. A one-time boot log names exactly what was disabled and what was kept."
       />
 
-      <h2>One line to switch posture</h2>
+      <h2 id="one-line-to-switch-posture">One line to switch posture</h2>
       <CodeBlock
         language="ts"
         code={`import { App } from "@daloyjs/core";
@@ -128,7 +128,7 @@ const app = new App({
         overwrite an explicit value.
       </p>
 
-      <h2>What the preset turns OFF</h2>
+      <h2 id="what-the-preset-turns-off">What the preset turns OFF</h2>
       <ul>
         <li>
           <strong>
@@ -162,7 +162,7 @@ const app = new App({
         </li>
       </ul>
 
-      <h2>What the preset KEEPS on (non-negotiable)</h2>
+      <h2 id="what-the-preset-keeps-on-non-negotiable">What the preset KEEPS on (non-negotiable)</h2>
       <p>
         Everything that protects the service itself from malformed input,
         confused dependencies, compromised callers, or operational mistakes
@@ -203,7 +203,7 @@ const app = new App({
         </li>
       </ul>
 
-      <h2>The threat model behind the preset</h2>
+      <h2 id="the-threat-model-behind-the-preset">The threat model behind the preset</h2>
       <p>
         &quot;Behind a firewall&quot; is a weaker guarantee than it used to be.
         Internal services are still reachable through SSRF from a compromised
@@ -226,7 +226,7 @@ const app = new App({
         master &quot;disable everything&quot; switch.
       </p>
 
-      <h2>Boot audit log</h2>
+      <h2 id="boot-audit-log">Boot audit log</h2>
       <p>
         Whenever the preset is applied, the framework emits a one-time{" "}
         <code>info</code> log under{" "}
@@ -264,7 +264,7 @@ const app = new App({
 }`}
       />
 
-      <h2>Introspecting the live posture</h2>
+      <h2 id="introspecting-the-live-posture">Introspecting the live posture</h2>
       <p>
         <code>app.getSecurityPosture()</code> returns a frozen snapshot of the
         resolved security configuration, useful for an internal{" "}
@@ -283,7 +283,7 @@ const app = new App({
 });`}
       />
 
-      <h2>When NOT to use the preset</h2>
+      <h2 id="when-not-to-use-the-preset">When NOT to use the preset</h2>
       <ul>
         <li>
           The service is reachable from a browser, even indirectly (BFF pattern,
@@ -303,7 +303,7 @@ const app = new App({
         </li>
       </ul>
 
-      <h2>Related</h2>
+      <h2 id="related">Related</h2>
       <ul>
         <li>
           <a href="/docs/security/secure-defaults">Secure-by-default</a>: the

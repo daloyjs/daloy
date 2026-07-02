@@ -120,7 +120,7 @@ export default function Page() {
         caption="The same pipeline underpins every Node platform below. Only the packaging and platform config differ; the build, release, and run stages stay the same."
       />
 
-      <h2>Node platforms</h2>
+      <h2 id="node-platforms">Node platforms</h2>
       <p>
         These providers all run the{" "}
         <Link href="/docs/adapters/node">Node adapter</Link>. What changes is
@@ -128,7 +128,7 @@ export default function Page() {
       </p>
       <Grid items={NODE_PLATFORMS} />
 
-      <h2>Production checklist</h2>
+      <h2 id="production-checklist">Production checklist</h2>
       <ul>
         <li>
           Set <code>NODE_ENV=production</code> so 5xx <code>detail</code> is
@@ -157,7 +157,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Docker (Node, distroless)</h2>
+      <h2 id="docker-node-distroless">Docker (Node, distroless)</h2>
       <CodeBlock
         language="dockerfile"
         code={`# syntax=docker/dockerfile:1
@@ -188,7 +188,7 @@ EXPOSE 3000
 CMD ["dist/server.js"]`}
       />
 
-      <h3>Signed images + SBOM attestation</h3>
+      <h3 id="signed-images-sbom-attestation">Signed images + SBOM attestation</h3>
       <p>
         <code>create-daloy --with-ci</code> ships a <code>deploy.yml</code>{" "}
         that, after every successful push to GHCR, resolves the immutable{" "}
@@ -230,7 +230,7 @@ cosign verify-attestation \\
   ghcr.io/<owner>/<repo>@sha256:<digest>`}
       />
 
-      <h2>Graceful shutdown</h2>
+      <h2 id="graceful-shutdown">Graceful shutdown</h2>
       <p>
         The Node adapter installs SIGTERM/SIGINT handlers by default. DaloyJS
         stops accepting new requests (returning 503) and waits up to{" "}
@@ -246,7 +246,7 @@ cosign verify-attestation \\
 await app.shutdown(15_000);`}
       />
 
-      <h2>Reverse proxy</h2>
+      <h2 id="reverse-proxy">Reverse proxy</h2>
       <p>
         If you sit behind nginx / Caddy / a load balancer / a PaaS edge
         (Railway, Render, Fly, Heroku), declare the proxy posture so DaloyJS
@@ -282,7 +282,7 @@ await app.shutdown(15_000);`}
         </li>
       </ul>
 
-      <h2>Edge / serverless REST APIs</h2>
+      <h2 id="edge-serverless-rest-apis">Edge / serverless REST APIs</h2>
       <p>
         DaloyJS can run on Vercel Functions, Cloudflare Workers, Netlify
         Functions, AWS Lambda, Fastly Compute, and Deno Deploy because the core

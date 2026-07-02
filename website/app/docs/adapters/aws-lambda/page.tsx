@@ -65,7 +65,7 @@ export default function Page() {
         caption="toLambdaHandler normalizes all three event shapes into one web-standard Request, runs app.fetch, then serializes the Response back into the Lambda result. Swap in toLambdaStreamHandler for SSE or large downloads."
       />
 
-      <h2>When to choose Lambda</h2>
+      <h2 id="when-to-choose-lambda">When to choose Lambda</h2>
       <ul>
         <li>You already run on AWS and want IAM-integrated invocation.</li>
         <li>You want per-request billing without managing a server.</li>
@@ -75,13 +75,13 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <p>
         The adapter ships with <code>@daloyjs/core</code>. For deployment, use
         AWS SAM, CDK, the Serverless Framework, or any IaC of your choice.
       </p>
 
-      <h2>Function URL or API Gateway HTTP API</h2>
+      <h2 id="function-url-or-api-gateway-http-api">Function URL or API Gateway HTTP API</h2>
       <CodeBlock
         language="ts"
         code={`// src/lambda.ts
@@ -91,7 +91,7 @@ import { app } from "./server.js";
 export const handler = toLambdaHandler(app);`}
       />
 
-      <h2>Streaming responses</h2>
+      <h2 id="streaming-responses">Streaming responses</h2>
       <p>
         Lambda supports response streaming via{" "}
         <code>awslambda.streamifyResponse</code>. Use the streaming variant of
@@ -108,7 +108,7 @@ export const handler = toLambdaStreamHandler(app);
 // equivalent to: awslambda.streamifyResponse(toLambdaHandler(app))`}
       />
 
-      <h2>SAM template</h2>
+      <h2 id="sam-template">SAM template</h2>
       <p>
         DaloyJS requires Node 24 LTS or Node 26+ (
         <code>engines.node: &quot;^24.0.0 || &gt;=26.0.0&quot;</code>). Use the
@@ -136,7 +136,7 @@ Resources:
         InvokeMode: BUFFERED   # or RESPONSE_STREAM for streaming`}
       />
 
-      <h2>Lambda Web Adapter (container deployments)</h2>
+      <h2 id="lambda-web-adapter-container-deployments">Lambda Web Adapter (container deployments)</h2>
       <p>
         If you prefer to ship a container image and keep the Node adapter, the{" "}
         <a
@@ -162,7 +162,7 @@ ENV PORT=8080 AWS_LWA_PORT=8080
 CMD ["node", "dist/server.js"]`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Callback-style handlers (
@@ -181,7 +181,7 @@ CMD ["node", "dist/server.js"]`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

@@ -40,7 +40,7 @@ export default function Page() {
         you eventually extract a module into its own service, the contract is already there.
       </p>
 
-      <h2>Mental model</h2>
+      <h2 id="mental-model">Mental model</h2>
       <ul>
         <li>
           <strong>Module</strong>: one bounded context (e.g. <code>catalog</code>,{" "}
@@ -57,7 +57,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Reference folder structure</h2>
+      <h2 id="reference-folder-structure">Reference folder structure</h2>
       <p>
         This is the layout we recommend for new projects. <code>create-daloy</code> can scaffold a
         small version of it, and it scales cleanly from one module to dozens.
@@ -133,7 +133,7 @@ generated/                   # Hey API typed client output
 `}
       />
 
-      <h2>Module dependency rules</h2>
+      <h2 id="module-dependency-rules">Module dependency rules</h2>
       <p>
         The whole point of a modular monolith is that the rules are <em>enforceable</em>, not just
         documented. There are only three rules and a linter can keep you honest.
@@ -191,7 +191,7 @@ generated/                   # Hey API typed client output
 `}
       />
 
-      <h2>Anatomy of a module</h2>
+      <h2 id="anatomy-of-a-module">Anatomy of a module</h2>
       <p>
         A module is just a DaloyJS plugin. The folder structure is what gives it long-term shape;
         the framework only cares about the <code>register()</code> function in{" "}
@@ -227,7 +227,7 @@ export const catalogModule = {
         an <code>operationId</code> in seconds.
       </p>
 
-      <h2>Public contracts: how modules talk</h2>
+      <h2 id="public-contracts-how-modules-talk">Public contracts: how modules talk</h2>
       <p>
         Every module has a <code>contracts/public.ts</code>. It is the only file other modules are
         allowed to import. Treat it like a public package boundary inside your monorepo.
@@ -254,7 +254,7 @@ export type Book = z.infer<typeof Book>;`}
         already validated.
       </p>
 
-      <h2>Cross-module calls without coupling</h2>
+      <h2 id="cross-module-calls-without-coupling">Cross-module calls without coupling</h2>
       <p>
         When <code>orders</code> needs a book, it does <em>not</em> import <code>BookRepo</code>.
         It calls catalog through the same <Link href="/docs/typed-client">typed client</Link>{" "}
@@ -285,7 +285,7 @@ export async function placeOrder(input: { bookId: string; userId: string }) {
         day you extract catalog into a separate service, the only change in orders is a base URL.
       </p>
 
-      <h2>Wiring modules into the app</h2>
+      <h2 id="wiring-modules-into-the-app">Wiring modules into the app</h2>
       <p>
         Keep registration explicit and ordered. A single list is far easier to review than
         auto-discovery, and it makes startup deterministic across runtimes.
@@ -327,7 +327,7 @@ registerModules(app);
 await app.ready();`}
       />
 
-      <h2>Enforcing boundaries with the linter</h2>
+      <h2 id="enforcing-boundaries-with-the-linter">Enforcing boundaries with the linter</h2>
       <p>
         Documentation drifts. Tooling does not. Add an{" "}
         <code>eslint-plugin-import</code> rule that bans the patterns the architecture forbids.
@@ -360,7 +360,7 @@ await app.ready();`}
 }`}
       />
 
-      <h2>Testing layout</h2>
+      <h2 id="testing-layout">Testing layout</h2>
       <p>
         Tests follow the module boundary. Each module owns its unit and integration tests; the
         repository keeps a small top-level <code>tests/contract</code> suite that runs against the
@@ -374,7 +374,7 @@ tests/contract/openapi.spec.ts             # diff-against-frozen-snapshot
 tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
       />
 
-      <h2>Scaling the monolith</h2>
+      <h2 id="scaling-the-monolith">Scaling the monolith</h2>
       <p>
         Most teams never need to leave this layout. When you do, usually because one module needs
         independent scaling, a different runtime, or a separate on-call rotation, the path is
@@ -403,7 +403,7 @@ tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
         configuration change rather than an architectural rewrite.
       </p>
 
-      <h2>Anti-patterns to avoid</h2>
+      <h2 id="anti-patterns-to-avoid">Anti-patterns to avoid</h2>
       <ul>
         <li>
           <strong>Reaching into another module&apos;s <code>domain/</code> or <code>infra/</code>.
@@ -432,7 +432,7 @@ tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
         </li>
       </ul>
 
-      <h2>Where to next</h2>
+      <h2 id="where-to-next">Where to next</h2>
       <ul>
         <li>
           <Link href="/docs/plugins">Plugins & encapsulation</Link>: the primitive every module is

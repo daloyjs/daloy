@@ -74,7 +74,7 @@ export default function Page() {
         caption="On success you get a typed config object. On failure defineConfig() aggregates every issue into one ConfigValidationError and exits before the server binds a port."
       />
 
-      <h2>Quick start (from the environment)</h2>
+      <h2 id="quick-start-from-the-environment">Quick start (from the environment)</h2>
       <p>
         By default <code>defineConfig()</code> reads from{" "}
         <code>process.env</code>. The result is fully typed from your schema.
@@ -105,7 +105,7 @@ export const config = await defineConfig({ schema: Config });
   - DATABASE_URL: Invalid URL`}
       />
 
-      <h2>Use the validated config</h2>
+      <h2 id="use-the-validated-config">Use the validated config</h2>
       <p>
         Load configuration before constructing the app, then pass the typed
         values into DaloyJS options and your runtime adapter:
@@ -125,7 +125,7 @@ const app = new App({
 serve(app, { port: config.PORT });`}
       />
 
-      <h2>Choosing a source</h2>
+      <h2 id="choosing-a-source">Choosing a source</h2>
       <p>
         The <code>source</code> option selects where the raw object comes from.
         The built-in sources are intentionally narrow; anything more elaborate
@@ -191,7 +191,7 @@ await defineConfig({
 });`}
       />
 
-      <h2>Transforming before validation</h2>
+      <h2 id="transforming-before-validation">Transforming before validation</h2>
       <p>
         Use <code>transform</code> to coerce or rename raw values before they
         hit the schema, for example mapping <code>FOO_BAR</code> to{" "}
@@ -209,7 +209,7 @@ await defineConfig({
 });`}
       />
 
-      <h2>Handling the error programmatically</h2>
+      <h2 id="handling-the-error-programmatically">Handling the error programmatically</h2>
       <p>
         On failure, <code>defineConfig()</code> throws a{" "}
         <code>ConfigValidationError</code> whose <code>issues</code> array holds

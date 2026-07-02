@@ -75,7 +75,7 @@ export default function Page() {
         caption="The meta block is the one place you author examples. Daloy validates them against your schemas, then surfaces the same payload into OpenAPI and the AI dump that codegen agents consume."
       />
 
-      <h2>Author examples</h2>
+      <h2 id="author-examples">Author examples</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import { z } from "zod";
@@ -120,7 +120,7 @@ app.route({
 });`}
       />
 
-      <h2>Shape of a meta block</h2>
+      <h2 id="shape-of-a-meta-block">Shape of a meta block</h2>
       <ul>
         <li>
           <code>summary</code> / <code>description</code> / <code>tags</code>: 
@@ -140,7 +140,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Build-time validation</h2>
+      <h2 id="build-time-validation">Build-time validation</h2>
       <p>
         Run <code>pnpm daloy inspect --check</code> (or call{" "}
         <code>runContractTests(app)</code> from your tests). For every named
@@ -163,7 +163,7 @@ app.route({
         a sample that does not match its schema.
       </p>
 
-      <h2>OpenAPI surfacing</h2>
+      <h2 id="openapi-surfacing">OpenAPI surfacing</h2>
       <p>
         The same shape is folded into the generated OpenAPI 3.1 document so
         Swagger UI, Scalar, and Hey API see your examples without any extra
@@ -208,7 +208,7 @@ app.route({
 }`}
       />
 
-      <h2>
+      <h2 id="daloy-inspect-ai">
         <code>daloy inspect --ai</code>
       </h2>
       <p>
@@ -257,7 +257,7 @@ pnpm daloy inspect --ai --tag Books`}
 }`}
       />
 
-      <h2>YAML output</h2>
+      <h2 id="yaml-output">YAML output</h2>
       <p>
         Both <code>--ai</code> and <code>--openapi</code> accept{" "}
         <code>--yaml</code> (shorthand) or <code>--format yaml</code>. The
@@ -317,7 +317,7 @@ routes:
         YAML when humans or LLMs will read the file directly.
       </p>
 
-      <h2>Consuming the dump</h2>
+      <h2 id="consuming-the-dump">Consuming the dump</h2>
       <p>
         The dump is intentionally a flat JSON file with no DaloyJS runtime
         coupling. Feed it directly to:

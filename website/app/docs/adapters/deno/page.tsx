@@ -53,7 +53,7 @@ export default function Page() {
         caption="serve() drives the stable Deno.serve and threads an AbortController signal through for graceful shutdown. The same src/server.ts runs locally and on Deno Deploy."
       />
 
-      <h2>When to choose Deno</h2>
+      <h2 id="when-to-choose-deno">When to choose Deno</h2>
       <ul>
         <li>
           You want a web-standard runtime with TypeScript built in and no
@@ -69,7 +69,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Scaffold</h2>
+      <h2 id="scaffold">Scaffold</h2>
       <p>
         The <code>deno-basic</code> template ships a Deno-native server with a{" "}
         <code>deno.json</code> import map, watch-mode dev, and{" "}
@@ -82,7 +82,7 @@ cd my-api
 deno task dev    # deno run --allow-net --allow-env --allow-read --watch`}
       />
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <p>
         <code>@daloyjs/core</code> is published to npm. Deno can consume it
         directly via the <code>npm:</code> specifier. This is the same
@@ -101,7 +101,7 @@ deno task dev    # deno run --allow-net --allow-env --allow-read --watch`}
 }`}
       />
 
-      <h2>Minimal server</h2>
+      <h2 id="minimal-server">Minimal server</h2>
       <CodeBlock
         language="ts"
         code={`// src/server.ts
@@ -125,13 +125,13 @@ Deno.addSignalListener("SIGTERM", () => ac.abort());
 Deno.addSignalListener("SIGINT", () => ac.abort());`}
       />
 
-      <h2>Run it</h2>
+      <h2 id="run-it">Run it</h2>
       <CodeBlock
         language="bash"
         code={`deno run --allow-net --allow-env --allow-read src/server.ts`}
       />
 
-      <h2>Deploy to Deno Deploy</h2>
+      <h2 id="deploy-to-deno-deploy">Deploy to Deno Deploy</h2>
       <p>
         Deno Deploy reads the entry script directly. Point your project at{" "}
         <code>src/server.ts</code>; the same file you run locally is what runs
@@ -146,7 +146,7 @@ deno install -gArf jsr:@deno/deployctl
 deployctl deploy --project=my-api src/server.ts`}
       />
 
-      <h2>Dockerfile</h2>
+      <h2 id="dockerfile">Dockerfile</h2>
       <CodeBlock
         language="docker"
         code={`FROM denoland/deno:distroless
@@ -156,7 +156,7 @@ EXPOSE 3000
 CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/server.ts"]`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Don&apos;t use <code>Deno.serveHttp</code>: it&apos;s deprecated. The
@@ -173,7 +173,7 @@ CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/server.ts"]`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

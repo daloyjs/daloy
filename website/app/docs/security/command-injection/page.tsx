@@ -59,7 +59,7 @@ export default function Page() {
         handlers you write don&apos;t reintroduce the bug.
       </p>
 
-      <h2>What Daloy already does for you</h2>
+      <h2 id="what-daloy-already-does-for-you">What Daloy already does for you</h2>
       <table>
         <thead>
           <tr>
@@ -132,7 +132,7 @@ export default function Page() {
         do need to invoke an external program from a Daloy route.
       </p>
 
-      <h2>
+      <h2 id="the-safe-shape-execfile-spawn-no-shell">
         The safe shape: <code>execFile</code> / <code>spawn</code>, no shell
       </h2>
       <p>
@@ -220,7 +220,7 @@ app.route({
         which would simply fail to open a file by that name. No shell ever runs.
       </p>
 
-      <h2>Anti-patterns to grep for</h2>
+      <h2 id="anti-patterns-to-grep-for">Anti-patterns to grep for</h2>
       <p>
         These are the patterns the Aikido write-up keeps finding in compromised
         packages. Wire them into a CI grep (or Semgrep / CodeQL) on your own
@@ -258,7 +258,7 @@ git grep -nE 'require\\(["'\\\\'']child_process["'\\\\'']\\)|from\\s+["'\\\\'']n
         file rather than turning the gate off for the whole repo.
       </p>
 
-      <h2>Windows footgun: BatBadBut (CVE-2024-27980)</h2>
+      <h2 id="windows-footgun-batbadbut-cve-2024-27980">Windows footgun: BatBadBut (CVE-2024-27980)</h2>
       <p>
         Node.js 21.7.2+ ships the fix for{" "}
         <a
@@ -280,7 +280,7 @@ git grep -nE 'require\\(["'\\\\'']child_process["'\\\\'']\\)|from\\s+["'\\\\'']n
         <code>shell: true</code>.
       </p>
 
-      <h2>When you really do need a shell</h2>
+      <h2 id="when-you-really-do-need-a-shell">When you really do need a shell</h2>
       <p>
         Sometimes you genuinely need pipes, globs, or output redirection. The
         safe pattern is to write the script as a real file on disk (or check it
@@ -302,7 +302,7 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
         build a shell string.
       </p>
 
-      <h2>Defense in depth</h2>
+      <h2 id="defense-in-depth">Defense in depth</h2>
       <ul>
         <li>
           <strong>Drop privileges.</strong> Run the Node process as a non-root
@@ -334,7 +334,7 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
         </li>
       </ul>
 
-      <h2>Reporting</h2>
+      <h2 id="reporting">Reporting</h2>
       <p>
         Found a command-injection-shaped weakness in Daloy itself (e.g. a CLI or
         scaffolder that interpolates user input into a spawn call, or a

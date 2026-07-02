@@ -51,7 +51,7 @@ export default function Page() {
         caption="serve() hands your app to the native Bun.serve so routing stays owned by DaloyJS. Bun's built-in routes option is intentionally unused to keep the same REST API portable across runtimes."
       />
 
-      <h2>When to choose Bun</h2>
+      <h2 id="when-to-choose-bun">When to choose Bun</h2>
       <ul>
         <li>
           You want startup measured in milliseconds and lower per-request
@@ -64,7 +64,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Scaffold</h2>
+      <h2 id="scaffold">Scaffold</h2>
       <p>
         The <code>bun-basic</code> template ships a Bun-native server with{" "}
         <code>bun test</code> and Hey&nbsp;API codegen.
@@ -76,10 +76,10 @@ cd my-api
 pnpm dev    # daloy dev --runtime bun (hot-reload)`}
       />
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <CodeBlock language="bash" code={`bun add @daloyjs/core`} />
 
-      <h2>Minimal server</h2>
+      <h2 id="minimal-server">Minimal server</h2>
       <CodeBlock
         language="ts"
         code={`// src/server.ts
@@ -98,10 +98,10 @@ const handle = serve(app, {
 console.log("listening on " + handle.url);`}
       />
 
-      <h2>Hot reload in dev</h2>
+      <h2 id="hot-reload-in-dev">Hot reload in dev</h2>
       <CodeBlock language="bash" code={`bun --hot src/server.ts`} />
 
-      <h2>Dockerfile</h2>
+      <h2 id="dockerfile">Dockerfile</h2>
       <CodeBlock
         language="docker"
         code={`FROM oven/bun:1.2-slim AS build
@@ -118,7 +118,7 @@ EXPOSE 3000
 CMD ["dist/server.js"]`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           <code>idleTimeout</code> is in <strong>seconds</strong>, capped at
@@ -135,7 +135,7 @@ CMD ["dist/server.js"]`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

@@ -56,7 +56,7 @@ export default function Page() {
         <strong>ᜇᜎᜓᜌ᜔</strong>. See <Link href="/about-the-name">About the name</Link> for the short version.
       </p>
 
-      <h2>Why another framework?</h2>
+      <h2 id="why-another-framework">Why another framework?</h2>
       <p>
         Each existing stack is excellent at one thing and forces trade-offs everywhere else.
         DaloyJS combines the best ideas without the lock-in:
@@ -70,7 +70,7 @@ export default function Page() {
         <li>Supply-chain-hardened installs and publishing via pnpm plus hardened repo defaults.</li>
       </ul>
 
-      <h2>The 30-second taste</h2>
+      <h2 id="the-30-second-taste">The 30-second taste</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import { z } from "zod";
@@ -142,7 +142,7 @@ serve(app, { port: 3000 });`}
         <li>An entry in <code>app.introspect()</code> for tooling and contract tests.</li>
       </ul>
 
-      <h2>Where to next?</h2>
+      <h2 id="where-to-next">Where to next?</h2>
       <ul>
         <li><Link href="/docs/installation">Installation</Link>: get DaloyJS into your project.</li>
         <li><Link href="/docs/getting-started">Getting started</Link>: your first server in 5 minutes.</li>

@@ -42,7 +42,7 @@ export default function Page() {
         <code>SignatureValidator</code> helper for signed webhooks.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>Right package, please.</strong> The new SDK is{" "}
@@ -79,7 +79,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Sign up at{" "}
@@ -103,10 +103,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add mollie-api-typescript`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 MOLLIE_API_KEY=test_replace_me              # or live_...
@@ -114,7 +114,7 @@ MOLLIE_WEBHOOK_SECRET=whsec_replace_me      # from Developers \u2192 Webhooks
 APP_URL=https://your-app.example.com`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/mollie.ts
 import { Client, SignatureValidator, InvalidSignatureException } from "mollie-api-typescript";
@@ -203,7 +203,7 @@ declare module "@daloyjs/core" {
         JSON will reorder fields and break the signature.
       </p>
 
-      <h2>5. Create a payment</h2>
+      <h2 id="5-create-a-payment">5. Create a payment</h2>
       <SequenceDiagram
         title="Redirect payment flow"
         participants={["Shopper", "DaloyJS route", "Mollie"]}
@@ -291,7 +291,7 @@ app.route({
 });`}
       />
 
-      <h2>6. Webhook</h2>
+      <h2 id="6-webhook">6. Webhook</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Mollie", "DaloyJS route"]}
@@ -372,7 +372,7 @@ app.route({
 });`}
       />
 
-      <h2>7. Refunds, captures, and cancellation</h2>
+      <h2 id="7-refunds-captures-and-cancellation">7. Refunds, captures, and cancellation</h2>
       <CodeBlock
         code={`// Full refund
 await state.mollie.raw.refunds.create({
@@ -395,7 +395,7 @@ await state.mollie.raw.captures.create({
 await state.mollie.raw.payments.cancel({ paymentId: "tr_xxx" });`}
       />
 
-      <h2>Pagination</h2>
+      <h2 id="pagination">Pagination</h2>
       <p>
         List endpoints return async iterables, let <code>for await</code> walk
         the pages for you:
@@ -409,7 +409,7 @@ for await (const page of pages) {
 }`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The SDK is built on the Fetch API and ships ESM + CJS, so it runs on
         Node 18+, Cloudflare Workers, Vercel, Bun, and Deno without adapters.
@@ -418,7 +418,7 @@ for await (const page of pages) {
         and works in every modern runtime.
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Mollie returns RFC-7807-shaped problem details. Catch{" "}
         <code>errors.ErrorResponse</code> and map it through{" "}
@@ -438,7 +438,7 @@ try {
 }`}
       />
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>Use the TypeScript SDK over the JS client.</strong>{" "}

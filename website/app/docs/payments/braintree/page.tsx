@@ -53,7 +53,7 @@ export default function Page() {
         .
       </p>
 
-      <h2>Pick the right Braintree SDK</h2>
+      <h2 id="pick-the-right-braintree-sdk">Pick the right Braintree SDK</h2>
       <p>
         Braintree ships two server SDKs and PayPal ships a third. Don&apos;t mix
         them up:
@@ -86,7 +86,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Sign up for a{" "}
@@ -119,14 +119,14 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add braintree`} />
       <p>
         The package bundles its own TypeScript declarations, no{" "}
         <code>@types/braintree</code> needed.
       </p>
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 BRAINTREE_ENVIRONMENT=sandbox          # or "production"
@@ -141,7 +141,7 @@ BRAINTREE_PRIVATE_KEY=use_your_private_key`}
         browser&rdquo;. Keep both out of client bundles.
       </p>
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/braintree.ts
 import braintree, { BraintreeGateway, Environment } from "braintree";
@@ -228,7 +228,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Generate a client token</h2>
+      <h2 id="5-generate-a-client-token">5. Generate a client token</h2>
       <p>
         Your browser SDK (Drop-in, Hosted Fields, Fastlane) needs a fresh client
         token to talk to Braintree. Pass an optional <code>customerId</code> so
@@ -260,7 +260,7 @@ app.route({
 });`}
       />
 
-      <h2>6. Create a transaction</h2>
+      <h2 id="6-create-a-transaction">6. Create a transaction</h2>
       <p>
         Once the browser SDK returns a <code>paymentMethodNonce</code> (and, for
         fraud scoring,{" "}
@@ -314,7 +314,7 @@ app.route({
         only do it manually if you wrote your own subscription engine.
       </p>
 
-      <h2>7. Receive and verify webhooks</h2>
+      <h2 id="7-receive-and-verify-webhooks">7. Receive and verify webhooks</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Braintree", "DaloyJS route", "Your queue"]}
@@ -395,7 +395,7 @@ app.route({
         the work in a background job and return 200 fast.
       </p>
 
-      <h2>Errors &amp; result objects</h2>
+      <h2 id="errors-and-result-objects">Errors &amp; result objects</h2>
       <p>
         The SDK doesn&apos;t throw on declined transactions, it resolves with{" "}
         <code>result.success === false</code> and details under{" "}
@@ -407,7 +407,7 @@ app.route({
         network failures the SDK throws an exception directly.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>braintree</code> package uses Node&apos;s <code>http</code>/
         <code>https</code> modules and reads cert/key files from disk on init.
@@ -426,7 +426,7 @@ app.route({
         private key).
       </p>
 
-      <h2>Deprecation policy</h2>
+      <h2 id="deprecation-policy">Deprecation policy</h2>
       <p>
         Braintree publishes a{" "}
         <a

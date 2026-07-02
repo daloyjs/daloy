@@ -71,10 +71,10 @@ export default function Page() {
         caption="Because Zod implements Standard Schema, DaloyJS reuses one schema for runtime validation, handler type inference, and the OpenAPI document. No adapter, no second source of truth."
       />
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <CodeBlock code={`pnpm add @daloyjs/core zod`} />
 
-      <h2>What gets validated</h2>
+      <h2 id="what-gets-validated">What gets validated</h2>
       <p>For each route you can declare schemas for:</p>
       <ul>
         <li>
@@ -99,7 +99,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>A complete route</h2>
+      <h2 id="a-complete-route">A complete route</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import { z } from "zod";
@@ -162,7 +162,7 @@ export const app = new App().route({
         <code>message</code> records.
       </p>
 
-      <h2>Zod coercion for strings</h2>
+      <h2 id="zod-coercion-for-strings">Zod coercion for strings</h2>
       <p>
         Path params, query values, headers, and urlencoded form values arrive as
         strings before schema validation. Use Zod coercion or transforms when
@@ -179,7 +179,7 @@ export const app = new App().route({
 });`}
       />
 
-      <h2>Body limits and content types</h2>
+      <h2 id="body-limits-and-content-types">Body limits and content types</h2>
       <p>
         When a route declares <code>request.body</code>, DaloyJS will also
         enforce:
@@ -229,7 +229,7 @@ export const app = new App().route({
 });`}
       />
 
-      <h2>Response validation</h2>
+      <h2 id="response-validation">Response validation</h2>
       <p>
         When a response schema is declared, DaloyJS validates the handler return
         before serializing it. Zod object schemas strip unknown keys by default,
@@ -258,7 +258,7 @@ app.route({
 });`}
       />
 
-      <h2>Type inference</h2>
+      <h2 id="type-inference">Type inference</h2>
       <p>
         The handler context is fully typed: <code>body</code>,{" "}
         <code>params</code>, <code>query</code>, and <code>headers</code> are
@@ -278,7 +278,7 @@ const Book = z.object({
 export type Book = z.infer<typeof Book>;`}
       />
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <a href="/docs/validation">Validation overview</a>: how validators

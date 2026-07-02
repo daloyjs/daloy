@@ -287,7 +287,7 @@ export function DocsPageCopyButton() {
         className="h-11 shrink-0 rounded-xl border border-taupe-200/80 bg-taupe-50/75 px-4 text-[11px] tracking-[0.22em] text-taupe-950 shadow-sm hover:bg-taupe-100/70 dark:border-taupe-900/70 dark:bg-taupe-950/20 dark:text-taupe-100 dark:hover:bg-taupe-950/35 dim:border-taupe-900/60 dim:bg-taupe-950/18 dim:text-taupe-100 sm:text-xs"
       >
         <Icon className="size-3.5" weight="bold" />
-        <span>{label}</span>
+        <span className="hidden sm:inline">{label}</span>
       </Button>
 
       {message ? (

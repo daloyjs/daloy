@@ -86,7 +86,7 @@ export default function Page() {
         caption="Pick a target with --template. Every starter ships the same guardrail-first posture and scripts, only the runtime adapter and config differ."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="bash"
         code={`# pick the package manager you actually use
@@ -124,13 +124,13 @@ bun  create daloy           my-api`}
         caption="When you omit flags the CLI prompts for each choice in order. Pass --yes to accept every default and skip the prompts entirely. Defaults are pnpm, node-basic, no pnpm install, the GitHub security bundle enabled, and the deploy starter enabled with it."
       />
 
-      <h2>Non-interactive usage</h2>
+      <h2 id="non-interactive-usage">Non-interactive usage</h2>
       <CodeBlock
         language="bash"
         code="pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security --install --git"
       />
 
-      <h3>Flags</h3>
+      <h3 id="flags">Flags</h3>
       <ul>
         <li>
           <code>--template &lt;name&gt;</code>: <code>node-basic</code>{" "}
@@ -183,7 +183,7 @@ bun  create daloy           my-api`}
         </li>
       </ul>
 
-      <h3>Missing-tool hints</h3>
+      <h3 id="missing-tool-hints">Missing-tool hints</h3>
       <p>
         Before printing the completion summary, the CLI checks whether the
         runtime and package manager your selections actually need are on your{" "}
@@ -211,13 +211,13 @@ bun  create daloy           my-api`}
         printed.
       </p>
 
-      <h2>Templates</h2>
+      <h2 id="templates">Templates</h2>
       <p>
         Run <code>create-daloy --list-templates</code> to inspect the available
         starters without creating a project.
       </p>
 
-      <h3>
+      <h3 id="node-basic">
         <code>node-basic</code>
       </h3>
       <p>
@@ -237,7 +237,7 @@ bun  create daloy           my-api`}
         constructor to switch to Swagger UI instead.
       </p>
 
-      <h3>
+      <h3 id="cloudflare-worker">
         <code>cloudflare-worker</code>
       </h3>
       <p>
@@ -248,7 +248,7 @@ bun  create daloy           my-api`}
         Zod-validated route exposed as <code>fetch</code>.
       </p>
 
-      <h3>
+      <h3 id="vercel">
         <code>vercel</code>
       </h3>
       <p>
@@ -269,7 +269,7 @@ bun  create daloy           my-api`}
         automatically.
       </p>
 
-      <h3>
+      <h3 id="bun-basic">
         <code>bun-basic</code>
       </h3>
       <p>
@@ -287,7 +287,7 @@ bun  create daloy           my-api`}
         <code>bun run gen:openapi</code> +<code>bun run gen:client</code>.
       </p>
 
-      <h3>
+      <h3 id="deno-basic">
         <code>deno-basic</code>
       </h3>
       <p>
@@ -306,7 +306,7 @@ bun  create daloy           my-api`}
         <code>package.json</code> to patch.
       </p>
 
-      <h2>Minimal scaffolds</h2>
+      <h2 id="minimal-scaffolds">Minimal scaffolds</h2>
       <p>
         Pass <code>--minimal</code> to drop the bookstore demo route and the
         built-in <code>/docs</code> + <code>/openapi.json</code> API docs routes
@@ -326,7 +326,7 @@ bun  create daloy           my-api`}
         later, or delete the marked blocks by hand.
       </p>
 
-      <h2>Hardened CI/security bundle</h2>
+      <h2 id="hardened-ci-security-bundle">Hardened CI/security bundle</h2>
       <p>
         Pass <code>--with-ci</code> when the new project should start with
         GitHub-side supply-chain guardrails as well as runtime defaults.
@@ -355,7 +355,7 @@ bun  create daloy           my-api`}
         starter.
       </p>
 
-      <h2>Editor MCP integration</h2>
+      <h2 id="editor-mcp-integration">Editor MCP integration</h2>
       <p>
         Every scaffold ships a <code>.vscode/mcp.json</code> that wires VS Code
         (and other MCP-aware editors) to the DaloyJS documentation MCP server at{" "}
@@ -382,7 +382,7 @@ bun  create daloy           my-api`}
         depend on it at runtime.
       </p>
 
-      <h2>Which template should I choose?</h2>
+      <h2 id="which-template-should-i-choose">Which template should I choose?</h2>
       <ul>
         <li>
           Choose <code>node-basic</code> for a traditional REST API on Node,
@@ -415,7 +415,7 @@ bun  create daloy           my-api`}
         </li>
       </ul>
 
-      <h2>Why a generator?</h2>
+      <h2 id="why-a-generator">Why a generator?</h2>
       <p>
         DaloyJS is a backend framework, so the first ten minutes matter. The
         scaffolder gives every project the same guardrail-first posture, the
@@ -439,7 +439,7 @@ bun  create daloy           my-api`}
         has to assemble by hand.
       </p>
 
-      <h2>Next</h2>
+      <h2 id="next">Next</h2>
       <p>
         After scaffolding, jump straight to{" "}
         <Link href="/docs/getting-started">Getting started</Link> for the route

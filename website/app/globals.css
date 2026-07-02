@@ -414,6 +414,15 @@
   .docs-prose blockquote {
     @apply border-l-2 border-border pl-4 text-muted-foreground italic;
   }
+
+  /* Hover "#" deep-link injected next to h2/h3 headings by <DocsToc>. */
+  .docs-prose .heading-anchor {
+    @apply ms-2 font-normal text-muted-foreground no-underline opacity-0 transition-opacity hover:text-primary focus-visible:opacity-100;
+  }
+
+  .docs-prose :is(h2, h3):hover .heading-anchor {
+    @apply opacity-100;
+  }
 }
 
 /* ---------- Flow / landing page motion ---------- */

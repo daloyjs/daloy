@@ -90,10 +90,10 @@ export default function Page() {
         caption="The auth endpoints are Better Auth's own Request to Response handler. Normal DaloyJS API routes read the current session from request headers and enforce application authorization."
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock code={`pnpm add better-auth`} />
 
-      <h2>2. Create the auth instance</h2>
+      <h2 id="2-create-the-auth-instance">2. Create the auth instance</h2>
       <p>
         Configure Better Auth once and export the instance. Use the database
         adapter that matches your app. The example below keeps the database
@@ -120,14 +120,14 @@ export const auth = betterAuth({
 });`}
       />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=replace-with-at-least-32-random-bytes`}
       />
 
-      <h2>4. Mount Better Auth routes</h2>
+      <h2 id="4-mount-better-auth-routes">4. Mount Better Auth routes</h2>
       <p>
         Better Auth owns all routes below <code>/api/auth/*</code>. Return the
         raw <code>Response</code> from a <code>beforeHandle</code> hook so
@@ -177,7 +177,7 @@ app.route({
 });`}
       />
 
-      <h2>5. Protect DaloyJS routes</h2>
+      <h2 id="5-protect-daloyjs-routes">5. Protect DaloyJS routes</h2>
       <p>
         Use <code>auth.api.getSession(&#123; headers &#125;)</code> inside
         middleware. This keeps normal DaloyJS routes contract-first while Better
@@ -246,7 +246,7 @@ app.route({
 });`}
       />
 
-      <h2>Client usage</h2>
+      <h2 id="client-usage">Client usage</h2>
       <p>
         Browser apps use Better Auth&apos;s client. Point <code>baseURL</code>{" "}
         at the same origin or public API origin that serves your DaloyJS app.
@@ -265,7 +265,7 @@ await authClient.signIn.email({
 });`}
       />
 
-      <h2>Runtime fit</h2>
+      <h2 id="runtime-fit">Runtime fit</h2>
       <table>
         <thead>
           <tr>
@@ -310,7 +310,7 @@ await authClient.signIn.email({
         </tbody>
       </table>
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <FlowDiagram
         title="Secure deployment checklist"
         numbered

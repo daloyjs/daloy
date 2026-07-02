@@ -60,7 +60,7 @@ export default function Page() {
         caption="Edge and Functions v2 both speak Request → Response, so they share toWebHandler; only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2."
       />
 
-      <h2>When to choose Netlify</h2>
+      <h2 id="when-to-choose-netlify">When to choose Netlify</h2>
       <ul>
         <li>
           You want a platform-managed REST API with Edge or Node function
@@ -70,7 +70,7 @@ export default function Page() {
         <li>You&apos;re fine with platform-managed cold starts.</li>
       </ul>
 
-      <h2>Netlify Edge Functions (Deno)</h2>
+      <h2 id="netlify-edge-functions-deno">Netlify Edge Functions (Deno)</h2>
       <p>
         Edge Functions run on a Deno-based runtime. Use{" "}
         <code>toWebHandler</code>, the same helper as the Vercel adapter,
@@ -90,7 +90,7 @@ export const config: Config = {
 };`}
       />
 
-      <h2>Netlify Functions v2 (Node, fetch-style)</h2>
+      <h2 id="netlify-functions-v2-node-fetch-style">Netlify Functions v2 (Node, fetch-style)</h2>
       <p>
         Functions v2 is GA and is the recommended way to write Node functions on
         Netlify. The old v1 lambda-style handler (
@@ -124,7 +124,7 @@ import { app } from "../../src/server.js";
 export const handler = toLambdaHandler(app);`}
       />
 
-      <h2>netlify.toml</h2>
+      <h2 id="netlify-toml">netlify.toml</h2>
       <p>
         For a REST-API-only project there is no static site to publish. Omit the{" "}
         <code>publish</code> key (or point it at an empty directory) so Netlify
@@ -144,7 +144,7 @@ export const handler = toLambdaHandler(app);`}
   path = "/api/*"`}
       />
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <CodeBlock
         language="bash"
         code={`pnpm netlify dev
@@ -152,7 +152,7 @@ pnpm netlify deploy --build
 pnpm netlify deploy --build --prod`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Edge Functions don&apos;t expose <code>node:*</code>, the same
@@ -169,7 +169,7 @@ pnpm netlify deploy --build --prod`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

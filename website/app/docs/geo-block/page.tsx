@@ -91,7 +91,7 @@ export default function Page() {
         caption="Deny is evaluated first, then the allow-list gate. An unresolved country fails closed when an allow-list is configured and fails open for deny-only setups, both overridable with allowUnknownCountry. A blocked request returns 403 without echoing the country."
       />
 
-      <h2>Strategy 1: bring your own IP → country lookup</h2>
+      <h2 id="strategy-1-bring-your-own-ip-country-lookup">Strategy 1: bring your own IP → country lookup</h2>
       <p>
         Use any GeoIP reader as an operator dependency. Daloy resolves the
         client IP and hands it to <code>lookupCountry</code>; return an ISO
@@ -118,7 +118,7 @@ app.use(
 );`}
       />
 
-      <h2>Strategy 2: read an edge-injected country header</h2>
+      <h2 id="strategy-2-read-an-edge-injected-country-header">Strategy 2: read an edge-injected country header</h2>
       <p>
         If your app runs behind a CDN or platform that already geolocates the
         request, skip the IP lookup entirely and read the header. No proxy-trust
@@ -136,7 +136,7 @@ app.use(
 );`}
       />
 
-      <h2>Deployment-platform country headers</h2>
+      <h2 id="deployment-platform-country-headers">Deployment-platform country headers</h2>
       <p>
         Most edges expose the resolved country as a request header, which makes{" "}
         <code>resolveCountry</code> a one-liner. Common values:
@@ -164,7 +164,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         treated as an unknown country unless you list them explicitly.
       </p>
 
-      <h2>Allow-list vs. deny-list semantics</h2>
+      <h2 id="allow-list-vs-deny-list-semantics">Allow-list vs. deny-list semantics</h2>
       <ul>
         <li>
           <strong>deny</strong>: listed countries are always rejected; a deny
@@ -185,7 +185,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         silently never matching.
       </p>
 
-      <h2>Unknown countries</h2>
+      <h2 id="unknown-countries">Unknown countries</h2>
       <p>
         When the country can&apos;t be resolved (no IP, no mapping, empty
         header), the default is:
@@ -203,7 +203,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         Override either way with <code>allowUnknownCountry</code>.
       </p>
 
-      <h2>Monitoring before enforcing</h2>
+      <h2 id="monitoring-before-enforcing">Monitoring before enforcing</h2>
       <p>
         Roll out safely with <code>mode: &quot;log&quot;</code>: requests are
         never blocked, but <code>onBlock</code> fires for every would-be block
@@ -224,7 +224,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
 );`}
       />
 
-      <h2>Reading the country downstream</h2>
+      <h2 id="reading-the-country-downstream">Reading the country downstream</h2>
       <p>
         For allowed requests, the resolved country is stamped on{" "}
         <code>ctx.state.geo</code> (rename with <code>stateKey</code>), so
@@ -244,7 +244,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
 });`}
       />
 
-      <h2>Rejection response</h2>
+      <h2 id="rejection-response">Rejection response</h2>
       <p>
         A blocked request throws <code>ForbiddenError</code>, rendered as RFC
         9457 <code>application/problem+json</code> with HTTP <code>403</code>{" "}
@@ -254,7 +254,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         country or IP back to the client.
       </p>
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           Geo-blocking is a <strong>compliance / abuse-reduction</strong> tool,

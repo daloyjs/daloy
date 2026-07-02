@@ -66,7 +66,7 @@ export default function Page() {
         caption="A DaloyJS API is a long-running Node web server on Replit. Preview it first in the Project Editor, then publish with production secrets and the same start command."
       />
 
-      <h2>When to choose Replit</h2>
+      <h2 id="when-to-choose-replit">When to choose Replit</h2>
       <ul>
         <li>
           You want browser-based development plus deployment in one place.
@@ -80,7 +80,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Check Node and pnpm</h2>
+      <h2 id="1-check-node-and-pnpm">1. Check Node and pnpm</h2>
       <p>
         DaloyJS requires <strong>Node.js 24 LTS or Node.js 26+</strong> and
         pnpm 11 or newer. Node.js 25 is not supported because it is already
@@ -107,7 +107,7 @@ pnpm --version`}
 }`}
       />
 
-      <h2>2. Server entrypoint</h2>
+      <h2 id="2-server-entrypoint">2. Server entrypoint</h2>
       <p>
         Bind to all interfaces and use the <code>PORT</code> value provided by
         Replit. This matters for published apps, not just local preview.
@@ -124,7 +124,7 @@ serve(app, {
 });`}
       />
 
-      <h2>3. Scripts</h2>
+      <h2 id="3-scripts">3. Scripts</h2>
       <p>
         Keep development and production commands separate. Use the production
         command in the Publishing pane.
@@ -140,7 +140,7 @@ serve(app, {
 }`}
       />
 
-      <h2>4. Replit app configuration</h2>
+      <h2 id="4-replit-app-configuration">4. Replit app configuration</h2>
       <p>
         The <code>.replit</code> file controls the editor Run button. Publishing
         can also ask for build and run commands in the Publishing pane. Keep
@@ -155,7 +155,7 @@ build = ["sh", "-c", "pnpm install --frozen-lockfile && pnpm build"]
 run = ["sh", "-c", "pnpm start"]`}
       />
 
-      <h2>5. Publish</h2>
+      <h2 id="5-publish">5. Publish</h2>
       <ol>
         <li>
           Run the app in the Project Editor and open Preview. Fix Preview before
@@ -179,7 +179,7 @@ run = ["sh", "-c", "pnpm start"]`}
         <li>Add production Secrets for every required environment variable.</li>
       </ol>
 
-      <h2>Secrets</h2>
+      <h2 id="secrets">Secrets</h2>
       <p>
         Replit Secrets are exposed to the app as environment variables. Add
         runtime values such as <code>NODE_ENV</code>, database URLs, auth
@@ -194,7 +194,7 @@ DATABASE_URL=...
 TRUST_PROXY_HOPS=1`}
       />
 
-      <h2>Trust Replit&apos;s proxy</h2>
+      <h2 id="trust-replit-and-apos-s-proxy">Trust Replit&apos;s proxy</h2>
       <p>
         Published Replit web apps sit behind Replit&apos;s edge proxy. If your
         DaloyJS app enables production forwarded-header protection, declare the
@@ -208,7 +208,7 @@ TRUST_PROXY_HOPS=1`}
         posture matrix.
       </p>
 
-      <h2>Replit Agent guidance</h2>
+      <h2 id="replit-agent-guidance">Replit Agent guidance</h2>
       <p>
         Replit Agent reads <code>replit.md</code> when it exists in the project
         root. Add a short file that tells Agent this is a DaloyJS API and that
@@ -228,7 +228,7 @@ TRUST_PROXY_HOPS=1`}
 - Store secrets in Replit Secrets, never in committed files.`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Do not bind to <code>localhost</code> or <code>127.0.0.1</code> in a
@@ -252,7 +252,7 @@ TRUST_PROXY_HOPS=1`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <a

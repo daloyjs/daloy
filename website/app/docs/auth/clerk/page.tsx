@@ -89,7 +89,7 @@ export default function Page() {
         caption="With CLERK_JWT_KEY set, authenticateRequest() verifies the token as a pure crypto check with no Clerk API call, which is ideal for edge runtimes. authorizedParties pins the origins allowed to call the API."
       />
 
-      <h2>1. Set up your Clerk app</h2>
+      <h2 id="1-set-up-your-clerk-app">1. Set up your Clerk app</h2>
       <ol>
         <li>
           Create an application in the{" "}
@@ -113,10 +113,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @clerk/backend`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -126,7 +126,7 @@ CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----\\n...\\n-----END PUBLIC KEY-----"`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/clerk.ts
 import { createClerkClient } from "@clerk/backend";
@@ -193,7 +193,7 @@ declare module "@daloyjs/core" {
         a pure crypto check (no network), which is ideal for edge runtimes.
       </p>
 
-      <h2>5. Guard a route</h2>
+      <h2 id="5-guard-a-route">5. Guard a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -230,7 +230,7 @@ app.route({
 });`}
       />
 
-      <h2>Organizations &amp; role checks</h2>
+      <h2 id="organizations-and-role-checks">Organizations &amp; role checks</h2>
       <p>
         Clerk&apos;s <code>Auth</code> object includes the active{" "}
         <code>orgId</code>, <code>orgSlug</code>, <code>orgRole</code> (e.g.{" "}
@@ -254,7 +254,7 @@ middleware: [
 ],`}
       />
 
-      <h2>Machine-to-machine authentication</h2>
+      <h2 id="machine-to-machine-authentication">Machine-to-machine authentication</h2>
       <p>
         Set <code>acceptsToken</code> to <code>&quot;m2m_token&quot;</code>,{" "}
         <code>&quot;oauth_token&quot;</code>, or an array like{" "}
@@ -263,7 +263,7 @@ middleware: [
         you branch your business logic per caller type.
       </p>
 
-      <h2>Webhooks</h2>
+      <h2 id="webhooks">Webhooks</h2>
       <p>
         Clerk delivers user, organization, and session events via Svix-signed
         webhooks. Use <code>clerk.verifyWebhook(request)</code> to validate
@@ -271,7 +271,7 @@ middleware: [
         unverified webhook body.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>@clerk/backend</code> is built on the Web <code>Request</code>{" "}
         and <code>fetch</code> APIs, so it runs on Node 18+, Bun, Deno, AWS

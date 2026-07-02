@@ -58,7 +58,7 @@ export default function Page() {
         caption="Both clients ship in the same package. Use the lightweight HTTP neon() client on edge runtimes and the pooled WebSocket Pool for long-lived Node processes."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <p>
         Create a project at{" "}
         <a href="https://console.neon.tech" target="_blank" rel="noreferrer">
@@ -68,7 +68,7 @@ export default function Page() {
         your environment.
       </p>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @neondatabase/serverless`} />
       <p>
         For a pooled connection on Node, use the <code>Pool</code> export. For
@@ -77,7 +77,7 @@ export default function Page() {
         newer when you run it in Node.
       </p>
 
-      <h2>3. HTTP client (edge-friendly)</h2>
+      <h2 id="3-http-client-edge-friendly">3. HTTP client (edge-friendly)</h2>
       <CodeBlock
         code={`// src/db/neon.ts
 import { neon } from "@neondatabase/serverless";
@@ -93,7 +93,7 @@ export const neonPlugin = {
 };`}
       />
 
-      <h2>4. Pooled WebSocket client (Node)</h2>
+      <h2 id="4-pooled-websocket-client-node">4. Pooled WebSocket client (Node)</h2>
       <CodeBlock
         code={`// src/db/neon-pool.ts
 import { Pool } from "@neondatabase/serverless";
@@ -112,7 +112,7 @@ export const neonPoolPlugin = {
 };`}
       />
 
-      <h2>5. Augment app state</h2>
+      <h2 id="5-augment-app-state">5. Augment app state</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { Pool } from "@neondatabase/serverless";
@@ -126,7 +126,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>6. Use it in a route</h2>
+      <h2 id="6-use-it-in-a-route">6. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
@@ -157,7 +157,7 @@ app.route({
 });`}
       />
 
-      <h2>Cloudflare Workers</h2>
+      <h2 id="cloudflare-workers">Cloudflare Workers</h2>
       <p>
         Use the HTTP <code>neon()</code> client and pass the connection string
         from the worker environment instead of <code>process.env</code>. Because
@@ -177,7 +177,7 @@ export default {
 };`}
       />
 
-      <h2>With Drizzle ORM</h2>
+      <h2 id="with-drizzle-orm">With Drizzle ORM</h2>
       <CodeBlock
         code={`pnpm add drizzle-orm
 // src/db/drizzle.ts
@@ -188,7 +188,7 @@ const sql = neon(process.env.DATABASE_URL!);
 export const db = drizzle({ client: sql });`}
       />
 
-      <h2>With Prisma</h2>
+      <h2 id="with-prisma">With Prisma</h2>
       <p>
         Use the{" "}
         <a
@@ -217,7 +217,7 @@ export const prisma = new PrismaClient({ adapter });`}
         <code>prisma migrate</code> and <code>prisma db pull</code>.
       </p>
 
-      <h2>Branching for preview environments</h2>
+      <h2 id="branching-for-preview-environments">Branching for preview environments</h2>
       <p>
         Pair Neon&apos;s branching with Vercel preview deployments or GitHub PR
         previews. Create a branch per PR and pass its connection string to the

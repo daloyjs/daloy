@@ -71,7 +71,7 @@ export default function Page() {
         caption="resend.emails.send() runs on the standard fetch API, so it works on edge runtimes too. The SDK returns { data, error } rather than throwing, so handle the error branch and return data.id on success."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Sign up at <a href="https://resend.com" target="_blank" rel="noreferrer">resend.com</a>{" "}
@@ -84,17 +84,17 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add resend`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxx
 RESEND_FROM="Acme <no-reply@acme.example.com>"`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/resend.ts
 import { Resend } from "resend";
@@ -140,7 +140,7 @@ declare module "@daloyjs/core" {
         <Link href="/docs/errors">DaloyJS error helpers</Link>.
       </p>
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -178,7 +178,7 @@ async function issueMagicLink(_email: string) {
 }`}
       />
 
-      <h2>React Email templates</h2>
+      <h2 id="react-email-templates">React Email templates</h2>
       <p>
         Resend reads the <code>react</code> field and renders it to HTML for you, so you can ship
         type-safe email templates as React components:
@@ -211,13 +211,13 @@ await resend.emails.send({
 });`}
       />
 
-      <h2>Batch sending</h2>
+      <h2 id="batch-sending">Batch sending</h2>
       <p>
         Use <code>resend.batch.send([...])</code> to enqueue up to 100 messages in a single API
         call, handy for fan-out notifications without queueing infrastructure.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>resend</code> SDK uses the standard <code>fetch</code> API, so it runs on Node
         18+, Bun, Deno, AWS Lambda, Vercel (Serverless and Edge), and Cloudflare Workers without

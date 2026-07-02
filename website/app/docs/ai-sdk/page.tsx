@@ -220,7 +220,7 @@ export default function Page() {
         wraps all of it.
       </p>
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <p>
         The AI SDK and your model provider are <em>your</em> dependencies.{" "}
         <code>@daloyjs/core</code> stays at zero runtime dependencies; it does
@@ -228,7 +228,7 @@ export default function Page() {
       </p>
       <CodeBlock language="bash" code={INSTALL} />
 
-      <h2>The request path</h2>
+      <h2 id="the-request-path">The request path</h2>
       <p>
         Every AI request flows through the same guardrails as the rest of your
         API before it ever reaches the model, and the model&apos;s output streams
@@ -270,7 +270,7 @@ export default function Page() {
         caption="The deployment-time layer (auth, limits, SSRF defense) holds even when the model is prompt-injected or hallucinating. That is the point: the guardrails do not depend on the model behaving."
       />
 
-      <h2>Streaming chat</h2>
+      <h2 id="streaming-chat">Streaming chat</h2>
       <p>
         The AI SDK&apos;s <code>result.toUIMessageStreamResponse()</code> returns
         a web-standard <code>Response</code>, and a DaloyJS handler can return a
@@ -283,7 +283,7 @@ export default function Page() {
       </p>
       <CodeBlock language="ts" code={CHAT} />
 
-      <h2>Structured output, validated by your contract</h2>
+      <h2 id="structured-output-validated-by-your-contract">Structured output, validated by your contract</h2>
       <p>
         This is the pattern that is meaningfully better on a contract-first
         framework. With <code>generateObject()</code>, the model is constrained
@@ -296,7 +296,7 @@ export default function Page() {
       </p>
       <CodeBlock language="ts" code={STRUCTURED} />
 
-      <h2>Tool calling behind fetchGuard</h2>
+      <h2 id="tool-calling-behind-fetchguard">Tool calling behind fetchGuard</h2>
       <p>
         AI SDK 7&apos;s tool loop is where prompt injection becomes a server-side
         request forgery problem: the model asks a tool to fetch a URL, and a
@@ -310,7 +310,7 @@ export default function Page() {
       </p>
       <CodeBlock language="ts" code={TOOLS} />
 
-      <h2>The secure-by-default layer</h2>
+      <h2 id="the-secure-by-default-layer">The secure-by-default layer</h2>
       <p>
         None of the above is the interesting part. The interesting part is what
         DaloyJS does <em>around</em> your AI endpoint without you asking: a 1 MiB
@@ -331,7 +331,7 @@ export default function Page() {
         <a href="/docs/security/secure-defaults">secure-by-default</a> guide.
       </p>
 
-      <h2>What about OpenAPI and the typed client?</h2>
+      <h2 id="what-about-openapi-and-the-typed-client">What about OpenAPI and the typed client?</h2>
       <p>
         Be honest with yourself about the trade-off. A pure streaming endpoint
         cannot carry a meaningful response-body schema, so OpenAPI documents it
@@ -342,7 +342,7 @@ export default function Page() {
         Stream the chat, contract the structured calls.
       </p>
 
-      <h2>Next steps</h2>
+      <h2 id="next-steps">Next steps</h2>
       <ul>
         <li>
           <a href="/docs/streaming">Streaming (SSE &amp; NDJSON)</a> for the

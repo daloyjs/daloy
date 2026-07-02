@@ -79,7 +79,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <p>
         Call <code>generateAsyncAPI(app, options)</code> and you get a plain,
         JSON-serializable AsyncAPI document. Hand it to AsyncAPI Studio, write
@@ -110,7 +110,7 @@ const doc = generateAsyncAPI(app, {
 writeFileSync("./generated/asyncapi.json", JSON.stringify(doc, null, 2));`}
       />
 
-      <h2>Serving an interactive UI</h2>
+      <h2 id="serving-an-interactive-ui">Serving an interactive UI</h2>
       <p>
         You don&apos;t have to wire the spec up yourself. Set{" "}
         <code>asyncapi: true</code> on the app and DaloyJS auto-mounts the
@@ -185,7 +185,7 @@ printStartupBanner({
         descriptive; it never relaxes Cross-Site WebSocket Hijacking defenses.
       </p>
 
-      <h2>Describing the messages</h2>
+      <h2 id="describing-the-messages">Describing the messages</h2>
       <p>
         WebSocket handlers accept an optional <code>meta</code> block that
         mirrors the HTTP route <code>meta</code>. It is purely descriptive (it
@@ -241,7 +241,7 @@ app.ws("/chat/:room", {
         <code>{`{}`}</code> placeholder rather than throwing.
       </p>
 
-      <h2>Generated document shape</h2>
+      <h2 id="generated-document-shape">Generated document shape</h2>
       <p>
         A single <code>app.ws(&quot;/chat/:room&quot;, ...)</code> route with
         the <code>meta</code> above produces roughly:
@@ -278,7 +278,7 @@ app.ws("/chat/:room", {
 }`}
       />
 
-      <h2>YAML output</h2>
+      <h2 id="yaml-output">YAML output</h2>
       <p>
         <code>asyncapiToYAML(doc)</code> renders the document as YAML 1.2 using
         the same dependency-free emitter shared with the OpenAPI generator.
@@ -291,7 +291,7 @@ const yaml = asyncapiToYAML(generateAsyncAPI(app, {
 }));`}
       />
 
-      <h2>CLI</h2>
+      <h2 id="cli">CLI</h2>
       <p>
         The <code>daloy inspect</code> command can print the AsyncAPI document
         for any app it can load, mirroring <code>--openapi</code>. Use{" "}
@@ -303,7 +303,7 @@ const yaml = asyncapiToYAML(generateAsyncAPI(app, {
 daloy inspect --asyncapi --format yaml > asyncapi.yaml`}
       />
 
-      <h2>Notes</h2>
+      <h2 id="notes">Notes</h2>
       <ul>
         <li>
           When the app has no WebSocket routes the document still validates,

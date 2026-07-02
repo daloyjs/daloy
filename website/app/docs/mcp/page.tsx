@@ -296,10 +296,10 @@ export default function Page() {
         caption="Run MCP as its own DaloyJS service when it has a different trust boundary than your REST API. The app still gets body limits, request timeouts, rate limits, auth middleware, and problem+json errors."
       />
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <CodeBlock code={INSTALL} language="bash" />
 
-      <h2>Create an MCP server</h2>
+      <h2 id="create-an-mcp-server">Create an MCP server</h2>
       <p>
         Use <code>createMcpHandler()</code> for the MCP protocol layer and{" "}
         <code>mcpRoutes()</code> to mount <code>POST</code>, <code>GET</code>,
@@ -311,7 +311,7 @@ export default function Page() {
       </p>
       <CodeBlock code={SERVER} />
 
-      <h2>Client config</h2>
+      <h2 id="client-config">Client config</h2>
       <p>
         Point an MCP-compatible client at the deployed endpoint. The exact
         config file differs by client, but remote Streamable HTTP servers use a
@@ -319,7 +319,7 @@ export default function Page() {
       </p>
       <CodeBlock code={CLIENT_CONFIG} language="json" />
 
-      <h2>Testing in Scalar</h2>
+      <h2 id="testing-in-scalar">Testing in Scalar</h2>
       <p>
         Scalar is best for testing normal REST endpoints. If your app exposes a
         regular docs search route and an MCP route, use{" "}
@@ -346,7 +346,7 @@ export default function Page() {
         reserve <code>/mcp</code> for MCP clients or explicit JSON-RPC requests.
       </p>
 
-      <h2>What core supports</h2>
+      <h2 id="what-core-supports">What core supports</h2>
       <ul>
         <li>
           <code>initialize</code>, <code>ping</code>, <code>tools/list</code>,{" "}
@@ -382,7 +382,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Origin validation (DNS rebinding)</h2>
+      <h2 id="origin-validation-dns-rebinding">Origin validation (DNS rebinding)</h2>
       <p>
         The MCP Streamable HTTP spec requires servers to validate the{" "}
         <code>Origin</code> header so a malicious web page cannot use DNS
@@ -394,7 +394,7 @@ export default function Page() {
       </p>
       <CodeBlock code={ORIGINS} />
 
-      <h2>Resource templates</h2>
+      <h2 id="resource-templates">Resource templates</h2>
       <p>
         Concrete resources cover fixed documents; resource templates cover
         families of them. A template advertises an RFC 6570 style URI pattern
@@ -408,7 +408,7 @@ export default function Page() {
       </p>
       <CodeBlock code={TEMPLATES} />
 
-      <h2>What stays out of core</h2>
+      <h2 id="what-stays-out-of-core">What stays out of core</h2>
       <p>
         DaloyJS does not bundle the official MCP SDK, stdio process management,
         OAuth server metadata, persistent MCP sessions, server-initiated SSE, or
@@ -417,7 +417,7 @@ export default function Page() {
         separate integration package until your use case needs them.
       </p>
 
-      <h2>Error handling</h2>
+      <h2 id="error-handling">Error handling</h2>
       <p>
         Throw <code>McpToolError</code> when the model can fix the call, for
         example missing arguments or a domain object that does not exist. The
@@ -427,7 +427,7 @@ export default function Page() {
       </p>
       <CodeBlock code={ERROR_HANDLING} />
 
-      <h2>
+      <h2 id="the-bodyschemamissing-warning-and-mcp">
         The <code>bodySchemaMissing</code> warning and MCP
       </h2>
       <p>
@@ -451,7 +451,7 @@ export default function Page() {
       </p>
       <CodeBlock code={ACKNOWLEDGE} />
 
-      <h2>Security checklist</h2>
+      <h2 id="security-checklist">Security checklist</h2>
       <ul>
         <li>
           Put auth in DaloyJS middleware before the MCP route. Bearer tokens,

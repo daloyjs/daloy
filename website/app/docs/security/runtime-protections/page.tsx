@@ -87,7 +87,7 @@ export default function Page() {
         caption="Only the top layer travels everywhere. It is baked into the framework and runs on every request no matter where you host the repo. The lower two layers depend on keeping the pnpm scaffold and the generated GitHub workflows."
       />
 
-      <h2>The three layers, side by side</h2>
+      <h2 id="the-three-layers-side-by-side">The three layers, side by side</h2>
       <table>
         <thead>
           <tr>
@@ -130,7 +130,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>Backend footguns the framework handles by default</h2>
+      <h2 id="backend-footguns-the-framework-handles-by-default">Backend footguns the framework handles by default</h2>
       <p>
         Every row below describes behavior that is on by default in a fresh
         DaloyJS app. You do not need to install a plugin, deploy on a specific
@@ -309,7 +309,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>
+      <h2 id="what-this-page-does-not-cover">
         What this page does <em>not</em> cover
       </h2>
       <p>
@@ -341,7 +341,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>What the generated GitHub Actions bundle actually does</h2>
+      <h2 id="what-the-generated-github-actions-bundle-actually-does">What the generated GitHub Actions bundle actually does</h2>
       <p>
         If you scaffold with <code>create-daloy --with-ci</code> and{" "}
         <strong>keep the generated workflows</strong>, the YAML itself encodes
@@ -390,7 +390,7 @@ export default function Page() {
         give you these guarantees automatically.
       </p>
 
-      <h2>The honest matrix</h2>
+      <h2 id="the-honest-matrix">The honest matrix</h2>
       <p>
         Use this table to figure out which protections you actually get for a
         given setup.

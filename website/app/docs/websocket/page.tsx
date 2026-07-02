@@ -61,7 +61,7 @@ export default function Page() {
         another site opened the socket.
       </p>
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
@@ -85,7 +85,7 @@ app.ws("/chat/:room", {
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Handler shape</h2>
+      <h2 id="handler-shape">Handler shape</h2>
       <p>
         Use <code>defineWebSocket()</code> for full type-inference on path
         params (<code>ctx.params</code>), query (<code>ctx.query</code>), and
@@ -116,7 +116,7 @@ const chatHandler = defineWebSocket({
 app.ws("/chat/:room", chatHandler);`}
       />
 
-      <h2>Connection API</h2>
+      <h2 id="connection-api">Connection API</h2>
       <p>
         The <code>WebSocketConnection</code> passed to your handlers mirrors the
         WHATWG <code>WebSocket</code> interface where it makes sense on the
@@ -156,7 +156,7 @@ app.ws("/chat/:room", chatHandler);`}
         </li>
       </ul>
 
-      <h2>Protocol negotiation & upgrade hook</h2>
+      <h2 id="protocol-negotiation-and-upgrade-hook">Protocol negotiation & upgrade hook</h2>
       <p>
         Optional <code>beforeUpgrade(req, ctx)</code> runs after the path match
         and Origin policy, but before the 101 response. Return a{" "}
@@ -229,7 +229,7 @@ app.ws("/chat/:room", chatHandler);`}
 });`}
       />
 
-      <h2>Origin policy and CSWSH</h2>
+      <h2 id="origin-policy-and-cswsh">Origin policy and CSWSH</h2>
       <p>
         <code>allowedOrigins</code> is checked before <code>beforeUpgrade</code>{" "}
         in both Node and Bun. Use <code>&quot;same-origin&quot;</code> for
@@ -280,7 +280,7 @@ app.ws("/cli", {
         reject clients that omit the header.
       </p>
 
-      <h2>Upgrade rate limiting</h2>
+      <h2 id="upgrade-rate-limiting">Upgrade rate limiting</h2>
       <p>
         Use <code>wsRateLimit()</code> in <code>beforeUpgrade</code> when a
         WebSocket route belongs to the same login or session-establishment
@@ -305,7 +305,7 @@ app.ws("/session", {
         language="ts"
       />
 
-      <h2>Payload and backpressure limits</h2>
+      <h2 id="payload-and-backpressure-limits">Payload and backpressure limits</h2>
       <p>
         Override safe defaults per route when a connection needs tighter bounds.{" "}
         <code>idleTimeout</code>, <code>backpressureLimit</code>, and{" "}
@@ -327,7 +327,7 @@ app.ws("/session", {
         language="ts"
       />
 
-      <h2>Graceful shutdown</h2>
+      <h2 id="graceful-shutdown">Graceful shutdown</h2>
       <p>
         The Node adapter tracks every upgraded socket. When <code>close()</code>{" "}
         is invoked (or the app receives <code>SIGTERM</code> /{" "}
@@ -336,7 +336,7 @@ app.ws("/session", {
         resolves so the process exits promptly even if clients linger.
       </p>
 
-      <h2>Custom adapters</h2>
+      <h2 id="custom-adapters">Custom adapters</h2>
       <p>
         If you target a runtime other than Node or Bun, import the primitives
         directly from <code>@daloyjs/core/websocket</code>:

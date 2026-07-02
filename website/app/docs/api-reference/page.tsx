@@ -24,7 +24,7 @@ export default function Page() {
       <h1>API reference</h1>
       <p>{`The complete public surface of DaloyJS v${CORE_PACKAGE_VERSION}, organized by import path. Every signature on this page is generated from the same TypeScript types your editor reads on hover, open the source files for fuller TSDoc, examples, and security rationale.`}</p>
 
-      <h2>Minimal server</h2>
+      <h2 id="minimal-server">Minimal server</h2>
       <p>
         This page is a reference, the signatures below are the source of truth,
         not a step-by-step tutorial. If you are starting from scratch, the{" "}
@@ -78,7 +78,7 @@ console.log(\`listening on http://localhost:\${port}\`);`}
         warning for routes that intentionally return no body.
       </p>
 
-      <h2>Subpath modules</h2>
+      <h2 id="subpath-modules">Subpath modules</h2>
       <p>Quick map of subpath modules exposed by the package:</p>
       <CodeBlock
         code={`@daloyjs/core                       // App, routing types, errors, middleware, security, JWT/JWK, ...
@@ -181,11 +181,11 @@ console.log(\`listening on http://localhost:\${port}\`);`}
         caption="The barrel and per-feature subpaths resolve to the same code, so pick whichever suits your bundler. Runtime adapters are the exception: they ship only as subpaths so platform code (like node:http) never leaks into an edge bundle."
       />
 
-      <h2>
+      <h2 id="daloyjs-core-root">
         <code>@daloyjs/core</code> (root)
       </h2>
 
-      <h3>
+      <h3 id="class-app">
         <code>class App</code>
       </h3>
       <CodeBlock
@@ -266,7 +266,7 @@ app.introspect(): IntrospectedRoute[]
 app.shutdown(timeoutMs?: number, reason?: string): Promise<void>`}
       />
 
-      <h3>Route, hooks &amp; context types</h3>
+      <h3 id="route-hooks-and-context-types">Route, hooks &amp; context types</h3>
       <CodeBlock
         code={`type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 type PathString = \`/\${string}\`;
@@ -362,7 +362,7 @@ interface IntrospectedRoute {
 }`}
       />
 
-      <h3>Hook dispatch order &amp; when the body is read</h3>
+      <h3 id="hook-dispatch-order-and-when-the-body-is-read">Hook dispatch order &amp; when the body is read</h3>
       <p>
         Per matched request, hooks fire in this order:{" "}
         <code>onRequest(req)</code> &rarr; <em>route match</em> &rarr; validate{" "}
@@ -394,7 +394,7 @@ interface IntrospectedRoute {
         in an app with a stricter <code>bodyLimitBytes</code> setting.
       </p>
 
-      <h3>Errors</h3>
+      <h3 id="errors">Errors</h3>
       <CodeBlock
         code={`// All errors extend HttpError and serialize to RFC 9457 application/problem+json.
 class HttpError extends Error {
@@ -427,7 +427,7 @@ function checkCustomErrorResponseHeaders(headers: Headers | Record<string, strin
 function httpError(opts: HttpErrorOptions): HttpError;  // typed factory`}
       />
 
-      <h3>Schema validation</h3>
+      <h3 id="schema-validation">Schema validation</h3>
       <CodeBlock
         code={`interface StandardSchemaV1<Input = unknown, Output = Input> { ... }  // Standard Schema spec
 function isStandardSchema(value: unknown): value is StandardSchemaV1;
@@ -436,7 +436,7 @@ function validate<S extends StandardSchemaV1>(schema: S, input: unknown):
   | { ok: false; issues: ReadonlyArray<StandardSchemaV1.Issue> };`}
       />
 
-      <h3>Security primitives</h3>
+      <h3 id="security-primitives">Security primitives</h3>
       <CodeBlock
         code={`// Body & parser hardening
 readBodyLimited(req: Request, limit: number): Promise<Uint8Array>;
@@ -478,7 +478,7 @@ sanitizeFilename(name: string): string;
 assertSafeRelativePath(p: string, where?: string): void;    // refuses .. escape, absolute, NUL`}
       />
 
-      <h3>Built-in middleware</h3>
+      <h3 id="built-in-middleware">Built-in middleware</h3>
       <CodeBlock
         code={`requestId(opts?: RequestIdOptions): Hooks
 secureHeaders(opts?: SecureHeadersOptions): Hooks
@@ -514,7 +514,7 @@ interface BearerAuthOptions {
 }`}
       />
 
-      <h3>Composition primitives</h3>
+      <h3 id="composition-primitives">Composition primitives</h3>
       <CodeBlock
         code={`every(...layers: Hooks[]): Hooks      // run every layer in order, pipeline-style
 some (...layers: Hooks[]): Hooks      // pass on first non-throwing beforeHandle (auth fallback chains)
@@ -526,7 +526,7 @@ type ExceptPredicate =
   | ((ctx) => boolean | Promise<boolean>);`}
       />
 
-      <h3>Dependencies (typed DI chain)</h3>
+      <h3 id="dependencies-typed-di-chain">Dependencies (typed DI chain)</h3>
       <CodeBlock
         code={`defineDependency<TName, TValue, TStateKey>(opts: {
   name: TName;
@@ -536,7 +536,7 @@ type ExceptPredicate =
 }): DependencyHooks   // per-request cached; runs once per dependency per request`}
       />
 
-      <h3>Connection info &amp; proxy posture</h3>
+      <h3 id="connection-info-and-proxy-posture">Connection info &amp; proxy posture</h3>
       <CodeBlock
         code={`type BehindProxyConfig = "none" | "loopback" | { hops: number } | { cidrs: readonly string[] };
 interface ConnInfo { remoteAddress?: string; remotePort?: number; tls?: boolean }
@@ -550,7 +550,7 @@ readRemotePort(ctx): number | undefined;
 pickForwardedForByHops(header: string, hops: number): string | undefined;`}
       />
 
-      <h3>Subdomains (Public-Suffix-aware)</h3>
+      <h3 id="subdomains-public-suffix-aware">Subdomains (Public-Suffix-aware)</h3>
       <CodeBlock
         code={`subdomains(hostname: string, opts?: SubdomainsOptions): SubdomainsResult;
 
@@ -565,7 +565,7 @@ const MAX_SNAPSHOT_AGE_DAYS: number;   // refuses to use a stale snapshot
 const PSL_PUBLIC_SUFFIXES: ReadonlySet<string>;`}
       />
 
-      <h3>SSRF guard</h3>
+      <h3 id="ssrf-guard">SSRF guard</h3>
       <CodeBlock
         code={`fetchGuard(opts?: FetchGuardOptions): typeof fetch;
   // returns a fetch-compatible wrapper that refuses loopback / RFC1918 /
@@ -592,7 +592,7 @@ type SsrfBlockReason =
 class SsrfBlockedError extends Error { readonly url; readonly reason: SsrfBlockReason; readonly address?: string }`}
       />
 
-      <h3>Open-redirect guard</h3>
+      <h3 id="open-redirect-guard">Open-redirect guard</h3>
       <CodeBlock
         code={`safeRedirect(target: string, opts: SafeRedirectOptions): Response;
 
@@ -612,7 +612,7 @@ type SafeRedirectBlockReason =
 class OpenRedirectBlockedError extends Error { readonly reason; readonly target }`}
       />
 
-      <h3>Cookies</h3>
+      <h3 id="cookies">Cookies</h3>
       <CodeBlock
         code={`type CookieSameSite = "Strict" | "Lax" | "None";
 interface CookieAttributes {
@@ -634,7 +634,7 @@ assertCookieAttributes(opts: {
 }): void;`}
       />
 
-      <h3>JWT signer &amp; verifier</h3>
+      <h3 id="jwt-signer-and-verifier">JWT signer &amp; verifier</h3>
       <CodeBlock
         code={`type JwtAlgorithm =
   | "HS256" | "HS384" | "HS512"
@@ -659,7 +659,7 @@ class JwtError extends Error { readonly code: string }
 const DEFAULT_JWT_MAX_LIFETIME_SECONDS = 30 * 24 * 60 * 60;  // 30d`}
       />
 
-      <h3>JWK / JWKS verification</h3>
+      <h3 id="jwk-jwks-verification">JWK / JWKS verification</h3>
       <CodeBlock
         code={`jwk(opts: JwkOptions): Hooks;
   // refuses HS* (confused-deputy), caches JWKS by TTL, honors kid, enforces
@@ -685,7 +685,7 @@ interface JwkOptions {
 }`}
       />
 
-      <h3>Temporal claim assertions</h3>
+      <h3 id="temporal-claim-assertions">Temporal claim assertions</h3>
       <CodeBlock
         code={`interface TemporalClaims { iat?: number; nbf?: number; exp?: number }
 type TemporalClaimErrorCode =
@@ -697,7 +697,7 @@ assertTemporalClaims(claims: TemporalClaims, opts?: AssertTemporalClaimsOptions)
 class TemporalClaimError extends Error { readonly code: TemporalClaimErrorCode }`}
       />
 
-      <h3>Configuration</h3>
+      <h3 id="configuration">Configuration</h3>
       <CodeBlock
         code={`defineConfig<S extends StandardSchemaV1>(opts: {
   schema: S;
@@ -718,7 +718,7 @@ class ConfigValidationError extends Error {
 }`}
       />
 
-      <h3>Logging</h3>
+      <h3 id="logging">Logging</h3>
       <CodeBlock
         code={`type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
@@ -744,7 +744,7 @@ interface Logger {
 }`}
       />
 
-      <h3>Startup banner</h3>
+      <h3 id="startup-banner">Startup banner</h3>
       <CodeBlock
         code={`interface StartupBannerLink { label: string; url: string }
 interface StartupBannerOptions {
@@ -761,7 +761,7 @@ formatStartupBanner(opts: StartupBannerOptions): string;
 printStartupBanner(opts: StartupBannerOptions): void;`}
       />
 
-      <h3>Security-scheme builders (OpenAPI 3.1)</h3>
+      <h3 id="security-scheme-builders-openapi-3-1">Security-scheme builders (OpenAPI 3.1)</h3>
       <CodeBlock
         code={`// Re-exported from @daloyjs/core for convenience (also live in /openapi).
 httpBearerScheme(opts?:   HttpBearerSchemeOptions):   HttpBearerScheme;
@@ -784,14 +784,14 @@ securitySchemeRequiresPayloadAuth(scheme: SecurityScheme): boolean;
 toOpenAPISecurityScheme(scheme: SecurityScheme): unknown;`}
       />
 
-      <h3>Discriminated unions (OpenAPI)</h3>
+      <h3 id="discriminated-unions-openapi">Discriminated unions (OpenAPI)</h3>
       <CodeBlock
         code={`discriminator(opts: DiscriminatorObject): unknown;            // { propertyName, mapping? }
 discriminatedUnion(prop: string, branches: StandardSchemaV1[],
                    opts?: DiscriminatedUnionOptions): StandardSchemaV1;`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-openapi">
         <code>@daloyjs/core/openapi</code>
       </h2>
       <CodeBlock
@@ -829,7 +829,7 @@ interface WebhookDefinition {
 }`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-client">
         <code>@daloyjs/core/client</code>
       </h2>
       <CodeBlock
@@ -848,7 +848,7 @@ type ClientFor<A extends App>  = { /* generated from A["routes"] */ };
 type RoutesOf<A extends App>   = A["routes"][number];`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-contract">
         <code>@daloyjs/core/contract</code>
       </h2>
       <CodeBlock
@@ -863,7 +863,7 @@ interface ContractReport { ok: boolean; checked: number; issues: ContractIssue[]
 interface ContractIssue  { route: string; method: HttpMethod; code: string; message: string }`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-docs">
         <code>@daloyjs/core/docs</code>
       </h2>
       <CodeBlock
@@ -904,7 +904,7 @@ interface HtmlResponseOptions extends DocsContentSecurityPolicyOptions {
 }`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-streaming">
         <code>@daloyjs/core/streaming</code>
       </h2>
       <CodeBlock
@@ -921,7 +921,7 @@ interface SSEResponseOptions  extends SSEStreamOptions { status?: number; header
 interface NDJSONResponseOptions extends StreamOptions { status?: number; headers?: HeadersInit }`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-multipart">
         <code>@daloyjs/core/multipart</code>
       </h2>
       <CodeBlock
@@ -944,7 +944,7 @@ interface FileFieldOptions {
 interface MultipartObjectOptions { strict?: boolean }  // refuses unknown fields by default`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-session">
         <code>@daloyjs/core/session</code>
       </h2>
       <CodeBlock
@@ -963,7 +963,7 @@ interface SessionStore {
 }`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-websocket">
         <code>@daloyjs/core/websocket</code>
       </h2>
       <CodeBlock
@@ -1009,7 +1009,7 @@ class WebSocketPayloadTooLargeError extends WebSocketProtocolError {}
 class FrameSink { /* event emitter over an async byte stream */ }`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-tracing">
         <code>@daloyjs/core/tracing</code>
       </h2>
       <CodeBlock
@@ -1029,7 +1029,7 @@ const TRACING_SPAN_STATUS_OK:     number;
 const TRACING_SPAN_STATUS_ERROR:  number;`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-hashing">
         <code>@daloyjs/core/hashing</code>
       </h2>
       <CodeBlock
@@ -1044,7 +1044,7 @@ passwordVerify(password: string, hash: string): Promise<boolean>;
   // Returns false (never throws) for empty or over-4096-byte passwords.`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-rate-limit-redis">
         <code>@daloyjs/core/rate-limit-redis</code>
       </h2>
       <CodeBlock
@@ -1064,7 +1064,7 @@ interface RedisCommands {
 }`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-banner">
         <code>@daloyjs/core/banner</code>
       </h2>
       <CodeBlock
@@ -1072,7 +1072,7 @@ interface RedisCommands {
 printStartupBanner (opts: StartupBannerOptions): void;`}
       />
 
-      <h2>
+      <h2 id="daloyjs-core-cli">
         <code>@daloyjs/core/cli</code>
       </h2>
       <CodeBlock
@@ -1087,9 +1087,9 @@ assertSafeEntryPath(entry: string, context: string): void;
 normalizeEntryArg(entry: string): string;`}
       />
 
-      <h2>Runtime adapters</h2>
+      <h2 id="runtime-adapters">Runtime adapters</h2>
 
-      <h3>
+      <h3 id="daloyjs-core-node">
         <code>@daloyjs/core/node</code>
       </h3>
       <CodeBlock
@@ -1109,7 +1109,7 @@ interface NodeServerOptions {
 interface NodeServerHandle { server: Server; port: number; close(): Promise<void> }`}
       />
 
-      <h3>
+      <h3 id="daloyjs-core-bun">
         <code>@daloyjs/core/bun</code>
       </h3>
       <CodeBlock
@@ -1127,7 +1127,7 @@ interface BunServeOptions {
 interface BunServerHandle { port: number; url: URL | undefined; stop(): Promise<void> }`}
       />
 
-      <h3>
+      <h3 id="daloyjs-core-deno">
         <code>@daloyjs/core/deno</code>
       </h3>
       <CodeBlock
@@ -1145,7 +1145,7 @@ interface DenoServeOptions {
 interface DenoServerHandle { shutdown(): Promise<void> }`}
       />
 
-      <h3>
+      <h3 id="daloyjs-core-cloudflare">
         <code>@daloyjs/core/cloudflare</code>
       </h3>
       <CodeBlock
@@ -1157,7 +1157,7 @@ interface ExportedFetchHandler<Env = unknown> {
 }`}
       />
 
-      <h3>
+      <h3 id="daloyjs-core-vercel">
         <code>@daloyjs/core/vercel</code>
       </h3>
       <CodeBlock
@@ -1171,7 +1171,7 @@ toRouteHandlers(app: App): RouteHandlers;     // Next.js App Router route.ts
 const toEdgeHandler = toWebHandler;           // backwards-compat alias`}
       />
 
-      <h3>
+      <h3 id="daloyjs-core-fastly">
         <code>@daloyjs/core/fastly</code>
       </h3>
       <CodeBlock
@@ -1179,7 +1179,7 @@ const toEdgeHandler = toWebHandler;           // backwards-compat alias`}
 installFastlyListener(app: App): void;   // wires addEventListener("fetch", ...)`}
       />
 
-      <h3>
+      <h3 id="daloyjs-core-lambda">
         <code>@daloyjs/core/lambda</code>
       </h3>
       <CodeBlock
@@ -1190,7 +1190,7 @@ type LambdaEvent    = LambdaEventV1   | LambdaEventV2;     // API Gateway REST +
 type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;`}
       />
 
-      <h2>Test-only / internal helpers</h2>
+      <h2 id="test-only-internal-helpers">Test-only / internal helpers</h2>
       <p>
         These are exported for internal tests and tooling. They are public-typed
         but underscore-prefixed; they may change without a semver bump. Most

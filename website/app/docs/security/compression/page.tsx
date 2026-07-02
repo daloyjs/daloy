@@ -49,7 +49,7 @@ app.use(compression());
         language="ts"
       />
 
-      <h2>What it compresses</h2>
+      <h2 id="what-it-compresses">What it compresses</h2>
       <p>
         The middleware negotiates <code>br</code>, <code>gzip</code>, and{" "}
         <code>deflate</code> from the request <code>Accept-Encoding</code>
@@ -65,7 +65,7 @@ app.use(compression());
         original response is kept.
       </p>
 
-      <h2>Security skip rules</h2>
+      <h2 id="security-skip-rules">Security skip rules</h2>
       <p>
         Compression can become an oracle when secrets and attacker-controlled
         bytes share the same compressed response. Daloy keeps those guards built
@@ -125,7 +125,7 @@ app.use(compression());
         </li>
       </ul>
 
-      <h2>Cache and ETag behavior</h2>
+      <h2 id="cache-and-etag-behavior">Cache and ETag behavior</h2>
       <p>
         Every response that reaches <code>compression()</code> gets{" "}
         <code>Vary: Accept-Encoding</code> appended (de-duplicated against any
@@ -144,7 +144,7 @@ app.use(compression());
         representation on the wire, and the wire bytes change per encoding.
       </p>
 
-      <h2>
+      <h2 id="interaction-with-etag">
         Interaction with <code>etag()</code>
       </h2>
       <p>
@@ -181,7 +181,7 @@ app.use(compression());
         on the way out.
       </p>
 
-      <h2>No compression level knob</h2>
+      <h2 id="no-compression-level-knob">No compression level knob</h2>
       <p>
         <code>CompressionStream</code> uses the runtime default. Daloy refuses
         any <code>compressLevel</code> option at construction, including{" "}
@@ -199,7 +199,7 @@ app.use(compression());
         language="ts"
       />
 
-      <h2>Ordering</h2>
+      <h2 id="ordering">Ordering</h2>
       <p>
         Register <code>compression()</code> after middleware that may add{" "}
         <code>Set-Cookie</code>, <code>Content-Encoding</code>, or{" "}

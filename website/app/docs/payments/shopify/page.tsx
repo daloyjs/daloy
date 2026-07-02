@@ -42,7 +42,7 @@ export default function Page() {
         body.
       </p>
 
-      <h2>REST is deprecated: prefer GraphQL</h2>
+      <h2 id="rest-is-deprecated-prefer-graphql">REST is deprecated: prefer GraphQL</h2>
       <p>
         Shopify{" "}
         <a
@@ -81,7 +81,7 @@ export default function Page() {
         supported stable version, which is usually not what you want.
       </p>
 
-      <h2>1. Provision a custom app</h2>
+      <h2 id="1-provision-a-custom-app">1. Provision a custom app</h2>
       <ol>
         <li>
           In the Shopify admin, open{" "}
@@ -110,7 +110,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add shopify-api-node`} />
       <p>
         TypeScript users: the package ships its own typings (under{" "}
@@ -118,7 +118,7 @@ export default function Page() {
         <code>@types/shopify-api-node</code> install needed.
       </p>
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 SHOPIFY_SHOP=acme-test.myshopify.com
@@ -134,7 +134,7 @@ SHOPIFY_WEBHOOK_SECRET=shpss_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`}
         release.
       </p>
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/shopify.ts
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -207,7 +207,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Query products with GraphQL</h2>
+      <h2 id="5-query-products-with-graphql">5. Query products with GraphQL</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
@@ -298,7 +298,7 @@ app.route({
         string to your client.
       </p>
 
-      <h2>6. Receive and verify webhooks</h2>
+      <h2 id="6-receive-and-verify-webhooks">6. Receive and verify webhooks</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Shopify", "DaloyJS route", "Your worker"]}
@@ -390,7 +390,7 @@ app.route({
         fast.
       </p>
 
-      <h2>Rate limits</h2>
+      <h2 id="rate-limits">Rate limits</h2>
       <p>
         The GraphQL Admin API uses a{" "}
         <a
@@ -407,7 +407,7 @@ app.route({
         and rely on retries instead.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>shopify-api-node</code> is built on{" "}
         <a
@@ -439,7 +439,7 @@ const res = await fetch(
 );`}
       />
 
-      <h2>Alternatives</h2>
+      <h2 id="alternatives">Alternatives</h2>
       <p>
         Shopify also publishes the official{" "}
         <a

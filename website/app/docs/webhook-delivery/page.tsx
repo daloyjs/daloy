@@ -107,7 +107,7 @@ export default function Page() {
         caption="Each delivery is a signed POST. Transient failures are retried with exponential backoff and jitter while reusing the same signature. An SSRF refusal or an exhausted attempt budget is sent straight to the dead-letter sink for inspection or replay."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { createWebhookSender, MemoryWebhookDeadLetterSink } from "@daloyjs/core";
@@ -130,7 +130,7 @@ if (!result.ok) {
 }`}
       />
 
-      <h2>What the receiver sees</h2>
+      <h2 id="what-the-receiver-sees">What the receiver sees</h2>
       <p>
         Every delivery is a <code>POST</code> with a stable idempotency id and a
         signature your subscriber verifies with the same shared secret:
@@ -152,7 +152,7 @@ webhook-signature: sha256=9f8a...c2
         on every attempt, so receivers can safely dedupe on the id.
       </p>
 
-      <h2>Verifying on the receiving end</h2>
+      <h2 id="verifying-on-the-receiving-end">Verifying on the receiving end</h2>
       <p>
         A DaloyJS receiver verifies the delivery with the inbound helper, using
         the same secret and the <code>webhook-timestamp</code> header:
@@ -185,7 +185,7 @@ app.route({
 });`}
       />
 
-      <h2>Retry &amp; backoff</h2>
+      <h2 id="retry-and-backoff">Retry &amp; backoff</h2>
       <p>
         Failed deliveries are retried up to <code>maxAttempts</code> (default{" "}
         <code>5</code>) with exponential backoff between{" "}
@@ -212,7 +212,7 @@ app.route({
 });`}
       />
 
-      <h2>Dead-letter semantics</h2>
+      <h2 id="dead-letter-semantics">Dead-letter semantics</h2>
       <p>
         When an event exhausts its attempts, or fails permanently (a{" "}
         non-retryable status or an SSRF refusal), it is handed to the{" "}
@@ -247,7 +247,7 @@ class TableDeadLetterSink implements WebhookDeadLetterSink {
         without re-signing under a new timestamp.
       </p>
 
-      <h2>SSRF posture</h2>
+      <h2 id="ssrf-posture">SSRF posture</h2>
       <p>
         The transport defaults to <code>fetchGuard()</code>. A subscriber URL
         that resolves to a cloud-metadata address or a private range is refused

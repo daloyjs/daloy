@@ -134,9 +134,17 @@ export default function RootLayout({
     >
       <body className="flex min-h-screen flex-col bg-background font-sans antialiased">
         <ThemeProvider>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:border focus:border-border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
+          >
+            Skip to content
+          </a>
           <ReadingProgress />
           <SiteHeader />
-          <div className="flex flex-1 flex-col">{children}</div>
+          <div id="main-content" tabIndex={-1} className="flex flex-1 flex-col">
+            {children}
+          </div>
           <footer className="border-t px-6 py-6 text-sm text-muted-foreground">
             <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row">
               <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">

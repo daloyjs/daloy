@@ -55,13 +55,13 @@ export default function Page() {
         caption="A push builds with the auto-detected heroku/nodejs buildpack and boots the Procfile web dyno bound to PORT. On a redeploy Heroku sends SIGTERM then SIGKILL after 30 seconds, so keep shutdownTimeoutMs well under that."
       />
 
-      <h2>When to choose Heroku</h2>
+      <h2 id="when-to-choose-heroku">When to choose Heroku</h2>
       <ul>
         <li>You already have Heroku add-ons and pipelines and don&apos;t want to migrate.</li>
         <li>You want a known, stable deploy story without a YAML file.</li>
       </ul>
 
-      <h2>Server entrypoint</h2>
+      <h2 id="server-entrypoint">Server entrypoint</h2>
       <CodeBlock
         language="ts"
         code={`// src/server.ts
@@ -74,16 +74,16 @@ serve(app, {
 });`}
       />
 
-      <h2>Procfile</h2>
+      <h2 id="procfile">Procfile</h2>
       <CodeBlock language="text" code={`web: node dist/server.js`} />
 
-      <h2>Stack</h2>
+      <h2 id="stack">Stack</h2>
       <p>
         Use <code>heroku-24</code> or <code>heroku-26</code>. <code>heroku-22</code> is deprecated.
       </p>
       <CodeBlock language="bash" code={`heroku stack:set heroku-24 --app my-daloy-api`} />
 
-      <h2>Buildpack</h2>
+      <h2 id="buildpack">Buildpack</h2>
       <p>
         The <code>heroku/nodejs</code> buildpack is auto-detected from <code>package.json</code>.
       </p>
@@ -92,7 +92,7 @@ serve(app, {
         code={`heroku buildpacks:set heroku/nodejs --app my-daloy-api`}
       />
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <CodeBlock
         language="bash"
         code={`heroku create my-daloy-api --stack heroku-24
@@ -100,7 +100,7 @@ heroku config:set SESSION_SECRET=...
 git push heroku main`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Heroku sends <code>SIGTERM</code> and then <code>SIGKILL</code> after 30 seconds. Set the
@@ -112,7 +112,7 @@ git push heroku main`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/deployment">Deployment overview</Link>

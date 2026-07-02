@@ -70,7 +70,7 @@ export default function Page() {
         caption="tenancy() resolves the calling tenant once per request and writes it to ctx.state.tenant. Register it first so tenantScope() can key every per-tenant bucket off the same value. If a limiter runs before tenancy(), its key falls back to tenant:unknown."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <p>
         Resolve the tenant from the request subdomain, bound the space with an
         allowlist, and give every tenant its own rate-limit bucket. Register{" "}
@@ -105,7 +105,7 @@ app.route({
         language="ts"
       />
 
-      <h2>Resolving the tenant</h2>
+      <h2 id="resolving-the-tenant">Resolving the tenant</h2>
       <p>
         Pass one resolver to <code>resolve</code>, or an array tried in order
         until one returns a non-empty value (e.g. prefer a verified JWT claim,
@@ -217,7 +217,7 @@ tenancy({
         language="ts"
       />
 
-      <h2>Options reference</h2>
+      <h2 id="options-reference">Options reference</h2>
       <div className="overflow-x-auto">
         <table>
           <thead>
@@ -291,7 +291,7 @@ tenancy({
         </table>
       </div>
 
-      <h2>Per-tenant isolation with <code>tenantScope()</code></h2>
+      <h2 id="per-tenant-isolation-with-tenantscope">Per-tenant isolation with <code>tenantScope()</code></h2>
       <p>
         <code>tenantScope()</code> returns a <code>(ctx) =&gt; string</code> key
         function that reads <code>ctx.state.tenant</code> and returns a{" "}
@@ -331,7 +331,7 @@ responseCache({
         <code>tenant:unknown</code>.
       </p>
 
-      <h2>Database isolation is yours to wire</h2>
+      <h2 id="database-isolation-is-yours-to-wire">Database isolation is yours to wire</h2>
       <p>
         This is the boundary worth being explicit about, because people coming
         from &ldquo;the framework guarantees isolation with Row-Level
@@ -365,7 +365,7 @@ await db.query("SET app.current_tenant = $1", [ctx.state.tenant]);
         query parameter or an RLS session variable.
       </p>
 
-      <h2>Typing <code>ctx.state.tenant</code></h2>
+      <h2 id="typing-ctx-state-tenant">Typing <code>ctx.state.tenant</code></h2>
       <p>
         Augment <code>AppState</code> so the resolved tenant is strongly typed
         in every handler and hook:
@@ -382,7 +382,7 @@ declare module "@daloyjs/core" {
         language="ts"
       />
 
-      <h2>Security posture</h2>
+      <h2 id="security-posture">Security posture</h2>
       <ul>
         <li>
           <strong>Refuse-unresolved by default.</strong> With{" "}
@@ -414,7 +414,7 @@ declare module "@daloyjs/core" {
         </li>
       </ul>
 
-      <h2>Runnable example</h2>
+      <h2 id="runnable-example">Runnable example</h2>
       <p>
         <code>examples/multitenancy-demo.ts</code> wires subdomain resolution +
         an allowlist + per-tenant rate limiting + a per-tenant in-memory store.
@@ -436,7 +436,7 @@ curl -s -o /dev/null -w '%{http_code}\\n' localhost:3003/orders -H 'Host: exampl
         language="sh"
       />
 
-      <h2>Tree-shake-friendly subpath</h2>
+      <h2 id="tree-shake-friendly-subpath">Tree-shake-friendly subpath</h2>
       <CodeBlock
         code={`// Main barrel:
 import { tenancy, tenantScope } from "@daloyjs/core";

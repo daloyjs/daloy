@@ -77,7 +77,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { trace } from "@opentelemetry/api";
 import { App, otelTracing } from "@daloyjs/core";
@@ -111,7 +111,7 @@ const app = new App({
         </li>
       </ul>
 
-      <h2>Reading the active span in handlers</h2>
+      <h2 id="reading-the-active-span-in-handlers">Reading the active span in handlers</h2>
       <p>
         The active span is exposed on <code>ctx.state.otelSpan</code> (key
         configurable via <code>stateKey</code>). Use it to add events, child
@@ -145,7 +145,7 @@ app.route({
 });`}
       />
 
-      <h2>Customizing span name and attributes</h2>
+      <h2 id="customizing-span-name-and-attributes">Customizing span name and attributes</h2>
       <p>
         All extractors are optional. They are merged on top of the defaults so
         you only need to override what you care about.
@@ -163,7 +163,7 @@ app.route({
 });`}
       />
 
-      <h2>Propagating upstream context</h2>
+      <h2 id="propagating-upstream-context">Propagating upstream context</h2>
       <p>
         DaloyJS does not bundle a propagator. If you want parent-span
         continuation from <code>traceparent</code> / B3 headers, use{" "}
@@ -186,7 +186,7 @@ otelTracing({
 });`}
       />
 
-      <h2>End-to-end with Jaeger (OTLP)</h2>
+      <h2 id="end-to-end-with-jaeger-otlp">End-to-end with Jaeger (OTLP)</h2>
       <p>
         The repository ships a runnable example plus a Jaeger service in the{" "}
         <code>examples/observability/</code> Docker stack, so you can watch real
@@ -198,21 +198,21 @@ otelTracing({
         straight to Jaeger&apos;s OTLP receiver, no{" "}
         <code>@opentelemetry/*</code> SDK required.
       </p>
-      <h3>1. Start Jaeger</h3>
+      <h3 id="1-start-jaeger">1. Start Jaeger</h3>
       <CodeBlock
         code={`docker compose -f examples/observability/docker-compose.yml up jaeger
 # Jaeger UI:            http://localhost:16686
 # OTLP/HTTP receiver:   http://localhost:4318/v1/traces`}
         language="sh"
       />
-      <h3>2. Run the demo app</h3>
+      <h3 id="2-run-the-demo-app">2. Run the demo app</h3>
       <CodeBlock
         code={`node --import tsx examples/otel-tracing-demo.ts
 # DaloyJS OTel tracing demo running at http://localhost:3002
 # Exporting OTLP spans to: http://localhost:4318/v1/traces`}
         language="sh"
       />
-      <h3>3. Generate traffic and open Jaeger</h3>
+      <h3 id="3-generate-traffic-and-open-jaeger">3. Generate traffic and open Jaeger</h3>
       <CodeBlock
         code={`curl localhost:3002/orders
 curl -X POST localhost:3002/orders -d '{"item":"book","total":42}' -H 'content-type: application/json'
@@ -241,7 +241,7 @@ curl localhost:3002/orders \\
         pass in does.
       </p>
 
-      <h2>Lifecycle and limitations</h2>
+      <h2 id="lifecycle-and-limitations">Lifecycle and limitations</h2>
       <ul>
         <li>
           <strong>Request outcomes.</strong> Matched routes, unmatched requests
@@ -267,7 +267,7 @@ curl localhost:3002/orders \\
         </li>
       </ul>
 
-      <h2>Tree-shake-friendly subpath</h2>
+      <h2 id="tree-shake-friendly-subpath">Tree-shake-friendly subpath</h2>
       <CodeBlock
         code={`// Main barrel:
 import { otelTracing } from "@daloyjs/core";

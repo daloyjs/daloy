@@ -45,10 +45,10 @@ export default function Page() {
         caption="The connection happens once inside the plugin. After you augment AppState, handlers get a fully typed state.db model surface."
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock code={`pnpm add mongoose`} />
 
-      <h2>2. Define a schema and model</h2>
+      <h2 id="2-define-a-schema-and-model">2. Define a schema and model</h2>
       <CodeBlock
         code={`// src/db/mongoose.ts
 import mongoose, { InferSchemaType, model, Schema } from "mongoose";
@@ -71,7 +71,7 @@ export const connection = mongoose;
 export const db = { connection, User };`}
       />
 
-      <h2>3. Create a Mongoose plugin</h2>
+      <h2 id="3-create-a-mongoose-plugin">3. Create a Mongoose plugin</h2>
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
@@ -89,7 +89,7 @@ export const mongoosePlugin = {
 };`}
       />
 
-      <h2>4. Augment app state types</h2>
+      <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { db } from "../db/mongoose";
@@ -101,7 +101,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in routes</h2>
+      <h2 id="5-use-it-in-routes">5. Use it in routes</h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -148,7 +148,7 @@ await app.ready();
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Sessions and transactions</h2>
+      <h2 id="sessions-and-transactions">Sessions and transactions</h2>
       <p>
         Use MongoDB sessions for multi-document transactions. Start the session inside the handler and thread it
         through every model call in the unit of work.
@@ -208,7 +208,7 @@ serve(app, { port: 3000 });`}
 }`}
       />
 
-      <h2>Validation and errors</h2>
+      <h2 id="validation-and-errors">Validation and errors</h2>
       <p>
         Keep transport validation in Zod and let Mongoose own document-level validation. Translate duplicate key
         or cast failures into DaloyJS errors so they serialize as problem+json.
@@ -227,7 +227,7 @@ try {
 }`}
       />
 
-      <h2>Runtime constraints</h2>
+      <h2 id="runtime-constraints">Runtime constraints</h2>
       <p>
         Mongoose is a Node.js-first ODM because it depends on the MongoDB Node driver. For SQL databases or
         edge runtimes, stay in the <Link href="/docs/orm">ORM section</Link> instead.

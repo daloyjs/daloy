@@ -56,7 +56,7 @@ export default function Page() {
         caption="The adapter turns a node:http socket into a web-standard Request, applies production timeouts and optional connection-layer admission control, then hands off to app.fetch. SIGTERM and SIGINT drain in-flight requests before closing."
       />
 
-      <h2>When to choose Node</h2>
+      <h2 id="when-to-choose-node">When to choose Node</h2>
       <ul>
         <li>
           You deploy to a container, VM, or Node PaaS (no per-request billing).
@@ -68,7 +68,7 @@ export default function Page() {
         <li>You want the broadest npm package compatibility.</li>
       </ul>
 
-      <h2>Scaffold</h2>
+      <h2 id="scaffold">Scaffold</h2>
       <p>
         The fastest way to start is the <code>node-basic</code> template. It
         ships with TypeScript, pnpm workspaces, a <code>/healthz</code> route,
@@ -81,7 +81,7 @@ cd my-api
 pnpm dev    # hot-reload via daloy dev`}
       />
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <p>
         Requires <strong>Node.js 24 LTS or Node.js 26+</strong>. The adapter ships
         with <code>@daloyjs/core</code>; no extra dependency. Node.js 25 is not
@@ -89,7 +89,7 @@ pnpm dev    # hot-reload via daloy dev`}
       </p>
       <CodeBlock language="bash" code={`pnpm add @daloyjs/core`} />
 
-      <h2>Minimal server</h2>
+      <h2 id="minimal-server">Minimal server</h2>
       <CodeBlock
         language="ts"
         code={`// src/server.ts
@@ -113,7 +113,7 @@ console.log(\`listening on :\${port}\`);
 await close();`}
       />
 
-      <h2>What the adapter wires for you</h2>
+      <h2 id="what-the-adapter-wires-for-you">What the adapter wires for you</h2>
       <ul>
         <li>
           <code>requestTimeout</code>, <code>headersTimeout</code>, and{" "}
@@ -140,7 +140,7 @@ await close();`}
         </li>
       </ul>
 
-      <h2>Behind a load balancer</h2>
+      <h2 id="behind-a-load-balancer">Behind a load balancer</h2>
       <p>Two rules to avoid the classic 502/504 race:</p>
       <ul>
         <li>
@@ -154,7 +154,7 @@ await close();`}
         </li>
       </ul>
 
-      <h2>Graceful degradation under overload</h2>
+      <h2 id="graceful-degradation-under-overload">Graceful degradation under overload</h2>
       <p>
         Steady-state throughput is only half the story. Once a Node process is
         pushed <em>past</em> saturation, the multi-second part of the tail
@@ -196,7 +196,7 @@ serve(app, {
         a very different point than I/O-bound proxying.
       </p>
 
-      <h3>Pair it with an upstream gateway</h3>
+      <h3 id="pair-it-with-an-upstream-gateway">Pair it with an upstream gateway</h3>
       <p>
         When the cap is hit, the overflow socket is refused at the TCP layer,
         the client sees a connection reset, not an HTTP response. In production
@@ -206,7 +206,7 @@ serve(app, {
         retry instead of hammering a saturated process.
       </p>
 
-      <h3>Pair it with loadShedding</h3>
+      <h3 id="pair-it-with-loadshedding">Pair it with loadShedding</h3>
       <p>
         <code>maxConnections</code> and{" "}
         <Link href="/docs/security/lifecycle-leftovers">
@@ -248,7 +248,7 @@ serve(app, {
         refused fast.&rdquo;
       </p>
 
-      <h2>Dockerfile</h2>
+      <h2 id="dockerfile">Dockerfile</h2>
       <CodeBlock
         language="docker"
         code={`FROM node:24-slim AS deps
@@ -270,7 +270,7 @@ EXPOSE 3000
 CMD ["dist/server.js"]`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Don&apos;t put <code>process.exit()</code> in a SIGTERM handler, let{" "}
@@ -284,7 +284,7 @@ CMD ["dist/server.js"]`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

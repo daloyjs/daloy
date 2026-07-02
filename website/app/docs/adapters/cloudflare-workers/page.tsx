@@ -57,7 +57,7 @@ export default function Page() {
         caption="toFetchHandler returns the { fetch } object Workers expect. To reach KV, R2, D1, or secrets, write the module export by hand and app.decorate(env) so bindings land on ctx.state inside every handler."
       />
 
-      <h2>When to choose Workers</h2>
+      <h2 id="when-to-choose-workers">When to choose Workers</h2>
       <ul>
         <li>
           You want global, low-latency execution without managing regions
@@ -73,7 +73,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Scaffold</h2>
+      <h2 id="scaffold">Scaffold</h2>
       <CodeBlock
         language="bash"
         code={`pnpm create daloy@latest my-api --template cloudflare-worker
@@ -81,7 +81,7 @@ cd my-api
 pnpm dev   # wrangler dev under the hood`}
       />
 
-      <h2>Worker entrypoint (no bindings)</h2>
+      <h2 id="worker-entrypoint-no-bindings">Worker entrypoint (no bindings)</h2>
       <p>
         If you don&apos;t need <code>env</code> bindings or the Worker{" "}
         <code>ExecutionContext</code>, <code>toFetchHandler</code> is a
@@ -98,7 +98,7 @@ import { app } from "./server.js";
 export default toFetchHandler(app);`}
       />
 
-      <h2>wrangler.jsonc</h2>
+      <h2 id="wrangler-jsonc">wrangler.jsonc</h2>
       <p>
         Cloudflare now recommends <code>wrangler.jsonc</code> over{" "}
         <code>wrangler.toml</code> for new projects; both are still supported.
@@ -126,7 +126,7 @@ export default toFetchHandler(app);`}
 }`}
       />
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <CodeBlock
         language="bash"
         code={`# local dev
@@ -144,7 +144,7 @@ pnpm wrangler deploy`}
         CI templates still reference it.
       </p>
 
-      <h2>Bindings (env)</h2>
+      <h2 id="bindings-env">Bindings (env)</h2>
       <p>
         <code>toFetchHandler(app)</code> only forwards the <code>Request</code>.
         To expose Worker bindings (KV, R2, D1, Durable Objects, Queues,
@@ -198,7 +198,7 @@ export default {
 });`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           No raw TCP. Use <strong>Hyperdrive</strong> for Postgres/MySQL, or
@@ -219,7 +219,7 @@ export default {
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

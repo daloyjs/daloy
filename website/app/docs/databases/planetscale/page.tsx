@@ -60,7 +60,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>1. Provision and grab credentials</h2>
+      <h2 id="1-provision-and-grab-credentials">1. Provision and grab credentials</h2>
       <p>
         Create a database at{" "}
         <a href="https://app.planetscale.com" target="_blank" rel="noreferrer">
@@ -71,10 +71,10 @@ export default function Page() {
         <code>DATABASE_PASSWORD</code>.
       </p>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @planetscale/database`} />
 
-      <h2>3. Create a PlanetScale plugin</h2>
+      <h2 id="3-create-a-planetscale-plugin">3. Create a PlanetScale plugin</h2>
       <CodeBlock
         code={`// src/db/planetscale.ts
     import { connect } from "@planetscale/database";
@@ -95,7 +95,7 @@ export const planetscalePlugin = {
 };`}
       />
 
-      <h2>4. Augment app state</h2>
+      <h2 id="4-augment-app-state">4. Augment app state</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { Db } from "../db/planetscale";
@@ -107,7 +107,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
@@ -141,7 +141,7 @@ app.route({
 });`}
       />
 
-      <h2>Cloudflare Workers</h2>
+      <h2 id="cloudflare-workers">Cloudflare Workers</h2>
       <p>
         Construct the connection inside the worker handler so it picks up the
         binding from <code>env</code>, then call <code>app.fetch(req)</code>. If
@@ -168,7 +168,7 @@ export default {
 };`}
       />
 
-      <h2>With Drizzle ORM</h2>
+      <h2 id="with-drizzle-orm">With Drizzle ORM</h2>
       <CodeBlock
         code={`pnpm add drizzle-orm
 // src/db/drizzle.ts
@@ -184,7 +184,7 @@ export const db = drizzle({
 `}
       />
 
-      <h2>With Prisma</h2>
+      <h2 id="with-prisma">With Prisma</h2>
       <p>
         Use the{" "}
         <a
@@ -216,7 +216,7 @@ export const prisma = new PrismaClient({ adapter });`}
         <code>{`{ fetch: undiciFetch }`}</code> as a second option.
       </p>
 
-      <h2>Branching &amp; deploy requests</h2>
+      <h2 id="branching-and-deploy-requests">Branching &amp; deploy requests</h2>
       <p>
         PlanetScale&apos;s schema workflow uses branches and deploy requests
         rather than ad-hoc <code>ALTER TABLE</code>. Pair this with your CI: run

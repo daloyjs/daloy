@@ -85,7 +85,7 @@ export default function Page() {
         caption="Each layer maps to one rule on Aikido's checklist. A leaked password alone clears none of them: it still has to come from the right network, carry an unthrottled per-admin token, survive CSRF, and leave an audit record."
       />
 
-      <h2>1. Don&apos;t mix admin routes into your public app</h2>
+      <h2 id="1-don-and-apos-t-mix-admin-routes-into-your-public-app">1. Don&apos;t mix admin routes into your public app</h2>
       <p>
         The first rule is the most important: admin endpoints should not be
         reachable from the same hostname as the public API, and they should not
@@ -157,7 +157,7 @@ app.route({
         default.
       </p>
 
-      <h2>2. Per-admin accounts with an audit log</h2>
+      <h2 id="2-per-admin-accounts-with-an-audit-log">2. Per-admin accounts with an audit log</h2>
       <p>
         Aikido&apos;s second rule is to ban shared <code>support@app.io</code>{" "}
         logins so every sensitive change is attributable. Daloy doesn&apos;t
@@ -232,7 +232,7 @@ app.route({
 });`}
       />
 
-      <h2>3. Enforce 2FA (or 3FA) for admin auth</h2>
+      <h2 id="3-enforce-2fa-or-3fa-for-admin-auth">3. Enforce 2FA (or 3FA) for admin auth</h2>
       <p>
         Daloy doesn&apos;t implement TOTP / WebAuthn itself (that belongs in
         your identity provider), but it gives you three layers that compose with
@@ -293,7 +293,7 @@ app.route({
 });`}
       />
 
-      <h2>4. Block unknown JavaScript with CSP</h2>
+      <h2 id="4-block-unknown-javascript-with-csp">4. Block unknown JavaScript with CSP</h2>
       <p>
         Aikido&apos;s last rule (and the one that would have prevented the
         &quot;Apple email injection&quot; case they cite) is a strict
@@ -341,7 +341,7 @@ app.use(secureHeaders({
         redaction so reported URLs don&apos;t leak PII into logs).
       </p>
 
-      <h2>Checklist: Aikido rule → Daloy primitive</h2>
+      <h2 id="checklist-aikido-rule-daloy-primitive">Checklist: Aikido rule → Daloy primitive</h2>
       <table>
         <thead>
           <tr>
@@ -417,7 +417,7 @@ app.use(secureHeaders({
         </tbody>
       </table>
 
-      <h2>
+      <h2 id="what-daloy-intentionally-does-not-do">
         What Daloy intentionally does <em>not</em> do
       </h2>
       <ul>

@@ -85,7 +85,7 @@ export default function Page() {
         <code>192.0.0.192</code>, Alibaba <code>100.100.100.200</code>).
       </p>
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { App, fetchGuard, SsrfBlockedError } from "@daloyjs/core";
 import { z } from "zod";
@@ -118,7 +118,7 @@ app.route({
 });`}
       />
 
-      <h2>What gets blocked by default</h2>
+      <h2 id="what-gets-blocked-by-default">What gets blocked by default</h2>
       <ul>
         <li>
           <strong>Loopback:</strong> <code>127.0.0.0/8</code>, <code>::1</code>.
@@ -162,7 +162,7 @@ app.route({
         is rejected the same way as <code>http://169.254.169.254/</code>.
       </p>
 
-      <h2>Redirects are re-validated at every hop</h2>
+      <h2 id="redirects-are-re-validated-at-every-hop">Redirects are re-validated at every hop</h2>
       <p>
         A common SSRF bypass is to return{" "}
         <code>302 Location: http://169.254.169.254/</code> from a public host.{" "}
@@ -173,7 +173,7 @@ app.route({
         <code>redirect: &quot;manual&quot;</code> per call for the same effect.
       </p>
 
-      <h2>Custom allowlists</h2>
+      <h2 id="custom-allowlists">Custom allowlists</h2>
       <CodeBlock
         code={`const safeFetch = fetchGuard({
   // IP / CIDR allowlist (overrides the deny defaults).
@@ -187,7 +187,7 @@ app.route({
 });`}
       />
 
-      <h2>Custom DNS resolution (non-Node runtimes)</h2>
+      <h2 id="custom-dns-resolution-non-node-runtimes">Custom DNS resolution (non-Node runtimes)</h2>
       <p>
         The default resolver uses Node&rsquo;s{" "}
         <code>node:dns/promises.lookup()</code>. On Cloudflare Workers, Deno
@@ -206,7 +206,7 @@ app.route({
 });`}
       />
 
-      <h2>Residual risk: DNS rebinding (TOCTOU)</h2>
+      <h2 id="residual-risk-dns-rebinding-toctou">Residual risk: DNS rebinding (TOCTOU)</h2>
       <p>
         The guard resolves the hostname once and validates every returned
         address, but between that resolution and the underlying TCP connect, an
@@ -254,7 +254,7 @@ const safeFetch = fetchGuard({
         controls.
       </p>
 
-      <h2>Error shape</h2>
+      <h2 id="error-shape">Error shape</h2>
       <p>
         Blocked requests throw <code>SsrfBlockedError</code> with a structured{" "}
         <code>reason</code>:

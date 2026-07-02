@@ -102,7 +102,7 @@ export default function Page() {
         caption="The OWASP API Top 10 splits cleanly across three layers in Daloy: choices refused before runtime, controls one call away, and the business-logic decisions only your code can make. The mapping table below walks each item through these layers."
       />
 
-      <h2>The mapping</h2>
+      <h2 id="the-mapping">The mapping</h2>
       <table>
         <thead>
           <tr>
@@ -360,7 +360,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>Cross-cutting best practices</h2>
+      <h2 id="cross-cutting-best-practices">Cross-cutting best practices</h2>
       <p>
         The Aikido guide also calls out general defences that aren&apos;t in the
         Top 10 list but matter for any API. Here&apos;s where Daloy addresses
@@ -461,7 +461,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>What no framework can do for you</h2>
+      <h2 id="what-no-framework-can-do-for-you">What no framework can do for you</h2>
       <ul>
         <li>
           <strong>Business-logic abuse:</strong> only your code knows whether a
@@ -484,7 +484,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Verify your posture</h2>
+      <h2 id="verify-your-posture">Verify your posture</h2>
       <ul>
         <li>
           <code>daloy doctor</code>: deployment-config posture checks.

@@ -57,7 +57,7 @@ export default function Page() {
         caption="Render picks up render.yaml on every push, builds and starts the Node web service, then gates routing on a 2xx from healthCheckPath while autoscaling between your min and max instances."
       />
 
-      <h2>When to choose Render</h2>
+      <h2 id="when-to-choose-render">When to choose Render</h2>
       <ul>
         <li>
           You want a Heroku-like UX with modern autoscaling and per-second
@@ -69,7 +69,7 @@ export default function Page() {
         <li>You want managed Postgres or Redis from the same dashboard.</li>
       </ul>
 
-      <h2>Server entrypoint</h2>
+      <h2 id="server-entrypoint">Server entrypoint</h2>
       <CodeBlock
         language="ts"
         code={`// src/server.ts
@@ -82,7 +82,7 @@ serve(app, {
 });`}
       />
 
-      <h2>render.yaml</h2>
+      <h2 id="render-yaml">render.yaml</h2>
       <p>
         Use <code>runtime: node</code>. The older <code>env: node</code> field
         is deprecated.
@@ -111,14 +111,14 @@ serve(app, {
         sync: false`}
       />
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <p>
         Push to your repo. Render picks up <code>render.yaml</code>{" "}
         automatically. For the first deploy, create a Blueprint service from the
         dashboard.
       </p>
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Bind to <code>0.0.0.0</code>, not <code>localhost</code>, or Render
@@ -132,7 +132,7 @@ serve(app, {
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/deployment">Deployment overview</Link>

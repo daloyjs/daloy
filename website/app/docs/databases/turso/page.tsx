@@ -65,17 +65,17 @@ export default function Page() {
         caption="The same createClient() driver serves both modes. Use an embedded replica on Node or Bun for ultra-low-latency local reads, and the remote HTTP client on Cloudflare Workers or Vercel."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <p>
         Create a database via the Turso CLI or dashboard, then grab the URL and
         auth token. Set them as <code>TURSO_DATABASE_URL</code> and{" "}
         <code>TURSO_AUTH_TOKEN</code>.
       </p>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @libsql/client`} />
 
-      <h2>3. Create a Turso plugin</h2>
+      <h2 id="3-create-a-turso-plugin">3. Create a Turso plugin</h2>
       <CodeBlock
         code={`// src/db/turso.ts
 import { createClient, type Client } from "@libsql/client";
@@ -97,7 +97,7 @@ export const tursoPlugin = {
 };`}
       />
 
-      <h2>4. Augment app state</h2>
+      <h2 id="4-augment-app-state">4. Augment app state</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { Client } from "@libsql/client";
@@ -109,7 +109,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
@@ -138,7 +138,7 @@ app.route({
 });`}
       />
 
-      <h2>Embedded replicas (Node, Bun)</h2>
+      <h2 id="embedded-replicas-node-bun">Embedded replicas (Node, Bun)</h2>
       <p>
         For ultra-low-latency reads, use an embedded replica that syncs with the
         primary in the background. Writes still go to the primary; reads are
@@ -155,13 +155,13 @@ export const db = createClient({
 });`}
       />
 
-      <h2>Cloudflare Workers / Vercel</h2>
+      <h2 id="cloudflare-workers-vercel">Cloudflare Workers / Vercel</h2>
       <p>
         Use the standard HTTP client (no embedded replicas in Workers). Pass{" "}
         <code>env.TURSO_DATABASE_URL</code> instead of <code>process.env</code>.
       </p>
 
-      <h2>With Drizzle ORM</h2>
+      <h2 id="with-drizzle-orm">With Drizzle ORM</h2>
       <CodeBlock
         code={`pnpm add drizzle-orm
 // src/db/drizzle.ts
@@ -175,7 +175,7 @@ const client = createClient({
 export const db = drizzle({ client });`}
       />
 
-      <h2>With Prisma</h2>
+      <h2 id="with-prisma">With Prisma</h2>
       <p>
         Prisma supports Turso through the{" "}
         <a

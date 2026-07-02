@@ -69,7 +69,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>
+      <h2 id="1-loadshedding">
         1. <code>loadShedding()</code>
       </h2>
       <p>
@@ -137,7 +137,7 @@ app.use(
         baselines from production.
       </p>
 
-      <h2>
+      <h2 id="2-app-cspreportroute-secureheaders-reporting-wiring">
         2. <code>app.cspReportRoute()</code> + <code>secureHeaders</code>{" "}
         reporting wiring
       </h2>
@@ -195,7 +195,7 @@ app.cspReportRoute({
         without breaking the <code>204</code> response.
       </p>
 
-      <h2>
+      <h2 id="3-disconnectstatuscode-499-default">
         3. <code>disconnectStatusCode: 499</code> default
       </h2>
       <p>
@@ -226,7 +226,7 @@ const legacy = new App({ disconnectStatusCode: 0 });
         range (or <code>0</code> to keep whatever status the handler produced).
       </p>
 
-      <h2>
+      <h2 id="4-defineconfig">
         4. <code>defineConfig({"{ schema, source }"})</code>
       </h2>
       <p>

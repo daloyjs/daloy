@@ -82,7 +82,7 @@ export default function Page() {
         caption="The DaloyJS API only verifies the access token Cognito issued. It never sees user passwords, and the JWKS is cached so most requests verify without a network round-trip."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Create a user pool in the AWS console, then add an{" "}
@@ -102,10 +102,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add aws-jwt-verify`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 COGNITO_USER_POOL_ID=us-east-1_AbCdEfGhI
@@ -113,7 +113,7 @@ COGNITO_CLIENT_ID=1example23456789
 COGNITO_REQUIRED_SCOPE=my-api/read`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/cognito.ts
 import { CognitoJwtVerifier } from "aws-jwt-verify";
@@ -164,7 +164,7 @@ declare module "@daloyjs/core" {
         Subsequent key rotations are picked up automatically.
       </p>
 
-      <h2>5. Guard a route</h2>
+      <h2 id="5-guard-a-route">5. Guard a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -194,7 +194,7 @@ app.route({
 });`}
       />
 
-      <h2>Trusting multiple pools or IdPs</h2>
+      <h2 id="trusting-multiple-pools-or-idps">Trusting multiple pools or IdPs</h2>
       <p>
         <code>CognitoJwtVerifier.create([...])</code> accepts an array of pool
         configurations to trust JWTs from more than one user pool. To trust a
@@ -203,7 +203,7 @@ app.route({
         <code>customJwtCheck</code>.
       </p>
 
-      <h2>Notes on tokens</h2>
+      <h2 id="notes-on-tokens">Notes on tokens</h2>
       <ul>
         <li>
           <strong>Access tokens</strong> carry <code>scope</code> (space-separated

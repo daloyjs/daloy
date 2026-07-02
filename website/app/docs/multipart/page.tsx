@@ -71,7 +71,7 @@ export default function Page() {
         caption="App-level caps are evaluated as soon as the body is parsed, so an oversized or over-counted request is rejected before the handler runs. Per-field fileField() checks (size, MIME allowlist, magic bytes) then surface mismatches as a 422 problem+json, leaving the handler a fully typed body."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, fileField, multipartObject } from "@daloyjs/core";
@@ -110,7 +110,7 @@ app.route({
 });`}
       />
 
-      <h2>fileField() options</h2>
+      <h2 id="filefield-options">fileField() options</h2>
       <ul>
         <li>
           <code>maxBytes</code>: reject files larger than this many bytes.
@@ -147,7 +147,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Magic-byte verification</h2>
+      <h2 id="magic-byte-verification">Magic-byte verification</h2>
       <p>
         MIME types come from the client, so use <code>magicBytes</code> when the
         route only accepts formats with recognizable signatures. Daloy rejects a
@@ -170,7 +170,7 @@ fileField({
 });`}
       />
 
-      <h2>Strict form fields</h2>
+      <h2 id="strict-form-fields">Strict form fields</h2>
       <p>
         By default, <code>multipartObject()</code> validates the fields you
         declare and ignores extra form fields. Pass{" "}
@@ -187,7 +187,7 @@ fileField({
 );`}
       />
 
-      <h2>App-level safety caps</h2>
+      <h2 id="app-level-safety-caps">App-level safety caps</h2>
       <p>
         The framework already enforces <code>bodyLimitBytes</code> on every
         request. For multipart bodies you can layer additional limits via{" "}
@@ -209,7 +209,7 @@ fileField({
         (size) or <code>400 Bad Request</code> (counts) before the handler runs.
       </p>
 
-      <h2>OpenAPI emission</h2>
+      <h2 id="openapi-emission">OpenAPI emission</h2>
       <p>
         When the request body is built from <code>multipartObject()</code>, the
         OpenAPI generator emits <code>multipart/form-data</code> as the request
@@ -220,7 +220,7 @@ fileField({
         see the constraints.
       </p>
 
-      <h2>Validation errors</h2>
+      <h2 id="validation-errors">Validation errors</h2>
       <p>
         Field-level failures are returned as a standard{" "}
         <code>422 Unprocessable Content</code> problem+json document with one

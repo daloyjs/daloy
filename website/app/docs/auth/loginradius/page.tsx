@@ -83,7 +83,7 @@ export default function Page() {
         caption="LoginRadius access tokens are validated through the provider API via the Node SDK. This is different from the JWT/JWKS provider pages, where verification is local after the signing keys are cached."
       />
 
-      <h2>1. Configure LoginRadius</h2>
+      <h2 id="1-configure-loginradius">1. Configure LoginRadius</h2>
       <ol>
         <li>
           In the LoginRadius Admin Console, copy your <strong>API Key</strong>,{" "}
@@ -100,10 +100,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add loginradius-sdk`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 LOGINRADIUS_API_DOMAIN=api.loginradius.com
@@ -113,7 +113,7 @@ LOGINRADIUS_SITE_NAME=acme
 LOGINRADIUS_API_REQUEST_SIGNING=false`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <p>
         The SDK is CommonJS and does not ship first-class TypeScript types, so
         wrap only the methods your app needs behind a small typed boundary.
@@ -202,7 +202,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Guard a route</h2>
+      <h2 id="5-guard-a-route">5. Guard a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -238,7 +238,7 @@ app.route({
 });`}
       />
 
-      <h2>Role checks</h2>
+      <h2 id="role-checks">Role checks</h2>
       <p>
         LoginRadius profile shape depends on your account configuration and
         selected fields. If your site stores roles or authorization flags in the
@@ -258,7 +258,7 @@ export function requireLoginRadiusRole(role: string): Middleware {
 }`}
       />
 
-      <h2>Registration and account APIs</h2>
+      <h2 id="registration-and-account-apis">Registration and account APIs</h2>
       <p>
         The SDK also wraps registration, password reset, email verification,
         access-token invalidation, account lookup, and custom-object APIs. Keep
@@ -267,7 +267,7 @@ export function requireLoginRadiusRole(role: string): Middleware {
         SDK error objects.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>loginradius-sdk</code> is a Node-style CommonJS SDK. Use it on the{" "}
         <Link href="/docs/adapters/node">Node adapter</Link>, Bun when your
@@ -277,7 +277,7 @@ export function requireLoginRadiusRole(role: string): Middleware {
         direct HTTP calls from a runtime that can safely keep server secrets.
       </p>
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           Treat the LoginRadius API secret like a signing key. Store it in your

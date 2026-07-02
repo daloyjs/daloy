@@ -51,10 +51,10 @@ export default function Page() {
         you install below.
       </p>
 
-      <h2>Install</h2>
+      <h2 id="install">Install</h2>
       <CodeBlock code={`pnpm add @daloyjs/core valibot`} />
 
-      <h2>Why Valibot</h2>
+      <h2 id="why-valibot">Why Valibot</h2>
       <ul>
         <li>
           <strong>Bundle size.</strong> You import only the validators you
@@ -73,7 +73,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>What gets validated</h2>
+      <h2 id="what-gets-validated">What gets validated</h2>
       <p>For each route you can declare schemas for:</p>
       <ul>
         <li>
@@ -97,7 +97,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>A complete route</h2>
+      <h2 id="a-complete-route">A complete route</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import * as v from "valibot";
@@ -163,7 +163,7 @@ export const app = new App().route({
         response before serialization.
       </p>
 
-      <h2>Params, query, and headers</h2>
+      <h2 id="params-query-and-headers">Params, query, and headers</h2>
       <p>
         Path params, query values, headers, and urlencoded form values arrive as
         strings before schema validation. Drop a <code>v.transform</code> or one
@@ -231,7 +231,7 @@ app.route({
 });`}
       />
 
-      <h2>Body limits and content types</h2>
+      <h2 id="body-limits-and-content-types">Body limits and content types</h2>
       <p>
         When a route declares <code>request.body</code>, DaloyJS will also
         enforce:
@@ -281,7 +281,7 @@ app.route({
 });`}
       />
 
-      <h2>Response validation</h2>
+      <h2 id="response-validation">Response validation</h2>
       <p>
         When a response schema is declared, DaloyJS validates the handler return
         before serializing it. Valibot object schemas return only declared keys
@@ -311,7 +311,7 @@ app.route({
 });`}
       />
 
-      <h2>Discriminated unions</h2>
+      <h2 id="discriminated-unions">Discriminated unions</h2>
       <p>
         Use <code>v.variant</code> for tagged unions. DaloyJS emits a proper{" "}
         <code>discriminator</code> in the OpenAPI document so generated clients
@@ -341,7 +341,7 @@ app.route({
 });`}
       />
 
-      <h2>Reusing types</h2>
+      <h2 id="reusing-types">Reusing types</h2>
       <CodeBlock
         code={`import * as v from "valibot";
 
@@ -360,7 +360,7 @@ export type BookInput = v.InferInput<typeof Book>;`}
         pre-parse shape, for example in a form library.
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Validation failures produce the same response as every other validator
         in DaloyJS: <strong>422 Unprocessable Entity</strong> as RFC 9457
@@ -379,7 +379,7 @@ export type BookInput = v.InferInput<typeof Book>;`}
 }`}
       />
 
-      <h2>OpenAPI</h2>
+      <h2 id="openapi">OpenAPI</h2>
       <p>
         Valibot schemas are converted into JSON Schema by DaloyJS&apos;s OpenAPI
         generator the same way Zod schemas are. Run the CLI and your spec is in
@@ -387,7 +387,7 @@ export type BookInput = v.InferInput<typeof Book>;`}
       </p>
       <CodeBlock code={`pnpm daloy openapi --out openapi.json`} />
 
-      <h2>Mixing validators</h2>
+      <h2 id="mixing-validators">Mixing validators</h2>
       <p>
         Nothing stops you from using Valibot for one route and Zod for another
         in the same app. Both speak Standard Schema. That is useful when
@@ -395,7 +395,7 @@ export type BookInput = v.InferInput<typeof Book>;`}
         exports its schemas in one library and you do not want to rewrite them.
       </p>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <a href="/docs/validation">Validation overview</a>: how validators

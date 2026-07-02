@@ -142,15 +142,15 @@ export default function Page() {
         caption="The core only ever sees a Request and returns a Response. Each thin adapter handles one platform's sockets, signals, or event shape, so the same app ships everywhere without a rewrite."
       />
 
-      <h2>Pick a target</h2>
+      <h2 id="pick-a-target">Pick a target</h2>
 
-      <h3>Runtimes (you own the process)</h3>
+      <h3 id="runtimes-you-own-the-process">Runtimes (you own the process)</h3>
       <Grid items={RUNTIMES} />
 
-      <h3>Edge &amp; serverless (platform owns the process)</h3>
+      <h3 id="edge-and-serverless-platform-owns-the-process">Edge &amp; serverless (platform owns the process)</h3>
       <Grid items={EDGE} />
 
-      <h2>Roll your own</h2>
+      <h2 id="roll-your-own">Roll your own</h2>
       <p>
         If your runtime exposes the web-standard <code>Request / Response</code>{" "}
         contract and isn&apos;t listed above, you don&apos;t need an adapter at
@@ -167,7 +167,7 @@ export default {
 };`}
       />
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/deployment">Deployment</Link>: Docker,

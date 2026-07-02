@@ -36,7 +36,7 @@ export default function Page() {
         database for the <Link href="/docs/adapters">Cloudflare adapter</Link>.
       </p>
 
-      <h2>1. Provision via Wrangler</h2>
+      <h2 id="1-provision-via-wrangler">1. Provision via Wrangler</h2>
       <CodeBlock
         code={`pnpm add -D wrangler
 pnpm dlx wrangler d1 create my-app-db`}
@@ -49,7 +49,7 @@ database_name = "my-app-db"
 database_id = "<id-from-create>"`}
       />
 
-      <h2>2. Type the binding</h2>
+      <h2 id="2-type-the-binding">2. Type the binding</h2>
       <CodeBlock
         code={`// src/types/env.d.ts
 export interface Env {
@@ -57,7 +57,7 @@ export interface Env {
 }`}
       />
 
-      <h2>3. Decorate the app per-request</h2>
+      <h2 id="3-decorate-the-app-per-request">3. Decorate the app per-request</h2>
       <p>
         D1 bindings live on <code>env</code>, not <code>process.env</code>, so decorate inside the
         Worker&apos;s <code>fetch</code> handler and call <code>app.fetch(req)</code> directly:
@@ -123,7 +123,7 @@ export default {
 };`}
       />
 
-      <h2>4. Augment app state</h2>
+      <h2 id="4-augment-app-state">4. Augment app state</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 declare module "@daloyjs/core" {
@@ -133,14 +133,14 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>Migrations</h2>
+      <h2 id="migrations">Migrations</h2>
       <CodeBlock
         code={`pnpm dlx wrangler d1 migrations create my-app-db init
 pnpm dlx wrangler d1 migrations apply my-app-db --local
 pnpm dlx wrangler d1 migrations apply my-app-db --remote`}
       />
 
-      <h2>With Drizzle ORM</h2>
+      <h2 id="with-drizzle-orm">With Drizzle ORM</h2>
       <CodeBlock
         code={`pnpm add drizzle-orm
 // src/db/drizzle.ts
@@ -150,13 +150,13 @@ import type { Env } from "../types/env";
 export const createDb = (env: Env) => drizzle(env.DB);`}
       />
 
-      <h2>With Prisma</h2>
+      <h2 id="with-prisma">With Prisma</h2>
       <p>
         Prisma supports D1 via the <a href="https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1" target="_blank" rel="noreferrer">D1 Driver Adapter</a>.
         Construct the adapter inside the Worker handler since it needs the runtime binding.
       </p>
 
-      <h2>Limitations to know</h2>
+      <h2 id="limitations-to-know">Limitations to know</h2>
       <ul>
         <li>D1 only runs in Cloudflare Workers, no Node.js, Lambda, or Edge runtime support.</li>
         <li>

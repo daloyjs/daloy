@@ -57,7 +57,7 @@ export default function Page() {
         caption="The same plugin code path serves every environment. Set MAILTRAP_SANDBOX=true in dev/staging to capture messages in a test inbox, and leave it off in production to deliver for real."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           For testing, open <strong>Email Sandbox → Inboxes</strong> and copy
@@ -71,10 +71,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add mailtrap`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 MAILTRAP_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -85,7 +85,7 @@ MAILTRAP_SANDBOX=true
 MAILTRAP_TEST_INBOX_ID=1234567`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/mailtrap.ts
 import { MailtrapClient } from "mailtrap";
@@ -140,7 +140,7 @@ declare module "@daloyjs/core" {
         <code>MAILTRAP_SANDBOX</code> per environment.
       </p>
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -175,7 +175,7 @@ app.route({
 });`}
       />
 
-      <h2>Bulk sending</h2>
+      <h2 id="bulk-sending">Bulk sending</h2>
       <p>
         Mailtrap exposes a separate <strong>Bulk Sending</strong> stream
         optimised for marketing volume. Toggle it on the same client by setting{" "}
@@ -188,7 +188,7 @@ app.route({
 });`}
       />
 
-      <h2>Templates</h2>
+      <h2 id="templates">Templates</h2>
       <p>
         Create a template in <strong>Email Sending → Email Templates</strong>,
         then send it by UUID and provide variables instead of{" "}
@@ -203,7 +203,7 @@ app.route({
 });`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>mailtrap</code> SDK targets Node (uses Node&apos;s HTTPS
         module). For <Link href="/docs/adapters">Cloudflare Workers</Link> or{" "}

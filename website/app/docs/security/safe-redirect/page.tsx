@@ -81,7 +81,7 @@ export default function Page() {
         caption="Every candidate runs the full gauntlet before any Location header is built. Dangerous schemes, protocol-relative escapes, and control characters are refused outright; only an exact allowlist match is emitted. A rejected target either falls back or throws."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { App, safeRedirect } from "@daloyjs/core";
 
@@ -109,7 +109,7 @@ app.route({
         is never cached and reused.
       </p>
 
-      <h2>Strict by default</h2>
+      <h2 id="strict-by-default">Strict by default</h2>
       <p>The defaults are deliberately conservative:</p>
       <ul>
         <li>
@@ -136,7 +136,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Allowing internal paths and external origins</h2>
+      <h2 id="allowing-internal-paths-and-external-origins">Allowing internal paths and external origins</h2>
       <CodeBlock
         language="ts"
         code={`// Same-origin paths only (exact pathname match).
@@ -158,7 +158,7 @@ safeRedirect(next, { allowedPaths: ["/*"] });`}
         allowed.
       </p>
 
-      <h2>Fallback vs. throwing</h2>
+      <h2 id="fallback-vs-throwing">Fallback vs. throwing</h2>
       <p>
         When a candidate is rejected, you choose the behavior. Provide a{" "}
         <code>fallback</code> path and the user is quietly redirected there.
@@ -193,7 +193,7 @@ try {
         are seeing.
       </p>
 
-      <h2>Choosing a status code</h2>
+      <h2 id="choosing-a-status-code">Choosing a status code</h2>
       <p>
         Override the default <code>303</code> only when you genuinely need a
         different redirect semantic. Accepted values are <code>301</code>,{" "}

@@ -88,7 +88,7 @@ export default function Page() {
         caption="A request acquires a slot from the per-bucket semaphore, waits in a bounded FIFO queue if every slot is busy, and is shed with a fast 503 once the queue is full or the wait times out. The slot is always released when the response finalizes, so a slot is never leaked."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { App, concurrencyLimit } from "@daloyjs/core";
@@ -104,7 +104,7 @@ app.use(concurrencyLimit({
 }));`}
       />
 
-      <h2>Scopes</h2>
+      <h2 id="scopes">Scopes</h2>
       <p>
         <code>scope</code> decides how the concurrency budget is partitioned:
       </p>
@@ -147,7 +147,7 @@ app.use(concurrencyLimit({
 }));`}
       />
 
-      <h2>No queue vs. queue</h2>
+      <h2 id="no-queue-vs-queue">No queue vs. queue</h2>
       <p>
         With the default <code>maxQueue: 0</code>, an overflowing request is
         rejected <em>immediately</em> with <code>503</code>, useful when you
@@ -168,7 +168,7 @@ app.use(concurrencyLimit({
 }));`}
       />
 
-      <h2>Observability</h2>
+      <h2 id="observability">Observability</h2>
       <p>
         <code>onReject</code> fires whenever a request is turned away, with the
         bucket key, the reason (<code>&quot;queue-full&quot;</code> or{" "}
@@ -189,7 +189,7 @@ app.use(concurrencyLimit({
 }));`}
       />
 
-      <h2>Customizing the 503</h2>
+      <h2 id="customizing-the-503">Customizing the 503</h2>
       <CodeBlock
         language="ts"
         code={`app.use(concurrencyLimit({
@@ -199,7 +199,7 @@ app.use(concurrencyLimit({
 }));`}
       />
 
-      <h2>How it complements the rest of the stack</h2>
+      <h2 id="how-it-complements-the-rest-of-the-stack">How it complements the rest of the stack</h2>
       <ul>
         <li>
           <strong>

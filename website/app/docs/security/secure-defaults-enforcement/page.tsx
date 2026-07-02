@@ -49,7 +49,7 @@ export default function Page() {
         releases.
       </p>
 
-      <h2>
+      <h2 id="1-securedefaults-false-master-flag-enforcement">
         1. <code>secureDefaults: false</code> master-flag enforcement
       </h2>
       <p>
@@ -136,7 +136,7 @@ new App({
         existing <code>_resetCrashHandlersForTests</code> pattern.
       </p>
 
-      <h2>2. JWT HS-secret length refuse-to-construct (RFC 7518 §3.2)</h2>
+      <h2 id="2-jwt-hs-secret-length-refuse-to-construct-rfc-7518-3-2">2. JWT HS-secret length refuse-to-construct (RFC 7518 §3.2)</h2>
       <p>
         <code>createJwtSigner()</code> and <code>createJwtVerifier()</code> now
         refuse <code>Uint8Array</code> HS-shaped secrets shorter than{" "}
@@ -169,7 +169,7 @@ crypto.getRandomValues(key);
 createJwtSigner({ alg: "HS256", key, maxLifetimeSeconds: 60 });`}
       />
 
-      <h2>
+      <h2 id="3-secureheaders-refuses-dual-framing-defense-disable">
         3. <code>secureHeaders()</code> refuses dual framing-defense disable
       </h2>
       <p>
@@ -220,7 +220,7 @@ secureHeaders({
         case (no options passed) needs no changes.
       </p>
 
-      <h2>4. Mandatory hardware-backed 2FA for publish access</h2>
+      <h2 id="4-mandatory-hardware-backed-2fa-for-publish-access">4. Mandatory hardware-backed 2FA for publish access</h2>
       <p>
         Daloy&apos;s supply-chain posture now mandates{" "}
         <strong>hardware-backed 2FA</strong> for every contributor with publish
@@ -261,7 +261,7 @@ secureHeaders({
         </li>
       </ul>
 
-      <h2>What&apos;s next</h2>
+      <h2 id="what-and-apos-s-next">What&apos;s next</h2>
       <p>
         The remaining cross-cutting bullets stay tracked on the roadmap and will
         land in subsequent <code>0.26.x</code> additive patches: single source

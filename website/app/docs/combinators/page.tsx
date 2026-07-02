@@ -30,7 +30,7 @@ export default function Page() {
         <code>except()</code> to skip a gate for specific paths.
       </p>
 
-      <h2>
+      <h2 id="every-run-a-whole-stack-in-order">
         <code>every()</code>: run a whole stack in order
       </h2>
       <p>
@@ -91,7 +91,7 @@ const adminStack = every(
 app.use(adminStack);`}
       />
 
-      <h2>
+      <h2 id="some-accept-any-one-proof-of-identity">
         <code>some()</code>: accept any one proof of identity
       </h2>
       <p>
@@ -184,7 +184,7 @@ app.use(
         </li>
       </ul>
 
-      <h2>
+      <h2 id="except-apply-everywhere-but-a-few-paths">
         <code>except()</code>: apply everywhere but a few paths
       </h2>
       <p>
@@ -234,7 +234,7 @@ app.use(
         different phases with different rules.
       </p>
 
-      <h2>Composing the three</h2>
+      <h2 id="composing-the-three">Composing the three</h2>
       <p>
         The primitives nest. A common production shape is to run correlation,
         secure headers, and authentication everywhere, but skip the auth gate

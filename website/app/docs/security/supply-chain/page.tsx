@@ -50,7 +50,7 @@ export default function Page() {
         defaults for your project.
       </p>
 
-      <h2>How DaloyJS itself is published</h2>
+      <h2 id="how-daloyjs-itself-is-published">How DaloyJS itself is published</h2>
       <FlowDiagram
         title="The publish pipeline, tag to tarball"
         numbered
@@ -158,7 +158,7 @@ export default function Page() {
         .
       </p>
 
-      <h2>How the framework itself is fuzzed</h2>
+      <h2 id="how-the-framework-itself-is-fuzzed">How the framework itself is fuzzed</h2>
       <p>
         Beyond static analysis, the untrusted-input parsers in{" "}
         <code>@daloyjs/core</code> are continuously fuzzed with{" "}
@@ -227,7 +227,7 @@ export default function Page() {
         .
       </p>
 
-      <h2>
+      <h2 id="defaults-you-get-from-pnpm-create-daloy">
         Defaults you get from <code>pnpm create daloy</code>
       </h2>
       <p>
@@ -254,7 +254,7 @@ verify-store-integrity=true
 strict-peer-dependencies=true`}
       />
 
-      <h2>Optional CI bundle for user projects</h2>
+      <h2 id="optional-ci-bundle-for-user-projects">Optional CI bundle for user projects</h2>
       <p>
         <code>create-daloy --with-ci</code> adds the GitHub-side controls that
         do not come from a package install: CI with top-level{" "}
@@ -288,7 +288,7 @@ strict-peer-dependencies=true`}
         reproducible, and isolate any job that can publish or deploy.
       </p>
 
-      <h2>If you legitimately need a postinstall</h2>
+      <h2 id="if-you-legitimately-need-a-postinstall">If you legitimately need a postinstall</h2>
       <p>
         <code>ignore-scripts=true</code> is global. To allow a build script for
         a package you actually trust (e.g. <code>esbuild</code>), allowlist it
@@ -309,7 +309,7 @@ strict-peer-dependencies=true`}
         form). Each entry should be reviewed in PR.
       </p>
 
-      <h2>Avoid git and tarball dependencies</h2>
+      <h2 id="avoid-git-and-tarball-dependencies">Avoid git and tarball dependencies</h2>
       <p>
         DaloyJS also checks its root lockfile for dependency sources that bypass
         the normal npm registry path. In this repo,{" "}
@@ -318,7 +318,7 @@ strict-peer-dependencies=true`}
         through as ordinary version churn.
       </p>
 
-      <h2>Optional: install-time malware scanners</h2>
+      <h2 id="optional-install-time-malware-scanners">Optional: install-time malware scanners</h2>
       <p>
         The 24-hour <code>minimum-release-age</code> cooldown is what bridges
         the gap between a malicious version being published and the registry
@@ -359,7 +359,7 @@ safe-chain setup`}
         the article recommends.
       </p>
 
-      <h2>Mapped to the ENISA package-manager advisory</h2>
+      <h2 id="mapped-to-the-enisa-package-manager-advisory">Mapped to the ENISA package-manager advisory</h2>
       <p>
         ENISA&apos;s{" "}
         <a
@@ -511,7 +511,7 @@ safe-chain setup`}
         low-false-positive guardrail the report associates with fewer incidents.
       </p>
 
-      <h2>What to do if a maintainer account is phished</h2>
+      <h2 id="what-to-do-if-a-maintainer-account-is-phished">What to do if a maintainer account is phished</h2>
       <p>
         The September 2025 chalk/debug compromise started with a single fake{" "}
         <code>npmjs.help</code> 2FA-reset email. If you suspect a maintainer
@@ -545,7 +545,7 @@ safe-chain setup`}
         </li>
       </ol>
 
-      <h2>Hardening your own GitHub Actions</h2>
+      <h2 id="hardening-your-own-github-actions">Hardening your own GitHub Actions</h2>
       <p>
         If you publish your own application&apos;s artifacts from CI, copy these
         rules:
@@ -587,7 +587,7 @@ safe-chain setup`}
         </li>
       </ul>
 
-      <h2>Further reading</h2>
+      <h2 id="further-reading">Further reading</h2>
       <ul>
         <li>
           <a

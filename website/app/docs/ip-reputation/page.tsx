@@ -85,7 +85,7 @@ export default function Page() {
         caption="The denylist is periodically refreshed from pluggable feeds. Reputation is layered defense, so a failed load or an unresolvable IP never blocks traffic: it retains the last-known-good list and lets the request through."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { createApp } from "@daloyjs/core";
@@ -109,7 +109,7 @@ app.use(reputation.hooks);
 process.on("SIGTERM", () => reputation.stop());`}
       />
 
-      <h2>Wiring abuse feeds</h2>
+      <h2 id="wiring-abuse-feeds">Wiring abuse feeds</h2>
       <p>
         A feed is anything implementing <code>IpReputationFeed</code>:
       </p>
@@ -145,7 +145,7 @@ const reputation = ipReputation({
 });`}
       />
 
-      <h2>Fail-open semantics</h2>
+      <h2 id="fail-open-semantics">Fail-open semantics</h2>
       <p>
         Reputation is layered defense, so an unavailable feed must never block
         legitimate traffic:
@@ -178,7 +178,7 @@ const reputation = ipReputation({
 });`}
       />
 
-      <h2>Monitor mode</h2>
+      <h2 id="monitor-mode">Monitor mode</h2>
       <p>
         Roll a new feed out in <code>&quot;log&quot;</code> mode first to
         measure what it would block before you enforce it:
@@ -195,7 +195,7 @@ const reputation = ipReputation({
 });`}
       />
 
-      <h2>Manual refresh &amp; introspection</h2>
+      <h2 id="manual-refresh-and-introspection">Manual refresh &amp; introspection</h2>
       <p>
         <code>ipReputation()</code> returns a controller you can drive directly:
       </p>
@@ -213,7 +213,7 @@ reputation.size;                     // number of compiled entries
 reputation.has("203.0.113.7");       // probe without side effects`}
       />
 
-      <h2>Custom IP resolution</h2>
+      <h2 id="custom-ip-resolution">Custom IP resolution</h2>
       <p>
         By default the client IP is resolved from the socket-supplied value; set{" "}
         <code>trustProxyHeaders: true</code> to read{" "}
@@ -229,7 +229,7 @@ reputation.has("203.0.113.7");       // probe without side effects`}
 });`}
       />
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           <strong>Defense in depth.</strong> A denylist complements (never

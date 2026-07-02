@@ -66,7 +66,7 @@ export default function Page() {
         caption="You write the route once. Validation, the OpenAPI spec, the interactive docs, and the typed client are all derived from it, so they can never drift out of sync."
       />
 
-      <h2>One line: auto-mount /docs, /openapi.json, /openapi.yaml</h2>
+      <h2 id="one-line-auto-mount-docs-openapi-json-openapi-yaml">One line: auto-mount /docs, /openapi.json, /openapi.yaml</h2>
       <p>
         FastAPI-style. Pass <code>docs: true</code> to the <code>App</code>{" "}
         constructor and DaloyJS registers <code>GET /openapi.json</code> +{" "}
@@ -111,7 +111,7 @@ const app = new App({
 });`}
       />
 
-      <h2>Pick a UI: Scalar, Swagger UI, or Redoc</h2>
+      <h2 id="pick-a-ui-scalar-swagger-ui-or-redoc">Pick a UI: Scalar, Swagger UI, or Redoc</h2>
       <p>
         Set <code>ui</code> to <code>&quot;scalar&quot;</code> (default),{" "}
         <code>&quot;swagger&quot;</code>, or <code>&quot;redoc&quot;</code>. All
@@ -211,7 +211,7 @@ const app = new App({
         client visibility without copying the docs HTML.
       </p>
 
-      <h2>Advanced: generate the spec manually</h2>
+      <h2 id="advanced-generate-the-spec-manually">Advanced: generate the spec manually</h2>
       <p>
         Need the raw spec object (for codegen, contract tests, or a custom
         route)? Call <code>generateOpenAPI(app, options)</code> directly:
@@ -228,7 +228,7 @@ const doc = generateOpenAPI(app, {
 console.log(JSON.stringify(doc, null, 2));`}
       />
 
-      <h2>Advanced: serve docs from your own route</h2>
+      <h2 id="advanced-serve-docs-from-your-own-route">Advanced: serve docs from your own route</h2>
       <CodeBlock
         code={`import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/core/docs";
 
@@ -274,7 +274,7 @@ const res = htmlResponse(
         validate search, grouping, and render performance.
       </p>
 
-      <h2>Dump to disk for codegen</h2>
+      <h2 id="dump-to-disk-for-codegen">Dump to disk for codegen</h2>
       <CodeBlock
         language="ts"
         code={`// scripts/dump-openapi.ts
@@ -300,7 +300,7 @@ console.log(\`wrote \${out}\`);`}
 }`}
       />
 
-      <h2>What gets emitted</h2>
+      <h2 id="what-gets-emitted">What gets emitted</h2>
       <ul>
         <li>
           One <code>operationId</code> per route, duplicates throw at
@@ -322,7 +322,7 @@ console.log(\`wrote \${out}\`);`}
         </li>
       </ul>
 
-      <h2>Webhooks</h2>
+      <h2 id="webhooks">Webhooks</h2>
       <p>
         OpenAPI 3.1 lets a producer publish <strong>top-level webhooks</strong>{" "}
         , operations a consumer is expected to implement. Pass{" "}
@@ -349,7 +349,7 @@ const doc = generateOpenAPI(app, {
 });`}
       />
 
-      <h2>Callbacks</h2>
+      <h2 id="callbacks">Callbacks</h2>
       <p>
         <strong>Callbacks</strong> describe out-of-band requests that an
         operation may trigger on the consumer (e.g. a subscription endpoint that
@@ -386,7 +386,7 @@ const doc = generateOpenAPI(app, {
         are skipped, passing an empty callback never produces a malformed spec.
       </p>
 
-      <h2>Discriminated unions</h2>
+      <h2 id="discriminated-unions">Discriminated unions</h2>
       <p>
         OpenAPI 3.1&apos;s <code>discriminator</code> is the canonical way to
         describe tagged unions. DaloyJS ships two helpers from{" "}

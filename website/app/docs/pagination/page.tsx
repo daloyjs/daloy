@@ -82,7 +82,7 @@ export default function Page() {
         caption="paginationQuery() validates and coerces the limit and cursor query params, decodeCursor() turns the opaque token back into a sort key, and fetching limit + 1 rows reveals whether another page exists. The last row becomes the next cursor, advertised through an RFC 8288 Link header."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <p>
         Mount <code>paginationQuery()</code> as the route&apos;s{" "}
         <code>request.query</code>. The handler receives a fully typed,
@@ -132,7 +132,7 @@ app.route({
         language="ts"
       />
 
-      <h2>Opaque cursors</h2>
+      <h2 id="opaque-cursors">Opaque cursors</h2>
       <p>
         <code>encodeCursor()</code> serializes any JSON-serializable value
         (typically the sort key of the last row) into a compact, URL-safe
@@ -163,7 +163,7 @@ const payload = decodeCursor<{ id: number; createdAt: string }>(cursor);
         language="ts"
       />
 
-      <h2>RFC 8288 Link header</h2>
+      <h2 id="rfc-8288-link-header">RFC 8288 Link header</h2>
       <p>
         <code>buildPageLinks()</code> clones the current request URL and swaps
         its cursor query parameter to produce <code>next</code>,{" "}
@@ -197,7 +197,7 @@ set.headers.set("Link", linkHeader);
         injection.
       </p>
 
-      <h2>OpenAPI parameter wiring</h2>
+      <h2 id="openapi-parameter-wiring">OpenAPI parameter wiring</h2>
       <p>
         Because <code>paginationQuery()</code> exposes a{" "}
         <code>toJSONSchema()</code> method, the OpenAPI generator emits the{" "}
@@ -233,7 +233,7 @@ set.headers.set("Link", linkHeader);
         language="ts"
       />
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           Cursors are <strong>opaque, not secret</strong>: they are encoded, not

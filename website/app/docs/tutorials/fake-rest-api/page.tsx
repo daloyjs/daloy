@@ -23,7 +23,7 @@ export default function Page() {
         while still giving users a realistic large-spec environment to test against.
       </p>
 
-      <h2>Live demo</h2>
+      <h2 id="live-demo">Live demo</h2>
       <p>
         Explore the public demo at{" "}
         <a href="https://fakerestapi.vercel.app/index.html" target="_blank" rel="noreferrer">
@@ -32,7 +32,7 @@ export default function Page() {
         .
       </p>
 
-      <h2>Why this lives here</h2>
+      <h2 id="why-this-lives-here">Why this lives here</h2>
       <ul>
         <li>It is a product demo, not part of the framework API surface.</li>
         <li>A catalog with roughly 600 endpoints is too large for the core docs sidebar structure.</li>
@@ -66,7 +66,7 @@ export default function Page() {
         caption="The demo exists so you can validate OpenAPI tooling, typed client codegen, and docs UX against a realistic large contract instead of a toy example."
       />
 
-      <h2>What to use it for</h2>
+      <h2 id="what-to-use-it-for">What to use it for</h2>
       <ul>
         <li>Pressure-test docs UIs and endpoint navigation with a non-trivial API size.</li>
         <li>Verify OpenAPI generation and downstream codegen workflows on a large contract.</li>
@@ -74,14 +74,14 @@ export default function Page() {
         <li>Show prospective users that DaloyJS scales beyond toy examples.</li>
       </ul>
 
-      <h2>Recommended information architecture</h2>
+      <h2 id="recommended-information-architecture">Recommended information architecture</h2>
       <p>
         Keep this page in the docs as the entry point, and host the actual explorer as a separate live surface
         such as <code>demo.daloyjs.dev</code> or <code>api-demo.daloyjs.dev</code>. The docs page should explain
         the purpose of the demo, link to the live explorer, and link back into the relevant DaloyJS guides.
       </p>
 
-      <h2>Where to continue</h2>
+      <h2 id="where-to-continue">Where to continue</h2>
       <p>
         Pair this demo with <Link href="/docs/openapi">OpenAPI generation</Link>,{" "}
         <Link href="/docs/typed-client">typed clients</Link>, and the{" "}

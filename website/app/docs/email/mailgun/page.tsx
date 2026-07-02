@@ -76,7 +76,7 @@ export default function Page() {
         caption="The region is fixed per domain (US or EU), set url accordingly. On edge runtimes pass useFetch: true so the SDK uses native fetch. Webhook payloads are HMAC-signed, verify them before acting."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Add and verify your sending domain under{" "}
@@ -96,14 +96,14 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add mailgun.js form-data`} />
       <p>
         <code>form-data</code> is the multipart implementation Mailgun expects
         on Node.
       </p>
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -113,7 +113,7 @@ MAILGUN_FROM="Acme <no-reply@mg.acme.example.com>"
 # MAILGUN_URL=https://api.eu.mailgun.net`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/mailgun.ts
 import Mailgun from "mailgun.js";
@@ -161,7 +161,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -196,7 +196,7 @@ app.route({
 });`}
       />
 
-      <h2>Templates</h2>
+      <h2 id="templates">Templates</h2>
       <p>
         Create a stored template in <strong>Sending → Templates</strong> with{" "}
         <a href="https://handlebarsjs.com/" target="_blank" rel="noreferrer">
@@ -214,7 +214,7 @@ app.route({
 });`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <ul>
         <li>
           <strong>Node / Bun / AWS Lambda</strong>: works with the configuration
@@ -239,7 +239,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Webhooks</h2>
+      <h2 id="webhooks">Webhooks</h2>
       <p>
         Mailgun signs webhook payloads with HMAC-SHA256. When you accept
         delivery, bounce, or complaint events, verify{" "}

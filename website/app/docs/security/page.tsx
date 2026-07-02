@@ -71,7 +71,7 @@ export default function Page() {
         caption="The dangerous things are blocked in the core without any setup. The deployment-specific things (CSP, CORS origins, session secrets, CSRF rollout) stay explicit middleware you opt into."
       />
 
-      <h2>Plain-English analogies for every protection</h2>
+      <h2 id="plain-english-analogies-for-every-protection">Plain-English analogies for every protection</h2>
       <p>
         If the terminology in this page feels abstract, this table maps every
         major protection to an everyday analogy. Skim it once and the rest of
@@ -354,7 +354,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>What the core enforces</h2>
+      <h2 id="what-the-core-enforces">What the core enforces</h2>
       <p>
         These checks happen in <code>App</code> or the runtime adapter itself.
         Applications get them without calling any middleware.
@@ -464,7 +464,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>First-party security middleware</h2>
+      <h2 id="first-party-security-middleware">First-party security middleware</h2>
       <p>
         These are part of DaloyJS and documented together, but they stay
         explicit because CSP, CORS, rate-limit keys, session secrets, and CSRF
@@ -503,7 +503,7 @@ app.use(timing());              // Server-Timing header for observability`}
         limits.
       </p>
 
-      <h2>Recommended by deployment target</h2>
+      <h2 id="recommended-by-deployment-target">Recommended by deployment target</h2>
       <p>
         Start with the middleware below unless you have a concrete reason not
         to. The point is not to hide policy behind a boolean flag; it is to make
@@ -562,7 +562,7 @@ app.use(timing());              // Server-Timing header for observability`}
         </tbody>
       </table>
 
-      <h2>
+      <h2 id="csrf-for-state-changing-routes">
         <code>csrf()</code> for state-changing routes
       </h2>
       <p>
@@ -600,7 +600,7 @@ app.use(csrf({
 }));`}
       />
 
-      <h2>
+      <h2 id="secureheaders-defaults">
         <code>secureHeaders()</code> defaults
       </h2>
       <CodeBlock
@@ -624,7 +624,7 @@ cross-origin-resource-policy: same-origin`}
         disable old browser XSS filters.
       </p>
 
-      <h3>CSP with per-request nonces &amp; Trusted Types</h3>
+      <h3 id="csp-with-per-request-nonces-and-trusted-types">CSP with per-request nonces &amp; Trusted Types</h3>
       <p>
         <code>secureHeaders()</code> can build the CSP from a directive map and
         inject a fresh <strong>per-request nonce</strong> into{" "}
@@ -678,7 +678,7 @@ app.route({
         nonce-protected pages.
       </p>
 
-      <h2>Auth</h2>
+      <h2 id="auth">Auth</h2>
       <CodeBlock
         code={`import { bearerAuth, basicAuth, timingSafeEqual } from "@daloyjs/core";
 
@@ -704,7 +704,7 @@ app.use(basicAuth({
 }));`}
       />
 
-      <h2>SQL injection</h2>
+      <h2 id="sql-injection">SQL injection</h2>
       <p>
         Daloy doesn&apos;t ship a database driver, but the HTTP boundary it{" "}
         <em>does</em> own (strict Zod schemas, hardened JSON parser, body-size
@@ -715,7 +715,7 @@ app.use(basicAuth({
         rules the maintainers use to catch regressions.
       </p>
 
-      <h2>Command injection</h2>
+      <h2 id="command-injection">Command injection</h2>
       <p>
         DaloyJS&apos;s runtime is <code>child_process</code>-free by CI gate, so
         the framework itself cannot shell out. See{" "}
@@ -726,7 +726,7 @@ app.use(basicAuth({
         footgun, and the grep rules to keep new bugs out at PR time.
       </p>
 
-      <h2>Admin panels</h2>
+      <h2 id="admin-panels">Admin panels</h2>
       <p>
         Building an admin or customer-success surface on top of DaloyJS? See{" "}
         <a href="/docs/security/admin-panels">Secure admin panels</a> for the
@@ -737,7 +737,7 @@ app.use(basicAuth({
         Aikido&apos;s public &quot;secure admin panel&quot; checklist.
       </p>
 
-      <h2>Supply-chain</h2>
+      <h2 id="supply-chain">Supply-chain</h2>
       <p>
         DaloyJS is distributed via{" "}
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">
@@ -807,7 +807,7 @@ app.use(basicAuth({
         private GitLab, Bitbucket, Azure DevOps, or on-prem installation.
       </p>
 
-      <h2>Trusted proxies and rate limiting</h2>
+      <h2 id="trusted-proxies-and-rate-limiting">Trusted proxies and rate limiting</h2>
       <p>
         DaloyJS no longer trusts <code>X-Forwarded-For</code> or{" "}
         <code>X-Real-IP</code> by default when deriving a rate-limit key. Those
@@ -826,7 +826,7 @@ app.use(basicAuth({
         can spend from the same <code>groupId</code> bucket.
       </p>
 
-      <h2>Self-hosted docs assets</h2>
+      <h2 id="self-hosted-docs-assets">Self-hosted docs assets</h2>
       <p>
         The built-in docs helpers no longer force a jsDelivr-shaped CSP. You can
         self-host the Swagger UI or Scalar assets, add a nonce to the bootstrap
@@ -872,7 +872,7 @@ provenance=true`}
         <code>pnpm audit --prod</code> in CI and before release.
       </p>
 
-      <h2>OWASP API Security Top 10 mapping</h2>
+      <h2 id="owasp-api-security-top-10-mapping">OWASP API Security Top 10 mapping</h2>
       <p>
         For a per-item walkthrough of how Daloy addresses every entry in the{" "}
         <a
@@ -887,7 +887,7 @@ provenance=true`}
         <a href="/docs/security/owasp-api-top-10">OWASP API Top 10 mapping</a>.
       </p>
 
-      <h2>Reporting a vulnerability</h2>
+      <h2 id="reporting-a-vulnerability">Reporting a vulnerability</h2>
       <p>
         Use GitHub&apos;s private vulnerability reporting at{" "}
         <a

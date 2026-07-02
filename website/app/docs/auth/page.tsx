@@ -48,7 +48,7 @@ export default function Page() {
         self-host an open-source IdP, and the two architectures we recommend.
       </p>
 
-      <h2>Supported providers</h2>
+      <h2 id="supported-providers">Supported providers</h2>
       <ul>
         <li>
           <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>: pay-as-you-go
@@ -113,7 +113,7 @@ export default function Page() {
         caption="DaloyJS stays the resource server in every case. Each provider page swaps only the verifier SDK behind the same TokenVerifier interface, so the rest of your app stays IdP-agnostic."
       />
 
-      <h2>Runtime compatibility at a glance</h2>
+      <h2 id="runtime-compatibility-at-a-glance">Runtime compatibility at a glance</h2>
       <table>
         <thead>
           <tr>
@@ -191,7 +191,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>Common pattern</h2>
+      <h2 id="common-pattern">Common pattern</h2>
       <p>
         Each provider page implements the same three steps: install the verifier
         SDK, register a DaloyJS plugin that decorates the request context with
@@ -275,7 +275,7 @@ declare module "@daloyjs/core" {
         official SDK so the rest of your application stays IdP-agnostic.
       </p>
 
-      <h2>Security checklist</h2>
+      <h2 id="security-checklist">Security checklist</h2>
       <ul>
         <li>
           <strong>Always verify the signature.</strong> Never trust an

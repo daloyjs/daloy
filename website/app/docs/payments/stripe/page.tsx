@@ -50,7 +50,7 @@ export default function Page() {
         never touch your DaloyJS app.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>Start with Checkout Sessions.</strong>{" "}
@@ -92,7 +92,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Create a Stripe account or sandbox from the{" "}
@@ -130,7 +130,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add stripe @stripe/stripe-js`} />
       <p>
         <code>stripe</code> belongs in your server application.{" "}
@@ -139,7 +139,7 @@ export default function Page() {
         <code>@daloyjs/core</code>.
       </p>
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 STRIPE_SECRET_KEY=sk_test_replace_me
@@ -155,7 +155,7 @@ STRIPE_CURRENCY=usd`}
         secrets as production credentials.
       </p>
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/stripe.ts
 import { randomUUID } from "node:crypto";
@@ -260,7 +260,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Create a Checkout Session</h2>
+      <h2 id="5-create-a-checkout-session">5. Create a Checkout Session</h2>
       <SequenceDiagram
         title="Stripe-hosted checkout"
         participants={["Browser", "DaloyJS route", "Stripe"]}
@@ -350,7 +350,7 @@ app.route({
 });`}
       />
 
-      <h2>6. Redirect from the browser</h2>
+      <h2 id="6-redirect-from-the-browser">6. Redirect from the browser</h2>
       <p>
         If your route returns a <code>session.url</code>, a plain
         <code>window.location.assign(url)</code> is enough. If you prefer
@@ -386,7 +386,7 @@ export async function startCheckout(cartId: string) {
         security policy when you render Stripe.js or Elements.
       </p>
 
-      <h2>7. Receive and verify webhooks</h2>
+      <h2 id="7-receive-and-verify-webhooks">7. Receive and verify webhooks</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Stripe", "DaloyJS route", "Your queue"]}
@@ -480,7 +480,7 @@ app.route({
         secret.
       </p>
 
-      <h2>8. Refunds</h2>
+      <h2 id="8-refunds">8. Refunds</h2>
       <CodeBlock
         code={`// Full refund by PaymentIntent id.
 await state.stripe.refund({
@@ -496,7 +496,7 @@ await state.stripe.refund({
 });`}
       />
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         The SDK throws structured <code>Stripe.errors.StripeError</code>
         subclasses for API, card, authentication, rate-limit, and connection
@@ -506,7 +506,7 @@ await state.stripe.refund({
         shape to clients.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The official <code>stripe</code> package is a server-side SDK and
         currently supports Node.js LTS versions 18+. It fits DaloyJS Node,
@@ -517,7 +517,7 @@ await state.stripe.refund({
         the worker runtime.
       </p>
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>Do not make Stripe a framework dependency.</strong> Keep it in

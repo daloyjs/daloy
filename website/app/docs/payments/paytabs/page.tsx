@@ -44,7 +44,7 @@ export default function Page() {
         API.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>
@@ -85,7 +85,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Sign in to the{" "}
@@ -112,10 +112,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add paytabs_pt2`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 PAYTABS_PROFILE_ID=12345
@@ -124,7 +124,7 @@ PAYTABS_REGION=ARE                  # ARE | SAU | OMN | JOR | EGY | IRQ | PSE | 
 APP_URL=https://your-app.example.com`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <p>
         We wrap two things here: <code>createPaymentPage</code>&apos;s
         positional-array+callback shape into a Promise with named args, and the
@@ -282,7 +282,7 @@ declare module "@daloyjs/core" {
         won&apos;t match.
       </p>
 
-      <h2>5. Create a payment page</h2>
+      <h2 id="5-create-a-payment-page">5. Create a payment page</h2>
       <SequenceDiagram
         title="Payment page flow"
         participants={["Customer", "DaloyJS route", "PayTabs"]}
@@ -382,7 +382,7 @@ app.route({
 });`}
       />
 
-      <h2>6. IPN webhook</h2>
+      <h2 id="6-ipn-webhook">6. IPN webhook</h2>
       <SequenceDiagram
         title="IPN verification"
         participants={["PayTabs", "DaloyJS route"]}
@@ -460,7 +460,7 @@ app.route({
 });`}
       />
 
-      <h2>7. Refunds and capture</h2>
+      <h2 id="7-refunds-and-capture">7. Refunds and capture</h2>
       <CodeBlock
         code={`// Full or partial refund of a captured sale.
 await state.paytabs.refund({
@@ -476,7 +476,7 @@ await state.paytabs.refund({
 // \u2014 wrap it the same way as refund() in the plugin if you need it.`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>paytabs_pt2</code> uses Node&apos;s <code>https</code> module and
         runs on Node 18+. It is <em>not</em> edge-runtime compatible. If
@@ -487,7 +487,7 @@ await state.paytabs.refund({
         against your regional base URL).
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         On failure, <code>response.payment_result.response_code</code> tells you
         the gateway outcome (e.g. <code>200</code> success, <code>481</code> 3-D
@@ -498,7 +498,7 @@ await state.paytabs.refund({
         scheme-specific text the customer can&apos;t act on.
       </p>
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>Wrap the SDK once, then forget it.</strong> The

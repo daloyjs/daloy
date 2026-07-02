@@ -44,7 +44,7 @@ export default function Page() {
         <code>WebhooksHelper.verifySignature</code> on the server for webhook auth.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>v40+ is a full rewrite.</strong> If you see <code>squareConnect</code>,{" "}
@@ -84,7 +84,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Sign in at{" "}
@@ -106,10 +106,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add square`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 SQUARE_ACCESS_TOKEN=EAAA_replace_me                  # sandbox or production access token
@@ -120,7 +120,7 @@ SQUARE_WEBHOOK_URL=https://your-app.example.com/webhooks/square
 SQUARE_ENV=sandbox                                   # "sandbox" | "production"`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/square.ts
 import { randomUUID } from "node:crypto";
@@ -242,7 +242,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Create a payment</h2>
+      <h2 id="5-create-a-payment">5. Create a payment</h2>
       <SequenceDiagram
         title="Token handoff and charge"
         participants={["Browser", "DaloyJS route", "Square"]}
@@ -356,7 +356,7 @@ app.route({
         agree on it.
       </p>
 
-      <h2>6. Webhook</h2>
+      <h2 id="6-webhook">6. Webhook</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Square", "DaloyJS route"]}
@@ -443,7 +443,7 @@ app.route({
         do the slow work asynchronously.
       </p>
 
-      <h2>7. Refunds</h2>
+      <h2 id="7-refunds">7. Refunds</h2>
       <CodeBlock
         code={`// Full refund \u2014 use the original payment's amount.
 await state.square.refund({
@@ -461,7 +461,7 @@ await state.square.refund({
 });`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The v40+ SDK is Fern-generated and uses the platform <code>fetch</code> when
         available, falling back to <code>node-fetch</code>. Square officially supports
@@ -472,7 +472,7 @@ await state.square.refund({
         adapter doesn&apos;t expose Node streams.
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Non-2xx responses throw <code>SquareError</code>. Inspect{" "}
         <code>err.statusCode</code>, <code>err.body</code>, and the structured{" "}
@@ -485,7 +485,7 @@ await state.square.refund({
         join them later.
       </p>
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>Use the new SDK, not <code>square/legacy</code>.</strong> The legacy

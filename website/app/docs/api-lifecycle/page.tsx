@@ -48,7 +48,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>Deprecating a route</h2>
+      <h2 id="deprecating-a-route">Deprecating a route</h2>
       <p>
         Set <code>deprecated: true</code> on a route to mark it in the OpenAPI
         document (the operation gets <code>deprecated: true</code>) and to emit
@@ -68,7 +68,7 @@ export default function Page() {
 //   Deprecation: true`}
       />
 
-      <h2>Scheduling a sunset date</h2>
+      <h2 id="scheduling-a-sunset-date">Scheduling a sunset date</h2>
       <p>
         Add a <code>sunset</code> date to announce <em>when</em> the route will
         be removed. It accepts an ISO-8601 string, any string{" "}
@@ -100,7 +100,7 @@ export default function Page() {
         <code>Deprecation</code> header when they need that stricter form.
       </p>
 
-      <h2>Detecting breaking changes</h2>
+      <h2 id="detecting-breaking-changes">Detecting breaking changes</h2>
       <p>
         <code>diffOpenAPI(baseline, current)</code> compares two OpenAPI 3.x
         documents and classifies every difference as <strong>breaking</strong>{" "}
@@ -144,7 +144,7 @@ if (hasBreakingChanges(publishedSpec, currentSpec)) {
         <code>info.version</code> bump are all reported as non-breaking.
       </p>
 
-      <h2>The daloy diff CLI</h2>
+      <h2 id="the-daloy-diff-cli">The daloy diff CLI</h2>
       <p>
         The same engine ships as a CLI command so you can gate any two spec
         files without writing code. It prints the classified changes and exits{" "}
@@ -159,7 +159,7 @@ daloy diff openapi.published.json openapi.json
 daloy diff --json openapi.published.json openapi.json`}
       />
 
-      <h2>Wiring it into CI</h2>
+      <h2 id="wiring-it-into-ci">Wiring it into CI</h2>
       <p>
         Commit your published spec as a baseline (e.g.{" "}
         <code>generated/openapi.baseline.json</code>) and run the{" "}

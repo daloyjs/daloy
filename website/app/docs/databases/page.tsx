@@ -43,7 +43,7 @@ export default function Page() {
         Drizzle or Prisma rather than replacing them.
       </p>
 
-      <h2>Why this matters on edge runtimes</h2>
+      <h2 id="why-this-matters-on-edge-runtimes">Why this matters on edge runtimes</h2>
       <p>
         Cloudflare Workers and Vercel don&apos;t expose raw TCP sockets, so the
         classic <code>pg</code> or <code>mysql2</code> drivers will not connect
@@ -83,7 +83,7 @@ export default function Page() {
         caption="On edge runtimes only HTTP, fetch, or native bindings work, raw TCP does not. The driver style is the layer that decides whether a host can run on Workers or Vercel."
       />
 
-      <h2>Supported providers</h2>
+      <h2 id="supported-providers">Supported providers</h2>
       <ul>
         <li>
           <Link href="/docs/databases/neon">Neon</Link>: serverless Postgres
@@ -122,7 +122,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Runtime compatibility</h2>
+      <h2 id="runtime-compatibility">Runtime compatibility</h2>
       <table>
         <thead>
           <tr>
@@ -202,7 +202,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>Choosing one</h2>
+      <h2 id="choosing-one">Choosing one</h2>
       <ul>
         <li>
           <strong>You target Cloudflare Workers exclusively</strong>: D1

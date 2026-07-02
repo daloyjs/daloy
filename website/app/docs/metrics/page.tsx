@@ -76,7 +76,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <p>
         Call <code>app.metrics()</code> <strong>before</strong> registering the
         routes you want measured. It installs RED instrumentation for later
@@ -119,7 +119,7 @@ app.route({
         <code>OPTIONS</code> preflights are not counted.
       </p>
 
-      <h2>What gets exported</h2>
+      <h2 id="what-gets-exported">What gets exported</h2>
       <p>Out of the box, the scrape route exposes:</p>
       <ul>
         <li>
@@ -143,7 +143,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Options reference</h2>
+      <h2 id="options-reference">Options reference</h2>
       <p>
         All fields are optional. The table below covers the full{" "}
         <code>MetricsRouteOptions</code> surface:
@@ -297,7 +297,7 @@ app.route({
         language="ts"
       />
 
-      <h2>The route label</h2>
+      <h2 id="the-route-label">The route label</h2>
       <p>
         High-cardinality labels are the classic way to melt a Prometheus server.
         By default the <code>route</code> label uses the request pathname,
@@ -315,7 +315,7 @@ app.route({
         language="ts"
       />
 
-      <h2>Custom application metrics</h2>
+      <h2 id="custom-application-metrics">Custom application metrics</h2>
       <p>
         Pass your own <code>MetricsRegistry</code> to register business metrics
         that render alongside the built-in HTTP series.
@@ -347,7 +347,7 @@ renderTime.observe({ template: "invoice" }, 0.042);`}
         scraped, instead of on a timer.
       </p>
 
-      <h2>Manual instrumentation</h2>
+      <h2 id="manual-instrumentation">Manual instrumentation</h2>
       <p>
         Prefer to wire the pieces yourself? <code>httpMetrics()</code> returns a{" "}
         <code>Hooks</code> bundle you can <code>app.use(...)</code> without the
@@ -386,13 +386,13 @@ app.route({
         language="ts"
       />
 
-      <h2>Grafana + Prometheus integration</h2>
+      <h2 id="grafana-prometheus-integration">Grafana + Prometheus integration</h2>
       <p>
         The repository ships a ready-to-use Docker Compose stack under{" "}
         <code>examples/observability/</code> that spins up Prometheus and
         Grafana with a pre-built dashboard, zero extra configuration needed.
       </p>
-      <h3>1. Start the app</h3>
+      <h3 id="1-start-the-app">1. Start the app</h3>
       <p>
         Run any DaloyJS server that calls <code>app.metrics()</code>. The
         example in the repo uses port 3001:
@@ -403,7 +403,7 @@ app.route({
 # Prometheus scrape target: http://localhost:3001/metrics`}
         language="sh"
       />
-      <h3>2. Start the observability stack</h3>
+      <h3 id="2-start-the-observability-stack">2. Start the observability stack</h3>
       <CodeBlock
         code={`docker compose -f examples/observability/docker-compose.yml up`}
         language="sh"
@@ -421,7 +421,7 @@ app.route({
           auto-provisioned on first start, no manual import required.
         </li>
       </ul>
-      <h3>3. Open the dashboard</h3>
+      <h3 id="3-open-the-dashboard">3. Open the dashboard</h3>
       <p>
         Navigate to <code>http://localhost:3000/d/daloy-http-metrics</code>. The
         dashboard ships nine panels out of the box:
@@ -437,7 +437,7 @@ app.route({
         <li>Process uptime</li>
         <li>Request duration heatmap</li>
       </ul>
-      <h3>Pointing at your own app</h3>
+      <h3 id="pointing-at-your-own-app">Pointing at your own app</h3>
       <p>
         Edit <code>examples/observability/prometheus.yml</code> and replace the
         target:
@@ -471,7 +471,7 @@ app.route({
         to the Prometheus service in{" "}
         <code>examples/observability/docker-compose.yml</code>.
       </p>
-      <h3>Useful PromQL queries</h3>
+      <h3 id="useful-promql-queries">Useful PromQL queries</h3>
       <CodeBlock
         code={`# Request rate (req/s) by route over the last 5 minutes
 sum by (route) (rate(daloy_http_requests_total[5m]))
@@ -490,7 +490,7 @@ daloy_http_requests_in_flight`}
         language="promql"
       />
 
-      <h2>Security posture</h2>
+      <h2 id="security-posture">Security posture</h2>
       <p>
         A <code>/metrics</code> endpoint leaks internal route names, latency
         distributions, request volume, and process memory, so it ships with the

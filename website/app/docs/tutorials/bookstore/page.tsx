@@ -50,7 +50,7 @@ export default function Page() {
         caption="A single buildApp factory is shared by the server, the OpenAPI dump, and the tests, so the spec, the typed client, and the contract tests can never drift apart."
       />
 
-      <h2>1. Scaffold</h2>
+      <h2 id="1-scaffold">1. Scaffold</h2>
       <CodeBlock
         language="bash"
         code={`mkdir bookstore && cd bookstore
@@ -102,7 +102,7 @@ prefer-frozen-lockfile=true
 verify-store-integrity=true`}
       />
 
-      <h2>
+      <h2 id="2-build-a-shared-buildapp-factory">
         2. Build a shared <code>buildApp</code> factory
       </h2>
       <p>
@@ -178,7 +178,7 @@ export function buildApp() {
 }`}
       />
 
-      <h2>3. Start the server</h2>
+      <h2 id="3-start-the-server">3. Start the server</h2>
       <CodeBlock
         code={`// src/server.ts
 import { buildApp } from "./build-app.js";
@@ -202,7 +202,7 @@ curl -X POST http://localhost:3000/books \\
 # {"id":"3","title":"Hyperion","year":1989}`}
       />
 
-      <h2>4. Generate the OpenAPI spec</h2>
+      <h2 id="4-generate-the-openapi-spec">4. Generate the OpenAPI spec</h2>
       <CodeBlock
         code={`// scripts/dump-openapi.ts
 import { mkdir, writeFile } from "node:fs/promises";
@@ -224,7 +224,7 @@ console.log(\`wrote \${out}\`);`}
 
       <CodeBlock language="bash" code={`pnpm gen:openapi`} />
 
-      <h2>5. Generate a typed Hey API SDK</h2>
+      <h2 id="5-generate-a-typed-hey-api-sdk">5. Generate a typed Hey API SDK</h2>
       <CodeBlock
         code={`// openapi-ts.config.ts
 import { defineConfig } from "@hey-api/openapi-ts";
@@ -241,7 +241,7 @@ export default defineConfig({
 # generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}`}
       />
 
-      <h2>6. Use the SDK from any TS consumer</h2>
+      <h2 id="6-use-the-sdk-from-any-ts-consumer">6. Use the SDK from any TS consumer</h2>
       <CodeBlock
         code={`import { client } from "../generated/client/client.gen.js";
 import { getBookById } from "../generated/client/sdk.gen.js";
@@ -252,7 +252,7 @@ const { data } = await getBookById({ path: { id: "1" } });
 console.log(data?.title); // string | undefined - fully typed`}
       />
 
-      <h2>7. Add tests</h2>
+      <h2 id="7-add-tests">7. Add tests</h2>
       <CodeBlock
         code={`// tests/books.test.ts
 import test from "node:test";
@@ -282,7 +282,7 @@ test("POST /books rejects without token", async () => {
 
       <CodeBlock language="bash" code={`pnpm test`} />
 
-      <h2>What you built</h2>
+      <h2 id="what-you-built">What you built</h2>
       <ul>
         <li>A typed, validated, secured HTTP API.</li>
         <li>

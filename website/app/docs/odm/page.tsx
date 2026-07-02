@@ -32,7 +32,7 @@ export default function Page() {
         middleware, and query helpers around collections or buckets.
       </p>
 
-      <h2>ORM vs ODM</h2>
+      <h2 id="orm-vs-odm">ORM vs ODM</h2>
       <ul>
         <li>
           <strong>ORM</strong> maps relational tables and joins into TypeScript
@@ -45,7 +45,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>The recommended pattern</h2>
+      <h2 id="the-recommended-pattern">The recommended pattern</h2>
       <p>
         Just like SQL clients, ODM connections belong in a plugin. Decorate your
         app with a small database surface and close the connection on shutdown.
@@ -99,7 +99,7 @@ export function databasePlugin(db: Database) {
 }`}
       />
 
-      <h2>Pick your ODM</h2>
+      <h2 id="pick-your-odm">Pick your ODM</h2>
       <ul>
         <li>
           <Link href="/docs/odm/mongoose">Mongoose</Link>: mature schemas,
@@ -111,7 +111,7 @@ export function databasePlugin(db: Database) {
         </li>
       </ul>
 
-      <h2>Runtime compatibility cheat sheet</h2>
+      <h2 id="runtime-compatibility-cheat-sheet">Runtime compatibility cheat sheet</h2>
       <table>
         <thead>
           <tr>
@@ -150,7 +150,7 @@ export function databasePlugin(db: Database) {
         there.
       </p>
 
-      <h2>Typing the decorated client</h2>
+      <h2 id="typing-the-decorated-client">Typing the decorated client</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { db } from "../db/mongoose";
@@ -162,7 +162,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>Sessions and transactions</h2>
+      <h2 id="sessions-and-transactions">Sessions and transactions</h2>
       <p>
         MongoDB transactions require a replica set and a session. Start the
         session inside the handler that owns the unit of work, then pass it
@@ -189,7 +189,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>Next steps</h2>
+      <h2 id="next-steps">Next steps</h2>
       <ul>
         <li>
           <Link href="/docs/odm/mongoose">Mongoose guide</Link>

@@ -44,7 +44,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock
         code={`pnpm add sequelize pg pg-hstore
 pnpm add -D @types/validator @types/node typescript`}
@@ -54,7 +54,7 @@ pnpm add -D @types/validator @types/node typescript`}
         instead of Postgres.
       </p>
 
-      <h2>2. Define a model</h2>
+      <h2 id="2-define-a-model">2. Define a model</h2>
       <CodeBlock
         code={`// src/db/sequelize.ts
 import { Sequelize, DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from "sequelize";
@@ -96,7 +96,7 @@ User.init(
 );`}
       />
 
-      <h2>3. Create a Sequelize plugin</h2>
+      <h2 id="3-create-a-sequelize-plugin">3. Create a Sequelize plugin</h2>
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
@@ -116,7 +116,7 @@ export const sequelizePlugin = {
 };`}
       />
 
-      <h2>4. Augment app state types</h2>
+      <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { db } from "../db/plugin";
@@ -128,7 +128,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in routes</h2>
+      <h2 id="5-use-it-in-routes">5. Use it in routes</h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -167,7 +167,7 @@ await app.ready();
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Transactions</h2>
+      <h2 id="transactions">Transactions</h2>
       <p>
         Use managed transactions so DaloyJS can map one handler invocation to
         one atomic unit of work.
@@ -188,7 +188,7 @@ serve(app, { port: 3000 });`}
 }`}
       />
 
-      <h2>Migrations</h2>
+      <h2 id="migrations">Migrations</h2>
       <p>
         Sequelize supports migrations via the CLI, but many teams keep model
         definitions in TypeScript and run explicit migration files through{" "}
@@ -202,7 +202,7 @@ pnpm sequelize-cli migration:generate --name create-users
 pnpm sequelize-cli db:migrate`}
       />
 
-      <h2>Runtime constraints</h2>
+      <h2 id="runtime-constraints">Runtime constraints</h2>
       <p>
         Sequelize depends on Node-oriented drivers, so it is best on the Node.js
         adapter. For edge runtimes, prefer{" "}

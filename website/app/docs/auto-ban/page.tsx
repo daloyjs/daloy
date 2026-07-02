@@ -73,7 +73,7 @@ export default function Page() {
         caption="A banned client is rejected before the handler runs. Otherwise the request proceeds and its outgoing status is watched: enough suspicious statuses inside the rolling window issue an escalating ban that decays once the client goes quiet."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { createApp } from "@daloyjs/core";
@@ -92,7 +92,7 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
         <code>429</code>s, your own <code>403</code>s), not just its own.
       </p>
 
-      <h2>Identity is mandatory</h2>
+      <h2 id="identity-is-mandatory">Identity is mandatory</h2>
       <p>
         <code>autoBan()</code> refuses to construct unless it can identify
         clients: pass a <code>keyGenerator</code> or set{" "}
@@ -112,7 +112,7 @@ app.use(
 );`}
       />
 
-      <h2>How escalation &amp; decay work</h2>
+      <h2 id="how-escalation-and-decay-work">How escalation &amp; decay work</h2>
       <ul>
         <li>
           Each watched response is a <strong>strike</strong>. Strikes accumulate
@@ -135,7 +135,7 @@ app.use(
         </li>
       </ul>
 
-      <h2>Responses</h2>
+      <h2 id="responses">Responses</h2>
       <p>
         A banned request is rejected in <code>beforeHandle</code> before the
         handler runs. By default it returns <code>429 Too Many Requests</code>{" "}
@@ -160,7 +160,7 @@ app.use(
 );`}
       />
 
-      <h2>Observability</h2>
+      <h2 id="observability">Observability</h2>
       <p>
         Wire <code>onBan</code> and <code>onStrike</code> into your logger,
         alerting, or an external denylist feed:
@@ -178,7 +178,7 @@ app.use(
 );`}
       />
 
-      <h2>Pluggable store (multi-instance)</h2>
+      <h2 id="pluggable-store-multi-instance">Pluggable store (multi-instance)</h2>
       <p>
         The default store is in-memory and <strong>single-process</strong>. For
         a horizontally-scaled deployment, implement <code>AutoBanStore</code>{" "}
@@ -210,7 +210,7 @@ app.use(autoBan({ trustProxyHeaders: true, store: redisStore }));`}
         manually, call <code>store.delete(key)</code>.
       </p>
 
-      <h2>Sharing across route groups</h2>
+      <h2 id="sharing-across-route-groups">Sharing across route groups</h2>
       <p>
         Every <code>autoBan()</code> with the same <code>groupId</code> (default{" "}
         <code>&quot;auto-ban&quot;</code>) shares one in-memory store, so a

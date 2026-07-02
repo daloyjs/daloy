@@ -55,7 +55,7 @@ export default function Page() {
         operator&apos;s responsibility.
       </p>
 
-      <h2>Shared technical controls</h2>
+      <h2 id="shared-technical-controls">Shared technical controls</h2>
       <p>
         Most frameworks ask for the same handful of application-layer controls
         under different names. DaloyJS ships them by default.
@@ -257,7 +257,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>SOC 2 (Trust Services Criteria, 2017 with 2022 points of focus)</h2>
+      <h2 id="soc-2-trust-services-criteria-2017-with-2022-points-of-focus">SOC 2 (Trust Services Criteria, 2017 with 2022 points of focus)</h2>
       <p>
         SOC 2 maps to the Trust Services Criteria. DaloyJS contributes mostly to
         the <strong>Security (Common Criteria)</strong> category and partially
@@ -303,7 +303,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>ISO/IEC 27001:2022 (Annex A)</h2>
+      <h2 id="iso-iec-27001-2022-annex-a">ISO/IEC 27001:2022 (Annex A)</h2>
       <p>
         Picking the 2022 revision (rather than 2013/2017) is the safer call for
         new certifications, because it adds explicit controls for secure coding,
@@ -392,7 +392,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>HIPAA Security Rule (45 CFR § 164.312)</h2>
+      <h2 id="hipaa-security-rule-45-cfr-164-312">HIPAA Security Rule (45 CFR § 164.312)</h2>
       <p>
         HIPAA cares about Protected Health Information (PHI) handled by Covered
         Entities and Business Associates. DaloyJS contributes to the{" "}
@@ -435,7 +435,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>GDPR (Regulation 2016/679)</h2>
+      <h2 id="gdpr-regulation-2016-679">GDPR (Regulation 2016/679)</h2>
       <p>
         GDPR is risk-based; Article 32 (&ldquo;security of processing&rdquo;)
         and Article 25 (&ldquo;data protection by design and by default&rdquo;)
@@ -485,7 +485,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>PCI-DSS v4.0 (software-side controls)</h2>
+      <h2 id="pci-dss-v4-0-software-side-controls">PCI-DSS v4.0 (software-side controls)</h2>
       <p>
         DaloyJS&apos;s payments documentation already calls out the SAQ scope
         consequences of touching a Primary Account Number (PAN) directly. The
@@ -534,7 +534,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>NIS2 (Directive (EU) 2022/2555) and the EU CRA</h2>
+      <h2 id="nis2-directive-eu-2022-2555-and-the-eu-cra">NIS2 (Directive (EU) 2022/2555) and the EU CRA</h2>
       <p>
         NIS2 Article 21 lists the cybersecurity risk-management measures
         essential and important entities must adopt. The Cyber Resilience Act
@@ -542,7 +542,7 @@ export default function Page() {
         as upstream patch-SLA clauses in procurement.
       </p>
 
-      <h3>Are you in scope? (NIS2 self-assessment)</h3>
+      <h3 id="are-you-in-scope-nis2-self-assessment">Are you in scope? (NIS2 self-assessment)</h3>
       <p>
         DaloyJS itself is open-source framework software and is not a regulated
         entity. NIS2 obligations attach to the operator running the service, not
@@ -631,7 +631,7 @@ export default function Page() {
         framework-layer evidence from scratch.
       </p>
 
-      <h3>Article 21 risk-management measures (framework-layer mapping)</h3>
+      <h3 id="article-21-risk-management-measures-framework-layer-mapping">Article 21 risk-management measures (framework-layer mapping)</h3>
       <ul>
         <li>
           <strong>
@@ -703,7 +703,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h3>EU Cyber Resilience Act (Regulation (EU) 2024/2847)</h3>
+      <h3 id="eu-cyber-resilience-act-regulation-eu-2024-2847">EU Cyber Resilience Act (Regulation (EU) 2024/2847)</h3>
       <p>
         The{" "}
         <a
@@ -930,7 +930,7 @@ export default function Page() {
         </em>
       </p>
 
-      <h2>UK Cyber Security and Resilience Bill (CSR Bill)</h2>
+      <h2 id="uk-cyber-security-and-resilience-bill-csr-bill">UK Cyber Security and Resilience Bill (CSR Bill)</h2>
       <p>
         The UK government&apos;s{" "}
         <a
@@ -1099,7 +1099,7 @@ export default function Page() {
         </em>
       </p>
 
-      <h2>DORA (Regulation (EU) 2022/2554)</h2>
+      <h2 id="dora-regulation-eu-2022-2554">DORA (Regulation (EU) 2022/2554)</h2>
       <p>
         The{" "}
         <a
@@ -1357,7 +1357,7 @@ export default function Page() {
         </em>
       </p>
 
-      <h2>Operator responsibilities the framework cannot cover</h2>
+      <h2 id="operator-responsibilities-the-framework-cannot-cover">Operator responsibilities the framework cannot cover</h2>
       <p>
         Be upfront about this when you talk to your auditor, because conflating
         application controls with platform or organizational controls is the
@@ -1399,7 +1399,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Suggested artifact pack for an audit</h2>
+      <h2 id="suggested-artifact-pack-for-an-audit">Suggested artifact pack for an audit</h2>
       <ol>
         <li>
           The generated <code>openapi.json</code> as the canonical inventory of
@@ -1425,7 +1425,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>Further reading</h2>
+      <h2 id="further-reading">Further reading</h2>
       <ul>
         <li>
           <a href="/docs/security/secure-defaults">Secure-by-default</a>: what

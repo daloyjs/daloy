@@ -49,7 +49,7 @@ export default function Page() {
         notifications.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>It&apos;s a thin XML wrapper.</strong> Requests are built with{" "}
@@ -93,7 +93,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Create a{" "}
@@ -122,7 +122,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add authorizenet`} />
       <p>
         The package ships its own TypeScript declarations, but they&apos;re
@@ -130,7 +130,7 @@ export default function Page() {
         spots when you reach for newer fields.
       </p>
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 AUTHNET_ENVIRONMENT=sandbox          # or "production"
@@ -139,7 +139,7 @@ AUTHNET_TRANSACTION_KEY=use_your_transaction_key
 AUTHNET_SIGNATURE_KEY=use_your_signature_key   # hex string from the merchant interface`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/authorizenet.ts
 import { promisify } from "node:util";
@@ -284,7 +284,7 @@ declare module "@daloyjs/core" {
         typo.
       </p>
 
-      <h2>5. Charge an Accept.js nonce</h2>
+      <h2 id="5-charge-an-accept-js-nonce">5. Charge an Accept.js nonce</h2>
       <p>
         Your frontend obtains an <code>opaqueData</code> nonce with Accept.js (
         <code>dataDescriptor: &quot;COMMON.ACCEPT.INAPP.PAYMENT&quot;</code> for
@@ -354,7 +354,7 @@ app.route({
         the plugin and follow the same response shape.
       </p>
 
-      <h2>6. Subscribe to webhooks</h2>
+      <h2 id="6-subscribe-to-webhooks">6. Subscribe to webhooks</h2>
       <p>
         Webhooks aren&apos;t in the XML SDK. Use the REST API with HTTP Basic
         auth (API Login ID + Transaction Key), once per environment, usually as
@@ -390,7 +390,7 @@ await fetch(\`\${host}/rest/v1/webhooks\`, {
 });`}
       />
 
-      <h2>7. Verify webhook deliveries</h2>
+      <h2 id="7-verify-webhook-deliveries">7. Verify webhook deliveries</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Authorize.Net", "DaloyJS route", "Your queue"]}
@@ -475,7 +475,7 @@ app.route({
         then marks the webhook inactive. Do the heavy work in a queue.
       </p>
 
-      <h2>Errors &amp; result objects</h2>
+      <h2 id="errors-and-result-objects">Errors &amp; result objects</h2>
       <p>
         There are two layers of failure. The outer <code>messages</code> block
         reports request-level errors (auth, schema, throttling). When
@@ -486,7 +486,7 @@ app.route({
         <Link href="/docs/errors">problem+json</Link>.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The SDK uses <code>axios</code> over Node&apos;s <code>https</code>,
         requires Node 14+ and TLS 1.2, and isn&apos;t designed for{" "}
@@ -497,7 +497,7 @@ app.route({
         that the SDK builds.
       </p>
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>

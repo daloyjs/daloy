@@ -80,7 +80,7 @@ export default function Page() {
         caption="In the beforeHandle phase waf() scans the decoded path, query, optional headers, and schema-parsed body. Each firing rule adds its score once per request; reaching blockThreshold fires onMatch and returns a generic 403 in block mode (log mode only reports)."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { App, waf } from "@daloyjs/core";
@@ -100,7 +100,7 @@ app.use(waf());`}
         schema are body-inspected automatically.
       </p>
 
-      <h2>Tune in log mode first</h2>
+      <h2 id="tune-in-log-mode-first">Tune in log mode first</h2>
       <p>
         Signatures are curated for a low false-positive rate, but every app is
         different. Start in <code>&quot;log&quot;</code> mode, watch{" "}
@@ -127,7 +127,7 @@ app.use(waf());`}
         short, control-character-stripped <code>sample</code> for your logs.
       </p>
 
-      <h2>The rules</h2>
+      <h2 id="the-rules">The rules</h2>
       <ul>
         <li>
           <strong>sqli</strong>: <code>UNION SELECT</code>, boolean tautologies
@@ -157,7 +157,7 @@ app.use(waf());`}
         </li>
       </ul>
 
-      <h2>Scoring and the block threshold</h2>
+      <h2 id="scoring-and-the-block-threshold">Scoring and the block threshold</h2>
       <p>
         Each rule contributes its score <strong>once per request</strong>
         (deduplicated across all inspected locations). The default score is{" "}
@@ -175,7 +175,7 @@ app.use(waf({ blockThreshold: 8 }));
 app.use(waf({ rules: { sqli: { score: 8 } } }));`}
       />
 
-      <h2>Per-rule enable/disable</h2>
+      <h2 id="per-rule-enable-disable">Per-rule enable/disable</h2>
       <p>
         Disable a noisy rule with a boolean, or pass an object to enable it with
         a custom score. Omitted rules keep their defaults (enabled, score 5).
@@ -191,7 +191,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
 }));`}
       />
 
-      <h2>Inspection scope</h2>
+      <h2 id="inspection-scope">Inspection scope</h2>
       <p>
         Path, query, and body are inspected by default. Header inspection is{" "}
         <strong>opt-in</strong> and requires an explicit allowlist, because
@@ -218,7 +218,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         inspected.
       </p>
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           The <code>403</code> body is intentionally generic (

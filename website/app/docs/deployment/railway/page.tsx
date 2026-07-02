@@ -34,14 +34,14 @@ export default function Page() {
         health check, run pre-deploy migrations, or switch to a Dockerfile-based build.
       </p>
 
-      <h2>When to choose Railway</h2>
+      <h2 id="when-to-choose-railway">When to choose Railway</h2>
       <ul>
         <li>You want the lowest-config push-and-it-runs experience on Node.</li>
         <li>You want managed Postgres, Redis, or MySQL in the same project.</li>
         <li>You like environment-per-PR with usage-based billing.</li>
       </ul>
 
-      <h2>Server entrypoint</h2>
+      <h2 id="server-entrypoint">Server entrypoint</h2>
       <p>
         The scaffolded <code>create-daloy</code> templates already ship this as{" "}
         <code>src/index.ts</code> (the only file that opens a port). It builds the app from
@@ -57,7 +57,7 @@ const app = buildApp();
 serve(app, { port: Number(process.env.PORT ?? 3000) });`}
       />
 
-      <h2>railway.json</h2>
+      <h2 id="railway-json">railway.json</h2>
       <CodeBlock
         language="json"
         code={`{
@@ -86,7 +86,7 @@ healthcheckPath = "/healthz"
 healthcheckTimeout = 300`}
       />
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <CodeBlock
         language="bash"
         code={`pnpm dlx @railway/cli login
@@ -94,7 +94,7 @@ pnpm dlx @railway/cli link
 pnpm dlx @railway/cli up`}
       />
 
-      <h2>Trust Railway&apos;s edge proxy</h2>
+      <h2 id="trust-railway-and-apos-s-edge-proxy">Trust Railway&apos;s edge proxy</h2>
       <p>
         Railway terminates TLS and proxies every request, adding{" "}
         <code>X-Forwarded-For</code> / <code>X-Forwarded-Proto</code> headers. In production
@@ -154,7 +154,7 @@ pnpm dlx @railway/cli up`}
         <Link href="/docs/deployment">deployment overview</Link> for the full posture matrix.
       </p>
 
-      <h2>Public API URL</h2>
+      <h2 id="public-api-url">Public API URL</h2>
       <p>
         The templates leave the OpenAPI <code>servers</code> list unset by default, so the
         Scalar <em>Try it</em> panel calls the <strong>origin the docs are served from</strong>{" "}
@@ -169,7 +169,7 @@ pnpm dlx @railway/cli up`}
         code={`pnpm dlx @railway/cli variables --set "PUBLIC_URL=https://api.example.com"`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Don&apos;t override <code>PORT</code>. Railway injects it and the load balancer targets that
@@ -190,7 +190,7 @@ pnpm dlx @railway/cli up`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/deployment">Deployment overview</Link>

@@ -66,9 +66,9 @@ export default function Page() {
         caption="A fresh App instance ships these defaults armed. Each one has a per-feature opt-out, and secureDefaults: false is the single master escape hatch for migrations."
       />
 
-      <h2>What flipped</h2>
+      <h2 id="what-flipped">What flipped</h2>
 
-      <h3>
+      <h3 id="1-secureheaders-is-now-auto-applied">
         1. <code>secureHeaders()</code> is now auto-applied
       </h3>
       <p>
@@ -121,7 +121,7 @@ app.use(
       </p>
       <CodeBlock code={`const app = new App({ secureHeaders: false });`} />
 
-      <h3>
+      <h3 id="2-cross-origin-post-put-patch-delete-require-cors">
         2. Cross-origin <code>POST</code> / <code>PUT</code> /{" "}
         <code>PATCH</code> / <code>DELETE</code> require <code>cors()</code>
       </h3>
@@ -191,7 +191,7 @@ app.use(cors({ origin: ["https://app.example.com"] }));
         code={`const app = new App({ corsCrossOriginGuard: false });`}
       />
 
-      <h3>
+      <h3 id="3-per-route-accepts-field">
         3. Per-route <code>accepts</code> field
       </h3>
       <p>
@@ -217,7 +217,7 @@ app.use(cors({ origin: ["https://app.example.com"] }));
 });`}
       />
 
-      <h2>The master escape hatch</h2>
+      <h2 id="the-master-escape-hatch">The master escape hatch</h2>
       <p>
         If you&apos;re upgrading from <code>0.15.x</code> and need to ship the
         upgrade without any behavior changes, pass{" "}
@@ -234,7 +234,7 @@ app.use(cors({ origin: ["https://app.example.com"] }));
         a permanent posture.
       </p>
 
-      <h2>Detection markers (advanced)</h2>
+      <h2 id="detection-markers-advanced">Detection markers (advanced)</h2>
       <p>
         The framework detects <code>secureHeaders()</code> and{" "}
         <code>cors()</code> registration via two exported symbols. If you wrap
@@ -263,7 +263,7 @@ export function myCustomHeaders() {
 }`}
       />
 
-      <h2>Migration checklist</h2>
+      <h2 id="migration-checklist">Migration checklist</h2>
       <ul>
         <li>
           Audit any custom <code>secureHeaders()</code> call sites. Behavior is
@@ -290,7 +290,7 @@ export function myCustomHeaders() {
         </li>
       </ul>
 
-      <h2>
+      <h2 id="what-and-apos-s-not-in-this-slice">
         What&apos;s <em>not</em> in this slice
       </h2>
       <p>

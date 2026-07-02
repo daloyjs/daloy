@@ -40,7 +40,7 @@ export default function Page() {
         call the new helper.
       </p>
 
-      <h2>
+      <h2 id="1-ratelimit-shared-buckets">
         1. <code>rateLimit({"{ groupId }"})</code> shared buckets
       </h2>
       <p>
@@ -68,7 +68,7 @@ app.route({ method: "POST", path: "/password-reset", hooks: authLimit(), ... });
         collide in a shared Redis backend either.
       </p>
 
-      <h2>
+      <h2 id="2-combine-primitives-every-some-except">
         2. <code>combine</code> primitives, <code>every</code> /{" "}
         <code>some</code> / <code>except</code>
       </h2>
@@ -165,7 +165,7 @@ app.use(some(
         </li>
       </ul>
 
-      <h2>
+      <h2 id="3-iprestriction-cidr-allow-deny">
         3. <code>ipRestriction()</code>: CIDR allow / deny
       </h2>
       <p>
@@ -203,7 +203,7 @@ app.use(ipRestriction({
         <code>cf-connecting-ip</code> or <code>true-client-ip</code>.
       </p>
 
-      <h2>
+      <h2 id="4-internal-true-app-inject">
         4. <code>internal: true</code> + <code>app.inject()</code>
       </h2>
       <p>
@@ -264,7 +264,7 @@ await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));
         language="ts"
       />
 
-      <h2>Opt-out</h2>
+      <h2 id="opt-out">Opt-out</h2>
       <p>
         Every primitive in this slice is additive; nothing changes unless you
         call the helper. The earlier secure-defaults master opt-out flag still

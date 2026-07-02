@@ -79,7 +79,7 @@ export default function Page() {
         caption="The middleware caps the compressed upload first, then inflates with two caps enforced during inflation. Either cap crossing cancels the stream mid-inflate and rejects with 413, so the full bomb is never materialised."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { App, requestDecompression } from "@daloyjs/core";
@@ -102,7 +102,7 @@ app.use(requestDecompression({
         <em>and</em> handlers that read the raw body themselves.
       </p>
 
-      <h2>The two caps</h2>
+      <h2 id="the-two-caps">The two caps</h2>
       <p>
         A single absolute byte cap is not enough on its own: a small payload can
         stay under it yet still amplify wildly.{" "}
@@ -130,7 +130,7 @@ app.use(requestDecompression({
         mid-stream, so the full bomb is never materialised.
       </p>
 
-      <h2>Bounding the compressed input</h2>
+      <h2 id="bounding-the-compressed-input">Bounding the compressed input</h2>
       <p>
         <code>maxCompressedBytes</code> (default <code>1048576</code> / 1 MiB)
         caps the <em>compressed</em> upload before a single byte is inflated. An
@@ -138,7 +138,7 @@ app.use(requestDecompression({
         inflating anything.
       </p>
 
-      <h2>Supported encodings</h2>
+      <h2 id="supported-encodings">Supported encodings</h2>
       <p>
         Built on the web-standard <code>DecompressionStream</code>, so the same
         line works on Node, Bun, Deno, Cloudflare Workers, and Vercel. Only{" "}
@@ -157,7 +157,7 @@ app.use(requestDecompression({
 }));`}
       />
 
-      <h2>Error responses</h2>
+      <h2 id="error-responses">Error responses</h2>
       <ul>
         <li>
           <code>413</code>: a decompression bomb tripped either cap, or the
@@ -183,7 +183,7 @@ app.use(requestDecompression({
         uncompressed traffic pays nothing.
       </p>
 
-      <h2>Observability</h2>
+      <h2 id="observability">Observability</h2>
       <p>
         Pass <code>onBomb</code> to record rejected bombs (it fires before the{" "}
         <code>413</code> is thrown). It receives the structured{" "}
@@ -204,14 +204,14 @@ app.use(requestDecompression({
 }));`}
       />
 
-      <h2>Low-level helper</h2>
+      <h2 id="low-level-helper">Low-level helper</h2>
       <p>
         <code>decompressRequestBody(compressed, encoding, opts)</code> is
         exported for custom flows that read raw bytes themselves. It inflates
         with the exact same bomb-resistant semantics and the same caps.
       </p>
 
-      <h2>
+      <h2 id="relationship-to-bodylimitbytes">
         Relationship to <code>bodyLimitBytes</code>
       </h2>
       <p>

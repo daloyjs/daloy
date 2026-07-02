@@ -44,7 +44,7 @@ export default function Page() {
         .
       </p>
 
-      <h2>1. Connection-draining shutdown</h2>
+      <h2 id="1-connection-draining-shutdown">1. Connection-draining shutdown</h2>
 
       <FlowDiagram
         title="Draining in-flight requests on shutdown"
@@ -109,7 +109,7 @@ await app.close(10_000, "SIGTERM");
         <code>app._registerIdleConnectionCloseHook(hook)</code>.
       </p>
 
-      <h2>2. Crash on unhandled rejection in production</h2>
+      <h2 id="2-crash-on-unhandled-rejection-in-production">2. Crash on unhandled rejection in production</h2>
       <p>
         The new{" "}
         <code>
@@ -143,7 +143,7 @@ await app.close(10_000, "SIGTERM");
         Vercel, Fastly Compute).
       </p>
 
-      <h2>
+      <h2 id="3-app-healthcheck-and-app-readinesscheck">
         3. <code>app.healthcheck()</code> and <code>app.readinesscheck()</code>
       </h2>
       <p>
@@ -183,7 +183,7 @@ app.readinesscheck({
         spoofing the header should not bypass the cap.
       </p>
 
-      <h2>Opt-out</h2>
+      <h2 id="opt-out">Opt-out</h2>
       <p>
         Disable the whole slice with{" "}
         <code>

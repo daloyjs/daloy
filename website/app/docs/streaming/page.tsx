@@ -99,7 +99,7 @@ export default function Page() {
 import { sseStream } from "@daloyjs/core/streaming";`}
       />
 
-      <h2>Server-Sent Events (SSE)</h2>
+      <h2 id="server-sent-events-sse">Server-Sent Events (SSE)</h2>
       <p>
         Yield either a string (sent as <code>data: …</code>) or an{" "}
         <code>SSEMessage</code> object with any combination of{" "}
@@ -171,14 +171,14 @@ const res = sseResponse(async function* () {
 });`}
       />
 
-      <h3>Keep-alive comments</h3>
+      <h3 id="keep-alive-comments">Keep-alive comments</h3>
       <p>
         Pass <code>keepAliveMs</code> to send a <code>: keep-alive</code>{" "}
         comment frame at a fixed interval. This prevents idle proxies from
         closing the connection while no events are flowing.
       </p>
 
-      <h2>Newline-delimited JSON (NDJSON)</h2>
+      <h2 id="newline-delimited-json-ndjson">Newline-delimited JSON (NDJSON)</h2>
       <p>
         Yield any JSON-serializable value; each value is encoded with{" "}
         <code>JSON.stringify</code> and terminated with a single <code>\n</code>
@@ -213,7 +213,7 @@ app.route({
         <code>application/x-ndjson</code> headers pre-set.
       </p>
 
-      <h2>Backpressure & cancellation</h2>
+      <h2 id="backpressure-and-cancellation">Backpressure & cancellation</h2>
       <p>
         Both helpers use the <code>pull()</code> entry point of{" "}
         <code>ReadableStream</code>: they call <code>iterator.next()</code>{" "}
@@ -229,7 +229,7 @@ app.route({
         released.
       </p>
 
-      <h2>Cross-runtime compatibility</h2>
+      <h2 id="cross-runtime-compatibility">Cross-runtime compatibility</h2>
       <p>
         The helpers only depend on web-standard <code>ReadableStream</code> and{" "}
         <code>TextEncoder</code>, so the same handler works identically on Node,
@@ -239,7 +239,7 @@ app.route({
         runtime without buffering.
       </p>
 
-      <h2>OpenAPI</h2>
+      <h2 id="openapi">OpenAPI</h2>
       <p>
         OpenAPI 3.1 has no rich schema for streamed event payloads. Document
         streaming routes with a free-form <code>200</code> response (just{" "}

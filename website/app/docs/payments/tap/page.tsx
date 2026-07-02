@@ -44,7 +44,7 @@ export default function Page() {
         with <code>fetch</code>.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>Bearer auth, secret key in the backend only.</strong>{" "}
@@ -81,7 +81,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Create an account at{" "}
@@ -110,7 +110,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Environment variables</h2>
+      <h2 id="2-environment-variables">2. Environment variables</h2>
       <CodeBlock
         code={`# .env
 TAP_SECRET_KEY=sk_test_replace_me        # sk_live_... in production
@@ -119,7 +119,7 @@ TAP_MERCHANT_ID=merchant_xxx
 APP_URL=https://your-app.example.com`}
       />
 
-      <h2>3. Plugin (no SDK: fetch-based)</h2>
+      <h2 id="3-plugin-no-sdk-fetch-based">3. Plugin (no SDK: fetch-based)</h2>
       <CodeBlock
         code={`// src/plugins/tap.ts
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -277,7 +277,7 @@ declare module "@daloyjs/core" {
         update the function.
       </p>
 
-      <h2>4. Create a hosted charge</h2>
+      <h2 id="4-create-a-hosted-charge">4. Create a hosted charge</h2>
       <SequenceDiagram
         title="Hosted charge flow"
         participants={["Customer", "DaloyJS route", "Tap"]}
@@ -369,7 +369,7 @@ app.route({
 });`}
       />
 
-      <h2>5. Webhook</h2>
+      <h2 id="5-webhook">5. Webhook</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Tap", "DaloyJS route"]}
@@ -440,7 +440,7 @@ app.route({
 });`}
       />
 
-      <h2>6. Refunds</h2>
+      <h2 id="6-refunds">6. Refunds</h2>
       <CodeBlock
         code={`await state.tap.refund({
   chargeId: "chg_xxx",
@@ -451,7 +451,7 @@ app.route({
 });`}
       />
 
-      <h2>Authorize + capture</h2>
+      <h2 id="authorize-capture">Authorize + capture</h2>
       <p>
         For an auth-then-capture flow (useful for hotels, marketplaces, anything
         where the final amount is decided after the customer&apos;s session),
@@ -461,7 +461,7 @@ app.route({
         supports it , confirm with Tap support per scheme before relying on it.
       </p>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         Everything here is plain <code>fetch</code> and <code>node:crypto</code>
         . Swap <code>createHmac</code> for <code>crypto.subtle</code> if
@@ -469,7 +469,7 @@ app.route({
         runtime requirements beyond a TLS-capable HTTP client.
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Tap returns JSON like{" "}
         <code>{`{ "errors": [{ "code": "1101", "description": "..." }] }`}</code>{" "}
@@ -479,7 +479,7 @@ app.route({
         for a charge that belongs to a different account).
       </p>
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>

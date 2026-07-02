@@ -39,7 +39,7 @@ export default function Page() {
         <code>Cache-Control: no-store</code>).
       </blockquote>
 
-      <h2>DaloyJS is a Relying Party, not an auth server</h2>
+      <h2 id="daloyjs-is-a-relying-party-not-an-auth-server">DaloyJS is a Relying Party, not an auth server</h2>
       <p>
         DaloyJS validates tokens; it does not mint user sessions through an
         authorization-code flow, host a consent screen, or store user/client
@@ -125,7 +125,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>
+      <h2 id="1-jwk-middleware">
         1. <code>jwk()</code> middleware
       </h2>
       <p>
@@ -219,7 +219,7 @@ app.use(
         cryptographically verified and <code>exp</code>-checked regardless.
       </p>
 
-      <h2>
+      <h2 id="2-per-scheme-verify-credentials-ctx-hook">
         2. Per-scheme <code>verify(credentials, ctx)</code> hook
       </h2>
       <p>
@@ -280,7 +280,7 @@ app.use(
         language="ts"
       />
 
-      <h2>
+      <h2 id="3-basicauth">
         3. <code>basicAuth({"{ onAuthSuccess }"})</code>
       </h2>
       <p>
@@ -306,7 +306,7 @@ app.use(
         language="ts"
       />
 
-      <h2>
+      <h2 id="4-cache-control-no-store-on-auth-401-challenges">
         4. <code>Cache-Control: no-store</code> on auth 401 challenges
       </h2>
       <p>
@@ -320,7 +320,7 @@ app.use(
         <code>basicAuth()</code>, and the new <code>jwk()</code>.
       </p>
 
-      <h2>What shipped next</h2>
+      <h2 id="what-shipped-next">What shipped next</h2>
       <p>
         The remaining leftover items, the <code>wsRateLimit()</code> adapter,{" "}
         <code>loginThrottle()</code> preset, <code>rotateSession()</code>{" "}

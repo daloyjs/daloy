@@ -81,7 +81,7 @@ export default function Page() {
         caption="The route handler sends through the SESv2Client, which signs the request and calls Amazon SES. SES returns a MessageId synchronously, then publishes delivery and bounce events asynchronously when you attach a configuration set."
       />
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           In the AWS console, open{" "}
@@ -101,7 +101,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @aws-sdk/client-sesv2`} />
       <p>
         The v3 SDK is modular, install only the SESv2 client. It works on Node
@@ -109,7 +109,7 @@ export default function Page() {
         <Link href="/docs/adapters">Lambda adapter</Link>.
       </p>
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 AWS_REGION=us-east-1
@@ -120,7 +120,7 @@ AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <p>
         The SDK reads credentials from the standard AWS provider chain (env
         vars, shared config file, IMDS, IRSA on EKS, Lambda role), so the client
@@ -177,7 +177,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in a route</h2>
+      <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -213,7 +213,7 @@ app.route({
 });`}
       />
 
-      <h2>Templates &amp; attachments</h2>
+      <h2 id="templates-and-attachments">Templates &amp; attachments</h2>
       <p>
         SESv2&apos;s <code>SendEmailCommand</code> accepts three content
         variants:
@@ -245,7 +245,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <ul>
         <li>
           <strong>Node / Bun / Deno / AWS Lambda</strong>: works out of the box.
@@ -260,7 +260,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Observability</h2>
+      <h2 id="observability">Observability</h2>
       <p>
         SES publishes <strong>delivery, bounce, and complaint</strong> events to
         SNS, EventBridge, or Kinesis Firehose via a <em>configuration set</em>.

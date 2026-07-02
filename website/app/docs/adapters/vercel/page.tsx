@@ -53,7 +53,7 @@ export default function Page() {
         caption="Both shapes live at api/index.ts and need the /(.*) → /api rewrite so DaloyJS owns routing at the site root. Only the export shape and runtime differ; the app object is the same."
       />
 
-      <h2>When to choose Vercel</h2>
+      <h2 id="when-to-choose-vercel">When to choose Vercel</h2>
       <ul>
         <li>You want a standalone DaloyJS REST API on Vercel Functions.</li>
         <li>
@@ -63,7 +63,7 @@ export default function Page() {
         <li>You want preview deployments per PR with zero CI config.</li>
       </ul>
 
-      <h2>Scaffold</h2>
+      <h2 id="scaffold">Scaffold</h2>
       <p>
         The Vercel starter scaffolds a standalone REST API on the Node.js
         runtime (the <code>toFetchHandler</code> entrypoint shown below), which
@@ -77,7 +77,7 @@ cd my-api
 pnpm vercel dev`}
       />
 
-      <h2>1. Vercel Node.js Functions (standalone API)</h2>
+      <h2 id="1-vercel-node-js-functions-standalone-api">1. Vercel Node.js Functions (standalone API)</h2>
       <p>
         For a standalone DaloyJS REST API on the Node.js runtime, use a single
         function at <code>api/index.ts</code>. Vercel Node.js Functions expect a
@@ -108,7 +108,7 @@ export default toFetchHandler(app);`}
 }`}
       />
 
-      <h2>2. Vercel Functions (standalone API)</h2>
+      <h2 id="2-vercel-functions-standalone-api">2. Vercel Functions (standalone API)</h2>
       <CodeBlock
         language="ts"
         code={`// api/index.ts
@@ -125,7 +125,7 @@ export default toWebHandler(app);`}
         <code>toWebHandler</code>.
       </p>
 
-      <h2>vercel.json</h2>
+      <h2 id="vercel-json">vercel.json</h2>
       <p>
         The <code>rewrites</code> rule above is required for root routing. Add{" "}
         <code>functions</code> for per-function memory/duration limits, and{" "}
@@ -146,7 +146,7 @@ export default toWebHandler(app);`}
         <code>functions</code> instead.
       </p>
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <CodeBlock
         language="bash"
         code={`# preview
@@ -159,7 +159,7 @@ pnpm vercel deploy --prod
 pnpm vercel env add SESSION_SECRET production`}
       />
 
-      <h2>Storage</h2>
+      <h2 id="storage">Storage</h2>
       <p>
         <strong>
           Vercel KV and Vercel Postgres no longer exist as Vercel-owned
@@ -187,7 +187,7 @@ pnpm vercel env add SESSION_SECRET production`}
         for the Redis setup.
       </p>
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Edge runtime has no <code>node:*</code>: keep middleware portable, and
@@ -206,7 +206,7 @@ pnpm vercel env add SESSION_SECRET production`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/adapters">Adapters overview</Link>

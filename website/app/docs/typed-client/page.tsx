@@ -30,7 +30,7 @@ export default function Page() {
         type-safety. Use whichever fits your consumer.
       </p>
 
-      <h2>1. In-process typed client (zero codegen)</h2>
+      <h2 id="1-in-process-typed-client-zero-codegen">1. In-process typed client (zero codegen)</h2>
       <p>
         For TypeScript consumers in the same monorepo (tests, internal tools,
         Next.js server actions):
@@ -103,7 +103,7 @@ if (r.status === 200) {
         </p>
       </div>
 
-      <h2>2. Hey API SDK (cross-language, cross-repo, build-time)</h2>
+      <h2 id="2-hey-api-sdk-cross-language-cross-repo-build-time">2. Hey API SDK (cross-language, cross-repo, build-time)</h2>
       <p>
         For consumers outside the monorepo or in other languages, generate a
         fully typed fetch SDK with{" "}
@@ -169,7 +169,7 @@ export default defineConfig({
 #   generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}`}
       />
 
-      <h2>Using the generated SDK</h2>
+      <h2 id="using-the-generated-sdk">Using the generated SDK</h2>
       <CodeBlock
         code={`import { client } from "./generated/client/client.gen.js";
 import { getBookById } from "./generated/client/sdk.gen.js";
@@ -181,7 +181,7 @@ if (error) console.error(error);
 else if (data) console.log(data.title);`}
       />
 
-      <h2>Which one should I use?</h2>
+      <h2 id="which-one-should-i-use">Which one should I use?</h2>
       <table>
         <thead>
           <tr>
@@ -211,7 +211,7 @@ else if (data) console.log(data.title);`}
         </tbody>
       </table>
 
-      <h2>Coming from ts-rest?</h2>
+      <h2 id="coming-from-ts-rest">Coming from ts-rest?</h2>
       <p>
         <a href="https://ts-rest.com/" target="_blank" rel="noreferrer">
           ts-rest

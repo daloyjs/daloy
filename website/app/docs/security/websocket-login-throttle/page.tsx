@@ -42,7 +42,7 @@ export default function Page() {
         local policy.
       </p>
 
-      <h2>
+      <h2 id="1-wsratelimit">
         1. <code>wsRateLimit()</code>
       </h2>
       <p>
@@ -122,7 +122,7 @@ app.ws("/session", {
         language="ts"
       />
 
-      <h2>
+      <h2 id="2-loginthrottle">
         2. <code>loginThrottle()</code>
       </h2>
       <p>
@@ -150,7 +150,7 @@ app.ws("/session", {
         language="ts"
       />
 
-      <h2>
+      <h2 id="3-rotatesession">
         3. <code>rotateSession()</code>
       </h2>
       <p>
@@ -177,7 +177,7 @@ app.route({
         language="ts"
       />
 
-      <h2>4. Upload MIME and magic-byte guards</h2>
+      <h2 id="4-upload-mime-and-magic-byte-guards">4. Upload MIME and magic-byte guards</h2>
       <p>
         <code>fileField()</code> already enforced <code>maxBytes</code> and MIME
         allowlists. Add <code>magicBytes: true</code> to derive known signatures
@@ -201,7 +201,7 @@ fileField({
         language="ts"
       />
 
-      <h2>
+      <h2 id="5-requirepayloadauth">
         5. <code>requirePayloadAuth</code>
       </h2>
       <p>
@@ -232,7 +232,7 @@ app.route({
         language="ts"
       />
 
-      <h2>6. WebSocket safe defaults</h2>
+      <h2 id="6-websocket-safe-defaults">6. WebSocket safe defaults</h2>
       <p>
         <code>app.ws()</code> now normalizes safe runtime defaults for Node and
         Bun: close on excessive outbound backpressure, a 1 MiB backpressure

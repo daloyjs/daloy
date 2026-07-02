@@ -27,7 +27,7 @@ export default function Page() {
         trie in O(path-segments) regardless of how many routes you have.
       </p>
 
-      <h2>Defining routes</h2>
+      <h2 id="defining-routes">Defining routes</h2>
       <p>
         A route declaration is the source of truth for matching, request
         validation, response validation, OpenAPI output, and typed clients.
@@ -90,7 +90,7 @@ export const app = new App().route({
 });`}
       />
 
-      <h2>Type inference and chaining</h2>
+      <h2 id="type-inference-and-chaining">Type inference and chaining</h2>
       <p>
         <code>app.route()</code> returns the same app instance with a widened
         route tuple type. Chain route registrations when you want{" "}
@@ -123,7 +123,7 @@ export const app = new App()
   });`}
       />
 
-      <h2>HTTP methods</h2>
+      <h2 id="http-methods">HTTP methods</h2>
       <p>
         Supported methods include <code>GET</code>, <code>POST</code>,{" "}
         <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>,{" "}
@@ -139,7 +139,7 @@ export const app = new App()
         <code>OPTIONS</code> route is registered.
       </p>
 
-      <h2>Path parameters</h2>
+      <h2 id="path-parameters">Path parameters</h2>
       <CodeBlock
         code={`app.route({
   method: "GET",
@@ -165,7 +165,7 @@ export const app = new App()
         at registration.
       </p>
 
-      <h3>Wildcard captures</h3>
+      <h3 id="wildcard-captures">Wildcard captures</h3>
       <p>
         A trailing <code>*name</code> segment captures the rest of the path into
         one decoded string. Wildcards must be terminal.
@@ -190,7 +190,7 @@ export const app = new App()
         your handler sees them.
       </p>
 
-      <h2>Groups</h2>
+      <h2 id="groups">Groups</h2>
       <CodeBlock
         code={`app.group("/api/v1", { tags: ["v1"] }, (v1) => {
   v1.route({
@@ -212,7 +212,7 @@ export const app = new App()
         group. Grouped routes are visible to runtime routing and OpenAPI.
       </p>
 
-      <h2>Route options</h2>
+      <h2 id="route-options">Route options</h2>
       <ul>
         <li>
           <code>request</code>: schemas for <code>params</code>,{" "}
@@ -244,7 +244,7 @@ export const app = new App()
         </li>
       </ul>
 
-      <h2>Hooks</h2>
+      <h2 id="hooks">Hooks</h2>
       <p>Hooks attach behavior at fixed lifecycle points:</p>
       <ul>
         <li>
@@ -311,7 +311,7 @@ export const app = new App()
 });`}
       />
 
-      <h2>
+      <h2 id="transforming-responses-with-onsend">
         Transforming responses with <code>onSend</code>
       </h2>
       <p>
@@ -358,7 +358,7 @@ app.route({
         the right place for logging and metrics.
       </p>
 
-      <h2>405 Method Not Allowed</h2>
+      <h2 id="405-method-not-allowed">405 Method Not Allowed</h2>
       <p>
         If a path is registered for one method but called with another, the
         router returns <strong>405</strong> with a correct <code>Allow</code>{" "}
@@ -368,7 +368,7 @@ app.route({
         leak through method probing.
       </p>
 
-      <h2>Performance</h2>
+      <h2 id="performance">Performance</h2>
       <CodeBlock
         language="text"
         code={`static route lookup        12,363,799 ops/sec

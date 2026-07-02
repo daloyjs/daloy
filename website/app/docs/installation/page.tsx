@@ -71,7 +71,7 @@ export default function Page() {
         caption="Either scaffold a hardened project in one command or add the dependency-free package to an existing one, then drop in the hardened .npmrc and verify the import resolves."
       />
 
-      <h2>Fastest path: scaffold a project</h2>
+      <h2 id="fastest-path-scaffold-a-project">Fastest path: scaffold a project</h2>
       <p>
         Use the official generator, it sets up a hardened <code>.npmrc</code>,
         strict TypeScript, and a working route in one command.
@@ -108,9 +108,9 @@ bun  create daloy           my-api`}
         templates and flags.
       </p>
 
-      <h2>Or install into an existing project</h2>
+      <h2 id="or-install-into-an-existing-project">Or install into an existing project</h2>
 
-      <h3>Prerequisites</h3>
+      <h3 id="prerequisites">Prerequisites</h3>
       <ul>
         <li>
           <strong>Node.js</strong> 24.0.0 or newer (active LTS).
@@ -141,7 +141,7 @@ corepack prepare pnpm@11.1.3 --activate
 pnpm --version`}
       />
 
-      <h3>Install DaloyJS</h3>
+      <h3 id="install-daloyjs">Install DaloyJS</h3>
       <CodeBlock
         language="bash"
         code={`# choose one package manager
@@ -167,7 +167,7 @@ bun  add -d     typescript @hey-api/openapi-ts prettier`}
         .
       </p>
 
-      <h2>
+      <h2 id="hardened-npmrc">
         Hardened <code>.npmrc</code>
       </h2>
       <p>
@@ -193,7 +193,7 @@ ignore-scripts=true`}
         .
       </p>
 
-      <h2>Verify</h2>
+      <h2 id="verify">Verify</h2>
       <p>
         Run this from the project root after installing, it works the same under
         pnpm, npm, yarn, or bun because it shells straight to <code>node</code>:
@@ -203,7 +203,7 @@ ignore-scripts=true`}
         code={`node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok →', Object.keys(m).slice(0, 6)))"`}
       />
 
-      <h2>Next</h2>
+      <h2 id="next">Next</h2>
       <p>
         Continue with <Link href="/docs/getting-started">Getting started</Link>{" "}
         to write your first route.

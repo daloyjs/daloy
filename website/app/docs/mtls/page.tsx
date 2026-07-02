@@ -86,7 +86,7 @@ export default function Page() {
         caption="The TLS layer verifies the chain; clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook. Anything that fails is rejected before the handler runs."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="ts"
         code={`import { createApp } from "@daloyjs/core";
@@ -122,7 +122,7 @@ app.route({
         <code>stateKey</code>) for downstream handlers and audit logging.
       </p>
 
-      <h2>Rejection semantics</h2>
+      <h2 id="rejection-semantics">Rejection semantics</h2>
       <ul>
         <li>
           <strong>No certificate presented</strong> &rarr; <code>401</code>{" "}
@@ -138,7 +138,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Native TLS (Node)</h2>
+      <h2 id="native-tls-node">Native TLS (Node)</h2>
       <p>
         When the peer socket is a TLS socket presenting a client certificate,
         the Node adapter normalizes it (subject, issuer, fingerprint, SANs,
@@ -160,7 +160,7 @@ app.route({
 );`}
       />
 
-      <h2>Behind a TLS-terminating proxy</h2>
+      <h2 id="behind-a-tls-terminating-proxy">Behind a TLS-terminating proxy</h2>
       <p>
         When a proxy terminates TLS, it forwards the verified client identity in
         request headers. Because those headers are spoofable by anything that
@@ -168,7 +168,7 @@ app.route({
         when the app is <em>exclusively</em> reachable through the terminating
         proxy.
       </p>
-      <h3>Envoy (X-Forwarded-Client-Cert)</h3>
+      <h3 id="envoy-x-forwarded-client-cert">Envoy (X-Forwarded-Client-Cert)</h3>
       <CodeBlock
         language="ts"
         code={`app.use(
@@ -178,7 +178,7 @@ app.route({
   }),
 );`}
       />
-      <h3>nginx / HAProxy / Traefik (structured headers)</h3>
+      <h3 id="nginx-haproxy-traefik-structured-headers">nginx / HAProxy / Traefik (structured headers)</h3>
       <p>
         For proxies that forward parsed fields in separate headers, name each
         header. The <code>verify</code> header lets the middleware require the
@@ -201,7 +201,7 @@ app.route({
 );`}
       />
 
-      <h2>Allow-lists &amp; checks</h2>
+      <h2 id="allow-lists-and-checks">Allow-lists &amp; checks</h2>
       <ul>
         <li>
           <code>requireVerified</code> (default <code>true</code>): refuse any

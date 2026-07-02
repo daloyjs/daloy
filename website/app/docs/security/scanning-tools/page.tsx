@@ -125,7 +125,7 @@ export default function Page() {
         claims into our docs.
       </p>
 
-      <h2>Quick recommendation</h2>
+      <h2 id="quick-recommendation">Quick recommendation</h2>
       <table>
         <thead>
           <tr>
@@ -166,7 +166,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>Socket: supply-chain defense</h2>
+      <h2 id="socket-supply-chain-defense">Socket: supply-chain defense</h2>
       <p>
         <a href="https://socket.dev/" target="_blank" rel="noreferrer noopener">
           Socket
@@ -200,7 +200,7 @@ export default function Page() {
         for install-time blocking.
       </p>
 
-      <h3>Why use it</h3>
+      <h3 id="why-use-it">Why use it</h3>
       <ul>
         <li>
           Socket watches package behavior, not only known CVEs. Its alert types
@@ -223,7 +223,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h3>When to use it</h3>
+      <h3 id="when-to-use-it">When to use it</h3>
       <ul>
         <li>
           Use Socket for every DaloyJS project that accepts dependency PRs from
@@ -241,7 +241,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h3>How to use it</h3>
+      <h3 id="how-to-use-it">How to use it</h3>
       <ol>
         <li>
           Install{" "}
@@ -297,7 +297,7 @@ export default function Page() {
       <CodeBlock language="bash" code={socketFirewallExample} />
       <CodeBlock language="bash" code={socketCliExample} />
 
-      <h2>Snyk: CVE, SAST, container, and IaC scanning</h2>
+      <h2 id="snyk-cve-sast-container-and-iac-scanning">Snyk: CVE, SAST, container, and IaC scanning</h2>
       <p>
         <a href="https://snyk.io/" target="_blank" rel="noreferrer noopener">
           Snyk
@@ -347,7 +347,7 @@ export default function Page() {
         .
       </p>
 
-      <h3>Why use it</h3>
+      <h3 id="why-use-it-2">Why use it</h3>
       <ul>
         <li>
           Snyk is strong when you need CVE evidence, vulnerability remediation
@@ -367,7 +367,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h3>When to use it</h3>
+      <h3 id="when-to-use-it-2">When to use it</h3>
       <ul>
         <li>
           Use Snyk when customers, auditors, or procurement ask for an SCA/SAST
@@ -385,7 +385,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h3>How to use it</h3>
+      <h3 id="how-to-use-it-2">How to use it</h3>
       <ol>
         <li>
           Start with Snyk&apos;s{" "}
@@ -432,7 +432,7 @@ export default function Page() {
       </ol>
       <CodeBlock language="bash" code={snykCliExample} />
 
-      <h2>Aikido: consolidated AppSec workflow</h2>
+      <h2 id="aikido-consolidated-appsec-workflow">Aikido: consolidated AppSec workflow</h2>
       <p>
         <a
           href="https://www.aikido.dev/"
@@ -485,7 +485,7 @@ export default function Page() {
         for runtime protection.
       </p>
 
-      <h3>Why use it</h3>
+      <h3 id="why-use-it-3">Why use it</h3>
       <ul>
         <li>
           Aikido is useful when you want broad coverage without stitching
@@ -505,7 +505,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h3>When to use it</h3>
+      <h3 id="when-to-use-it-3">When to use it</h3>
       <ul>
         <li>
           Use Aikido when a small or mid-size team wants one security inbox and
@@ -527,7 +527,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h3>How to use it</h3>
+      <h3 id="how-to-use-it-3">How to use it</h3>
       <ol>
         <li>
           Connect your source control from{" "}
@@ -585,7 +585,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>How they compare</h2>
+      <h2 id="how-they-compare">How they compare</h2>
       <table>
         <thead>
           <tr>
@@ -631,7 +631,7 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2>Recommended rollout</h2>
+      <h2 id="recommended-rollout">Recommended rollout</h2>
       <ol>
         <li>
           Keep the DaloyJS defaults first: <code>ignore-scripts=true</code>,
@@ -658,7 +658,7 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>What no scanner replaces</h2>
+      <h2 id="what-no-scanner-replaces">What no scanner replaces</h2>
       <p>
         Do not turn off framework controls after adding a scanner. The scanner
         tells you what it can see; the framework still needs to refuse dangerous
@@ -684,7 +684,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Freshness policy</h2>
+      <h2 id="freshness-policy">Freshness policy</h2>
       <p>
         To keep this page current, review the linked vendor docs when changing
         recommendations and before major DaloyJS releases. Avoid hardcoding plan
@@ -716,7 +716,7 @@ export default function Page() {
         the old name out unless it is still present in the current docs.
       </p>
 
-      <h2>Disclosure</h2>
+      <h2 id="disclosure">Disclosure</h2>
       <p>
         DaloyJS has no commercial relationship with Socket, Snyk, or Aikido.
         These recommendations are based on how their current public products map

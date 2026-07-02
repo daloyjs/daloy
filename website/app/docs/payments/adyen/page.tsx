@@ -43,7 +43,7 @@ export default function Page() {
         <code>hmacValidator</code>.
       </p>
 
-      <h2>What you should know up front</h2>
+      <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
           <strong>
@@ -90,7 +90,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>1. Provision</h2>
+      <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
           Create a{" "}
@@ -127,10 +127,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @adyen/api-library`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 ADYEN_ENVIRONMENT=TEST                         # or LIVE
@@ -143,7 +143,7 @@ ADYEN_LIVE_URL_PREFIX=                         # required when ENVIRONMENT=LIVE
 ADYEN_CLIENT_KEY=test_...replace_me            # public key, ship to the browser`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/adyen.ts
 import { Client, CheckoutAPI, Types, hmacValidator } from "@adyen/api-library";
@@ -224,7 +224,7 @@ declare module "@daloyjs/core" {
         instance is safe to call concurrently.
       </p>
 
-      <h2>5. Create a session for Drop-in / Components</h2>
+      <h2 id="5-create-a-session-for-drop-in-components">5. Create a session for Drop-in / Components</h2>
       <p>
         The frontend renders Adyen Web with the <code>id</code> and{" "}
         <code>sessionData</code> from this response. You never touch a PAN, and
@@ -283,7 +283,7 @@ app.route({
 });`}
       />
 
-      <h2>6. Standard webhook notifications</h2>
+      <h2 id="6-standard-webhook-notifications">6. Standard webhook notifications</h2>
       <SequenceDiagram
         title="Webhook verification"
         participants={["Adyen", "DaloyJS route", "Your queue"]}
@@ -384,7 +384,7 @@ app.route({
         webhooks are the source of truth.
       </p>
 
-      <h2>7. Modifications (capture, refund, cancel)</h2>
+      <h2 id="7-modifications-capture-refund-cancel">7. Modifications (capture, refund, cancel)</h2>
       <CodeBlock
         code={`// Capture an authorisation (manual capture flow).
 await checkout.ModificationsApi.captureAuthorisedPayment(item.pspReference, {
@@ -416,7 +416,7 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
 });`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         The SDK uses Node&apos;s built-in <code>https</code> module out of the
         box. It runs on Node 18+ and works on classic Node serverless. For{" "}
@@ -433,7 +433,7 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         anywhere.
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Adyen returns RFC-7807-shaped errors with <code>status</code>,{" "}
         <code>errorCode</code>, <code>message</code>, and <code>errorType</code>
@@ -442,7 +442,7 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         <Link href="/docs/errors">problem+json</Link> like other providers.
       </p>
 
-      <h2>Modernisation notes</h2>
+      <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
           <strong>

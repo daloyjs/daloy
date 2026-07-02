@@ -77,7 +77,7 @@ export default function Page() {
         caption="One command loads your App instance without starting a server, then prints the registered routes in whatever shape you ask for."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         language="bash"
         code={`pnpm exec daloy inspect             # also tries build-app/createApp-style factories
@@ -96,7 +96,7 @@ pnpm exec daloy doctor
 pnpm exec daloy diff openapi.published.json openapi.json`}
       />
 
-      <h2>Loading the App</h2>
+      <h2 id="loading-the-app">Loading the App</h2>
       <p>
         The entry file must export an <code>App</code> instance. The CLI accepts
         a default export, named <code>app</code> or <code>default_app</code>{" "}
@@ -138,7 +138,7 @@ export function buildApp() {
         stays parseable.
       </p>
 
-      <h2>Flags</h2>
+      <h2 id="flags">Flags</h2>
       <ul>
         <li>
           <code>--json</code>: emit a machine-readable JSON document instead of
@@ -203,7 +203,7 @@ export function buildApp() {
         </li>
       </ul>
 
-      <h2>
+      <h2 id="daloy-dev-watch-mode-dev-server">
         <code>daloy dev</code>: watch-mode dev server
       </h2>
       <p>
@@ -246,7 +246,7 @@ pnpm exec daloy dev ./src/server.ts`}
         this reason.
       </p>
 
-      <h2>
+      <h2 id="daloy-doctor-secure-defaults-audit">
         <code>daloy doctor</code>: secure-defaults audit
       </h2>
       <p>
@@ -266,7 +266,7 @@ pnpm exec daloy doctor --audit-secrets`}
         <code>ok</code> is only true when there are no findings at all.
       </p>
 
-      <h2>
+      <h2 id="daloy-diff-openapi-change-gate">
         <code>daloy diff</code>: OpenAPI change gate
       </h2>
       <p>
@@ -281,7 +281,7 @@ pnpm exec daloy diff openapi.published.json openapi.json
 pnpm exec daloy diff --json openapi.published.json openapi.json`}
       />
 
-      <h2>CI usage</h2>
+      <h2 id="ci-usage">CI usage</h2>
       <p>
         <code>daloy inspect --check</code> is a drop-in replacement for the
         in-process <code>runContractTests</code> runner. Wire it into your
@@ -297,7 +297,7 @@ pnpm exec daloy diff --json openapi.published.json openapi.json`}
   run: pnpm exec daloy diff openapi.published.json openapi.json`}
       />
 
-      <h2>Programmatic API</h2>
+      <h2 id="programmatic-api">Programmatic API</h2>
       <p>
         The CLI is also exported as a function so you can wire it into custom
         scripts or your own binary:

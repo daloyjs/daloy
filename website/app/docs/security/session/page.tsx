@@ -87,7 +87,7 @@ export default function Page() {
         caption="The cookie only carries a signed id, never the payload. A tampered stub fails the HMAC check and loads nothing; on login regenerate() swaps the id and drops the old store record, so a fixated session id is useless after authentication."
       />
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { App, rotateSession, session } from "@daloyjs/core";
 
@@ -140,7 +140,7 @@ app.route({
 });`}
       />
 
-      <h2>Defaults</h2>
+      <h2 id="defaults">Defaults</h2>
       <p>
         Every option is conservative by default, with explicit error messages
         when a setting would silently weaken security (for example, a non-
@@ -176,7 +176,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>The session API</h2>
+      <h2 id="the-session-api">The session API</h2>
       <p>
         Inside a handler, <code>ctx.state.session</code> exposes:
       </p>
@@ -206,7 +206,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Automatic rotation on privilege changes</h2>
+      <h2 id="automatic-rotation-on-privilege-changes">Automatic rotation on privilege changes</h2>
       <p>
         <code>rotateSession()</code> watches privilege-bearing session values
         and calls <code>session.regenerate()</code> after the handler if they
@@ -230,7 +230,7 @@ app.route({
 });`}
       />
 
-      <h2>Key rotation</h2>
+      <h2 id="key-rotation">Key rotation</h2>
       <p>
         Pass an array to <code>secret</code>. The first entry is always used to
         sign new cookies; any later entry can verify (so older clients keep
@@ -243,7 +243,7 @@ app.route({
 });`}
       />
 
-      <h2>Pluggable store</h2>
+      <h2 id="pluggable-store">Pluggable store</h2>
       <p>
         Implement <code>SessionStore</code> against any KV/Redis-shaped backend.
         Methods may return synchronously or via a <code>Promise</code> - DaloyJS
@@ -276,7 +276,7 @@ const kvStore: SessionStore = {
 app.use(session({ secret: process.env.SESSION_SECRET!, store: kvStore }));`}
       />
 
-      <h2>Standalone signing helpers</h2>
+      <h2 id="standalone-signing-helpers">Standalone signing helpers</h2>
       <p>
         The same HMAC-SHA256 primitives that power the cookie are exported as{" "}
         <code>signValue(value, secret)</code> and{" "}
@@ -293,7 +293,7 @@ const original = await verifySignedValue(signed, process.env.LINK_SECRET!);
 // original === "user_123" or null if tampered / wrong secret.`}
       />
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           The session cookie is <strong>HttpOnly</strong> by default - it is

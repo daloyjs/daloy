@@ -82,7 +82,7 @@ export default function Page() {
         caption="DaloyJS is database-agnostic. The same decorate plus onClose pattern wires any SQL client (or the Supabase platform client) onto every handler's state, so the choice of data layer stays a swappable detail."
       />
 
-      <h2>The recommended pattern</h2>
+      <h2 id="the-recommended-pattern">The recommended pattern</h2>
       <p>
         Wrap the database client in a plugin and register it once at the root of
         your app. Handlers read it from <code>state</code> with full
@@ -151,7 +151,7 @@ app.route({
 });`}
       />
 
-      <h2>Pick your ORM</h2>
+      <h2 id="pick-your-orm">Pick your ORM</h2>
       <ul>
         <li>
           <Link href="/docs/orm/prisma">Prisma</Link>: schema-first, mature
@@ -175,7 +175,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Need a platform client instead?</h2>
+      <h2 id="need-a-platform-client-instead">Need a platform client instead?</h2>
       <p>
         Supabase is not an ORM. It is a hosted Postgres platform with a
         fetch-based JavaScript client, auth, storage, realtime, and
@@ -190,7 +190,7 @@ app.route({
         </li>
       </ul>
 
-      <h2>Keep ORM and ODM separate</h2>
+      <h2 id="keep-orm-and-odm-separate">Keep ORM and ODM separate</h2>
       <p>
         This section is intentionally SQL-focused. If you are using MongoDB or
         Couchbase, jump to the <Link href="/docs/odm">ODM overview</Link> and
@@ -199,7 +199,7 @@ app.route({
         document models into an ORM-shaped abstraction.
       </p>
 
-      <h2>Runtime compatibility cheat sheet</h2>
+      <h2 id="runtime-compatibility-cheat-sheet">Runtime compatibility cheat sheet</h2>
       <table>
         <thead>
           <tr>
@@ -276,7 +276,7 @@ app.route({
         assumptions and are best on the Node.js adapter.
       </p>
 
-      <h2>Typing the decorated client</h2>
+      <h2 id="typing-the-decorated-client">Typing the decorated client</h2>
       <p>
         Use the exported <code>AppState</code> augmentation point to make
         decorated clients available on <code>state</code> in every handler:
@@ -292,7 +292,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>Transactions</h2>
+      <h2 id="transactions">Transactions</h2>
       <p>
         Don&apos;t open transactions in middleware. Open them inside the handler
         that owns the unit of work, so your contract response (success or error)
@@ -311,7 +311,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Translate database errors into framework errors so they serialize as{" "}
         <Link href="/docs/errors">problem+json</Link> automatically:
@@ -332,7 +332,7 @@ try {
 }`}
       />
 
-      <h2>Next steps</h2>
+      <h2 id="next-steps">Next steps</h2>
       <ul>
         <li>
           <Link href="/docs/orm/prisma">Prisma guide</Link>

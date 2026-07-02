@@ -81,7 +81,7 @@ export default function Page() {
         caption="DaloyJS emits an integrity and crossorigin attribute on the script or link tag for the pinned, version-exact URL. The browser hashes the downloaded bytes and refuses to execute anything that does not match, so a poisoned CDN asset never runs."
       />
 
-      <h2>Why it&apos;s opt-in</h2>
+      <h2 id="why-it-and-apos-s-opt-in">Why it&apos;s opt-in</h2>
       <p>
         SRI only works against a <strong>version-pinned, byte-stable</strong>{" "}
         URL. The framework&apos;s default asset URLs intentionally track the{" "}
@@ -91,7 +91,7 @@ export default function Page() {
         both a version-exact URL and its matching hash.
       </p>
 
-      <h2>Pin SRI on the auto-mounted docs</h2>
+      <h2 id="pin-sri-on-the-auto-mounted-docs">Pin SRI on the auto-mounted docs</h2>
       <CodeBlock
         language="ts"
         code={`import { App } from "@daloyjs/core";
@@ -145,7 +145,7 @@ const app = new App({
 });`}
       />
 
-      <h2>Computing the hash</h2>
+      <h2 id="computing-the-hash">Computing the hash</h2>
       <p>
         Download the exact pinned file and hash it. The output is exactly what
         goes into the <code>*Integrity</code> field:
@@ -163,7 +163,7 @@ const app = new App({
         the pinned version.
       </p>
 
-      <h2>Self-hosting instead</h2>
+      <h2 id="self-hosting-instead">Self-hosting instead</h2>
       <p>
         If your Content-Security-Policy forbids third-party CDNs, point the same{" "}
         <code>assets</code> URLs at copies you serve yourself. SRI is optional
@@ -181,7 +181,7 @@ const app = new App({
 });`}
       />
 
-      <h2>Malformed hashes fail loudly</h2>
+      <h2 id="malformed-hashes-fail-loudly">Malformed hashes fail loudly</h2>
       <p>
         A typo in an SRI value is dangerous: browsers silently ignore an{" "}
         <em>unparseable</em> <code>integrity</code> attribute and load the asset
@@ -213,7 +213,7 @@ scalarHtml({
 // (new App({ docs: { assets } })) makes GET /docs fail with a 500.`}
       />
 
-      <h2>Low-level helpers</h2>
+      <h2 id="low-level-helpers">Low-level helpers</h2>
       <p>
         The same options flow through the <code>scalarHtml()</code>,{" "}
         <code>swaggerUiHtml()</code>, and <code>redocHtml()</code> helpers (from

@@ -54,7 +54,7 @@ export default function Page() {
         caption="This guide goes from an empty folder to a typed SDK in five steps, each one builds on the route you declared in step two."
       />
 
-      <h2>1. Scaffold</h2>
+      <h2 id="1-scaffold">1. Scaffold</h2>
       <CodeBlock
         language="bash"
         code={`mkdir hello-daloy && cd hello-daloy
@@ -86,7 +86,7 @@ pnpm add -D typescript tsx @types/node`}
         renaming files.
       </p>
 
-      <h2>2. Write your first route</h2>
+      <h2 id="2-write-your-first-route">2. Write your first route</h2>
       <CodeBlock
         code={`// src/index.ts
 import { z } from "zod";
@@ -166,7 +166,7 @@ console.log(res.status, await res.json());
 // → 200 { msg: "Hello, world!" }`}
       />
 
-      <h2>3. Add OpenAPI &amp; docs UI</h2>
+      <h2 id="3-add-openapi-and-docs-ui">3. Add OpenAPI &amp; docs UI</h2>
       <p>
         One line on the <code>App</code> constructor and DaloyJS auto-mounts{" "}
         <code>GET /openapi.json</code> + <code>GET /openapi.yaml</code> (the
@@ -208,7 +208,7 @@ console.log(res.status, await res.json());
 const app = createApp({ docs: true });`}
       />
 
-      <h3>Prefer the classic Swagger UI?</h3>
+      <h3 id="prefer-the-classic-swagger-ui">Prefer the classic Swagger UI?</h3>
       <p>
         Scalar is the default because it&apos;s faster, prettier, and friendlier
         on mobile, but if your team is used to Swagger UI, or you have existing
@@ -261,7 +261,7 @@ const app = createApp({ docs: true });`}
 headers: { "content-security-policy": docsContentSecurityPolicy() }`}
       />
 
-      <h2>4. Use the typed in-process client</h2>
+      <h2 id="4-use-the-typed-in-process-client">4. Use the typed in-process client</h2>
       <CodeBlock
         code={`import { createClient } from "@daloyjs/core/client";
 
@@ -278,7 +278,7 @@ console.log(r.status, r.body);`}
         types and the client falls back to an untyped surface.
       </p>
 
-      <h2>5. Generate a Hey API SDK</h2>
+      <h2 id="5-generate-a-hey-api-sdk">5. Generate a Hey API SDK</h2>
       <p>
         For consumers outside the monorepo, generate a fully typed fetch SDK:
       </p>
@@ -309,7 +309,7 @@ curl http://localhost:3000/openapi.json -o generated/openapi.json
 pnpm exec openapi-ts`}
       />
 
-      <h2>Next steps</h2>
+      <h2 id="next-steps">Next steps</h2>
       <ul>
         <li>
           <Link href="/docs/routing">Routing</Link>

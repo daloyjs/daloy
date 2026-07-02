@@ -49,7 +49,7 @@ export default function Page() {
         <code>@daloyjs/core/http-signatures</code> subpath.
       </p>
 
-      <h2>Secure-by-default</h2>
+      <h2 id="secure-by-default">Secure-by-default</h2>
       <ul>
         <li>
           The verifier requires an explicit <code>algorithms</code> allowlist.
@@ -78,7 +78,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Supported algorithms</h2>
+      <h2 id="supported-algorithms">Supported algorithms</h2>
       <p>
         The labels map 1:1 onto the RFC 9421 HTTP Signature Algorithms registry:
       </p>
@@ -97,7 +97,7 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2>Verify inbound requests (middleware)</h2>
+      <h2 id="verify-inbound-requests-middleware">Verify inbound requests (middleware)</h2>
       <p>
         <code>httpSignatureAuth()</code> rejects any request without a valid
         signature with a <code>401</code> (<code>Cache-Control: no-store</code>)
@@ -173,7 +173,7 @@ app.route({
 });`}
       />
 
-      <h2>Sign an outbound request</h2>
+      <h2 id="sign-an-outbound-request">Sign an outbound request</h2>
       <p>
         <code>signRequest()</code> returns a new <code>Request</code> with the{" "}
         <code>Signature</code> and <code>Signature-Input</code> headers attached
@@ -201,7 +201,7 @@ const signed = await signRequest(req, {
 await fetch(signed);`}
       />
 
-      <h2>Bind the body with Content-Digest (RFC 9530)</h2>
+      <h2 id="bind-the-body-with-content-digest-rfc-9530">Bind the body with Content-Digest (RFC 9530)</h2>
       <p>
         Message signatures cover headers and derived components, not the body.
         To bind the body, compute a <code>Content-Digest</code> header with{" "}
@@ -235,7 +235,7 @@ if (!(await verifyContentDigest(request.headers.get("content-digest") ?? "", raw
 }`}
       />
 
-      <h2>Low-level sign / verify</h2>
+      <h2 id="low-level-sign-verify">Low-level sign / verify</h2>
       <p>
         <code>signMessage()</code> and <code>verifyMessage()</code> work with
         plain method/URL/headers when you are not inside a request/response
@@ -274,7 +274,7 @@ if (!result.valid) {
 }`}
       />
 
-      <h2>Rejection reasons</h2>
+      <h2 id="rejection-reasons">Rejection reasons</h2>
       <p>
         <code>verifyMessage()</code> / <code>verifyRequest()</code> never throw
         on a forged or malformed signature. They return{" "}

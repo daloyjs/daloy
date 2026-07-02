@@ -56,7 +56,7 @@ export default function Page() {
         caption="Each plugin gets its own child App. Routes inherit the prefix, tags, hooks, auth, and app-level decorators, but hooks and decorators added inside one plugin apply only to that plugin's routes."
       />
 
-      <h2>Defining a plugin</h2>
+      <h2 id="defining-a-plugin">Defining a plugin</h2>
       <p>
         A plugin can be a descriptor object with optional metadata and a{" "}
         <code>register(app)</code> function, or a plain function that receives
@@ -96,7 +96,7 @@ export const usersPlugin = {
 };`}
       />
 
-      <h2>Registering a plugin</h2>
+      <h2 id="registering-a-plugin">Registering a plugin</h2>
       <p>
         <code>app.register()</code> mounts the plugin in a scoped group. The
         registration config supplies the inherited prefix, tags, hooks, and
@@ -124,7 +124,7 @@ await app.ready();`}
         install observers, so it is safe to call every time.
       </p>
 
-      <h2>Dependencies, seeds, and state</h2>
+      <h2 id="dependencies-seeds-and-state">Dependencies, seeds, and state</h2>
       <p>
         Plugin descriptors can declare operational metadata that DaloyJS checks
         at registration time:
@@ -168,7 +168,7 @@ app.register({ name: "metrics", seed: "admin", register: adminMetrics });
 app.register({ name: "metrics", seed: "public", register: publicMetrics });`}
       />
 
-      <h2>Decorators</h2>
+      <h2 id="decorators">Decorators</h2>
       <p>
         Decorate the app to inject shared resources into every handler&apos;s{" "}
         <code>state</code>. Decorations added at the root are visible inside
@@ -206,7 +206,7 @@ app.route({
 });`}
       />
 
-      <h2>Extension ordering</h2>
+      <h2 id="extension-ordering">Extension ordering</h2>
       <p>
         Plugins that contribute lifecycle hooks can declare ordered extensions.
         DaloyJS topologically sorts <code>before</code> and <code>after</code>{" "}
@@ -240,7 +240,7 @@ const extensions: PluginExtension[] = [
 app.register({ name: "observability", extensions });`}
       />
 
-      <h2>Why encapsulation matters</h2>
+      <h2 id="why-encapsulation-matters">Why encapsulation matters</h2>
       <ul>
         <li>
           You can mount the same plugin twice under different prefixes without
@@ -260,7 +260,7 @@ app.register({ name: "observability", extensions });`}
         </li>
       </ul>
 
-      <h2>Lifecycle events</h2>
+      <h2 id="lifecycle-events">Lifecycle events</h2>
       <p>
         Observability plugins often need to know when other plugins finish
         installing or when the process starts shutting down. DaloyJS exposes two

@@ -62,13 +62,13 @@ export default function Page() {
         ]}
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock
         code={`pnpm add drizzle-orm postgres
 pnpm add -D drizzle-kit`}
       />
 
-      <h2>2. Define your schema</h2>
+      <h2 id="2-define-your-schema">2. Define your schema</h2>
       <CodeBlock
         code={`// src/db/schema.ts
 import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
@@ -96,7 +96,7 @@ export default defineConfig({
 pnpm drizzle-kit migrate`}
       />
 
-      <h2>3. Create a Drizzle plugin</h2>
+      <h2 id="3-create-a-drizzle-plugin">3. Create a Drizzle plugin</h2>
       <CodeBlock
         code={`// src/db/drizzle.ts
 import postgres from "postgres";
@@ -118,7 +118,7 @@ export const drizzlePlugin = {
 };`}
       />
 
-      <h2>4. Augment app state types</h2>
+      <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { db } from "../db/drizzle";
@@ -130,7 +130,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Use it in routes</h2>
+      <h2 id="5-use-it-in-routes">5. Use it in routes</h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -183,7 +183,7 @@ await app.ready();
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Transactions</h2>
+      <h2 id="transactions">Transactions</h2>
       <CodeBlock
         code={`handler: async ({ body, state }) => {
   const order = await state.db.transaction(async (tx) => {
@@ -198,7 +198,7 @@ serve(app, { port: 3000 });`}
 }`}
       />
 
-      <h2>Edge runtimes</h2>
+      <h2 id="edge-runtimes">Edge runtimes</h2>
       <p>
         Drizzle is the easiest path to running DaloyJS against a real database
         on the edge. Pick a driver:

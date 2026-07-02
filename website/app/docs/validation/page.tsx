@@ -60,7 +60,7 @@ export default function Page() {
         caption="Each validator exposes the same ~standard property, so DaloyJS infers handler types, generates OpenAPI, and returns problem+json errors through one framework path."
       />
 
-      <h2>What gets validated</h2>
+      <h2 id="what-gets-validated">What gets validated</h2>
       <p>For each route you can declare schemas for:</p>
       <ul>
         <li>
@@ -89,7 +89,7 @@ export default function Page() {
         and <code>prototype</code> before validation.
       </p>
 
-      <h2>End-to-end example</h2>
+      <h2 id="end-to-end-example">End-to-end example</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import { z } from "zod";
@@ -145,7 +145,7 @@ export const app = new App().route({
 });`}
       />
 
-      <h2>Pick your validator</h2>
+      <h2 id="pick-your-validator">Pick your validator</h2>
       <ul>
         <li>
           <Link href="/docs/validation/zod">Zod</Link>: the default for most
@@ -162,7 +162,7 @@ export const app = new App().route({
         docs and scaffolds for Zod and Valibot.
       </p>
 
-      <h2>Side-by-side</h2>
+      <h2 id="side-by-side">Side-by-side</h2>
       <CodeBlock
         code={`// Zod
 import { z } from "zod";
@@ -193,7 +193,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
         regardless of which validator produced it.
       </p>
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <FlowDiagram
         title="Parse, then branch on the outcome"
         steps={[
@@ -233,7 +233,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
         <Link href="/docs/errors">Errors &amp; problem+json</Link>.
       </p>
 
-      <h2>Response validation</h2>
+      <h2 id="response-validation">Response validation</h2>
       <p>
         When a response schema is declared, DaloyJS validates the handler return
         before serializing it. The validated value is what goes on the wire, so
@@ -242,7 +242,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
         redacted 500 problem response in production.
       </p>
 
-      <h2>Body limits and content types</h2>
+      <h2 id="body-limits-and-content-types">Body limits and content types</h2>
       <p>
         When a route declares <code>request.body</code>, DaloyJS also enforces:
       </p>
@@ -291,7 +291,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
 });`}
       />
 
-      <h2>Mixing validators</h2>
+      <h2 id="mixing-validators">Mixing validators</h2>
       <p>
         You can mix and match per route. A Zod schema in one file and a Valibot
         schema in another are both valid, useful when migrating an existing

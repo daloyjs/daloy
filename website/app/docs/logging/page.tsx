@@ -46,7 +46,7 @@ export default function Page() {
         when they appear under an innocent key.
       </p>
 
-      <h2>The default logger</h2>
+      <h2 id="the-default-logger">The default logger</h2>
       <p>
         You do not need to wire anything up. Construct an <code>App</code> and a{" "}
         <code>createLogger(&#123; level: &quot;info&quot; &#125;)</code>{" "}
@@ -79,7 +79,7 @@ app.route({
 app.log.warn({ retries: 3 }, "upstream slow");`}
       />
 
-      <h2>Choosing a level</h2>
+      <h2 id="choosing-a-level">Choosing a level</h2>
       <p>
         Levels follow the familiar pino ordering: <code>trace</code> (10),{" "}
         <code>debug</code> (20), <code>info</code> (30), <code>warn</code> (40),{" "}
@@ -94,7 +94,7 @@ app.log.warn({ retries: 3 }, "upstream slow");`}
 const silent = new App({ logger: false });`}
       />
 
-      <h2>Calling the logger</h2>
+      <h2 id="calling-the-logger">Calling the logger</h2>
       <p>
         Every level method accepts either a message string, or an object of
         structured fields followed by an optional message. Prefer the object
@@ -113,7 +113,7 @@ try {
 }`}
       />
 
-      <h2>Child loggers</h2>
+      <h2 id="child-loggers">Child loggers</h2>
       <p>
         Use <code>child()</code> to bind fields that should appear on every
         subsequent record. This is how the request id is attached to{" "}
@@ -127,7 +127,7 @@ jobLog.info("starting nightly invoice run");
 jobLog.info({ processed: 1280 }, "done");`}
       />
 
-      <h2>Redaction (secure by default)</h2>
+      <h2 id="redaction-secure-by-default">Redaction (secure by default)</h2>
       <p>
         Redaction is on by default. Keys are matched case-insensitively at any
         depth and replaced with <code>[REDACTED]</code>. The built-in{" "}
@@ -187,7 +187,7 @@ const raw = createLogger({ redact: false });`}
         into log aggregators in real-world incidents.
       </p>
 
-      <h2>Bring your own logger (pino, winston)</h2>
+      <h2 id="bring-your-own-logger-pino-winston">Bring your own logger (pino, winston)</h2>
       <p>
         The <code>logger</code> option accepts any object implementing the{" "}
         <code>Logger</code> interface (the <code>trace</code>/<code>debug</code>
@@ -208,7 +208,7 @@ const app = new App({ logger: pino({ level: "info" }) });`}
         match the protection DaloyJS gives you for free.
       </p>
 
-      <h2>Customizing the output sink</h2>
+      <h2 id="customizing-the-output-sink">Customizing the output sink</h2>
       <p>
         By default records are written to stdout. Provide a <code>write</code>{" "}
         function to redirect them (for example, to a buffer in tests):
@@ -221,7 +221,7 @@ const lines: string[] = [];
 const log = createLogger({ write: (line) => lines.push(line) });`}
       />
 
-      <h2>When to reach for it</h2>
+      <h2 id="when-to-reach-for-it">When to reach for it</h2>
       <ul>
         <li>
           <strong>Inside handlers:</strong> use <code>ctx.state.log</code> so

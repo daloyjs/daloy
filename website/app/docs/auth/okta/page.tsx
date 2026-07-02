@@ -87,7 +87,7 @@ export default function Page() {
         caption="Only tokens from a Custom Authorization Server are meant to be verified by your app. The Org Authorization Server issues opaque tokens that you introspect instead, never verify locally."
       />
 
-      <h2>1. Configure an Okta Authorization Server</h2>
+      <h2 id="1-configure-an-okta-authorization-server">1. Configure an Okta Authorization Server</h2>
       <ol>
         <li>
           In the Okta admin console, go to{" "}
@@ -107,10 +107,10 @@ export default function Page() {
         </li>
       </ol>
 
-      <h2>2. Install</h2>
+      <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add @okta/jwt-verifier`} />
 
-      <h2>3. Environment variables</h2>
+      <h2 id="3-environment-variables">3. Environment variables</h2>
       <CodeBlock
         code={`# .env
 OKTA_ISSUER=https://dev-12345.okta.com/oauth2/default
@@ -119,7 +119,7 @@ OKTA_AUDIENCE=api://default
 OKTA_REQUIRED_SCOPE=items:read`}
       />
 
-      <h2>4. Plugin</h2>
+      <h2 id="4-plugin">4. Plugin</h2>
       <CodeBlock
         code={`// src/plugins/okta.ts
 import OktaJwtVerifier from "@okta/jwt-verifier";
@@ -168,7 +168,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Guard a route</h2>
+      <h2 id="5-guard-a-route">5. Guard a route</h2>
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
@@ -192,7 +192,7 @@ app.route({
 });`}
       />
 
-      <h2>Custom claim assertions</h2>
+      <h2 id="custom-claim-assertions">Custom claim assertions</h2>
       <p>
         The verifier can enforce extra claims at construction time. For example,
         to require that the token includes both <code>items:read</code> and{" "}
@@ -209,7 +209,7 @@ app.route({
 });`}
       />
 
-      <h2>Verifying ID tokens</h2>
+      <h2 id="verifying-id-tokens">Verifying ID tokens</h2>
       <p>
         Use <code>verifyIdToken(token, expectedClientId, expectedNonce?)</code>{" "}
         if your client also sends ID tokens (for example, to populate a user
@@ -217,7 +217,7 @@ app.route({
         one.
       </p>
 
-      <h2>Custom JWKS URI</h2>
+      <h2 id="custom-jwks-uri">Custom JWKS URI</h2>
       <p>
         When the JWKS isn&apos;t under the issuer (e.g. you front Okta with a
         proxy), pass <code>jwksUri</code> explicitly:
@@ -230,7 +230,7 @@ app.route({
 });`}
       />
 
-      <h2>Runtimes</h2>
+      <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>@okta/jwt-verifier</code> is a <strong>Node-only</strong> library
         (it imports Node modules transitively). For Node, Bun, and AWS Lambda it
@@ -242,7 +242,7 @@ app.route({
         that exact pattern, only the issuer URL changes).
       </p>
 
-      <h2>Org server vs Custom Authorization Server</h2>
+      <h2 id="org-server-vs-custom-authorization-server">Org server vs Custom Authorization Server</h2>
       <p>
         Only tokens from a <strong>Custom Authorization Server</strong> are
         meant to be verified by your app, those issuers look like{" "}

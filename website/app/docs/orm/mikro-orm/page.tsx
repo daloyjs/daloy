@@ -37,7 +37,7 @@ export default function Page() {
         <Link href="/docs/adapters">Node.js adapter</Link>.
       </p>
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <p>
         Install <code>@mikro-orm/core</code> together with the driver package
         for your database. The version of every <code>@mikro-orm/*</code>{" "}
@@ -65,7 +65,7 @@ pnpm add -D @mikro-orm/cli @mikro-orm/migrations`}
         full TypeScript inference without any compiler flags.
       </p>
 
-      <h2>2. Define an entity</h2>
+      <h2 id="2-define-an-entity">2. Define an entity</h2>
       <p>
         <code>defineEntity</code> returns a schema object you can attach to a
         real class. The class gives you a named type for your handlers; the
@@ -89,7 +89,7 @@ export class User extends UserSchema.class {}
 UserSchema.setClass(User);`}
       />
 
-      <h2>3. Configure the ORM</h2>
+      <h2 id="3-configure-the-orm">3. Configure the ORM</h2>
       <p>
         Import <code>defineConfig</code> from your driver package, it infers the
         driver and gives you IntelliSense without extra type hints.
@@ -113,7 +113,7 @@ export default defineConfig({
 });`}
       />
 
-      <h2>4. Create a MikroORM plugin</h2>
+      <h2 id="4-create-a-mikroorm-plugin">4. Create a MikroORM plugin</h2>
       <p>
         Initialize the ORM once at startup, decorate the app with the root ORM
         instance, and close it on shutdown. Handlers get their own forked{" "}
@@ -137,7 +137,7 @@ export const mikroOrmPlugin = {
 };`}
       />
 
-      <h2>5. Fork an EntityManager per request</h2>
+      <h2 id="5-fork-an-entitymanager-per-request">5. Fork an EntityManager per request</h2>
       <p>
         MikroORM relies on an <strong>Identity Map</strong> that is bound to an{" "}
         <code>EntityManager</code>. You must <em>fork</em> the root EM for every
@@ -194,7 +194,7 @@ export function requestEntityManager(): Hooks {
         <code>state.em</code> inside handlers.
       </p>
 
-      <h2>6. Augment app state types</h2>
+      <h2 id="6-augment-app-state-types">6. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { MikroORM, EntityManager } from "@mikro-orm/postgresql";
@@ -207,7 +207,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>7. Use the EntityManager in routes</h2>
+      <h2 id="7-use-the-entitymanager-in-routes">7. Use the EntityManager in routes</h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -269,7 +269,7 @@ serve(app, { port: 3000 });`}
         <code>new User()</code> still need <code>em.persist()</code>.
       </p>
 
-      <h2>Transactions</h2>
+      <h2 id="transactions">Transactions</h2>
       <p>
         Use <code>em.transactional()</code> inside the handler that owns the
         unit of work. The callback receives a transactional EM that commits on
@@ -287,7 +287,7 @@ serve(app, { port: 3000 });`}
 }`}
       />
 
-      <h2>Migrations</h2>
+      <h2 id="migrations">Migrations</h2>
       <p>
         The CLI is installed as a dev dependency and reads{" "}
         <code>src/mikro-orm.config.ts</code> by default. If you move the config
@@ -308,7 +308,7 @@ pnpm mikro-orm migration:pending
 pnpm mikro-orm debug`}
       />
 
-      <h2>Errors</h2>
+      <h2 id="errors">Errors</h2>
       <p>
         Translate MikroORM errors into framework errors so they serialize as{" "}
         <Link href="/docs/errors">problem+json</Link>:
@@ -335,7 +335,7 @@ try {
 }`}
       />
 
-      <h2>Runtime notes</h2>
+      <h2 id="runtime-notes">Runtime notes</h2>
       <ul>
         <li>
           MikroORM is a Node.js adapter default for Daloy apps. Edge runtimes

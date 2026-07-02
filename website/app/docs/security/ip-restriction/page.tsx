@@ -38,7 +38,7 @@ export default function Page() {
         <code>application/problem+json</code> with HTTP <code>403</code>.
       </p>
 
-      <h2>Fails closed by default</h2>
+      <h2 id="fails-closed-by-default">Fails closed by default</h2>
       <p>
         Web-standard <code>Request</code> objects do not expose the peer
         address, so DaloyJS <strong>fails closed</strong>: unless you tell it
@@ -48,7 +48,7 @@ export default function Page() {
         behind a proxy chain you control.
       </p>
 
-      <h2>Quick start</h2>
+      <h2 id="quick-start">Quick start</h2>
       <CodeBlock
         code={`import { App, ipRestriction, readRemoteAddress } from "@daloyjs/core";
 
@@ -65,7 +65,7 @@ app.use(ipRestriction({
         provided; passing neither throws at construction time.
       </p>
 
-      <h2>How matching works</h2>
+      <h2 id="how-matching-works">How matching works</h2>
       <FlowDiagram
         title="Resolve then match (fail closed)"
         steps={[
@@ -119,7 +119,7 @@ app.use(ipRestriction({
         </li>
       </ul>
 
-      <h2>Resolving the client IP</h2>
+      <h2 id="resolving-the-client-ip">Resolving the client IP</h2>
       <p>
         Behind a trusted proxy chain, set <code>trustProxyHeaders: true</code>{" "}
         to read <code>X-Forwarded-For</code> / <code>X-Real-IP</code>. This
@@ -146,7 +146,7 @@ app.use(ipRestriction({
 }));`}
       />
 
-      <h2>Customizing the rejection</h2>
+      <h2 id="customizing-the-rejection">Customizing the rejection</h2>
       <p>
         Override the response body with <code>message</code>. Keep it generic:
         echoing the client IP back can leak proxy topology to attackers, so the
@@ -161,7 +161,7 @@ app.use(ipRestriction({
 }));`}
       />
 
-      <h2>When to reach for it</h2>
+      <h2 id="when-to-reach-for-it">When to reach for it</h2>
       <ul>
         <li>
           <strong>Internal admin surfaces</strong> reachable only from a VPN or

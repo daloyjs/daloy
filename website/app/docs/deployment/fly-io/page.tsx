@@ -57,14 +57,14 @@ export default function Page() {
         caption="Fly runs the container as one or more Machines. Health checks against /healthz gate routing, and auto_stop_machines = stop scales you to zero when traffic drops."
       />
 
-      <h2>When to choose Fly</h2>
+      <h2 id="when-to-choose-fly">When to choose Fly</h2>
       <ul>
         <li>You want multiple regions cheaply, with anycast routing for free.</li>
         <li>You want a single image that also runs on ECS or Kubernetes elsewhere.</li>
         <li>You want raw TCP without a serverless workaround.</li>
       </ul>
 
-      <h2>Server entrypoint</h2>
+      <h2 id="server-entrypoint">Server entrypoint</h2>
       <p>Use the Node adapter and bind to the Fly-provided <code>PORT</code>:</p>
       <CodeBlock
         language="ts"
@@ -78,7 +78,7 @@ serve(app, {
 });`}
       />
 
-      <h2>fly.toml</h2>
+      <h2 id="fly-toml">fly.toml</h2>
       <p>
         <code>auto_stop_machines</code> takes a <strong>string</strong>{" "}
         (<code>&quot;off&quot;</code>, <code>&quot;stop&quot;</code>, or{" "}
@@ -116,7 +116,7 @@ primary_region = "fra"
   memory = "256mb"`}
       />
 
-      <h2>Dockerfile</h2>
+      <h2 id="dockerfile">Dockerfile</h2>
       <CodeBlock
         language="docker"
         code={`FROM node:24-slim AS build
@@ -135,7 +135,7 @@ EXPOSE 3000
 CMD ["dist/server.js"]`}
       />
 
-      <h2>Deploy</h2>
+      <h2 id="deploy">Deploy</h2>
       <CodeBlock
         language="bash"
         code={`brew install flyctl
@@ -144,7 +144,7 @@ fly secrets set SESSION_SECRET=...
 fly deploy`}
       />
 
-      <h2>Gotchas</h2>
+      <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
           Set <code>shutdownTimeoutMs</code> on the Node adapter to a value smaller than Fly&apos;s
@@ -157,7 +157,7 @@ fly deploy`}
         </li>
       </ul>
 
-      <h2>See also</h2>
+      <h2 id="see-also">See also</h2>
       <ul>
         <li>
           <Link href="/docs/deployment">Deployment overview</Link>

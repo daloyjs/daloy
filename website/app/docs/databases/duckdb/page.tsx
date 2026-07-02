@@ -59,14 +59,14 @@ export default function Page() {
         caption="DuckDB runs inside the process. That makes it excellent for local analytics and data APIs, but not the right default for shared OLTP state across many API instances."
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <p>
         Use the modern Node client. The older <code>duckdb</code> package is not
         the client this guide targets.
       </p>
       <CodeBlock code={`pnpm add @duckdb/node-api`} />
 
-      <h2>2. Create a DuckDB plugin</h2>
+      <h2 id="2-create-a-duckdb-plugin">2. Create a DuckDB plugin</h2>
       <p>
         Create one instance per process and connect during app startup. Use an
         in-memory database for transient analytics, or point DuckDB at a
@@ -96,7 +96,7 @@ export const duckDbPlugin = {
 };`}
       />
 
-      <h2>3. Augment app state</h2>
+      <h2 id="3-augment-app-state">3. Augment app state</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { DuckDBConnection } from "@duckdb/node-api";
@@ -108,7 +108,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>4. Query from a route</h2>
+      <h2 id="4-query-from-a-route">4. Query from a route</h2>
       <p>
         Keep SQL structure owned by the server and pass request values as
         parameters. Convert results to JSON-safe objects before returning them
@@ -154,7 +154,7 @@ app.route({
 });`}
       />
 
-      <h2>Runtime support</h2>
+      <h2 id="runtime-support">Runtime support</h2>
       <table>
         <thead>
           <tr>
@@ -209,7 +209,7 @@ app.route({
         </tbody>
       </table>
 
-      <h2>Use the right storage mode</h2>
+      <h2 id="use-the-right-storage-mode">Use the right storage mode</h2>
       <FlowDiagram
         title="Storage choice"
         numbered
@@ -237,7 +237,7 @@ app.route({
         caption="Use DuckDB for analytical reads and local processing. Keep primary multi-user writes in a transactional database unless you have a carefully controlled single-writer design."
       />
 
-      <h2>Security notes</h2>
+      <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
           Do not execute SQL text from users. DuckDB SQL can read files, access
@@ -270,7 +270,7 @@ await state.duckdb.run("set lock_configuration = true");`}
         </li>
       </ul>
 
-      <h2>When to choose DuckDB</h2>
+      <h2 id="when-to-choose-duckdb">When to choose DuckDB</h2>
       <ul>
         <li>You need analytics over Parquet, CSV, JSON, or local snapshots.</li>
         <li>
@@ -283,7 +283,7 @@ await state.duckdb.run("set lock_configuration = true");`}
         </li>
       </ul>
 
-      <h2>When not to choose it</h2>
+      <h2 id="when-not-to-choose-it">When not to choose it</h2>
       <ul>
         <li>
           You need many API replicas to write the same primary application data.

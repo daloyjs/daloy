@@ -50,7 +50,7 @@ export default function Page() {
         ]}
       />
 
-      <h2>In-process test client</h2>
+      <h2 id="in-process-test-client">In-process test client</h2>
       <p>
         Every <code>App</code> exposes a <code>request()</code> method that
         round-trips a fetch <code>Request</code> through the same pipeline real
@@ -77,7 +77,7 @@ test("POST /books rejects unauthorized", async () => {
 });`}
       />
 
-      <h2>Mock mode</h2>
+      <h2 id="mock-mode">Mock mode</h2>
       <p>
         For pure-contract testing (no DB, no side effects), enable{" "}
         <code>mockMode</code>. DaloyJS returns the first declared response{" "}
@@ -108,7 +108,7 @@ app.route({
 });`}
       />
 
-      <h2>Contract test runner</h2>
+      <h2 id="contract-test-runner">Contract test runner</h2>
       <p>
         <code>runContractTests</code> walks your registered routes and verifies
         that every declared response and <code>meta.examples</code> payload
@@ -185,7 +185,7 @@ console.log(\`\${report.checked} routes - all clean\`);`}
         </li>
       </ul>
 
-      <h2>Wire into CI</h2>
+      <h2 id="wire-into-ci">Wire into CI</h2>
       <CodeBlock
         language="json"
         code={`{
@@ -216,7 +216,7 @@ console.log(\`\${report.checked} routes - all clean\`);`}
         mismatched example fails CI from the first commit.
       </p>
 
-      <h2>Gate it locally with a pre-push hook</h2>
+      <h2 id="gate-it-locally-with-a-pre-push-hook">Gate it locally with a pre-push hook</h2>
       <p>
         A contract check is an authoring-time concern, so it belongs on your
         machine, never on the production request path. A <code>pre-push</code>{" "}

@@ -63,14 +63,14 @@ export default function Page() {
         ]}
       />
 
-      <h2>1. Install</h2>
+      <h2 id="1-install">1. Install</h2>
       <CodeBlock
         code={`pnpm add @prisma/client @prisma/adapter-pg dotenv
 pnpm add -D prisma
 pnpm prisma init --datasource-provider postgresql`}
       />
 
-      <h2>2. Define your schema</h2>
+      <h2 id="2-define-your-schema">2. Define your schema</h2>
       <CodeBlock
         code={`// prisma/schema.prisma
 datasource db {
@@ -120,7 +120,7 @@ export default defineConfig({
 pnpm prisma generate`}
       />
 
-      <h2>3. Create a Prisma plugin</h2>
+      <h2 id="3-create-a-prisma-plugin">3. Create a Prisma plugin</h2>
       <p>
         Instantiate one <code>PrismaClient</code> per process, decorate the app,
         and disconnect on shutdown.
@@ -149,7 +149,7 @@ export const prismaPlugin = {
 };`}
       />
 
-      <h2>4. Augment app state types</h2>
+      <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <CodeBlock
         code={`// src/types/state.d.ts
 import type { PrismaClient } from "../generated/prisma/client";
@@ -161,7 +161,7 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2>5. Wire the plugin and route</h2>
+      <h2 id="5-wire-the-plugin-and-route">5. Wire the plugin and route</h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -213,7 +213,7 @@ await app.ready();
 serve(app, { port: 3000 });`}
       />
 
-      <h2>Transactions</h2>
+      <h2 id="transactions">Transactions</h2>
       <p>
         Use <code>$transaction</code> for atomic units of work. Throwing inside
         the callback rolls back; a successful return commits.
@@ -232,7 +232,7 @@ serve(app, { port: 3000 });`}
 }`}
       />
 
-      <h2>Edge runtimes</h2>
+      <h2 id="edge-runtimes">Edge runtimes</h2>
       <p>
         For Cloudflare Workers and Vercel, set the generated client runtime for
         your target and use the appropriate{" "}
@@ -261,7 +261,7 @@ const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
 export const prisma = new PrismaClient({ adapter });`}
       />
 
-      <h2>Operator injection: validate your filter shapes</h2>
+      <h2 id="operator-injection-validate-your-filter-shapes">Operator injection: validate your filter shapes</h2>
       <p>
         Prisma always emits parameterized SQL, but the <em>filter object</em>{" "}
         you pass to <code>where</code> is interpreted by Prisma. If a field
@@ -286,7 +286,7 @@ export const prisma = new PrismaClient({ adapter });`}
         for the full pattern and review-time rules.
       </p>
 
-      <h2>Mapping errors to problem+json</h2>
+      <h2 id="mapping-errors-to-problem-json">Mapping errors to problem+json</h2>
       <CodeBlock
         code={`import { Prisma } from "../generated/prisma/client";
 import { HttpError } from "@daloyjs/core";
