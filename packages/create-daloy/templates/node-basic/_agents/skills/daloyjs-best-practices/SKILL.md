@@ -82,6 +82,7 @@ pnpm gen:client   # write generated/client/
 pnpm contract     # daloy inspect --check src/build-app.ts
 pnpm build        # emit dist/
 pnpm audit        # supply-chain audit
+pnpm hooks:install  # enable the optional pre-push contract gate
 ```
 
 Always run `pnpm typecheck` and `pnpm test` before declaring a task done.
@@ -97,7 +98,7 @@ definitions:
 
 - `GET /openapi.json` — OpenAPI 3.1 spec as JSON.
 - `GET /openapi.yaml` — OpenAPI 3.1 spec as YAML (served inline as
-  `text/yaml; charset=utf-8`, since `@daloyjs/core` 0.13.1).
+  `text/yaml; charset=utf-8`).
 - `GET /docs` — Scalar API reference UI that loads the spec.
 
 Customize via `docs: { openapiPath, openapiYamlPath, path, ui }`. Set
@@ -146,7 +147,7 @@ bugs (drifted client SDK, missing test, broken codegen).
 5. **Throw typed errors, do not return raw error responses.** Use
    `NotFoundError`, `BadRequestError`, `UnauthorizedError`,
    `ForbiddenError`, `ConflictError`, etc. from `@daloyjs/core`. The
-   framework maps them to RFC 7807 problem responses.
+   framework maps them to RFC 9457 problem responses.
 6. **Add a test in `tests/<route>.test.ts`.** Use `app.request(...)` for
    in-process tests — no port needed (see "Testing best practices").
 7. **Run the contract gate.** Run `pnpm contract` or `pnpm test` before
@@ -209,7 +210,7 @@ app.route({
 ## Error handling
 
 - Throw typed errors from `@daloyjs/core` — they carry status codes and
-  serialize to RFC 7807 problem responses (`application/problem+json`).
+  serialize to RFC 9457 problem responses (`application/problem+json`).
 - Add a `responses[code]` entry for every error you throw, so the OpenAPI
   spec and the typed client know it can happen.
 - Do not swallow errors in handlers. If you need to log and rethrow, use
@@ -276,7 +277,7 @@ For routes that touch external services, write a thin in-memory fake
 inside the test and inject it via the factory pattern (`buildApp({ store })`).
 Do not mock global `fetch` unless there is no alternative.
 
-Aim for **100% line and function coverage** on routes you add. If a
+Aim for complete happy- and unhappy-path test coverage of the routes you add. If a
 branch is impractical to test (e.g. defensive `never` arms), refactor it
 out rather than adding ignore comments — agent coverage tools may not
 honor them.
@@ -347,6 +348,11 @@ honor them.
   `--ignore-scripts=false` on install without a clear reason.
 - Avoid global mutable state in `buildApp()`. If you need shared state,
   pass it in as a parameter (`buildApp({ store })`).
+- If a route intentionally returns a body the contract cannot describe (a
+  raw `Response`, HTML, a proxied payload), set
+  `acknowledgeNoResponseBodySchema: true` on that route — never silence the
+  `security.response.bodySchemaMissing` boot warning by widening a schema
+  to `z.any()`.
 
 ## Process expectations
 
@@ -360,6 +366,18 @@ honor them.
   run the contract gate and inspect the relevant generated OpenAPI diff.
 - Keep `README.md`, this `SKILL.md`, and `AGENTS.md` consistent with the
   code. If you add a workflow, document it here.
+
+## Exposing this API over MCP
+
+`@daloyjs/core` ships a dependency-free Model Context Protocol (Streamable
+HTTP) server helper — also available from the `@daloyjs/core/mcp` subpath.
+To expose selected capabilities to MCP clients (AI agents), build a handler
+with `createMcpHandler({ tools, resources, prompts })` and mount it with
+`mcpRoutes("/mcp", handler)`. Throw `McpToolError` for caller-correctable
+tool failures. The handler ships protocol-level guards (body cap, UTF-8/JSON
+validation, `Origin` checks against DNS rebinding) and composes with the
+existing middleware chain — put `bearerAuth()` / `rateLimit()` in front of
+it like any other route. See <https://daloyjs.dev/docs> for the MCP guide.
 
 ## More
 

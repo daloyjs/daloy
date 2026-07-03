@@ -75,13 +75,13 @@ export function buildApp(): App {
       },
     },
     handler: async () => ({
-      status: 200,
+      status: 200 as const,
       body: { ok: true as const, uptime: process.uptime() },
     }),
   });
 
   // daloy-minimal:strip-start books
-  const Book = z.object({ id: z.string(), title: z.string() });
+  const Book = z.object({ id: z.string(), title: z.string() }).strict();
   const books = new Map<string, z.infer<typeof Book>>([
     ["1", { id: "1", title: "Noli Me Tangere" }],
     ["2", { id: "2", title: "El Filibusterismo" }],
@@ -92,7 +92,7 @@ export function buildApp(): App {
     path: "/books/:id",
     operationId: "getBookById",
     tags: ["Books"],
-    request: { params: z.object({ id: z.string() }) },
+    request: { params: z.object({ id: z.string().min(1) }).strict() },
     responses: {
       200: { description: "Found", body: Book },
       404: { description: "Not found" },
@@ -100,7 +100,7 @@ export function buildApp(): App {
     handler: async ({ params }) => {
       const book = books.get(params.id);
       if (!book) throw new NotFoundError(`Book ${params.id} not found`);
-      return { status: 200, body: book };
+      return { status: 200 as const, body: book };
     },
   });
   // daloy-minimal:strip-end books

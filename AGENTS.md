@@ -16,12 +16,30 @@ docs/marketing site (`website/`).
 
 - `pnpm dev` — watch-mode `tsc`
 - `pnpm build` — emit `dist/` via `tsconfig.build.json`
-- `pnpm typecheck` — `tsc --noEmit`
+- `pnpm typecheck` — full type check: `tsc --noEmit` plus the type-test project (`tsconfig.typetest.json`) and the tests project (`tests/tsconfig.json`)
 - `pnpm test` — run the test suite (`node --test` via `tsx`)
+- `pnpm test:red-team` — run only the adversarial red-team attack suites
 - `pnpm coverage` — tests with the 90% line/function gate
+- `pnpm coverage:branches` — compiled-JS run with the 92% branch gate
 - `pnpm gen` — regenerate the OpenAPI spec and typed client
+- `pnpm gen:sbom` — regenerate the CycloneDX + SPDX SBOMs
 - `pnpm format` — Prettier write
+- `pnpm hooks:install` — install the repo's git hooks (staged-secret scan, pre-push gates)
+- `pnpm scan:staged-secrets` — scan staged changes for leaked credentials
+- `pnpm bench` / `pnpm bench:serverless` — router and serverless-cold-path benchmarks
 - `cd website && pnpm dev | build | typecheck` — docs site
+
+The `verify:*` scripts run the individual CI gates (see the guardrails section below for the security-critical set). All are defined in the root `package.json` `scripts`; run any of them as `pnpm <script>`.
+
+## Repository layout
+
+- `src/` — the `@daloyjs/core` framework source (also published verbatim to JSR). Security-critical modules: `security.ts`, `hashing.ts`, `jwt.ts`, `jwk.ts`, `fetch-guard.ts`, `middleware.ts` (auth/rate-limit), `errors.ts`, `mcp.ts`.
+- `tests/` — the framework test suite, including `red-team-attacks*.test.ts`.
+- `scripts/` — codegen (`dump-openapi.ts`, `generate-sbom.ts`) and the `verify-*.ts` CI gates.
+- `bench/` — performance benchmarks; validate hot-path changes here (see the performance rule under "Editing the codebase").
+- `packages/create-daloy/` — the scaffolder CLI (`bin/`), its tests (`test/templates.test.mjs`), and the five project templates (`templates/`). Has no separate agent guide; this file governs it.
+- `website/` — the docs/marketing site. **Read [`website/AGENTS.md`](website/AGENTS.md) before editing anything under it.**
+- `workshop/` — the hands-on workshop; has its own [`workshop/AGENTS.md`](workshop/AGENTS.md).
 
 ## Design principles
 
@@ -81,7 +99,7 @@ That risk exists for human contributors and AI coding agents alike. When a test 
 
 - Treat **bad defaults as bugs**. If a default actually blocks legitimate behavior, fix the default for everyone (per-route override, narrower scope, configurable knob) rather than removing it inline.
 - Never silently delete or weaken: `secureHeaders`, `requestId`, `rateLimit`, `bodyLimitBytes`, `requestTimeoutMs`, `fetchGuard`, `isForbiddenObjectKey`, JWT algorithm allowlists, `timingSafeEqual` credential comparisons, schema `.strict()`, response-body schema validation, `except()` path normalization, prod-mode error redaction, or the `_gitignore` / `_npmrc` defaults in templates.
-- Changes to `src/security.ts`, `src/hashing.ts`, `src/jwt.ts`, `src/fetch-guard.ts`, `src/jwk.ts`, the verify-* scripts, or `.github/` workflows must keep the existing CI gates green (`pnpm verify:parity-audits`, `verify:governance-audits`, `verify:runtime-parity-audits`, `verify:routing-hardening-audits`, `verify:secret-comparisons`, `verify:no-remote-exec`, `verify:no-registry-exfiltration`, `verify:no-encoded-payloads`, `verify:no-invisible-unicode`, `verify:no-weak-random`, `verify:no-unsafe-buffer`, `verify:no-leaked-credentials`, `verify:no-vulnerable-sandboxes`, `verify:no-lifecycle-scripts`, `verify:lockfile-sources`, `verify:no-runtime-deps`, `verify:dep-licenses`, `verify:known-dep-names`, `verify:sbom`). These gates exist precisely so an "easy" weakening cannot land silently.
+- Changes to `src/security.ts`, `src/hashing.ts`, `src/jwt.ts`, `src/fetch-guard.ts`, `src/jwk.ts`, the verify-* scripts, or `.github/` workflows must keep the existing CI gates green (`pnpm verify:parity-audits`, `verify:governance-audits`, `verify:runtime-parity-audits`, `verify:routing-hardening-audits`, `verify:secret-comparisons`, `verify:no-remote-exec`, `verify:no-registry-exfiltration`, `verify:no-encoded-payloads`, `verify:no-invisible-unicode`, `verify:no-weak-random`, `verify:no-unsafe-buffer`, `verify:no-leaked-credentials`, `verify:no-vulnerable-sandboxes`, `verify:no-lifecycle-scripts`, `verify:lockfile`, `verify:no-runtime-deps`, `verify:dep-licenses`, `verify:known-dep-names`, `verify:sbom`). These gates exist precisely so an "easy" weakening cannot land silently.
 - Every change that touches an auth, header, parsing, or crypto code path ships with an **unhappy-path test** that proves the guard still rejects what it should — not just that the new happy path works.
 - Do not add runtime dependencies to `@daloyjs/core`; `verify:no-runtime-deps` is the floor.
 

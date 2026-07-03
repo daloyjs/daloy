@@ -2800,3 +2800,48 @@ test("--help documents the secure-by-default install + CI defaults", async () =>
   assert.match(out, /--with-ci.*\(default: Y\)/);
   assert.match(out, /--with-deploy.*inherits --with-ci/);
 });
+
+// Drift guard: templates author dotfiles/dotdirs with an `_` prefix (e.g.
+// `_gitignore`, `_agents`, `_npmrc`) so `npm pack` does not drop them, and the
+// CLI's RENAME_ON_COPY map renames each back on copy. If someone adds a new
+// `_`-prefixed template file but forgets the rename-map entry, the scaffold
+// ships a literal `_foo` file. This test proves no `_`-prefixed entry ever
+// survives into a scaffolded project, for every template.
+async function collectUnderscorePrefixed(dir) {
+  const offenders = [];
+  async function walk(current, rel) {
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const childRel = rel ? path.posix.join(rel, entry.name) : entry.name;
+      if (entry.name.startsWith("_")) offenders.push(childRel);
+      if (entry.isDirectory()) {
+        await walk(path.join(current, entry.name), childRel);
+      }
+    }
+  }
+  await walk(dir, "");
+  return offenders;
+}
+
+for (const template of ["node-basic", "vercel", "cloudflare-worker", "bun-basic", "deno-basic"]) {
+  test(`${template}: scaffold leaves no _-prefixed files (rename-map drift guard)`, async () => {
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+    const projectName = "underscore-check";
+    try {
+      const { exitCode, output } = await runCreateDaloy(
+        [projectName, "--template", template, "--no-install", "--no-git", "--yes"],
+        { cwd: tmpDir },
+      );
+      assert.equal(exitCode, 0, `scaffold failed:\n${output}`);
+      const offenders = await collectUnderscorePrefixed(path.join(tmpDir, projectName));
+      assert.deepEqual(
+        offenders,
+        [],
+        `scaffolded ${template} still contains _-prefixed entries (missing RENAME_ON_COPY entry?): ${offenders.join(", ")}`,
+      );
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+}

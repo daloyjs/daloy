@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { App, NotFoundError, requestId, secureHeaders } from "@daloyjs/core";
+import { App, NotFoundError, rateLimit, requestId, secureHeaders } from "@daloyjs/core";
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
 
 const app = new App({
@@ -26,6 +26,11 @@ const app = new App({
 
 app.use(requestId());
 app.use(secureHeaders());
+// The in-memory limiter resets per Worker isolate, so treat it as a
+// per-isolate abuse brake, not a global quota. For high-traffic routes, attach
+// Cloudflare's native rate-limit binding in addition to — not instead of —
+// this baseline. Do not remove it to make a test pass; raise `max` per route.
+app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
 app.route({
   method: "GET",
@@ -39,13 +44,13 @@ app.route({
     },
   },
   handler: async () => ({
-    status: 200,
+    status: 200 as const,
     body: { ok: true as const, runtime: "cloudflare-worker" as const },
   }),
 });
 
 // daloy-minimal:strip-start books
-const Book = z.object({ id: z.string(), title: z.string() });
+const Book = z.object({ id: z.string(), title: z.string() }).strict();
 const books = new Map<string, z.infer<typeof Book>>([
   ["1", { id: "1", title: "Noli Me Tangere" }],
 ]);
@@ -55,7 +60,7 @@ app.route({
   path: "/books/:id",
   operationId: "getBookById",
   tags: ["Books"],
-  request: { params: z.object({ id: z.string() }) },
+  request: { params: z.object({ id: z.string().min(1) }).strict() },
   responses: {
     200: { description: "Found", body: Book },
     404: { description: "Not found" },
@@ -63,7 +68,7 @@ app.route({
   handler: async ({ params }) => {
     const book = books.get(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
-    return { status: 200, body: book };
+    return { status: 200 as const, body: book };
   },
 });
 // daloy-minimal:strip-end books

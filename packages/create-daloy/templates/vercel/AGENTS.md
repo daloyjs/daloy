@@ -46,7 +46,7 @@ You import the file you see. Vercel and tsx resolve `.ts` directly. Bare package
 2. Validate every input with Zod or another Standard Schema-compatible validator. For Zod object schemas, use `.strict()` to reject unknown keys at the boundary.
 3. Preserve literal types in responses: `status: 200 as const`, `z.literal(...)` on discriminator fields.
 4. Throw typed errors (`NotFoundError`, `BadRequestError`, etc.) from `@daloyjs/core`.
-5. Keep `requestId()`, `secureHeaders()`, and `rateLimit()` enabled. For production traffic, back rate-limiting with Vercel KV or another shared store (the in-memory limiter resets per instance).
+5. Keep `requestId()`, `secureHeaders()`, and `rateLimit()` enabled. For production traffic, back rate-limiting with a shared store such as Upstash Redis from the Vercel Marketplace (the in-memory limiter resets per instance).
 6. Prefer Web Standards (`Request`/`Response`, `fetch`, `Web Crypto`) even though Node APIs are available; Edge runtime code must avoid `node:` modules.
 7. Keep a single `api/index.ts` entry and the `vercel.json` `/(.*)` → `/api` rewrite so DaloyJS handles all routing at the site root.
 8. Keep operation IDs stable and examples schema-valid; `pnpm contract` must pass after route, metadata, or OpenAPI-facing changes.
@@ -56,7 +56,7 @@ You import the file you see. Vercel and tsx resolve `.ts` directly. Bare package
 
 Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development): _"If you tell an AI to make something work, it might remove the very security checks that protect you."_ When a guard rejects a request, **satisfy it, do not delete it.**
 
-- Keep `secureHeaders()`, `requestId()`, `rateLimit()`, `bodyLimitBytes`, and `requestTimeoutMs`. For production, back rate limits with Vercel KV or another shared store.
+- Keep `secureHeaders()`, `requestId()`, `rateLimit()`, `bodyLimitBytes`, and `requestTimeoutMs`. For production, back rate limits with a shared store such as Upstash Redis from the Vercel Marketplace.
 - Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. For other validators, use the strict / no-extra-keys equivalent. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
 - Every protected route attaches auth `beforeHandle` and tests unauthenticated `401` plus wrong-scope `403`.
 - JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.

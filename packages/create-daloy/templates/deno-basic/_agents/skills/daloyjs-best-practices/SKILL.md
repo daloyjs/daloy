@@ -93,7 +93,7 @@ definitions:
 
 - `GET /openapi.json` — OpenAPI 3.1 spec as JSON.
 - `GET /openapi.yaml` — OpenAPI 3.1 spec as YAML (served inline as
-  `text/yaml; charset=utf-8`, since `@daloyjs/core` 0.13.1).
+  `text/yaml; charset=utf-8`).
 - `GET /docs` — Scalar API reference UI that loads the spec.
 
 Customize via `docs: { openapiPath, openapiYamlPath, path, ui }`. Set
@@ -177,7 +177,7 @@ app.route({
 
 ## Error handling
 
-- Throw typed errors from `@daloyjs/core` — they serialize to RFC 7807
+- Throw typed errors from `@daloyjs/core` — they serialize to RFC 9457
   problem responses.
 - Add a `responses[code]` entry for every error you throw.
 - Do not swallow errors. Log via `ctx.log.error(...)` and rethrow.
@@ -221,7 +221,7 @@ limiting (429). For external services, inject an in-memory fake via
 The shipped contract test should fail invalid examples, duplicate/missing
 `operationId`, or missing responses.
 
-Aim for **100% line and function coverage** on routes you add.
+Aim for complete happy- and unhappy-path test coverage of the routes you add.
 
 ## Security best practices
 
@@ -271,6 +271,11 @@ Aim for **100% line and function coverage** on routes you add.
 - Use `deno task ...`, not `npm`/`pnpm`. There is no `package.json`.
 - If you need a new dependency, add it to `imports` in `deno.json` via
   `npm:` or `jsr:` specifiers; do not introduce a `package.json`.
+- If a route intentionally returns a body the contract cannot describe (a
+  raw `Response`, HTML, a proxied payload), set
+  `acknowledgeNoResponseBodySchema: true` on that route — never silence the
+  `security.response.bodySchemaMissing` boot warning by widening a schema
+  to `z.any()`.
 
 ## Process expectations
 
@@ -283,6 +288,18 @@ Aim for **100% line and function coverage** on routes you add.
   run the contract gate and inspect the relevant generated OpenAPI diff.
 - Keep `README.md`, this `SKILL.md`, and `AGENTS.md` consistent with the
   code.
+
+## Exposing this API over MCP
+
+`@daloyjs/core` ships a dependency-free Model Context Protocol (Streamable
+HTTP) server helper — also available from the `@daloyjs/core/mcp` subpath.
+To expose selected capabilities to MCP clients (AI agents), build a handler
+with `createMcpHandler({ tools, resources, prompts })` and mount it with
+`mcpRoutes("/mcp", handler)`. Throw `McpToolError` for caller-correctable
+tool failures. The handler ships protocol-level guards (body cap, UTF-8/JSON
+validation, `Origin` checks against DNS rebinding) and composes with the
+existing middleware chain — put `bearerAuth()` / `rateLimit()` in front of
+it like any other route. See <https://daloyjs.dev/docs> for the MCP guide.
 
 ## More
 
