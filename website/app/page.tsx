@@ -301,7 +301,7 @@ export default function HomePage() {
               className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              DaloyJS gives teams a runtime-portable backend with supply-chain-aware defaults for safely shipping AI-assisted services.
+              DaloyJS is the first TypeScript REST API framework to combine runtime portability, contract-first OpenAPI, a built-in secure-by-default posture with zero runtime dependencies for its security features, generated typed clients, and supply-chain-aware defaults for safely shipping AI-assisted services.
             </p>
             <ContractFlowVisual />
             <p
@@ -337,7 +337,7 @@ export default function HomePage() {
                 href="/docs/getting-started"
                 className={buttonVariants({ size: "lg" }) + " group"}
               >
-                Get started
+                Get started: Install Daloy
                 <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </Link>
               <Link
@@ -347,6 +347,13 @@ export default function HomePage() {
                 Read the docs
               </Link>
             </div>
+            <p
+              className="float-up max-w-2xl text-sm leading-7 text-muted-foreground"
+              style={{ animationDelay: "350ms" }}
+            >
+              Try the quickstart, generate typed clients, or explore runtime
+              targets (Node, Deno, Bun, Edge). Secure by default out of the box.
+            </p>
             <div
               className="float-up flex items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
               style={{ animationDelay: "380ms" }}
