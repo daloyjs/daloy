@@ -80,24 +80,25 @@ export default function Image() {
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         <div
           style={{
-            fontSize: "68px",
+            fontSize: "58px",
             fontWeight: 800,
             lineHeight: 1.05,
             letterSpacing: 0,
           }}
         >
-          Runtime-portable. Supply-chain-aware.
+          The first TypeScript REST API framework built for secure AI-assisted
+          services.
         </div>
         <div
           style={{
-            maxWidth: "980px",
+            maxWidth: "1000px",
             color: "#d4d4d4",
-            fontSize: "32px",
+            fontSize: "30px",
             lineHeight: 1.35,
           }}
         >
-          Blocked install scripts. Source-verified lockfiles. Zero runtime deps.
-          Typed end-to-end.
+          Runtime portability, contract-first OpenAPI, generated typed clients,
+          zero-dependency guardrails, and supply-chain-aware defaults.
         </div>
       </div>
       <div style={{ color: "#a3a3a3", fontSize: "28px" }}>daloyjs.dev</div>
