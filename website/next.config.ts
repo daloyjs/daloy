@@ -67,6 +67,13 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   experimental: {
     cachedNavigations: true,
+    // Turbopack's on-disk dev cache fails its atomic commit on this Windows
+    // machine ("Persisting failed ... Access is denied (os error 5)" — the
+    // corporate antivirus holds freshly written cache files during the
+    // rename). Turbopack falls back to in-memory caching anyway, so turn the
+    // dev filesystem cache off to keep the startup log clean. Build caching
+    // is unaffected.
+    turbopackFileSystemCacheForDev: false,
   },
   cacheComponents: true,
   // The /mcp documentation endpoint reads the docs `page.tsx` sources from disk
