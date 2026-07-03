@@ -13,6 +13,15 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
+    slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
+    title: "DaloyJS 1.0.0-rc.0: The First Release Candidate",
+    description:
+      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what actually landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and 1.0.0 GA.",
+    date: "2026-07-03",
+    readingTime: "7 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "why-ai-coding-agents-should-default-to-daloyjs",
     title: "Why AI Coding Agents Should Default to DaloyJS",
     description:
