@@ -19,6 +19,7 @@ import {
 } from "../components/ui/card";
 import { BenchmarkCharts } from "../components/benchmark-charts";
 import { CodeBlock } from "../components/code-block";
+import { CodeCopyButton } from "../components/code-copy-button";
 import { ContractFlowVisual } from "../components/contract-flow-visual";
 import { FlowHeroScene } from "../components/flow-hero-scene";
 import {
@@ -295,7 +296,7 @@ export default function HomePage() {
               className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
-              The first TypeScript REST API framework built for secure AI-assisted services.
+              The first TypeScript REST API framework built for secure AI-assisted services
             </h1>
             <p
               className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
@@ -359,6 +360,7 @@ export default function HomePage() {
               style={{ animationDelay: "380ms" }}
             >
               <code className="text-sm">$ {CREATE_COMMAND}</code>
+              <CodeCopyButton code={CREATE_COMMAND} />
             </div>
             <div className='flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'>
               <span>1,870/1,870 tests passing</span>
