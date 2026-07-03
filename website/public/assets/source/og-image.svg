@@ -29,8 +29,8 @@
     <tspan fill="#f8fafc">Daloy</tspan><tspan fill="#38bdf8">JS</tspan>
   </text>
 
-  <text x="96" y="380" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="64" font-weight="800" fill="#f8fafc" letter-spacing="-1">Runtime-portable.</text>
-  <text x="96" y="456" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="64" font-weight="800" fill="#f8fafc" letter-spacing="-1">Supply-chain aware.</text>
+  <text x="96" y="380" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="60" font-weight="800" fill="#f8fafc" letter-spacing="-1">The secure TypeScript API</text>
+  <text x="96" y="456" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="60" font-weight="800" fill="#f8fafc" letter-spacing="-1">framework that runs anywhere</text>
   <text x="96" y="540" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="500" fill="#94a3b8">Secure-by-default runtime &#183; Blocked install scripts &#183; Source-verified lockfiles &#183; Typed end-to-end.</text>
 
   <text x="1104" y="586" text-anchor="end" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="26" fill="#7dd3fc">daloyjs.dev</text>

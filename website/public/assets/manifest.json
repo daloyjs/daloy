@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-23T14:20:02.768Z",
+  "generatedAt": "2026-07-03T14:15:02.803Z",
   "generator": "scripts/render-assets.mjs",
   "source": "public/assets/source/",
   "files": [
@@ -9,7 +9,7 @@
     },
     {
       "name": "favicon-32.png",
-      "bytes": 677
+      "bytes": 674
     },
     {
       "name": "favicon-48.png",
@@ -25,7 +25,7 @@
     },
     {
       "name": "icon-512.png",
-      "bytes": 22557
+      "bytes": 22555
     },
     {
       "name": "social-avatar-400.png",
@@ -33,7 +33,7 @@
     },
     {
       "name": "social-avatar-512.png",
-      "bytes": 22557
+      "bytes": 22555
     },
     {
       "name": "social-avatar-1000.png",
@@ -45,27 +45,27 @@
     },
     {
       "name": "social-avatar-light-1000.png",
-      "bytes": 32294
+      "bytes": 32292
     },
     {
       "name": "banner-x-1500x500.png",
-      "bytes": 87809
+      "bytes": 87042
     },
     {
       "name": "banner-bluesky-3000x1000.png",
-      "bytes": 218986
+      "bytes": 218073
     },
     {
       "name": "banner-light-1280x426.png",
-      "bytes": 109935
+      "bytes": 106918
     },
     {
       "name": "banner-light-1500x500.png",
-      "bytes": 79834
+      "bytes": 79072
     },
     {
       "name": "og-image.png",
-      "bytes": 72896
+      "bytes": 81750
     }
   ]
 }
