@@ -509,7 +509,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status
 
-DaloyJS is now in the **`1.0.0` beta** (`1.0.0-beta.7`). The public API is feature-complete and stable for the 1.0 line; from `1.0.0` onward, breaking changes follow SemVer and deprecations get at least one minor cycle. Small adjustments are still possible before the `1.0.0` GA if beta feedback surfaces something. The framework is already in use for production trials.
+DaloyJS is now at its **first `1.0.0` release candidate** (`1.0.0-rc.0`). The public API is frozen for the 1.0 line: only bug fixes and documentation land between RC and GA, and from `1.0.0` onward breaking changes follow SemVer with deprecations getting at least one minor cycle. The framework is already in use for production trials.
 
 **Release quality bar.** Every release ships with **≥90% line + function coverage and ≥90% branch coverage**, strict TypeScript, OpenSSF Scorecard, CodeQL + Opengrep dual SAST, zizmor workflow linting, and npm provenance. Coverage was relaxed from a former 100% gate so complex security work isn't blocked chasing throwaway tests for unreachable defensive branches or tsx source-map phantoms; see [AGENTS.md](AGENTS.md) for the policy.
 

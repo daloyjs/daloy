@@ -13,6 +13,39 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [1.0.0-rc.0] - 2026-07-03
+
+The **first `1.0.0` release candidate**. The public API is frozen: from here to
+GA only bug fixes and documentation land, no new surface. `@daloyjs/core`,
+`create-daloy`, and the JSR package `@daloyjs/daloy` move to `1.0.0-rc.0` in
+lockstep, and every `create-daloy` template now pins `@daloyjs/core@^1.0.0-rc.0`.
+Projects on `^1.0.0-beta.7` upgrade with a version bump.
+
+### Changed
+
+- **Version: `1.0.0-beta.7` → `1.0.0-rc.0`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, and JSR `@daloyjs/daloy`), with the
+  `create-daloy` templates, workshop, README status line, website version
+  reference, Deno adapter docs, and SBOMs synced to `1.0.0-rc.0`.
+- **Scaffolder templates aligned with their own security + contract guidance.**
+  The `node-basic`, `bun-basic`, `deno-basic`, `cloudflare-worker`, and `vercel`
+  templates and their bundled `daloyjs-best-practices` skill were brought into
+  agreement so a freshly scaffolded app follows the secure-by-default and
+  contract-first patterns the docs describe out of the box.
+
+### Performance
+
+- **Faster Node hot path: lazy Request/Response shims + sync-first validation**
+  (+21% on the full-contract benchmark, +53% on the bare echo path). No public
+  API or behavior change; existing security checks (body limits, timeouts,
+  validation, response-field stripping) are unchanged and still covered.
+
+### Fixed
+
+- **Docs site hydration stabilized** and the docs UX pass finished (navigation
+  table of contents, pager, breadcrumb, and search components). Website only;
+  not part of the `@daloyjs/core` / `create-daloy` package release.
+
 ## [1.0.0-beta.7] - 2026-07-02
 
 ### Added
@@ -1721,6 +1754,7 @@ scaffolded projects pin the latest peer.
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...HEAD
+[1.0.0-rc.0]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.7...v1.0.0-rc.0
 [1.0.0-beta.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.5...v1.0.0-beta.6
 [1.0.0-beta.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.4...v1.0.0-beta.5

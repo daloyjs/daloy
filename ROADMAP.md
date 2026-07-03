@@ -22,7 +22,7 @@ Source of truth for what's shipped, what's next, and the order we plan to ship i
 
 ## Shipped — `0.1.x` foundation
 
-Published to npm as **`@daloyjs/core`** (latest: `1.0.0-beta.7`, released 2026-07-02).
+Published to npm as **`@daloyjs/core`** (latest: `1.0.0-rc.0`, released 2026-07-03 — the first release candidate).
 
 ### Core framework
 
@@ -114,6 +114,7 @@ Published to npm as **`@daloyjs/core`** (latest: `1.0.0-beta.7`, released 2026-0
 | `0.43.0` | Scaffolder + CLI polish                           | Missing-tooling install links after scaffolding; startup banner under Deno `--allow-env`; removed the unused `/app` package subpath; `daloy doctor` exit-code TSDoc corrections.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `0.44.0` | DNS pinning + slowloris enforcement               | `fetchGuard({ pinDns: true })` DNS-rebinding (TOCTOU) protection; Node adapter enforces `connectionTimeoutMs` promptly (slowloris).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `1.0.0-beta.0`–`beta.7` | The 1.0 beta train (API freeze in practice) | `beta.0` renames `0.44.0` with **zero API changes** — the de-facto freeze point. `beta.1`: indeterminate-environment security warning, Fetch-forbidden methods (`TRACE`/`CONNECT`/`TRACK`) rejected in the Node adapter, multipart bodies capped at `bodyLimitBytes` without a schema. `beta.2`: continuous fuzzing via ClusterFuzzLite. `beta.3`: EOL-runtime scanning for generated apps, safe-redirect hardening (encoded backslashes, protocol-relative), Node request-target normalization. `beta.4`: raw `Response` returns from handlers, array/keyless `hooks` no longer silently no-op, docs accuracy pass. `beta.5`: lockstep maintenance. `beta.6`: **MCP Streamable HTTP helpers** at `@daloyjs/core/mcp` (`createMcpHandler()` + `mcpRoutes()`). `beta.7`: MCP spec catch-up (Origin/DNS-rebinding validation with `allowedOrigins`, RFC 6570 resource templates, 2025-11-25 metadata, cursor + prompt-argument enforcement), the `acknowledgeNoResponseBodySchema` escape hatch with framework routes self-acknowledging, case-sensitive multipart boundary fix, `discriminatedUnion` prototype-key fix, `waf()` query parser-differential fix. |
+| `1.0.0-rc.0` | First release candidate (public API freeze) | API frozen — fixes and docs only through GA. Node hot-path perf (lazy Request/Response shims + sync-first validation, +21% full-contract / +53% bare echo, no behavior change); `create-daloy` templates aligned with their bundled security + contract best-practices guidance; docs-site hydration + navigation UX pass (TOC, pager, breadcrumb, search). |
 
 > **History audit note (2026-05-30).** As of that audit, local and remote git tags stopped at `v0.34.1`; rows from `0.34.2` through `0.36.0` were reconstructed from package-version bumps and the actual diffs: `1805e7f` (`0.34.2`), `2fc135c` (`0.34.3`), `70592cb` (`0.35.0`), `f4a9733` (`0.35.1`, despite the misleading subject "releasing to 0.35.0"), `10de2f5` (`0.35.2`), and `d8848f0` (`0.36.0`, also mislabeled "releasing 0.35.0") plus the follow-up `0.36.0` commits through `f37ce20`. Later rows follow the published changelog.
 
@@ -206,12 +207,12 @@ Open items for this track:
 
 ## Stabilization — `1.0.0` ("public API freeze")
 
-**Status (2026-07-02): the `1.0.0` beta train is live** — `beta.0` (2026-06-21)
-through `beta.7` (2026-07-02) shipped with no breaking changes, enforced per
-release by the `verify:breaking-changes` OpenAPI-diff gate. Next step: tag
-`1.0.0-rc.0` (feature freeze — fixes and docs only between RC and GA). GA ships
-when every unchecked item below is true. We'd rather delay `1.0.0` than freeze
-the wrong API.
+**Status (2026-07-03): the first release candidate `1.0.0-rc.0` shipped** —
+`beta.0` (2026-06-21) through `beta.7` (2026-07-02) shipped with no breaking
+changes, enforced per release by the `verify:breaking-changes` OpenAPI-diff
+gate, and the public API is now frozen: from RC to GA only bug fixes and
+documentation land, no new surface. GA ships when every unchecked item below is
+true. We'd rather delay `1.0.0` than freeze the wrong API.
 
 - [x] No breaking change in two consecutive `0.x` minors. _(Satisfied and then
   some: `0.43.0` → `0.44.0` → the entire `beta.0`–`beta.7` train shipped
