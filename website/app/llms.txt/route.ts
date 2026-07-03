@@ -19,7 +19,7 @@ export async function GET() {
     "",
     "> DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI 3.1 generation, typed client codegen (Hey API), and security-first defaults. It runs on Node.js, Bun, Deno, Cloudflare Workers, and Vercel.",
     "",
-    "Each docs page has a \"Copy page\" button that exports the page as markdown; the URLs below serve the canonical HTML.",
+    "Every docs page is also available as markdown: append `.md` to its URL (the links below point at the markdown versions; drop the `.md` suffix for the canonical HTML).",
     "",
   ];
 
@@ -27,7 +27,7 @@ export async function GET() {
     lines.push(`## ${section.heading}`, "");
 
     for (const item of section.items) {
-      lines.push(`- [${item.title}](${SITE_URL}${item.href}): ${item.description}`);
+      lines.push(`- [${item.title}](${SITE_URL}${item.href}.md): ${item.description}`);
     }
 
     lines.push("");

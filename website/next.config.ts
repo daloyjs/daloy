@@ -71,12 +71,24 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   // The /mcp documentation endpoint reads the docs `page.tsx` sources from disk
   // at runtime (via lib/docs-content). Trace those files into its serverless
-  // bundle so they are present in production, not just during the build.
+  // bundle so they are present in production, not just during the build. The
+  // markdown docs endpoint (/docs/*.md) validates routes the same way.
   outputFileTracingIncludes: {
     "/mcp": ["./app/docs/**/*.tsx"],
+    "/docs-md/[[...slug]]": ["./app/docs/**/*.tsx"],
   },
   turbopack: {
     root,
+  },
+  async rewrites() {
+    return [
+      // Appending `.md` to a docs URL serves the page as markdown via the
+      // route handler in app/docs-md/[[...slug]]/route.ts (same pattern as
+      // nextjs.org). The dot is escaped because `.` is a regex-special
+      // character in path matching.
+      { source: "/docs\\.md", destination: "/docs-md" },
+      { source: "/docs/:path*\\.md", destination: "/docs-md/:path*" },
+    ];
   },
   async headers() {
     return [
