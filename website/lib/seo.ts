@@ -32,7 +32,7 @@ export const CORE_PACKAGE_VERSION =
   process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.0.0-rc.0";
 
 export const HOME_TITLE =
-  "The first TypeScript REST API framework built for secure AI-assisted services.";
+  "The first TypeScript REST API framework built for secure AI-assisted services";
 
 export const HOME_DESCRIPTION =
   "DaloyJS combines runtime portability, contract-first OpenAPI, generated typed clients, zero-dependency runtime guardrails, and supply-chain-aware project defaults in one framework.";
