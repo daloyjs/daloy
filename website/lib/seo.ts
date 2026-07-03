@@ -32,10 +32,10 @@ export const CORE_PACKAGE_VERSION =
   process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.0.0-rc.0";
 
 export const HOME_TITLE =
-  "The secure TypeScript API framework that runs anywhere with supply-chain-aware defaults";
+  "The first TypeScript REST API framework built for secure AI-assisted services.";
 
 export const HOME_DESCRIPTION =
-  "DaloyJS is a secure-by-default TypeScript/JavaScript web framework with portable runtime guardrails and package provenance you can verify on any CI host. It combines FastAPI-grade docs, Hono-style portability, Fastify-style ops, Elysia-level typing, and Hey API clients. create-daloy pnpm scaffolds add blocked install scripts, a 24h release-age cooldown, and source-verified lockfiles, with an optional hardened GitHub Actions bundle for teams on GitHub.";
+  "DaloyJS combines runtime portability, contract-first OpenAPI, generated typed clients, zero-dependency runtime guardrails, and supply-chain-aware project defaults in one framework.";
 
 export const SITE_TAGLINE =
   "The runtime-portable TypeScript framework with secure-by-default runtime guardrails, hardened pnpm installs, source-verified lockfiles, and typed end-to-end APIs. Optional hardened GitHub Actions bundle for teams on GitHub.";

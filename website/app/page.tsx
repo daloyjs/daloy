@@ -295,13 +295,13 @@ export default function HomePage() {
               className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
-              The secure TypeScript API framework that runs anywhere
+              The first TypeScript REST API framework built for secure AI-assisted services.
             </h1>
             <p
               className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              DaloyJS is the first TypeScript REST API framework to combine runtime portability, contract-first OpenAPI, a built-in secure-by-default posture with zero runtime dependencies for its security features, generated typed clients, and supply-chain-aware defaults for safely shipping AI-assisted services.
+              DaloyJS combines runtime portability, contract-first OpenAPI, generated typed clients, zero-dependency runtime guardrails, and supply-chain-aware project defaults in one framework.
             </p>
             <ContractFlowVisual />
             <p
