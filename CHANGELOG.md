@@ -13,6 +13,64 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [1.0.0-rc.1] - 2026-07-04
+
+A security-hardening release from an internal audit against a 17-category threat
+model. It tightens several secure-by-default guarantees and, because the
+framework has no external users yet, ships a few **breaking changes** now rather
+than deferring them past GA.
+
+### Security
+
+- **MCP `tools/call` arguments are now validated server-side** against the
+  tool's `inputSchema` before the handler runs, via a new dependency-free
+  JSON-Schema subset validator (`type` incl. `integer`, `required`,
+  `properties`, `additionalProperties`, `enum`, `const`, and string/number/array
+  bounds). A violation is rejected with JSON-RPC `-32602` and the handler never
+  sees a non-conforming payload. `pattern` is intentionally not enforced
+  (ReDoS-sink avoidance) — validate those constraints in your handler.
+- **MCP JSON-RPC request bodies are parsed with `safeJsonParse`**, stripping
+  `__proto__` / `constructor` / `prototype` keys before tool arguments reach a
+  handler (parity with the REST body parsers).
+- **HTTP Message Signatures enforce a 2048-bit RSA modulus floor** for
+  `rsa-pss-sha512` / `rsa-v1_5-sha256`, matching the JWT verifier
+  (NIST SP 800-131A).
+- **`urlFeed()` (ip-reputation) is SSRF-hardened by default** — its outbound
+  feed fetch now runs through `fetchGuard()` (per-hop redirect re-validation,
+  cloud-metadata / internal targets refused). Override via `fetchImpl`.
+- **The unconfigured-`trustProxy` production boot guard also refuses vendor
+  client-IP headers** (`cf-connecting-ip`, `fly-client-ip`, `true-client-ip`)
+  alongside `X-Forwarded-*` / `X-Real-IP`.
+
+### Added
+
+- **`markAuthHook(hooks)` + `AUTH_HOOK_MARKER`** to mark a custom (or
+  upstream-gateway-enforced) authentication hook so it satisfies the new
+  route-auth boot guard. The built-in auth middlewares (`bearerAuth`,
+  `basicAuth`, `jwk`, `httpSignatureAuth`, `clientCertAuth`) carry the marker
+  automatically.
+- **`validateMcpInput(schema, value)`** — the reusable MCP input validator.
+- **`mcpRoutes(path, handler, { public: true })`** (`McpRoutesOptions`) to opt a
+  deliberately public MCP endpoint out of the new MCP auth boot guard.
+
+### Changed
+
+- **BREAKING: production `secureDefaults` apps refuse to boot on shadow auth.** A
+  route that declares an `auth:` requirement but installs no authentication hook
+  to enforce it is now a boot error (previously `auth:` was OpenAPI-only
+  documentation). Wire an auth middleware, mark a custom hook with
+  `markAuthHook()`, or drop the `auth:` declaration.
+- **BREAKING: production `secureDefaults` apps refuse to boot on an
+  unauthenticated `mcpRoutes()` endpoint.** Cover the route with auth or pass
+  `{ public: true }`.
+- **BREAKING: MCP `tools/call` rejects schema-violating arguments** with
+  `-32602` before the handler runs (previously `inputSchema` was advertised to
+  clients but never enforced). Handlers that relied on receiving unvalidated
+  arguments must adjust.
+- **Version: `1.0.0-rc.0` → `1.0.0-rc.1`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, JSR `@daloyjs/daloy`), the `create-daloy`
+  templates, the website version reference, the Deno adapter docs, and the SBOMs.
+
 ## [1.0.0-rc.0] - 2026-07-03
 
 The **first `1.0.0` release candidate**. The public API is frozen: from here to
@@ -1753,7 +1811,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.1...HEAD
+[1.0.0-rc.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.0...v1.0.0-rc.1
 [1.0.0-rc.0]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.7...v1.0.0-rc.0
 [1.0.0-beta.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...v1.0.0-beta.7
 [1.0.0-beta.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.5...v1.0.0-beta.6

@@ -631,6 +631,49 @@ export const CORS_WILDCARD_ORIGIN_MARKER: unique symbol = Symbol.for(
  */
 export const CSRF_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.middleware.csrf");
 
+/**
+ * Marker stamped on a {@link Hooks} bundle that authenticates the request —
+ * i.e. rejects callers without valid credentials. Built-in auth middlewares
+ * (`bearerAuth`, `basicAuth`, `jwk`, `httpSignatureAuth`, `clientCertAuth`)
+ * stamp it so the framework's route-auth boot guard can confirm that any route
+ * declaring an `auth:` requirement is actually enforced by a hook rather than
+ * being silently public (a `security` entry in the OpenAPI doc with no runtime
+ * check). Wrap a custom authentication hook with {@link markAuthHook} to opt it
+ * into the same guard.
+ *
+ * @since 1.0.0
+ */
+export const AUTH_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.auth.hook");
+
+/**
+ * Mark a custom {@link Hooks} bundle as performing request authentication.
+ *
+ * Use this when you authenticate with your own hook (not one of the built-in
+ * auth middlewares) but still declare `auth:` on the protected routes: it
+ * stamps {@link AUTH_HOOK_MARKER} so the production route-auth boot guard treats
+ * those routes as enforced. It is also the correct escape hatch when
+ * authentication is performed by an upstream gateway/mesh and the in-app hook
+ * is intentionally a pass-through.
+ *
+ * @param hooks - The hook bundle to mark (mutated in place and returned).
+ * @returns The same `hooks` object, now stamped as an auth hook.
+ *
+ * @example
+ * ```ts
+ * app.use(markAuthHook({
+ *   async beforeHandle(ctx) {
+ *     if (!(await myVerify(ctx.request))) throw new UnauthorizedError();
+ *   },
+ * }));
+ * ```
+ *
+ * @since 1.0.0
+ */
+export function markAuthHook(hooks: Hooks): Hooks {
+  (hooks as Record<PropertyKey, unknown>)[AUTH_HOOK_MARKER] = true;
+  return hooks;
+}
+
 /** Predicate stamped on a CORS `Hooks` object that returns `true` for allowed origins. */
 export type CorsOriginAllow = (origin: string) => boolean;
 
@@ -1210,7 +1253,7 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
   if (/["\r\n\0]/.test(realm)) {
     throw new Error("bearerAuth(): realm must not contain quotes, CR, LF, or NUL bytes.");
   }
-  return {
+  return markAuthHook({
     async beforeHandle(ctx) {
       const h = ctx.request.headers.get("authorization") ?? "";
       const m = /^Bearer\s+(.+)$/i.exec(h);
@@ -1239,7 +1282,7 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
       }
       return undefined;
     },
-  };
+  });
 }
 
 // ---------- CSRF (double-submit cookie) ----------
@@ -1608,7 +1651,7 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
   if (!Number.isInteger(maxBytes) || maxBytes < 1) {
     throw new Error("basicAuth(): maxCredentialBytes must be a positive integer.");
   }
-  return {
+  return markAuthHook({
     async beforeHandle(ctx) {
       const header = ctx.request.headers.get("authorization") ?? "";
       const match = BASIC_AUTH_TOKEN_RE.exec(header);
@@ -1624,7 +1667,7 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
       }
       return undefined;
     },
-  };
+  });
 }
 
 // ---------- requireScopes ----------

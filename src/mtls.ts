@@ -542,7 +542,7 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
       return undefined;
     });
 
-  return {
+  const authHooks: Hooks = {
     async beforeHandle(ctx) {
       const cert = resolve(ctx);
       if (!cert) {
@@ -580,6 +580,11 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
       return undefined;
     },
   };
+  // Same global symbol as middleware's AUTH_HOOK_MARKER (stamped inline to keep
+  // the middleware module out of this bundle): lets the route-auth boot guard
+  // recognize that a route declaring `auth:` is actually enforced here.
+  (authHooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.auth.hook")] = true;
+  return authHooks;
 }
 
 function assertHeaderConfig(cfg: ClientCertHeaderConfig): void {

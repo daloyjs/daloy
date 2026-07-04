@@ -6,7 +6,9 @@ import {
   createMcpHandler,
   findRoutesMissingResponseBodySchema,
   mcpRoutes,
+  validateMcpInput,
   type McpHandler,
+  type McpJsonSchema,
 } from "../src/index.js";
 
 const ENDPOINT = "http://test.local/mcp";
@@ -151,17 +153,162 @@ test("createMcpHandler lists and calls tools with structured output", async () =
   assert.deepEqual(called.json.result.structuredContent, { sku: "ABC-123", units: 42 });
 });
 
+test("createMcpHandler strips prototype-pollution keys from tool arguments", async () => {
+  let received: string[] = [];
+  const handler = createMcpHandler({
+    serverInfo: { name: "echo-mcp", version: "1.0.0" },
+    tools: [
+      {
+        name: "echo_keys",
+        description: "Echo the own-property names of the received arguments.",
+        inputSchema: { type: "object", additionalProperties: true },
+        handler: (args) => {
+          received = Object.getOwnPropertyNames(args);
+          return { content: [{ type: "text", text: received.join(",") }] };
+        },
+      },
+    ],
+  });
+
+  // Hand-written JSON: a JS object literal's `__proto__` sets the prototype and
+  // would be dropped by JSON.stringify, so the raw string is required to prove
+  // the parser strips the pollution keys. A raw `JSON.parse` would surface
+  // `__proto__` / `constructor` / `prototype` as own keys on `arguments`.
+  const raw =
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":' +
+    '{"name":"echo_keys","arguments":' +
+    '{"__proto__":{"polluted":true},"constructor":"x","prototype":"y","sku":"OK"}}}';
+  const res = await post(handler, raw);
+  const json = (await res.json()) as RpcResponse;
+
+  assert.equal(json.error, undefined);
+  assert.deepEqual(received, ["sku"]);
+  // Global prototype must remain unpolluted regardless of the payload.
+  assert.equal(({} as Record<string, unknown>).polluted, undefined);
+});
+
 test("createMcpHandler returns recoverable tool errors as MCP tool results", async () => {
   const handler = createTestHandler();
+  // `{ sku: "" }` satisfies the inputSchema (sku present, string) so validation
+  // passes and the handler's own McpToolError surfaces as a recoverable result.
   const { json } = await rpc(handler, {
     jsonrpc: "2.0",
     id: 4,
     method: "tools/call",
-    params: { name: "inventory_lookup", arguments: {} },
+    params: { name: "inventory_lookup", arguments: { sku: "" } },
   });
 
   assert.equal(json.result.isError, true);
   assert.equal(json.result.content[0].text, "`sku` is required.");
+});
+
+test("createMcpHandler rejects tools/call arguments that violate inputSchema", async () => {
+  const handler = createTestHandler();
+
+  // Missing required property -> JSON-RPC -32602 before the handler runs.
+  const missing = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 40,
+    method: "tools/call",
+    params: { name: "inventory_lookup", arguments: {} },
+  });
+  assert.equal(missing.json.result, undefined);
+  assert.equal(missing.json.error?.code, -32602);
+  assert.match(missing.json.error!.message, /sku/);
+
+  // Wrong type for a declared property.
+  const wrongType = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 41,
+    method: "tools/call",
+    params: { name: "inventory_lookup", arguments: { sku: 123 } },
+  });
+  assert.equal(wrongType.json.error?.code, -32602);
+  assert.match(wrongType.json.error!.message, /expected string/);
+
+  // Unexpected key rejected by additionalProperties:false.
+  const extra = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 42,
+    method: "tools/call",
+    params: { name: "inventory_lookup", arguments: { sku: "OK", drop: true } },
+  });
+  assert.equal(extra.json.error?.code, -32602);
+  assert.match(extra.json.error!.message, /unexpected property/);
+});
+
+test("validateMcpInput enforces the supported JSON Schema subset", () => {
+  // No constraints -> anything valid.
+  assert.deepEqual(validateMcpInput({}, { anything: 1 }), []);
+  assert.deepEqual(validateMcpInput({ type: "object" }, {}), []);
+
+  // type (incl. integer) and multi-type.
+  assert.match(validateMcpInput({ type: "string" }, 5)[0]!, /expected string/);
+  assert.match(validateMcpInput({ type: "integer" }, 1.5)[0]!, /expected integer/);
+  assert.deepEqual(validateMcpInput({ type: ["string", "null"] }, null), []);
+  assert.match(validateMcpInput({ type: ["string", "number"] }, true)[0]!, /expected one of/);
+
+  // required + additionalProperties:false.
+  const objSchema: McpJsonSchema = {
+    type: "object",
+    properties: { a: { type: "string" } },
+    required: ["a"],
+    additionalProperties: false,
+  };
+  assert.deepEqual(validateMcpInput(objSchema, { a: "x" }), []);
+  assert.match(validateMcpInput(objSchema, {})[0]!, /required property is missing/);
+  assert.match(validateMcpInput(objSchema, { a: "x", b: 1 })[0]!, /unexpected property/);
+  assert.match(validateMcpInput(objSchema, { a: 1 })[0]!, /expected string/);
+
+  // enum + const.
+  assert.deepEqual(validateMcpInput({ enum: ["a", "b"] }, "a"), []);
+  assert.match(validateMcpInput({ enum: ["a", "b"] }, "c")[0]!, /enum/);
+  assert.match(validateMcpInput({ const: 42 }, 7)[0]!, /constant/);
+
+  // string + number bounds.
+  assert.match(validateMcpInput({ type: "string", minLength: 2 }, "a")[0]!, /minLength/);
+  assert.match(validateMcpInput({ type: "string", maxLength: 2 }, "abc")[0]!, /maxLength/);
+  assert.match(validateMcpInput({ type: "number", minimum: 5 }, 1)[0]!, /below minimum/);
+  assert.match(validateMcpInput({ type: "number", maximum: 10 }, 20)[0]!, /above maximum/);
+
+  // array items + bounds, and additionalProperties as a subschema.
+  const arrSchema: McpJsonSchema = { type: "array", items: { type: "number" }, minItems: 1, maxItems: 2 };
+  assert.deepEqual(validateMcpInput(arrSchema, [1, 2]), []);
+  assert.match(validateMcpInput(arrSchema, [])[0]!, /minItems/);
+  assert.match(validateMcpInput(arrSchema, [1, 2, 3])[0]!, /maxItems/);
+  assert.match(validateMcpInput(arrSchema, ["x"])[0]!, /expected number/);
+  const mapSchema: McpJsonSchema = { type: "object", additionalProperties: { type: "number" } };
+  assert.deepEqual(validateMcpInput(mapSchema, { a: 1, b: 2 }), []);
+  assert.match(validateMcpInput(mapSchema, { a: "x" })[0]!, /expected number/);
+
+  // Nested required propagates a pathed error.
+  const nested: McpJsonSchema = {
+    type: "object",
+    properties: { inner: { type: "object", properties: { n: { type: "integer" } }, required: ["n"] } },
+    required: ["inner"],
+  };
+  assert.deepEqual(validateMcpInput(nested, { inner: { n: 3 } }), []);
+  assert.match(validateMcpInput(nested, { inner: {} })[0]!, /\.n: required property is missing/);
+});
+
+test("validateMcpInput caps the error count and recursion depth", () => {
+  // additionalProperties:false + 40 unexpected keys -> errors are capped so a
+  // hostile payload can't inflate the response.
+  const closed: McpJsonSchema = { type: "object", additionalProperties: false };
+  const many: Record<string, number> = {};
+  for (let i = 0; i < 40; i++) many[`k${i}`] = i;
+  assert.equal(validateMcpInput(closed, many).length, 20);
+
+  // A payload nested past the depth cap is refused rather than overflowing.
+  let deepSchema: McpJsonSchema = { type: "integer" };
+  let deepValue: unknown = 0;
+  for (let i = 0; i < 70; i++) {
+    deepSchema = { type: "object", properties: { x: deepSchema }, required: ["x"] };
+    deepValue = { x: deepValue };
+  }
+  assert.ok(
+    validateMcpInput(deepSchema, deepValue).some((e) => /maximum validation depth/.test(e)),
+  );
 });
 
 test("createMcpHandler redacts unexpected tool failures by default in production mode", async () => {

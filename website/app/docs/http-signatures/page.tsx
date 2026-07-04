@@ -18,6 +18,8 @@ export const metadata = buildMetadata({
     "ed25519",
     "Content-Digest",
     "RFC 9530",
+    "RSA 2048 modulus floor",
+    "NIST SP 800-131A",
     "DaloyJS",
   ],
   type: "article",
@@ -73,6 +75,12 @@ export default function Page() {
           <code>alg: &quot;none&quot;</code>-style escapes do not exist.
         </li>
         <li>
+          RSA keys (<code>rsa-pss-sha512</code>, <code>rsa-v1_5-sha256</code>)
+          must have at least a 2048-bit modulus. Shorter keys are refused, in
+          parity with the JWT verifier and per NIST SP 800-131A (RSA under 2048
+          bits has been disallowed since 2014).
+        </li>
+        <li>
           Optional <code>nonce</code> replay defense via an{" "}
           <code>isReplay</code> callback.
         </li>
@@ -93,7 +101,8 @@ export default function Page() {
           shared secret).
         </li>
         <li>
-          <code>rsa-pss-sha512</code>, <code>rsa-v1_5-sha256</code>: RSA.
+          <code>rsa-pss-sha512</code>, <code>rsa-v1_5-sha256</code>: RSA (2048-bit
+          modulus floor; see below).
         </li>
       </ul>
 

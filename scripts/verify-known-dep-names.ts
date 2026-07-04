@@ -87,6 +87,7 @@ export const ALLOWED_DEP_NAMES: ReadonlySet<string> = new Set([
   "eslint",
   "@eslint/eslintrc",
   "eslint-config-next",
+  "linkedom",
   "next",
   "next-themes",
   "postcss",

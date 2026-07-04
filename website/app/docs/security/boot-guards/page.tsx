@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Boot guards",
   description:
-    "Daloy refuses to boot in production on weak session secrets, wildcard CORS, session() without csrf() on state-changing routes, and unconfigured X-Forwarded-* headers. Learn each guard, how to opt out, and how to migrate.",
+    "Daloy refuses to boot in production on weak session secrets, wildcard CORS, session() without csrf() on state-changing routes, shadow-security auth: routes, unauthenticated mcpRoutes() endpoints, and unconfigured proxy / vendor client-IP headers. Learn each guard, how to opt out, and how to migrate.",
   path: "/docs/security/boot-guards",
   keywords: [
     "DaloyJS boot guards",
@@ -14,6 +14,10 @@ export const metadata = buildMetadata({
     "cors wildcard production",
     "csrf required",
     "trustProxy unconfigured",
+    "shadow security auth",
+    "markAuthHook",
+    "mcpRoutes auth",
+    "cf-connecting-ip",
     "secureDefaults",
   ],
   type: "article",
@@ -34,13 +38,16 @@ export default function Page() {
       </blockquote>
       <p>
         Daloy ships the boot-guards slice of the secure-by-default initiative:
-        four refuse-to-boot / first-request guards that turn the most common
+        refuse-to-boot / first-request guards that turn the most common
         production misconfigurations into loud failures during startup instead
-        of silent vulnerabilities under load.
+        of silent vulnerabilities under load. They cover weak session secrets,
+        wildcard CORS, missing CSRF, <code>auth:</code> declarations with
+        nothing enforcing them, unauthenticated <code>mcpRoutes()</code>{" "}
+        endpoints, and spoofable forwarded / vendor client-IP headers.
       </p>
 
       <p>
-        All four guards are gated on the resolved environment being{" "}
+        Every guard is gated on the resolved environment being{" "}
         <code>production</code> (sources:{" "}
         <code>
           app({"{"} env: &quot;production&quot; {"}"})
@@ -69,8 +76,8 @@ export default function Page() {
           },
           {
             eyebrow: "guards",
-            label: "Four refuse-to-boot checks",
-            detail: "secret, cors '*', csrf, X-Forwarded-*",
+            label: "Refuse-to-boot checks",
+            detail: "secret, cors '*', csrf, auth:, mcp, forwarded IP",
             tone: "accent",
           },
           {
@@ -198,7 +205,7 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
       />
 
       <h2 id="4-x-forwarded-with-trustproxy-unset-returns-500">
-        4. <code>X-Forwarded-*</code> with <code>trustProxy</code> unset returns
+        4. Spoofable client-IP headers with <code>trustProxy</code> unset return
         500
       </h2>
       <p>
@@ -212,6 +219,15 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
         to dispatch the request and returns a structured{" "}
         <code>500 problem+json</code>. The rate limiter, audit log, and
         request-id propagation would otherwise honour the attacker-supplied IP.
+      </p>
+      <p>
+        The same refusal now covers the platform-specific client-IP headers{" "}
+        <code>cf-connecting-ip</code> (Cloudflare), <code>fly-client-ip</code>{" "}
+        (Fly.io), and <code>true-client-ip</code>. They are exactly as spoofable
+        as <code>X-Forwarded-*</code> when the app is not actually running behind
+        that platform&apos;s proxy, so an unconfigured app refuses them too
+        rather than letting a client forge its source IP through a vendor header
+        the operator never opted into.
       </p>
       <CodeBlock
         code={`// Pick exactly one in production:
@@ -229,6 +245,104 @@ const app = new App({ env: "production", secureDefaults: false });`}
       <p>
         The warning is logged at <code>warn</code> exactly once per process via
         a latch, so a flood of forged requests does not flood your logs.
+      </p>
+
+      <h2 id="5-route-auth-declared-but-not-enforced">
+        5. Route <code>auth:</code> declared but not enforced (shadow security)
+      </h2>
+      <p>
+        A route can declare <code>auth: {"{"} scheme, ... {"}"}</code> so the
+        generated OpenAPI document advertises it as protected. Previously that
+        declaration was documentation only: if no authentication hook actually
+        ran, the route accepted unauthenticated requests while claiming to be
+        protected, a &ldquo;shadow security&rdquo; footgun. Now, in production
+        with <code>secureDefaults</code> on, the App refuses to boot when a route
+        declares <code>auth:</code> but no authentication hook is present in its
+        effective hook chain.
+      </p>
+      <p>
+        The built-in auth middlewares (<code>bearerAuth</code>,{" "}
+        <code>basicAuth</code>, <code>jwk</code>, <code>httpSignatureAuth</code>,{" "}
+        <code>clientCertAuth</code>) satisfy the guard automatically. For a
+        custom auth hook, or when authentication is actually enforced by an
+        upstream gateway, wrap the hook with the exported{" "}
+        <code>markAuthHook()</code> so the guard can see it.
+      </p>
+      <CodeBlock
+        code={`import { App, bearerAuth, markAuthHook } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+
+// Built-in middleware satisfies the guard automatically.
+app.use(bearerAuth({ validate: (t) => t === process.env.API_TOKEN }));
+
+// A custom auth hook must be marked so the guard recognises it.
+app.use(
+  markAuthHook({
+    beforeHandle: (ctx) => {
+      if (!isAuthorized(ctx.request)) {
+        return { status: 401, body: { error: "unauthorized" } };
+      }
+    },
+  })
+);
+
+app.route({
+  method: "GET",
+  path: "/me",
+  auth: { scheme: "bearerAuth" }, // advertised as protected
+  responses: { 200: { description: "ok" } },
+  handler: () => ({ status: 200, body: {} }),
+});`}
+      />
+      <p>
+        The exported <code>AUTH_HOOK_MARKER</code> symbol is the marker{" "}
+        <code>markAuthHook()</code> stamps, in case you need to check for it
+        yourself. Disable this guard along with the rest via{" "}
+        <code>
+          app({"{"} secureDefaults: false {"}"})
+        </code>
+        .
+      </p>
+
+      <h2 id="6-unauthenticated-mcp-endpoint">
+        6. Unauthenticated <code>mcpRoutes()</code> endpoint
+      </h2>
+      <p>
+        MCP tools are model-controlled and side-effecting, so an unauthenticated
+        MCP endpoint is a high-impact default. In production with{" "}
+        <code>secureDefaults</code> on, the App refuses to boot when an{" "}
+        <code>mcpRoutes()</code> <code>POST</code> endpoint has no authentication
+        hook in its effective chain. Cover it with an auth middleware, or opt in
+        to a genuinely public server with the new{" "}
+        <code>
+          mcpRoutes(path, handler, {"{"} public: true {"}"})
+        </code>{" "}
+        option (typed as <code>McpRoutesOptions</code>).
+      </p>
+      <CodeBlock
+        code={`import { App, bearerAuth, createMcpHandler, mcpRoutes } from "@daloyjs/core";
+
+const app = new App({ env: "production" });
+const mcp = createMcpHandler({ serverInfo, tools });
+
+// (a) Authenticated MCP server - satisfies the guard.
+app.use(bearerAuth({ validate: (t) => t === process.env.MCP_TOKEN }));
+for (const route of mcpRoutes("/mcp", mcp)) {
+  app.route(route);
+}
+
+// (b) ...or an intentionally public MCP server.
+for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
+  app.route(route);
+}`}
+      />
+      <p>
+        Only the <code>POST</code> transport route is checked and stamped;{" "}
+        <code>GET</code> (a 405 hint) and <code>OPTIONS</code> (CORS preflight)
+        are left unmarked so preflight stays credential-free. See the{" "}
+        <a href="/docs/mcp#security-checklist">MCP docs</a> for the full server
+        setup.
       </p>
 
       <h2 id="migration-checklist">Migration checklist</h2>
@@ -258,7 +372,22 @@ const app = new App({ env: "production", secureDefaults: false });`}
         </li>
         <li>
           Pick a <code>trustProxy</code> posture explicitly for every production
-          app.
+          app. If you relied on <code>cf-connecting-ip</code>,{" "}
+          <code>fly-client-ip</code>, or <code>true-client-ip</code>, set{" "}
+          <code>trustProxy: true</code> now that those headers are refused too.
+        </li>
+        <li>
+          For every route that declares <code>auth:</code>, confirm a built-in
+          auth middleware covers it, or wrap your custom hook with{" "}
+          <code>markAuthHook(...)</code>.
+        </li>
+        <li>
+          Add an auth middleware in front of every <code>mcpRoutes()</code>{" "}
+          endpoint, or pass{" "}
+          <code>
+            mcpRoutes(path, handler, {"{"} public: true {"}"})
+          </code>{" "}
+          for a deliberately public MCP server.
         </li>
       </ul>
     </>

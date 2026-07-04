@@ -47,6 +47,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
+import { fetchGuard } from "./fetch-guard.js";
 import {
   compileCidrMatcher,
   matchesMatcher,
@@ -177,8 +178,12 @@ export interface UrlFeedOptions {
   /** Feed name. Defaults to the URL. */
   name?: string;
   /**
-   * Custom `fetch` implementation. Defaults to the platform `fetch`. Provide an
-   * SSRF-guarded fetch or a non-standard-runtime client here.
+   * Custom `fetch` implementation. Defaults to an SSRF-hardened
+   * {@link fetchGuard} instance so a compromised or malicious feed host cannot
+   * redirect the request into internal/link-local space (cloud metadata, etc.).
+   * Override with your own client for a non-standard runtime, or with
+   * `fetchGuard({ allowPrivate: true })` for an intentionally internal feed
+   * mirror.
    */
   fetchImpl?: typeof fetch;
   /** Extra request headers (e.g. an API token for a commercial feed). */
@@ -210,6 +215,8 @@ function parseFeedLine(line: string): string | undefined {
  * are skipped by {@link ipReputation}, so a partially-malformed feed still loads
  * its good entries.
  *
+ * The outbound fetch is SSRF-hardened by default (see {@link UrlFeedOptions.fetchImpl}).
+ *
  * @param url - The feed URL.
  * @param opts - Optional feed name, custom `fetch`, and request headers.
  * @returns A feed ready to pass to {@link IpReputationOptions.feeds}.
@@ -217,7 +224,10 @@ function parseFeedLine(line: string): string | undefined {
  */
 export function urlFeed(url: string, opts: UrlFeedOptions = {}): IpReputationFeed {
   const name = opts.name ?? url;
-  const doFetch = opts.fetchImpl ?? globalThis.fetch;
+  // Secure-by-default: route the outbound feed fetch through fetchGuard() so
+  // redirects are re-validated per hop and internal/metadata targets are
+  // refused, matching createWebhookSender's posture. Callers can override.
+  const doFetch = opts.fetchImpl ?? fetchGuard();
   return {
     name,
     async fetch(signal) {

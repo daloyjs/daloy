@@ -906,6 +906,82 @@ test("rsa-v1_5-sha256 sign + verify roundtrip", async () => {
   assert.equal(result.valid, true);
 });
 
+test("signMessage refuses an undersized (1024-bit) RSA-PSS key", async () => {
+  const pair = (await crypto.subtle.generateKey(
+    {
+      name: "RSA-PSS",
+      modulusLength: 1024,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-512",
+    },
+    true,
+    ["sign", "verify"],
+  )) as CryptoKeyPair;
+  const created = 1_700_014_000;
+  await assert.rejects(
+    () =>
+      signMessage({
+        method: "GET",
+        url: "https://api.example.com/weak-rsa",
+        components: ["@method", "@path"],
+        alg: "rsa-pss-sha512",
+        key: pair.privateKey,
+        created,
+        now: fixedNow(created),
+      }),
+    /modulus must be at least 2048 bits/,
+  );
+});
+
+test("verifyMessage refuses an undersized (1024-bit) RSA verify key", async () => {
+  // Sign with a compliant 2048-bit key so the signature itself is well-formed;
+  // the modulus floor must reject the 1024-bit verify key up front (fail-closed
+  // with `invalid_key`), never letting an undersized RSA key reach `subtle.verify`.
+  const strong = (await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"],
+  )) as CryptoKeyPair;
+  const weak = (await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 1024,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"],
+  )) as CryptoKeyPair;
+  const created = 1_700_014_500;
+  const sig = await signMessage({
+    method: "GET",
+    url: "https://api.example.com/weak-rsa15",
+    components: ["@method", "@path"],
+    alg: "rsa-v1_5-sha256",
+    key: strong.privateKey,
+    created,
+    now: fixedNow(created),
+  });
+  const result = await verifyMessage({
+    method: "GET",
+    url: "https://api.example.com/weak-rsa15",
+    headers: {
+      "signature-input": sig.signatureInput,
+      signature: sig.signature,
+    },
+    algorithms: ["rsa-v1_5-sha256"],
+    resolveKey: () => weak.publicKey,
+    now: fixedNow(created),
+  });
+  assert.equal(result.valid, false);
+  if (result.valid === false) assert.equal(result.reason, "invalid_key");
+});
+
 test("ecdsa-p384-sha384 sign + verify roundtrip", async () => {
   const pair = (await crypto.subtle.generateKey(
     { name: "ECDSA", namedCurve: "P-384" },

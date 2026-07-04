@@ -87,6 +87,15 @@ const MAX_HEADER_LENGTH = 8192;
 /** Minimum byte length for a raw HMAC secret (RFC 7518 §3.2). */
 const MIN_HMAC_KEY_BYTES = 32;
 
+/**
+ * Minimum RSA modulus size accepted for `rsa-*` signature algorithms. NIST
+ * SP 800-131A has disallowed RSA keys shorter than 2048 bits since 2014; the
+ * JWT verifier ({@link file://./jwt.ts}) enforces the same floor, so the HTTP
+ * Message Signatures path holds the parity to keep undersized (crackable) RSA
+ * keys out of every signature-verification surface in the framework.
+ */
+const MIN_RSA_KEY_BITS = 2048;
+
 const ENC = new TextEncoder();
 
 // ---------------------------------------------------------------------------
@@ -190,6 +199,31 @@ function algSpec(alg: HttpSignatureAlgorithm): AlgSpec {
   }
 }
 
+/**
+ * Refuse RSA keys whose modulus is shorter than {@link MIN_RSA_KEY_BITS}.
+ *
+ * Only applies to the `rsa-*` algorithms — non-RSA keys are ignored. Every RSA
+ * `CryptoKey` carries a numeric `algorithm.modulusLength`; when WebCrypto
+ * reports a length below the floor the key is refused for both signing and
+ * verification. Mirrors the JWT verifier's `assertRsaModulusFloor` so no
+ * signature surface in the framework accepts an undersized RSA key.
+ *
+ * @param alg - The HTTP signature algorithm the key will be used with.
+ * @param key - The imported (or caller-supplied) `CryptoKey`.
+ * @throws {TypeError} When `alg` is RSA and the modulus is under the floor.
+ */
+function assertRsaModulusFloor(alg: HttpSignatureAlgorithm, key: CryptoKey): void {
+  if (alg !== "rsa-pss-sha512" && alg !== "rsa-v1_5-sha256") return;
+  const algorithm = key.algorithm as { modulusLength?: unknown };
+  const modulusLength = algorithm?.modulusLength;
+  if (typeof modulusLength !== "number" || !Number.isFinite(modulusLength)) return;
+  if (modulusLength < MIN_RSA_KEY_BITS) {
+    throw new TypeError(
+      `http-signatures: ${alg} key modulus must be at least ${MIN_RSA_KEY_BITS} bits (NIST SP 800-131A); got ${modulusLength}.`,
+    );
+  }
+}
+
 async function importKey(
   alg: HttpSignatureAlgorithm,
   material: HttpSignatureKeyMaterial,
@@ -197,7 +231,10 @@ async function importKey(
 ): Promise<CryptoKey> {
   const spec = algSpec(alg);
   const c = getCrypto();
-  if (isCryptoKey(material)) return material;
+  if (isCryptoKey(material)) {
+    assertRsaModulusFloor(alg, material);
+    return material;
+  }
   if (material instanceof Uint8Array) {
     if (!spec.symmetric) {
       throw new TypeError(
@@ -218,9 +255,11 @@ async function importKey(
     );
   }
   if (isJsonWebKey(material)) {
-    return c.subtle.importKey("jwk", material, spec.importParams, false, [
+    const key = await c.subtle.importKey("jwk", material, spec.importParams, false, [
       usage,
     ]);
+    assertRsaModulusFloor(alg, key);
+    return key;
   }
   throw new TypeError("http-signatures: unsupported key material.");
 }
@@ -1063,7 +1102,7 @@ export interface HttpSignatureAuthOptions
 export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
   const stateKey = opts.stateKey ?? "httpSignature";
   const message = opts.message ?? "Valid HTTP message signature required";
-  return {
+  const authHooks: Hooks = {
     async beforeHandle(ctx: BaseContext<any, any>) {
       const headers = ctx.request.headers;
       if (opts.optional && !headers.has("signature")) return undefined;
@@ -1075,6 +1114,11 @@ export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
       return undefined;
     },
   };
+  // Same global symbol as middleware's AUTH_HOOK_MARKER (stamped inline to keep
+  // the middleware module out of this bundle): lets the route-auth boot guard
+  // recognize that a route declaring `auth:` is actually enforced here.
+  (authHooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.auth.hook")] = true;
+  return authHooks;
 }
 
 // ---------------------------------------------------------------------------

@@ -69,6 +69,7 @@ import {
 } from "./asyncapi.js";
 import {
   secureHeaders as secureHeadersMiddleware,
+  AUTH_HOOK_MARKER,
   CORS_HOOK_MARKER,
   CORS_ORIGIN_ALLOW_MARKER,
   CORS_WILDCARD_ORIGIN_MARKER,
@@ -963,7 +964,21 @@ interface RouteSecurityMarkers {
   path: string;
   hasSession: boolean;
   hasCsrf: boolean;
+  /** Route's effective hook chain includes an authentication hook (AUTH_HOOK_MARKER). */
+  hasAuth: boolean;
+  /** Route declares an `auth:` requirement (surfaces in the OpenAPI `security` list). */
+  declaresAuth: boolean;
+  /** Route was produced by {@link mcpRoutes} without opting out of the auth boot guard. */
+  isMcp: boolean;
 }
+
+/**
+ * Global-registry symbol stamped by `mcpRoutes()` on the route definitions it
+ * produces (unless the caller opts out with `public: true`). Read here — rather
+ * than importing from `mcp.ts` — so the MCP module is never pulled into the core
+ * `App` bundle. Must match the string used in `mcpRoutes`.
+ */
+const MCP_ROUTE_MARKER = Symbol.for("daloyjs.mcp.route");
 
 interface BootGuardCache {
   checked: boolean;
@@ -1902,13 +1917,24 @@ export class App<
   /**
    * First-request boot guard. Verifies that the assembled hook
    * chain + route table is internally consistent before any user handler
-   * runs. Currently checks: when `session()` is installed and any route
-   * accepts a state-changing method (`POST` / `PUT` / `PATCH` / `DELETE`),
-   * a `csrf()` hook (or third-party equivalent stamped with
-   * {@link CSRF_HOOK_MARKER}) must also be present in that route's effective
-   * hook chain. Opt out with `app({ csrf: "off" })` or
-   * `app({ secureDefaults: false })`. Runs once per App between registration
-   * changes; the result is cached so the fast path is a single boolean check.
+   * runs. Currently checks (production + `secureDefaults` only):
+   *
+   * 1. **Shadow auth** — a route that declares an `auth:` requirement (so it is
+   *    advertised as protected in the OpenAPI `security` list) must have an
+   *    authentication hook ({@link AUTH_HOOK_MARKER}) in its effective chain.
+   *    Otherwise it accepts unauthenticated requests while claiming protection.
+   * 2. **Unauthenticated MCP** — a route from {@link mcpRoutes} must have an
+   *    auth hook unless it opted out with `mcpRoutes(path, handler, { public: true })`.
+   *    MCP tools are model-controlled and side-effecting, so a public one is a
+   *    high-impact default.
+   * 3. **Missing CSRF** — when `session()` is installed and any route accepts a
+   *    state-changing method (`POST`/`PUT`/`PATCH`/`DELETE`), a `csrf()` hook
+   *    (or third-party equivalent stamped with {@link CSRF_HOOK_MARKER}) must
+   *    also be present. Skipped when `app({ csrf: "off" })`.
+   *
+   * Opt out of all guards with `app({ secureDefaults: false })`. Runs once per
+   * App between registration changes; the result is cached so the fast path is a
+   * single boolean check.
    */
   private assertBootGuards(): void {
     if (this.bootGuard.checked) {
@@ -1917,12 +1943,45 @@ export class App<
     }
     this.bootGuard.checked = true;
     if (this.options.secureDefaults === false) return;
-    if (this.options.csrf === "off") return;
     // Per the risk register: boot guards only fire in production so CI /
     // staging surfaces that ship sample secrets / no CSRF token while
     // iterating do not pay the refuse-to-boot cost.
     if (!this.isProduction()) return;
 
+    // Guard 1: shadow auth — declared `auth:` with nothing enforcing it.
+    const shadowAuth = this.routeSecurityMarkers.find((r) => r.declaresAuth && !r.hasAuth);
+    if (shadowAuth) {
+      const err = new Error(
+        `Route ${shadowAuth.method} ${shadowAuth.path} declares an auth requirement (auth: ...) ` +
+          `but no authentication hook is installed in its effective hook chain, so it is advertised ` +
+          `as protected while accepting unauthenticated requests. ` +
+          `Install an auth middleware (bearerAuth/basicAuth/jwk/httpSignatureAuth/clientCertAuth), ` +
+          `wrap a custom auth hook with markAuthHook(...), remove the route's auth: declaration, ` +
+          `or pass app({ secureDefaults: false }) to disable this guard. ` +
+          `See https://daloyjs.dev/docs/security/boot-guards.`
+      );
+      this.bootGuard.error = err;
+      throw err;
+    }
+
+    // Guard 2: unauthenticated MCP tool endpoint.
+    const mcpNoAuth = this.routeSecurityMarkers.find((r) => r.isMcp && !r.hasAuth);
+    if (mcpNoAuth) {
+      const err = new Error(
+        `MCP route ${mcpNoAuth.method} ${mcpNoAuth.path} (from mcpRoutes()) has no authentication ` +
+          `hook in its effective hook chain. MCP tools are model-controlled and can trigger side ` +
+          `effects, so an unauthenticated endpoint is a high-impact default. ` +
+          `Install an auth middleware covering the MCP route (e.g. app.use(bearerAuth({ ... }))), ` +
+          `wrap a custom auth hook with markAuthHook(...), pass mcpRoutes(path, handler, { public: true }) ` +
+          `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
+          `See https://daloyjs.dev/docs/security/boot-guards.`
+      );
+      this.bootGuard.error = err;
+      throw err;
+    }
+
+    // Guard 3: session() + state-changing route without csrf().
+    if (this.options.csrf === "off") return;
     const stateChanging = this.routeSecurityMarkers.find(
       (r) => isStateChangingMethod(r.method) && r.hasSession && !r.hasCsrf
     );
@@ -1944,7 +2003,9 @@ export class App<
   /**
    * Per-request guard for spoofed proxy headers. When the App was
    * constructed without an explicit {@link AppOptions.trustProxy} value
-   * and a request arrives carrying an `X-Forwarded-*` header, refuse to
+   * and a request arrives carrying a spoofable forwarded / client-IP header
+   * (`X-Forwarded-*`, `X-Real-IP`, or a vendor header like `CF-Connecting-IP`,
+   * `Fly-Client-IP`, `True-Client-IP`), refuse to
    * dispatch it: the rate limiter, audit log, and request-id propagation
    * would otherwise honour the attacker-supplied IP. Returns a structured
    * `500 problem+json` so the failure is loud at the network boundary.
@@ -1970,6 +2031,13 @@ export class App<
       "x-forwarded-proto",
       "x-forwarded-port",
       "x-real-ip",
+      // Platform-specific client-IP headers are just as spoofable as
+      // X-Forwarded-* when the app is not actually behind that platform's
+      // proxy. Refuse them too so a client cannot forge its source IP via a
+      // vendor header the operator never configured trust for.
+      "cf-connecting-ip",
+      "fly-client-ip",
+      "true-client-ip",
     ]) {
       if (headers.has(name)) {
         found = name;
@@ -2420,6 +2488,8 @@ export class App<
       method: merged.method,
       path: merged.path,
       ...securityMarkers,
+      declaresAuth: merged.auth !== undefined && merged.auth !== null,
+      isMcp: (merged as unknown as Record<PropertyKey, unknown>)[MCP_ROUTE_MARKER] === true,
     });
     this.resetBootGuardCache();
     return this as unknown as App<
@@ -4054,15 +4124,17 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
 
 function securityMarkersFromHooks(
   layers: Hooks[]
-): Pick<RouteSecurityMarkers, "hasSession" | "hasCsrf"> {
+): Pick<RouteSecurityMarkers, "hasSession" | "hasCsrf" | "hasAuth"> {
   let hasSession = false;
   let hasCsrf = false;
+  let hasAuth = false;
   for (const hooks of layers) {
     const record = hooks as Record<PropertyKey, unknown>;
     if (record[SESSION_HOOK_MARKER] === true) hasSession = true;
     if (record[CSRF_HOOK_MARKER] === true) hasCsrf = true;
+    if (record[AUTH_HOOK_MARKER] === true) hasAuth = true;
   }
-  return { hasSession, hasCsrf };
+  return { hasSession, hasCsrf, hasAuth };
 }
 
 function isStateChangingMethod(method: HttpMethod): boolean {

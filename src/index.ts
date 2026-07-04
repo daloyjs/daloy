@@ -96,6 +96,7 @@ export {
   McpToolError,
   createMcpHandler,
   mcpRoutes,
+  validateMcpInput,
 } from "./mcp.js";
 export type {
   McpContent,
@@ -119,6 +120,7 @@ export type {
   McpResourceDefinition,
   McpResourceTemplate,
   McpResourceTemplateDefinition,
+  McpRoutesOptions,
   McpServerInfo,
   McpTextContent,
   McpTool,
@@ -167,6 +169,8 @@ export {
   timing,
   bearerAuth,
   basicAuth,
+  markAuthHook,
+  AUTH_HOOK_MARKER,
   csrf,
   CSRF_HOOK_MARKER,
   fetchMetadata,

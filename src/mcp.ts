@@ -1,5 +1,6 @@
 import type { PathString, RouteDefinition } from "./types.js";
 import type { StandardSchemaV1 } from "./schema.js";
+import { safeJsonParse } from "./security.js";
 
 /**
  * Latest MCP protocol version DaloyJS negotiates by default.
@@ -100,9 +101,16 @@ export type McpJsonObject = { [key: string]: McpJsonValue };
 
 /**
  * JSON Schema fragment advertised to MCP clients for a tool or prompt
- * argument object. DaloyJS does not bundle a schema validator here, so the
- * schema is documentation and client-side guidance. Validate sensitive inputs
- * inside your handler before touching databases, files, or remote services.
+ * argument object.
+ *
+ * For a tool's `inputSchema`, DaloyJS enforces the commonly-used,
+ * security-relevant subset of JSON Schema server-side (see
+ * {@link validateMcpInput}) BEFORE the tool handler runs, rejecting a
+ * `tools/call` whose arguments violate it with JSON-RPC `-32602`. Keywords
+ * outside that subset (`pattern`, `format`, `$ref`,
+ * `anyOf`/`oneOf`/`allOf`, …) are advertised to clients but NOT enforced —
+ * validate any constraint expressed only through those keywords inside your
+ * handler before touching databases, files, or remote services.
  *
  * @since 1.0.0
  */
@@ -267,8 +275,11 @@ export interface McpToolAnnotations {
  * Handler for a single MCP tool.
  *
  * @typeParam TArgs - Type expected in `params.arguments` for this tool.
- * @param args - Tool arguments supplied by the MCP client. They are typed for
- *   developer experience but are still untrusted JSON at runtime.
+ * @param args - Tool arguments supplied by the MCP client. They have already
+ *   been validated against this tool's `inputSchema` (enforced subset — see
+ *   {@link validateMcpInput}) and had prototype-pollution keys stripped, so the
+ *   declared shape holds at runtime. Constraints expressed only through
+ *   unsupported schema keywords (e.g. `pattern`) remain the handler's job.
  * @param ctx - Request metadata and the original HTTP request.
  * @returns Text shorthand or a full {@link McpToolResult}.
  * @throws {McpToolError} for caller-correctable failures that should be
@@ -285,9 +296,11 @@ export type McpToolHandler<TArgs extends Record<string, unknown> = Record<string
  * Definition of a callable MCP tool.
  *
  * Tools are model-controlled in MCP: clients may let the language model decide
- * when to call them. Treat every tool as a public API operation and enforce
- * authentication, authorization, rate limits, and validation before side
- * effects.
+ * when to call them. Treat every tool as a public API operation. DaloyJS
+ * enforces the tool's `inputSchema` (enforced subset — see
+ * {@link validateMcpInput}) before the handler runs; you remain responsible for
+ * authentication, authorization, rate limits, and any validation beyond that
+ * subset before side effects.
  *
  * @typeParam TArgs - Type expected by this tool's handler.
  * @since 1.0.0
@@ -660,6 +673,176 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/** Hard cap on reported validation errors so a hostile payload can't inflate the response. */
+const MAX_MCP_VALIDATION_ERRORS = 20;
+/** Recursion-depth cap so a deeply-nested payload can't exhaust the stack. */
+const MAX_MCP_SCHEMA_DEPTH = 64;
+
+/** Narrow an arbitrary JSON value to a schema object (`{}`), excluding arrays/null. */
+function isSchemaObject(v: unknown): v is McpJsonObject {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+/** Report the JSON type of a value using JSON Schema's type names. */
+function jsonTypeOf(v: unknown): string {
+  if (v === null) return "null";
+  if (Array.isArray(v)) return "array";
+  return typeof v;
+}
+
+/** Test a value against a single JSON Schema `type` keyword. */
+function matchesJsonType(type: string, value: unknown): boolean {
+  switch (type) {
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value);
+    case "number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "string":
+      return typeof value === "string";
+    case "boolean":
+      return typeof value === "boolean";
+    case "null":
+      return value === null;
+    case "object":
+      return value !== null && typeof value === "object" && !Array.isArray(value);
+    case "array":
+      return Array.isArray(value);
+    default:
+      // Unknown type keyword — do not reject; treat as unconstrained.
+      return true;
+  }
+}
+
+/** Structural equality for `enum`/`const` comparison (sufficient for JSON scalars/objects). */
+function deepEqualJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Recursive worker for {@link validateMcpInput}. Pushes human-readable errors into `errors`. */
+function validateSchemaNode(
+  schema: McpJsonObject,
+  value: unknown,
+  path: string,
+  errors: string[],
+  depth: number
+): void {
+  if (errors.length >= MAX_MCP_VALIDATION_ERRORS) return;
+  if (depth > MAX_MCP_SCHEMA_DEPTH) {
+    errors.push(`${path}: exceeds maximum validation depth`);
+    return;
+  }
+
+  // type (string or array-of-strings). A type mismatch stops deeper,
+  // type-dependent checks for this node to avoid a cascade of noise.
+  const typeKw = schema.type;
+  if (typeof typeKw === "string") {
+    if (!matchesJsonType(typeKw, value)) {
+      errors.push(`${path}: expected ${typeKw}, got ${jsonTypeOf(value)}`);
+      return;
+    }
+  } else if (Array.isArray(typeKw)) {
+    const types = typeKw.filter((t): t is string => typeof t === "string");
+    if (types.length > 0 && !types.some((t) => matchesJsonType(t, value))) {
+      errors.push(`${path}: expected one of [${types.join(", ")}], got ${jsonTypeOf(value)}`);
+      return;
+    }
+  }
+
+  if (Array.isArray(schema.enum) && !schema.enum.some((e) => deepEqualJson(e, value))) {
+    errors.push(`${path}: value is not one of the allowed enum values`);
+  }
+  if ("const" in schema && !deepEqualJson(schema.const, value)) {
+    errors.push(`${path}: value does not equal the required constant`);
+  }
+
+  if (typeof value === "string") {
+    if (typeof schema.minLength === "number" && value.length < schema.minLength) {
+      errors.push(`${path}: string shorter than minLength ${schema.minLength}`);
+    }
+    if (typeof schema.maxLength === "number" && value.length > schema.maxLength) {
+      errors.push(`${path}: string longer than maxLength ${schema.maxLength}`);
+    }
+  }
+
+  if (typeof value === "number") {
+    if (typeof schema.minimum === "number" && value < schema.minimum) {
+      errors.push(`${path}: number below minimum ${schema.minimum}`);
+    }
+    if (typeof schema.maximum === "number" && value > schema.maximum) {
+      errors.push(`${path}: number above maximum ${schema.maximum}`);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) {
+      errors.push(`${path}: array has fewer than minItems ${schema.minItems}`);
+    }
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
+      errors.push(`${path}: array has more than maxItems ${schema.maxItems}`);
+    }
+    if (isSchemaObject(schema.items)) {
+      for (let i = 0; i < value.length; i++) {
+        validateSchemaNode(schema.items, value[i], `${path}[${i}]`, errors, depth + 1);
+        if (errors.length >= MAX_MCP_VALIDATION_ERRORS) return;
+      }
+    }
+  }
+
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    const props = isSchemaObject(schema.properties) ? schema.properties : undefined;
+    if (Array.isArray(schema.required)) {
+      for (const req of schema.required) {
+        if (typeof req === "string" && !Object.prototype.hasOwnProperty.call(obj, req)) {
+          errors.push(`${path}.${req}: required property is missing`);
+        }
+      }
+    }
+    const addl = schema.additionalProperties;
+    for (const key of Object.keys(obj)) {
+      const sub = props && isSchemaObject(props[key]) ? props[key] : undefined;
+      if (sub) {
+        validateSchemaNode(sub, obj[key], `${path}.${key}`, errors, depth + 1);
+      } else if (addl === false) {
+        errors.push(`${path}.${key}: unexpected property (additionalProperties is false)`);
+      } else if (isSchemaObject(addl)) {
+        validateSchemaNode(addl, obj[key], `${path}.${key}`, errors, depth + 1);
+      }
+      if (errors.length >= MAX_MCP_VALIDATION_ERRORS) return;
+    }
+  }
+}
+
+/**
+ * Minimal, dependency-free JSON Schema validator for MCP tool arguments.
+ *
+ * DaloyJS core bundles no third-party schema library, so this implements the
+ * commonly-used, security-relevant subset of JSON Schema — enough to reject the
+ * untrusted `tools/call` argument shapes that matter before a tool handler
+ * runs: wrong `type` (including `integer`), missing `required` properties,
+ * unexpected keys under `additionalProperties: false`, `enum`/`const`
+ * violations, and basic string/number/array bounds (`minLength`/`maxLength`,
+ * `minimum`/`maximum`, `minItems`/`maxItems`). Nested `properties`, `items`,
+ * and object-form `additionalProperties` are validated recursively.
+ *
+ * Keywords outside this subset (`pattern`, `format`, `$ref`,
+ * `anyOf`/`oneOf`/`allOf`, etc.) are intentionally NOT enforced — notably
+ * `pattern` is skipped so a developer-authored regex can never become a ReDoS
+ * sink against attacker-controlled input. Handlers must still validate any
+ * constraint expressed only through those keywords.
+ *
+ * @param schema - The tool's advertised `inputSchema`.
+ * @param value - The untrusted `params.arguments` value from the client.
+ * @returns A list of human-readable validation errors; empty when the value
+ *   satisfies the enforced subset of the schema.
+ * @since 1.0.0
+ */
+export function validateMcpInput(schema: McpJsonSchema, value: unknown): string[] {
+  const errors: string[] = [];
+  validateSchemaNode(schema, value, "arguments", errors, 0);
+  return errors;
+}
+
 function publicTool(tool: McpTool): Omit<McpTool, "handler"> {
   const { handler: _handler, ...rest } = tool;
   return rest;
@@ -965,8 +1148,25 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
             headers
           );
         }
+        // Enforce the tool's advertised inputSchema on the untrusted client
+        // arguments BEFORE the handler runs, so a handler is never handed a
+        // payload that violates its own contract (wrong types, missing required
+        // fields, unexpected keys). Protocol-level validation failures map to
+        // JSON-RPC -32602 (Invalid params).
+        const rawArgs = params.arguments === undefined ? {} : params.arguments;
+        const validationErrors = validateMcpInput(tool.inputSchema, rawArgs);
+        if (validationErrors.length > 0) {
+          return rpcError(
+            id,
+            INVALID_PARAMS,
+            `Invalid arguments for tool "${name}": ${validationErrors[0]}`,
+            { validationErrors },
+            200,
+            headers
+          );
+        }
         try {
-          const result = await tool.handler(asRecord(params.arguments), ctx);
+          const result = await tool.handler(asRecord(rawArgs), ctx);
           return rpcResult(id, normalizeToolResult(result), headers);
         } catch (error) {
           if (error instanceof McpToolError) {
@@ -1202,7 +1402,11 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
 
     let message: JsonRpcMessage;
     try {
-      message = JSON.parse(raw) as JsonRpcMessage;
+      // `safeJsonParse` strips `__proto__` / `constructor` / `prototype` keys so
+      // an untrusted MCP client cannot smuggle prototype-pollution-shaped keys
+      // into a tool handler's arguments — matching the REST body parsers'
+      // secure-by-default posture (see `safeJsonParse` in security.ts).
+      message = safeJsonParse(raw) as JsonRpcMessage;
     } catch {
       return rpcError(null, PARSE_ERROR, "Invalid JSON in request body.", undefined, 400, headers);
     }
@@ -1280,6 +1484,26 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
 }
 
 /**
+ * Options for {@link mcpRoutes}.
+ *
+ * @since 1.0.0
+ */
+export interface McpRoutesOptions {
+  /**
+   * Set `true` to intentionally expose the MCP endpoint WITHOUT authentication,
+   * opting the `POST` transport out of the App's production route-auth boot
+   * guard. Only do this for a genuinely public MCP server — MCP tools are
+   * model-controlled and can trigger side effects, so an unauthenticated
+   * endpoint is a high-impact default. When left `false` (the default), a
+   * production `secureDefaults` App refuses to boot unless an authentication
+   * hook covers the MCP route.
+   *
+   * @defaultValue false
+   */
+  public?: boolean;
+}
+
+/**
  * Build the Daloy route definitions for a Streamable HTTP MCP endpoint.
  *
  * Register each returned route on the Daloy app that should host MCP. A
@@ -1287,8 +1511,16 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
  * its public contract and auth policy, while the MCP server can use its own
  * bearer token, rate limit, network allowlist, and tool set.
  *
+ * By default the `POST` transport route is stamped so that a production
+ * `secureDefaults` App **refuses to boot** unless an authentication hook covers
+ * it — MCP tools are model-controlled and side-effecting. Cover the route with
+ * an auth middleware (e.g. `app.use(bearerAuth({ ... }))`), or pass
+ * `{ public: true }` to intentionally expose a public MCP server.
+ *
  * @param path - Public MCP endpoint path, usually `"/mcp"`.
  * @param handler - Handler returned by {@link createMcpHandler}.
+ * @param options - See {@link McpRoutesOptions}; pass `{ public: true }` to opt
+ *   out of the auth boot guard.
  * @returns Route definitions for `POST`, `GET`, and `OPTIONS` on the same
  *   path. `POST` is the actual MCP transport; `GET` gives a human-readable
  *   405 hint because this helper does not open server-initiated SSE streams;
@@ -1299,7 +1531,14 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
  * const app = new App();
  * const mcp = createMcpHandler({ serverInfo, tools });
  *
+ * // Authenticated MCP server (satisfies the production boot guard):
+ * app.use(bearerAuth({ validate: (t) => timingSafeEqual(t, process.env.MCP_TOKEN!) }));
  * for (const route of mcpRoutes("/mcp", mcp)) {
+ *   app.route(route);
+ * }
+ *
+ * // ...or an intentionally public MCP server:
+ * for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
  *   app.route(route);
  * }
  * ```
@@ -1308,7 +1547,8 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
  */
 export function mcpRoutes(
   path: PathString,
-  handler: McpHandler
+  handler: McpHandler,
+  options: McpRoutesOptions = {}
 ): RouteDefinition<PathString, "GET" | "POST" | "OPTIONS">[] {
   const responses = {
     200: { description: "MCP JSON-RPC response", body: MCP_JSON_RESPONSE_SCHEMA },
@@ -1320,7 +1560,7 @@ export function mcpRoutes(
     413: { description: "MCP request body too large" },
   };
 
-  return [
+  const routes: RouteDefinition<PathString, "GET" | "POST" | "OPTIONS">[] = [
     {
       method: "POST",
       path,
@@ -1346,4 +1586,18 @@ export function mcpRoutes(
       handler: ({ request }) => handler(request),
     },
   ];
+
+  // Unless explicitly public, stamp the POST transport (the route that executes
+  // tools/call) with the global-registry marker the App boot guard reads. GET
+  // (405 hint) and OPTIONS (preflight) are not marked: preflight must stay
+  // credential-free. Uses the same string as app.ts's MCP_ROUTE_MARKER; kept as
+  // a bare Symbol.for so the App core never imports this module.
+  if (options.public !== true) {
+    for (const route of routes) {
+      if (route.method === "POST") {
+        (route as unknown as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.mcp.route")] = true;
+      }
+    }
+  }
+  return routes;
 }

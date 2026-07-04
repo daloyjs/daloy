@@ -17,6 +17,10 @@ export const metadata = buildMetadata({
     "MCP prompts",
     "AI agent backend",
     "createMcpHandler",
+    "validateMcpInput",
+    "MCP inputSchema validation",
+    "mcpRoutes public",
+    "MCP auth boot guard",
   ],
   type: "article",
 });
@@ -211,6 +215,29 @@ app.route({
   handler: ({ request }) => mcp(request),
 });`;
 
+const INPUT_INVALID = `{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid params"
+  }
+}`;
+
+const VALIDATE_HELPER = `import { validateMcpInput } from "@daloyjs/core";
+
+const schema = {
+  type: "object",
+  properties: { sku: { type: "string", minLength: 1 } },
+  required: ["sku"],
+  additionalProperties: false,
+} as const;
+
+// [] means valid; a non-empty array holds human-readable error messages.
+validateMcpInput(schema, { sku: "ABC-1" });        // []
+validateMcpInput(schema, {});                       // ["arguments: missing required property \\"sku\\""]
+validateMcpInput(schema, { sku: "", extra: true }); // 2 errors`;
+
 const ERROR_HANDLING = `import { McpToolError, createMcpHandler } from "@daloyjs/core/mcp";
 
 const mcp = createMcpHandler({
@@ -360,7 +387,15 @@ export default function Page() {
           rejection for unsupported versions (headerless requests assume{" "}
           <code>2025-03-26</code> per the spec), JSON-RPC parse errors, accepted
           notifications, unknown-pagination-cursor rejection, and bounded
-          request bodies.
+          request bodies parsed with the framework&apos;s{" "}
+          <code>safeJsonParse</code> so <code>__proto__</code> /{" "}
+          <code>constructor</code> / <code>prototype</code> keys are stripped,
+          matching the REST body parsers.
+        </li>
+        <li>
+          <strong>Server-side <code>tools/call</code> argument validation</strong>
+          {" "}against each tool&apos;s <code>inputSchema</code> before the
+          handler runs (see below).
         </li>
         <li>
           Built-in <code>Origin</code> validation against DNS rebinding, with
@@ -393,6 +428,52 @@ export default function Page() {
         receives <code>403</code>.
       </p>
       <CodeBlock code={ORIGINS} />
+
+      <h2 id="input-schema-enforcement">Input schema enforcement</h2>
+      <blockquote>
+        <strong>Breaking change.</strong> A tool&apos;s{" "}
+        <code>inputSchema</code> used to be documentation only. It is now
+        enforced server-side: <code>tools/call</code> arguments that violate the
+        schema are rejected before your handler runs. Handlers that previously
+        received malformed arguments (and coped) will now see those calls fail
+        with <code>-32602</code> instead.
+      </blockquote>
+      <p>
+        On every <code>tools/call</code>, DaloyJS validates{" "}
+        <code>params.arguments</code> against the tool&apos;s{" "}
+        <code>inputSchema</code> <strong>before</strong> the handler runs. A
+        violation returns a JSON-RPC <code>-32602</code> (Invalid params) error
+        and the handler never executes, so a tool no longer has to defend
+        against the shapes its schema already forbids.
+      </p>
+      <CodeBlock code={INPUT_INVALID} language="json" />
+      <p>
+        The enforced subset is deliberately small and dependency-free, but
+        covers the security-relevant keywords: <code>type</code> (including{" "}
+        <code>integer</code>), <code>required</code>, <code>properties</code>,{" "}
+        <code>additionalProperties</code> (including{" "}
+        <code>additionalProperties: false</code>), <code>enum</code>,{" "}
+        <code>const</code>, and basic bounds (<code>minLength</code> /{" "}
+        <code>maxLength</code>, <code>minimum</code> / <code>maximum</code>,{" "}
+        <code>minItems</code> / <code>maxItems</code>). It recurses into nested{" "}
+        <code>properties</code>, <code>items</code>, and object-form{" "}
+        <code>additionalProperties</code>.
+      </p>
+      <p>
+        These keywords are advertised to clients but{" "}
+        <strong>not enforced</strong>, so your handler must still check them:{" "}
+        <code>pattern</code>, <code>format</code>, <code>$ref</code>, and{" "}
+        <code>anyOf</code> / <code>oneOf</code> / <code>allOf</code>.{" "}
+        <code>pattern</code> is skipped on purpose so a developer-authored regex
+        can never become a ReDoS sink against attacker-controlled input.
+      </p>
+      <p>
+        The same validator is exported as{" "}
+        <code>validateMcpInput(schema, value)</code>, which returns an array of
+        error strings (empty when valid). Use it to pre-validate arguments in
+        tests or in your own tooling:
+      </p>
+      <CodeBlock code={VALIDATE_HELPER} />
 
       <h2 id="resource-templates">Resource templates</h2>
       <p>
@@ -456,6 +537,16 @@ export default function Page() {
         <li>
           Put auth in DaloyJS middleware before the MCP route. Bearer tokens,
           mTLS, IP restrictions, and per-client rate limits all work normally.
+          In production a <code>secureDefaults</code> App{" "}
+          <a href="/docs/security/boot-guards#6-unauthenticated-mcp-endpoint">
+            refuses to boot
+          </a>{" "}
+          if the <code>mcpRoutes()</code> <code>POST</code> endpoint has no auth
+          hook. For a genuinely public server, opt out explicitly with{" "}
+          <code>
+            mcpRoutes(path, handler, {"{"} public: true {"}"})
+          </code>
+          .
         </li>
         <li>
           Leave the built-in <code>Origin</code> validation alone and prefer
@@ -463,8 +554,13 @@ export default function Page() {
           wildcard CORS layer in front of the endpoint.
         </li>
         <li>
-          Validate tool arguments inside handlers. The advertised JSON Schema
-          helps clients, but it is not a substitute for server-side validation.
+          The advertised <code>inputSchema</code> is now{" "}
+          <a href="#input-schema-enforcement">enforced server-side</a> for its
+          supported subset, but it is still not a substitute for full
+          validation: check anything expressed only through{" "}
+          <code>pattern</code>, <code>format</code>, or{" "}
+          <code>anyOf</code>/<code>oneOf</code>/<code>allOf</code> inside the
+          handler.
         </li>
         <li>
           Keep tool descriptions precise. A vague tool is easier for a model to

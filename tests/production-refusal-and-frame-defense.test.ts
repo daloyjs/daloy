@@ -51,6 +51,29 @@ test("secureDefaults: false in development is allowed without acknowledgement", 
   );
 });
 
+test("prod trust-proxy guard refuses spoofable vendor client-IP headers", async () => {
+  // trustProxy unset + production + secureDefaults on => any spoofable
+  // forwarded/client-IP header must be refused before routing (500), including
+  // the vendor headers (CF/Fly/Cloudflare-style true-client-ip).
+  const app = new App({ logger: false, env: "production" });
+  for (const header of [
+    "cf-connecting-ip",
+    "fly-client-ip",
+    "true-client-ip",
+    "x-real-ip",
+    "x-forwarded-for",
+  ]) {
+    const res = await app.fetch(
+      new Request("http://x/", { headers: { [header]: "1.2.3.4" } }),
+    );
+    assert.equal(res.status, 500, `expected ${header} to trip the trust-proxy guard`);
+  }
+  // A request with no forwarded/vendor header is not refused by the guard
+  // (routing proceeds; no matching route => 404, never the guard's 500).
+  const clean = await app.fetch(new Request("http://x/"));
+  assert.notEqual(clean.status, 500);
+});
+
 test("secureDefaults: false logs a once-per-process error naming the disabled defaults", () => {
   _resetInsecureDefaultsLogForTests();
   const records: Array<{ level: string; obj: unknown; msg: string }> = [];

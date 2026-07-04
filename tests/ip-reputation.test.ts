@@ -324,3 +324,10 @@ test("urlFeed defaults its name to the URL", () => {
   });
   assert.equal(feed.name, "https://example.test/x.txt");
 });
+
+test("urlFeed defaults to an SSRF-hardened fetch that blocks cloud metadata", async () => {
+  // No fetchImpl -> must route through fetchGuard(), whose deny floor refuses
+  // the AWS/GCP/Azure metadata IP before any network call.
+  const feed = urlFeed("http://169.254.169.254/latest/meta-data/");
+  await assert.rejects(() => feed.fetch(new AbortController().signal), /SSRF blocked/);
+});

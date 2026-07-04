@@ -361,7 +361,7 @@ export function jwk(opts: JwkOptions): Hooks {
     return cachedVerifier;
   }
 
-  return {
+  const authHooks: Hooks = {
     async beforeHandle(ctx) {
       const header = ctx.request.headers.get("authorization") ?? "";
       const match = /^Bearer\s+(.+)$/i.exec(header);
@@ -392,6 +392,11 @@ export function jwk(opts: JwkOptions): Hooks {
       return undefined;
     },
   };
+  // Same global symbol as middleware's AUTH_HOOK_MARKER (stamped inline to keep
+  // the middleware module out of jwk's bundle): lets the route-auth boot guard
+  // recognize that a route declaring `auth:` is actually enforced here.
+  (authHooks as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.auth.hook")] = true;
+  return authHooks;
 }
 
 function extractScopes(payload: Record<string, unknown>): readonly string[] {

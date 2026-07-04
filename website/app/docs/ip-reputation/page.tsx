@@ -6,17 +6,20 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "IP reputation / dynamic denylist feed",
   description:
-    "Wire pluggable abuse feeds (Tor exit lists, Spamhaus DROP, cloud-abuse ranges) into your app with ipReputation(): periodic refresh, fail-open semantics, and the same SSRF-grade CIDR matcher as ipRestriction(). Zero runtime dependencies.",
+    "Wire pluggable abuse feeds (Tor exit lists, Spamhaus DROP, cloud-abuse ranges) into your app with ipReputation(): periodic refresh, fail-open semantics, the same SSRF-grade CIDR matcher as ipRestriction(), and a urlFeed() whose outbound fetch is SSRF-hardened by default. Zero runtime dependencies.",
   path: "/docs/ip-reputation",
   keywords: [
     "IP reputation",
     "denylist",
     "ipReputation",
+    "urlFeed",
     "Spamhaus DROP",
     "Tor exit list",
     "threat intel",
     "WAF",
     "fail-open",
+    "SSRF",
+    "fetchGuard",
     "DaloyJS",
   ],
   type: "article",
@@ -126,7 +129,9 @@ process.on("SIGTERM", () => reputation.stop());`}
         <code>{"<cidr> ; <annotation>"}</code> format, and skips <code>#</code>,{" "}
         <code>;</code>, and <code>{"//"}</code> comment lines. Lines that
         aren&apos;t valid IPs/CIDRs are skipped, so a partially-malformed feed
-        still loads its good rows.
+        still loads its good rows. Its outbound fetch is{" "}
+        <a href="/docs/security/fetch-guard">SSRF-hardened by default</a>{" "}
+        (see the security notes below).
       </p>
       <CodeBlock
         language="ts"
@@ -242,9 +247,19 @@ reputation.has("203.0.113.7");       // probe without side effects`}
           <code>onError</code> / match volume.
         </li>
         <li>
-          <strong>SSRF.</strong> <code>urlFeed()</code> uses the platform{" "}
-          <code>fetch</code>; pass an SSRF-guarded <code>fetchImpl</code> if
-          feed URLs are operator-configurable.
+          <strong>SSRF.</strong> <code>urlFeed()</code>&apos;s outbound fetch is
+          SSRF-hardened by default: it routes through a{" "}
+          <a href="/docs/security/fetch-guard">
+            <code>fetchGuard()</code>
+          </a>{" "}
+          instance (per-hop redirect re-validation, cloud-metadata and internal
+          IPs blocked), so a compromised feed host can&apos;t redirect the
+          request into internal space. Override <code>fetchImpl</code> only for a
+          non-standard runtime, or with{" "}
+          <code>
+            fetchGuard({"{"} allowPrivate: true {"}"})
+          </code>{" "}
+          for an intentionally internal feed mirror.
         </li>
       </ul>
     </>
