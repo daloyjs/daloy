@@ -747,7 +747,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["NOTES.md"]}
             activeFile="NOTES.md"
-            status="Node · Workers · Vercel · Lambda"
+            status="Node · Workers · Lambda"
           >
             <CodeBlock language="bash" code={RUNTIME_NOTES} />
           </EditorFrame>

@@ -668,7 +668,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["NOTES.md"]}
             activeFile="NOTES.md"
-            status="long-lived Node · Workers · Vercel · Lambda"
+            status="long-lived Node · Workers · Lambda"
           >
             <CodeBlock language="bash" code={SERVERLESS_GUIDANCE} />
           </EditorFrame>

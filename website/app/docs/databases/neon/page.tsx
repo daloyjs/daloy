@@ -46,7 +46,7 @@ export default function Page() {
           {
             eyebrow: "edge-friendly",
             label: "HTTP neon() client",
-            detail: "One-shot queries · Workers · Vercel",
+            detail: "One-shot queries · Workers",
             tone: "success",
           },
           {
