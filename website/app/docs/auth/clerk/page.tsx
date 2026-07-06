@@ -197,7 +197,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { clerkPlugin, requireClerkAuth } from "./plugins/clerk";
+import { clerkPlugin, requireClerkAuth } from "./plugins/clerk.ts";
 
 const app = new App();
 app.use(secureHeaders());

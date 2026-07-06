@@ -201,12 +201,12 @@ generated/                   # Hey API typed client output
         code={`// src/modules/catalog/index.ts
 import type { App } from "@daloyjs/core";
 
-import { listBooks }  from "./routes/list-books";
-import { getBook }    from "./routes/get-book";
-import { createBook } from "./routes/create-book";
+import { listBooks }  from "./routes/list-books.ts";
+import { getBook }    from "./routes/get-book.ts";
+import { createBook } from "./routes/create-book.ts";
 
-import { CatalogService } from "./domain/catalog-service";
-import { BookRepo }       from "./infra/book-repo";
+import { CatalogService } from "./domain/catalog-service.ts";
+import { BookRepo }       from "./infra/book-repo.ts";
 
 export const catalogModule = {
   name: "catalog",

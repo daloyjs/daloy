@@ -243,7 +243,7 @@ declare module "@daloyjs/core" {
         code={`import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { molliePlugin } from "./plugins/mollie";
+import { molliePlugin } from "./plugins/mollie.ts";
 
 const app = new App();
 app.use(secureHeaders());

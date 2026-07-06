@@ -272,10 +272,17 @@ app.route({
       <h2 id="typing-the-decorated-client">Typing the decorated client</h2>
       <p>
         Use the exported <code>AppState</code> augmentation point to make
-        decorated clients available on <code>state</code> in every handler:
+        decorated clients available on <code>state</code> in every handler.
+        Declare it in the module that creates the client (a regular{" "}
+        <code>.ts</code> file the compiler always checks), not in a separate{" "}
+        <code>.d.ts</code> file: declaration files are exempt from
+        type-checking when <code>skipLibCheck</code> is on (the scaffolded
+        default), so a broken import inside a <code>.d.ts</code> fails
+        silently and <code>state.db</code> quietly degrades to{" "}
+        <code>any</code>.
       </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
+        code={`// src/db/prisma.ts (the module that creates the client)
 import type { PrismaClient } from "@prisma/client";
 
 declare module "@daloyjs/core" {

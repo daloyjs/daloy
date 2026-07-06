@@ -128,7 +128,7 @@ pnpm prisma generate`}
       <CodeBlock
         code={`// src/db/prisma.ts
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient } from "../generated/prisma/client.ts";
 import type { App } from "@daloyjs/core";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
@@ -150,10 +150,16 @@ export const prismaPlugin = {
       />
 
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the client, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { PrismaClient } from "../generated/prisma/client";
-
+        code={`// src/db/prisma.ts (same module as the plugin above)
 declare module "@daloyjs/core" {
   interface AppState {
     db: PrismaClient;
@@ -167,7 +173,7 @@ declare module "@daloyjs/core" {
 import { z } from "zod";
 import { App, secureHeaders, requestId } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
-import { prismaPlugin } from "./db/prisma";
+import { prismaPlugin } from "./db/prisma.ts";
 
 const UserSchema = z.object({
   id: z.uuid(),
@@ -254,7 +260,7 @@ generator client {
 }
 
 // src/db/prisma-edge.ts
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient } from "../generated/prisma/client.ts";
 import { PrismaNeon } from "@prisma/adapter-neon";
 
 const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
@@ -288,7 +294,7 @@ export const prisma = new PrismaClient({ adapter });`}
 
       <h2 id="mapping-errors-to-problem-json">Mapping errors to problem+json</h2>
       <CodeBlock
-        code={`import { Prisma } from "../generated/prisma/client";
+        code={`import { Prisma } from "../generated/prisma/client.ts";
 import { HttpError } from "@daloyjs/core";
 
 try {

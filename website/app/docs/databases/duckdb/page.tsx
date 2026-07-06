@@ -97,10 +97,16 @@ export const duckDbPlugin = {
       />
 
       <h2 id="3-augment-app-state">3. Augment app state</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the plugin, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.duckdb</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { DuckDBConnection } from "@duckdb/node-api";
-
+        code={`// src/db/duckdb.ts (same module as the plugin above)
 declare module "@daloyjs/core" {
   interface AppState {
     duckdb: DuckDBConnection;
@@ -117,7 +123,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
-import { duckDbPlugin } from "./db/duckdb";
+import { duckDbPlugin } from "./db/duckdb.ts";
 
 const app = new App();
 app.use(secureHeaders());

@@ -327,7 +327,7 @@ export class SeatUnavailableError extends HttpError {
 const CONTRACT_TEST = `// tests/books.contract.test.ts, RFC 9457 makes contract tests trivial.
 import { describe, it, expect } from "vitest";
 import { runContractTests } from "@daloyjs/core/testing";
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 
 it("getBook returns RFC 9457 on missing id", async () => {
   const res = await app.request("/books/does-not-exist");

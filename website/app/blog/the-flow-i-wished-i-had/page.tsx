@@ -79,7 +79,7 @@ app.get("/books/:id", async (req, res) => {
 // the client SDK is generated from yet another file
 // the contract tests live in QA's heart`;
 
-const TYPED_CLIENT = `import { createClient } from "./generated/client";
+const TYPED_CLIENT = `import { createClient } from "./generated/client/index.js";
 
 const api = createClient({ baseUrl: "http://localhost:3000" });
 

@@ -172,8 +172,8 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { oktaPlugin } from "./plugins/okta";
-import { requireAuth } from "./plugins/auth"; // from the Overview page
+import { oktaPlugin } from "./plugins/okta.ts";
+import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
 
 const app = new App();
 app.use(secureHeaders());

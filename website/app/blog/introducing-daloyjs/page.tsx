@@ -82,7 +82,7 @@ app.route({
 
 const SERVE_NODE = `// src/server.ts
 import { serve } from "@daloyjs/core/node";
-import { app } from "./app";
+import { app } from "./app.ts";
 
 serve(app, { port: 3000 });`;
 
@@ -91,7 +91,7 @@ curl http://localhost:3000/openapi.json | jq '.paths."/books/{id}".get.operation
 # "getBookById"`;
 
 const TYPED_CLIENT = `// scripts/smoke.ts
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 import { createInProcessClient } from "@daloyjs/core/client";
 
 const api = createInProcessClient(app);
@@ -132,7 +132,7 @@ const CONTRACT_TEST = `// tests/books.contract.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInProcessClient } from "@daloyjs/core/client";
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 
 const api = createInProcessClient(app);
 

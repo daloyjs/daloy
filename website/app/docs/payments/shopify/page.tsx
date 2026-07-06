@@ -211,7 +211,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
-import { shopifyPlugin } from "./plugins/shopify";
+import { shopifyPlugin } from "./plugins/shopify.ts";
 
 const app = new App();
 app.use(secureHeaders());

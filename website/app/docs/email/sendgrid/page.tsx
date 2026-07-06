@@ -158,7 +158,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { sendgridPlugin } from "./plugins/sendgrid";
+import { sendgridPlugin } from "./plugins/sendgrid.ts";
 
 const app = new App();
 app.use(secureHeaders());

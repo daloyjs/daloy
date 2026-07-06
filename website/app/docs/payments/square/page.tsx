@@ -293,7 +293,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { squarePlugin, SquareError } from "./plugins/square";
+import { squarePlugin, SquareError } from "./plugins/square.ts";
 
 const app = new App();
 app.use(secureHeaders());

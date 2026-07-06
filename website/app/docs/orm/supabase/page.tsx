@@ -94,7 +94,7 @@ pnpm dlx supabase gen types typescript --project-id <your-ref> --schema public >
         code={`// src/db/supabase.ts
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import type { App } from "@daloyjs/core";
-import type { Database } from "./supabase.types";
+import type { Database } from "./supabase.types.ts";
 
 export type Db = SupabaseClient<Database>;
 
@@ -113,10 +113,16 @@ export const supabasePlugin = {
       />
 
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the client, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.supabase</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { Db } from "../db/supabase";
-
+        code={`// src/db/supabase.ts (same module as the plugin above)
 declare module "@daloyjs/core" {
   interface AppState {
     supabase: Db;
@@ -130,7 +136,7 @@ declare module "@daloyjs/core" {
 import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
-import { supabasePlugin } from "./db/supabase";
+import { supabasePlugin } from "./db/supabase.ts";
 
 const app = new App();
 app.use(secureHeaders());
@@ -194,7 +200,7 @@ serve(app, { port: 3000 });`}
       </p>
       <CodeBlock
         code={`import { createClient } from "@supabase/supabase-js";
-import type { Database } from "./db/supabase.types";
+import type { Database } from "./db/supabase.types.ts";
 
 app.use({
   beforeHandle({ headers, state }) {

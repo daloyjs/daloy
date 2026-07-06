@@ -92,7 +92,7 @@ export interface Env {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
-import type { Env } from "./types/env";
+import type { Env } from "./types/env.ts";
 
 const app = new App();
 app.use(secureHeaders());
@@ -124,8 +124,16 @@ export default {
       />
 
       <h2 id="4-augment-app-state">4. Augment app state</h2>
+      <p>
+        Add the <code>declare module</code> block to the Worker module itself,
+        not to a separate <code>.d.ts</code> file. Declaration files are
+        exempt from type-checking when <code>skipLibCheck</code> is on (the
+        scaffolded default), so a mistake inside a <code>.d.ts</code> fails
+        silently and <code>state.db</code> quietly degrades to{" "}
+        <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
+        code={`// src/index.ts (same module as the Worker above)
 declare module "@daloyjs/core" {
   interface AppState {
     db: D1Database;
@@ -145,7 +153,7 @@ pnpm dlx wrangler d1 migrations apply my-app-db --remote`}
         code={`pnpm add drizzle-orm
 // src/db/drizzle.ts
 import { drizzle } from "drizzle-orm/d1";
-import type { Env } from "../types/env";
+import type { Env } from "../types/env.ts";
 
 export const createDb = (env: Env) => drizzle(env.DB);`}
       />

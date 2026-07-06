@@ -114,7 +114,7 @@ export async function createDsqlClient() {
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
-import { createDsqlClient } from "./dsql";
+import { createDsqlClient } from "./dsql.ts";
 
 export const dsqlPlugin = {
   name: "dsql",
@@ -135,7 +135,7 @@ export const dsqlPlugin = {
       </p>
       <CodeBlock
         code={`import { toLambdaHandler } from "@daloyjs/core/lambda";
-import { createDsqlClient } from "./db/dsql";
+import { createDsqlClient } from "./db/dsql.ts";
 
 const daloyHandler = toLambdaHandler(app);
 
@@ -151,10 +151,16 @@ export const handler = async (event) => {
       />
 
       <h2 id="6-augment-app-state">6. Augment app state</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the client, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { Client } from "pg";
-
+        code={`// src/db/dsql.ts (same module as createDsqlClient above)
 declare module "@daloyjs/core" {
   interface AppState {
     db: Client;
@@ -167,7 +173,7 @@ declare module "@daloyjs/core" {
         code={`pnpm add drizzle-orm
 // src/db/drizzle.ts
 import { drizzle } from "drizzle-orm/node-postgres";
-import { createDsqlClient } from "./dsql";
+import { createDsqlClient } from "./dsql.ts";
 
 export async function createDb() {
   const client = await createDsqlClient();

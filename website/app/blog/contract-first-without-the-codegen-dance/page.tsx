@@ -45,7 +45,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 
 const ROUTE_FILE = `// apps/api/src/routes/books.ts
 import { z } from "zod";
-import { app } from "../app";
+import { app } from "../app.ts";
 
 const Book = z.object({
   id: z.string(),
@@ -95,7 +95,7 @@ app.route({
 const PROJECTION_OPENAPI = `// apps/api/scripts/dump-openapi.ts
 import { writeFileSync } from "node:fs";
 import { generateOpenAPI } from "@daloyjs/core/openapi";
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 
 const doc = generateOpenAPI(app, {
   info: { title: "Bookstore API", version: "1.0.0" },
@@ -115,7 +115,7 @@ const PROJECTION_CLIENT = `// apps/api/tests/books.in-process.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createClient } from "@daloyjs/core/client";
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 
 // In-process: route the client's fetch straight into the app. No socket,
 // no port, no flaky CI. Same validation, same response shape as production.
@@ -147,7 +147,7 @@ const PROJECTION_CONTRACT = `// apps/api/tests/contract.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runContractTests } from "@daloyjs/core/contract";
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 
 test("every route is a good citizen", async () => {
   const report = await runContractTests(app, {

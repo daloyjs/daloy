@@ -113,10 +113,18 @@ export const neonPoolPlugin = {
       />
 
       <h2 id="5-augment-app-state">5. Augment app state</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the clients, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.sql</code> / <code>state.db</code> quietly degrade to{" "}
+        <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
+        code={`// src/db/neon.ts (same module as the HTTP plugin above)
 import type { Pool } from "@neondatabase/serverless";
-import type { neon } from "@neondatabase/serverless";
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -130,7 +138,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
-import { neonPlugin } from "./db/neon";
+import { neonPlugin } from "./db/neon.ts";
 
 const app = new App();
 app.use(secureHeaders());

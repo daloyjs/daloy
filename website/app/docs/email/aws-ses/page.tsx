@@ -181,7 +181,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { sesPlugin } from "./plugins/ses";
+import { sesPlugin } from "./plugins/ses.ts";
 
 const app = new App();
 app.use(secureHeaders());

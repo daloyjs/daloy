@@ -184,8 +184,8 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { auth0Plugin } from "./plugins/auth0";
-import { requireAuth } from "./plugins/auth"; // from the Overview page
+import { auth0Plugin } from "./plugins/auth0.ts";
+import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
 
 const app = new App();
 app.use(secureHeaders());

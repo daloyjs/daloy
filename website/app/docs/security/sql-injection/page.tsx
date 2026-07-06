@@ -151,8 +151,8 @@ export default function Page() {
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
 import { z } from "zod";
-import { db } from "./db";
-import { users } from "./schema";
+import { db } from "./db.ts";
+import { users } from "./schema.ts";
 import { eq } from "drizzle-orm";
 
 const app = new App();

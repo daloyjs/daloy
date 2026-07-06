@@ -322,7 +322,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { tapPlugin } from "./plugins/tap";
+import { tapPlugin } from "./plugins/tap.ts";
 
 const app = new App();
 app.use(secureHeaders());

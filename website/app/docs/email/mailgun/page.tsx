@@ -165,7 +165,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { mailgunPlugin } from "./plugins/mailgun";
+import { mailgunPlugin } from "./plugins/mailgun.ts";
 
 const app = new App();
 app.use(secureHeaders());

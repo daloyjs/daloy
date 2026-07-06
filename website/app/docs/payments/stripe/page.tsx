@@ -299,7 +299,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { stripePlugin } from "./plugins/stripe";
+import { stripePlugin } from "./plugins/stripe.ts";
 
 const app = new App();
 app.use(secureHeaders());

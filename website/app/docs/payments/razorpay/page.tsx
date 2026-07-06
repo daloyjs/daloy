@@ -254,7 +254,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { razorpayPlugin } from "./plugins/razorpay";
+import { razorpayPlugin } from "./plugins/razorpay.ts";
 
 const app = new App();
 app.use(secureHeaders());

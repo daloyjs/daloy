@@ -295,7 +295,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { authorizeNetPlugin } from "./plugins/authorizenet";
+import { authorizeNetPlugin } from "./plugins/authorizenet.ts";
 
 const app = new App();
 app.use(secureHeaders());

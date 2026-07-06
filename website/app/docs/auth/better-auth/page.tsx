@@ -137,7 +137,7 @@ BETTER_AUTH_SECRET=replace-with-at-least-32-random-bytes`}
       <CodeBlock
         code={`// src/routes/auth.ts
 import { App } from "@daloyjs/core";
-import { auth } from "../auth";
+import { auth } from "../auth.ts";
 
 const app = new App();
 
@@ -186,7 +186,7 @@ app.route({
       <CodeBlock
         code={`// src/plugins/better-auth.ts
 import type { Middleware } from "@daloyjs/core";
-import { auth } from "../auth";
+import { auth } from "../auth.ts";
 
 export type BetterAuthSession = Awaited<
   ReturnType<typeof auth.api.getSession>
@@ -216,7 +216,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { requireBetterAuth } from "./plugins/better-auth";
+import { requireBetterAuth } from "./plugins/better-auth.ts";
 
 const app = new App();
 app.use(secureHeaders());

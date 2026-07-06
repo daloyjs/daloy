@@ -168,8 +168,8 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { cognitoPlugin } from "./plugins/cognito";
-import { requireAuth } from "./plugins/auth"; // from the Overview page
+import { cognitoPlugin } from "./plugins/cognito.ts";
+import { requireAuth } from "./plugins/auth.ts"; // from the Overview page
 
 const app = new App();
 app.use(secureHeaders());

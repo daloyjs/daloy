@@ -229,7 +229,10 @@ export interface AuthSpec {
  *
  * @example
  * ```ts
- * // src/types.d.ts
+ * // Put this in a regular module the compiler always checks (e.g. the
+ * // plugin file that calls `app.decorate(...)`). Avoid a separate .d.ts:
+ * // `skipLibCheck` skips declaration files, so a broken import there
+ * // silently types the state value as `any`.
  * declare module "@daloyjs/core" {
  *   interface AppState {
  *     user: { id: string; roles: string[] };

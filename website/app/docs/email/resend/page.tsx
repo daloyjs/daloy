@@ -144,7 +144,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { resendPlugin } from "./plugins/resend";
+import { resendPlugin } from "./plugins/resend.ts";
 
 const app = new App();
 app.use(secureHeaders());
@@ -201,7 +201,7 @@ export default function Welcome({ name }: { name: string }) {
 }
 
 // in the handler
-import Welcome from "../../emails/welcome";
+import Welcome from "../../emails/welcome.tsx";
 
 await resend.emails.send({
   from: process.env.RESEND_FROM!,

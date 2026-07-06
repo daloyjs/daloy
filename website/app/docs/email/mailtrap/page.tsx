@@ -144,7 +144,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { mailtrapPlugin } from "./plugins/mailtrap";
+import { mailtrapPlugin } from "./plugins/mailtrap.ts";
 
 const app = new App();
 app.use(secureHeaders());

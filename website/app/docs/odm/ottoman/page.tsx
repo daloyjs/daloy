@@ -89,7 +89,7 @@ export const db = { ottoman, User };`}
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
-import { db, ottoman } from "./ottoman";
+import { db, ottoman } from "./ottoman.ts";
 
 export const ottomanPlugin = {
   name: "ottoman",
@@ -112,10 +112,16 @@ export const ottomanPlugin = {
       />
 
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        exports <code>db</code>, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { db } from "../db/ottoman";
-
+        code={`// src/db/ottoman.ts (the module that exports db)
 declare module "@daloyjs/core" {
   interface AppState {
     db: typeof db;
@@ -129,7 +135,7 @@ declare module "@daloyjs/core" {
 import { z } from "zod";
 import { App, HttpError } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
-import { ottomanPlugin } from "./db/plugin";
+import { ottomanPlugin } from "./db/plugin.ts";
 
 const UserSchema = z.object({
   id: z.string(),

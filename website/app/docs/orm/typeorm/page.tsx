@@ -107,7 +107,7 @@ export class User {
         code={`// src/db/data-source.ts
 import "reflect-metadata";
 import { DataSource } from "typeorm";
-import { User } from "./entities/User";
+import { User } from "./entities/User.ts";
 
 export const AppDataSource = new DataSource({
   type: "postgres",
@@ -123,7 +123,7 @@ export const AppDataSource = new DataSource({
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
-import { AppDataSource } from "./data-source";
+import { AppDataSource } from "./data-source.ts";
 
 export const typeormPlugin = {
   name: "typeorm",
@@ -140,13 +140,19 @@ export const typeormPlugin = {
       />
 
       <h2 id="5-augment-app-state-types">5. Augment app state types</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the plugin, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { DataSource } from "typeorm";
-
+        code={`// src/db/plugin.ts (same module as the plugin above)
 declare module "@daloyjs/core" {
   interface AppState {
-    db: DataSource;
+    db: typeof AppDataSource;
   }
 }`}
       />
@@ -158,8 +164,8 @@ import "reflect-metadata";
 import { z } from "zod";
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
-import { typeormPlugin } from "./db/plugin";
-import { User } from "./db/entities/User";
+import { typeormPlugin } from "./db/plugin.ts";
+import { User } from "./db/entities/User.ts";
 
 const app = new App();
 app.register(typeormPlugin);

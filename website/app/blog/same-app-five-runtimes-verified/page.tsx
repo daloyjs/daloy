@@ -142,7 +142,7 @@ serve(app, {
 
 const WORKER_ENTRY = `// apps/bookstore/src/worker.ts
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
-import { app } from "./app";
+import { app } from "./app.ts";
 
 // Type your bindings; toFetchHandler is generic over Env.
 interface MyEnv {
@@ -172,7 +172,7 @@ export default toFetchHandler<MyEnv>(app);`;
 const VERCEL_THREE = `// 1) Vercel function, runtime: "edge"
 // apps/bookstore/api/[...path].ts
 import { toWebHandler } from "@daloyjs/core/vercel";
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 
 export const config = { runtime: "edge" };
 
@@ -183,7 +183,7 @@ export default toWebHandler(app);
 // 2) Vercel Node.js function - default runtime
 // apps/bookstore/api/[...path].ts
 import { toFetchHandler } from "@daloyjs/core/vercel";
-import { app } from "../src/app";
+import { app } from "../src/app.ts";
 
 // toFetchHandler wraps it in { fetch }, which the Node Vercel runtime expects.
 export default toFetchHandler(app);

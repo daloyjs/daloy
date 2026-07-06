@@ -233,7 +233,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { adyenPlugin } from "./plugins/adyen";
+import { adyenPlugin } from "./plugins/adyen.ts";
 
 const app = new App();
 app.use(secureHeaders());

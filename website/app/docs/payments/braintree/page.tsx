@@ -237,7 +237,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders, rateLimit } from "@daloyjs/core";
-import { braintreePlugin } from "./plugins/braintree";
+import { braintreePlugin } from "./plugins/braintree.ts";
 
 const app = new App();
 app.use(secureHeaders());

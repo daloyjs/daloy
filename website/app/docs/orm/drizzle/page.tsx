@@ -102,7 +102,7 @@ pnpm drizzle-kit migrate`}
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import type { App } from "@daloyjs/core";
-import * as schema from "./schema";
+import * as schema from "./schema.ts";
 
 const client = postgres(process.env.DATABASE_URL!, { max: 10, prepare: false });
 export const db = drizzle(client, { schema });
@@ -119,10 +119,16 @@ export const drizzlePlugin = {
       />
 
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        exports <code>db</code>, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { db } from "../db/drizzle";
-
+        code={`// src/db/drizzle.ts (same module as the plugin above)
 declare module "@daloyjs/core" {
   interface AppState {
     db: typeof db;
@@ -137,8 +143,8 @@ import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
-import { drizzlePlugin } from "./db/drizzle";
-import { users } from "./db/schema";
+import { drizzlePlugin } from "./db/drizzle.ts";
+import { users } from "./db/schema.ts";
 
 const app = new App();
 app.register(drizzlePlugin);

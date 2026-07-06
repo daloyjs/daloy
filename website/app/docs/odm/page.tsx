@@ -148,10 +148,17 @@ export function databasePlugin(db: Database) {
       </p>
 
       <h2 id="typing-the-decorated-client">Typing the decorated client</h2>
+      <p>
+        Declare the augmentation in the module that exports the models (a
+        regular <code>.ts</code> file the compiler always checks), not in a
+        separate <code>.d.ts</code> file: declaration files are exempt from
+        type-checking when <code>skipLibCheck</code> is on (the scaffolded
+        default), so a broken import inside a <code>.d.ts</code> fails
+        silently and <code>state.db</code> quietly degrades to{" "}
+        <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { db } from "../db/mongoose";
-
+        code={`// src/db/mongoose.ts (the module that exports db)
 declare module "@daloyjs/core" {
   interface AppState {
     db: typeof db;

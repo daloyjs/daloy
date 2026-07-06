@@ -98,7 +98,7 @@ UserSchema.setClass(User);`}
         code={`// src/mikro-orm.config.ts
 import { defineConfig } from "@mikro-orm/postgresql";
 import { Migrator } from "@mikro-orm/migrations";
-      import { User } from "./db/entities/User";
+      import { User } from "./db/entities/User.ts";
 
 export default defineConfig({
   entities: [User],
@@ -123,7 +123,7 @@ export default defineConfig({
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
 import { MikroORM } from "@mikro-orm/postgresql";
-import config from "../mikro-orm.config";
+import config from "../mikro-orm.config.ts";
 
 export const mikroOrmPlugin = {
   name: "mikro-orm",
@@ -195,9 +195,18 @@ export function requestEntityManager(): Hooks {
       </p>
 
       <h2 id="6-augment-app-state-types">6. Augment app state types</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the plugin, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.orm</code> / <code>state.em</code> quietly degrade to{" "}
+        <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { MikroORM, EntityManager } from "@mikro-orm/postgresql";
+        code={`// src/db/plugin.ts (same module as the plugin above)
+import type { EntityManager } from "@mikro-orm/postgresql";
 
 declare module "@daloyjs/core" {
   interface AppState {
@@ -213,9 +222,9 @@ declare module "@daloyjs/core" {
 import { z } from "zod";
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
-import { mikroOrmPlugin } from "./db/plugin";
-import { requestEntityManager } from "./db/middleware";
-import { User } from "./db/entities/User";
+import { mikroOrmPlugin } from "./db/plugin.ts";
+import { requestEntityManager } from "./db/middleware.ts";
+import { User } from "./db/entities/User.ts";
 
 const app = new App();
 app.register(mikroOrmPlugin);

@@ -76,7 +76,7 @@ app.use(
 //      directive you didn't ask for.`;
 
 const SSR_TEMPLATE = `// src/routes/home.ts, pipe the nonce into the rendered HTML
-import { app } from "../app";
+import { app } from "../app.ts";
 
 app.route({
   method: "GET",

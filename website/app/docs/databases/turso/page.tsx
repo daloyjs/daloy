@@ -98,10 +98,16 @@ export const tursoPlugin = {
       />
 
       <h2 id="4-augment-app-state">4. Augment app state</h2>
+      <p>
+        Add the <code>declare module</code> block to the same module that
+        creates the client, not to a separate <code>.d.ts</code> file.
+        Declaration files are exempt from type-checking when{" "}
+        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
+        import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
+      </p>
       <CodeBlock
-        code={`// src/types/state.d.ts
-import type { Client } from "@libsql/client";
-
+        code={`// src/db/turso.ts (same module as the plugin above)
 declare module "@daloyjs/core" {
   interface AppState {
     db: Client;
@@ -113,7 +119,7 @@ declare module "@daloyjs/core" {
       <CodeBlock
         code={`import { z } from "zod";
 import { App, secureHeaders } from "@daloyjs/core";
-import { tursoPlugin } from "./db/turso";
+import { tursoPlugin } from "./db/turso.ts";
 
 const app = new App();
 app.use(secureHeaders());
