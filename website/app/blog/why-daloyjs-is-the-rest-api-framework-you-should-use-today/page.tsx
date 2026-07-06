@@ -43,7 +43,7 @@ const LOGIN_ROUTE = `app.route({
   path: "/login",
   operationId: "login",
   request: {
-    body: z.object({ email: z.string().email(), password: z.string() })
+    body: z.object({ email: z.email(), password: z.string() })
   },
   responses: {
     200: { description: "OK", body: z.object({ token: z.string() }) },

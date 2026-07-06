@@ -232,7 +232,7 @@ app.route({
       description: "OK",
       body: z.object({
         userId: z.string(),
-        email: z.string().email(),
+        email: z.email(),
       }),
     },
   },

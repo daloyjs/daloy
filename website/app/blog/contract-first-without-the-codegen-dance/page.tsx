@@ -55,7 +55,7 @@ const Book = z.object({
 });
 
 const Problem = z.object({
-  type: z.string().url(),
+  type: z.url(),
   title: z.string(),
   status: z.number().int(),
   detail: z.string().optional(),

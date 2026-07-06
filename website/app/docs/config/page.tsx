@@ -85,7 +85,7 @@ import { defineConfig } from "@daloyjs/core";
 
 const Config = z.object({
   PORT: z.coerce.number().int().min(1).max(65535),
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
   NODE_ENV: z.enum(["development", "production", "test"]),
 });
 

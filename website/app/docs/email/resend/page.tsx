@@ -156,7 +156,7 @@ app.route({
   path: "/magic-link",
   operationId: "sendMagicLink",
   request: {
-    body: z.object({ email: z.string().email() }),
+    body: z.object({ email: z.email() }),
   },
   responses: {
     202: { description: "Sent", body: z.object({ id: z.string() }) },

@@ -96,7 +96,7 @@ export default function Page() {
               Every route declares <code>params</code>, <code>query</code>, and{" "}
               <code>body</code> shapes. If you constrain a field with{" "}
               <code>z.enum([...])</code>, a tight regex, or{" "}
-              <code>z.string().uuid()</code>, attacker shell metacharacters
+              <code>z.uuid()</code>, attacker shell metacharacters
               don&apos;t reach your handler in the first place; the request is
               rejected with <strong>422 problem+json</strong>.
             </td>

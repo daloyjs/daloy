@@ -97,7 +97,7 @@ app.route({
   method: "POST",
   path: "/import",
   operationId: "importFromUrl",
-  request: { body: z.object({ url: z.string().url() }) },
+  request: { body: z.object({ url: z.url() }) },
   responses: {
     200: { description: "ok" },
     422: { description: "bad url or refused: ssrf" },

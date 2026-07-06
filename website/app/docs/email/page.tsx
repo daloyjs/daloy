@@ -249,7 +249,7 @@ declare module "@daloyjs/core" {
           Treat <code>to</code>, <code>subject</code>, display names,{" "}
           <code>reply_to</code>, and any custom header value as untrusted. Use{" "}
           <Link href="/docs/validation">DaloyJS validation</Link> with{" "}
-          <code>z.string().email()</code> for addresses and reject{" "}
+          <code>z.email()</code> for addresses and reject{" "}
           <code>\r</code> / <code>\n</code> in every other header-bound string.
           This is the classic SMTP / email header injection vector (Snyk&apos;s
           2022 write-up{" "}
@@ -277,10 +277,10 @@ const headerSafe = z
 
 export const SendEmailBody = z
   .object({
-    to: z.string().email(),
+    to: z.email(),
     subject: headerSafe,
     fromName: headerSafe.optional(),
-    replyTo: z.string().email().optional(),
+    replyTo: z.email().optional(),
     text: z.string().max(50_000),
   })
   .strict();`}</code>

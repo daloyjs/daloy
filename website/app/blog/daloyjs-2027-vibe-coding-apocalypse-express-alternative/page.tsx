@@ -94,7 +94,7 @@ app.route({
   method: "POST",
   path: "/import",
   operationId: "import",
-  request: { json: z.object({ url: z.string().url() }) },
+  request: { json: z.object({ url: z.url() }) },
   responses: { 200: { description: "ok" } },
   handler: async ({ request }) => {
     const { url } = await request.json();

@@ -244,7 +244,7 @@ import { z } from "zod";
 const ConfigSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   JWT_SECRET: z.string().min(32),
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
   NODE_ENV: z.enum(["development", "test", "production"]),
 });
 

@@ -93,7 +93,7 @@ app.route({
     // Response schemas are validated too - the handler cannot
     // accidentally leak a field a downstream agent wasn't supposed
     // to see, even if a junior engineer adds it to the SELECT later.
-    200: { description: "queued", schema: z.object({ id: z.string().uuid() }).strict() },
+    200: { description: "queued", schema: z.object({ id: z.uuid() }).strict() },
   },
   handler: async ({ body }) => transfers.queue(body),
 });`;
@@ -215,7 +215,7 @@ app.route({
       description: "results",
       schema: z.object({
         results: z.array(z.object({
-          id: z.string().uuid(),
+          id: z.uuid(),
           title: z.string(),
           snippet: z.string().max(500),
         })).max(20),
@@ -301,7 +301,7 @@ app.route({
   operationId: "refund",
   request: {
     body: z.object({
-      orderId: z.string().uuid(),
+      orderId: z.uuid(),
       amountCents: z.number().int().min(1).max(50_000),
       reason: z.string().min(3).max(280),
     }).strict(),
@@ -309,7 +309,7 @@ app.route({
   responses: {
     200: {
       description: "refunded",
-      schema: z.object({ id: z.string().uuid() }).strict(),
+      schema: z.object({ id: z.uuid() }).strict(),
     },
   },
   handler: async ({ body, ctx }) => refunds.create(ctx.user, body),

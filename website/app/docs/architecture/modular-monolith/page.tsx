@@ -236,13 +236,13 @@ export const catalogModule = {
         code={`// src/modules/catalog/contracts/public.ts
 import { z } from "zod";
 
-export const BookId = z.string().uuid().brand<"BookId">();
+export const BookId = z.uuid().brand<"BookId">();
 export type BookId = z.infer<typeof BookId>;
 
 export const Book = z.object({
   id: BookId,
   title: z.string(),
-  authorId: z.string().uuid(),
+  authorId: z.uuid(),
   priceCents: z.number().int().nonnegative(),
 });
 export type Book = z.infer<typeof Book>;`}

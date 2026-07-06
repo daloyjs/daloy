@@ -178,7 +178,7 @@ app.route({
   operationId: "sendInvite",
   request: {
     body: z.object({
-      to: z.string().email(),
+      to: z.email(),
       inviter: z.string().min(1).max(80),
     }),
   },

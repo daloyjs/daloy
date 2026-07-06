@@ -79,7 +79,7 @@ app.route({
   path: "/users/:id/plan",
   operationId: "updateUserPlan",
   request: {
-    params: z.object({ id: z.string().uuid() }).strict(),
+    params: z.object({ id: z.uuid() }).strict(),
     body: z
       .object({
         plan: z.enum(["free", "pro", "team"]),
@@ -97,7 +97,7 @@ app.route({
       // a junior dev adds it to the SELECT next quarter.
       schema: z
         .object({
-          id: z.string().uuid(),
+          id: z.uuid(),
           plan: z.enum(["free", "pro", "team"]),
           seatCount: z.number().int(),
         })

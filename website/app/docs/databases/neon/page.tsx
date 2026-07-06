@@ -136,13 +136,13 @@ const app = new App();
 app.use(secureHeaders());
 app.register(neonPlugin);
 
-const UserSchema = z.object({ id: z.string().uuid(), email: z.string().email() });
+const UserSchema = z.object({ id: z.uuid(), email: z.email() });
 
 app.route({
   method: "GET",
   path: "/users/:id",
   operationId: "getUser",
-  request: { params: z.object({ id: z.string().uuid() }) },
+  request: { params: z.object({ id: z.uuid() }) },
   responses: {
     200: { description: "Found", body: UserSchema },
     404: { description: "Not found" },

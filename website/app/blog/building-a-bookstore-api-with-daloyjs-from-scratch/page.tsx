@@ -78,10 +78,10 @@ import { z } from "zod";
  * Used in route responses and the GET /books list.
  */
 export const Book = z.object({
-  id:        z.string().uuid(),
+  id:        z.uuid(),
   title:     z.string().min(1).max(200),
   author:    z.string().min(1).max(120),
-  publishedAt: z.string().date(),       // "YYYY-MM-DD"
+  publishedAt: z.iso.date(),            // "YYYY-MM-DD"
   pages:     z.number().int().positive(),
   tags:      z.array(z.string()).default([]),
 });
@@ -175,7 +175,7 @@ function getById(app: App) {
     operationId: "getBookById",
     tags: ["Books"],
     request: {
-      params: z.object({ id: z.string().uuid() }),
+      params: z.object({ id: z.uuid() }),
     },
     responses: {
       200: { description: "Found",     body: Book },

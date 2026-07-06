@@ -108,7 +108,7 @@ app.route({
   responses: {
     201: {
       description: "Avatar uploaded",
-      body: z.object({ url: z.string().url() }),
+      body: z.object({ url: z.url() }),
     },
   },
   handler: async ({ body }) => {
@@ -174,7 +174,7 @@ const GalleryUpload = multipartObject({
       accept: ["image/*"],
     }),
   ).min(1).max(50),
-  albumId: z.string().uuid(),
+  albumId: z.uuid(),
 });
 
 // In your handler:

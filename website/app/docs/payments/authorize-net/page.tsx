@@ -312,7 +312,7 @@ app.route({
       dataDescriptor: z.string().min(1),
       dataValue: z.string().min(1),
       invoiceNumber: z.string().max(20).optional(),
-      email: z.string().email().optional(),
+      email: z.email().optional(),
     }),
   },
   responses: {

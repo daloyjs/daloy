@@ -270,7 +270,7 @@ app.route({
       description: "payment created",
       body: z.object({
         paymentId: z.string(),
-        checkoutUrl: z.string().url(),
+        checkoutUrl: z.url(),
       }),
     },
   },

@@ -170,8 +170,8 @@ import { serve } from "@daloyjs/core/node";
 import { prismaPlugin } from "./db/prisma";
 
 const UserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.string().email(),
+  id: z.uuid(),
+  email: z.email(),
   name: z.string().nullable(),
 });
 
@@ -184,7 +184,7 @@ app.route({
   method: "GET",
   path: "/users/:id",
   operationId: "getUser",
-  request: { params: z.object({ id: z.string().uuid() }) },
+  request: { params: z.object({ id: z.uuid() }) },
   responses: {
     200: { description: "Found", body: UserSchema },
     404: { description: "Not found" },
@@ -201,7 +201,7 @@ app.route({
   method: "POST",
   path: "/users",
   operationId: "createUser",
-  request: { body: z.object({ email: z.string().email(), name: z.string().optional() }) },
+  request: { body: z.object({ email: z.email(), name: z.string().optional() }) },
   responses: { 201: { description: "Created", body: UserSchema } },
   handler: async ({ body, state }) => ({
     status: 201,

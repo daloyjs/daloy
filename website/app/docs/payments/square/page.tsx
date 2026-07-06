@@ -319,7 +319,7 @@ app.route({
       body: z.object({
         paymentId: z.string(),
         status: z.string(),
-        receiptUrl: z.string().url().optional(),
+        receiptUrl: z.url().optional(),
       }),
     },
     402: { description: "card declined", body: z.object({ error: z.string() }) },

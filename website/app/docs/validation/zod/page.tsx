@@ -80,7 +80,7 @@ export default function Page() {
         <li>
           <code>request.params</code>: decoded path parameters. They start as
           strings, so use <code>z.coerce.number()</code>,{" "}
-          <code>z.string().uuid()</code>, or enums when you need stronger
+          <code>z.uuid()</code>, or enums when you need stronger
           shapes.
         </li>
         <li>
@@ -110,7 +110,7 @@ const CreateOrder = z.object({
 });
 
 const Order = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   tenantId: z.string(),
   sku: z.string(),
   qty: z.number().int().positive(),
@@ -218,7 +218,7 @@ export const app = new App().route({
   accepts: ["application/x-www-form-urlencoded"],
   request: {
     body: z.object({
-      email: z.string().email(),
+      email: z.email(),
       qty: z.coerce.number().int().positive(),
     }),
   },
@@ -234,13 +234,13 @@ export const app = new App().route({
         When a response schema is declared, DaloyJS validates the handler return
         before serializing it. Zod object schemas strip unknown keys by default,
         so the validated value also prevents undeclared fields from leaking to
-        clients. Use <code>.passthrough()</code> only when extra keys are part
+        clients. Use <code>z.looseObject()</code> only when extra keys are part
         of the intended response contract.
       </p>
       <CodeBlock
         code={`const PublicUser = z.object({
   id: z.string(),
-  email: z.string().email(),
+  email: z.email(),
 });
 
 app.route({
@@ -270,7 +270,7 @@ app.route({
         code={`import { z } from "zod";
 
 const Book = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   title: z.string(),
   author: z.string(),
 });

@@ -194,7 +194,7 @@ app.route({
   operationId: "sendWelcome",
   request: {
     body: z.object({
-      to: z.string().email(),
+      to: z.email(),
       name: z.string().min(1).max(80),
     }),
   },

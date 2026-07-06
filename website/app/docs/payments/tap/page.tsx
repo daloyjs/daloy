@@ -342,14 +342,14 @@ app.route({
       source: z.string().default("src_all"),
       customer: z.object({
         first_name: z.string().min(1).max(80),
-        email: z.string().email().optional(),
+        email: z.email().optional(),
       }),
     }),
   },
   responses: {
     201: {
       description: "redirect to Tap",
-      body: z.object({ chargeId: z.string(), redirectUrl: z.string().url() }),
+      body: z.object({ chargeId: z.string(), redirectUrl: z.url() }),
     },
   },
   handler: async ({ body, state }) => {

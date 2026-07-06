@@ -157,7 +157,7 @@ app.route({
   operationId: "sendFeedback",
   request: {
     body: z.object({
-      to: z.string().email(),
+      to: z.email(),
       message: z.string().min(1).max(2000),
     }),
   },

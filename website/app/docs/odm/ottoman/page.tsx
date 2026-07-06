@@ -133,7 +133,7 @@ import { ottomanPlugin } from "./db/plugin";
 
 const UserSchema = z.object({
   id: z.string(),
-  email: z.string().email(),
+  email: z.email(),
   name: z.string().nullable(),
 });
 
@@ -181,7 +181,7 @@ serve(app, { port: 3000 });`}
   method: "GET",
   path: "/users/by-email/:email",
   operationId: "getUserByEmail",
-  request: { params: z.object({ email: z.string().email() }) },
+  request: { params: z.object({ email: z.email() }) },
   responses: { 200: { description: "Found", body: UserSchema } },
   handler: async ({ params, state }) => {
     const user = await state.db.User.findOne({ email: params.email });

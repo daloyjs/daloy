@@ -77,15 +77,15 @@ const app = new App({
         request: {
           headers: z.object({
             "x-signature": z.string().describe("HMAC-SHA256 of body, hex"),
-            "x-event-id": z.string().uuid(),
+            "x-event-id": z.uuid(),
           }),
           body: z.object({
             type: z.literal("invoice.paid"),
             data: z.object({
-              invoiceId: z.string().uuid(),
+              invoiceId: z.uuid(),
               amountCents: z.number().int().positive(),
               currency: z.enum(["EUR", "NOK", "USD"]),
-              paidAt: z.string().datetime(),
+              paidAt: z.iso.datetime(),
             }),
           }),
         },
@@ -130,7 +130,7 @@ import type { CallbackMap } from "@daloyjs/core";
 const PaymentCreate = z.object({
   amountCents: z.number().int().positive(),
   currency: z.enum(["EUR", "NOK", "USD"]),
-  callbackUrl: z.string().url(),   // ← the URL we'll POST to later
+  callbackUrl: z.url(),            // ← the URL we'll POST to later
 });
 
 const paymentCallbacks: CallbackMap = {
@@ -146,7 +146,7 @@ const paymentCallbacks: CallbackMap = {
           "x-signature": z.string(),
         }),
         body: z.object({
-          paymentId: z.string().uuid(),
+          paymentId: z.uuid(),
           status: z.enum(["captured", "failed"]),
           failureReason: z.string().optional(),
         }),
@@ -167,7 +167,7 @@ app.route({
   responses: {
     202: {
       description: "Accepted - payment is pending. Watch for the callback.",
-      body: z.object({ paymentId: z.string().uuid() }),
+      body: z.object({ paymentId: z.uuid() }),
     },
   },
   callbacks: paymentCallbacks,     // ← attaches to THIS operation only
@@ -218,21 +218,21 @@ import { discriminatedUnion } from "@daloyjs/core";
 
 const BookingCreated = z.object({
   type: z.literal("booking.created"),
-  bookingId: z.string().uuid(),
-  customerId: z.string().uuid(),
+  bookingId: z.uuid(),
+  customerId: z.uuid(),
   totalCents: z.number().int().positive(),
 });
 
 const BookingCancelled = z.object({
   type: z.literal("booking.cancelled"),
-  bookingId: z.string().uuid(),
+  bookingId: z.uuid(),
   reason: z.enum(["user_requested", "payment_failed", "fraud"]),
   refundCents: z.number().int().nonnegative(),
 });
 
 const BookingShipped = z.object({
   type: z.literal("booking.shipped"),
-  bookingId: z.string().uuid(),
+  bookingId: z.uuid(),
   carrier: z.enum(["posten", "bring", "dhl"]),
   trackingNumber: z.string(),
 });

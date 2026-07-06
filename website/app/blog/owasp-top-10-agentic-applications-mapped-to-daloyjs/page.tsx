@@ -57,7 +57,7 @@ app.route({
   // discovers tools from. The contract is the single source of truth.
   request: {
     body: z.object({
-      orderId: z.string().uuid(),
+      orderId: z.uuid(),
       // Bounded. An agent that "improvises" a 9999999.99 refund 400s.
       amountCents: z.number().int().min(1).max(50_000),
       reason: z.string().min(3).max(280),
@@ -164,7 +164,7 @@ import { z } from "zod";
 
 const Refund = z
   .object({
-    orderId: z.string().uuid(),
+    orderId: z.uuid(),
     amountCents: z.number().int().positive(),
   })
   .strict();   // <-- the difference between hardened and "vibes"`;

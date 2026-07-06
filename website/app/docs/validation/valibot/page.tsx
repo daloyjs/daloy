@@ -64,7 +64,7 @@ export default function Page() {
         <li>
           <strong>Functional API.</strong>{" "}
           <code>v.pipe(v.string(), v.email())</code> instead of{" "}
-          <code>z.string().email()</code>. Easier to compose, easier to lint.
+          <code>z.email()</code>. Easier to compose, easier to lint.
         </li>
         <li>
           <strong>Standard Schema native.</strong> Same handler types and the

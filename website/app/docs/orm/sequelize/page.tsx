@@ -137,8 +137,8 @@ import { serve } from "@daloyjs/core/node";
 import { sequelizePlugin } from "./db/plugin";
 
 const UserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.string().email(),
+  id: z.uuid(),
+  email: z.email(),
   name: z.string().nullable(),
 });
 
@@ -149,7 +149,7 @@ app.route({
   method: "GET",
   path: "/users/:id",
   operationId: "getUser",
-  request: { params: z.object({ id: z.string().uuid() }) },
+  request: { params: z.object({ id: z.uuid() }) },
   responses: {
     200: { description: "Found", body: UserSchema },
     404: { description: "Not found" },

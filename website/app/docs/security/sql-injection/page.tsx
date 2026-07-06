@@ -162,7 +162,7 @@ app.route({
   path: "/users/:id",
   operationId: "getUser",
   // 1) The HTTP layer validates BEFORE the handler runs.
-  request: { params: z.object({ id: z.string().uuid() }) },
+  request: { params: z.object({ id: z.uuid() }) },
   responses: { 200: { description: "ok" } },
   handler: async ({ params }) => {
     // 2) The ORM emits a parameterized query - params.id is bound, never spliced.
@@ -262,7 +262,7 @@ await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
         every <code>body</code>, <code>query</code>, and <code>params</code>{" "}
         slot is validated against a Zod schema before your handler runs, and
         Zod&apos;s primitive checks (<code>z.string()</code>,{" "}
-        <code>z.string().email()</code>, <code>z.number()</code>, &hellip;)
+        <code>z.email()</code>, <code>z.number()</code>, &hellip;)
         reject nested objects with a <strong>422 problem+json</strong>. The
         vulnerability shows up when developers route around that, usually with{" "}
         <code>z.any()</code>, <code>z.unknown()</code>, a pass-through{" "}
@@ -290,7 +290,7 @@ app.route({
 
 // SAFE - primitives are enforced at the wire, so \`body.email\` is a string.
 const SafeLogin = z.object({
-  email: z.string().email().max(254),
+  email: z.email().max(254),
   password: z.string().min(1).max(1024),
 });`}
       />
@@ -303,7 +303,7 @@ const SafeLogin = z.object({
         code={`// SAFE, build the \`where\` yourself from validated primitives. The
 // shape passed to Prisma is owned by your code, not the request body.
 const Search = z.object({
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   emailContains: z.string().min(1).max(64).optional(),
 });
 

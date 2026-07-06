@@ -40,8 +40,8 @@ export default function Page() {
 import { z } from "zod";
 
 const UserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.string().email(),
+  id: z.uuid(),
+  email: z.email(),
   tenantId: z.string(),
   included: z.enum(["profile", "settings"]).optional(),
 });
@@ -66,7 +66,7 @@ export const app = new App().route({
   tags: ["Users"],
   summary: "Get a user by id",
   request: {
-    params: z.object({ id: z.string().uuid() }),
+    params: z.object({ id: z.uuid() }),
     query: z
       .object({ include: z.enum(["profile", "settings"]).optional() })
       .optional(),

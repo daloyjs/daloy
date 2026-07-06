@@ -313,7 +313,7 @@ app.route({
   request: {
     body: z.object({
       cartId: z.string().min(1).max(80),
-      customerEmail: z.string().email().optional(),
+      customerEmail: z.email().optional(),
       items: z.array(
         z.object({
           name: z.string().min(1).max(120),
@@ -326,7 +326,7 @@ app.route({
   responses: {
     200: {
       description: "checkout session",
-      body: z.object({ sessionId: z.string(), url: z.string().url() }),
+      body: z.object({ sessionId: z.string(), url: z.url() }),
     },
   },
   handler: async ({ body, state }) => {

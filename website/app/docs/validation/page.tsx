@@ -112,7 +112,7 @@ export const app = new App().route({
   path: "/orders/:orderId/items",
   operationId: "createOrderItem",
   request: {
-    params: z.object({ orderId: z.string().uuid() }),
+    params: z.object({ orderId: z.uuid() }),
     query: z
       .object({
         dryRun: z
@@ -280,7 +280,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
   accepts: ["application/x-www-form-urlencoded"],
   request: {
     body: z.object({
-      email: z.string().email(),
+      email: z.email(),
       qty: z.coerce.number().int().positive(),
     }),
   },

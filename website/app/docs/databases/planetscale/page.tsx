@@ -117,7 +117,7 @@ const app = new App();
 app.use(secureHeaders());
 app.register(planetscalePlugin);
 
-const UserSchema = z.object({ id: z.string(), email: z.string().email() });
+const UserSchema = z.object({ id: z.string(), email: z.email() });
 
 app.route({
   method: "GET",

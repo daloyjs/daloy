@@ -289,7 +289,7 @@ export default function BlogPostPage() {
           <p>
             For SQL, the framework&apos;s contribution is that validated input
             comes out as the type you declared. A schema that expects{" "}
-            <code>email: z.string().email()</code> will not let{" "}
+            <code>email: z.email()</code> will not let{" "}
             <code>email = &quot; OR 1=1 --&quot;</code> reach your handler
             looking like a string. You still have to call the driver correctly, 
             but you don&apos;t get to claim you concatenated a string

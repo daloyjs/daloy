@@ -341,7 +341,7 @@ app.route({
       paymentMethods: z.array(z.string()).optional(),
       customer: z.object({
         name: z.string().min(1).max(80),
-        email: z.string().email(),
+        email: z.email(),
         phone: z.string().min(7).max(20),
         street: z.string().max(120),
         city: z.string().max(60),
@@ -354,7 +354,7 @@ app.route({
   responses: {
     201: {
       description: "redirect to PayTabs",
-      body: z.object({ tranRef: z.string(), redirectUrl: z.string().url() }),
+      body: z.object({ tranRef: z.string(), redirectUrl: z.url() }),
     },
   },
   handler: async ({ body, request, state }) => {

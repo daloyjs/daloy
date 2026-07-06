@@ -253,7 +253,7 @@ app.route({
       reference: z.string().min(1).max(80),
       countryCode: z.string().length(2).optional(),
       shopperReference: z.string().max(80).optional(),
-      shopperEmail: z.string().email().optional(),
+      shopperEmail: z.email().optional(),
     }),
   },
   responses: {

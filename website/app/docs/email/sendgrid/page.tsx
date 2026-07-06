@@ -171,7 +171,7 @@ app.route({
   operationId: "submitContact",
   request: {
     body: z.object({
-      to: z.string().email(),
+      to: z.email(),
       subject: z.string().min(1).max(200),
       message: z.string().min(1).max(5000),
     }),

@@ -361,7 +361,7 @@ const doc = generateOpenAPI(app, {
   method: "POST",
   path: "/subscribe",
   operationId: "subscribe",
-  request: { body: z.object({ callbackUrl: z.string().url() }) },
+  request: { body: z.object({ callbackUrl: z.url() }) },
   responses: { 201: { description: "Subscribed" } },
   callbacks: {
     onEvent: {

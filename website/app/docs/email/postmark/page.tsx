@@ -180,7 +180,7 @@ app.route({
   operationId: "sendReceipt",
   request: {
     body: z.object({
-      to: z.string().email(),
+      to: z.email(),
       orderId: z.string().min(1),
       total: z.number().nonnegative(),
     }),
