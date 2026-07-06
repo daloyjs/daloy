@@ -172,7 +172,7 @@ const FEATURES = [
   {
     icon: CubeIcon,
     title: "Runtime-portable",
-    body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers, Vercel - same app, same tests, five runtimes.",
+    body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers - same app, same tests, five runtimes.",
   },
   {
     icon: RocketLaunchIcon,
@@ -367,7 +367,7 @@ export default function HomePage() {
               <span aria-hidden>·</span>
               <span>≥90% line, function, and branch coverage gates</span>
               <span aria-hidden>·</span>
-              <span>Node 24 LTS, Node 26+, Bun, Deno, Cloudflare, Vercel</span>
+              <span>Node 24 LTS, Node 26+, Bun, Deno, Cloudflare</span>
             </div>
           </div>
         </div>
@@ -515,7 +515,7 @@ export default function HomePage() {
                     "Built-in OpenAPI 3.1 from one route definition",
                   ],
                   [
-                    "Vercel / serverless / edge fit",
+                    "Serverless / edge fit",
                     "Hono",
                     "Web-standard core, multi-runtime adapters",
                   ],

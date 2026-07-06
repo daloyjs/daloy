@@ -221,7 +221,7 @@ app.route({
           above.
         </li>
         <li>
-          <strong>Cloudflare Workers / Vercel</strong>: pass{" "}
+          <strong>Cloudflare Workers</strong>: pass{" "}
           <code>useFetch: true</code> so the SDK uses the platform&apos;s native{" "}
           <code>fetch</code> instead of <code>request</code> (which depends on
           Node&apos;s HTTP module):

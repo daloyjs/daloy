@@ -155,7 +155,7 @@ export const db = createClient({
 });`}
       />
 
-      <h2 id="cloudflare-workers-vercel">Cloudflare Workers / Vercel</h2>
+      <h2 id="cloudflare-workers-vercel">Cloudflare Workers</h2>
       <p>
         Use the standard HTTP client (no embedded replicas in Workers). Pass{" "}
         <code>env.TURSO_DATABASE_URL</code> instead of <code>process.env</code>.

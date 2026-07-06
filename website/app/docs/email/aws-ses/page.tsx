@@ -253,7 +253,7 @@ app.route({
           credentials.
         </li>
         <li>
-          <strong>Cloudflare Workers / Vercel</strong>: the SDK can run there
+          <strong>Cloudflare Workers</strong>: the SDK can run there
           but uses a Web Crypto signer; pin <code>@aws-sdk/client-sesv2</code> ≥
           3.700 and pass <code>credentials</code> explicitly (the default
           provider chain expects Node APIs).

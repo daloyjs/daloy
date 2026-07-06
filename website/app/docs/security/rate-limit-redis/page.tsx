@@ -112,11 +112,6 @@ export default function Page() {
           consistent per-key), or KV / D1 for relaxed consistency.
         </li>
         <li>
-          <strong>Vercel</strong>: Vercel KV (Upstash Redis under the hood) is
-          reachable from edge functions; for very high RPS prefer Edge Config +
-          a Node region for the counter write path.
-        </li>
-        <li>
           <strong>Fastly Compute</strong>: Edge Dictionaries for static quotas,
           KV Store for dynamic counters.
         </li>

@@ -194,7 +194,7 @@ app.route({
             </td>
           </tr>
           <tr>
-            <td>Cloudflare Workers / Vercel Edge</td>
+            <td>Cloudflare Workers</td>
             <td>No</td>
             <td>Edge runtimes cannot load the native Node package.</td>
           </tr>

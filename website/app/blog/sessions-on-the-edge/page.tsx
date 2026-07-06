@@ -487,7 +487,7 @@ export default function BlogPostPage() {
             defaults, multi-secret rotation built in, a{" "}
             <code>regenerate()</code> that does the fixation-safe dance for you,
             a <code>MemorySessionStore</code> for tests, and a three-method{" "}
-            <code>SessionStore</code> interface so Redis, Workers KV, Vercel KV,
+            <code>SessionStore</code> interface so Redis, Workers KV,
             Postgres, any of them, is twenty lines.
           </p>
 
@@ -709,7 +709,7 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <StoreCard
-            name="Workers KV / Vercel KV"
+            name="Workers KV"
             good="Edge deployments where you want session reads close to the user. Eventually consistent, but for sessions that's fine, you're reading your own writes by sid."
             watchFor="Workers KV has a 60s minimum expirationTtl and eventually-consistent global propagation. Don't use it for sub-second auth flows; do use it for long-lived sessions."
           />
