@@ -289,7 +289,7 @@ await state.duckdb.run("set lock_configuration = true");`}
           You need many API replicas to write the same primary application data.
         </li>
         <li>
-          You deploy only to Cloudflare Workers or Vercel Edge. Use{" "}
+          You deploy only to Cloudflare Workers. Use{" "}
           <Link href="/docs/databases/turso">Turso</Link>,{" "}
           <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>, or{" "}
           <Link href="/docs/databases/neon">Neon</Link> instead.

@@ -272,7 +272,7 @@ export function requireLoginRadiusRole(role: string): Middleware {
         <code>loginradius-sdk</code> is a Node-style CommonJS SDK. Use it on the{" "}
         <Link href="/docs/adapters/node">Node adapter</Link>, Bun when your
         deployment supports CommonJS packages, Vercel Node functions, and AWS
-        Lambda. It is not a fit for Cloudflare Workers or Vercel Edge. For edge
+        Lambda. It is not a fit for Cloudflare Workers. For edge
         APIs, put LoginRadius validation behind a small Node service or use
         direct HTTP calls from a runtime that can safely keep server secrets.
       </p>

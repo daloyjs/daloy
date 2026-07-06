@@ -480,7 +480,7 @@ await state.paytabs.refund({
       <p>
         <code>paytabs_pt2</code> uses Node&apos;s <code>https</code> module and
         runs on Node 18+. It is <em>not</em> edge-runtime compatible. If
-        you&apos;re deploying to Cloudflare Workers or Vercel, call the PayTabs
+        you&apos;re deploying to Cloudflare Workers, call the PayTabs
         PT2 REST endpoints directly with <code>fetch</code> (Bearer auth on{" "}
         <code>Authorization</code> using the server key, endpoints like{" "}
         <code>POST /payment/request</code> and <code>POST /payment/query</code>{" "}

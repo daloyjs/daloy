@@ -495,7 +495,7 @@ await state.razorpay.refund({
       <p>
         The <code>razorpay</code> SDK ships CJS and depends on Node&apos;s{" "}
         <code>https</code> module, it runs on Node 18+ but is not edge-runtime
-        compatible. For Cloudflare Workers or Vercel, hit{" "}
+        compatible. For Cloudflare Workers, hit{" "}
         <code>https://api.razorpay.com/v1</code> directly with{" "}
         <code>fetch</code> and Basic auth (
         <code>Authorization: Basic base64(key_id:key_secret)</code>). The two

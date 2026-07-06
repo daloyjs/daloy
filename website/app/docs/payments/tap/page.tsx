@@ -465,7 +465,7 @@ app.route({
       <p>
         Everything here is plain <code>fetch</code> and <code>node:crypto</code>
         . Swap <code>createHmac</code> for <code>crypto.subtle</code> if
-        you&apos;re targeting Cloudflare Workers or Vercel, Tap itself has no
+        you&apos;re targeting Cloudflare Workers, Tap itself has no
         runtime requirements beyond a TLS-capable HTTP client.
       </p>
 

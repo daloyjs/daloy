@@ -187,8 +187,7 @@ export async function createDb() {
       <h2 id="things-to-remember">Things to remember</h2>
       <ul>
         <li>
-          DSQL is <strong>TCP</strong>-only, so it does <em>not</em> work on Cloudflare Workers or Vercel
-          Edge. Use <Link href="/docs/databases/neon">Neon</Link> or{" "}
+          DSQL is <strong>TCP</strong>-only, so it does <em>not</em> work on Cloudflare Workers. Use <Link href="/docs/databases/neon">Neon</Link> or{" "}
           <Link href="/docs/databases/planetscale">PlanetScale</Link> there.
         </li>
         <li>

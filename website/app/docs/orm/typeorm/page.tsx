@@ -227,7 +227,7 @@ pnpm typeorm migration:run -d src/db/data-source.ts`}
       <ul>
         <li>
           TypeORM uses Node-only APIs (filesystem, native drivers). It does{" "}
-          <strong>not</strong> run on Cloudflare Workers or Vercel, use{" "}
+          <strong>not</strong> run on Cloudflare Workers, use{" "}
           <Link href="/docs/orm/drizzle">Drizzle</Link> or{" "}
           <Link href="/docs/orm/supabase">Supabase</Link> there.
         </li>

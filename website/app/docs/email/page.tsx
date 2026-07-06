@@ -97,7 +97,7 @@ export default function Page() {
         Most provider SDKs are HTTPS-based and work on every runtime DaloyJS
         targets, but a few depend on Node-only APIs (filesystem, TCP, AWS
         Signature V4 with NodeHttpHandler) and won&apos;t run on Cloudflare
-        Workers or Vercel without adjustments.
+        Workers without adjustments.
       </p>
       <table>
         <thead>
