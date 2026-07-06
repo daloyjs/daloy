@@ -208,7 +208,6 @@ app.route({
             <th>Bun</th>
             <th>Deno</th>
             <th>Cloudflare Workers</th>
-            <th>Vercel</th>
           </tr>
         </thead>
         <tbody>
@@ -218,11 +217,9 @@ app.route({
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes, with Driver Adapters</td>
-            <td>Yes, with Driver Adapters</td>
           </tr>
           <tr>
             <td>Drizzle ORM</td>
-            <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
@@ -234,7 +231,6 @@ app.route({
             <td>Partial</td>
             <td>Partial</td>
             <td>No</td>
-            <td>No</td>
           </tr>
           <tr>
             <td>MikroORM</td>
@@ -242,13 +238,11 @@ app.route({
             <td>Yes</td>
             <td>Partial</td>
             <td>No</td>
-            <td>No</td>
           </tr>
           <tr>
             <td>Sequelize</td>
             <td>Yes</td>
             <td>Partial</td>
-            <td>No</td>
             <td>No</td>
             <td>No</td>
           </tr>
@@ -258,12 +252,11 @@ app.route({
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
-            <td>Yes</td>
           </tr>
         </tbody>
       </table>
       <p>
-        For edge runtimes (Cloudflare Workers, Vercel), prefer Drizzle or
+        For edge runtimes (Cloudflare Workers), prefer Drizzle or
         Supabase, or use Prisma with{" "}
         <a
           href="https://www.prisma.io/docs/orm/overview/databases/database-drivers"

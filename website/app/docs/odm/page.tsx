@@ -120,7 +120,6 @@ export function databasePlugin(db: Database) {
             <th>Bun</th>
             <th>Deno</th>
             <th>Cloudflare Workers</th>
-            <th>Vercel</th>
           </tr>
         </thead>
         <tbody>
@@ -130,13 +129,11 @@ export function databasePlugin(db: Database) {
             <td>Partial</td>
             <td>No</td>
             <td>No</td>
-            <td>No</td>
           </tr>
           <tr>
             <td>Ottoman</td>
             <td>Yes</td>
             <td>Partial</td>
-            <td>No</td>
             <td>No</td>
             <td>No</td>
           </tr>
