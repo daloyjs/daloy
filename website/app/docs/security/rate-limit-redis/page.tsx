@@ -102,7 +102,7 @@ export default function Page() {
         across replicas.
       </p>
       <p>
-        On <strong>edge runtimes</strong> (Cloudflare Workers, Vercel, Fastly
+        On <strong>edge runtimes</strong> (Cloudflare Workers, Fastly
         Compute), prefer the platform&apos;s native primitive rather than
         fronting Redis from every region:
       </p>

@@ -7,7 +7,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Use PlanetScale with DaloyJS",
   description:
-    "Connect a DaloyJS API to PlanetScale MySQL using @planetscale/database, an HTTP driver that works on Cloudflare Workers, Vercel, Node.js, Bun, and Deno.",
+    "Connect a DaloyJS API to PlanetScale MySQL using @planetscale/database, an HTTP driver that works on Cloudflare Workers, Node.js, Bun, and Deno.",
   path: "/docs/databases/planetscale",
   keywords: [
     "PlanetScale DaloyJS",

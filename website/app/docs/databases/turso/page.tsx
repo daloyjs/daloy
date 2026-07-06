@@ -62,7 +62,7 @@ export default function Page() {
             detail: "url + authToken · no embedded replicas",
           },
         ]}
-        caption="The same createClient() driver serves both modes. Use an embedded replica on Node or Bun for ultra-low-latency local reads, and the remote HTTP client on Cloudflare Workers or Vercel."
+        caption="The same createClient() driver serves both modes. Use an embedded replica on Node or Bun for ultra-low-latency local reads, and the remote HTTP client on Cloudflare Workers."
       />
 
       <h2 id="1-provision">1. Provision</h2>

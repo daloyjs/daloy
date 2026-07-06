@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Adapters & runtimes",
   description:
-    "Run the same DaloyJS REST API on Node.js, Bun, Deno, Cloudflare Workers, Vercel, Netlify, Fastly Compute, and AWS Lambda. One codebase, multiple runtimes, zero rewrites.",
+    "Run the same DaloyJS REST API on Node.js, Bun, Deno, Cloudflare Workers, Netlify, Fastly Compute, and AWS Lambda. One codebase, multiple runtimes, zero rewrites.",
   path: "/docs/adapters",
   keywords: [
     "runtime adapters",

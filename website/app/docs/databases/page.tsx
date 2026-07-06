@@ -30,7 +30,7 @@ export default function Page() {
       <h1>Database hosting &amp; serverless data providers</h1>
       <p>
         DaloyJS doesn&apos;t ship a database. It runs on Node, Bun, Deno,
-        Cloudflare Workers, Vercel, AWS Lambda, Deno Deploy, and Fastly Compute,
+        Cloudflare Workers, AWS Lambda, Deno Deploy, and Fastly Compute,
         so the right database depends on which{" "}
         <Link href="/docs/adapters">adapter</Link> you target.
       </p>
@@ -80,7 +80,7 @@ export default function Page() {
             tone: "muted",
           },
         ]}
-        caption="On edge runtimes only HTTP, fetch, or native bindings work, raw TCP does not. The driver style is the layer that decides whether a host can run on Workers or Vercel."
+        caption="On edge runtimes only HTTP, fetch, or native bindings work, raw TCP does not. The driver style is the layer that decides whether a host can run on Workers."
       />
 
       <h2 id="supported-providers">Supported providers</h2>
@@ -131,7 +131,6 @@ export default function Page() {
             <th>Node.js</th>
             <th>Bun / Deno</th>
             <th>Cloudflare Workers</th>
-            <th>Vercel</th>
             <th>AWS Lambda</th>
           </tr>
         </thead>
@@ -139,7 +138,6 @@ export default function Page() {
           <tr>
             <td>Neon</td>
             <td>HTTP &amp; WebSocket</td>
-            <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
@@ -152,12 +150,10 @@ export default function Page() {
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
-            <td>Yes</td>
           </tr>
           <tr>
             <td>Supabase</td>
             <td>fetch-based</td>
-            <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
@@ -170,7 +166,6 @@ export default function Page() {
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
-            <td>Yes</td>
           </tr>
           <tr>
             <td>DuckDB</td>
@@ -178,7 +173,6 @@ export default function Page() {
             <td>Yes</td>
             <td>Limited</td>
             <td>No</td>
-            <td>Limited</td>
             <td>Yes</td>
           </tr>
           <tr>
@@ -188,14 +182,12 @@ export default function Page() {
             <td>No</td>
             <td>Yes</td>
             <td>No</td>
-            <td>No</td>
           </tr>
           <tr>
             <td>Aurora DSQL</td>
             <td>TCP (pg)</td>
             <td>Yes</td>
             <td>Yes</td>
-            <td>No</td>
             <td>No</td>
             <td>Yes</td>
           </tr>
@@ -207,10 +199,6 @@ export default function Page() {
         <li>
           <strong>You target Cloudflare Workers exclusively</strong>: D1
           (built-in) or Neon / PlanetScale / Turso over HTTP.
-        </li>
-        <li>
-          <strong>You want Postgres on Vercel</strong>: Neon, Supabase, or
-          PlanetScale Postgres through the Neon serverless driver.
         </li>
         <li>
           <strong>You want MySQL with database branching</strong>: PlanetScale.

@@ -412,7 +412,7 @@ for await (const page of pages) {
       <h2 id="runtimes">Runtimes</h2>
       <p>
         The SDK is built on the Fetch API and ships ESM + CJS, so it runs on
-        Node 18+, Cloudflare Workers, Vercel, Bun, and Deno without adapters.
+        Node 18+, Cloudflare Workers, Bun, and Deno without adapters.
         The webhook verifier is pure crypto using{" "}
         <code>crypto.subtle.importKey</code> / <code>sign</code> under the hood
         and works in every modern runtime.

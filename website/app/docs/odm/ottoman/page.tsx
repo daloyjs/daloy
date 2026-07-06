@@ -204,7 +204,7 @@ serve(app, { port: 3000 });`}
       <h2 id="runtime-constraints">Runtime constraints</h2>
       <p>
         Ottoman depends on the Couchbase Node.js SDK, so it is a Node.js-first
-        ODM. It is not a fit for Cloudflare Workers or Vercel. For
+        ODM. It is not a fit for Cloudflare Workers. For
         edge-compatible data access, use the{" "}
         <Link href="/docs/orm">SQL ORM overview</Link> and choose a compatible
         client.

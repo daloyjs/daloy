@@ -245,7 +245,7 @@ app.route({
       <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>jose</code> uses Web Crypto, so this setup runs on Node 18+, Bun,
-        Deno, Cloudflare Workers, Vercel, and AWS Lambda. No need to swap
+        Deno, Cloudflare Workers, and AWS Lambda. No need to swap
         libraries between environments.
       </p>
 

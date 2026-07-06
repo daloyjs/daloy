@@ -134,7 +134,7 @@ export default function Page() {
           tied to Node&apos;s <code>http</code> module. DaloyJS is built on
           web-standard <code>Request</code> / <code>Response</code> and ships{" "}
           <Link href="/docs/adapters">adapters</Link> for Node, Bun, Deno,
-          Cloudflare Workers, Vercel, and more.
+          Cloudflare Workers, and more.
         </li>
         <li>
           <strong>You want zero runtime dependencies.</strong> The Express
@@ -1414,7 +1414,7 @@ console.log(\`up on \${port}\`);
       <p>
         Deploying somewhere other than a long-running Node process? Swap the
         import for the matching <Link href="/docs/adapters">adapter</Link> (Bun,
-        Deno, Cloudflare Workers, Vercel, AWS Lambda, ...), the same{" "}
+        Deno, Cloudflare Workers, AWS Lambda, ...), the same{" "}
         <code>app</code> object runs on all of them. That portability is
         something Express simply cannot do, because it is bound to Node&apos;s{" "}
         <code>http</code> module.

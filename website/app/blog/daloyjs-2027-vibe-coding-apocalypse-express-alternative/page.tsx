@@ -805,7 +805,7 @@ export default function BlogPostPage() {
               <strong>Run the same app everywhere.</strong> Express is welded to
               Node&apos;s <code>http</code> module. DaloyJS is built on
               web-standard <code>Request</code> and <code>Response</code>, so the
-              same app object runs on Node, Bun, Deno, Workers, Vercel, and
+              same app object runs on Node, Bun, Deno, Workers, and
               Lambda. When your platform decision changes (it will), you swap an
               import, not a framework.
             </li>

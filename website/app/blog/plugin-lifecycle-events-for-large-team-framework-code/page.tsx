@@ -817,7 +817,7 @@ export default function BlogPostPage() {
               five-runtimes post
             </Link>{" "}
             for why the platform plugins above run identically on Node, Bun,
-            Workers, Vercel, and Lambda.
+            Workers, and Lambda.
           </p>
 
           <p>Devlin</p>

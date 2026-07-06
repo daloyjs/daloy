@@ -7,7 +7,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Use Neon serverless Postgres with DaloyJS",
   description:
-    "Connect a DaloyJS API to Neon's serverless Postgres using the @neondatabase/serverless HTTP and WebSocket driver. Works on Node, Bun, Deno, Cloudflare Workers, Vercel, and AWS Lambda.",
+    "Connect a DaloyJS API to Neon's serverless Postgres using the @neondatabase/serverless HTTP and WebSocket driver. Works on Node, Bun, Deno, Cloudflare Workers, and AWS Lambda.",
   path: "/docs/databases/neon",
   keywords: [
     "Neon DaloyJS",
