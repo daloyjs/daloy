@@ -50,8 +50,13 @@ database_id = "<id-from-create>"`}
       />
 
       <h2 id="2-type-the-binding">2. Type the binding</h2>
+      <p>
+        Use a regular <code>.ts</code> module (not a <code>.d.ts</code>, which{" "}
+        <code>skipLibCheck</code> would silently skip) so the import below
+        resolves and the shape stays type-checked:
+      </p>
       <CodeBlock
-        code={`// src/types/env.d.ts
+        code={`// src/types/env.ts
 export interface Env {
   DB: D1Database;
 }`}

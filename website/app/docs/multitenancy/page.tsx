@@ -368,10 +368,15 @@ await db.query("SET app.current_tenant = $1", [ctx.state.tenant]);
       <h2 id="typing-ctx-state-tenant">Typing <code>ctx.state.tenant</code></h2>
       <p>
         Augment <code>AppState</code> so the resolved tenant is strongly typed
-        in every handler and hook:
+        in every handler and hook. Put the <code>declare module</code> block in
+        a regular <code>.ts</code> module the compiler always checks (for
+        example the file where you register <code>tenancy()</code>), not in a
+        separate <code>.d.ts</code> file: declaration files are exempt from
+        type-checking when <code>skipLibCheck</code> is on (the scaffolded
+        default), so a mistake inside one fails silently.
       </p>
       <CodeBlock
-        code={`// src/types.d.ts
+        code={`// src/build-app.ts (same module where tenancy() is registered)
 declare module "@daloyjs/core" {
   interface AppState {
     tenant?: string;
