@@ -44,7 +44,7 @@ export default function Page() {
       <p>
         Everything is built on Web-standard <code>URL</code>, <code>btoa</code>{" "}
         / <code>atob</code>, and <code>JSON</code>, so it runs unchanged on
-        Node, Bun, Deno, Cloudflare Workers, and Vercel.
+        Node, Bun, Deno, and Cloudflare Workers.
       </p>
 
       <FlowDiagram

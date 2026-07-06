@@ -8,7 +8,7 @@ import { buildMetadata, CORE_PACKAGE_VERSION } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "API reference",
   description:
-    "Complete API reference for DaloyJS: App, routing, middleware, plugins, errors, security helpers, JWT/JWK, sessions, streaming, websockets, and runtime adapters, with TypeScript signatures.",
+    "Complete API reference for DaloyJS: App, routing, middleware, MCP, plugins, errors, security helpers, JWT/JWK, sessions, streaming, websockets, and runtime adapters, with TypeScript signatures.",
   path: "/docs/api-reference",
   keywords: [
     "DaloyJS API reference",
@@ -88,6 +88,7 @@ console.log(\`listening on http://localhost:\${port}\`);`}
 @daloyjs/core/client                // Typed in-process client + Hey API SDK glue
 @daloyjs/core/contract              // Contract-tests harness (assert OpenAPI parity)
 @daloyjs/core/docs                  // Scalar / Swagger UI / Redoc HTML + CSP helper
+@daloyjs/core/mcp                   // MCP Streamable HTTP tools, resources, prompts, and routes
 @daloyjs/core/streaming             // SSE + NDJSON helpers
 @daloyjs/core/websocket             // WebSocket route helper + frame primitives
 @daloyjs/core/multipart             // File-field + multipart object schema helpers
@@ -489,6 +490,8 @@ timing(headerName?: string): Hooks
 compression(opts?: CompressionOptions): Hooks
 bearerAuth(opts: BearerAuthOptions): Hooks
 basicAuth(opts: BasicAuthOptions): Hooks
+markAuthHook(hooks: Hooks): Hooks
+const AUTH_HOOK_MARKER: unique symbol  // stamped by built-ins and markAuthHook()
 csrf(opts?: CsrfOptions): Hooks
 fetchMetadata(opts?: FetchMetadataOptions): Hooks   // Sec-Fetch-Site/Mode/Dest enforcement
 requireScopes(scopes: string | string[]
@@ -861,6 +864,89 @@ interface ContractTestOptions {
 
 interface ContractReport { ok: boolean; checked: number; issues: ContractIssue[] }
 interface ContractIssue  { route: string; method: HttpMethod; code: string; message: string }`}
+      />
+
+      <h2 id="daloyjs-core-mcp">
+        <code>@daloyjs/core/mcp</code>
+      </h2>
+      <CodeBlock
+        code={`const MCP_PROTOCOL_VERSION = "2025-11-25";
+const MCP_PROTOCOL_VERSIONS: readonly string[];
+const MCP_DEFAULT_MAX_BODY_BYTES = 262144;
+
+createMcpHandler(options: McpHandlerOptions): McpHandler;
+mcpRoutes(path: PathString, handler: McpHandler, options?: McpRoutesOptions):
+  RouteDefinition<PathString, "GET" | "POST" | "OPTIONS">[];
+validateMcpInput(schema: McpJsonSchema, value: unknown): string[];
+class McpToolError extends Error {}
+
+type McpHandler = (request: Request) => Promise<Response>;
+type McpJsonValue = null | boolean | number | string | McpJsonValue[] | { [key: string]: McpJsonValue };
+type McpJsonObject = { [key: string]: McpJsonValue };
+type McpJsonSchema = McpJsonObject;
+type McpJsonRpcId = string | number | null;
+
+interface McpRoutesOptions {
+  public?: boolean;  // default false; opt out of the production auth boot guard
+}
+
+interface McpHandlerOptions {
+  serverInfo: McpServerInfo;
+  instructions?: string;
+  tools?: readonly McpTool[];
+  resources?: readonly McpResourceDefinition[];
+  resourceTemplates?: readonly McpResourceTemplateDefinition[];
+  prompts?: readonly McpPromptDefinition[];
+  allowedOrigins?: readonly string[];       // bare origins, plus optional "null"
+  protocolVersions?: readonly string[];     // default MCP_PROTOCOL_VERSIONS
+  preferredProtocolVersion?: string;        // default MCP_PROTOCOL_VERSION
+  maxBodyBytes?: number;                    // default MCP_DEFAULT_MAX_BODY_BYTES
+  headers?: Record<string, string>;
+  exposeInternalErrors?: boolean;           // default NODE_ENV !== "production"
+}
+
+interface McpServerInfo {
+  name: string;
+  version: string;
+  title?: string;
+  description?: string;
+  websiteUrl?: string;
+  icons?: McpIcon[];
+}
+
+interface McpTool<TArgs extends Record<string, unknown> = Record<string, unknown>> {
+  name: string;
+  description: string;
+  title?: string;
+  inputSchema: McpJsonSchema;
+  outputSchema?: McpJsonSchema;
+  annotations?: McpToolAnnotations;
+  icons?: McpIcon[];
+  handler: McpToolHandler<TArgs>;
+}
+
+type McpToolHandler<TArgs extends Record<string, unknown> = Record<string, unknown>> =
+  (args: TArgs, ctx: McpRequestContext) =>
+    string | McpToolResult | Promise<string | McpToolResult>;
+
+interface McpToolResult {
+  content?: McpContent[];
+  structuredContent?: McpJsonObject;
+  isError?: boolean;
+}
+
+interface McpRequestContext {
+  request: Request;
+  protocolVersion: string;
+  id: McpJsonRpcId;
+  method: string;
+}
+
+// tools/call arguments are validated against inputSchema before the handler runs.
+// Schema violations return JSON-RPC -32602. Unsupported keywords such as
+// pattern, format, $ref, anyOf, oneOf, and allOf are advertised but not enforced.
+// In production secureDefaults apps, mcpRoutes() must be covered by an auth hook
+// unless mounted with mcpRoutes(path, handler, { public: true }).`}
       />
 
       <h2 id="daloyjs-core-docs">

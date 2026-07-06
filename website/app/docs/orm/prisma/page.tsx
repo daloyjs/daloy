@@ -234,7 +234,7 @@ serve(app, { port: 3000 });`}
 
       <h2 id="edge-runtimes">Edge runtimes</h2>
       <p>
-        For Cloudflare Workers and Vercel, set the generated client runtime for
+        For Cloudflare Workers, set the generated client runtime for
         your target and use the appropriate{" "}
         <a
           href="https://www.prisma.io/docs/orm/overview/databases/database-drivers"
@@ -250,7 +250,7 @@ serve(app, { port: 3000 });`}
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
-  runtime  = "vercel" // use "workerd" for Cloudflare Workers
+  runtime  = "deno" // use "workerd" for Cloudflare Workers
 }
 
 // src/db/prisma-edge.ts

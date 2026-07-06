@@ -58,12 +58,6 @@ const EDGE: Target[] = [
       "Modules-format Worker. wrangler.jsonc, nodejs_compat, and bindings for KV, R2, D1, DO, Queues, Hyperdrive.",
   },
   {
-    name: "Vercel",
-    href: "/docs/adapters/vercel" as Route,
-    blurb:
-      "Deploy a standalone REST API as a Vercel Node Function or Edge Function.",
-  },
-  {
     name: "Netlify",
     href: "/docs/adapters/netlify" as Route,
     blurb:

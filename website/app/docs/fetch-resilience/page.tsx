@@ -252,7 +252,7 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
         <li>
           <strong>Zero runtime dependencies.</strong> Built entirely on
           Web-standard <code>AbortController</code> / <code>fetch</code>, so it
-          runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel
+          runs unchanged on Node, Bun, Deno, and Cloudflare Workers
           Edge.
         </li>
       </ul>

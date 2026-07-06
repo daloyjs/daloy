@@ -40,7 +40,7 @@ export default function Page() {
       <p>
         It is <strong>built-in and dependency-free</strong>, built on Web Crypto
         and the Web-standard <code>Request</code>/<code>Response</code>, so it
-        runs unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel Edge.
+        runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
         The behavior mirrors the IETF <em>Idempotency-Key HTTP Header Field</em>{" "}
         draft and the conventions used by major payment processors.
       </p>

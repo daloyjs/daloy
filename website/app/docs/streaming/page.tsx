@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Streaming responses (SSE & NDJSON)",
   description:
-    "Build backpressure-safe Server-Sent Events and newline-delimited JSON streams in DaloyJS. Honor AbortSignal, release iterators on disconnect, and reuse the same handler across Node, Bun, Deno, Cloudflare Workers, and Vercel.",
+    "Build backpressure-safe Server-Sent Events and newline-delimited JSON streams in DaloyJS. Honor AbortSignal, release iterators on disconnect, and reuse the same handler across Node, Bun, Deno, and Cloudflare Workers.",
   path: "/docs/streaming",
   keywords: [
     "Server-Sent Events",
@@ -233,7 +233,7 @@ app.route({
       <p>
         The helpers only depend on web-standard <code>ReadableStream</code> and{" "}
         <code>TextEncoder</code>, so the same handler works identically on Node,
-        Bun, Deno, Cloudflare Workers, and Vercel. The DaloyJS response
+        Bun, Deno, and Cloudflare Workers. The DaloyJS response
         serializer recognizes a <code>ReadableStream</code> body when you set an
         explicit non-JSON <code>content-type</code> and forwards it to the
         runtime without buffering.

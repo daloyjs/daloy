@@ -9,7 +9,7 @@ import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 const POST = {
   slug: "same-app-five-runtimes-verified",
   title:
-    "The Same App on Node, Bun, Deno, Cloudflare Workers, and Vercel, Verified",
+    "The Same App on Node, Bun, Deno, and Cloudflare Workers, Verified",
   description:
     "One Bookstore app, five entry files, five deployments. The Node serve(), the Bun handle.url, the Deno onListen, the Workers ctx.waitUntil, and Vercel's toWebHandler / toRouteHandlers / toFetchHandler, with receipts.",
   date: "2026-05-22",
@@ -779,7 +779,7 @@ export default function BlogPostPage() {
 
           <p>
             Want to skip ahead and try it? <code>pnpm create daloy@latest</code>{" "}
-            ships templates for Node, Bun, Deno, Cloudflare Workers, and Vercel
+            ships templates for Node, Bun, Deno, and Cloudflare Workers
             Edge out of the box. Pick one, deploy it, then point a different
             adapter at the same <code>src/app.ts</code> the next morning. The
             scaffolding has done the boring parts for you.

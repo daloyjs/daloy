@@ -141,7 +141,7 @@ app.use(requestDecompression({
       <h2 id="supported-encodings">Supported encodings</h2>
       <p>
         Built on the web-standard <code>DecompressionStream</code>, so the same
-        line works on Node, Bun, Deno, Cloudflare Workers, and Vercel. Only{" "}
+        line works on Node, Bun, Deno, and Cloudflare Workers. Only{" "}
         <code>gzip</code> and <code>deflate</code> are accepted (the encodings{" "}
         <code>DecompressionStream</code> implements consistently across
         runtimes).

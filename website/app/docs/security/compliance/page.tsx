@@ -322,7 +322,7 @@ export default function Page() {
         <li>
           <strong>A.5.23 Information security for use of cloud services</strong>
           : runtime-parity audits keep behavior identical across Node,
-          Bun, Deno, Cloudflare Workers, and Vercel so the cloud provider is a
+          Bun, Deno, and Cloudflare Workers so the cloud provider is a
           deployment choice, not a security trade-off.
         </li>
         <li>

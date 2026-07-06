@@ -28,7 +28,7 @@ export default function Page() {
           Drizzle ORM
         </a>{" "}
         is a lightweight, TypeScript-native ORM with a SQL-like API. It runs
-        everywhere DaloyJS does, including Cloudflare Workers and Vercel, and
+        everywhere DaloyJS does, including Cloudflare Workers, and
         infers result types directly from your schema.
       </p>
 

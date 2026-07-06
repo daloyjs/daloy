@@ -7,7 +7,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Use Turso (libSQL) with DaloyJS",
   description:
-    "Connect a DaloyJS API to Turso, a distributed SQLite-compatible database, using @libsql/client. Works on Node.js, Bun, Deno, Cloudflare Workers, and Vercel over HTTP.",
+    "Connect a DaloyJS API to Turso, a distributed SQLite-compatible database, using @libsql/client. Works on Node.js, Bun, Deno, and Cloudflare Workers over HTTP.",
   path: "/docs/databases/turso",
   keywords: [
     "Turso DaloyJS",
@@ -38,7 +38,7 @@ export default function Page() {
         </a>{" "}
         (a fork of SQLite). The <code>@libsql/client</code> driver speaks HTTP
         and WebSocket, so the same DaloyJS app works on Node, Bun, Deno,
-        Cloudflare Workers, and Vercel.
+        and Cloudflare Workers.
       </p>
 
       <BranchDiagram

@@ -38,7 +38,7 @@ export default function Page() {
 
       <LayerStack
         title="One HTTP driver, every runtime"
-        caption="Because @planetscale/database speaks plain fetch instead of a raw TCP socket, the same data-access code runs on every runtime DaloyJS targets, including Cloudflare Workers and Vercel."
+        caption="Because @planetscale/database speaks plain fetch instead of a raw TCP socket, the same data-access code runs on every runtime DaloyJS targets, including Cloudflare Workers."
         layers={[
           {
             title: "DaloyJS route",
@@ -49,7 +49,7 @@ export default function Page() {
           {
             title: "@planetscale/database",
             detail: "fetch-based HTTP driver",
-            items: ["Node", "Bun", "Deno", "Workers", "Vercel"],
+            items: ["Node", "Bun", "Deno", "Workers"],
           },
           {
             title: "PlanetScale",

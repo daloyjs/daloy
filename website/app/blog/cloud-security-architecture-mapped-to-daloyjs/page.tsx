@@ -409,7 +409,7 @@ export default function BlogPostPage() {
 
           <PrincipleCard
             principle="A single pane of glass for security posture"
-            framework="Structured per-request JSON logs with correlated request IDs, automatic redaction of Authorization / Cookie / Set-Cookie / X-API-Key, Server-Timing, and OpenTelemetry-shaped spans, same shape on Node, Bun, Workers, and Vercel."
+            framework="Structured per-request JSON logs with correlated request IDs, automatic redaction of Authorization / Cookie / Set-Cookie / X-API-Key, Server-Timing, and OpenTelemetry-shaped spans, same shape on Node, Bun, and Workers."
             platform="Ship the logs into your SIEM (CloudWatch / Datadog / Splunk / Loki). Daloy doesn't run the dashboard; it makes sure the events are useful when they arrive."
           />
 

@@ -42,7 +42,7 @@ export default function Page() {
       <p>
         Everything is built on Web-standard primitives (plus optional{" "}
         <code>process.*</code> gauges guarded for non-Node runtimes), so it runs
-        unchanged on Node, Bun, Deno, Cloudflare Workers, and Vercel.
+        unchanged on Node, Bun, Deno, and Cloudflare Workers.
       </p>
 
       <FlowDiagram

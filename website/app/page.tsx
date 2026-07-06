@@ -619,7 +619,7 @@ export default function HomePage() {
             pnpm, generated CI that blocks install scripts, pinned GitHub
             Actions, Dependabot, CODEOWNERS, and lockfile source verification.
             Then keep the contract as the app grows, the same app runs on Node,
-            Bun, Deno, Cloudflare Workers, and Vercel.
+            Bun, Deno, and Cloudflare Workers.
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Link

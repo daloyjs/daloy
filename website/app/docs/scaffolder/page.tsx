@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Scaffold a DaloyJS project",
   description:
-    "Use create-daloy to scaffold a production-ready DaloyJS project with templates for Node.js, Bun, Deno, Cloudflare Workers, and Vercel, plus optional hardened GitHub CI.",
+    "Use create-daloy to scaffold a production-ready DaloyJS project with templates for Node.js, Bun, Deno, and Cloudflare Workers, plus optional hardened GitHub CI.",
   path: "/docs/scaffolder",
   keywords: [
     "create-daloy",

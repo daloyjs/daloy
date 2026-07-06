@@ -613,7 +613,7 @@ export default function BlogPostPage() {
 
           <p>
             The nonce is generated using WebCrypto on every request, so the same
-            code works on Node, Bun, Deno, Workers, and Vercel without a
+            code works on Node, Bun, Deno, and Workers without a
             polyfill. The first time I turned this on in a real app I found four
             scripts I didn&apos;t know were inline. That is what CSP is{" "}
             <em>for</em>.

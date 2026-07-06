@@ -36,7 +36,7 @@ export default function Page() {
           <code>@supabase/supabase-js</code>
         </a>{" "}
         client is fetch-based, so it runs on every runtime DaloyJS supports,
-        Node.js, Bun, Deno, Cloudflare Workers, and Vercel.
+        Node.js, Bun, Deno, and Cloudflare Workers.
       </p>
       <p>
         Treat Supabase as a platform client, not a traditional ORM: you are

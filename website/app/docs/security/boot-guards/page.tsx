@@ -290,7 +290,7 @@ app.use(
 app.route({
   method: "GET",
   path: "/me",
-  auth: { scheme: "bearerAuth" }, // advertised as protected
+  auth: { scheme: "bearer" }, // advertised as protected
   responses: { 200: { description: "ok" } },
   handler: () => ({ status: 200, body: {} }),
 });`}

@@ -40,7 +40,7 @@ export default function Page() {
         Redis-shaped stores plug in directly), and per-request mutations are
         exposed on <code>ctx.state.session</code>. There are no adapter-specific
         code paths - the same middleware runs on Node, Bun, Deno, Cloudflare
-        Workers, and Vercel because it only uses <code>WebCrypto</code> and
+        and Workers because it only uses <code>WebCrypto</code> and
         standard <code>Set-Cookie</code> headers.
       </p>
 

@@ -10,7 +10,7 @@ const POST = {
   slug: "introducing-daloyjs",
   title: "Introducing DaloyJS: One Route, Many Runtimes, Zero Ceremony",
   description:
-    "The launch post. One app.route({...}) becomes your validation, types, OpenAPI, typed client, and contract tests, and the same app runs on Node, Bun, Deno, Workers, and Vercel.",
+    "The launch post. One app.route({...}) becomes your validation, types, OpenAPI, typed client, and contract tests, and the same app runs on Node, Bun, Deno, and Workers.",
   date: "2026-05-19",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
@@ -306,7 +306,7 @@ export default function BlogPostPage() {
             for <em>validation</em>, <em>TypeScript types</em>,<em> OpenAPI</em>
             , the <em>typed client</em>, and your <em>contract tests</em>. And
             that same <code>app</code> runs on Node, Bun, Deno, Cloudflare
-            Workers, and Vercel, the same file, no rewrites, no &quot;works on
+            and Workers, the same file, no rewrites, no &quot;works on
             my Node version&quot; magic.
           </p>
 

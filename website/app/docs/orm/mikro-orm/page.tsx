@@ -340,7 +340,7 @@ try {
         <li>
           MikroORM is a Node.js adapter default for Daloy apps. Edge runtimes
           require precompiled MikroORM functions plus a compatible driver, so
-          most Cloudflare Workers and Vercel apps should start with{" "}
+          most Cloudflare Workers apps should start with{" "}
           <Link href="/docs/orm/drizzle">Drizzle</Link> or{" "}
           <Link href="/docs/orm/supabase">Supabase</Link> instead.
         </li>

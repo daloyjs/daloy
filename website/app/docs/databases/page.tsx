@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Database hosting & serverless data providers",
   description:
-    "Pick the right managed database host or embedded analytical engine for a DaloyJS API: Neon, PlanetScale, Supabase, Turso, DuckDB, Cloudflare D1, and AWS Aurora DSQL. Compares runtime support and which providers work on Cloudflare Workers and Vercel.",
+    "Pick the right managed database host or embedded analytical engine for a DaloyJS API: Neon, PlanetScale, Supabase, Turso, DuckDB, Cloudflare D1, and AWS Aurora DSQL. Compares runtime support and which providers work on Cloudflare Workers.",
   path: "/docs/databases",
   keywords: [
     "DaloyJS database hosting",
@@ -45,7 +45,7 @@ export default function Page() {
 
       <h2 id="why-this-matters-on-edge-runtimes">Why this matters on edge runtimes</h2>
       <p>
-        Cloudflare Workers and Vercel don&apos;t expose raw TCP sockets, so the
+        Cloudflare Workers don&apos;t expose raw TCP sockets, so the
         classic <code>pg</code> or <code>mysql2</code> drivers will not connect
         directly. The providers below solve that by offering an{" "}
         <strong>HTTP / WebSocket driver</strong>, an{" "}
@@ -60,7 +60,7 @@ export default function Page() {
           {
             title: "DaloyJS app on a runtime",
             detail: "Same route code on any adapter",
-            items: ["Node", "Workers", "Vercel", "Lambda"],
+            items: ["Node", "Workers", "Lambda"],
             tone: "accent",
           },
           {

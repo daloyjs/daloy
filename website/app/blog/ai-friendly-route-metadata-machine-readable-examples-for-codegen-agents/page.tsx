@@ -335,7 +335,7 @@ const SCOPE_NOTES = `# What 'meta' deliberately is, and is not.
 #   - Free-form on the 'extensions' lane. Keys without an 'x-' prefix
 #     are auto-prefixed for OpenAPI spec compliance.
 #   - Surface-stable across runtimes. The same code emits the same
-#     OpenAPI on Node, Bun, Deno, Workers, and Vercel.
+#     OpenAPI on Node, Bun, Deno, and Workers.
 #
 # It IS NOT:
 #   - A runtime mock. Examples are validated at build time and

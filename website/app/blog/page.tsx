@@ -229,7 +229,7 @@ const POSTS = [
     title:
       "Observability Without Lock-In: Structured Logs and OpenTelemetry-Compatible Tracing",
     description:
-      "How DaloyJS gives you per-request structured logs, correlated request IDs, Server-Timing, and OpenTelemetry-shaped spans \u2014 without taking a hard dependency on @opentelemetry/api. The result is a single observability story that runs identically on Node, Bun, Workers, and Vercel, with any tracer you bring.",
+      "How DaloyJS gives you per-request structured logs, correlated request IDs, Server-Timing, and OpenTelemetry-shaped spans \u2014 without taking a hard dependency on @opentelemetry/api. The result is a single observability story that runs identically on Node, Bun, and Workers, with any tracer you bring.",
     date: "2026-06-03",
     readingTime: "13 min read",
     author: "Devlin Duldulao",
@@ -341,7 +341,7 @@ const POSTS = [
   {
     slug: "same-app-five-runtimes-verified",
     title:
-      "The Same App on Node, Bun, Deno, Cloudflare Workers, and Vercel, Verified",
+      "The Same App on Node, Bun, Deno, and Cloudflare Workers, Verified",
     description:
       "One Bookstore app, five entry files, five deployments, Node serve(), Bun handle.url, Deno onListen, Workers ctx.waitUntil, and Vercel's three handler shapes. With receipts.",
     date: "2026-05-22",
@@ -372,7 +372,7 @@ const POSTS = [
     slug: "introducing-daloyjs",
     title: "Introducing DaloyJS: One Route, Many Runtimes, Zero Ceremony",
     description:
-      "The launch post. One app.route({...}) becomes your validation, types, OpenAPI, typed client, and contract tests, and the same app runs on Node, Bun, Deno, Workers, and Vercel.",
+      "The launch post. One app.route({...}) becomes your validation, types, OpenAPI, typed client, and contract tests, and the same app runs on Node, Bun, Deno, and Workers.",
     date: "2026-05-19",
     readingTime: "11 min read",
     author: "Devlin Duldulao",
