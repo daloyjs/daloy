@@ -14,7 +14,7 @@
  */
 
 import { serve } from "../src/adapters/node.ts";
-import { App } from "../src/index.js";
+import { App } from "../src/index.ts";
 import { printStartupBanner, type StartupBannerLink } from "../src/banner.ts";
 
 const app = new App({

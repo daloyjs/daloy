@@ -19,7 +19,7 @@ curl -s http://localhost:3000/books/1/checkout | jq        # works
 curl -s -X POST http://localhost:3000/books/1/checkout | jq # 422, detail explains why
 
 # Production mode — expected 4xx detail remains client-facing
-NODE_ENV=production tsx src/challenges/8-hour/exercise-3.ts &
+NODE_ENV=production node src/challenges/8-hour/exercise-3.ts &
 curl -s -X POST http://localhost:3000/books/1/checkout | jq
 # {"type":"https://daloyjs.dev/errors/already-checked-out","title":"Already checked out","status":422,"detail":"Book 1 is already checked out"}
 

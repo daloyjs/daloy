@@ -25,8 +25,8 @@ Do not collapse these layers into a single file when adding new exercises. Senio
 | Runtime     | Node.js            | >= 24.0.0  |
 | Language    | TypeScript         | ^6.0.3     |
 | Validator   | Zod                | ^4         |
-| Codegen     | @hey-api/openapi-ts | ^0.97.1   |
-| Dev runner  | tsx                | ^4.22.3    |
+| Codegen     | @hey-api/openapi-ts | ^0.99.0   |
+| Dev runner  | node --watch (native type stripping) | n/a |
 | Test runner | node:test (built-in) | n/a      |
 
 ## Setup Commands
@@ -34,8 +34,8 @@ Do not collapse these layers into a single file when adding new exercises. Senio
 ```bash
 pnpm install              # install workshop deps
 pnpm create daloy@latest my-api --template node-basic --yes  # compare against the latest scaffold
-pnpm dev:4:N              # run 4-hour exercise N with tsx --watch
-pnpm dev:8:N              # run 8-hour exercise N with tsx --watch
+pnpm dev:4:N              # run 4-hour exercise N with node --watch
+pnpm dev:8:N              # run 8-hour exercise N with node --watch
 pnpm dev:sol:4:N          # run 4-hour reference solution N
 pnpm dev:sol:8:N          # run 8-hour reference solution N
 pnpm typecheck            # tsc --noEmit
@@ -133,7 +133,7 @@ Keep the TODO block to **three to five high-level bullets** — never the full s
 ## Quality Gates
 
 - `pnpm typecheck` must pass on every exercise and solution.
-- Every starter file must boot under `tsx --watch` and respond with at least one 2xx route — even before the attendee makes any edits — so they can confirm the dev loop works before fighting the actual exercise.
+- Every starter file must boot under `node --watch` and respond with at least one 2xx route — even before the attendee makes any edits — so they can confirm the dev loop works before fighting the actual exercise.
 - Every solution file must pass the contract test in `tests/` if one exists for that exercise.
 
 ## What This Workshop Is NOT

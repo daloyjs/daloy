@@ -34,7 +34,7 @@
  */
 
 import { serve } from "../src/adapters/node.ts";
-import { App, rateLimit, tenancy, tenantFromSubdomain, tenantScope } from "../src/index.js";
+import { App, rateLimit, tenancy, tenantFromSubdomain, tenantScope } from "../src/index.ts";
 import { z } from "zod";
 
 // Augment AppState so ctx.state.tenant is typed in handlers.

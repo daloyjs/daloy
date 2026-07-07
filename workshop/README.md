@@ -25,7 +25,7 @@ Want a fresh generated app beside the workshop for comparison? Use the same scaf
 pnpm create daloy@latest my-api --template node-basic --yes
 ```
 
-Each exercise is a **self-contained TypeScript file** that boots its own DaloyJS app on `http://localhost:3000`. You run, edit, hit save, and `tsx --watch` hot-reloads.
+Each exercise is a **self-contained TypeScript file** that boots its own DaloyJS app on `http://localhost:3000`. You run, edit, hit save, and `node --watch` hot-reloads (Node.js runs TypeScript natively via type stripping).
 
 ## Who This Is For
 
@@ -76,14 +76,14 @@ src/challenges/
     └── 8-hour-homework.md              ← full capstone practice
 ```
 
-Every exercise file is runnable on its own with `tsx --watch` — there is no central app, no router config to thread through, and no extension to install. Edit, save, `curl`, repeat.
+Every exercise file is runnable on its own with `node --watch` — there is no central app, no router config to thread through, and no extension to install. Edit, save, `curl`, repeat.
 
 ## Recommended Workflow
 
 1. Pick an exercise from [WORKSHOP_SCHEDULE.md](./WORKSHOP_SCHEDULE.md).
 2. Read the matching [`instructions/exercise-N.md`](./src/challenges/4-hour/instructions) — explains _what_ to build and _why_.
 3. Run it: `pnpm dev:4:N` (4-hour) or `pnpm dev:8:N` (8-hour). The server starts on `http://localhost:3000` with `/docs` and `/openapi.json` auto-mounted.
-4. Edit the matching `src/challenges/<track>/exercise-N.ts` file. `tsx --watch` restarts the server on save.
+4. Edit the matching `src/challenges/<track>/exercise-N.ts` file. `node --watch` restarts the server on save.
 5. Stuck on the _order_ of edits? Open [`coding-steps/exercise-N-steps.md`](./src/challenges/4-hour/coding-steps) — it lists every delete / edit / add in build order with the reasoning behind each step.
 6. Still stuck? Open `solutions/exercise-N-end.ts` and diff against your file.
 7. Done? Move on. After the workshop, do the **Homework** capstone for extra practice.
@@ -102,9 +102,9 @@ The `coding-steps/` files include mental models, before → after snippets, a co
 
 | Command                 | Purpose                                                              |
 | ----------------------- | -------------------------------------------------------------------- |
-| `pnpm install`          | Install dependencies (`@daloyjs/core@^1.0.0-rc.1`, `zod`, `tsx`)    |
-| `pnpm dev:4:N`          | Run 4-hour exercise N with `tsx --watch` on port 3000                |
-| `pnpm dev:8:N`          | Run 8-hour exercise N with `tsx --watch` on port 3000                |
+| `pnpm install`          | Install dependencies (`@daloyjs/core@^1.0.0-rc.1`, `zod`)           |
+| `pnpm dev:4:N`          | Run 4-hour exercise N with `node --watch` on port 3000               |
+| `pnpm dev:8:N`          | Run 8-hour exercise N with `node --watch` on port 3000               |
 | `pnpm dev:sol:4:N`      | Run the 4-hour reference solution for exercise N                     |
 | `pnpm dev:sol:8:N`      | Run the 8-hour reference solution for exercise N                     |
 | `pnpm typecheck`        | TypeScript check across all exercises                                |

@@ -49,7 +49,7 @@ curl -s -X POST http://localhost:3000/books/1/checkout | jq
 # {"type":"https://daloyjs.dev/errors/already-checked-out","title":"Already checked out","status":422,"detail":"Book 1 is already checked out","requestId":"…"}
 
 # Expected 4xx detail remains client-readable, including in production
-NODE_ENV=production tsx src/challenges/8-hour/exercise-3.ts &
+NODE_ENV=production node src/challenges/8-hour/exercise-3.ts &
 curl -s -X POST http://localhost:3000/books/1/checkout | jq
 # {"type":"https://daloyjs.dev/errors/already-checked-out","title":"Already checked out","status":422,"detail":"Book 1 is already checked out","requestId":"…"}
 

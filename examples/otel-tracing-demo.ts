@@ -40,7 +40,7 @@ import {
   type TracingSpan,
   type TracingStartSpanOptions,
   type TracingTracer,
-} from "../src/index.js";
+} from "../src/index.ts";
 import { z } from "zod";
 
 const SERVICE_NAME = "daloy-otel-demo";

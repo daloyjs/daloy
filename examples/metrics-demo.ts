@@ -21,7 +21,7 @@
  */
 
 import { serve } from "../src/adapters/node.ts";
-import { App, MetricsRegistry } from "../src/index.js";
+import { App, MetricsRegistry } from "../src/index.ts";
 import { z } from "zod";
 
 const registry = new MetricsRegistry({ prefix: "demo_" });

@@ -88,7 +88,7 @@ app.route({
 
 **Why last:** `serve()` blocks until the process exits, so it must be the last call. The starter file already has `serve(app, { port: 3000 })`. No edit needed.
 
-Save the file. `tsx --watch` should restart and print:
+Save the file. `node --watch` should restart and print:
 
 ```
 → http://localhost:3000/health

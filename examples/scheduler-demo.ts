@@ -11,7 +11,7 @@
  * Run:  node --import tsx examples/scheduler-demo.ts
  */
 
-import { App, nextCronRun, parseCron } from "../src/index.js";
+import { App, nextCronRun, parseCron } from "../src/index.ts";
 
 const app = new App({ env: "development" });
 
