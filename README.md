@@ -28,6 +28,12 @@ Disclosure](https://img.shields.io/badge/Security-Responsible%20Disclosure-yello
 
 DaloyJS is maintained in the GitHub organization at <https://github.com/daloyjs>; the canonical framework repository is <https://github.com/daloyjs/daloy>.
 
+## Partners
+
+<a href="https://snyk.io">
+  <img src="https://github.com/user-attachments/assets/da58db43-67cc-45d4-ade5-bdaa7b041465" alt="Snyk's Secure Developer Program" width="160">
+</a>
+
 ---
 
 ## Built for the vibe-coding era
