@@ -13,7 +13,7 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
-## [Unreleased]
+## [1.0.0-rc.2] - 2026-07-07
 
 ### Changed
 
@@ -1835,7 +1835,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.2...HEAD
+[1.0.0-rc.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.0...v1.0.0-rc.1
 [1.0.0-rc.0]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.7...v1.0.0-rc.0
 [1.0.0-beta.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.6...v1.0.0-beta.7
