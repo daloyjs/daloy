@@ -232,8 +232,7 @@ app.route({
         The <code>postmark</code> SDK currently uses <code>axios</code> under
         the hood, so it targets Node and Node-compatible runtimes (Bun,
         Deno&apos;s Node-compat, AWS Lambda). For{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link> or{" "}
-        <Link href="/docs/adapters">Vercel</Link>, call the REST endpoint
+        <Link href="/docs/adapters">Cloudflare Workers</Link>, call the REST endpoint
         directly with <code>fetch</code>:
         <code>POST https://api.postmarkapp.com/email</code> with the header{" "}
         <code>X-Postmark-Server-Token</code>.

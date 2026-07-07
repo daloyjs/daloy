@@ -137,7 +137,7 @@ if (r.status === 200) {
 
       <CodeBlock
         language="bash"
-        code={`pnpm add -D @hey-api/openapi-ts prettier tsx`}
+        code={`pnpm add -D @hey-api/openapi-ts prettier`}
       />
 
       <CodeBlock
@@ -155,7 +155,7 @@ export default defineConfig({
         language="json"
         code={`// package.json
 "scripts": {
-  "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
+  "gen:openapi": "node scripts/dump-openapi.ts",
   "gen:client":  "openapi-ts",
   "gen":         "pnpm gen:openapi && pnpm gen:client"
 }`}

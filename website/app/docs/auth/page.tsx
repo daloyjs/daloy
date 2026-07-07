@@ -120,7 +120,6 @@ export default function Page() {
             <th>Provider</th>
             <th>Node / Bun / Deno</th>
             <th>Cloudflare Workers</th>
-            <th>Vercel</th>
             <th>AWS Lambda</th>
           </tr>
         </thead>
@@ -132,13 +131,11 @@ export default function Page() {
             <td>Yes</td>
             <td>Yes (Web Crypto)</td>
             <td>Yes</td>
-            <td>Yes</td>
           </tr>
           <tr>
             <td>
               Entra ID (<code>jose</code>)
             </td>
-            <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
@@ -150,7 +147,6 @@ export default function Page() {
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
-            <td>Yes</td>
           </tr>
           <tr>
             <td>
@@ -158,14 +154,12 @@ export default function Page() {
             </td>
             <td>Yes</td>
             <td>No (Node-only)</td>
-            <td>No</td>
             <td>Yes</td>
           </tr>
           <tr>
             <td>
               Clerk (<code>@clerk/backend</code>)
             </td>
-            <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
@@ -176,7 +170,6 @@ export default function Page() {
             </td>
             <td>Yes (Node-style)</td>
             <td>No</td>
-            <td>Node functions only</td>
             <td>Yes</td>
           </tr>
           <tr>
@@ -185,7 +178,6 @@ export default function Page() {
             </td>
             <td>Yes</td>
             <td>Depends on database adapter</td>
-            <td>Yes</td>
             <td>Yes</td>
           </tr>
         </tbody>

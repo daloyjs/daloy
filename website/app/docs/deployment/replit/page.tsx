@@ -133,7 +133,7 @@ serve(app, {
         language="json"
         code={`{
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "node --watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js"
   }

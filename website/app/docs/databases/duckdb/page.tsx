@@ -191,20 +191,6 @@ app.route({
             <td>Workers cannot load the native Node package.</td>
           </tr>
           <tr>
-            <td>Vercel</td>
-            <td>Limited</td>
-            <td>
-              Node functions may work for in-memory or read-only analytical
-              data. Edge functions cannot load native Node binaries, and local
-              disk is not durable.
-            </td>
-          </tr>
-          <tr>
-            <td>Cloudflare Workers</td>
-            <td>No</td>
-            <td>Edge runtimes cannot load the native Node package.</td>
-          </tr>
-          <tr>
             <td>AWS Lambda / containers</td>
             <td>Yes</td>
             <td>

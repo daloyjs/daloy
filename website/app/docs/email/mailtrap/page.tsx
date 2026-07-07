@@ -206,8 +206,7 @@ app.route({
       <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>mailtrap</code> SDK targets Node (uses Node&apos;s HTTPS
-        module). For <Link href="/docs/adapters">Cloudflare Workers</Link> or{" "}
-        <Link href="/docs/adapters">Vercel</Link>, call the REST API directly
+        module). For <Link href="/docs/adapters">Cloudflare Workers</Link>, call the REST API directly
         with <code>fetch</code>:{" "}
         <code>POST https://send.api.mailtrap.io/api/send</code> (production) or{" "}
         <code>

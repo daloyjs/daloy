@@ -35,8 +35,7 @@ export default function Page() {
       </p>
       <CodeBlock
         language="bash"
-        code={`pnpm add @daloyjs/core zod
-pnpm add -D tsx`}
+        code={`pnpm add @daloyjs/core zod`}
       />
       <CodeBlock
         code={`// index.ts
@@ -61,8 +60,8 @@ const { port } = serve(app);                  // NodeServerOptions.port defaults
 console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
-        Run it with <code>node --import tsx index.ts</code> (supported Node
-        versions can also run <code>node index.ts</code> directly via type stripping). Every
+        Run it with <code>node index.ts</code> — Node.js (22.18+) strips
+        TypeScript types natively, no loader required. Every
         response already carries the secure-by-default headers (
         <code>secureHeaders</code>) and an <code>x-request-id</code> (
         <code>requestId</code>); errors serialize to RFC 9457{" "}

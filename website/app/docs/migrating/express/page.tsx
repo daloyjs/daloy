@@ -316,7 +316,7 @@ pnpm create daloy@latest my-api
 
 # or add to an existing repo (incremental migration)
 pnpm add @daloyjs/core zod
-pnpm add -D typescript tsx @types/node`}
+pnpm add -D typescript @types/node`}
       />
       <p>
         See <Link href="/docs/installation">Installation</Link> for the full

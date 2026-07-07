@@ -296,7 +296,7 @@ console.log(\`wrote \${out}\`);`}
         language="json"
         code={`// package.json
 "scripts": {
-  "gen:openapi": "node --import tsx scripts/dump-openapi.ts"
+  "gen:openapi": "node scripts/dump-openapi.ts"
 }`}
       />
 

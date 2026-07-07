@@ -125,10 +125,11 @@ export function buildApp() {
         <code>src/app.ts</code>, <code>src/app.js</code>,{" "}
         <code>src/build-app.ts</code>, <code>src/build-app.js</code>,{" "}
         <code>app.ts</code>, <code>app.js</code>, <code>build-app.ts</code>, and{" "}
-        <code>build-app.js</code>. TypeScript entry files are loaded via{" "}
-        <code>tsx</code>. <code>create-daloy</code> templates already include{" "}
-        <code>tsx</code>; in other projects install it with{" "}
-        <code>pnpm add -D tsx</code>.
+        <code>build-app.js</code>. TypeScript entry files load directly —
+        Node.js (22.18+) strips types natively. If the native load fails (older
+        Node, non-erasable syntax such as enums, or extensionless relative
+        imports), the CLI falls back to <code>tsx</code> when it is installed
+        (<code>pnpm add -D tsx</code>).
       </p>
       <p>
         Point <code>inspect</code>, <code>doctor</code>, and <code>diff</code>{" "}
@@ -221,9 +222,9 @@ pnpm exec daloy dev ./src/server.ts`}
       </p>
       <ul>
         <li>
-          <strong>Node</strong>:{" "}
-          <code>node --import tsx --watch &lt;entry&gt;</code> (install{" "}
-          <code>tsx</code> as a dev dependency for TypeScript entries).
+          <strong>Node</strong>: <code>node --watch &lt;entry&gt;</code>{" "}
+          (Node.js 22.18+ runs TypeScript entries natively via built-in type
+          stripping — no loader needed).
         </li>
         <li>
           <strong>Bun</strong>: <code>bun --hot &lt;entry&gt;</code>.

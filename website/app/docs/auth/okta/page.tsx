@@ -235,8 +235,7 @@ app.route({
         <code>@okta/jwt-verifier</code> is a <strong>Node-only</strong> library
         (it imports Node modules transitively). For Node, Bun, and AWS Lambda it
         works out of the box; for{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link> or{" "}
-        <Link href="/docs/adapters">Vercel</Link>, use <code>jose</code>&apos;s{" "}
+        <Link href="/docs/adapters">Cloudflare Workers</Link>, use <code>jose</code>&apos;s{" "}
         <code>createRemoteJWKSet</code> + <code>jwtVerify</code> against the
         same issuer (the <Link href="/docs/auth/auth0">Auth0</Link> page shows
         that exact pattern, only the issuer URL changes).

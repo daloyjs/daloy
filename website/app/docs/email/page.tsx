@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CodeBlock } from "../../../components/code-block";
 import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
@@ -105,7 +106,6 @@ export default function Page() {
             <th>Provider</th>
             <th>Node / Bun / Deno</th>
             <th>Cloudflare Workers</th>
-            <th>Vercel</th>
             <th>AWS Lambda</th>
           </tr>
         </thead>
@@ -116,21 +116,16 @@ export default function Page() {
             <td>
               With <code>fetch</code> handler &amp; static creds
             </td>
-            <td>
-              With <code>fetch</code> handler &amp; static creds
-            </td>
             <td>Yes (IAM role)</td>
           </tr>
           <tr>
             <td>SendGrid</td>
             <td>Yes</td>
             <td>Use Web API via fetch (SDK is Node-oriented)</td>
-            <td>Use Web API via fetch</td>
             <td>Yes</td>
           </tr>
           <tr>
             <td>Resend</td>
-            <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
             <td>Yes</td>
@@ -139,7 +134,6 @@ export default function Page() {
             <td>Postmark</td>
             <td>Yes</td>
             <td>Call REST via fetch (SDK uses axios)</td>
-            <td>Call REST via fetch</td>
             <td>Yes</td>
           </tr>
           <tr>
@@ -148,16 +142,12 @@ export default function Page() {
             <td>
               Yes (enable <code>useFetch: true</code> in v12.1+)
             </td>
-            <td>
-              Yes (<code>useFetch: true</code>)
-            </td>
             <td>Yes</td>
           </tr>
           <tr>
             <td>Mailtrap</td>
             <td>Yes</td>
             <td>Call REST via fetch (SDK uses Node features)</td>
-            <td>Call REST via fetch</td>
             <td>Yes</td>
           </tr>
         </tbody>
@@ -197,8 +187,8 @@ export default function Page() {
         caption="Every guide in this section follows the same three steps. The plugin puts the client on app.state, then validated route handlers send through it."
       />
 
-      <pre>
-        <code>{`// src/plugins/email.ts
+      <CodeBlock
+        code={`// src/plugins/email.ts
 import type { App } from "@daloyjs/core";
 
 export interface EmailMessage {
@@ -225,8 +215,8 @@ declare module "@daloyjs/core" {
   interface AppState {
     email: EmailSender;
   }
-}`}</code>
-      </pre>
+}`}
+      />
       <p>
         Each provider page implements <code>EmailSender</code> with the official
         SDK so the rest of your app stays provider-agnostic.
@@ -265,8 +255,8 @@ declare module "@daloyjs/core" {
           into mail headers). A reusable schema looks like:
         </li>
       </ul>
-      <pre>
-        <code>{`// src/schemas/email.ts
+      <CodeBlock
+        code={`// src/schemas/email.ts
 import { z } from "zod";
 
 // Reject CR, LF, NUL - the SMTP / email header injection trio.
@@ -283,8 +273,8 @@ export const SendEmailBody = z
     replyTo: z.email().optional(),
     text: z.string().max(50_000),
   })
-  .strict();`}</code>
-      </pre>
+  .strict();`}
+      />
       <ul>
         <li>
           <strong>Prefer HTTPS provider SDKs over raw SMTP libraries.</strong>{" "}

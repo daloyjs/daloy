@@ -420,8 +420,7 @@ app.route({
         , which depends on Node&apos;s HTTPS module. It runs fine on Node, Bun,
         AWS Lambda, and any long-running container, but it is{" "}
         <strong>not</strong> drop-in compatible with{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link> or{" "}
-        <Link href="/docs/adapters">Vercel</Link>. On those runtimes, call the
+        <Link href="/docs/adapters">Cloudflare Workers</Link>. On those runtimes, call the
         Admin GraphQL endpoint directly with <code>fetch</code>:
       </p>
       <CodeBlock

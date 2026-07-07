@@ -60,7 +60,7 @@ export default function Page() {
         code={`mkdir hello-daloy && cd hello-daloy
 pnpm init
 pnpm add @daloyjs/core zod
-pnpm add -D typescript tsx @types/node`}
+pnpm add -D typescript @types/node`}
       />
 
       <CodeBlock
@@ -69,14 +69,15 @@ pnpm add -D typescript tsx @types/node`}
 {
   "type": "module",
   "scripts": {
-    "dev": "node --import tsx --watch src/index.ts",
-    "start": "node --import tsx src/index.ts"
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts"
   }
 }`}
       />
       <p>
-        We use <code>node --import tsx</code> so TypeScript entrypoints run
-        directly during local development without a separate build step.
+        Node.js runs TypeScript entrypoints directly via built-in type
+        stripping (stable in Node 24+, available since 22.18), so local
+        development needs no transpiler and no separate build step.
       </p>
 
       <p>

@@ -56,7 +56,7 @@ export default function Page() {
         code={`mkdir bookstore && cd bookstore
 pnpm init
 pnpm add @daloyjs/core zod
-pnpm add -D typescript tsx @types/node @hey-api/openapi-ts prettier`}
+pnpm add -D typescript @types/node @hey-api/openapi-ts prettier`}
       />
 
       <CodeBlock
@@ -66,10 +66,10 @@ pnpm add -D typescript tsx @types/node @hey-api/openapi-ts prettier`}
   "name": "bookstore",
   "type": "module",
   "scripts": {
-    "dev":         "node --import tsx src/server.ts",
-    "test":        "node --import tsx --test tests/**/*.test.ts",
+    "dev":         "node --watch src/server.ts",
+    "test":        "node --test tests/**/*.test.ts",
     "typecheck":   "tsc --noEmit",
-    "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
+    "gen:openapi": "node scripts/dump-openapi.ts",
     "gen:client":  "openapi-ts",
     "gen":         "pnpm gen:openapi && pnpm gen:client"
   }

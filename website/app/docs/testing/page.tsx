@@ -190,7 +190,7 @@ console.log(\`\${report.checked} routes - all clean\`);`}
         language="json"
         code={`{
   "scripts": {
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --test tests/**/*.test.ts",
     "contract": "daloy inspect --check src/build-app.ts"
   }
 }`}
