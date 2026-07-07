@@ -243,7 +243,8 @@ needs to run code after the handler.
 ## Testing best practices
 
 Tests live under `tests/` and run with `node --test` (Node's built-in
-runner via `tsx`). Use **in-process** requests through `app.request()` —
+runner; Node.js strips TypeScript types natively). Use **in-process**
+requests through `app.request()` —
 no HTTP server, no port flakiness, no teardown.
 
 ```ts

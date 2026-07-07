@@ -3,11 +3,14 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --test tests/**/*.test.ts",
     "contract": "daloy inspect --check src/index.ts",
     "audit": "pnpm audit --prod",
     "hooks:install": "git config core.hooksPath .githooks"
@@ -18,7 +21,6 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240909.0",
-    "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "wrangler": "^4.0.0"
   }

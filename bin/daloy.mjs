@@ -2,9 +2,11 @@
 /**
  * `daloy` CLI shim. Real logic lives in `dist/cli.js` (`src/cli.ts`).
  *
- * For TypeScript entry files we try to register `tsx` if it's installed
- * in the consumer project; otherwise we surface a friendly error pointing
- * users at `node --import tsx`.
+ * TypeScript entry files are imported directly — Node.js >= 22.18 strips
+ * erasable TypeScript syntax natively. If the native load fails (older
+ * Node, non-erasable syntax such as enums, or extensionless relative
+ * imports) we fall back to registering `tsx` when the consumer project has
+ * it installed; otherwise we surface a friendly error.
  */
 
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -20,17 +22,33 @@ const PKG = JSON.parse(
 
 const TS_EXT = /\.(ts|tsx|mts|cts)$/i;
 
+/**
+ * Error codes that mean the host Node.js could not load a TypeScript file
+ * natively — the cases where falling back to a transpiling loader (tsx)
+ * can still succeed.
+ */
+const NATIVE_TS_ERROR_CODES = new Set([
+  // Type stripping disabled (--no-strip-types) or Node too old.
+  "ERR_UNKNOWN_FILE_EXTENSION",
+  // Non-erasable syntax: enums, runtime namespaces, parameter properties.
+  "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX",
+  // Extensionless relative imports that native stripping refuses to resolve.
+  "ERR_MODULE_NOT_FOUND",
+]);
+
 let tsxRegistered = false;
-async function ensureTsxIfNeeded(specifier) {
-  if (!TS_EXT.test(specifier) || tsxRegistered) return;
+async function registerTsxFallback(specifier, cause) {
   try {
     const api = await import("tsx/esm/api");
     api.register();
     tsxRegistered = true;
   } catch {
     throw new Error(
-      `Loading TypeScript entry "${specifier}" requires tsx. Install it ` +
-        `(\`pnpm add -D tsx\`) or run: node --import tsx ./node_modules/.bin/daloy inspect ${specifier}`
+      `Loading TypeScript entry "${specifier}" failed: ${cause?.message ?? cause}\n` +
+        "Node.js runs erasable-only TypeScript natively (>= 22.18). If the entry uses " +
+        "non-erasable syntax (enums, runtime namespaces, parameter properties) or " +
+        "extensionless relative imports, install tsx (`pnpm add -D tsx`) and re-run.",
+      { cause }
     );
   }
 }
@@ -40,8 +58,18 @@ async function importEntry(specifier) {
   if (!existsSync(abs)) {
     throw new Error(`Entry file not found: ${abs}`);
   }
-  await ensureTsxIfNeeded(abs);
-  return import(pathToFileURL(abs).href);
+  const href = pathToFileURL(abs).href;
+  if (!TS_EXT.test(abs) || tsxRegistered) return import(href);
+  try {
+    return await import(href);
+  } catch (err) {
+    if (!NATIVE_TS_ERROR_CODES.has(err?.code)) throw err;
+    await registerTsxFallback(abs, err);
+    // Cache-bust so the retried load resolves through tsx's hooks instead of
+    // the failed native module job. The first attempt failed before
+    // evaluation, so no side effects ran twice.
+    return import(`${href}?daloy-tsx-fallback=1`);
+  }
 }
 
 function spawnDev(command, args) {
@@ -62,7 +90,7 @@ function spawnDev(command, args) {
           new Error(
             `\`${command}\` was not found on PATH. ` +
               (command === "node"
-                ? "Install `tsx` as a dev dependency (`pnpm add -D tsx`) and ensure Node.js is on PATH."
+                ? "Ensure Node.js is on PATH."
                 : `Install ${command} or run daloy dev from the runtime that hosts it.`)
           )
         );

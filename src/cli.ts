@@ -103,8 +103,9 @@ Usage:
 Commands:
   inspect [entry]        Load an App and print its routes (default command).
   dev     [entry]        Start the entry file with the host runtime's
-                         native watch mode (tsx --watch on Node, --hot on
-                         Bun, --watch on Deno).
+                         native watch mode (node --watch on Node, --hot on
+                         Bun, --watch on Deno). Node runs TypeScript
+                         entries via its built-in type stripping.
   doctor  [entry]        Audit a loaded App's secure-by-default posture.
                          Exits non-zero on any violation so the
                          command can guard container HEALTHCHECK and CI
@@ -275,8 +276,11 @@ export function normalizeEntryArg(entry: string): string {
  * runtime and entry file. Pure function so tests can assert exact argv
  * without spawning a child process.
  *
- * - Node: `node --import tsx --watch <entry>` (tsx must be installed as a
- *   dev dependency for TS files; .js entries also work).
+ * - Node: `node --watch <entry>` (Node >= 22.18 strips TypeScript types
+ *   natively, so `.ts` entries with erasable-only syntax run without a
+ *   loader; `.js` entries also work. Projects that need non-erasable
+ *   syntax — enums, runtime namespaces, parameter properties — should
+ *   transpile or add a loader such as tsx themselves).
  * - Bun:  `bun --hot <entry>` (Bun ships with TS support).
  * - Deno: `deno run --watch --allow-net --allow-env --allow-read <entry>`
  *   (the three permissions cover serving HTTP, reading env vars, and
@@ -308,7 +312,7 @@ export function buildDevCommand(runtime: DevRuntime, entry: string): { command: 
       };
     case "node":
     default:
-      return { command: "node", args: ["--import", "tsx", "--watch", safe] };
+      return { command: "node", args: ["--watch", safe] };
   }
 }
 

@@ -23,7 +23,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.97.1",
+    "@hey-api/openapi-ts": "^0.99.0",
     "@types/bun": "^1.1.0",
     "typescript": "^6.0.3"
   }

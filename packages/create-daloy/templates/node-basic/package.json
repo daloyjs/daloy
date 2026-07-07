@@ -11,9 +11,9 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --test tests/**/*.test.ts",
     "contract": "daloy inspect --check src/build-app.ts",
-    "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
+    "gen:openapi": "node scripts/dump-openapi.ts",
     "gen:client": "openapi-ts",
     "gen": "pnpm gen:openapi && pnpm gen:client",
     "audit": "pnpm audit --prod",
@@ -24,9 +24,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.97.1",
-    "@types/node": "^25.7.0",
-    "tsx": "^4.22.3",
+    "@hey-api/openapi-ts": "^0.99.0",
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3"
   }
 }

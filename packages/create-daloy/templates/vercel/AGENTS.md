@@ -38,7 +38,7 @@ This project uses TypeScript with `"allowImportingTsExtensions"`, so relative im
 import handler from "../api/index.ts";
 ```
 
-You import the file you see. Vercel and tsx resolve `.ts` directly. Bare package imports (`@daloyjs/core`, `zod`, ...) need no extension.
+You import the file you see. Vercel resolves `.ts` at deploy time; Node runs it natively (type stripping). Bare package imports (`@daloyjs/core`, `zod`, ...) need no extension.
 
 ## Core rules
 

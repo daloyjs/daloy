@@ -395,10 +395,10 @@ test("detectRuntime: returns 'node' under standard test env", () => {
   assert.equal(detectRuntime(), "node");
 });
 
-test("buildDevCommand: node uses --import tsx --watch", () => {
+test("buildDevCommand: node uses native --watch (built-in type stripping)", () => {
   assert.deepEqual(buildDevCommand("node", "src/server.ts"), {
     command: "node",
-    args: ["--import", "tsx", "--watch", "./src/server.ts"],
+    args: ["--watch", "./src/server.ts"],
   });
 });
 
@@ -417,15 +417,8 @@ test("buildDevCommand: deno uses run --watch with safe permissions", () => {
 });
 
 test("buildDevCommand: preserves already-anchored relative paths", () => {
-  assert.deepEqual(buildDevCommand("node", "./src/server.ts").args, [
-    "--import",
-    "tsx",
-    "--watch",
-    "./src/server.ts",
-  ]);
+  assert.deepEqual(buildDevCommand("node", "./src/server.ts").args, ["--watch", "./src/server.ts"]);
   assert.deepEqual(buildDevCommand("node", "../sibling/server.ts").args, [
-    "--import",
-    "tsx",
     "--watch",
     "../sibling/server.ts",
   ]);

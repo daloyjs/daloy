@@ -75,7 +75,7 @@ Use `create-daloy --list-templates` to inspect available templates without creat
 
 A production-ready Node.js HTTP server using `@daloyjs/core` with:
 
-- Strict TypeScript and `tsx` for instant dev runs.
+- Strict TypeScript run natively by Node.js (built-in type stripping) — no transpiler needed for dev runs.
 - Hardened `.npmrc` for safer installs.
 - `secureHeaders`, `requestId`, and `rateLimit` enabled by default (`rateLimit` is global until you configure `keyGenerator` or trusted proxy headers).
 - A sample `GET /healthz` and contract-first `GET /books/:id` route with Zod validation.

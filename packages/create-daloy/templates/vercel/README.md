@@ -93,7 +93,7 @@ This project uses TypeScript with `"allowImportingTsExtensions"`. Relative impor
 import handler from "../api/index.ts";
 ```
 
-Vercel bundles the `api/` functions at deploy time and resolves `.ts` directly, and the test runner (tsx) does too.
+Vercel bundles the `api/` functions at deploy time and resolves `.ts` directly, and Node.js (>= 22.18) runs the tests and dev server directly via native type stripping.
 
 ## What's included
 

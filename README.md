@@ -211,7 +211,7 @@ That single command runs the two scripts:
 ```jsonc
 // package.json
 "scripts": {
-  "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
+  "gen:openapi": "node scripts/dump-openapi.ts",
   "gen:client":  "openapi-ts",
   "gen":         "pnpm gen:openapi && pnpm gen:client"
 }
@@ -339,11 +339,11 @@ const app = createApp({ docs: true });
 
 | Runtime | Spawned command                                                 |
 | ------- | --------------------------------------------------------------- |
-| Node    | `node --import tsx --watch <entry>`                             |
+| Node    | `node --watch <entry>`                                          |
 | Bun     | `bun --hot <entry>`                                             |
 | Deno    | `deno run --watch --allow-net --allow-env --allow-read <entry>` |
 
-Entry defaults to `src/index.ts`, `src/main.ts`, `src/server.ts`, or `src/app.ts`. Install `tsx` as a dev dependency on Node for TypeScript entries.
+Entry defaults to `src/index.ts`, `src/main.ts`, `src/server.ts`, or `src/app.ts`. Node.js (>= 22.18) runs TypeScript entries natively via built-in type stripping — no loader needed. Projects that rely on non-erasable syntax (enums, runtime namespaces, parameter properties) or extensionless relative imports can keep using a loader directly, e.g. `node --import tsx --watch <entry>` (and `daloy inspect` falls back to `tsx` automatically when the native load fails and `tsx` is installed).
 
 Pass `--runtime <node|bun|deno>` to override runtime detection. This is required when running `daloy dev` from a `package.json` script on Bun or Deno, because the CLI binary's `#!/usr/bin/env node` shebang otherwise forces Node detection. The `bun-basic` template ships `"dev": "daloy dev --runtime bun"` for this reason.
 
@@ -527,7 +527,7 @@ DaloyJS is at **`1.0.0-rc.1`**, a security-hardening release candidate. Because 
 ### Runtimes and deployment
 
 - Adapters for Node (Heroku, Railway, Render, Fly.io), Bun, Deno, Cloudflare Workers, Vercel Node / Edge / Next.js / Netlify Edge, Fastly Compute, and AWS Lambda / Netlify Functions / Lambda Function URLs.
-- `daloy dev` watch loop delegates to the host runtime's native watcher (`node --import tsx --watch`, `bun --hot`, or `deno run --watch`) with a `--runtime` override for cross-runtime `package.json` scripts.
+- `daloy dev` watch loop delegates to the host runtime's native watcher (`node --watch`, `bun --hot`, or `deno run --watch`) with a `--runtime` override for cross-runtime `package.json` scripts.
 - `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening. The completion summary surfaces official install links (nodejs.org, pnpm.io, bun.sh) for any runtime or package manager your selections need but that is missing from `PATH`, and skips a doomed dependency install when the chosen package manager is absent.
 - Container-first templates: `HEALTHCHECK` to `/readyz`, `STOPSIGNAL SIGTERM`, non-root user, `tini` as PID 1.
 - Generated `deploy.yml` for container templates signs every pushed GHCR image with **Sigstore Cosign** (keyless OIDC) and attaches an **SPDX SBOM attestation** so consumers can `cosign verify` and `cosign verify-attestation --type spdxjson` instead of trusting the registry alone.

@@ -253,9 +253,10 @@ test("node-basic separates buildApp() from server boot so codegen has no side ef
   assert.equal(buildTsconfig.extends, "./tsconfig.json");
   // The production build compiles ONLY src/, rooted at src/, so the emitted
   // entrypoint is a flat dist/index.js — exactly what `start` and the Dockerfile
-  // CMD run. scripts/dump-openapi.ts runs via tsx (see gen:openapi), never from
-  // dist; including it here would re-root the output at the project dir
-  // (dist/src/index.js) and break `node dist/index.js` at boot.
+  // CMD run. scripts/dump-openapi.ts runs directly via Node's native type
+  // stripping (see gen:openapi), never from dist; including it here would
+  // re-root the output at the project dir (dist/src/index.js) and break
+  // `node dist/index.js` at boot.
   assert.deepEqual(buildTsconfig.include, ["src/**/*"]);
   assert.equal(buildTsconfig.compilerOptions.rootDir, "src");
   assert.deepEqual(buildTsconfig.exclude, ["node_modules", "dist", "tests"]);

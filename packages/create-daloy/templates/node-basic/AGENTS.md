@@ -34,7 +34,7 @@ When `docs: true` is set in `new App({...})`, three routes are auto-mounted:
 - `src/index.ts` — calls `buildApp()` and starts the listener via `@daloyjs/core/node`. The only file that opens a port.
 - `scripts/dump-openapi.ts` — imports `buildApp()` and writes `generated/openapi.json`. Codegen reads from `buildApp()` only — never import `src/index.ts` from scripts.
 - `generated/` — machine-written by `pnpm gen`. Do not edit by hand.
-- `tests/` — `*.test.ts` files run with `node --test` (via `tsx`).
+- `tests/` — `*.test.ts` files run with `node --test` (Node.js strips TypeScript types natively).
 
 ## Imports
 

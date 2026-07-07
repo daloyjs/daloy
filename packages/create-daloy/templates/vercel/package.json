@@ -3,11 +3,14 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^24.0.0 || >=26.0.0"
+  },
   "scripts": {
-    "dev": "node --import tsx src/dev.ts",
+    "dev": "node --watch src/dev.ts",
     "deploy": "vercel deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --test tests/**/*.test.ts",
     "contract": "daloy inspect --check api/index.ts",
     "audit": "pnpm audit --prod",
     "hooks:install": "git config core.hooksPath .githooks"
@@ -17,8 +20,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^25.7.0",
-    "tsx": "^4.22.3",
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
     "vercel": "^48.0.0"
   }

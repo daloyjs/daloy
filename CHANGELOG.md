@@ -13,6 +13,30 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [Unreleased]
+
+### Changed
+
+- **`daloy dev` on Node now spawns `node --watch <entry>`** instead of
+  `node --import tsx --watch <entry>` — Node.js (>= 22.18, stable in 24+) runs
+  erasable-only TypeScript entries natively via built-in type stripping, so no
+  loader is required. Projects that rely on non-erasable syntax (enums, runtime
+  namespaces, parameter properties) or extensionless relative imports can keep
+  running a loader directly (`node --import tsx --watch <entry>`).
+- **The `daloy` CLI shim loads TypeScript entries natively first** for
+  `inspect` / `doctor` / `contract`, falling back to registering `tsx` (when
+  installed in the consumer project) only if the native load fails.
+- **`create-daloy` templates no longer depend on `tsx`** — the `node-basic`,
+  `vercel`, and `cloudflare-worker` templates run tests (`node --test`), the
+  OpenAPI dump script, and the Vercel dev server (`node --watch src/dev.ts`)
+  through Node's native type stripping. Template `tsconfig.json`s adopt the
+  Node-recommended `erasableSyntaxOnly` + `verbatimModuleSyntax` flags, and the
+  `vercel` / `cloudflare-worker` templates now declare the same Node `engines`
+  range as `node-basic`.
+- **Template devDependencies refreshed** to match the versions the repo itself
+  builds with: `@hey-api/openapi-ts` `^0.97.1` → `^0.99.0` (node-basic,
+  bun-basic) and `@types/node` `^25.7.0` → `^26.1.0` (node-basic, vercel).
+
 ## [1.0.0-rc.1] - 2026-07-04
 
 A security-hardening release from an internal audit against a 17-category threat
