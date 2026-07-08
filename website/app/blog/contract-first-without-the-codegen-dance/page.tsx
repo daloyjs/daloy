@@ -405,7 +405,7 @@ export default function BlogPostPage() {
             <code>openapi.yaml</code> in a monorepo, and I have personally been
             the reason it was three sprints out of date. I&apos;ve also been the
             person who shipped a frontend that called <code>POST /book</code>{" "}
-            when the backend had quietly renamed it to <code>POST /books</code>{" "}
+            when the backend had renamed it to <code>POST /books</code>{" "}
             the week before. So when I tell you the codegen dance is a real
             problem, please understand: I am one of the dancers.
           </p>
@@ -512,7 +512,7 @@ export default function BlogPostPage() {
 
             <p>
               The two things I want you to notice in that snippet are also the
-              two things I quietly celebrate every time I see them at work.
+              two things I celebrate every time I see them at work.
               First, the <code>res.body</code> inside the <code>200</code>{" "}
               branch is narrowed to the <code>Book</code> shape, not the union
               of every declared response, the actual <code>200</code> one.

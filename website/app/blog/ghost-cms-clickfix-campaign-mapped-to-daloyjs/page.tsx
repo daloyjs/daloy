@@ -448,7 +448,7 @@ app.use(secureHeaders({
             without reading a CVE or running a migration script. If you have to
             read a security blog before your app is safe, the framework already
             failed you. I&apos;d rather feel a little dumb for missing this one
-            line than ship a framework that quietly leaves it to you.
+            line than ship a framework that leaves it to you.
           </p>
 
           <p className="text-sm text-muted-foreground">

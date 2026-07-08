@@ -619,7 +619,7 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Think of it as a 2-of-2: a CSRF attempt would need to (a) defeat the
+            Together they act as a 2-of-2: a CSRF attempt would need to (a) defeat the
             browser&apos;s <code>Sec-Fetch-Site</code> reporting <em>and</em>{" "}
             (b) read the <code>__Host-</code> cookie from your origin to mirror
             it back. The first is essentially &quot;break the browser&quot;; the
@@ -708,10 +708,10 @@ export default function BlogPostPage() {
             <code> SameSite=Lax</code> defaults, Fetch-Metadata reporting, and
             double-submit being two lines away, the surviving bugs are almost
             always configuration bugs (a cookie set without <code>Secure</code>,
-            an <code>allowedOrigins</code> that quietly matches every preview
+            an <code>allowedOrigins</code> that happens to match every preview
             deploy ever, a frontend that forgot to call the helper). What we
             tried to do with this middleware is make those configuration bugs
-            throw at boot instead of leaking through quietly. The strategies
+            throw at boot instead of leaking into production. The strategies
             themselves are well-trodden ground. The <em>fail fast</em> part is
             what I&apos;m proudest of.
           </p>

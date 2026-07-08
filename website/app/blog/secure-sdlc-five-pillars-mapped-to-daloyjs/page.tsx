@@ -396,7 +396,7 @@ export default function BlogPostPage() {
 
           <PillarCard
             pillar="Aikido: 'Apply uniform security standards, policies, and enforcement across all teams, repositories, and languages.'"
-            framework="The same verify:* gate set ships in every create-daloy template. The same secure-by-default constructor runs on every supported runtime, Node, Bun, Deno, Cloudflare Workers, Vercel. verify:runtime-parity-audits and verify:parity-audits make sure no adapter quietly drops a security guard. verify:governance-audits keeps the security docs in sync with the code. The whole posture travels with the framework; a new service started this week gets the same gates as a service started last quarter."
+            framework="The same verify:* gate set ships in every create-daloy template. The same secure-by-default constructor runs on every supported runtime, Node, Bun, Deno, Cloudflare Workers, Vercel. verify:runtime-parity-audits and verify:parity-audits make sure no adapter drops a security guard. verify:governance-audits keeps the security docs in sync with the code. The whole posture travels with the framework; a new service started this week gets the same gates as a service started last quarter."
             user="Run the scaffolder for every new service. Don't fork the templates and then forget to merge upstream security fixes, the Dependabot config that ships in the scaffold updates @daloyjs/core for you, and a new version usually re-syncs the templates."
           />
 

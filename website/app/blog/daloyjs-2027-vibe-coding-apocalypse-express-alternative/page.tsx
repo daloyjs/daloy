@@ -118,7 +118,7 @@ app.route({
   path: "/projects/:id",
   operationId: "deleteProject",
   auth: { scheme: "bearer" },
-  // Compose multiple guards with every(...) — both must pass.
+  // Compose multiple guards with every(...): both must pass.
   // (An array here would silently apply NO hooks; the framework refuses it.)
   hooks: every(auth, requireScopes(["projects:write"])),
   request: { params: z.object({ id: z.string() }) },
@@ -539,7 +539,7 @@ export default function BlogPostPage() {
             <code>100.100.100.200</code>, link-local, loopback, and private
             ranges. And here is the detail I really like: it re-resolves on
             redirects, so an attacker cannot hand you a friendly{" "}
-            <code>https://example.com</code> that quietly <code>302</code>s to{" "}
+            <code>https://example.com</code> that then <code>302</code>s to{" "}
             <code>http://169.254.169.254</code>. The hard-deny floor cannot be
             lifted by any allow flag. Even if you misconfigure your allow list,
             you cannot accidentally re-expose the metadata endpoint. That is what
@@ -662,7 +662,7 @@ export default function BlogPostPage() {
             packages and refuses lifecycle scripts, and a workspace gate called{" "}
             <code>verify:known-dep-names</code> refuses any top-level dependency
             name that is not on an explicit allowlist. So{" "}
-            <code>pnpm add some-hallucinated-name</code> cannot quietly land in a{" "}
+            <code>pnpm add some-hallucinated-name</code> cannot slip into a{" "}
             <code>package.json</code>. It forces a one-line diff that a human has
             to look at. That review checkpoint is the whole defense, and the
             framework makes it unavoidable.

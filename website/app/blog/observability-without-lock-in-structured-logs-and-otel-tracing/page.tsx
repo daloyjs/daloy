@@ -11,7 +11,7 @@ const POST = {
   title:
     "Observability Without Lock-In: Structured Logs and OpenTelemetry-Compatible Tracing",
   description:
-    "How DaloyJS gives you per-request structured logs, correlated request IDs, Server-Timing, and OpenTelemetry-shaped spans \u2014 without taking a hard dependency on @opentelemetry/api. The result is a single observability story that runs identically on Node, Bun, and Workers, with any tracer you bring.",
+    "How DaloyJS gives you per-request structured logs, correlated request IDs, Server-Timing, and OpenTelemetry-shaped spans, without taking a hard dependency on @opentelemetry/api. The result is a single observability story that runs identically on Node, Bun, and Workers, with any tracer you bring.",
   date: "2026-06-03",
   readingTime: "13 min read",
   author: "Devlin Duldulao",

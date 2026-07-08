@@ -10,7 +10,7 @@ const POST = {
   slug: "plugin-lifecycle-events-for-large-team-framework-code",
   title: "Plugin Lifecycle Events for Large-Team Framework Code",
   description:
-    "Why DaloyJS exposes onPluginInstalled() and onShutdown() as first-class events, and how a platform team uses them to ship observability, service registration, graceful drain, metrics flushing, and policy plugins that every route inherits \u2014 without a single import in the route files themselves.",
+    "Why DaloyJS exposes onPluginInstalled() and onShutdown() as first-class events, and how a platform team uses them to ship observability, service registration, graceful drain, metrics flushing, and policy plugins that every route inherits, without a single import in the route files themselves.",
   date: "2026-06-04",
   readingTime: "13 min read",
   author: "Devlin Duldulao",

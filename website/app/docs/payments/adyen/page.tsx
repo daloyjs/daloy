@@ -421,7 +421,7 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         The SDK uses Node&apos;s built-in <code>https</code> module out of the
         box. It runs on Node 18+ and works on classic Node serverless. For{" "}
         <Link href={"/docs/adapters" as Route}>edge runtimes</Link> (Cloudflare
-        Workers, Vercel) you either swap in a fetch-based{" "}
+        Workers) you either swap in a fetch-based{" "}
         <code>HttpClient</code> via{" "}
         <code>
           new Client(

@@ -10,7 +10,7 @@ const POST = {
   slug: "openapi-3-1-extras-webhooks-callbacks-discriminators",
   title: "OpenAPI 3.1 Extras: Webhooks, Callbacks, and Discriminators",
   description:
-    "A practical tour of the OpenAPI 3.1 features your generated clients are quietly waiting for: top-level webhooks for event-driven APIs, route-level callbacks for payment-style async flows, and the discriminator()/discriminatedUnion() pair that turns polymorphic payloads into tagged TypeScript unions you can switch on with confidence.",
+    "A practical tour of the OpenAPI 3.1 features your generated clients are still waiting for: top-level webhooks for event-driven APIs, route-level callbacks for payment-style async flows, and the discriminator()/discriminatedUnion() pair that turns polymorphic payloads into tagged TypeScript unions you can switch on with confidence.",
   date: "2026-05-31",
   readingTime: "13 min read",
   author: "Devlin Duldulao",
@@ -55,7 +55,7 @@ const THE_PROBLEM = `# A representative API contract circa "we'll figure it out 
 #    back when it's done. Generated SDK? Nope. Contract test? Nope. Vibes? Yes."
 #
 # Three things every grown-up API has - webhooks, callbacks, and polymorphic
-# payloads - and three things the average OpenAPI spec quietly skips.
+# payloads - and three things the average OpenAPI spec skips.
 # That's the gap this post fills.`;
 
 const WEBHOOKS_TOP_LEVEL = `// src/index.ts, top-level webhooks describe events YOU send to consumers.

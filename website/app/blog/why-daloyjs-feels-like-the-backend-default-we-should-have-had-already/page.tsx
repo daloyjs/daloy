@@ -160,7 +160,7 @@ export default function BlogPostPage() {
 
           <p>
             Those lines are not glamorous. They are also the sort of thing that
-            quietly prevents extremely annoying incidents. I trust boring
+            prevents extremely annoying incidents. I trust boring
             controls more than dramatic postmortems.
           </p>
 

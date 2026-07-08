@@ -402,7 +402,7 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            That is the practical argument. Not magic. Not hype. Just a better
+            That is the practical argument: no magic, no hype, just a better
             starting point for the kind of backend code agents are already being
             asked to write every day.
           </p>

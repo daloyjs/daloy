@@ -11,7 +11,7 @@ const POST = {
   title:
     "The DaloyJS CLI: Inspecting Routes, Schemas, OpenAPI, and Contract Health",
   description:
-    "daloy inspect is the CLI you point at your App before a PR merges. It prints the full route table, schema presence, contract issues, and the live OpenAPI 3.1 document \u2014 loaded straight from your TypeScript entry through tsx with zero build step. This is the API-surface review tool platform teams keep wishing they had.",
+    "daloy inspect is the CLI you point at your App before a PR merges. It prints the full route table, schema presence, contract issues, and the live OpenAPI 3.1 document, loaded straight from your TypeScript entry through tsx with zero build step. This is the API-surface review tool platform teams keep wishing they had.",
   date: "2026-06-05",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
@@ -628,8 +628,8 @@ export default function BlogPostPage() {
 
           <p>
             Most of what goes wrong with a public API surface goes wrong
-            silently. An operationId quietly drifts. A response quietly
-            disappears. A debug route quietly ships to prod. The whole reason{" "}
+            quietly. An operationId drifts, a response disappears, a debug
+            route ships to prod, and nobody hears a thing. The whole reason{" "}
             <code>daloy inspect</code> exists is to turn &quot;quietly&quot;
             into &quot;loudly, in the PR, before the merge button.&quot;
             That&apos;s it. No magic, no sprawling tool, one binary, one entry

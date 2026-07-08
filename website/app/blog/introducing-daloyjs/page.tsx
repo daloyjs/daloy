@@ -368,7 +368,7 @@ export default function BlogPostPage() {
               status you declared. Forget to handle a status? The compiler will
               tell you. Try to return a body for <code>404</code> when you
               didn&apos;t declare one? Also a compile error. This is the part
-              that quietly removes about a third of the bugs I&apos;ve shipped
+              that removes about a third of the bugs I&apos;ve shipped
               in the last decade.
             </li>
             <li>
@@ -402,7 +402,7 @@ export default function BlogPostPage() {
             You did not write an OpenAPI document. You did not run a codegen.
             You did not maintain a YAML file in a folder called{" "}
             <code>openapi/</code> that your team agreed to update and then
-            quietly stopped updating around sprint 4. The spec is just… there:
+            stopped updating around sprint 4. The spec is just… there:
           </p>
 
           <CodeBlock language="bash" code={OPENAPI_CURL} />

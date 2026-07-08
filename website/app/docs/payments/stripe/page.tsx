@@ -502,8 +502,7 @@ await state.stripe.refund({
         subclasses for API, card, authentication, rate-limit, and connection
         failures. Preserve <code>requestId</code>, <code>code</code>,{" "}
         <code>decline_code</code>, and <code>payment_intent</code> in internal
-        logs, but return a stable <Link href="/docs/errors">problem+json</Link>
-        shape to clients.
+        logs, but return a stable <Link href="/docs/errors">problem+json</Link> shape to clients.
       </p>
 
       <h2 id="runtimes">Runtimes</h2>
@@ -527,8 +526,7 @@ await state.stripe.refund({
         <li>
           <strong>
             Use Checkout first, Payment Intents when you need control.
-          </strong>
-          Payment Intents are the lower-level API for custom payment forms and
+          </strong> Payment Intents are the lower-level API for custom payment forms and
           advanced flows. Start there only when hosted Checkout cannot model the
           experience.
         </li>

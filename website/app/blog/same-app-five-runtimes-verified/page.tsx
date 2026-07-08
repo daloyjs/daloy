@@ -417,7 +417,8 @@ export default function BlogPostPage() {
           <p>
             Hi, I&apos;m Devlin. Ten years of fullstack work. I have personally
             been in a meeting where someone said &quot;our framework runs
-            anywhere&quot; and then quietly listed five things it does not run
+            anywhere&quot; and then listed, in a much smaller font, five things
+            it does not run
             on. So when DaloyJS says{" "}
             <em>
               the same app runs on Node, Bun, Deno, Cloudflare Workers, and
@@ -524,7 +525,7 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            The thing I quietly love here is <code>handle.url</code>. Bun
+            The thing I love most here is <code>handle.url</code>. Bun
             computes the scheme and port for you, so &quot;what URL do I
             actually log on boot&quot; stops being a paragraph of conditionals.
             One field, you&apos;re done. Small luxury, big quality-of-life.

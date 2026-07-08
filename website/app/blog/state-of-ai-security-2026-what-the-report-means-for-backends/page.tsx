@@ -533,7 +533,7 @@ export default function BlogPostPage() {
             about $5M. The point is not the precision, it is the category:
             this is a real, recurring cost that scales with headcount, and most
             of it is spent reading alerts that were never real. That is the
-            invoice tool sprawl quietly sends you every year.
+            invoice tool sprawl sends you every year.
           </p>
 
           <h2>False positives make good engineers do dumb things</h2>

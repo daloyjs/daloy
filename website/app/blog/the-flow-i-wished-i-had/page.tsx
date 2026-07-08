@@ -408,7 +408,8 @@ export default function BlogPostPage() {
           <p>
             Ten years in, the bugs that still wake me up are not the clever
             ones. They&apos;re the dumb ones. A status code that the docs lied
-            about. A payload field that quietly turned into <code>null</code>. A
+            about. A payload field that turned into <code>null</code> without
+            anyone noticing. A
             middleware that &quot;everyone uses&quot; that wasn&apos;t wired up
             in the prod build. A deploy that worked in Node 20 and exploded in a
             Worker because someone reached for <code>process.env</code> like it

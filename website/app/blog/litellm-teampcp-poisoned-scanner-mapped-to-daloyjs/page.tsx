@@ -323,7 +323,7 @@ export default function BlogPostPage() {
           <CodeBlock language="yaml" code={TRUSTED_PUBLISHING} />
 
           <p>
-            The Snyk post quietly buries the most useful sentence in the whole
+            The Snyk post buries the most useful sentence in the whole
             article:{" "}
             <em>
               &quot;The package passes all standard integrity checks because the

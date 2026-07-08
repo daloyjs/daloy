@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 
+import { CodeBlock } from "../../../components/code-block";
 import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
@@ -200,8 +201,8 @@ export default function Page() {
         Each provider guide implements roughly the same interface on{" "}
         <code>app.state</code>:
       </p>
-      <pre>
-        <code>{`// src/plugins/commerce.ts
+      <CodeBlock
+        code={`// src/plugins/commerce.ts
 import type { App } from "@daloyjs/core";
 
 export interface CommerceClient {
@@ -215,8 +216,8 @@ declare module "@daloyjs/core" {
   interface AppState {
     commerce: CommerceClient;
   }
-}`}</code>
-      </pre>
+}`}
+      />
       <p>
         Provider pages keep the shape but specialise the method names where it
         makes the SDK nicer to read (for example, Shopify gets a{" "}

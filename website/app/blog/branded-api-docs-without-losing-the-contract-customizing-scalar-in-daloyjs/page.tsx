@@ -17,7 +17,7 @@ const POST = {
   author: "Devlin Duldulao",
   authorRole: "Fullstack cloud engineer",
   authorBio:
-    "Ten years of fullstack, currently typing this from a desk in Norway where the sun has been up since 03:42. Has personally shipped at least three custom-forked docs pages that quietly served a six-month-old spec because nobody noticed the URL was hard-coded. Has feelings about this.",
+    "Ten years of fullstack, currently typing this from a desk in Norway where the sun has been up since 03:42. Has personally shipped at least three custom-forked docs pages that served a six-month-old spec because nobody noticed the URL was hard-coded. Has feelings about this.",
 };
 
 export const metadata = buildMetadata({

@@ -282,7 +282,7 @@ export default function BlogPostPage() {
             just refuses to hand you the wrong tool with a friendly name.
             Passwords go through a salted argon2id KDF. Secrets at rest go
             through AEAD with a key. There is no <code>encrypt()</code> helper
-            that quietly base64-encodes and lets you tell your boss it is
+            that just base64-encodes and lets you tell your boss it is
             secure. The vocabulary is enforced by the API surface.
           </p>
 
@@ -348,7 +348,7 @@ export default function BlogPostPage() {
           <h2>5. PKI and certificates still matter</h2>
 
           <p>
-            The closing theme is one a lot of web developers quietly hope is
+            The closing theme is one a lot of web developers secretly hope is
             someone else&apos;s job: PKI, certificate chains, who-signed-what.
             In a world of service meshes, mTLS between services, and signed
             artifacts in your supply chain, &quot;I just trust whatever the load

@@ -243,7 +243,7 @@ const ASSUME_AGENT = `// The "assume an unsupervised agent is calling every tool
 // 9. Cookies:               __Host- prefix, Secure, HttpOnly, SameSite=Lax
 // 10. Response body schema: 500 if a handler tries to return a shape
 //     that doesn't match the declared response schema - so a buggy or
-//     compromised handler can't quietly leak fields the contract hid.
+//     compromised handler can't leak fields the contract hid.
 //
 // Constructor:
 new App();`;
@@ -415,7 +415,7 @@ export default function BlogPostPage() {
 
           <RiskCard
             risk="OWASP ASI05: The agent operates without sufficient boundaries, a compromised agent has free rein."
-            framework="Daloy's multi-App pattern is the framework-level sandboxing primitive. High-blast-radius tools (refundAll, deleteUser, exportEverything) live on a separate App, mounted on a separate hostname, behind ipRestriction() + strong auth. They are not in the public OpenAPI, so the agent's tool-discovery layer never sees them. Add response-body schema validation and the handler cannot quietly return fields the contract didn't promise. Add ipRestriction() + bearerAuth() and the model-facing app literally cannot reach the destructive code path."
+            framework="Daloy's multi-App pattern is the framework-level sandboxing primitive. High-blast-radius tools (refundAll, deleteUser, exportEverything) live on a separate App, mounted on a separate hostname, behind ipRestriction() + strong auth. They are not in the public OpenAPI, so the agent's tool-discovery layer never sees them. Add response-body schema validation and the handler cannot return fields the contract didn't promise. Add ipRestriction() + bearerAuth() and the model-facing app literally cannot reach the destructive code path."
             user="Decide what the agent is allowed to do, then put the rest somewhere it can't reach. The framework can give you the multi-App split; it can't pick which tools are dangerous. (Hint: anything ending in -All, -Everything, or Delete probably belongs on the other App.)"
           />
 
