@@ -72,6 +72,21 @@ export type PageSeoInput = {
   type?: "website" | "article";
 };
 
+function getDefaultImage(path: string): string {
+  const normalizedPath = path.replace(/\/$/, "") || "/";
+
+  if (
+    normalizedPath === "/blog" ||
+    normalizedPath.startsWith("/blog/") ||
+    normalizedPath === "/docs" ||
+    normalizedPath.startsWith("/docs/")
+  ) {
+    return `${normalizedPath}/opengraph-image`;
+  }
+
+  return "/opengraph-image";
+}
+
 /**
  * Build a Next.js `Metadata` object with consistent SEO defaults:
  * canonical URL, OpenGraph, Twitter card, robots, and keyword merging.
@@ -80,7 +95,7 @@ export function buildMetadata(input: PageSeoInput): Metadata {
   const path = input.path.startsWith("/") ? input.path : `/${input.path}`;
   const url = `${SITE_URL}${path}`;
   const fullTitle = `${input.title} · ${SITE_NAME}`;
-  const image = input.image ?? "/opengraph-image";
+  const image = input.image ?? getDefaultImage(path);
   const keywords = Array.from(
     new Set([...(input.keywords ?? []), ...DEFAULT_KEYWORDS])
   );

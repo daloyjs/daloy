@@ -27,6 +27,7 @@ Run `pnpm lint` and `pnpm typecheck` before finishing code changes when relevant
 
 - Docs navigation, sitemap entries, and search discovery are manually maintained. When changing docs routes, check [components/docs-sidebar.tsx](components/docs-sidebar.tsx), [components/docs-nav.ts](components/docs-nav.ts), [app/sitemap.ts](app/sitemap.ts), and [lib/docs-search.ts](lib/docs-search.ts). Run `pnpm verify:docs-links` from the repo root afterwards — it fails on broken internal `/docs` links, dangling nav/sitemap entries, pages missing from the sitemap, nav↔sitemap drift, and broken `#anchor` targets.
 - Every new documentation page under `app/docs/` must include a diagram that matches the current documentation style. Use the existing docs pages as the visual baseline so new pages keep the same diagram-led explanation pattern.
+- Every new documentation page under `app/docs/` must have its own Open Graph image. Create or wire the page-specific `opengraph-image` route so shared links resolve to `/docs/<slug>/opengraph-image` instead of the homepage image.
 - Database docs split SQL ORMs (`/docs/orm`) from ODMs (`/docs/odm`); Supabase is treated as a platform client, not an ORM.
 
 ## Blog authoring
@@ -55,7 +56,8 @@ When writing a new blog post under `app/blog/<slug>/page.tsx`, follow these rule
 2. **Adjust the date** — use the current real-world date for `publishedAt` / displayed date, not a copy-pasted one from another post.
 3. Add the post to the `POSTS` (or equivalent) list in [app/blog/page.tsx](app/blog/page.tsx) so it appears on the blog index.
 4. Add a matching entry to `STATIC_PATHS` in [app/sitemap.ts](app/sitemap.ts) (`changeFrequency: "monthly"`, `priority: 0.7` to match siblings).
-5. Run `pnpm lint` and `pnpm typecheck` before finishing.
+5. Create or wire the post-specific Open Graph image so shared links resolve to `/blog/<slug>/opengraph-image` instead of the homepage image.
+6. Run `pnpm lint` and `pnpm typecheck` before finishing.
 
 ## Skills
 
