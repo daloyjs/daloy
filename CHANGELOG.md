@@ -9,7 +9,7 @@ For the forward-looking plan and the full thematic release log, see
 [`ROADMAP.md`](ROADMAP.md).
 
 > Now in the **1.0.0 beta**. The public API is feature-complete and stable for
-> the 1.0 line; from 1.0 onward, breaking changes follow semver. `@daloyjs/core`
+> the 1.0 line; from 1.0 onward the API follows semver. `@daloyjs/core`
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
@@ -54,7 +54,7 @@ For the forward-looking plan and the full thematic release log, see
 
 A security-hardening release from an internal audit against a 17-category threat
 model. It tightens several secure-by-default guarantees and, because the
-framework has no external users yet, ships a few **breaking changes** now rather
+framework has no external users yet, makes those changes now rather
 than deferring them past GA.
 
 ### Security
@@ -92,15 +92,15 @@ than deferring them past GA.
 
 ### Changed
 
-- **BREAKING: production `secureDefaults` apps refuse to boot on shadow auth.** A
+- **Production `secureDefaults` apps refuse to boot on shadow auth.** A
   route that declares an `auth:` requirement but installs no authentication hook
   to enforce it is now a boot error (previously `auth:` was OpenAPI-only
   documentation). Wire an auth middleware, mark a custom hook with
   `markAuthHook()`, or drop the `auth:` declaration.
-- **BREAKING: production `secureDefaults` apps refuse to boot on an
+- **Production `secureDefaults` apps refuse to boot on an
   unauthenticated `mcpRoutes()` endpoint.** Cover the route with auth or pass
   `{ public: true }`.
-- **BREAKING: MCP `tools/call` rejects schema-violating arguments** with
+- **MCP `tools/call` rejects schema-violating arguments** with
   `-32602` before the handler runs (previously `inputSchema` was advertised to
   clients but never enforced). Handlers that relied on receiving unvalidated
   arguments must adjust.
@@ -413,7 +413,7 @@ lockstep, and every `create-daloy` template now pins
 ## [1.0.0-beta.1] - 2026-06-21
 
 The second **1.0.0 beta** — a small, security-leaning patch on top of
-`1.0.0-beta.0`. No breaking changes and no public API additions; projects on
+`1.0.0-beta.0`. No public API changes or additions; projects on
 `^1.0.0-beta.0` upgrade with a version bump. `@daloyjs/core`, `create-daloy`,
 and the JSR package `@daloyjs/daloy` move to `1.0.0-beta.1` in lockstep, and
 every `create-daloy` template now pins `@daloyjs/core@^1.0.0-beta.1`.
@@ -458,7 +458,7 @@ now feature-complete and considered stable for the 1.0 release. This is the buil
 we want people to test in anger and report back on before the `1.0.0` GA. There
 are no functional code changes from `0.44.0`: every guardrail, adapter, and
 helper that shipped across `0.x` is here, unchanged. What changed is the promise.
-From 1.0 onward, breaking changes follow SemVer (no breaking change in a `1.x`
+From 1.0 onward, the API follows SemVer (compatible within a `1.x`
 minor).
 
 ### Changed
