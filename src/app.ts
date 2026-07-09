@@ -957,6 +957,16 @@ interface CompiledRoute {
   corsOriginAllows: CorsOriginAllow[];
   /** CORS origin allowlist predicates from global hooks; precomputed for the dispatch cross-origin check. */
   fullCorsOriginAllows: CorsOriginAllow[];
+  /**
+   * Decorations visible in this route's registration scope, or `undefined`
+   * when the scope had none. Captured at registration (like {@link mergedHooks})
+   * so plugin-local decorations reach only that plugin's routes instead of
+   * leaking through the root app's shared bag — see {@link App.decorate} and
+   * {@link App.group}. Referenced (not copied) so decorations added later in
+   * the same scope stay visible; each scope owns a distinct bag, so the
+   * reference never crosses an encapsulation boundary.
+   */
+  decorations: Record<string, unknown> | undefined;
 }
 
 interface RouteSecurityMarkers {
@@ -2474,10 +2484,25 @@ export class App<
       ...corsOriginAllows,
     ];
     const securityMarkers = securityMarkersFromHooks([globalHookLayer, ...sources]);
+    // Capture the decorations of this route's scope at registration time so the
+    // dispatch hot path reads the scope-local bag rather than the root app's.
+    // `this.decorations` is this scope's own bag (the root's, or the child's
+    // copy created in `group()`), so plugin-local decorations never leak to
+    // sibling plugins or the root. `undefined` when empty keeps the per-request
+    // `Object.assign` skipped for the common no-decoration case.
+    const decorations = this.decorationsCount === 0 ? undefined : this.decorations;
     this.router.add(
       def.method,
       fullPath,
-      { def: merged, hooks, mergedHooks, hasFinalizeHook, corsOriginAllows, fullCorsOriginAllows },
+      {
+        def: merged,
+        hooks,
+        mergedHooks,
+        hasFinalizeHook,
+        corsOriginAllows,
+        fullCorsOriginAllows,
+        decorations,
+      },
       def.operationId
     );
     // `routes` is statically a readonly tuple so the typed client can infer
@@ -3061,7 +3086,15 @@ export class App<
     (child as any).corsOriginAllows = corsOriginAllowsFromHooks((child as any).groupHooks);
     (child as any).groupTags = [...this.groupTags, ...(config.tags ?? [])];
     (child as any).groupAuth = config.auth ?? this.groupAuth;
-    (child as any).decorations = this.decorations;
+    // Encapsulate decorations (Fastify-style): the child gets its OWN bag
+    // seeded with a copy of the parent's current decorations. App-level
+    // decorations therefore flow inward, while `child.decorate()` mutates only
+    // this copy — it never leaks back to the parent or sideways to sibling
+    // plugins (each sibling copies the parent bag at its own registration).
+    // Routes snapshot this bag in `route()`; the shared reference used before
+    // made decorators app-global instead of scoped.
+    (child as any).decorations = { ...this.decorations };
+    (child as any).decorationsCount = this.decorationsCount;
     (child as any).installedPlugins = this.installedPlugins;
     (child as any).closeHooks = this.closeHooks;
     (child as any).idleConnectionCloseHooks = this.idleConnectionCloseHooks;
@@ -3151,6 +3184,25 @@ export class App<
    *   handler: ({ state }) => ({ status: 200, body: state.db.ping() }),
    * });
    * ```
+   *
+   * ### Scoping (Fastify-style encapsulation)
+   *
+   * Decorations are **scoped to the app instance they are declared on**, and
+   * are captured per route at registration time:
+   *
+   * - Calling `decorate()` on the root app makes the value visible to every
+   *   route, including routes inside plugins/groups registered *afterwards*
+   *   (app-level decorations flow inward).
+   * - Calling `decorate()` on the child app passed to {@link App.register} /
+   *   {@link App.group} scopes the value to **that plugin's routes only** — it
+   *   does not leak to sibling plugins or back to the root.
+   *
+   * Each route binds to its scope's decorations when it is registered, so
+   * **decorate before registering the routes that consume the value** (the same
+   * ordering Fastify requires). Adding a decoration to a scope that already had
+   * at least one is picked up by that scope's existing routes; but the first
+   * decoration added to a scope *after* its routes were registered will not
+   * reach them.
    *
    * @param key - Property name on `ctx.state`.
    * @param value - Value bound to that property on every request.
@@ -3641,7 +3693,12 @@ export class App<
       const state = ctx.state as Record<string, unknown>;
       state.requestId = requestId;
       state.log = log;
-      if (this.decorationsCount !== 0) Object.assign(state, this.decorations);
+      // Apply the decorations captured for THIS route's scope (see
+      // `CompiledRoute.decorations`) rather than the root app's bag, so a
+      // plugin's decorations reach only that plugin's routes. `undefined` when
+      // the scope had none keeps the common case allocation-free.
+      const routeDecorations = match.handler.decorations;
+      if (routeDecorations !== undefined) Object.assign(state, routeDecorations);
 
       if (allHooks.beforeHandle !== undefined) {
         const beforeResult = allHooks.beforeHandle(ctx);

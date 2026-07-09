@@ -172,9 +172,17 @@ app.register({ name: "metrics", seed: "public", register: publicMetrics });`}
       <p>
         Decorate the app to inject shared resources into every handler&apos;s{" "}
         <code>state</code>. Decorations added at the root are visible inside
-        plugins. Decorations added inside a plugin stay scoped to that plugin.
+        plugins. Decorations added inside a plugin stay scoped to that plugin
+        and never leak sideways to sibling plugins or back up to the root.
         Reusing a key throws unless you pass <code>{`{ override: true }`}</code>
         deliberately.
+      </p>
+      <p>
+        Each route binds to its scope&apos;s decorations when it is registered,
+        so <strong>decorate before registering the routes that read it</strong>{" "}
+        (the same ordering Fastify requires). Declare root-level decorations
+        before the plugins and groups that depend on them, and a plugin&apos;s
+        own decorations before that plugin&apos;s routes.
       </p>
       <CodeBlock
         code={`import { z } from "zod";

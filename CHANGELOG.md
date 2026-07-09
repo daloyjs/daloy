@@ -13,6 +13,19 @@ For the forward-looking plan and the full thematic release log, see
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
+## [Unreleased]
+
+### Fixed
+
+- **Plugin decorations are now correctly encapsulated.** `app.decorate()` called
+  inside a plugin/group is scoped to that plugin's routes as the docs promise:
+  it no longer leaks sideways to sibling plugins or up to the root, and a
+  plugin's own routes reliably see it (previously a decoration set inside a
+  plugin was either invisible or, when the root also had a decoration, visible
+  app-wide). Each route now snapshots the decorations of its registration scope,
+  matching how group/route hooks are already scoped. Decorate before registering
+  the routes that read the value (the same ordering Fastify requires).
+
 ## [1.0.0-rc.2] - 2026-07-07
 
 ### Changed
