@@ -465,7 +465,7 @@ await state.square.refund({
       <p>
         The v40+ SDK is Fern-generated and uses the platform <code>fetch</code> when
         available, falling back to <code>node-fetch</code>. Square officially supports
-        Node.js 18+, Vercel (Edge and Node), Cloudflare Workers, Deno 1.25+, Bun 1.0+, and
+        Node.js 18+, Cloudflare Workers, Deno 1.25+, Bun 1.0+, and
         React Native, so the same plugin runs on Edge runtimes unchanged. The only thing
         to watch is reading the raw body: on Edge, use{" "}
         <code>await request.text()</code> instead of <code>readRawBody</code> if your
