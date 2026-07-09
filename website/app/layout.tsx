@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Noto_Sans, Playfair_Display } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
@@ -118,9 +119,16 @@ const playfairDisplayHeading = Playfair_Display({
 
 const notoSans = Noto_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // The CSP nonce is minted per request in proxy.ts and forwarded on `x-nonce`.
+  // Reading it here (a dynamic API) also opts the tree into dynamic rendering,
+  // which nonce-based CSP requires. It is stamped onto the inline scripts we
+  // control — next-themes' anti-FOUC script and the analytics loader — so they
+  // satisfy `script-src 'nonce-…'` without `'unsafe-inline'`.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html
       lang="en"
@@ -133,7 +141,7 @@ export default function RootLayout({
       )}
     >
       <body className="flex min-h-screen flex-col bg-background font-sans antialiased">
-        <ThemeProvider>
+        <ThemeProvider nonce={nonce}>
           <a
             href="#main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:border focus:border-border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
@@ -192,7 +200,7 @@ export default function RootLayout({
         <Analytics />
         <PwaServiceWorker />
       </body>
-      <GoogleAnalytics gaId="G-DSBFBZT7RQ" />
+      <GoogleAnalytics gaId="G-DSBFBZT7RQ" nonce={nonce} />
     </html>
   );
 }

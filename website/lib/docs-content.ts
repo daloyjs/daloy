@@ -1,5 +1,4 @@
 import type { Route } from "next";
-import { cacheLife } from "next/cache";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -140,26 +139,38 @@ export function parseDocFrontmatter(
 }
 
 /**
+ * Process-lifetime memo for {@link getAllDocPages}. The docs tree is static at
+ * runtime, so the disk walk + parse runs at most once per server process.
+ */
+let allDocPagesPromise: Promise<DocPage[]> | undefined;
+
+/**
  * Read and parse every docs page from disk, returning metadata plus the full
- * plain-text body for each, sorted by route. Cached for the lifetime of the
+ * plain-text body for each, sorted by route. Memoized for the lifetime of the
  * deployment since the docs tree is static at runtime.
+ *
+ * The memoization replaces a `"use cache"` directive: nonce-based CSP requires
+ * dropping the `cacheComponents`/PPR flag that `"use cache"` depends on, and a
+ * module-level promise gives the same once-per-deployment caching for this
+ * build-invariant computation.
  *
  * @returns Every discovered {@link DocPage}.
  */
 export async function getAllDocPages(): Promise<DocPage[]> {
-  "use cache";
-  cacheLife("max");
+  allDocPagesPromise ??= (async () => {
+    const pageFiles = await walkDocsPages(docsDir);
+    const pages = await Promise.all(
+      pageFiles.map(async (filePath) => {
+        const source = await readFile(filePath, "utf8");
+        const frontmatter = parseDocFrontmatter(source, filePath);
+        return { ...frontmatter, body: extractBodyText(source) } satisfies DocPage;
+      }),
+    );
 
-  const pageFiles = await walkDocsPages(docsDir);
-  const pages = await Promise.all(
-    pageFiles.map(async (filePath) => {
-      const source = await readFile(filePath, "utf8");
-      const frontmatter = parseDocFrontmatter(source, filePath);
-      return { ...frontmatter, body: extractBodyText(source) } satisfies DocPage;
-    }),
-  );
+    return pages.sort((left, right) => left.href.localeCompare(right.href));
+  })();
 
-  return pages.sort((left, right) => left.href.localeCompare(right.href));
+  return allDocPagesPromise;
 }
 
 /**

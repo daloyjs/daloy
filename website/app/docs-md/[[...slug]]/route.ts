@@ -1,4 +1,3 @@
-import { cacheLife } from "next/cache";
 import { parseHTML } from "linkedom";
 
 import { getDocPage } from "@/lib/docs-content";
@@ -21,7 +20,18 @@ import { SITE_URL } from "@/lib/seo";
  */
 
 /**
- * Fetch a docs page's rendered HTML and convert it to markdown. Cached for
+ * Process-lifetime memo of successfully rendered markdown keyed by
+ * `origin\0route`. The docs are static at runtime, so each page's markdown is
+ * built at most once per deployment. Failures are intentionally not cached so a
+ * transient self-fetch error does not stick for the life of the process.
+ *
+ * Replaces a `"use cache"` directive: nonce-based CSP requires dropping the
+ * `cacheComponents`/PPR flag that `"use cache"` depends on.
+ */
+const markdownCache = new Map<string, string>();
+
+/**
+ * Fetch a docs page's rendered HTML and convert it to markdown. Memoized for
  * the lifetime of the deployment since the docs are static at runtime.
  *
  * @param origin - Origin of the current deployment, used for the self-fetch.
@@ -29,8 +39,11 @@ import { SITE_URL } from "@/lib/seo";
  * @returns The markdown document, or `null` when rendering fails.
  */
 async function renderDocMarkdown(origin: string, route: string): Promise<string | null> {
-  "use cache";
-  cacheLife("max");
+  const key = `${origin} ${route}`;
+  const cached = markdownCache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
 
   const response = await fetch(`${origin}${route}`);
 
@@ -45,7 +58,14 @@ async function renderDocMarkdown(origin: string, route: string): Promise<string 
     return null;
   }
 
-  return buildPageMarkdown(article as unknown as Element, `${SITE_URL}${route}`) || null;
+  const markdown =
+    buildPageMarkdown(article as unknown as Element, `${SITE_URL}${route}`) || null;
+
+  if (markdown !== null) {
+    markdownCache.set(key, markdown);
+  }
+
+  return markdown;
 }
 
 export async function GET(

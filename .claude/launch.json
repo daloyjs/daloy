@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "website", "dev"],
       "port": 3000
+    },
+    {
+      "name": "website-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "website", "start"],
+      "port": 3000
     }
   ]
 }
