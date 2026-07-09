@@ -4,7 +4,7 @@ import { App } from "../src/index.js";
 import { scalarHtml, swaggerUiHtml, redocHtml, htmlResponse, docsContentSecurityPolicy } from "../src/docs.js";
 import { createLogger } from "../src/logger.js";
 import { toFetchHandler as toCloudflareFetchHandler } from "../src/adapters/cloudflare.js";
-import { toEdgeHandler, toWebHandler, toRouteHandlers, toFetchHandler as toVercelFetchHandler } from "../src/adapters/vercel.js";
+import { toWebHandler, toRouteHandlers, toFetchHandler as toVercelFetchHandler } from "../src/adapters/vercel.js";
 import { serve as serveBun } from "../src/adapters/bun.js";
 import { serve as serveDeno } from "../src/adapters/deno.js";
 import { toFastlyHandler, installFastlyListener } from "../src/adapters/fastly.js";
@@ -407,15 +407,12 @@ test("cloudflare and vercel adapters delegate to app.fetch", async () => {
   });
 
   const cf = await toCloudflareFetchHandler(app).fetch(new Request("http://test.local/ok"));
-  const edge = await toEdgeHandler(app)(new Request("http://test.local/ok"));
   const web = await toWebHandler(app)(new Request("http://test.local/ok"));
   const vercelFetch = await toVercelFetchHandler(app).fetch(new Request("http://test.local/ok"));
   assert.equal(cf.status, 200);
-  assert.equal(edge.status, 200);
   assert.equal(web.status, 200);
   assert.equal(vercelFetch.status, 200);
   assert.deepEqual(await cf.json(), { ok: true });
-  assert.deepEqual(await edge.json(), { ok: true });
   assert.deepEqual(await web.json(), { ok: true });
   assert.deepEqual(await vercelFetch.json(), { ok: true });
 

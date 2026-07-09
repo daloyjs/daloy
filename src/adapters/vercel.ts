@@ -1,13 +1,15 @@
 /**
  * Vercel / web-standard handler.
  *
- * Vercel now recommends the Node.js runtime over Edge for new functions. The
- * runtime is web-standard, but the export shape differs by integration: Node
- * `/api` functions use a default `{ fetch }` object, while Edge functions use a
- * bare function export. If you are hosting a DaloyJS app inside an existing
- * Next.js app, App Router route handlers use named method exports.
+ * Vercel recommends the Node.js runtime for new functions (it runs on Fluid
+ * Compute with full Node APIs) and has deprecated standalone Edge Functions.
+ * The runtime is web-standard, but the export shape differs by integration:
+ * Node `/api` functions use a default `{ fetch }` object, App Router route
+ * handlers use named method exports, and the deprecated Edge runtime expects a
+ * bare function export — {@link toWebHandler} — plus `export const runtime =
+ * "edge"`.
  *
- *   // Vercel Functions (`api/[...path].ts`)
+ *   // Vercel Functions (`api/[...path].ts`) — recommended
  *   import { toFetchHandler } from "@daloyjs/core/vercel";
  *   export default toFetchHandler(app);
  *
@@ -15,8 +17,6 @@
  *   import { toRouteHandlers } from "@daloyjs/core/vercel";
  *   export const { GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD } =
  *     toRouteHandlers(app);
- *
- * `toEdgeHandler` is kept as a backward-compatible alias of `toWebHandler`.
  */
 import type { App } from "../app.js";
 
@@ -52,9 +52,6 @@ export function toWebHandler(app: App): WebHandler {
 export function toFetchHandler(app: App): FetchHandler {
   return { fetch: toWebHandler(app) };
 }
-
-/** Backward-compatible alias for {@link toWebHandler}. */
-export const toEdgeHandler = toWebHandler;
 
 /**
  * Build the `{ GET, POST, ... }` object expected by Next.js App Router

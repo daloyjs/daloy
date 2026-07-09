@@ -1250,10 +1250,9 @@ interface ExportedFetchHandler<Env = unknown> {
 interface FetchHandler { fetch: WebHandler }
 type RouteHandlers = Record<"GET"|"POST"|"PUT"|"PATCH"|"DELETE"|"OPTIONS"|"HEAD", WebHandler>;
 
-toWebHandler   (app: App): WebHandler;        // bare function (Edge, middleware)
+toWebHandler   (app: App): WebHandler;        // bare function (middleware, deprecated Edge runtime)
 toFetchHandler (app: App): FetchHandler;      // default export for Node Functions
-toRouteHandlers(app: App): RouteHandlers;     // Next.js App Router route.ts
-const toEdgeHandler = toWebHandler;           // backwards-compat alias`}
+toRouteHandlers(app: App): RouteHandlers;     // Next.js App Router route.ts`}
       />
 
       <h3 id="daloyjs-core-fastly">

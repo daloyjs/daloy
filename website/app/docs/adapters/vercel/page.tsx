@@ -108,7 +108,9 @@ export default toFetchHandler(app);`}
 }`}
       />
 
-      <h2 id="2-vercel-functions-standalone-api">2. Vercel Functions (standalone API)</h2>
+      <h2 id="2-vercel-functions-standalone-api">
+        2. Edge runtime opt-in (deprecated by Vercel)
+      </h2>
       <CodeBlock
         language="ts"
         code={`// api/index.ts
@@ -119,10 +121,12 @@ export const runtime = "edge";
 export default toWebHandler(app);`}
       />
       <p>
-        The same <code>/(.*)</code> → <code>/api</code> rewrite applies.{" "}
-        <code>toEdgeHandler</code> is still exported as a backward-compatible
-        alias of <code>toWebHandler</code>; new code should prefer{" "}
-        <code>toWebHandler</code>.
+        The same <code>/(.*)</code> → <code>/api</code> rewrite applies. Vercel
+        has <strong>deprecated standalone Edge Functions</strong>, so prefer the
+        Node.js runtime in section 1; reach for this opt-in only for an existing
+        Edge workload. The Edge runtime uses the web-standard{" "}
+        <code>toWebHandler</code> and its code must avoid <code>node:</code>{" "}
+        modules.
       </p>
 
       <h2 id="vercel-json">vercel.json</h2>
