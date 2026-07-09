@@ -15,6 +15,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] - 2026-07-09
+
 ### Fixed
 
 - **Plugin decorations are now correctly encapsulated.** `app.decorate()` called
@@ -25,6 +27,17 @@ For the forward-looking plan and the full thematic release log, see
   app-wide). Each route now snapshots the decorations of its registration scope,
   matching how group/route hooks are already scoped. Decorate before registering
   the routes that read the value (the same ordering Fastify requires).
+
+### Changed
+
+- **`toEdgeHandler` is removed from `@daloyjs/core/vercel`.** It was a plain
+  alias of `toWebHandler`; use `toWebHandler` directly (with
+  `export const runtime = "edge"`) for the Edge runtime, which Vercel now
+  positions behind the recommended Node.js runtime (Fluid Compute).
+- **Version: `1.0.0-rc.2` → `1.0.0-rc.3`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, JSR `@daloyjs/daloy`), the `create-daloy`
+  templates, the website version reference, the Deno adapter docs, the workshop,
+  and the SBOMs.
 
 ## [1.0.0-rc.2] - 2026-07-07
 
@@ -1848,7 +1861,8 @@ scaffolded projects pin the latest peer.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.2...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.3...HEAD
+[1.0.0-rc.3]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.0...v1.0.0-rc.1
 [1.0.0-rc.0]: https://github.com/daloyjs/daloy/compare/v1.0.0-beta.7...v1.0.0-rc.0

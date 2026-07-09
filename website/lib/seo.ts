@@ -29,7 +29,7 @@ export const SITE_URL = (
 export const SITE_NAME = "DaloyJS";
 
 export const CORE_PACKAGE_VERSION =
-  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.0.0-rc.2";
+  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.0.0-rc.3";
 
 export const HOME_TITLE =
   "The first TypeScript REST API framework built for secure AI-assisted services";
