@@ -132,6 +132,7 @@ export type {
 export {
   readBodyLimited,
   safeJsonParse,
+  safeJsonParseLimited,
   isForbiddenObjectKey,
   sanitizeHeaderName,
   sanitizeHeaderValue,

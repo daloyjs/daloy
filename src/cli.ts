@@ -823,6 +823,48 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
       });
     }
 
+    // JSON structural limits audit. The new jsonMaxKeys / jsonMaxDepth
+    // guards protect against hash-flood / deep-nesting DoS inside the byte
+    // limit. Surface when disabled (0) or raised to an implausibly high
+    // value.
+    const jsonMaxKeys = o.jsonMaxKeys;
+    if (jsonMaxKeys === 0) {
+      findings.push({
+        level: "warn",
+        code: "audit.jsonMaxKeys.disabled",
+        message:
+          "jsonMaxKeys is 0 — the wide-object / hash-flood structural limit " +
+          "is disabled. An attacker can send tens or hundreds of thousands " +
+          "of keys in a body that still fits under bodyLimitBytes.",
+      });
+    } else if (typeof jsonMaxKeys === "number" && jsonMaxKeys > 100_000) {
+      findings.push({
+        level: "warn",
+        code: "audit.jsonMaxKeys.blanket",
+        message:
+          `jsonMaxKeys is ${jsonMaxKeys} (> 100k). A cap this high weakens ` +
+          "protection against wide-object DoS payloads.",
+      });
+    }
+
+    const jsonMaxDepth = o.jsonMaxDepth;
+    if (jsonMaxDepth === 0) {
+      findings.push({
+        level: "warn",
+        code: "audit.jsonMaxDepth.disabled",
+        message:
+          "jsonMaxDepth is 0 — deep nesting DoS protection is disabled.",
+      });
+    } else if (typeof jsonMaxDepth === "number" && jsonMaxDepth > 200) {
+      findings.push({
+        level: "warn",
+        code: "audit.jsonMaxDepth.blanket",
+        message:
+          `jsonMaxDepth is ${jsonMaxDepth} (> 200). Extremely deep JSON is ` +
+          "almost never legitimate and can amplify CPU during validation.",
+      });
+    }
+
     // Idle-timeout / request-timeout audit. Reaffirms the
     // existing requestTimeoutMs check; also surface an explicit zero
     // idleTimeoutMs in production. The framework also keeps adapter

@@ -115,7 +115,7 @@ test("[C/stack-bomb] a deeply-nested JSON body is rejected (400) without hanging
   assert.ok(dt < 2000, `parsing must fail fast (${dt.toFixed(0)}ms)`);
 });
 
-test("[C/hash-flood] a very wide JSON object (50k keys) is handled in bounded time", async () => {
+test("[C/hash-flood] an excessively wide JSON object (50k keys) is rejected quickly (structural limit)", async () => {
   const app = new App({ env: "development", logger: false });
   app.route({
     method: "POST",
@@ -134,8 +134,11 @@ test("[C/hash-flood] a very wide JSON object (50k keys) is handled in bounded ti
     body: JSON.stringify(obj),
   });
   const dt = performance.now() - t0;
-  assert.equal(res.status, 200);
-  assert.ok(dt < 2000, `wide-object parsing must not blow up (${dt.toFixed(0)}ms)`);
+  // With the jsonMaxKeys default, an extreme wide object is rejected with 400
+  // by the pre-parse structural scan — before the 50k-key object is ever
+  // materialized. This is the desired DoS protection, in bounded time.
+  assert.equal(res.status, 400);
+  assert.ok(dt < 2000, `wide-object rejection must be fast (${dt.toFixed(0)}ms)`);
 });
 
 // ===========================================================================

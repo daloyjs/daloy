@@ -159,11 +159,13 @@ DaloyJS is designed for the threat model of an **internet-facing HTTP API on a t
 
 Each subsection names the class, a one-line description, the framework primitive that defends it, and where the regression tests live.
 
-#### Body-size DoS
+#### Body-size DoS + structural DoS
 Streamed body read with hard cap (default 1 MiB); `Content-Length` rejected pre-read when oversize. Core-enforced.
 
+In addition, `jsonMaxKeys` (default 10 000 total object keys across the parsed tree) and `jsonMaxDepth` (default 50) bound "hash flood" wide objects and deeply nested structures even when they fit inside the byte limit. `safeJsonParseLimited` enforces both with a single allocation-free pre-parse scan of the raw text (object keys counted via structural `:` delimiters, depth via `{`/`[` balance), so an oversized structure is rejected in bounded time **before** it is parsed into memory. Applied to JSON bodies, MCP envelopes, CSP reports, and pagination cursors. Can be raised per `App()` or disabled (0). See `getSecurityPosture()`.
+
 #### Prototype pollution via JSON
-`safeJsonParse` strips `__proto__` / `constructor` / `prototype` via reviver on every parsed body. JWT verification applies the same reviver to header + payload so polluted keys cannot ride into user code via `Object.assign` / spread on the returned claims. See [Aikido's write-up](https://www.aikido.dev/blog/prevent-prototype-pollution).
+`safeJsonParse` (and the limited variant) strips `__proto__` / `constructor` / `prototype` via reviver on every parsed body. JWT verification applies the same reviver to header + payload so polluted keys cannot ride into user code via `Object.assign` / spread on the returned claims. See [Aikido's write-up](https://www.aikido.dev/blog/prevent-prototype-pollution).
 
 #### Parameter-binding RCE (Spring4Shell-class)
 The three non-JSON parsers in [`src/app.ts`](src/app.ts) (`queryToObject`, urlencoded, multipart) funnel keys through `isForbiddenObjectKey` and drop `__proto__` / `constructor` / `prototype` before assignment. Tested in [`tests/security.test.ts`](tests/security.test.ts).

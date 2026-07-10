@@ -91,6 +91,36 @@ test("doctor: item 4 - bodyLimitBytes > 25 MiB surfaces a warn", async () => {
   assert.ok(codes.includes("audit.bodyLimit.blanket"), codes.join(","));
 });
 
+test("doctor: jsonMaxKeys: 0 surfaces a warn for disabled wide-object protection", async () => {
+  const app = dummyApp({ jsonMaxKeys: 0 });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 0); // warn only
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes("audit.jsonMaxKeys.disabled"), codes.join(","));
+});
+
+test("doctor: jsonMaxDepth: 0 surfaces a warn", async () => {
+  const app = dummyApp({ jsonMaxDepth: 0 });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 0);
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes("audit.jsonMaxDepth.disabled"), codes.join(","));
+});
+
+test("doctor: jsonMaxKeys high value surfaces a blanket warn", async () => {
+  const app = dummyApp({ jsonMaxKeys: 500_000 });
+  const { io, out } = buildIO(app);
+  const r = await runCli(["doctor", "--json", "entry.ts"], io);
+  assert.equal(r.exitCode, 0);
+  const parsed = JSON.parse(out.join(""));
+  const codes = parsed.findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes("audit.jsonMaxKeys.blanket"), codes.join(","));
+});
+
 test("doctor: item 6 - allowUnsafeValidationDetails surfaces an error", async () => {
   const app = dummyApp({ allowUnsafeValidationDetails: true });
   const { io, out } = buildIO(app);

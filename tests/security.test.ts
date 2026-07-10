@@ -10,6 +10,7 @@ import {
   bearerAuth,
   timingSafeEqual,
   safeJsonParse,
+  safeJsonParseLimited,
   isForbiddenObjectKey,
 } from "../src/index.js";
 
@@ -60,6 +61,161 @@ test("safeJsonParse strips prototype-pollution keys", () => {
   // The dangerous own keys were stripped:
   assert.equal(Object.hasOwn(out, "__proto__"), false);
   assert.equal(Object.hasOwn(out.nested, "constructor"), false);
+});
+
+test("jsonMaxKeys (default 10k) rejects excessively wide objects", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "POST",
+    path: "/wide",
+    operationId: "wide",
+    request: { body: z.record(z.string(), z.string()) as any },
+    responses: { 200: { description: "ok", body: z.object({ n: z.number() }) as any } },
+    handler: async ({ body }: any) => ({ status: 200 as const, body: { n: Object.keys(body).length } }),
+  });
+
+  // 12k keys > default 10k → rejected quickly
+  const wide: Record<string, string> = {};
+  for (let i = 0; i < 12_000; i++) wide[`k${i}`] = "v";
+  const res = await app.request("/wide", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(wide),
+  });
+  assert.equal(res.status, 400);
+});
+
+test("jsonMaxKeys and jsonMaxDepth are configurable and can be disabled", async () => {
+  const app = new App({ logger: false, jsonMaxKeys: 0, jsonMaxDepth: 0 });
+  app.route({
+    method: "POST",
+    path: "/accept",
+    operationId: "accept",
+    request: { body: z.any() as any },
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: async () => ({ status: 200 as const, body: { ok: true } }),
+  });
+
+  const veryWide: Record<string, string> = {};
+  for (let i = 0; i < 50_000; i++) veryWide[`k${i}`] = "v";
+  const deep = JSON.stringify({ a: { b: { c: { d: { e: { f: 1 } } } } } }); // depth 6, fine anyway
+
+  const resWide = await app.request("/accept", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(veryWide),
+  });
+  assert.equal(resWide.status, 200);
+
+  const resDeep = await app.request("/accept", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: deep,
+  });
+  assert.equal(resDeep.status, 200);
+});
+
+test("jsonMaxDepth rejects deeply nested structures by default", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "POST",
+    path: "/deep",
+    operationId: "deep",
+    request: { body: z.any() as any },
+    responses: { 200: { description: "ok" } },
+    handler: async () => ({ status: 200 as const, body: { ok: true } }),
+  });
+
+  // Build a structure deeper than default 50
+  let deep: any = {};
+  let current = deep;
+  for (let i = 0; i < 60; i++) {
+    current.n = {};
+    current = current.n;
+  }
+  const res = await app.request("/deep", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(deep),
+  });
+  assert.equal(res.status, 400);
+});
+
+test("safeJsonParseLimited rejects wide/deep payloads", () => {
+  const wide = JSON.stringify(Object.fromEntries(Array.from({ length: 20_000 }, (_, i) => [`k${i}`, "v"])));
+  const deep = JSON.stringify({ a: { b: { c: Array.from({ length: 60 }).reduce((p: any) => ({ n: p }), {}) } } });
+
+  try {
+    safeJsonParseLimited(wide);
+    assert.fail("should have thrown for wide object");
+  } catch (e: any) {
+    assert.equal(e.status, 400);
+    assert.match(e.problem?.detail || "", /key count/);
+  }
+
+  try {
+    safeJsonParseLimited(deep);
+    assert.fail("should have thrown for deep nesting");
+  } catch (e: any) {
+    assert.equal(e.status, 400);
+    assert.match(e.problem?.detail || "", /nesting depth/);
+  }
+
+  // Disabled limits
+  assert.doesNotThrow(() => safeJsonParseLimited(wide, 0, 0));
+});
+
+test("safeJsonParseLimited counts structure, not string contents", () => {
+  // The limit scan reads raw text, so `:`/`{`/`[` characters INSIDE string
+  // literals must not be miscounted as object keys or nesting. These payloads
+  // are structurally tiny and must parse cleanly under tight limits.
+
+  // Colons inside string values are not keys: 3 real keys under a cap of 5.
+  assert.doesNotThrow(() =>
+    safeJsonParseLimited(
+      JSON.stringify({ a: "1:2:3:4:5", b: "http://x:y:z", c: "::::::" }),
+      5,
+      50,
+    ),
+  );
+
+  // A colon inside a key name is not a second key: 1 key under a cap of 1.
+  assert.doesNotThrow(() => safeJsonParseLimited(JSON.stringify({ "a:b:c": 1 }), 1, 50));
+
+  // Brackets inside a string do not inflate depth: real depth is 1 under a cap of 3.
+  assert.doesNotThrow(() =>
+    safeJsonParseLimited(JSON.stringify({ a: "[[[[[[[[[[x]]]]]]]]]]" }), 100, 3),
+  );
+
+  // An escaped quote must not end the string early, so the `:` that follows
+  // stays inside the string and is not counted: 1 key under a cap of 2.
+  assert.doesNotThrow(() => safeJsonParseLimited('{"a":"he said \\"x:y\\" ok"}', 2, 50));
+
+  // Array elements are not object keys: 10 elements, 0 keys, under a cap of 1.
+  assert.doesNotThrow(() => safeJsonParseLimited(JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), 1, 50));
+
+  // Sanity: genuine structural excess still rejects (the phrase lives in the
+  // RFC 9457 `detail`, matching the assertions above).
+  const rejects = (fn: () => unknown, re: RegExp) => {
+    try {
+      fn();
+      assert.fail("should have thrown");
+    } catch (e: any) {
+      assert.equal(e.status, 400);
+      assert.match(e.problem?.detail || "", re);
+    }
+  };
+  rejects(() => safeJsonParseLimited(JSON.stringify({ a: 1, b: 2, c: 3 }), 2, 50), /key count/);
+  rejects(() => safeJsonParseLimited(JSON.stringify({ a: { b: { c: 1 } } }), 100, 2), /nesting depth/);
+});
+
+test("getSecurityPosture exposes jsonMaxKeys and jsonMaxDepth", () => {
+  const app = new App({ logger: false });
+  const p = app.getSecurityPosture() as any;
+  assert.equal(typeof p.jsonMaxKeys, "number");
+  assert.equal(typeof p.jsonMaxDepth, "number");
+  assert.ok(p.jsonMaxKeys > 0 && p.jsonMaxKeys <= 100_000);
+  assert.ok(p.jsonMaxDepth > 0 && p.jsonMaxDepth <= 200);
 });
 
 test("405 with allow header for known path / wrong method", async () => {

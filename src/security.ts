@@ -997,3 +997,95 @@ export function assertNoMongoOperators(value: unknown): void {
     throw new BadRequestError("Operator-prefixed key rejected");
   }
 }
+
+/**
+ * Enforces structural limits by scanning raw JSON *text* in a single
+ * allocation-free pass, before the value is parsed — so a wide-object or
+ * deep-nesting bomb is rejected without ever being materialized into memory.
+ *
+ * Object keys are counted via `:` delimiters that sit outside string literals:
+ * every JSON object member is `"key": value`, and array elements carry no
+ * colon, so the number of structural colons equals the total object-key count
+ * across the whole tree. Nesting depth tracks the running `{`/`[` … `}`/`]`
+ * balance, again ignoring characters inside strings. Both checks short-circuit
+ * the instant a limit is exceeded, giving bounded-time rejection.
+ *
+ * This mirrors the accounting of the older recursive object walk but costs one
+ * tight character loop instead of a second full traversal of the parsed graph,
+ * keeping the common (small-body) path close to a bare `JSON.parse`.
+ *
+ * @param text - The raw JSON text (already known to be non-empty).
+ * @param maxKeys - Maximum total object keys (`<= 0` disables the key check).
+ * @param maxDepth - Maximum nesting depth (`<= 0` disables the depth check).
+ * @throws {BadRequestError} When the key or depth limit is exceeded.
+ * @internal
+ */
+function assertJsonTextStructure(text: string, maxKeys: number, maxDepth: number): void {
+  let depth = 0;
+  let keyCount = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === 0x5c /* \ */) escaped = true;
+      else if (c === 0x22 /* " */) inString = false;
+      continue;
+    }
+    switch (c) {
+      case 0x22 /* " */:
+        inString = true;
+        break;
+      case 0x7b /* { */:
+      case 0x5b /* [ */:
+        depth++;
+        if (maxDepth > 0 && depth > maxDepth) {
+          throw new BadRequestError("JSON exceeds maximum nesting depth");
+        }
+        break;
+      case 0x7d /* } */:
+      case 0x5d /* ] */:
+        depth--;
+        break;
+      case 0x3a /* : */:
+        if (maxKeys > 0 && ++keyCount > maxKeys) {
+          throw new BadRequestError("JSON exceeds maximum key count");
+        }
+        break;
+    }
+  }
+}
+
+/**
+ * Like {@link safeJsonParse}, but additionally enforces structural limits
+ * (total object keys across the tree and maximum nesting depth) to defend
+ * against wide-object / hash-flood and deep-nesting DoS payloads that stay
+ * under the byte cap.
+ *
+ * The limits are checked with a single pre-parse text scan
+ * ({@link assertJsonTextStructure}), so an oversized structure is rejected
+ * *before* it is parsed or allocated. On success the text is handed to
+ * {@link safeJsonParse}, which applies the same prototype-pollution stripping
+ * as every other body parser — so the security posture is identical, only the
+ * structural bounds are added.
+ *
+ * @param text - JSON text. Empty string returns `undefined`.
+ * @param maxKeys - Maximum total object keys (0 or negative = unlimited).
+ * @param maxDepth - Maximum nesting depth (0 or negative = unlimited).
+ * @returns Parsed value (with dangerous keys stripped).
+ * @throws {BadRequestError} on invalid JSON or when limits are exceeded.
+ * @since 1.0.0
+ */
+export function safeJsonParseLimited(
+  text: string,
+  maxKeys = 10_000,
+  maxDepth = 50
+): unknown {
+  if (text.length === 0) return undefined;
+  if (maxKeys > 0 || maxDepth > 0) {
+    assertJsonTextStructure(text, maxKeys, maxDepth);
+  }
+  return safeJsonParse(text);
+}

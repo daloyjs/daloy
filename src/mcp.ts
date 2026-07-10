@@ -1,6 +1,6 @@
 import type { PathString, RouteDefinition } from "./types.js";
 import type { StandardSchemaV1 } from "./schema.js";
-import { safeJsonParse } from "./security.js";
+import { safeJsonParse, safeJsonParseLimited } from "./security.js";
 
 /**
  * Latest MCP protocol version DaloyJS negotiates by default.
@@ -1402,11 +1402,10 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
 
     let message: JsonRpcMessage;
     try {
-      // `safeJsonParse` strips `__proto__` / `constructor` / `prototype` keys so
-      // an untrusted MCP client cannot smuggle prototype-pollution-shaped keys
-      // into a tool handler's arguments — matching the REST body parsers'
-      // secure-by-default posture (see `safeJsonParse` in security.ts).
-      message = safeJsonParse(raw) as JsonRpcMessage;
+      // Use the limited parser (proto stripping + key/depth bounds) so an
+      // untrusted MCP client cannot DoS us with wide or deeply-nested JSON-RPC
+      // payloads, even within the MCP body cap. Matches the REST body parsers.
+      message = safeJsonParseLimited(raw) as JsonRpcMessage;
     } catch {
       return rpcError(null, PARSE_ERROR, "Invalid JSON in request body.", undefined, 400, headers);
     }

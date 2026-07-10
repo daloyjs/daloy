@@ -246,6 +246,8 @@
     "example": "node --import tsx examples/basic.ts",
     "bench": "node --import tsx bench/router.bench.ts",
     "bench:serverless": "node --import tsx bench/serverless-cold-path.bench.ts",
+    "bench:json": "node --import tsx bench/json-body.bench.ts",
+    "bench:json-e2e": "node --import tsx bench/json-body-e2e.bench.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts tests/red-team-attacks-6.test.ts tests/red-team-attacks-7.test.ts tests/red-team-attacks-8.test.ts tests/red-team-attacks-9.test.ts tests/red-team-attacks-10.test.ts",
     "red-team:live": "node --import tsx red-team-live/run.ts",

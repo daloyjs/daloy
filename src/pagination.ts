@@ -29,6 +29,7 @@
  */
 
 import { BadRequestError } from "./errors.js";
+import { safeJsonParseLimited } from "./security.js";
 import { isForbiddenObjectKey } from "./security.js";
 import type { StandardSchemaV1 } from "./schema.js";
 
@@ -96,7 +97,9 @@ export function decodeCursor<T = unknown>(cursor: string): T {
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(json);
+    // Use limited parse for structural safety (wide/deep cursors).
+    // Cursors are length-capped at 4k so even default limits are very generous here.
+    parsed = safeJsonParseLimited(json, 1000, 20);
   } catch {
     throw new BadRequestError("Malformed pagination cursor.");
   }

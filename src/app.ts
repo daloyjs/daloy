@@ -22,6 +22,7 @@ import { validate } from "./schema.js";
 import {
   readBodyLimited,
   safeJsonParse,
+  safeJsonParseLimited,
   randomId,
   assertNoDuplicateSingletonHeaders,
   assertNoReservedInternalHeaders,
@@ -187,6 +188,7 @@ const INTERNAL_SERVICE_PRESET_DISABLED: readonly string[] = Object.freeze([
  */
 const INTERNAL_SERVICE_PRESET_KEPT: readonly string[] = Object.freeze([
   "bodyLimitBytes (1 MiB default)",
+  "jsonMaxKeys (10k) + jsonMaxDepth (50) structural limits",
   "requestTimeoutMs (30 s default)",
   "crashOnUnhandledRejection (production)",
   "weak session secret refuse-to-boot",
@@ -293,6 +295,31 @@ export interface AppOptions {
    * @since 0.38.0
    */
   maxHeaderCount?: number;
+
+  /**
+   * Maximum number of keys (summed across every object in the tree) permitted
+   * when parsing a JSON request body. This bounds "hash-flood" / wide-object
+   * attacks that easily fit inside `bodyLimitBytes` (e.g. 40 000 tiny keys).
+   * Applies to top-level objects and all nested objects. Set to 0 to disable.
+   * Default: 10 000.
+   *
+   * Exposed in `getSecurityPosture()` and audited by `daloy doctor`.
+   *
+   * @since 1.0.0
+   */
+  jsonMaxKeys?: number;
+
+  /**
+   * Maximum nesting depth permitted for JSON request bodies (objects and arrays).
+   * Prevents deeply-nested structures that can consume excessive CPU/memory
+   * during schema validation or handler processing. Set to 0 to disable.
+   * Default: 50.
+   *
+   * Exposed in `getSecurityPosture()` and audited by `daloy doctor`.
+   *
+   * @since 1.0.0
+   */
+  jsonMaxDepth?: number;
 
   /**
    * Per-request limits applied when parsing `multipart/form-data` bodies.
@@ -1036,6 +1063,8 @@ const DEFAULTS = {
   bodyLimitBytes: 1024 * 1024,
   requestTimeoutMs: 30_000,
   maxHeaderCount: DEFAULT_MAX_HEADER_COUNT,
+  jsonMaxKeys: 10_000,
+  jsonMaxDepth: 50,
   validateResponses: true,
 };
 
@@ -1409,6 +1438,8 @@ export class App<
       bodyLimitBytes: resolved.bodyLimitBytes ?? DEFAULTS.bodyLimitBytes,
       requestTimeoutMs: resolved.requestTimeoutMs ?? DEFAULTS.requestTimeoutMs,
       maxHeaderCount: resolved.maxHeaderCount ?? DEFAULTS.maxHeaderCount,
+      jsonMaxKeys: resolved.jsonMaxKeys ?? DEFAULTS.jsonMaxKeys,
+      jsonMaxDepth: resolved.jsonMaxDepth ?? DEFAULTS.jsonMaxDepth,
       ...resolved,
     };
     this.log =
@@ -1542,6 +1573,8 @@ export class App<
     bodyLimitBytes: number;
     requestTimeoutMs: number;
     maxHeaderCount: number;
+    jsonMaxKeys: number;
+    jsonMaxDepth: number;
     stripServerHeaders: boolean;
     production: boolean;
   } {
@@ -1558,6 +1591,8 @@ export class App<
       bodyLimitBytes: this.options.bodyLimitBytes,
       requestTimeoutMs: this.options.requestTimeoutMs,
       maxHeaderCount: this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT,
+      jsonMaxKeys: this.options.jsonMaxKeys ?? DEFAULTS.jsonMaxKeys,
+      jsonMaxDepth: this.options.jsonMaxDepth ?? DEFAULTS.jsonMaxDepth,
       stripServerHeaders: o.stripServerHeaders !== false,
       production: this.isProduction(),
     });
@@ -3000,7 +3035,7 @@ export class App<
         const rawText = new TextDecoder().decode(rawBytes);
         let parsed: unknown;
         try {
-          parsed = safeJsonParse(rawText);
+          parsed = safeJsonParseLimited(rawText, 1000, 20); // CSP reports are small
         } catch {
           throw new BadRequestError("Invalid JSON report body");
         }
@@ -4661,6 +4696,8 @@ function buildContext(
     bodyLimitBytes: number;
     allowedContentTypes?: string[];
     multipart?: AppOptions["multipart"];
+    jsonMaxKeys?: number;
+    jsonMaxDepth?: number;
   }
 ): BaseContext<any, any> | PromiseLike<BaseContext<any, any>> {
   const set = new LazyResponseSet();
@@ -4744,7 +4781,14 @@ function buildContext(
     if (!allowed.some((a) => ct.includes(a))) {
       throw new UnsupportedMediaTypeError(ct || "(none)", allowed);
     }
-    const raw = readBody(request, ct, opts.bodyLimitBytes, opts.multipart);
+    const raw = readBody(
+      request,
+      ct,
+      opts.bodyLimitBytes,
+      opts.multipart,
+      opts.jsonMaxKeys,
+      opts.jsonMaxDepth
+    );
     if (isPromiseLike(raw)) return raw.then(validateBodyAndFinish);
     return validateBodyAndFinish(raw);
   };
@@ -4850,9 +4894,16 @@ function readBodyBytesFast(req: Request, limit: number): Uint8Array | undefined 
   return undefined;
 }
 
-function parseJsonBodyBytes(bytes: Uint8Array): unknown {
+function parseJsonBodyBytes(
+  bytes: Uint8Array,
+  maxKeys: number,
+  maxDepth: number
+): unknown {
   if (bytes.byteLength === 0) return undefined;
-  return safeJsonParse(TEXT_DECODER.decode(bytes));
+  const text = TEXT_DECODER.decode(bytes);
+  // Use the limited parser when limits are enabled; falls back to safe behavior
+  // when limits are disabled (0 / negative).
+  return safeJsonParseLimited(text, maxKeys, maxDepth);
 }
 
 function parseUrlencodedBodyBytes(bytes: Uint8Array): Record<string, string> {
@@ -4879,12 +4930,14 @@ function readBody(
   req: Request,
   ct: string,
   limit: number,
-  multipart?: AppOptions["multipart"]
+  multipart?: AppOptions["multipart"],
+  jsonMaxKeys = 10_000,
+  jsonMaxDepth = 50
 ): unknown | Promise<unknown> {
   if (ct.includes("application/json")) {
     const fast = readBodyBytesFast(req, limit);
-    if (fast !== undefined) return parseJsonBodyBytes(fast);
-    return readBodyLimited(req, limit).then(parseJsonBodyBytes);
+    if (fast !== undefined) return parseJsonBodyBytes(fast, jsonMaxKeys, jsonMaxDepth);
+    return readBodyLimited(req, limit).then((b) => parseJsonBodyBytes(b, jsonMaxKeys, jsonMaxDepth));
   }
   if (ct.includes("application/x-www-form-urlencoded")) {
     const fast = readBodyBytesFast(req, limit);
