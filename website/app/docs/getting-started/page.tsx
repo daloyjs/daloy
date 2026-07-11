@@ -75,9 +75,9 @@ pnpm add -D typescript @types/node`}
 }`}
       />
       <p>
-        Node.js runs TypeScript entrypoints directly via built-in type
-        stripping (stable in Node 24+, available since 22.18), so local
-        development needs no transpiler and no separate build step.
+        Node.js runs TypeScript entrypoints directly via built-in type stripping
+        (stable in Node 24+, available since 22.18), so local development needs
+        no transpiler and no separate build step.
       </p>
 
       <p>
@@ -191,12 +191,11 @@ console.log(res.status, await res.json());
       </p>
 
       <p>
-        If you omit <code>openapi.info</code> entirely, DaloyJS will read your
-        project&apos;s <code>package.json</code> (<code>name</code>,{" "}
-        <code>version</code>, <code>description</code>) and use those for the
-        spec automatically. Deno projects without a <code>package.json</code>{" "}
-        fall back to <code>deno.json</code> / <code>deno.jsonc</code>. Explicit
-        values always override the autofill.
+        Set <code>openapi.info</code> (or the top-level <code>title</code>,{" "}
+        <code>version</code>, and <code>description</code>) for a real service.
+        If omitted, DaloyJS uses the portable <code>DaloyJS API</code> /{" "}
+        <code>0.0.0</code> fallback. The core never reads a host manifest, so
+        the same docs bundle works on Node, Bun, Deno, Workers, and Vercel.
       </p>
 
       <p>
@@ -206,7 +205,10 @@ console.log(res.status, await res.json());
       <CodeBlock
         code={`import { createApp } from "@daloyjs/core";
 
-const app = createApp({ docs: true });`}
+const app = createApp({
+  docs: true,
+  openapi: { info: { title: "My API", version: "1.0.0" } },
+});`}
       />
 
       <h3 id="prefer-the-classic-swagger-ui">Prefer the classic Swagger UI?</h3>
@@ -262,21 +264,23 @@ const app = createApp({ docs: true });`}
 headers: { "content-security-policy": docsContentSecurityPolicy() }`}
       />
 
-      <h2 id="4-use-the-typed-in-process-client">4. Use the typed in-process client</h2>
+      <h2 id="4-use-the-typed-in-process-client">
+        4. Use the typed in-process client
+      </h2>
       <CodeBlock
-        code={`import { createClient } from "@daloyjs/core/client";
+        code={`import { createInProcessClient } from "@daloyjs/core/client";
 
-const client = createClient(app, { baseUrl: "http://localhost:3000" });
+const client = createInProcessClient(app);
 const r = await client.greet({ params: { name: "DaloyJS" } });
 //    ^? { status: 200; body: { msg: string } }
 console.log(r.status, r.body);`}
       />
       <p>
-        The client&apos;s methods are inferred from the routes you chained onto{" "}
-        <code>app</code>. Keep the registrations chained (
-        <code>new App().route(a).route(b)</code>) and avoid a widening{" "}
-        <code>const app: App</code> annotation; either one erases the per-route
-        types and the client falls back to an untyped surface.
+        The client&apos;s methods are inferred from the app&apos;s route tuple.
+        Chain registrations or compose exported <code>defineRoute()</code>{" "}
+        contracts with <code>registerRoutes([...])</code>. Avoid widening the
+        result to a bare <code>App</code> annotation, which deliberately erases
+        that tuple.
       </p>
 
       <h2 id="5-generate-a-hey-api-sdk">5. Generate a Hey API SDK</h2>

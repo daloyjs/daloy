@@ -10,12 +10,28 @@ import {
   sseResponse,
 } from "../src/index.js";
 
-// A handler may return a raw web-standard `Response` as an escape hatch for
-// streaming / proxying / pre-built bodies (e.g. an AI SDK
-// `result.toUIMessageStreamResponse()`). These tests pin the two things that
-// matter: (1) the Response is delivered as the handler built it, and (2) it is
-// still finalized through the same path as every other response, so no
-// security control is skipped.
+// A handler may return a raw web-standard `Response` only through the explicit
+// acknowledgement escape hatch used for streaming / proxying / pre-built
+// bodies. These tests pin fail-closed behavior and prove acknowledged raw
+// responses still pass through every deployment-time security control.
+
+test("a raw Response without an explicit acknowledgement fails closed", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/unacknowledged",
+    operationId: "unacknowledgedRawResponse",
+    responses: {
+      200: { description: "safe", body: z.object({ public: z.string() }) as never },
+    },
+    handler: () =>
+      Response.json({ public: "ok", private: "must-never-leak" }),
+  });
+
+  const res = await app.request("/unacknowledged");
+  assert.equal(res.status, 500);
+  assert.doesNotMatch(await res.text(), /must-never-leak/);
+});
 
 test("a handler can return a raw Response (status, headers, body preserved)", async () => {
   const app = new App({ logger: false });
@@ -23,6 +39,7 @@ test("a handler can return a raw Response (status, headers, body preserved)", as
     method: "GET",
     path: "/raw",
     operationId: "rawResponse",
+    acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "raw" } },
     handler: () =>
       new Response(JSON.stringify({ ok: true }), {
@@ -46,6 +63,7 @@ test("a streaming Response from a handler passes through (AI SDK shape)", async 
     method: "GET",
     path: "/stream",
     operationId: "streamResponse",
+    acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "stream" } },
     // sseResponse() returns a web-standard Response with a ReadableStream
     // body, mirroring an AI SDK result.toUIMessageStreamResponse().
@@ -74,6 +92,7 @@ test("secureHeaders still apply to a handler-returned Response", async () => {
     method: "GET",
     path: "/raw",
     operationId: "rawSecure",
+    acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "raw" } },
     handler: () => new Response("hi", { status: 200 }),
   });
@@ -97,6 +116,7 @@ test("an onSend hook can observe a handler-returned Response", async () => {
     method: "GET",
     path: "/raw",
     operationId: "rawOnSend",
+    acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "raw" } },
     handler: () => new Response("hi", { status: 200 }),
   });
@@ -111,6 +131,7 @@ test("server-fingerprint headers are stripped from a handler-returned Response",
     method: "GET",
     path: "/raw",
     operationId: "rawStrip",
+    acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "raw" } },
     handler: () =>
       new Response("hi", {
@@ -130,6 +151,7 @@ test("a user-set x-request-id on the Response is preserved", async () => {
     method: "GET",
     path: "/raw",
     operationId: "rawReqId",
+    acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "raw" } },
     handler: () =>
       new Response("hi", {
@@ -148,6 +170,7 @@ test("HEAD on a raw-Response GET route yields an empty body with headers intact"
     method: "GET",
     path: "/raw",
     operationId: "rawHead",
+    acknowledgeNoResponseBodySchema: true,
     responses: { 200: { description: "raw" } },
     handler: () =>
       new Response("a body that HEAD must not return", {
@@ -168,6 +191,7 @@ test("a raw Response bypasses response-schema validation (documented escape hatc
     method: "GET",
     path: "/raw",
     operationId: "rawNoValidate",
+    acknowledgeNoResponseBodySchema: true,
     // The schema says { n: number }, but a raw Response is opaque: there is no
     // schema that can describe an arbitrary stream, so validation is skipped
     // by design. Structured `{ status, body }` results are still validated
@@ -208,6 +232,7 @@ test("SECURITY PARITY: a raw-Response route gets the identical guardrails as a s
       method: "GET",
       path: "/raw",
       operationId: "parityRaw",
+      acknowledgeNoResponseBodySchema: true,
       responses: { 200: { description: "ok" } },
       handler: () =>
         new Response(JSON.stringify({ ok: true }), {

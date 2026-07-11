@@ -130,9 +130,11 @@ BETTER_AUTH_SECRET=replace-with-at-least-32-random-bytes`}
       <h2 id="4-mount-better-auth-routes">4. Mount Better Auth routes</h2>
       <p>
         Better Auth owns all routes below <code>/api/auth/*</code>. Return the
-        raw <code>Response</code> from a <code>beforeHandle</code> hook so
-        cookies, redirects, status codes, and multiple <code>Set-Cookie</code>{" "}
-        headers are preserved exactly.
+        raw <code>Response</code> from a <code>preBody</code> hook so cookies,
+        redirects, status codes, and multiple <code>Set-Cookie</code> headers
+        are preserved exactly. <code>preBody</code> runs after routing but
+        before any body I/O, which is the right place to delegate to another
+        web-standard <code>Request → Response</code> handler.
       </p>
       <CodeBlock
         code={`// src/routes/auth.ts
@@ -142,7 +144,7 @@ import { auth } from "../auth.ts";
 const app = new App();
 
 const betterAuthHook = {
-  beforeHandle: ({ request }: { request: Request }) => auth.handler(request),
+  preBody: ({ request }: { request: Request }) => auth.handler(request),
 };
 
 app.route({
@@ -179,31 +181,35 @@ app.route({
 
       <h2 id="5-protect-daloyjs-routes">5. Protect DaloyJS routes</h2>
       <p>
-        Use <code>auth.api.getSession(&#123; headers &#125;)</code> inside
-        middleware. This keeps normal DaloyJS routes contract-first while Better
-        Auth owns the session lookup.
+        Use <code>auth.api.getSession(&#123; headers &#125;)</code> inside a
+        <code>preBody</code> guard. Because it only reads headers (no body
+        parsing needed), it runs in the cheapest-rejection phase before
+        validated context is built. This keeps normal DaloyJS routes
+        contract-first while Better Auth owns the session lookup.
       </p>
       <CodeBlock
         code={`// src/plugins/better-auth.ts
-import type { Middleware } from "@daloyjs/core";
+import type { Hooks } from "@daloyjs/core";
 import { auth } from "../auth.ts";
 
 export type BetterAuthSession = Awaited<
   ReturnType<typeof auth.api.getSession>
 >;
 
-export function requireBetterAuth(): Middleware {
-  return async (ctx, next) => {
-    const session = await auth.api.getSession({
-      headers: ctx.request.headers,
-    });
+export function requireBetterAuth(): Hooks {
+  return {
+    preBody: async (ctx) => {
+      const session = await auth.api.getSession({
+        headers: ctx.request.headers,
+      });
 
-    if (!session) {
-      return ctx.problem(401, "unauthorized", "Missing or expired session");
-    }
+      if (!session) {
+        return ctx.problem(401, "unauthorized", "Missing or expired session");
+      }
 
-    ctx.state.session = session;
-    return next();
+      ctx.state.session = session;
+      // return undefined (or nothing) to continue to the handler
+    },
   };
 }
 
@@ -226,7 +232,7 @@ app.route({
   method: "GET",
   path: "/me",
   operationId: "getMe",
-  middleware: [requireBetterAuth()],
+  hooks: requireBetterAuth(),
   responses: {
     200: {
       description: "OK",

@@ -39,7 +39,9 @@ export default function Page() {
         <code>Cache-Control: no-store</code>).
       </blockquote>
 
-      <h2 id="daloyjs-is-a-relying-party-not-an-auth-server">DaloyJS is a Relying Party, not an auth server</h2>
+      <h2 id="daloyjs-is-a-relying-party-not-an-auth-server">
+        DaloyJS is a Relying Party, not an auth server
+      </h2>
       <p>
         DaloyJS validates tokens; it does not mint user sessions through an
         authorization-code flow, host a consent screen, or store user/client
@@ -230,7 +232,10 @@ app.use(
         no <code>WWW-Authenticate</code> per RFC 6750); returning{" "}
         <code>true</code> or <code>undefined</code> accepts. Use it to consult a
         revocation list, a token-version counter, or any other per-request
-        signal that a previously-issued token has been invalidated.
+        signal that a previously-issued token has been invalidated. These
+        callbacks run in <code>preBody</code>: raw route/header context is
+        available, but <code>ctx.body</code> is always <code>undefined</code> so
+        an unauthenticated upload can be rejected before it is consumed.
       </p>
 
       <FlowDiagram
@@ -288,7 +293,9 @@ app.use(
         the typed <code>(credentials, ctx)</code> tuple. The previous idiomatic
         workaround was a separate <code>beforeHandle</code> that re-parsed the{" "}
         <code>Authorization</code> header in every handler; that is no longer
-        necessary.
+        necessary. The callback runs in <code>preBody</code>, so move any logic
+        that requires a validated request body into a later{" "}
+        <code>beforeHandle</code>.
       </p>
       <CodeBlock
         code={`import { basicAuth } from "@daloyjs/core";

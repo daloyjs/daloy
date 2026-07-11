@@ -1565,6 +1565,10 @@ export function mcpRoutes(
       path,
       operationId: "mcpPost",
       summary: "MCP Streamable HTTP endpoint",
+      // The transport handler owns JSON-RPC serialization and may also emit
+      // empty/streaming responses, so its web-standard Response is
+      // intentionally opaque to Daloy's response serializer.
+      acknowledgeNoResponseBodySchema: true,
       responses,
       handler: ({ request }) => handler(request),
     },
@@ -1573,6 +1577,7 @@ export function mcpRoutes(
       path,
       operationId: "mcpGet",
       summary: "MCP Streamable HTTP discovery hint",
+      acknowledgeNoResponseBodySchema: true,
       responses,
       handler: ({ request }) => handler(request),
     },
@@ -1581,6 +1586,7 @@ export function mcpRoutes(
       path,
       operationId: "mcpOptions",
       summary: "MCP Streamable HTTP preflight",
+      acknowledgeNoResponseBodySchema: true,
       responses,
       handler: ({ request }) => handler(request),
     },

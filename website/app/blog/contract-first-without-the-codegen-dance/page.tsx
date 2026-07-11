@@ -114,15 +114,12 @@ const OPENAPI_PEEK = `$ jq '.paths."/books/{id}".get | {operationId, responses: 
 const PROJECTION_CLIENT = `// apps/api/tests/books.in-process.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createClient } from "@daloyjs/core/client";
+import { createInProcessClient } from "@daloyjs/core/client";
 import { app } from "../src/app.ts";
 
 // In-process: route the client's fetch straight into the app. No socket,
 // no port, no flaky CI. Same validation, same response shape as production.
-const client = createClient(app, {
-  baseUrl: "http://app.local",
-  fetch: (req) => app.fetch(new Request(req)),
-});
+const client = createInProcessClient(app);
 
 test("getBookById - 200 has a typed body", async () => {
   const res = await client.getBookById({ params: { id: "42" } });
@@ -405,9 +402,9 @@ export default function BlogPostPage() {
             <code>openapi.yaml</code> in a monorepo, and I have personally been
             the reason it was three sprints out of date. I&apos;ve also been the
             person who shipped a frontend that called <code>POST /book</code>{" "}
-            when the backend had renamed it to <code>POST /books</code>{" "}
-            the week before. So when I tell you the codegen dance is a real
-            problem, please understand: I am one of the dancers.
+            when the backend had renamed it to <code>POST /books</code> the week
+            before. So when I tell you the codegen dance is a real problem,
+            please understand: I am one of the dancers.
           </p>
 
           <p>
@@ -486,17 +483,17 @@ export default function BlogPostPage() {
 
           <ProjectionStep
             index={2}
-            title="createClient(app), the typed client lives in the same monorepo"
+            title="createInProcessClient(app), the typed client lives in the same monorepo"
             from="app.route({...})"
             to="ClientFor<App>"
           >
             <p>
-              <code>createClient&lt;A extends App&gt;(app, opts)</code> returns
-              an object keyed by every <code>operationId</code> you defined,
-              with full input/output type narrowing per status. The classic use
-              for it is &quot;in-process integration tests&quot;, point its{" "}
-              <code>fetch</code> at <code>app.fetch</code> and you get a real
-              end-to-end test without a socket:
+              <code>createInProcessClient&lt;A extends App&gt;(app)</code>{" "}
+              returns an object keyed by every <code>operationId</code> you
+              defined, with full input/output type narrowing per status. The
+              classic use for it is &quot;in-process integration tests&quot;:
+              requests traverse <code>app.fetch</code> automatically, giving you
+              a real end-to-end test without a socket:
             </p>
 
             <EditorFrame
@@ -512,11 +509,11 @@ export default function BlogPostPage() {
 
             <p>
               The two things I want you to notice in that snippet are also the
-              two things I celebrate every time I see them at work.
-              First, the <code>res.body</code> inside the <code>200</code>{" "}
-              branch is narrowed to the <code>Book</code> shape, not the union
-              of every declared response, the actual <code>200</code> one.
-              Second, the <code>@ts-expect-error</code> comment in the
+              two things I celebrate every time I see them at work. First, the{" "}
+              <code>res.body</code> inside the <code>200</code> branch is
+              narrowed to the <code>Book</code> shape, not the union of every
+              declared response, the actual <code>200</code> one. Second, the{" "}
+              <code>@ts-expect-error</code> comment in the
               <code>404</code> branch <em>passes</em>: trying to read{" "}
               <code>title</code> from a <code>Problem</code> is a compile error,
               by construction.
@@ -682,8 +679,8 @@ export default function BlogPostPage() {
             </li>
             <li>
               Add the in-process client test (
-              <code>createClient(app, {`{ fetch: app.fetch }`}</code>)). You now
-              have integration coverage without a server.
+              <code>createInProcessClient(app)</code>). You now have integration
+              coverage without a server.
             </li>
             <li>
               Wire <code>pnpm gen</code> and import the generated SDK in your

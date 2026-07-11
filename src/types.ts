@@ -7,14 +7,7 @@ import type { StandardSchemaV1 } from "./schema.js";
  *
  * @since 0.1.0
  */
-export type HttpMethod =
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "PATCH"
-  | "DELETE"
-  | "HEAD"
-  | "OPTIONS";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
 /**
  * A route path. Must start with `"/"`. Path parameters are written with a
@@ -42,10 +35,9 @@ export type PathString = `/${string}`;
  *
  * @since 0.1.0
  */
-export type ParamsOf<P extends string> =
-  P extends `${string}:${infer Param}/${infer Rest}`
-    ? Param | ParamsOf<`/${Rest}`>
-    : P extends `${string}:${infer Param}`
+export type ParamsOf<P extends string> = P extends `${string}:${infer Param}/${infer Rest}`
+  ? Param | ParamsOf<`/${Rest}`>
+  : P extends `${string}:${infer Param}`
     ? Param
     : never;
 
@@ -93,9 +85,7 @@ export interface RequestSchemas {
 }
 
 /** Infer the validated output of a Standard Schema validator, or `undefined` when no schema is present. */
-export type InferOut<S> = S extends StandardSchemaV1
-  ? StandardSchemaV1.InferOutput<S>
-  : undefined;
+export type InferOut<S> = S extends StandardSchemaV1 ? StandardSchemaV1.InferOutput<S> : undefined;
 
 /**
  * Computed type that infers the four pieces of validated request data from
@@ -127,7 +117,8 @@ export type InferRequest<R extends RequestSchemas | undefined, P extends string>
 /**
  * Describes a single HTTP response variant declared by a route.
  *
- * - `description` — surfaces in OpenAPI documentation. Required.
+ * - `description` — optional OpenAPI documentation; omitted values receive a
+ *   stable `HTTP <status> response` fallback.
  * - `body`        — Standard-Schema validator for the response body; when
  *   present, DaloyJS validates the handler's return value against it
  *   (controlled by `AppOptions.validateResponses`).
@@ -138,8 +129,8 @@ export type InferRequest<R extends RequestSchemas | undefined, P extends string>
  * @since 0.1.0
  */
 export interface ResponseSpec {
-  /** Human-readable description emitted into the OpenAPI response object. Required. */
-  description: string;
+  /** Human-readable OpenAPI description. Defaults to `HTTP <status> response`. */
+  description?: string;
   /** Response-body validator; handler return values are checked against it when `AppOptions.validateResponses` is on. */
   body?: StandardSchemaV1;
   /** Documented response headers keyed by header name; surfaced in the OpenAPI document. */
@@ -256,14 +247,7 @@ export interface AppState {}
  *
  * @since 0.24.0
  */
-export type AuthScheme =
-  | "bearer"
-  | "basic"
-  | "jwt"
-  | "jwk"
-  | "webhook"
-  | "session"
-  | "apiKey";
+export type AuthScheme = "bearer" | "basic" | "jwt" | "jwk" | "webhook" | "session" | "apiKey";
 
 /**
  * Verified-identity envelope written to `ctx.state.auth` by the first-party
@@ -313,22 +297,56 @@ export interface BaseContext<P extends string, R extends RequestSchemas | undefi
   };
 }
 
+/**
+ * Minimal request context exposed before request-body I/O or schema
+ * validation. It is intended for cheap perimeter decisions such as bearer,
+ * API-key, mTLS, and header-only JWT authentication.
+ *
+ * Path, query, and header values are raw at this phase, and `body` is always
+ * `undefined`. Middleware that requires validated input or body bytes belongs
+ * in {@link Hooks.beforeHandle}.
+ *
+ * @typeParam P - Literal route path used to infer raw path-parameter names.
+ * @since 1.0.0
+ */
+export interface PreBodyContext<P extends string = string> {
+  /** Original web-standard Request. Its body stream has not been consumed by DaloyJS. */
+  request: Request;
+  /** Raw router path parameters. */
+  params: PathParams<P>;
+  /** Raw query-string values, materialized lazily. */
+  query: Record<string, string | string[] | undefined>;
+  /** Raw request headers, materialized lazily. */
+  headers: Record<string, string | undefined>;
+  /** Always `undefined`; request-body I/O has not started. */
+  body: undefined;
+  /** Mutable per-request state shared with later hooks and the handler. */
+  state: AppState & Record<string, unknown>;
+  /** Response headers/status available to a short-circuiting perimeter hook. */
+  set: {
+    status?: number;
+    headers: Headers;
+  };
+}
+
 // ---------- Hooks ----------
 
 /**
  * Lifecycle hooks fired around request handling. Hooks compose pipeline-style
  * — the global hooks (`AppOptions.hooks`) run first, then group hooks added
  * with `app.use()`, then per-route hooks. Returning a `Response` from
- * `beforeHandle` or `onSend` short-circuits/replaces the response.
+ * `preBody`, `beforeHandle`, or `onSend` short-circuits/replaces the response.
  *
  * Ordering for a successful request:
  *   1. `onRequest`     — before any context is built (raw `Request`).
- *   2. `beforeHandle`  — with the built context; may short-circuit.
- *   3. *handler runs*
- *   4. `afterHandle`   — may transform the handler return value.
- *   5. *response is serialized + validated*
- *   6. `onSend`        — may mutate or replace the outgoing `Response`.
- *   7. `onResponse`    — fire-and-forget observer (cannot change anything).
+ *   2. `preBody`       — after routing, before body I/O or validation.
+ *   3. *request schemas are validated and the body is read when declared*
+ *   4. `beforeHandle`  — with the validated context; may short-circuit.
+ *   5. *handler runs*
+ *   6. `afterHandle`   — may transform the handler return value.
+ *   7. *response is serialized + validated*
+ *   8. `onSend`        — may mutate or replace the outgoing `Response`.
+ *   9. `onResponse`    — fire-and-forget observer (cannot change anything).
  *
  * `onError` runs on the error path before serialization.
  *
@@ -337,6 +355,8 @@ export interface BaseContext<P extends string, R extends RequestSchemas | undefi
 export interface Hooks {
   /** Runs first, before validation or context building. Receives the raw web-standard `Request`. */
   onRequest?: (req: Request) => void | Promise<void>;
+  /** Runs after route matching but before request-body I/O or schema validation. Use for cheap header/certificate auth; `ctx.body` is always undefined. */
+  preBody?: (ctx: PreBodyContext<any>) => void | Response | Promise<void | Response>;
   /** Runs with the validated {@link BaseContext} before the handler. Returning a `Response` short-circuits the handler entirely (useful for auth guards). */
   beforeHandle?: (ctx: BaseContext<any, any>) => void | Response | Promise<void | Response>;
   /** Runs after the handler with its raw return value. Return a non-`undefined` value to replace the result before serialization and response-schema validation. */
@@ -345,7 +365,10 @@ export interface Hooks {
     result: unknown
   ) => void | unknown | Promise<void | unknown>;
   /** Runs on the error path before serialization. `ctx` is `undefined` if the error occurred before context was built. Return a `Response` to replace the default RFC 9457 problem+json error response. */
-  onError?: (err: unknown, ctx: BaseContext<any, any> | undefined) => void | Response | Promise<void | Response>;
+  onError?: (
+    err: unknown,
+    ctx: BaseContext<any, any> | undefined
+  ) => void | Response | Promise<void | Response>;
   /**
    * Symmetric to `beforeHandle`, but for outgoing responses. Runs after the Response
    * is built (success, error, and OPTIONS preflight paths) and after request-scoped
@@ -395,7 +418,7 @@ export interface RouteDefinition<
   P extends PathString = PathString,
   M extends HttpMethod = HttpMethod,
   Req extends RequestSchemas | undefined = undefined,
-  Res extends ResponsesMap = ResponsesMap
+  Res extends ResponsesMap = ResponsesMap,
 > {
   /** HTTP method to match (uppercase, e.g. `"GET"`). See {@link HttpMethod}. */
   method: M;
@@ -417,16 +440,19 @@ export interface RouteDefinition<
   version?: string;
 
   /**
-   * Acknowledge that this route's `2xx` responses intentionally carry no
-   * response body schema — an opaque, framework-controlled, or non-JSON body
-   * (a raw `Response`, an HTML page, a spec document, a proxied payload).
+   * Acknowledge that this route's output intentionally is not protected by a
+   * response body schema — either because its `2xx` response declares no body
+   * schema or because it returns an opaque, framework-controlled raw
+   * `Response` (an HTML page, stream, spec document, or proxied payload).
    *
    * Setting this suppresses the `security.response.bodySchemaMissing` boot
    * warning and the `audit.response.bodySchema` `daloy doctor` finding for
-   * this route only. It documents intent; it does not add protection —
-   * response field-level stripping (OWASP API3) still does not run for a
-   * `2xx` response without a body schema, so never set this on a route whose
-   * handler builds JSON from domain objects.
+   * this route only. It also explicitly authorizes a handler or `afterHandle`
+   * hook to return a raw `Response`; DaloyJS fails closed with a `500` if they
+   * return one without this acknowledgement. It documents intent; it does not
+   * add protection — response field-level stripping (OWASP API3) does not run
+   * for an opaque body, so never set this on a route whose handler builds JSON
+   * from domain objects.
    */
   acknowledgeNoResponseBodySchema?: boolean;
 
@@ -557,8 +583,11 @@ export interface RouteDefinition<
    *   forwarded verbatim).
    *
    * A returned `Response` **bypasses response-schema validation and the
-   * typed-client body type by design** — there is no schema that can describe
-   * an opaque stream. It is still finalized exactly like every other response,
+   * typed-client body type by design** and therefore requires
+   * `acknowledgeNoResponseBodySchema: true` on the route. Without that explicit
+   * acknowledgement, DaloyJS refuses the response with a `500` instead of
+   * silently weakening the contract. An acknowledged raw response is still
+   * finalized exactly like every other response,
    * so no security control is skipped: headers set via `ctx.set` (including
    * `secureHeaders()` and CORS) are copied onto it, `x-request-id` is added
    * when absent, any `onSend` / `onResponse` hooks run, server-fingerprint
@@ -572,6 +601,33 @@ export interface RouteDefinition<
   handler: (
     ctx: BaseContext<P, Req>
   ) => HandlerReturn<Res> | Response | Promise<HandlerReturn<Res> | Response>;
+}
+
+/**
+ * Define a route contract outside an {@link "./app.js".App} while preserving
+ * its literal path, method, operation id, schemas, and contextually typed
+ * handler.
+ *
+ * Export contracts from route modules, collect them in a literal tuple, then
+ * register the tuple with {@link "./app.js".App.registerRoutes}. The returned
+ * App retains the complete tuple for the no-codegen typed client.
+ *
+ * @param definition - Complete route contract and handler.
+ * @returns The same definition object, unchanged at runtime.
+ * @since 1.0.0
+ */
+export function defineRoute<
+  const P extends PathString,
+  const M extends HttpMethod,
+  Req extends RequestSchemas | undefined,
+  Res extends ResponsesMap,
+  const Op extends string | undefined = undefined,
+>(
+  definition: RouteDefinition<P, M, Req, Res> & { operationId?: Op }
+): RouteDefinition<P, M, Req, Res> &
+  (Op extends string ? { operationId: Op } : { operationId?: undefined }) {
+  return definition as RouteDefinition<P, M, Req, Res> &
+    (Op extends string ? { operationId: Op } : { operationId?: undefined });
 }
 
 // ---------- Callbacks ----------
@@ -613,10 +669,7 @@ export interface CallbackOperation {
  *   },
  * }
  */
-export type CallbackDefinition = Record<
-  string,
-  CallbackOperation | CallbackOperation[]
->;
+export type CallbackDefinition = Record<string, CallbackOperation | CallbackOperation[]>;
 
 /** A named map of OpenAPI Callback Objects. */
 export interface CallbackMap {

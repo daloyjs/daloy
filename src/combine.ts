@@ -6,7 +6,8 @@
  * @since 0.19.0
  */
 
-import type { Hooks, BaseContext } from "./types.js";
+import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
+import { _mergePreBodyWithEarlyRejections, EARLY_REJECTION_HOOK_MARKER } from "./middleware.js";
 
 /**
  * Run every supplied {@link Hooks} bundle in order, pipeline-style.
@@ -15,7 +16,7 @@ import type { Hooks, BaseContext } from "./types.js";
  * stack for the admin section"). All lifecycle phases compose:
  *
  * - `onRequest` / `onResponse` run in registration order.
- * - `beforeHandle` / `onError` short-circuit on the first `Response`.
+ * - `preBody` / `beforeHandle` / `onError` short-circuit on the first `Response`.
  * - `afterHandle` / `onSend` thread the value through every bundle.
  *
  * Symbol-keyed security markers (CORS / CSRF / session / secure-headers)
@@ -40,14 +41,14 @@ export function every(...layers: Hooks[]): Hooks {
 }
 
 /**
- * Run the supplied bundles until one of them passes its `beforeHandle`
+ * Run the supplied bundles until one of them passes its auth gate
  * check without throwing. Useful for "this route accepts a bearer token
  * OR a signed cookie OR an API key" patterns where any single proof of
  * identity is enough.
  *
  * Semantics:
  *
- * - The bundles' `beforeHandle` hooks are awaited in order. The first one
+ * - The bundles' `preBody` or `beforeHandle` hooks are awaited in order. The first one
  *   that resolves without throwing wins; its `ctx` mutations (headers,
  *   `ctx.state`, etc.) are preserved.
  * - When a bundle returns a `Response`, that response is treated as a
@@ -57,7 +58,7 @@ export function every(...layers: Hooks[]): Hooks {
  *   client gets a deterministic status code. Place the auth method whose
  *   `WWW-Authenticate` challenge you want clients to see first.
  * - `afterHandle`, `onSend`, `onResponse`, and `onError` from every bundle
- *   still compose normally — `some()` only changes the `beforeHandle`
+ *   still compose normally — `some()` only changes the auth-gate
  *   evaluation strategy.
  *
  * @example
@@ -68,39 +69,60 @@ export function every(...layers: Hooks[]): Hooks {
  * ));
  * ```
  *
- * @param layers Candidate hook bundles; the first `beforeHandle` that passes wins.
- * @returns A merged {@link Hooks} bundle with the OR-style `beforeHandle` strategy.
+ * @param layers Candidate hook bundles; the first auth gate that passes wins.
+ * @returns A merged {@link Hooks} bundle with an OR-style auth-gate strategy.
  * @since 0.19.0
  */
 export function some(...layers: Hooks[]): Hooks {
   if (layers.length === 0) return {};
-  const stripped = layers.map(({ beforeHandle: _b, ...rest }) => rest);
+  const stripped = layers.map(({ preBody: _p, beforeHandle: _b, ...rest }) => rest);
   const base = mergeCombineHooks(stripped);
-  const candidates = layers
+  const preBodyCandidates = layers
+    .map((h) => h.preBody)
+    .filter((f): f is NonNullable<Hooks["preBody"]> => typeof f === "function");
+  const beforeHandleCandidates = layers
     .map((h) => h.beforeHandle)
     .filter((f): f is NonNullable<Hooks["beforeHandle"]> => typeof f === "function");
+  const usePreBody = preBodyCandidates.length > 0 && beforeHandleCandidates.length === 0;
+  const candidates = usePreBody
+    ? preBodyCandidates
+    : layers.flatMap((hooks) => {
+        if (hooks.preBody && hooks.beforeHandle) {
+          return [
+            async (ctx: BaseContext<any, any>) => {
+              const early = await hooks.preBody!(ctx);
+              return early instanceof Response ? early : hooks.beforeHandle!(ctx);
+            },
+          ];
+        }
+        const gate = hooks.preBody ?? hooks.beforeHandle;
+        return gate ? [gate] : [];
+      });
   if (candidates.length === 0) return base;
+  const runCandidates = async (ctx: BaseContext<any, any>) => {
+    let firstFailure:
+      { kind: "throw"; err: unknown } | { kind: "response"; res: Response } | undefined;
+    for (const fn of candidates) {
+      try {
+        const r = await fn(ctx);
+        if (r instanceof Response) {
+          if (!firstFailure) firstFailure = { kind: "response", res: r };
+          continue;
+        }
+        return undefined;
+      } catch (err) {
+        if (!firstFailure) firstFailure = { kind: "throw", err };
+      }
+    }
+    if (firstFailure?.kind === "response") return firstFailure.res;
+    throw (firstFailure as { kind: "throw"; err: unknown }).err;
+  };
+  if (usePreBody) {
+    return { ...base, preBody: runCandidates };
+  }
   return {
     ...base,
-    async beforeHandle(ctx) {
-      let firstFailure: { kind: "throw"; err: unknown } | { kind: "response"; res: Response } | undefined;
-      for (const fn of candidates) {
-        try {
-          const r = await fn(ctx);
-          if (r instanceof Response) {
-            // Treat as a denial — try the next layer.
-            if (!firstFailure) firstFailure = { kind: "response", res: r };
-            continue;
-          }
-          // Undefined = pass; bundle accepts the request.
-          return undefined;
-        } catch (err) {
-          if (!firstFailure) firstFailure = { kind: "throw", err };
-        }
-      }
-      if (firstFailure?.kind === "response") return firstFailure.res;
-      throw (firstFailure as { kind: "throw"; err: unknown }).err;
-    },
+    beforeHandle: runCandidates,
   };
 }
 
@@ -115,7 +137,7 @@ export function some(...layers: Hooks[]): Hooks {
 export type ExceptPredicate =
   | string
   | string[]
-  | ((ctx: BaseContext<any, any>) => boolean | Promise<boolean>);
+  | ((ctx: PreBodyContext<any> | BaseContext<any, any>) => boolean | Promise<boolean>);
 
 /**
  * Run a hook bundle on every request EXCEPT those matching `when`. The
@@ -129,34 +151,45 @@ export type ExceptPredicate =
  * ));
  * ```
  *
- * Only the `beforeHandle` phase is gated — the surrounding
+ * The `preBody` and `beforeHandle` phases are gated — the surrounding
  * `onRequest`/`afterHandle`/`onSend`/`onResponse` phases still run so
  * shared concerns like request-id propagation are not accidentally
  * exempted. Wrap each bundle with {@link except} individually when you
  * need to gate other phases.
  *
  * @param when Paths or predicate ({@link ExceptPredicate}) that exempt a request.
- * @param hooks The hook bundle whose `beforeHandle` is skipped on a match.
- * @returns A {@link Hooks} bundle whose `beforeHandle` is gated by `when`.
+ * @param hooks The hook bundle whose `preBody` and `beforeHandle` gates are skipped on a match.
+ * @returns A {@link Hooks} bundle whose request gates are controlled by `when`.
  * @throws Error at composition time if a string pattern does not start with `/`.
  * @since 0.19.0
  */
 export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
+  const earlyRejectionHooks = (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER];
+  if (!hooks.preBody && !hooks.beforeHandle && !Array.isArray(earlyRejectionHooks)) return hooks;
   const matches = compileExceptMatcher(when);
-  const original = hooks.beforeHandle;
-  if (!original) return hooks;
-  return {
-    ...hooks,
-    async beforeHandle(ctx) {
-      if (await matches(ctx)) return undefined;
-      return original(ctx);
-    },
-  };
+  const wrapped: Hooks = { ...hooks };
+  if (Array.isArray(earlyRejectionHooks)) {
+    (wrapped as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] =
+      earlyRejectionHooks.map((hook) => {
+        if (typeof hook !== "function") return hook;
+        return async (ctx: PreBodyContext<any> | BaseContext<any, any>) =>
+          (await matches(ctx)) ? undefined : hook(ctx);
+      });
+  }
+  if (hooks.preBody) {
+    const original = hooks.preBody;
+    wrapped.preBody = async (ctx) => ((await matches(ctx)) ? undefined : original(ctx));
+  }
+  if (hooks.beforeHandle) {
+    const original = hooks.beforeHandle;
+    wrapped.beforeHandle = async (ctx) => ((await matches(ctx)) ? undefined : original(ctx));
+  }
+  return wrapped;
 }
 
 function compileExceptMatcher(
-  when: ExceptPredicate,
-): (ctx: BaseContext<any, any>) => Promise<boolean> {
+  when: ExceptPredicate
+): (ctx: PreBodyContext<any> | BaseContext<any, any>) => Promise<boolean> {
   if (typeof when === "function") {
     return async (ctx) => Boolean(await when(ctx));
   }
@@ -171,7 +204,7 @@ function compileExceptMatcher(
 function compilePathPattern(pattern: string): (path: string) => boolean {
   if (!pattern.startsWith("/")) {
     throw new Error(
-      `except(): path patterns must start with "/" (got ${JSON.stringify(pattern)}).`,
+      `except(): path patterns must start with "/" (got ${JSON.stringify(pattern)}).`
     );
   }
   if (!pattern.includes("*")) {
@@ -191,9 +224,7 @@ function compilePathPattern(pattern: string): (path: string) => boolean {
 
 function mergeCombineHooks(layers: Hooks[]): Hooks {
   const pick = <K extends keyof Hooks>(key: K): NonNullable<Hooks[K]>[] =>
-    layers
-      .map((h) => h[key])
-      .filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
+    layers.map((h) => h[key]).filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
 
   const merged: Hooks = {};
   const onRequest = pick("onRequest");
@@ -202,6 +233,8 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
       for (const fn of onRequest) await fn(req);
     };
   }
+  const preBody = _mergePreBodyWithEarlyRejections(layers);
+  if (preBody !== undefined) merged.preBody = preBody;
   const beforeHandle = pick("beforeHandle");
   if (beforeHandle.length > 0) {
     merged.beforeHandle = async (ctx) => {
@@ -256,6 +289,16 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
   for (const hooks of layers) {
     const record = hooks as Record<PropertyKey, unknown>;
     for (const key of Object.getOwnPropertySymbols(record)) {
+      if (key === EARLY_REJECTION_HOOK_MARKER && merged.preBody !== undefined) continue;
+      if (key === EARLY_REJECTION_HOOK_MARKER) {
+        const existing = (merged as Record<PropertyKey, unknown>)[key];
+        const incoming = record[key];
+        (merged as Record<PropertyKey, unknown>)[key] = [
+          ...(Array.isArray(existing) ? existing : []),
+          ...(Array.isArray(incoming) ? incoming : []),
+        ];
+        continue;
+      }
       if (!(key in (merged as Record<PropertyKey, unknown>))) {
         (merged as Record<PropertyKey, unknown>)[key] = record[key];
       }

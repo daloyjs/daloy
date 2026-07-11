@@ -202,6 +202,40 @@ app.route({
 serve(app, { port: 3000 });
 ```
 
+For a concise route that keeps the full contract, use a method shorthand. The
+method and path produce a stable operation id (`getRoot` here), while the
+response schema preserves validation, OpenAPI, and data-exposure protection:
+
+```ts
+const app = new App().get(
+  "/",
+  { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+  () => ({ status: 200, body: { hello: "world" } }),
+);
+```
+
+There is intentionally no `app.get(path, handler)` form. If a streaming or
+proxy route genuinely needs to return a raw `Response`, declare a contract and
+set `acknowledgeNoResponseBodySchema: true`; otherwise DaloyJS fails closed
+rather than silently bypassing response-body validation.
+
+Add request schemas and other contract options as the endpoint grows:
+
+```ts
+app.post(
+  "/books",
+  {
+    request: { body: z.object({ title: z.string().min(1) }) },
+    responses: {
+      201: {
+        body: z.object({ id: z.string(), title: z.string() }),
+      },
+    },
+  },
+  ({ body }) => ({ status: 201, body: { id: "1", title: body.title } }),
+);
+```
+
 ---
 
 ## OpenAPI + Hey API typed client
@@ -237,15 +271,32 @@ export default defineConfig({
 For TypeScript consumers in the same monorepo you can skip codegen entirely and use the **in-process typed client**:
 
 ```ts
-import { createClient } from "@daloyjs/core/client";
-const client = createClient(app, { baseUrl: "http://localhost:3000" });
+import { createInProcessClient } from "@daloyjs/core/client";
+const client = createInProcessClient(app);
 const r = await client.getBookById({ params: { id: "1" } });
 //    ^? { status: 200; body: { id: string; title: string } } | { status: 404; ... }
 ```
 
-> Method inference relies on **chaining** your `app.route(...)` calls (`new App().route(a).route(b)`) and letting
-> TypeScript infer the variable's type. A widening `const app: App` annotation, a `: App` factory return type, or
-> registering routes as separate statements erases the per-route types and collapses the client to an untyped surface.
+For multi-file applications, export each contract with `defineRoute()` and
+compose the literal tuple with `app.registerRoutes([...])`. This retains every
+operation across module boundaries:
+
+```ts
+import { App, defineRoute } from "@daloyjs/core";
+import { createInProcessClient } from "@daloyjs/core/client";
+import { listBooksRoute } from "./routes/list-books.js";
+import { getBookRoute } from "./routes/get-book.js";
+
+const app = new App().registerRoutes([listBooksRoute, getBookRoute] as const);
+const client = createInProcessClient(app); // typed, no socket or port
+```
+
+Chained `route()` calls remain supported. Avoid widening a composed app back to
+a bare `App` annotation, because that deliberately discards its route tuple.
+Callback-style `group()` and plugin `register()` provide runtime encapsulation,
+but TypeScript cannot widen the already-created parent variable from inside a
+callback. Export route tuples and compose them with `registerRoutes()` whenever
+the no-codegen client must include those module routes.
 
 ---
 
@@ -329,7 +380,10 @@ import { generateOpenAPI } from "@daloyjs/core/openapi";
 
 The UI is always contract-accurate — never stale. `create-daloy` templates opt in with `docs: true`.
 
-If you omit `openapi.info.title` / `info.version`, Daloy reads your project's `package.json` (`name`, `version`, `description`) automatically — no boilerplate. Deno projects without a `package.json` fall back to `deno.json` / `deno.jsonc`. Explicit values always win.
+If you omit `openapi.info`, the portable defaults are `DaloyJS API` / `0.0.0`.
+Set `openapi.info` (or the top-level `title`, `version`, and `description`) for
+real services. The core never reads the host filesystem, so the same docs
+bundle runs unchanged on Workers, Vercel, Bun, Deno, and Node.
 
 Prefer a factory? `createApp(options)` is exported as an alias of `new App(options)`.
 
@@ -523,7 +577,10 @@ DaloyJS is at **`1.0.0-rc.3`**, a security-hardening release candidate. Because 
 
 - Contract-first routing with Standard Schema validation (Zod 4, Valibot, ArkType, TypeBox) and OpenAPI 3.1 generated from a single source of truth.
 - Live OpenAPI 3.1 spec served as both JSON (`GET /openapi.json`) and YAML (`GET /openapi.yaml`) when `docs: true`, with a choice of Scalar (default), Swagger UI, or Redoc via `docs.ui`, plus Scalar theming/custom CSS/auth defaults via `docs.scalar`, Swagger UI options via `docs.swagger` (including persisted Authorize credentials), Redoc options via `docs.redoc`, and a provider-neutral `docs.auth` launcher for local login routes or third-party OAuth2/OIDC providers.
-- Zero-config OpenAPI `info` autofill from `package.json` (Node / Bun) or `deno.json` / `deno.jsonc` (Deno); explicit `openapi.info` values always win.
+- Filesystem-free OpenAPI metadata: explicit `openapi.info` / top-level metadata wins, with portable `DaloyJS API` / `0.0.0` fallbacks on every runtime.
+- Contract-required `get()` / `post()` / `put()` / `patch()` / `delete()` / `head()` shorthands with deterministic method+path operation IDs and the same validation, OpenAPI, response-exposure protection, and client typing as `route()`; there is no silent two-argument schema bypass.
+- Multi-file contract composition through `defineRoute()` + `app.registerRoutes([...])`, plus a typed `createInProcessClient(app)` that traverses the real pipeline without a socket.
+- Header/JWT/basic/mTLS authentication runs in the `preBody` phase before request-body I/O; body-aware WAF, idempotency, signature, and application middleware keep the validated `beforeHandle` phase.
 - RFC 7231 + RFC 5789 HTTP-method allowlist enforced inside `app.route()` (WebDAV, `TRACE`, `CONNECT` rejected at the framework boundary).
 - AI-friendly route metadata via optional `meta: { examples, extensions, summary, description, tags }`; examples are validated against your schemas at build time, surfaced as OpenAPI `examples` + `x-daloy-*` extensions, and dumped as `routes.json` / `routes.yaml` via `daloy inspect --ai`.
 - Dependency-free MCP Streamable HTTP server helpers at `@daloyjs/core/mcp`: `createMcpHandler()` exposes tools (with `outputSchema`, `annotations`, and icons), resources, RFC 6570 resource templates, and prompts (with required-argument enforcement) over JSON-RPC 2.0 and validates `Origin` against DNS rebinding (with an `allowedOrigins` allowlist), while `mcpRoutes("/mcp", handler)` mounts the POST / GET / OPTIONS Daloy routes — with the JSON-RPC envelope schema surfaced in OpenAPI — for a dedicated MCP service with the same auth, rate-limit, body-limit, and timeout middleware as any other app. Every `tools/call` argument is validated server-side against the tool's `inputSchema` (a dependency-free JSON-Schema subset — `type`/`required`/`properties`/`additionalProperties`/`enum`/`const`/bounds; exposed as `validateMcpInput()`) before the handler runs, rejecting a mismatch with JSON-RPC `-32602`; the JSON-RPC body is parsed with prototype-pollution-safe `safeJsonParse`; and an unauthenticated `mcpRoutes()` endpoint refuses to boot in production unless opted out with `mcpRoutes(path, handler, { public: true })`.
@@ -600,7 +657,7 @@ The framework refuses to start (or to construct) when configuration is unsafe:
 - `concurrencyLimit()` per-route / per-client concurrency limits + queueing at `@daloyjs/core/concurrency-limit`: HAProxy `maxconn`/queue parity at the app layer. Bounds in-flight requests through a surface with a per-bucket semaphore (`maxConcurrent`), a bounded FIFO queue (`maxQueue`) with an optional `queueTimeoutMs`, and a fast `503` + `Retry-After` once the queue is full or the wait times out. Partition the budget with `scope`: `"global"` (default), `"route"` (per `method + path`), `"client"` (per identity, needs `trustProxyHeaders`/`keyGenerator`), or a custom function (`undefined` skips limiting, fail-open). Acquires in `beforeHandle` and releases in `onSend`, so slots are freed on success, error, and short-circuit paths alike — never leaked. `onReject` observability hook, configurable `retryAfterSeconds`/`message`. Complements the `maxConnections` socket cap and `loadShedding()`. Zero runtime dependencies. HAProxy `maxconn`/queue parity at the app layer. Bounds in-flight requests through a surface with a per-bucket semaphore (`maxConcurrent`), a bounded FIFO queue (`maxQueue`) with an optional `queueTimeoutMs`, and a fast `503` + `Retry-After` once the queue is full or the wait times out. Partition the budget with `scope`: `"global"` (default), `"route"` (per `method + path`), `"client"` (per identity, needs `trustProxyHeaders`/`keyGenerator`), or a custom function (`undefined` skips limiting, fail-open). Acquires in `beforeHandle` and releases in `onSend`, so slots are freed on success, error, and short-circuit paths alike — never leaked. `onReject` observability hook, configurable `retryAfterSeconds`/`message`. Complements the `maxConnections` socket cap and `loadShedding()`. Zero runtime dependencies.
 - `requestDecompression()` inbound decompression-bomb guard at `@daloyjs/core/request-decompression`: core is safe by omission (it never decompresses request bodies), so this is the opt-in middleware for services that must accept compressed uploads. Inflates `gzip` / `deflate` bodies behind two caps enforced **during** inflation so a zip bomb is aborted before it is fully materialised: an absolute `maxDecompressedBytes` (required) and an expansion-ratio `maxRatio` (default `100`), both rejecting with `413`. The compressed upload itself is bounded by `maxCompressedBytes` (default 1 MiB) before a byte is inflated. Unknown, non-allowlisted, runtime-unsupported, or **layered** (`gzip, gzip`) encodings are refused `415`; malformed streams `400`; bodyless / uncompressed / `identity` / `GET` / `HEAD` traffic passes through untouched. Runs in `onRequest` and stashes the inflated bytes so schema-validated bodies and raw-body handlers both see the decompressed payload. `onBomb` observability hook, exported `decompressRequestBody()` for custom flows. Built on web-standard `DecompressionStream` (brotli excluded — not in the spec). Zero runtime dependencies.
 - `waf()` opt-in WAF-lite signature/anomaly inbound-inspection middleware at `@daloyjs/core/waf`: a first-party defense-in-depth layer for teams without an edge WAF (it does **not** replace ModSecurity / a CDN WAF). Wires DaloyJS' high-confidence injection signatures — SQLi, XSS, NoSQL-operator injection (reusing `hasMongoOperatorKeys` for a structural body check), and command injection — into a single scored inbound-inspection pass over the decoded path, the raw + decoded query string, an opt-in header allowlist, and the validated body. Each rule that fires adds an anomaly `score`; reaching `blockThreshold` (default `5`) rejects with a generic `403` (block mode) or merely reports via `onMatch` (log mode) so operators can tune against real traffic first. Per-rule enable/disable + score overrides, inspection-surface toggles, control-character-stripped log samples, and bounded scanning (`maxValueLength` / `maxBodyNodes`) keep a hostile payload from becoming CPU-DoS. The `403` body never names the rule that fired. Zero runtime dependencies.
-- Built-in docs UI Subresource Integrity (SRI): `DocsAssetOptions` lets `scalarHtml()` / `swaggerUiHtml()` / `redocHtml()` and the `docs: { assets }` auto-mount pin version-exact `*Integrity` hashes (`sha256`/`sha384`/`sha512`) plus a `crossOrigin` value (default `"anonymous"`) on the CDN-loaded Scalar / Swagger UI / Redoc `<script>` / `<link>` tags, so a poisoned jsDelivr asset can't execute. Malformed SRI values throw a `TypeError` at startup (browsers ignore unparseable `integrity`, so failing loud avoids a false sense of protection); self-hosting the assets via the same `assets` URLs stays supported. Zero runtime dependencies.
+- Built-in docs UI Subresource Integrity (SRI): the default Scalar / Swagger UI / Redoc / AsyncAPI assets use version-exact URLs with matching SHA-384 hashes and `crossorigin="anonymous"`, so a poisoned CDN asset cannot execute. `DocsAssetOptions` supports validated URL/hash overrides or self-hosting; malformed SRI values throw a `TypeError` instead of silently weakening the page. Zero runtime dependencies.
 - HTTP Message Signatures (RFC 9421) at `@daloyjs/core/http-signatures`: first-party sign/verify for server-to-server request authentication via the standard `Signature` / `Signature-Input` headers — complements the inbound-only webhook HMAC and `clientCertAuth()` mTLS. `signMessage()` / `signRequest()` build an RFC 9421 signature base over derived components (`@method`, `@target-uri`, `@authority`, `@scheme`, `@request-target`, `@path`, `@query`, `@query-param`, `@status`) and HTTP fields with Structured-Fields header serialization; `verifyMessage()` / `verifyRequest()` and the `httpSignatureAuth()` middleware check them. Algorithms `hmac-sha256` / `ed25519` / `ecdsa-p256-sha256` / `ecdsa-p384-sha384` / `rsa-pss-sha512` / `rsa-v1_5-sha256` via WebCrypto (no `node:` imports). Secure-by-default verify: a **mandatory `algorithms` allowlist** (no implicit "any alg"), optional per-key alg pinning to defeat algorithm-confusion, a required `created` timestamp with a 300s freshness window, `created`-in-future / `expires` skew rejection, configurable `requiredComponents`, a 32-byte raw-HMAC floor, a 2048-bit RSA modulus floor (NIST SP 800-131A, parity with the JWT verifier), and `nonce` replay defense; the middleware answers a missing/invalid signature with `401` + `Cache-Control: no-store` and stamps the verified result on `ctx.state.httpSignature`. Ships RFC 9530 `contentDigest()` / `verifyContentDigest()` to bind the request body. Zero runtime dependencies.
 - `compression()` built on web-standard `CompressionStream` (prefers `br` > `gzip` > `deflate`), with BREACH-aware always-on guards (skips `Set-Cookie`, `Authorization`, session / CSRF cookies, already-compressed content types), `minimumSize: 1024`, negative-compression-ratio post-check, no configurable `compressLevel` knob (CPU-DoS defense — `level: 9` is refused at construction), always-on `Vary: Accept-Encoding`, and strong → weak ETag downgrade per RFC 9110 §8.8.3.
 - `etag()` helper auto-skips on `Set-Cookie` and private / no-store / no-cache `Cache-Control` (cross-tenant fingerprinting defense).

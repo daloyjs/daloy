@@ -104,7 +104,7 @@ import { log } from "./log.js";
 
 const app = new App({ logger: log });
 
-// Order matters. requestId() runs in beforeHandle and stamps
+// Order matters. requestId() runs in preBody and stamps
 // ctx.state.requestId + sets x-request-id on the response.
 // trustIncoming defaults to false because clients can spoof headers
 // unless your edge proxy strips/rewrites them.
@@ -647,7 +647,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["NOTES.md"]}
             activeFile="NOTES.md"
-            status="onRequest · beforeHandle · onError · onSend"
+            status="onRequest · preBody · beforeHandle · onError · onSend"
           >
             <CodeBlock language="bash" code={OTEL_LIFECYCLE} />
           </EditorFrame>

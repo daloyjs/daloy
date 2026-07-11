@@ -30,7 +30,7 @@
 
 import { ForbiddenError } from "./errors.js";
 import { timingSafeEqual } from "./security.js";
-import type { BaseContext, Hooks } from "./types.js";
+import type { Hooks, PreBodyContext } from "./types.js";
 
 /**
  * Normalized view of a TLS client certificate, independent of how it was
@@ -83,9 +83,7 @@ export interface ClientCertificate {
  * @since 0.37.0
  */
 export type ClientCertificateSource =
-  | ClientCertificate
-  | undefined
-  | (() => ClientCertificate | undefined);
+  ClientCertificate | undefined | (() => ClientCertificate | undefined);
 
 const CLIENT_CERT_SYMBOL: unique symbol = Symbol.for("daloyjs.clientCertificate");
 
@@ -100,10 +98,7 @@ const CLIENT_CERT_SYMBOL: unique symbol = Symbol.for("daloyjs.clientCertificate"
  *   when the connection presented no client certificate.
  * @since 0.37.0
  */
-export function setClientCertificate(
-  request: Request,
-  source: ClientCertificateSource,
-): void {
+export function setClientCertificate(request: Request, source: ClientCertificateSource): void {
   (request as unknown as Record<PropertyKey, unknown>)[CLIENT_CERT_SYMBOL] = source;
 }
 
@@ -167,7 +162,7 @@ export interface PeerCertificateLike {
  */
 export function normalizePeerCertificate(
   raw: PeerCertificateLike | null | undefined,
-  verified: boolean,
+  verified: boolean
 ): ClientCertificate | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const subjectDN = dnFromRecord(raw.subject);
@@ -193,7 +188,7 @@ export function normalizePeerCertificate(
 }
 
 function dnFromRecord(
-  rec: Record<string, string | string[]> | null | undefined,
+  rec: Record<string, string | string[]> | null | undefined
 ): string | undefined {
   if (!rec || typeof rec !== "object") return undefined;
   const parts: string[] = [];
@@ -209,7 +204,7 @@ function dnFromRecord(
 }
 
 function cnFromRecord(
-  rec: Record<string, string | string[]> | null | undefined,
+  rec: Record<string, string | string[]> | null | undefined
 ): string | undefined {
   if (!rec || typeof rec !== "object") return undefined;
   const cn = rec["CN"];
@@ -308,7 +303,7 @@ function cnFromDN(dn: string | undefined): string | undefined {
  * @since 0.37.0
  */
 export function parseForwardedClientCert(
-  headerValue: string | null | undefined,
+  headerValue: string | null | undefined
 ): ClientCertificate | undefined {
   if (typeof headerValue !== "string" || headerValue.trim().length === 0) {
     return undefined;
@@ -423,9 +418,9 @@ export interface ClientCertAuthOptions {
   /**
    * Override how the certificate is sourced. Defaults to reading whatever the
    * adapter attached via {@link setClientCertificate} (native TLS), falling
-   * back to {@link header} parsing when configured.
+   * back to {@link header} parsing when configured. Runs before body I/O.
    */
-  resolve?: (ctx: BaseContext<any, any>) => ClientCertificate | undefined;
+  resolve?: (ctx: PreBodyContext<any>) => ClientCertificate | undefined;
   /**
    * Read the certificate from a trusted-proxy header instead of (or in
    * addition to) the native adapter source. **Spoofable** unless the app is
@@ -463,11 +458,12 @@ export interface ClientCertAuthOptions {
   checkValidity?: boolean;
   /**
    * Custom per-request check, run after all built-in checks pass. Returning
-   * `false` rejects with `403`; `true`/`undefined` accepts.
+   * `false` rejects with `403`; `true`/`undefined` accepts. The context body is
+   * unavailable because certificate authentication runs before body I/O.
    */
   verify?: (
     cert: ClientCertificate,
-    ctx: BaseContext<any, any>,
+    ctx: PreBodyContext<any>
   ) => boolean | void | Promise<boolean | void>;
   /** Rejection message for the `403` responses. Default: `"Client certificate not permitted"`. */
   message?: string;
@@ -523,7 +519,7 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
   const stateKey = opts.stateKey ?? "clientCertificate";
   const now = opts.now ?? Date.now;
   const allowFingerprints = (opts.allowFingerprints ?? []).map(
-    (f) => normalizeFingerprint(f) ?? "",
+    (f) => normalizeFingerprint(f) ?? ""
   );
   const allowSubjectCNs = opts.allowSubjectCNs;
   const allowIssuerCNs = opts.allowIssuerCNs;
@@ -535,7 +531,7 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
 
   const resolve =
     opts.resolve ??
-    ((ctx: BaseContext<any, any>) => {
+    ((ctx: PreBodyContext<any>) => {
       const native = getClientCertificate(ctx.request);
       if (native) return native;
       if (headerConfig) return certFromHeaders(ctx.request, headerConfig);
@@ -543,7 +539,7 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
     });
 
   const authHooks: Hooks = {
-    async beforeHandle(ctx) {
+    async preBody(ctx) {
       const cert = resolve(ctx);
       if (!cert) {
         return new Response(MISSING_CERT_BODY, {
@@ -590,15 +586,9 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
 function assertHeaderConfig(cfg: ClientCertHeaderConfig): void {
   if (cfg.format === "xfcc") return;
   if (cfg.format === "structured") {
-    if (
-      !cfg.subjectDN &&
-      !cfg.fingerprint &&
-      !cfg.san &&
-      !cfg.serialNumber &&
-      !cfg.issuerDN
-    ) {
+    if (!cfg.subjectDN && !cfg.fingerprint && !cfg.san && !cfg.serialNumber && !cfg.issuerDN) {
       throw new Error(
-        "clientCertAuth(): structured header config must name at least one of subjectDN/issuerDN/fingerprint/serialNumber/san.",
+        "clientCertAuth(): structured header config must name at least one of subjectDN/issuerDN/fingerprint/serialNumber/san."
       );
     }
     return;
@@ -608,7 +598,7 @@ function assertHeaderConfig(cfg: ClientCertHeaderConfig): void {
 
 function certFromHeaders(
   request: Request,
-  cfg: ClientCertHeaderConfig,
+  cfg: ClientCertHeaderConfig
 ): ClientCertificate | undefined {
   if (cfg.format === "xfcc") {
     const name = cfg.name ?? "x-forwarded-client-cert";
@@ -622,9 +612,7 @@ function certFromHeaders(
   const verifyRaw = cfg.verify ? readHeader(request, cfg.verify) : undefined;
   const successValue = (cfg.verifySuccessValue ?? "SUCCESS").toLowerCase();
   const verified =
-    cfg.verify === undefined
-      ? true
-      : (verifyRaw ?? "").toLowerCase() === successValue;
+    cfg.verify === undefined ? true : (verifyRaw ?? "").toLowerCase() === successValue;
   const sans: string[] = [];
   if (sanRaw) {
     for (const piece of sanRaw.split(",")) {

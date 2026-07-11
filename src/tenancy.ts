@@ -49,7 +49,7 @@
  * @since 0.42.0
  */
 
-import type { BaseContext, Hooks } from "./types.js";
+import type { BaseContext, Hooks, PreBodyContext } from "./types.js";
 import {
   BadRequestError,
   ForbiddenError,
@@ -415,7 +415,7 @@ export interface TenantScopeOptions {
  */
 export function tenantScope(
   opts: TenantScopeOptions = {},
-): (ctx: BaseContext<any, any>) => string {
+): (ctx: BaseContext<any, any> | PreBodyContext<any>) => string {
   const stateKey = opts.stateKey ?? "tenant";
   const fallback = opts.fallback ?? "tenant:unknown";
   return (ctx) => {

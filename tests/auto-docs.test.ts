@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { App, createApp, httpBearerScheme, _resetPackageJsonCacheForTests } from "../src/index.js";
+import { App, createApp, httpBearerScheme } from "../src/index.js";
 import { scalarHtml } from "../src/docs.js";
 
 function withRoute(app: App): App {
@@ -465,79 +465,41 @@ test("docs: { enabled: 'auto' } object form respects production flag", async () 
 });
 
 test("docs: true with no openapi options falls back to default info", async () => {
-  // Stub out cwd to a directory with no package.json so the autofill path
-  // returns empty and the hardcoded fallback ("DaloyJS API" / "0.0.0") wins.
-  const realCwd = process.cwd;
-  (process as { cwd: () => string }).cwd = () => "/__nonexistent_for_test__";
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(new App({ logger: false, docs: true }));
-    const spec = await app.request("/openapi.json");
-    const json: any = await spec.json();
-    assert.equal(json.info.title, "DaloyJS API");
-    assert.equal(json.info.version, "0.0.0");
-  } finally {
-    (process as { cwd: () => string }).cwd = realCwd;
-    _resetPackageJsonCacheForTests();
-  }
+  const app = withRoute(new App({ logger: false, docs: true }));
+  const spec = await app.request("/openapi.json");
+  const json: any = await spec.json();
+  assert.equal(json.info.title, "DaloyJS API");
+  assert.equal(json.info.version, "0.0.0");
 });
 
-test("docs: package.json name/version autofill info when not explicitly set", async () => {
-  // Default cwd is the repo root, so the autofill should pick up
-  // `@daloyjs/core` and the current version from this repo's package.json.
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(new App({ logger: false, docs: true }));
-    const json: any = await (await app.request("/openapi.json")).json();
-    assert.equal(typeof json.info.title, "string");
-    assert.equal(typeof json.info.version, "string");
-    assert.notEqual(json.info.title, "DaloyJS API"); // proves autofill ran
-    assert.notEqual(json.info.version, "0.0.0");
-    assert.match(json.info.title, /daloy/i);
-  } finally {
-    _resetPackageJsonCacheForTests();
-  }
+test("docs: explicit openapi.info overrides portable defaults", async () => {
+  const app = withRoute(
+    new App({
+      logger: false,
+      docs: true,
+      openapi: { info: { title: "Explicit", version: "9.9.9" } },
+    })
+  );
+  const json: any = await (await app.request("/openapi.json")).json();
+  assert.equal(json.info.title, "Explicit");
+  assert.equal(json.info.version, "9.9.9");
 });
 
-test("docs: explicit openapi.info overrides package.json autofill", async () => {
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(
-      new App({
-        logger: false,
-        docs: true,
-        openapi: { info: { title: "Explicit", version: "9.9.9" } },
-      })
-    );
-    const json: any = await (await app.request("/openapi.json")).json();
-    assert.equal(json.info.title, "Explicit");
-    assert.equal(json.info.version, "9.9.9");
-  } finally {
-    _resetPackageJsonCacheForTests();
-  }
-});
-
-test("docs: top-level title/version override package.json autofill", async () => {
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(
-      new App({
-        logger: false,
-        docs: true,
-        title: "Top-Level",
-        version: "1.2.3",
-      })
-    );
-    const json: any = await (await app.request("/openapi.json")).json();
-    assert.equal(json.info.title, "Top-Level");
-    assert.equal(json.info.version, "1.2.3");
-  } finally {
-    _resetPackageJsonCacheForTests();
-  }
+test("docs: top-level title/version override portable defaults", async () => {
+  const app = withRoute(
+    new App({
+      logger: false,
+      docs: true,
+      title: "Top-Level",
+      version: "1.2.3",
+    })
+  );
+  const json: any = await (await app.request("/openapi.json")).json();
+  assert.equal(json.info.title, "Top-Level");
+  assert.equal(json.info.version, "1.2.3");
 });
 
 test("createApp({ docs: true }) behaves identically to new App({ docs: true })", async () => {
-  _resetPackageJsonCacheForTests();
   const app = withRoute(
     createApp({
       logger: false,
@@ -656,107 +618,4 @@ test("docs auto-mount respects the openapi.servers and securitySchemes options",
   assert.deepEqual(json.components.securitySchemes, {
     bearerAuth: { type: "http", scheme: "bearer" },
   });
-});
-
-test("docs: deno.json autofills info when no package.json is present", async () => {
-  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const dir = mkdtempSync(join(tmpdir(), "daloy-deno-"));
-  writeFileSync(
-    join(dir, "deno.json"),
-    JSON.stringify({
-      name: "my-deno-app",
-      version: "4.2.0",
-      description: "deno-only project",
-    })
-  );
-  const realCwd = process.cwd;
-  (process as { cwd: () => string }).cwd = () => dir;
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(new App({ logger: false, docs: true }));
-    const json: any = await (await app.request("/openapi.json")).json();
-    assert.equal(json.info.title, "my-deno-app");
-    assert.equal(json.info.version, "4.2.0");
-    assert.equal(json.info.description, "deno-only project");
-  } finally {
-    (process as { cwd: () => string }).cwd = realCwd;
-    _resetPackageJsonCacheForTests();
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("docs: deno.jsonc autofills info and strips JSONC line + block comments", async () => {
-  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const dir = mkdtempSync(join(tmpdir(), "daloy-denoc-"));
-  writeFileSync(
-    join(dir, "deno.jsonc"),
-    `{
-  // app name
-  "name": "jsonc-app",
-  /* multi-line
-     block comment */
-  "version": "1.1.1"
-}`
-  );
-  const realCwd = process.cwd;
-  (process as { cwd: () => string }).cwd = () => dir;
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(new App({ logger: false, docs: true }));
-    const json: any = await (await app.request("/openapi.json")).json();
-    assert.equal(json.info.title, "jsonc-app");
-    assert.equal(json.info.version, "1.1.1");
-  } finally {
-    (process as { cwd: () => string }).cwd = realCwd;
-    _resetPackageJsonCacheForTests();
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("docs: deno.json ignores empty-string name/version/description fields", async () => {
-  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const dir = mkdtempSync(join(tmpdir(), "daloy-empty-"));
-  writeFileSync(join(dir, "deno.json"), JSON.stringify({ name: "", version: "", description: "" }));
-  const realCwd = process.cwd;
-  (process as { cwd: () => string }).cwd = () => dir;
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(new App({ logger: false, docs: true }));
-    const json: any = await (await app.request("/openapi.json")).json();
-    // Empty strings should be ignored, falling back to defaults.
-    assert.equal(json.info.title, "DaloyJS API");
-    assert.equal(json.info.version, "0.0.0");
-    assert.equal(json.info.description, undefined);
-  } finally {
-    (process as { cwd: () => string }).cwd = realCwd;
-    _resetPackageJsonCacheForTests();
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("docs: malformed manifest is swallowed and returns empty autofill", async () => {
-  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const dir = mkdtempSync(join(tmpdir(), "daloy-bad-"));
-  writeFileSync(join(dir, "deno.json"), "{ not json");
-  const realCwd = process.cwd;
-  (process as { cwd: () => string }).cwd = () => dir;
-  _resetPackageJsonCacheForTests();
-  try {
-    const app = withRoute(new App({ logger: false, docs: true }));
-    const json: any = await (await app.request("/openapi.json")).json();
-    assert.equal(json.info.title, "DaloyJS API");
-    assert.equal(json.info.version, "0.0.0");
-  } finally {
-    (process as { cwd: () => string }).cwd = realCwd;
-    _resetPackageJsonCacheForTests();
-    rmSync(dir, { recursive: true, force: true });
-  }
 });

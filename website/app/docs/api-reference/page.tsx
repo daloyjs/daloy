@@ -33,10 +33,7 @@ export default function Page() {
         full. The snippet here is just enough to map the types below onto a
         server you can actually run.
       </p>
-      <CodeBlock
-        language="bash"
-        code={`pnpm add @daloyjs/core zod`}
-      />
+      <CodeBlock language="bash" code={`pnpm add @daloyjs/core zod`} />
       <CodeBlock
         code={`// index.ts
 import { z } from "zod";
@@ -61,13 +58,13 @@ console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
         Run it with <code>node index.ts</code> — Node.js (22.18+) strips
-        TypeScript types natively, no loader required. Every
-        response already carries the secure-by-default headers (
-        <code>secureHeaders</code>) and an <code>x-request-id</code> (
-        <code>requestId</code>); errors serialize to RFC 9457{" "}
-        <code>application/problem+json</code>. To serve <code>/docs</code> and{" "}
-        <code>/openapi.json</code>, pass <code>docs: true</code> to{" "}
-        <code>new App(...)</code> (it defaults to <code>false</code>).
+        TypeScript types natively, no loader required. Every response already
+        carries the secure-by-default headers (<code>secureHeaders</code>) and
+        an <code>x-request-id</code> (<code>requestId</code>); errors serialize
+        to RFC 9457 <code>application/problem+json</code>. To serve{" "}
+        <code>/docs</code> and <code>/openapi.json</code>, pass{" "}
+        <code>docs: true</code> to <code>new App(...)</code> (it defaults to{" "}
+        <code>false</code>).
       </p>
       <p>
         If you drop the response <code>body</code> schema the route still works,
@@ -240,6 +237,9 @@ interface AppOptions {
 
 // Routing
 app.route<P, Req, Res>(def: RouteDefinition<P, Req, Res>): App
+defineRoute(def: RouteDefinition): RouteDefinition  // literal-preserving identity helper
+app.registerRoutes(defs: readonly RouteDefinition[]): App
+app.get(path, contract, handler): App                // also post/put/patch/delete/head
 app.ws<P, TData>(path: P, handler: WebSocketHandler<P, AppState, TData>): App
 app.group(prefix, { tags?, hooks?, auth? }, register: (child: App) => void): App
 app.use(hooks: Hooks): App
@@ -266,7 +266,9 @@ app.introspect(): IntrospectedRoute[]
 app.shutdown(timeoutMs?: number, reason?: string): Promise<void>`}
       />
 
-      <h3 id="route-hooks-and-context-types">Route, hooks &amp; context types</h3>
+      <h3 id="route-hooks-and-context-types">
+        Route, hooks &amp; context types
+      </h3>
       <CodeBlock
         code={`type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 type PathString = \`/\${string}\`;
@@ -281,7 +283,7 @@ interface RequestSchemas {
 }
 
 interface ResponseSpec {
-  description: string;
+  description?: string; // default: HTTP <status> response
   body?:    StandardSchemaV1;
   headers?: Record<string, { description?: string; schema?: StandardSchemaV1 }>;
   examples?: Record<string, unknown>;
@@ -313,12 +315,23 @@ interface BaseContext<P extends string, R extends RequestSchemas | undefined> {
   set:     { status?: number; headers: Headers };
 }
 
+interface PreBodyContext<P extends string = string> {
+  request: Request;
+  params: PathParams<P>; // raw router values
+  query: Record<string, string | string[] | undefined>;
+  headers: Record<string, string | undefined>;
+  body: undefined;
+  state: AppState & Record<string, unknown>;
+  set: { status?: number; headers: Headers };
+}
+
 // HandlerReturn<R> is a discriminated union by status code - TS enforces
 // that every returned response is declared in the route's responses map.
 type HandlerReturn<R extends ResponsesMap> = ...;
 
 interface Hooks {
   onRequest?:    (req: Request) => void | Promise<void>;
+  preBody?:       (ctx: PreBodyContext) => void | Response | Promise<void | Response>;
   beforeHandle?: (ctx) => void | Response | Promise<void | Response>;
   afterHandle?:  (ctx, result) => void | unknown | Promise<void | unknown>;
   onError?:      (err, ctx?) => void | Response | Promise<void | Response>;
@@ -362,11 +375,14 @@ interface IntrospectedRoute {
 }`}
       />
 
-      <h3 id="hook-dispatch-order-and-when-the-body-is-read">Hook dispatch order &amp; when the body is read</h3>
+      <h3 id="hook-dispatch-order-and-when-the-body-is-read">
+        Hook dispatch order &amp; when the body is read
+      </h3>
       <p>
         Per matched request, hooks fire in this order:{" "}
-        <code>onRequest(req)</code> &rarr; <em>route match</em> &rarr; validate{" "}
-        <code>params</code>/<code>query</code>/<code>headers</code>{" "}
+        <code>onRequest(req)</code> &rarr; <em>route match</em> &rarr;{" "}
+        <code>preBody(ctx)</code> &rarr; validate <code>params</code>/
+        <code>query</code>/<code>headers</code>{" "}
         <strong>and read &amp; parse the request body</strong> when the route
         declares a <code>request.body</code> schema &rarr;{" "}
         <code>beforeHandle(ctx)</code> &rarr; <code>handler(ctx)</code> &rarr;{" "}
@@ -374,24 +390,23 @@ interface IntrospectedRoute {
         &rarr; <code>onResponse(res)</code>.
       </p>
       <p>
-        The body is read and validated <strong>before</strong>{" "}
-        <code>beforeHandle</code> <em>by design</em>: body-aware guards that run
-        in <code>beforeHandle</code> need the parsed <code>ctx.body</code>;{" "}
+        Header-only authentication runs in <code>preBody</code>, where route
+        params, query values, and headers are raw and <code>ctx.body</code> is
+        always <code>undefined</code>. Built-in bearer, basic, JWK, and mTLS
+        helpers can reject an unauthenticated upload without consuming it.
+      </p>
+      <p>
+        The body is then read and validated before <code>beforeHandle</code>.
+        Body-aware guards still need the parsed <code>ctx.body</code>;{" "}
         <code>waf()</code> inspects it for NoSQL-operator injection and other
         inbound attack signatures, and <code>idempotency()</code> derives its
         dedup key from it. Deferring the read would silently turn those into
         no-ops.
       </p>
       <p>
-        Consequence: a cheap <code>beforeHandle</code> guard (e.g.{" "}
-        <code>bearerAuth()</code>, <code>rateLimit()</code>) on a route with a
-        body schema runs <em>after</em> the body has been read, so an
-        unauthenticated client still pays for the (bounded) body read before
-        being rejected. The cost is capped by <code>bodyLimitBytes</code> (1 MiB
-        default). To gate traffic <strong>before any body I/O</strong>, put the
-        guard in <code>App({"{ hooks }"})</code> <code>onRequest</code>, which
-        runs before routing and before the body is touched, or run that surface
-        in an app with a stricter <code>bodyLimitBytes</code> setting.
+        Custom cheap guards can use <code>preBody</code>. Keep rate limits that
+        depend on validated identity, WAF, idempotency, dependencies, and other
+        parsed-input logic in <code>beforeHandle</code>.
       </p>
 
       <h3 id="errors">Errors</h3>
@@ -502,7 +517,7 @@ etag(opts?: ETagOptions): Hooks                      // 304 + Set-Cookie / Cache
 interface RateLimitOptions {
   windowMs: number;
   max: number;
-  keyGenerator?: (ctx) => string;
+  keyGenerator?: (ctx: RateLimitContext) => string; // may run on an early auth rejection
   store?: RateLimitStore;          // default in-memory; use redisRateLimitStore for clusters
   trustProxyHeaders?: boolean;
   retryAfter?: boolean;
@@ -518,9 +533,9 @@ interface BearerAuthOptions {
 
       <h3 id="composition-primitives">Composition primitives</h3>
       <CodeBlock
-        code={`every(...layers: Hooks[]): Hooks      // run every layer in order, pipeline-style
-some (...layers: Hooks[]): Hooks      // pass on first non-throwing beforeHandle (auth fallback chains)
-except(when: ExceptPredicate, hooks: Hooks): Hooks  // exempt matching paths from a beforeHandle gate
+        code={`every(...layers: Hooks[]): Hooks      // run every lifecycle phase in order
+some (...layers: Hooks[]): Hooks      // pass the first successful preBody/beforeHandle auth gate
+except(when: ExceptPredicate, hooks: Hooks): Hooks  // exempt paths from preBody + beforeHandle gates
 
 type ExceptPredicate =
   | string                            // path glob: "*" = one segment, "**" = any suffix
@@ -538,7 +553,9 @@ type ExceptPredicate =
 }): DependencyHooks   // per-request cached; runs once per dependency per request`}
       />
 
-      <h3 id="connection-info-and-proxy-posture">Connection info &amp; proxy posture</h3>
+      <h3 id="connection-info-and-proxy-posture">
+        Connection info &amp; proxy posture
+      </h3>
       <CodeBlock
         code={`type BehindProxyConfig = "none" | "loopback" | { hops: number } | { cidrs: readonly string[] };
 interface ConnInfo { remoteAddress?: string; remotePort?: number; tls?: boolean }
@@ -552,7 +569,9 @@ readRemotePort(ctx): number | undefined;
 pickForwardedForByHops(header: string, hops: number): string | undefined;`}
       />
 
-      <h3 id="subdomains-public-suffix-aware">Subdomains (Public-Suffix-aware)</h3>
+      <h3 id="subdomains-public-suffix-aware">
+        Subdomains (Public-Suffix-aware)
+      </h3>
       <CodeBlock
         code={`subdomains(hostname: string, opts?: SubdomainsOptions): SubdomainsResult;
 
@@ -763,7 +782,9 @@ formatStartupBanner(opts: StartupBannerOptions): string;
 printStartupBanner(opts: StartupBannerOptions): void;`}
       />
 
-      <h3 id="security-scheme-builders-openapi-3-1">Security-scheme builders (OpenAPI 3.1)</h3>
+      <h3 id="security-scheme-builders-openapi-3-1">
+        Security-scheme builders (OpenAPI 3.1)
+      </h3>
       <CodeBlock
         code={`// Re-exported from @daloyjs/core for convenience (also live in /openapi).
 httpBearerScheme(opts?:   HttpBearerSchemeOptions):   HttpBearerScheme;
@@ -836,11 +857,17 @@ interface WebhookDefinition {
       </h2>
       <CodeBlock
         code={`createClient<A extends App>(app: A, opts: ClientOptions): ClientFor<A>;
+createInProcessClient<A extends App>(app: A, opts?: InProcessClientOptions): ClientFor<A>;
 
 interface ClientOptions {
   baseUrl: string;
   fetch?: typeof fetch;
-  headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
+  headers?: Record<string, string>;
+}
+
+interface InProcessClientOptions {
+  baseUrl?: string; // default: http://daloy.local
+  headers?: Record<string, string>;
 }
 
 // ClientFor<A> is keyed by operationId; each method takes
@@ -969,6 +996,8 @@ interface DocsAssetOptions {
   swaggerUiCssUrl?: string;       swaggerUiCssIntegrity?: string;
   swaggerUiBundleUrl?: string;    swaggerUiBundleIntegrity?: string;
   redocScriptUrl?: string;        redocScriptIntegrity?: string;
+  asyncapiScriptUrl?: string;     asyncapiScriptIntegrity?: string;
+  asyncapiStyleUrl?: string;      asyncapiStyleIntegrity?: string;
   crossOrigin?: "anonymous" | "use-credentials";  // default: "anonymous"
 }
 
@@ -1281,8 +1310,7 @@ type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;`}
         application code will never need them.
       </p>
       <CodeBlock
-        code={`_resetPackageJsonCacheForTests();
-_resetCrashHandlersForTests();
+        code={`_resetCrashHandlersForTests();
 _resetInsecureDefaultsLogForTests();
 _resetCompressionRuntimeProbeForTests();
 _resetSharedRateLimitStoresForTests();`}

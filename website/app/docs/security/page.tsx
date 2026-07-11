@@ -495,6 +495,16 @@ app.use(timing());              // Server-Timing header for observability`}
       />
 
       <p>
+        Put <code>rateLimit()</code> or <code>loginThrottle()</code> before
+        bearer/basic/JWK/mTLS auth when it must count failed credentials. The
+        limiter will still spend the attempt and return <code>429</code> after
+        the cap even though auth rejects in <code>preBody</code>; DaloyJS does
+        not read a declared request body to do it. A custom key generator on
+        that path should use raw request data or state populated by an earlier{" "}
+        <code>preBody</code> hook.
+      </p>
+
+      <p>
         The official starters wire these in for you: Node, Bun, and Deno enable
         <code>secureHeaders()</code>, <code>requestId()</code>, and{" "}
         <code>rateLimit()</code>; Cloudflare Worker and Vercel enable{" "}

@@ -237,16 +237,12 @@ export interface RedocConfiguration {
 }
 
 /**
- * Override CDN URLs and pin Subresource Integrity (SRI) hashes for the docs
- * UI assets.
+ * Override the version-pinned CDN URLs and Subresource Integrity (SRI) hashes
+ * used by the docs UI assets.
  *
- * Supplying an `*Integrity` value emits an `integrity="…"` attribute plus a
- * `crossorigin` attribute on the matching `<script>` / `<link>` tag so the
- * browser refuses to execute a CDN asset whose bytes don't match the pinned
- * hash. SRI is only meaningful against a **version-pinned** URL
- * (e.g. `…/@scalar/api-reference@1.25.0`); pair each integrity hash with a
- * pinned `*Url`, since the framework's default URLs intentionally track the
- * latest upstream release and therefore cannot carry a stable hash.
+ * Defaults use exact upstream versions with matching SHA-384 digests. A custom
+ * URL without a custom `*Integrity` value intentionally omits SRI; pair URL
+ * overrides with hashes whose exact bytes you control or have verified.
  *
  * @since 0.37.0
  */
@@ -489,6 +485,24 @@ export interface HtmlResponseOptions extends DocsContentSecurityPolicyOptions {
 }
 
 const JSDELIVR_ORIGIN = "https://cdn.jsdelivr.net";
+const DEFAULT_SCALAR_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference@1.62.5`;
+const DEFAULT_SCALAR_SCRIPT_INTEGRITY =
+  "sha384-jVBCKhcCfx34USN27x4iQK1SBNdL/HxKq3KuBAxTS4WPaP5w80K4fjpwB+DezJL5";
+const DEFAULT_SWAGGER_CSS_URL = `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist@5.32.8/swagger-ui.css`;
+const DEFAULT_SWAGGER_CSS_INTEGRITY =
+  "sha384-9Q2fpS+xeS4ffJy6CagnwoUl+4ldAYhOs9pgZuEKxypVModhmZFzeMlvVsAjf7uT";
+const DEFAULT_SWAGGER_BUNDLE_URL = `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist@5.32.8/swagger-ui-bundle.js`;
+const DEFAULT_SWAGGER_BUNDLE_INTEGRITY =
+  "sha384-IKpAWwsTL0pcw7/Amtnt2eXF4P1BK64WNuY2E/RG15SWLUW5HXzFuyqCSAr/DP8C";
+const DEFAULT_REDOC_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/redoc@2.5.3/bundles/redoc.standalone.js`;
+const DEFAULT_REDOC_SCRIPT_INTEGRITY =
+  "sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96";
+const DEFAULT_ASYNCAPI_SCRIPT_URL = `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component@3.1.4/browser/standalone/index.js`;
+const DEFAULT_ASYNCAPI_SCRIPT_INTEGRITY =
+  "sha384-ZI+8twyvBIiWAquvsA8HFRvWjFn7l9/JlCHI3sekdQ6s7xK8ZDT6TDQOickRDQ0t";
+const DEFAULT_ASYNCAPI_STYLE_URL = `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component@3.1.4/styles/default.min.css`;
+const DEFAULT_ASYNCAPI_STYLE_INTEGRITY =
+  "sha384-hcBf581bZwhXX8SyfsmPFkODqlIruk2b6gfX+b2WuK+am42GxstWJlJLiosKZoiL";
 
 /**
  * Matches a single Subresource Integrity digest: a `sha256-`/`sha384-`/
@@ -542,10 +556,13 @@ function integrityAttr(
 export function scalarHtml(opts: ScalarHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Reference");
   const url = escapeHtml(opts.specUrl);
-  const scriptUrl = escapeHtml(
-    opts.assets?.scalarScriptUrl ?? `${JSDELIVR_ORIGIN}/npm/@scalar/api-reference`
+  const usesDefaultScript = opts.assets?.scalarScriptUrl === undefined;
+  const scriptUrl = escapeHtml(opts.assets?.scalarScriptUrl ?? DEFAULT_SCALAR_SCRIPT_URL);
+  const scriptSri = integrityAttr(
+    opts.assets?.scalarScriptIntegrity ??
+      (usesDefaultScript ? DEFAULT_SCALAR_SCRIPT_INTEGRITY : undefined),
+    opts.assets?.crossOrigin
   );
-  const scriptSri = integrityAttr(opts.assets?.scalarScriptIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
   const configuration = scalarConfigurationAttr(opts.specUrl, opts.configuration);
   return `<!doctype html>
@@ -574,14 +591,20 @@ ${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
  */
 export function swaggerUiHtml(opts: SwaggerUiHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Docs");
-  const cssUrl = escapeHtml(
-    opts.assets?.swaggerUiCssUrl ?? `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist/swagger-ui.css`
+  const usesDefaultCss = opts.assets?.swaggerUiCssUrl === undefined;
+  const usesDefaultBundle = opts.assets?.swaggerUiBundleUrl === undefined;
+  const cssUrl = escapeHtml(opts.assets?.swaggerUiCssUrl ?? DEFAULT_SWAGGER_CSS_URL);
+  const bundleUrl = escapeHtml(opts.assets?.swaggerUiBundleUrl ?? DEFAULT_SWAGGER_BUNDLE_URL);
+  const cssSri = integrityAttr(
+    opts.assets?.swaggerUiCssIntegrity ??
+      (usesDefaultCss ? DEFAULT_SWAGGER_CSS_INTEGRITY : undefined),
+    opts.assets?.crossOrigin
   );
-  const bundleUrl = escapeHtml(
-    opts.assets?.swaggerUiBundleUrl ?? `${JSDELIVR_ORIGIN}/npm/swagger-ui-dist/swagger-ui-bundle.js`
+  const bundleSri = integrityAttr(
+    opts.assets?.swaggerUiBundleIntegrity ??
+      (usesDefaultBundle ? DEFAULT_SWAGGER_BUNDLE_INTEGRITY : undefined),
+    opts.assets?.crossOrigin
   );
-  const cssSri = integrityAttr(opts.assets?.swaggerUiCssIntegrity, opts.assets?.crossOrigin);
-  const bundleSri = integrityAttr(opts.assets?.swaggerUiBundleIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
   const configuration = jsonForScript({
     persistAuthorization: true,
@@ -622,10 +645,13 @@ ${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
  */
 export function redocHtml(opts: RedocHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "API Docs");
-  const scriptUrl = escapeHtml(
-    opts.assets?.redocScriptUrl ?? `${JSDELIVR_ORIGIN}/npm/redoc/bundles/redoc.standalone.js`
+  const usesDefaultScript = opts.assets?.redocScriptUrl === undefined;
+  const scriptUrl = escapeHtml(opts.assets?.redocScriptUrl ?? DEFAULT_REDOC_SCRIPT_URL);
+  const scriptSri = integrityAttr(
+    opts.assets?.redocScriptIntegrity ??
+      (usesDefaultScript ? DEFAULT_REDOC_SCRIPT_INTEGRITY : undefined),
+    opts.assets?.crossOrigin
   );
-  const scriptSri = integrityAttr(opts.assets?.redocScriptIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
   const specArg = jsonForScript(opts.specUrl);
   const optionsArg = jsonForScript(opts.configuration ?? {});
@@ -663,16 +689,20 @@ ${docsAuthLauncherHtml(opts.auth, opts.scriptNonce)}
  */
 export function asyncapiHtml(opts: AsyncApiHtmlOptions): string {
   const title = escapeHtml(opts.title ?? "AsyncAPI");
-  const scriptUrl = escapeHtml(
-    opts.assets?.asyncapiScriptUrl ??
-      `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component/browser/standalone/index.js`
+  const usesDefaultScript = opts.assets?.asyncapiScriptUrl === undefined;
+  const usesDefaultStyle = opts.assets?.asyncapiStyleUrl === undefined;
+  const scriptUrl = escapeHtml(opts.assets?.asyncapiScriptUrl ?? DEFAULT_ASYNCAPI_SCRIPT_URL);
+  const styleUrl = escapeHtml(opts.assets?.asyncapiStyleUrl ?? DEFAULT_ASYNCAPI_STYLE_URL);
+  const scriptSri = integrityAttr(
+    opts.assets?.asyncapiScriptIntegrity ??
+      (usesDefaultScript ? DEFAULT_ASYNCAPI_SCRIPT_INTEGRITY : undefined),
+    opts.assets?.crossOrigin
   );
-  const styleUrl = escapeHtml(
-    opts.assets?.asyncapiStyleUrl ??
-      `${JSDELIVR_ORIGIN}/npm/@asyncapi/react-component/styles/default.min.css`
+  const styleSri = integrityAttr(
+    opts.assets?.asyncapiStyleIntegrity ??
+      (usesDefaultStyle ? DEFAULT_ASYNCAPI_STYLE_INTEGRITY : undefined),
+    opts.assets?.crossOrigin
   );
-  const scriptSri = integrityAttr(opts.assets?.asyncapiScriptIntegrity, opts.assets?.crossOrigin);
-  const styleSri = integrityAttr(opts.assets?.asyncapiStyleIntegrity, opts.assets?.crossOrigin);
   const nonce = nonceAttr(opts.scriptNonce);
   const specArg = jsonForScript(opts.specUrl);
   const configArg = jsonForScript(opts.configuration ?? { show: { sidebar: true, errors: true } });

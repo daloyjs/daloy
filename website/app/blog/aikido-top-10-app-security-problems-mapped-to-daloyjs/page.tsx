@@ -45,7 +45,10 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 const SAFE_REDIRECT = `// src/routes/login-callback.ts
 import { safeRedirect } from "@daloyjs/core";
 
-app.get("/login/callback", (ctx) => {
+app.get("/login/callback", {
+  acknowledgeNoResponseBodySchema: true,
+  responses: { 303: {} },
+}, (ctx) => {
   // \`?next=\` is attacker-controlled. Never trust it.
   const next = new URL(ctx.request.url).searchParams.get("next") ?? "/";
 

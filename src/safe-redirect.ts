@@ -31,7 +31,10 @@
  * ```ts
  * import { safeRedirect } from "@daloyjs/core";
  *
- * app.get("/login/callback", (ctx) => {
+ * app.get("/login/callback", {
+ *   acknowledgeNoResponseBodySchema: true,
+ *   responses: { 303: {} },
+ * }, (ctx) => {
  *   const next = new URL(ctx.request.url).searchParams.get("next") ?? "/";
  *   return safeRedirect(next, {
  *     allowedPaths: ["/", "/dashboard", "/account"],

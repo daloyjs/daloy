@@ -1092,7 +1092,9 @@ function aiResponses(
   const out: Record<string, unknown> = {};
   for (const [status, spec] of Object.entries(responses)) {
     if (!spec) continue;
-    const entry: Record<string, unknown> = { description: spec.description };
+    const entry: Record<string, unknown> = {
+      description: spec.description ?? `HTTP ${status} response`,
+    };
     if (spec.body) entry.body = aiSchema(spec.body);
     if (spec.examples) entry.examples = spec.examples;
     out[status] = entry;

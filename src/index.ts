@@ -1,7 +1,7 @@
 export { App } from "./app.js";
 export { createApp } from "./app.js";
+export { defineRoute } from "./types.js";
 export { findRoutesMissingResponseBodySchema } from "./app.js";
-export { _resetPackageJsonCacheForTests } from "./app.js";
 export { _resetCrashHandlersForTests } from "./app.js";
 export { _resetInsecureDefaultsLogForTests } from "./app.js";
 export { _resetIndeterminateEnvWarningForTests } from "./app.js";
@@ -49,6 +49,7 @@ export type {
   AuthSpec,
   Hooks,
   BaseContext,
+  PreBodyContext,
   AppState,
   AuthScheme,
   AuthContext,
@@ -366,6 +367,7 @@ export type {
   CorsOptions,
   CorsOriginAllow,
   RateLimitOptions,
+  RateLimitContext,
   RateLimitStore,
   LoginThrottleOptions,
   CsrfOptions,

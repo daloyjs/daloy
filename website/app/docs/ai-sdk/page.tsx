@@ -43,6 +43,7 @@ app.route({
   method: "POST",
   path: "/api/chat",
   operationId: "chat",
+  acknowledgeNoResponseBodySchema: true,
   request: {
     // You still validate the request. A message count cap plus the
     // default 1 MiB body limit are your first abuse guard, even on a
@@ -146,6 +147,7 @@ app.route({
   method: "POST",
   path: "/api/agent",
   operationId: "agent",
+  acknowledgeNoResponseBodySchema: true,
   request: {
     body: z.object({ messages: z.array(z.unknown()).min(1).max(50) }).strict(),
   },
@@ -274,7 +276,10 @@ export default function Page() {
       <p>
         The AI SDK&apos;s <code>result.toUIMessageStreamResponse()</code> returns
         a web-standard <code>Response</code>, and a DaloyJS handler can return a
-        raw <code>Response</code> directly. The stream passes through,
+        raw <code>Response</code> directly after explicitly setting{" "}
+        <code>acknowledgeNoResponseBodySchema: true</code>. Without that
+        acknowledgement, the route fails closed instead of silently bypassing
+        response validation. The acknowledged stream passes through,
         backpressure and all, and the framework still finalizes it: it adds the
         request id, applies <code>secureHeaders()</code> and CORS, runs your{" "}
         <code>onSend</code> hooks, and strips fingerprint headers, exactly as it

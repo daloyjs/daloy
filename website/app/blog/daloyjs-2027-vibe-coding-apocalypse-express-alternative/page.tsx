@@ -204,7 +204,7 @@ app.get(path, (req,res,next) => {    app.route({
                                        },
                                      })
 
-middleware chain (req,res,next)       hooks (onRequest, beforeHandle,
+middleware chain (req,res,next)       hooks (onRequest, preBody, beforeHandle,
                                        afterHandle, onError, onSend, onResponse)
 express.Router() mini-app             app.group(prefix, opts, fn) / plugins
 error mw (err,req,res,next)           throw new NotFoundError(...) + onError hook

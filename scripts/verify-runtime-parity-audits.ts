@@ -30,6 +30,8 @@
  *   9. `cors()` `allowMethods` default narrowed - `src/middleware.ts`
  *      must declare `DEFAULT_CORS_METHODS = ["GET", "HEAD", "POST"]` and
  *      refuse `methods: ["*"]` at construction.
+ *  10. Portable docs core has no Node filesystem/path imports - `src/app.ts`
+ *      and `src/docs.ts` must remain bundle-safe on Workers and edge hosts.
  *
  * Exit code:
  *   0 - every audit passed.
@@ -56,9 +58,7 @@ const SRC_ROOT = new URL("src/", REPO_ROOT);
 
 async function listSrcFiles(): Promise<readonly string[]> {
   const entries = await readdir(SRC_ROOT, { withFileTypes: true });
-  return entries
-    .filter((e) => e.isFile() && e.name.endsWith(".ts"))
-    .map((e) => e.name);
+  return entries.filter((e) => e.isFile() && e.name.endsWith(".ts")).map((e) => e.name);
 }
 
 async function readSrc(name: string): Promise<string> {
@@ -74,8 +74,7 @@ async function readSrc(name: string): Promise<string> {
 export async function auditReverseProxyAbsence(): Promise<readonly Finding[]> {
   const out: Finding[] = [];
   const files = await listSrcFiles();
-  const forbidden =
-    /\bexport\s+(?:function|const|class)\s+(?:proxy|reverseProxy)\b/;
+  const forbidden = /\bexport\s+(?:function|const|class)\s+(?:proxy|reverseProxy)\b/;
   for (const name of files) {
     const text = await readSrc(name);
     const lines = text.split(/\r?\n/);
@@ -208,10 +207,7 @@ export async function auditCspReportHardening(): Promise<readonly Finding[]> {
         "(audit item 7).",
     });
   }
-  for (const contentType of [
-    "application/csp-report",
-    "application/reports+json",
-  ]) {
+  for (const contentType of ["application/csp-report", "application/reports+json"]) {
     if (!text.includes(`contentType !== "${contentType}"`)) {
       out.push({
         audit: "7. csp-report-hardening",
@@ -248,7 +244,11 @@ export async function auditCspReportHardening(): Promise<readonly Finding[]> {
         "`logCspReportBodies: true` is set explicitly (audit item 7).",
     });
   }
-  if (!/rateLimitConfig\s*=\s*\n\s*opts\.rateLimit\s*===\s*false[\s\S]*limit:\s*60[\s\S]*windowMs:\s*60_000/.test(text)) {
+  if (
+    !/rateLimitConfig\s*=\s*\n\s*opts\.rateLimit\s*===\s*false[\s\S]*limit:\s*60[\s\S]*windowMs:\s*60_000/.test(
+      text
+    )
+  ) {
     out.push({
       audit: "7. csp-report-hardening",
       file: "src/app.ts",
@@ -270,11 +270,7 @@ export async function auditCspReportHardening(): Promise<readonly Finding[]> {
 export async function auditCorsAllowMethodsDefault(): Promise<readonly Finding[]> {
   const out: Finding[] = [];
   const text = await readSrc("middleware.ts");
-  if (
-    !/DEFAULT_CORS_METHODS\s*=\s*\[\s*"GET"\s*,\s*"HEAD"\s*,\s*"POST"\s*\]/.test(
-      text,
-    )
-  ) {
+  if (!/DEFAULT_CORS_METHODS\s*=\s*\[\s*"GET"\s*,\s*"HEAD"\s*,\s*"POST"\s*\]/.test(text)) {
     out.push({
       audit: "9. cors-allow-methods-default",
       file: "src/middleware.ts",
@@ -294,7 +290,7 @@ export async function auditCorsAllowMethodsDefault(): Promise<readonly Finding[]
       line: 0,
       text: 'cors(): methods cannot include "*"',
       message:
-        "cors() must refuse `methods: [\"*\"]` at construction with a " +
+        'cors() must refuse `methods: ["*"]` at construction with a ' +
         "structured error. `*` is a response-only token per the Fetch " +
         "standard, not a developer-facing allowlist value " +
         "(audit item 9).",
@@ -327,7 +323,10 @@ export async function auditWebSocketHeaderMutationRefusal(): Promise<readonly Fi
         "middleware is mounted on a matching path (audit gate).",
     });
   }
-  if (!/acknowledgeUnauthenticated/.test(text) || !/handler\.beforeUpgrade\s*===\s*undefined/.test(text)) {
+  if (
+    !/acknowledgeUnauthenticated/.test(text) ||
+    !/handler\.beforeUpgrade\s*===\s*undefined/.test(text)
+  ) {
     out.push({
       audit: "2. ws-header-mutation-refusal",
       file: "src/app.ts",
@@ -471,6 +470,34 @@ export async function auditPluginExtensionHeaderConflictRefusal(): Promise<reado
 }
 
 /**
+ * Item 10: the App and built-in docs renderer must not import Node filesystem,
+ * path, or OS modules. Even guarded dynamic imports are visible to edge
+ * bundlers and can turn `/docs` into a build-time or first-request failure.
+ */
+export async function auditPortableDocsHaveNoNodeIo(): Promise<readonly Finding[]> {
+  const out: Finding[] = [];
+  const forbidden = /(?:from\s+|import\s*\()\s*["']node:(?:fs(?:\/promises)?|path|os)["']/;
+  for (const name of ["app.ts", "docs.ts"] as const) {
+    const text = await readSrc(name);
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      if (!forbidden.test(line)) continue;
+      out.push({
+        audit: "10. portable-docs-no-node-io",
+        file: `src/${name}`,
+        line: i + 1,
+        text: line.trim(),
+        message:
+          "The portable App/docs bundle must not import node:fs, node:path, or node:os. " +
+          "Pass OpenAPI metadata explicitly and keep docs HTML/assets web-standard.",
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Top-level orchestrator. Runs every audit, reports findings to stderr,
  * exits non-zero on any finding.
  */
@@ -484,6 +511,7 @@ export async function runRuntimeParityAudits(): Promise<readonly Finding[]> {
   all.push(...(await auditWebSocketHeaderMutationRefusal()));
   all.push(...(await auditHttpErrorResHeaderRefusal()));
   all.push(...(await auditPluginExtensionHeaderConflictRefusal()));
+  all.push(...(await auditPortableDocsHaveNoNodeIo()));
   return all;
 }
 
@@ -499,8 +527,8 @@ async function main(): Promise<void> {
   if (errors.length === 0) {
     console.log(
       warnings.length === 0
-        ? "verify-runtime-parity-audits: all static gates passed (items 1, 2, 4, 5, 6, 7, 8, 9)."
-        : `verify-runtime-parity-audits: all static gates passed with ${warnings.length} warning${warnings.length === 1 ? "" : "s"} (items 1, 2, 4, 5, 6, 7, 8, 9).`,
+        ? "verify-runtime-parity-audits: all static gates passed (items 1, 2, 4, 5, 6, 7, 8, 9, 10)."
+        : `verify-runtime-parity-audits: all static gates passed with ${warnings.length} warning${warnings.length === 1 ? "" : "s"} (items 1, 2, 4, 5, 6, 7, 8, 9, 10).`
     );
     return;
   }
@@ -513,7 +541,7 @@ async function main(): Promise<void> {
     `verify-runtime-parity-audits: ${errors.length} error${errors.length === 1 ? "" : "s"}` +
       (warnings.length === 0
         ? "."
-        : ` and ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`),
+        : ` and ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`)
   );
   process.exitCode = 1;
 }

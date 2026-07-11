@@ -83,7 +83,7 @@ export default function Page() {
             detail: "ctx.state.clientCertificate stamped for downstream + audit",
           },
         ]}
-        caption="The TLS layer verifies the chain; clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook. Anything that fails is rejected before the handler runs."
+        caption="The TLS layer verifies the chain; clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook in preBody. Anything that fails is rejected before request-body I/O or the handler."
       />
 
       <h2 id="quick-start">Quick start</h2>

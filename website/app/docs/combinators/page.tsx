@@ -39,9 +39,10 @@ export default function Page() {
         calling <code>app.use(...)</code> for each bundle, but lets you name and
         reuse a curated stack. All lifecycle phases compose:
         <code> onRequest</code> and <code>onResponse</code> run in order,{" "}
-        <code>beforeHandle</code> and <code>onError</code> stop on the first{" "}
-        <code>Response</code>, and <code>afterHandle</code> plus{" "}
-        <code>onSend</code> thread the value through each layer.
+        <code>preBody</code>, <code>beforeHandle</code>, and{" "}
+        <code>onError</code> stop on the first <code>Response</code>, and{" "}
+        <code>afterHandle</code> plus <code>onSend</code> thread the value
+        through each layer.
       </p>
 
       <FlowDiagram
@@ -95,18 +96,20 @@ app.use(adminStack);`}
         <code>some()</code>: accept any one proof of identity
       </h2>
       <p>
-        <code>some(...layers)</code> runs each bundle&apos;s{" "}
-        <code>beforeHandle</code> in order and accepts the request as soon as
-        one bundle passes without throwing or returning a <code>Response</code>.
-        Use it for routes that accept more than one credential style, such as a
-        bearer token or a signed session cookie.
+        <code>some(...layers)</code> runs each bundle&apos;s auth gate in order
+        and accepts the request as soon as one bundle passes without throwing or
+        returning a <code>Response</code>. When every candidate uses{" "}
+        <code>preBody</code>, selection happens before body I/O. Mixed stacks
+        defer candidate selection to <code>beforeHandle</code> for
+        compatibility. Use it for routes that accept more than one credential
+        style, such as a bearer token or a signed session cookie.
       </p>
 
       <BranchDiagram
         title="some() accepts any one proof"
         source={{
           eyebrow: "request",
-          label: "beforeHandle runs each bundle in order",
+          label: "auth gate runs each bundle in order",
           detail: "first to pass wins",
         }}
         branches={[
@@ -178,9 +181,10 @@ app.use(
           <code>WWW-Authenticate</code> challenge you want clients to see first.
         </li>
         <li>
-          Only the <code>beforeHandle</code> selection strategy changes.{" "}
-          <code>afterHandle</code>, <code>onSend</code>, <code>onResponse</code>
-          , and <code>onError</code> from every bundle still compose normally.
+          Only the <code>preBody</code>/<code>beforeHandle</code> selection
+          strategy changes. <code>afterHandle</code>, <code>onSend</code>,{" "}
+          <code>onResponse</code>, and <code>onError</code> from every bundle
+          still compose normally.
         </li>
       </ul>
 
@@ -227,11 +231,12 @@ app.use(
         encoded traversal tricks.
       </p>
       <p>
-        Only the wrapped bundle&apos;s <code>beforeHandle</code> phase is
-        skipped. Its <code>onRequest</code>, <code>afterHandle</code>,{" "}
-        <code>onSend</code>, and <code>onResponse</code> phases still run. Wrap
-        each bundle with <code>except()</code> individually if you need to gate
-        different phases with different rules.
+        The wrapped bundle&apos;s <code>preBody</code> and{" "}
+        <code>beforeHandle</code> gates are skipped. Its <code>onRequest</code>,{" "}
+        <code>afterHandle</code>, <code>onSend</code>, and{" "}
+        <code>onResponse</code> phases still run. Wrap each bundle with{" "}
+        <code>except()</code> individually if you need to gate different phases
+        with different rules.
       </p>
 
       <h2 id="composing-the-three">Composing the three</h2>

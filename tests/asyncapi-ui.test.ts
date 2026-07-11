@@ -28,7 +28,7 @@ test("asyncapi: true mounts the JSON document with the app's WS channels", async
       logger: false,
       asyncapi: true,
       openapi: { info: { title: "Realtime API", version: "2.1.0" } },
-    }),
+    })
   );
   const res = await app.request("/asyncapi.json");
   assert.equal(res.status, 200);
@@ -40,7 +40,7 @@ test("asyncapi: true mounts the JSON document with the app's WS channels", async
   const channelAddresses = Object.values(doc.channels ?? {}).map((c: any) => c.address);
   assert.ok(
     channelAddresses.some((a: string) => a === "/chat/{room}"),
-    `expected a /chat/{room} channel, got ${JSON.stringify(channelAddresses)}`,
+    `expected a /chat/{room} channel, got ${JSON.stringify(channelAddresses)}`
   );
 });
 
@@ -60,15 +60,18 @@ test("asyncapi: true mounts an interactive UI loading the AsyncAPI standalone bu
       logger: false,
       asyncapi: true,
       openapi: { info: { title: "Realtime API", version: "1.0.0" } },
-    }),
+    })
   );
   const res = await app.request("/asyncapi");
   assert.equal(res.status, 200);
   assert.match(res.headers.get("content-type") ?? "", /^text\/html/);
   const html = await res.text();
   // Loads the AsyncAPI React standalone bundle + stylesheet from the CDN.
-  assert.match(html, /@asyncapi\/react-component\/browser\/standalone/);
-  assert.match(html, /@asyncapi\/react-component\/styles\/default\.min\.css/);
+  assert.match(html, /@asyncapi\/react-component@3\.1\.4\/browser\/standalone/);
+  assert.match(
+    html,
+    /@asyncapi\/react-component@3\.1\.4\/styles\/default\.min\.css/,
+  );
   // Renders against the served JSON document.
   assert.match(html, /AsyncApiStandalone\.render/);
   assert.match(html, /\/asyncapi\.json/);
@@ -101,7 +104,7 @@ test("asyncapi object form honors custom paths", async () => {
     new App({
       logger: false,
       asyncapi: { path: "/events", jsonPath: "/events.json", yamlPath: "/events.yaml" },
-    }),
+    })
   );
   assert.equal((await app.request("/events")).status, 200);
   assert.equal((await app.request("/events.json")).status, 200);
@@ -125,11 +128,28 @@ test("asyncapi pins SRI hashes when supplied via assets", async () => {
       asyncapi: {
         assets: { asyncapiScriptIntegrity: sri, asyncapiStyleIntegrity: sri },
       },
-    }),
+    })
   );
   const html = await (await app.request("/asyncapi")).text();
   assert.match(html, new RegExp(`integrity="${sri}"`));
   assert.match(html, /crossorigin="anonymous"/);
+});
+
+test("asyncapi uses version-pinned default assets with exact SRI", async () => {
+  const app = withChannel(new App({ logger: false, asyncapi: true }));
+  const html = await (await app.request("/asyncapi")).text();
+
+  assert.match(html, /@asyncapi\/react-component@3\.1\.4/);
+  assert.ok(
+    html.includes(
+      'integrity="sha384-ZI+8twyvBIiWAquvsA8HFRvWjFn7l9/JlCHI3sekdQ6s7xK8ZDT6TDQOickRDQ0t"'
+    )
+  );
+  assert.ok(
+    html.includes(
+      'integrity="sha384-hcBf581bZwhXX8SyfsmPFkODqlIruk2b6gfX+b2WuK+am42GxstWJlJLiosKZoiL"'
+    )
+  );
 });
 
 test("asyncapi derives ws/wss servers from openapi.servers when none are given", async () => {
@@ -141,7 +161,7 @@ test("asyncapi derives ws/wss servers from openapi.servers when none are given",
         info: { title: "Realtime API", version: "1.0.0" },
         servers: [{ url: "https://api.example.com" }, { url: "http://localhost:3000" }],
       },
-    }),
+    })
   );
   const doc: any = await (await app.request("/asyncapi.json")).json();
   const servers = Object.values(doc.servers ?? {}) as Array<{ host: string; protocol: string }>;
@@ -155,8 +175,11 @@ test("explicit asyncapi.servers override the openapi-derived ones", async () => 
     new App({
       logger: false,
       asyncapi: { servers: { prod: { host: "ws.example.com", protocol: "wss" } } },
-      openapi: { info: { title: "X", version: "1.0.0" }, servers: [{ url: "https://api.example.com" }] },
-    }),
+      openapi: {
+        info: { title: "X", version: "1.0.0" },
+        servers: [{ url: "https://api.example.com" }],
+      },
+    })
   );
   const doc: any = await (await app.request("/asyncapi.json")).json();
   assert.deepEqual(Object.keys(doc.servers ?? {}), ["prod"]);

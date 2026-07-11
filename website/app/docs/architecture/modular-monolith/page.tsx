@@ -26,41 +26,47 @@ export default function Page() {
     <>
       <h1>Modular monolith</h1>
       <p>
-        A modular monolith is one deployable, but inside the codebase each business capability is a
-        clearly bounded module. You get the operational simplicity of a monolith and most of the
-        decoupling of microservices, without the network, the orchestration, or the early
-        commitment.
+        A modular monolith is one deployable, but inside the codebase each
+        business capability is a clearly bounded module. You get the operational
+        simplicity of a monolith and most of the decoupling of microservices,
+        without the network, the orchestration, or the early commitment.
       </p>
       <p>
         DaloyJS is a great fit for this style because{" "}
-        <Link href="/docs/plugins">plugins are encapsulated</Link>, every route is a typed contract,
-        and the same{" "}
-        <Link href="/docs/openapi">OpenAPI document</Link> + <Link href="/docs/typed-client">typed
-        client</Link> you ship to consumers also lets your own modules call each other safely. When
-        you eventually extract a module into its own service, the contract is already there.
+        <Link href="/docs/plugins">plugins are encapsulated</Link>, every route
+        is a typed contract, and the same{" "}
+        <Link href="/docs/openapi">OpenAPI document</Link> +{" "}
+        <Link href="/docs/typed-client">typed client</Link> you ship to
+        consumers also lets your own modules call each other safely. When you
+        eventually extract a module into its own service, the contract is
+        already there.
       </p>
 
       <h2 id="mental-model">Mental model</h2>
       <ul>
         <li>
-          <strong>Module</strong>: one bounded context (e.g. <code>catalog</code>,{" "}
-          <code>orders</code>, <code>identity</code>). Owns its routes, domain logic, persistence,
-          and tests. Exposes only a public surface.
+          <strong>Module</strong>: one bounded context (e.g.{" "}
+          <code>catalog</code>, <code>orders</code>, <code>identity</code>).
+          Owns its routes, domain logic, persistence, and tests. Exposes only a
+          public surface.
         </li>
         <li>
-          <strong>Shared kernel</strong>: cross-cutting infrastructure (db client, logger, http
-          hooks, config). Knows nothing about any specific module.
+          <strong>Shared kernel</strong>: cross-cutting infrastructure (db
+          client, logger, http hooks, config). Knows nothing about any specific
+          module.
         </li>
         <li>
-          <strong>Platform</strong>: wiring code: which modules to register, in what order, with
-          which prefixes. Builds the <code>App</code> and exposes the typed client.
+          <strong>Platform</strong>: wiring code: which modules to register, in
+          what order, with which prefixes. Builds the <code>App</code> and
+          exposes the typed client.
         </li>
       </ul>
 
       <h2 id="reference-folder-structure">Reference folder structure</h2>
       <p>
-        This is the layout we recommend for new projects. <code>create-daloy</code> can scaffold a
-        small version of it, and it scales cleanly from one module to dozens.
+        This is the layout we recommend for new projects.{" "}
+        <code>create-daloy</code> can scaffold a small version of it, and it
+        scales cleanly from one module to dozens.
       </p>
       <CodeBlock
         language="text"
@@ -135,8 +141,9 @@ generated/                   # Hey API typed client output
 
       <h2 id="module-dependency-rules">Module dependency rules</h2>
       <p>
-        The whole point of a modular monolith is that the rules are <em>enforceable</em>, not just
-        documented. There are only three rules and a linter can keep you honest.
+        The whole point of a modular monolith is that the rules are{" "}
+        <em>enforceable</em>, not just documented. There are only three rules
+        and a linter can keep you honest.
       </p>
       <LayerStack
         title="Dependency direction"
@@ -193,44 +200,94 @@ generated/                   # Hey API typed client output
 
       <h2 id="anatomy-of-a-module">Anatomy of a module</h2>
       <p>
-        A module is just a DaloyJS plugin. The folder structure is what gives it long-term shape;
-        the framework only cares about the <code>register()</code> function in{" "}
-        <code>index.ts</code>.
+        A module is just a DaloyJS plugin. The folder structure is what gives it
+        long-term shape; the framework only cares about the{" "}
+        <code>register()</code> function in <code>index.ts</code>.
       </p>
       <CodeBlock
         code={`// src/modules/catalog/index.ts
 import type { App } from "@daloyjs/core";
 
-import { listBooks }  from "./routes/list-books.ts";
-import { getBook }    from "./routes/get-book.ts";
-import { createBook } from "./routes/create-book.ts";
+import { listBooksRoute }  from "./routes/list-books.ts";
+import { getBookRoute }    from "./routes/get-book.ts";
+import { createBookRoute } from "./routes/create-book.ts";
 
 import { CatalogService } from "./domain/catalog-service.ts";
 import { BookRepo }       from "./infra/book-repo.ts";
 
-export const catalogModule = {
-  name: "catalog",
-  register(app: App) {
-    // Wire the module's own dependencies into a single decorator.
-    // Other modules cannot see this - encapsulation is per-plugin.
-    app.decorate("catalog", new CatalogService(new BookRepo(app.state.db)));
+// The literal tuple is the module's public HTTP surface.
+export const catalogRoutes = [
+  listBooksRoute,
+  getBookRoute,
+  createBookRoute,
+] as const;
 
-    listBooks(app);
-    getBook(app);
-    createBook(app);
-  },
-};`}
+export function installCatalog(app: App) {
+  app.decorate("catalog", new CatalogService(new BookRepo(app.state.db)));
+}`}
       />
       <p>
-        Each route file contains exactly one <code>app.route(...)</code> call. That keeps OpenAPI
-        diffs small, makes test scoping obvious, and lets new contributors find the right file from
-        an <code>operationId</code> in seconds.
+        Each route file exports one <code>defineRoute(...)</code> contract. That
+        keeps OpenAPI diffs small and, unlike passing a bare <code>App</code>{" "}
+        through registration functions, preserves every operation&apos;s literal
+        type across file boundaries.
       </p>
-
-      <h2 id="public-contracts-how-modules-talk">Public contracts: how modules talk</h2>
       <p>
-        Every module has a <code>contracts/public.ts</code>. It is the only file other modules are
-        allowed to import. Treat it like a public package boundary inside your monorepo.
+        Use plugin <code>register()</code> and <code>group()</code> for runtime
+        encapsulation, hooks, and decorations. Their callback bodies cannot
+        widen the already-created parent&apos;s TypeScript generic, so routes
+        that must appear in the no-codegen client should also be exported in
+        module tuples and composed once through <code>registerRoutes()</code>.
+      </p>
+      <CodeBlock
+        code={`// src/modules/catalog/routes/get-book.ts
+import { defineRoute } from "@daloyjs/core";
+import { z } from "zod";
+import { Book } from "../contracts/public";
+
+export const getBookRoute = defineRoute({
+  method: "GET",
+  path: "/catalog/books/:id",
+  operationId: "getBook",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: { description: "Book", body: Book },
+    404: { description: "Not found" },
+  },
+  handler: async ({ params, state }) => {
+    const book = await state.catalog.get(params.id);
+    return book
+      ? { status: 200, body: book }
+      : { status: 404, body: undefined };
+  },
+});`}
+      />
+      <CodeBlock
+        code={`// src/app.ts
+import { App } from "@daloyjs/core";
+import { catalogRoutes, installCatalog } from "./modules/catalog";
+import { identityRoutes, installIdentity } from "./modules/identity";
+import { orderRoutes, installOrders } from "./modules/orders";
+
+const base = new App({ docs: true });
+installCatalog(base);
+installIdentity(base);
+installOrders(base);
+
+export const app = base.registerRoutes([
+  ...catalogRoutes,
+  ...identityRoutes,
+  ...orderRoutes,
+] as const);`}
+      />
+
+      <h2 id="public-contracts-how-modules-talk">
+        Public contracts: how modules talk
+      </h2>
+      <p>
+        Every module has a <code>contracts/public.ts</code>. It is the only file
+        other modules are allowed to import. Treat it like a public package
+        boundary inside your monorepo.
       </p>
       <CodeBlock
         code={`// src/modules/catalog/contracts/public.ts
@@ -248,24 +305,27 @@ export const Book = z.object({
 export type Book = z.infer<typeof Book>;`}
       />
       <p>
-        Inside the module, <code>domain/</code> and <code>infra/</code> may use richer internal
-        types. Across modules, only the public schema is visible. This is the same pattern that
-        makes future extraction painless, the cross-module type surface is already minimal and
-        already validated.
+        Inside the module, <code>domain/</code> and <code>infra/</code> may use
+        richer internal types. Across modules, only the public schema is
+        visible. This is the same pattern that makes future extraction painless,
+        the cross-module type surface is already minimal and already validated.
       </p>
 
-      <h2 id="cross-module-calls-without-coupling">Cross-module calls without coupling</h2>
+      <h2 id="cross-module-calls-without-coupling">
+        Cross-module calls without coupling
+      </h2>
       <p>
-        When <code>orders</code> needs a book, it does <em>not</em> import <code>BookRepo</code>.
-        It calls catalog through the same <Link href="/docs/typed-client">typed client</Link>{" "}
-        consumers use, pointed at the in-process app instead of HTTP.
+        When <code>orders</code> needs a book, it does <em>not</em> import{" "}
+        <code>BookRepo</code>. It calls catalog through the same{" "}
+        <Link href="/docs/typed-client">typed client</Link> consumers use,
+        pointed at the in-process app instead of HTTP.
       </p>
       <CodeBlock
         code={`// src/platform/client.ts
 import { createInProcessClient } from "@daloyjs/core/client";
 import { app } from "@/app";
 
-// Same shape as the public typed client; zero network hops.
+// Exact operation-id surface from every module, zero network hops.
 export const internal = createInProcessClient(app);`}
       />
       <CodeBlock
@@ -273,22 +333,24 @@ export const internal = createInProcessClient(app);`}
 import { internal } from "@/platform/client";
 
 export async function placeOrder(input: { bookId: string; userId: string }) {
-  const { body: book } = await internal.getBook({ params: { id: input.bookId } });
-
-  if (!book) throw new Error("book not found");
+  const response = await internal.getBook({ params: { id: input.bookId } });
+  if (response.status !== 200) throw new Error("book not found");
+  const book = response.body;
 
   // ... charge, persist, emit event, return order
 }`}
       />
       <p>
-        Two wins: orders has no compile-time dependency on catalog&apos;s implementation, and the
-        day you extract catalog into a separate service, the only change in orders is a base URL.
+        Two wins: orders has no compile-time dependency on catalog&apos;s
+        implementation, and the day you extract catalog into a separate service,
+        the only change in orders is a base URL.
       </p>
 
       <h2 id="wiring-modules-into-the-app">Wiring modules into the app</h2>
       <p>
-        Keep registration explicit and ordered. A single list is far easier to review than
-        auto-discovery, and it makes startup deterministic across runtimes.
+        Keep registration explicit and ordered. A single list is far easier to
+        review than auto-discovery, and it makes startup deterministic across
+        runtimes.
       </p>
       <CodeBlock
         code={`// src/platform/modules.ts
@@ -327,10 +389,13 @@ registerModules(app);
 await app.ready();`}
       />
 
-      <h2 id="enforcing-boundaries-with-the-linter">Enforcing boundaries with the linter</h2>
+      <h2 id="enforcing-boundaries-with-the-linter">
+        Enforcing boundaries with the linter
+      </h2>
       <p>
         Documentation drifts. Tooling does not. Add an{" "}
-        <code>eslint-plugin-import</code> rule that bans the patterns the architecture forbids.
+        <code>eslint-plugin-import</code> rule that bans the patterns the
+        architecture forbids.
       </p>
       <CodeBlock
         language="json"
@@ -362,9 +427,10 @@ await app.ready();`}
 
       <h2 id="testing-layout">Testing layout</h2>
       <p>
-        Tests follow the module boundary. Each module owns its unit and integration tests; the
-        repository keeps a small top-level <code>tests/contract</code> suite that runs against the
-        generated OpenAPI document so any unintended schema change fails CI.
+        Tests follow the module boundary. Each module owns its unit and
+        integration tests; the repository keeps a small top-level{" "}
+        <code>tests/contract</code> suite that runs against the generated
+        OpenAPI document so any unintended schema change fails CI.
       </p>
       <CodeBlock
         language="text"
@@ -376,79 +442,88 @@ tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
 
       <h2 id="scaling-the-monolith">Scaling the monolith</h2>
       <p>
-        Most teams never need to leave this layout. When you do, usually because one module needs
-        independent scaling, a different runtime, or a separate on-call rotation, the path is
-        straightforward.
+        Most teams never need to leave this layout. When you do, usually because
+        one module needs independent scaling, a different runtime, or a separate
+        on-call rotation, the path is straightforward.
       </p>
       <ol>
         <li>
-          Move <code>src/modules/&lt;name&gt;</code> into its own repo or workspace package and keep
-          its plugin entry intact.
+          Move <code>src/modules/&lt;name&gt;</code> into its own repo or
+          workspace package and keep its plugin entry intact.
         </li>
         <li>
-          Re-export <code>contracts/public.ts</code> as a published package so the original repo can
-          still import the types.
+          Re-export <code>contracts/public.ts</code> as a published package so
+          the original repo can still import the types.
         </li>
         <li>
-          Swap the in-process typed client for a real HTTP base URL in the original repo, the
-          callsites do not change.
+          Swap the in-process typed client for a real HTTP base URL in the
+          original repo, the callsites do not change.
         </li>
         <li>
-          Re-run <code>generateOpenAPI</code> in both repos; the contract-test suite immediately
-          tells you if anything drifted.
+          Re-run <code>generateOpenAPI</code> in both repos; the contract-test
+          suite immediately tells you if anything drifted.
         </li>
       </ol>
       <p>
-        Because every cross-module call already went through a typed contract, extraction becomes a
-        configuration change rather than an architectural rewrite.
+        Because every cross-module call already went through a typed contract,
+        extraction becomes a configuration change rather than an architectural
+        rewrite.
       </p>
 
       <h2 id="anti-patterns-to-avoid">Anti-patterns to avoid</h2>
       <ul>
         <li>
-          <strong>Reaching into another module&apos;s <code>domain/</code> or <code>infra/</code>.
+          <strong>
+            Reaching into another module&apos;s <code>domain/</code> or{" "}
+            <code>infra/</code>.
           </strong>{" "}
-          The instant this is allowed, the modules collapse back into a tangle. Keep the lint rule
-          enforced.
+          The instant this is allowed, the modules collapse back into a tangle.
+          Keep the lint rule enforced.
         </li>
         <li>
-          <strong>Putting domain logic in <code>shared/</code>.</strong>{" "}
-          <code>shared/</code> is for plumbing only. If you need a helper that knows about{" "}
-          <code>Book</code>, it belongs inside <code>modules/catalog</code>.
+          <strong>
+            Putting domain logic in <code>shared/</code>.
+          </strong>{" "}
+          <code>shared/</code> is for plumbing only. If you need a helper that
+          knows about <code>Book</code>, it belongs inside{" "}
+          <code>modules/catalog</code>.
         </li>
         <li>
-          <strong>One giant <code>routes.ts</code> per module.</strong> Prefer one file per route, 
-          it keeps OpenAPI diffs reviewable and gives you obvious test boundaries.
+          <strong>
+            One giant <code>routes.ts</code> per module.
+          </strong>{" "}
+          Prefer one file per route, it keeps OpenAPI diffs reviewable and gives
+          you obvious test boundaries.
         </li>
         <li>
-          <strong>Auto-loading modules from the filesystem.</strong> Explicit registration in{" "}
-          <code>platform/modules.ts</code> is easier to audit, diff, and reason about across
-          runtimes.
+          <strong>Auto-loading modules from the filesystem.</strong> Explicit
+          registration in <code>platform/modules.ts</code> is easier to audit,
+          diff, and reason about across runtimes.
         </li>
         <li>
-          <strong>Premature service extraction.</strong> Stay a monolith until the operational
-          benefit is concrete. The contracts you build along the way are what makes splitting cheap
-          later.
+          <strong>Premature service extraction.</strong> Stay a monolith until
+          the operational benefit is concrete. The contracts you build along the
+          way are what makes splitting cheap later.
         </li>
       </ul>
 
       <h2 id="where-to-next">Where to next</h2>
       <ul>
         <li>
-          <Link href="/docs/plugins">Plugins & encapsulation</Link>: the primitive every module is
-          built on.
+          <Link href="/docs/plugins">Plugins & encapsulation</Link>: the
+          primitive every module is built on.
         </li>
         <li>
-          <Link href="/docs/openapi">OpenAPI generation</Link>: the contract that powers the typed
-          client and contract tests.
+          <Link href="/docs/openapi">OpenAPI generation</Link>: the contract
+          that powers the typed client and contract tests.
         </li>
         <li>
-          <Link href="/docs/typed-client">Typed clients</Link>: how cross-module calls stay
-          decoupled.
+          <Link href="/docs/typed-client">Typed clients</Link>: how cross-module
+          calls stay decoupled.
         </li>
         <li>
-          <Link href="/docs/testing">Testing</Link>: pairing module-level tests with
-          contract-level guarantees.
+          <Link href="/docs/testing">Testing</Link>: pairing module-level tests
+          with contract-level guarantees.
         </li>
       </ul>
     </>

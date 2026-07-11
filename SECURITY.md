@@ -259,8 +259,8 @@ Requires both an expanding logger (`${jndi:…}`) and a runtime classloader. Nei
 #### OWASP API Security Top 10 (2023)
 DaloyJS ships first-party middleware for the surface the "API security tools" market bolts on at runtime. See the [docs page](website/app/docs/security/owasp-api-top-10/page.tsx) for the per-item mapping. Headlines:
 
-- **API1 BOLA / API3 BOPLA / API5 Function-level auth** — typed `params` from the request schema, explicit `beforeHandle` per route, response-body schemas validate on the way out.
-- **API2 Broken Authentication** — `bearerAuth`, `basicAuth`, `jwt()`, signed-cookie `session()`, `timingSafeEqual()`. Production-mode `csrf({ strategy: "fetch-metadata" })`.
+- **API1 BOLA / API3 BOPLA / API5 Function-level auth** — typed `params` from the request schema, header/certificate authentication in `preBody` before upload I/O, validated-input authorization in `beforeHandle`, and response-body schemas on the way out. Raw handler responses fail closed unless the route explicitly declares `acknowledgeNoResponseBodySchema: true`; method shorthands have no two-argument contract bypass.
+- **API2 Broken Authentication** — `bearerAuth`, `basicAuth`, `jwt()`, signed-cookie `session()`, `timingSafeEqual()`. Header/certificate auth rejects in `preBody`; a preceding `rateLimit()` / `loginThrottle()` still counts failed credentials before returning `401`/`429`, without reading the upload. Production-mode `csrf({ strategy: "fetch-metadata" })`.
 - **API4 Unrestricted Resource Consumption** — body cap, request timeout, `rateLimit()` + Redis store, `loadShedding()`, response `compression()`, multipart per-field cap.
 - **API6 Sensitive Business Flows** — `rateLimit({ key })` per-account / per-card-bin + Fetch-Metadata `csrf()`.
 - **API7 SSRF** — `fetchGuard()`. See the SSRF entries below.

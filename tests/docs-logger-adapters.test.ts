@@ -1,10 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { App } from "../src/index.js";
-import { scalarHtml, swaggerUiHtml, redocHtml, htmlResponse, docsContentSecurityPolicy } from "../src/docs.js";
+import {
+  scalarHtml,
+  swaggerUiHtml,
+  redocHtml,
+  htmlResponse,
+  docsContentSecurityPolicy,
+} from "../src/docs.js";
 import { createLogger } from "../src/logger.js";
 import { toFetchHandler as toCloudflareFetchHandler } from "../src/adapters/cloudflare.js";
-import { toWebHandler, toRouteHandlers, toFetchHandler as toVercelFetchHandler } from "../src/adapters/vercel.js";
+import {
+  toWebHandler,
+  toRouteHandlers,
+  toFetchHandler as toVercelFetchHandler,
+} from "../src/adapters/vercel.js";
 import { serve as serveBun } from "../src/adapters/bun.js";
 import { serve as serveDeno } from "../src/adapters/deno.js";
 import { toFastlyHandler, installFastlyListener } from "../src/adapters/fastly.js";
@@ -37,9 +47,9 @@ test("docs HTML escapes untrusted title and spec URL", () => {
   assert.match(scalar, /\/openapi\.json\?x=&lt;script&gt;/);
   assert.doesNotMatch(scalar, /<img>/);
 
-  const swagger = swaggerUiHtml({ title: "Docs & API", specUrl: "\";alert(1)//" });
+  const swagger = swaggerUiHtml({ title: "Docs & API", specUrl: '";alert(1)//' });
   assert.match(swagger, /Docs &amp; API/);
-  assert.equal(swaggerConfigurationFrom(swagger).url, "\";alert(1)//");
+  assert.equal(swaggerConfigurationFrom(swagger).url, '";alert(1)//');
   assert.doesNotMatch(swagger, /<\/script><script>/);
 });
 
@@ -84,14 +94,13 @@ test("scalarHtml emits pinned SRI integrity and crossorigin attributes", () => {
   const html = scalarHtml({
     specUrl: "/openapi.json",
     assets: {
-      scalarScriptUrl:
-        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
+      scalarScriptUrl: "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
       scalarScriptIntegrity: "sha384-abcDEF123+/456ghiJKL789mnoPQR012stuVWX",
     },
   });
   assert.match(
     html,
-    /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@scalar\/api-reference@1\.25\.0" integrity="sha384-abcDEF123\+\/456ghiJKL789mnoPQR012stuVWX" crossorigin="anonymous">/,
+    /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@scalar\/api-reference@1\.25\.0" integrity="sha384-abcDEF123\+\/456ghiJKL789mnoPQR012stuVWX" crossorigin="anonymous">/
   );
 });
 
@@ -99,8 +108,7 @@ test("swaggerUiHtml emits SRI on both the stylesheet and the bundle", () => {
   const html = swaggerUiHtml({
     specUrl: "/openapi.json",
     assets: {
-      swaggerUiCssUrl:
-        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css",
+      swaggerUiCssUrl: "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css",
       swaggerUiCssIntegrity: "sha512-cssHASH+/value0123456789ABCDEFabcdef==",
       swaggerUiBundleUrl:
         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js",
@@ -110,11 +118,11 @@ test("swaggerUiHtml emits SRI on both the stylesheet and the bundle", () => {
   });
   assert.match(
     html,
-    /<link rel="stylesheet" href="[^"]+swagger-ui\.css" integrity="sha512-cssHASH\+\/value0123456789ABCDEFabcdef==" crossorigin="use-credentials" \/>/,
+    /<link rel="stylesheet" href="[^"]+swagger-ui\.css" integrity="sha512-cssHASH\+\/value0123456789ABCDEFabcdef==" crossorigin="use-credentials" \/>/
   );
   assert.match(
     html,
-    /<script src="[^"]+swagger-ui-bundle\.js" integrity="sha256-jsHASHvalue0123456789ABCDEFabcdef0=" crossorigin="use-credentials">/,
+    /<script src="[^"]+swagger-ui-bundle\.js" integrity="sha256-jsHASHvalue0123456789ABCDEFabcdef0=" crossorigin="use-credentials">/
   );
 });
 
@@ -143,14 +151,44 @@ test("swaggerUiHtml persists authorization and forwards JSON configuration safel
   assert.equal(swaggerConfigurationFrom(defaultHtml).persistAuthorization, true);
 });
 
-test("docs helpers omit SRI attributes when no integrity hash is supplied", () => {
+test("docs helpers pin default CDN assets with SRI", () => {
   const scalar = scalarHtml({ specUrl: "/openapi.json" });
-  assert.doesNotMatch(scalar, /integrity=/);
-  assert.doesNotMatch(scalar, /crossorigin=/);
+  assert.match(scalar, /@scalar\/api-reference@1\.62\.5/);
+  assert.ok(
+    scalar.includes(
+      'integrity="sha384-jVBCKhcCfx34USN27x4iQK1SBNdL/HxKq3KuBAxTS4WPaP5w80K4fjpwB+DezJL5"'
+    )
+  );
+  assert.match(scalar, /crossorigin="anonymous"/);
 
   const swagger = swaggerUiHtml({ specUrl: "/openapi.json" });
-  assert.doesNotMatch(swagger, /integrity=/);
-  assert.doesNotMatch(swagger, /crossorigin=/);
+  assert.match(swagger, /swagger-ui-dist@5\.32\.8/);
+  assert.ok(
+    swagger.includes(
+      'integrity="sha384-9Q2fpS+xeS4ffJy6CagnwoUl+4ldAYhOs9pgZuEKxypVModhmZFzeMlvVsAjf7uT"'
+    )
+  );
+  assert.ok(
+    swagger.includes(
+      'integrity="sha384-IKpAWwsTL0pcw7/Amtnt2eXF4P1BK64WNuY2E/RG15SWLUW5HXzFuyqCSAr/DP8C"'
+    )
+  );
+  assert.equal((swagger.match(/crossorigin="anonymous"/g) ?? []).length, 2);
+
+  const redoc = redocHtml({ specUrl: "/openapi.json" });
+  assert.match(redoc, /redoc@2\.5\.3/);
+  assert.ok(
+    redoc.includes(
+      'integrity="sha384-xiEssMQFSpSfLbzRZCGfxxIM5QDb2DTrU6vyoZdp2sV1L6pmOMy6MpTtUoLbpC96"'
+    )
+  );
+
+  const custom = scalarHtml({
+    specUrl: "/openapi.json",
+    assets: { scalarScriptUrl: "/assets/scalar.js" },
+  });
+  assert.doesNotMatch(custom, /integrity=/);
+  assert.doesNotMatch(custom, /crossorigin=/);
 });
 
 test("docs helpers support multiple space-separated SRI digests", () => {
@@ -158,13 +196,12 @@ test("docs helpers support multiple space-separated SRI digests", () => {
     specUrl: "/openapi.json",
     assets: {
       scalarScriptUrl: "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.0.0",
-      scalarScriptIntegrity:
-        "sha384-AAAA+/0123456789abcdef sha512-BBBB+/0123456789abcdef==",
+      scalarScriptIntegrity: "sha384-AAAA+/0123456789abcdef sha512-BBBB+/0123456789abcdef==",
     },
   });
   assert.match(
     html,
-    /integrity="sha384-AAAA\+\/0123456789abcdef sha512-BBBB\+\/0123456789abcdef=="/,
+    /integrity="sha384-AAAA\+\/0123456789abcdef sha512-BBBB\+\/0123456789abcdef=="/
   );
 });
 
@@ -178,18 +215,19 @@ test("docs helpers reject a malformed SRI integrity value", () => {
           scalarScriptIntegrity: "md5-notallowed",
         },
       }),
-    /Invalid Subresource Integrity value/,
+    /Invalid Subresource Integrity value/
   );
   assert.throws(
     () =>
       swaggerUiHtml({
         specUrl: "/openapi.json",
         assets: {
-          swaggerUiBundleUrl: "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.0.0/swagger-ui-bundle.js",
+          swaggerUiBundleUrl:
+            "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.0.0/swagger-ui-bundle.js",
           swaggerUiBundleIntegrity: "   ",
         },
       }),
-    /Invalid Subresource Integrity value/,
+    /Invalid Subresource Integrity value/
   );
 });
 
@@ -232,7 +270,7 @@ test("redocHtml supports self-hosted assets, a nonce, and forwards configuration
   assert.match(html, /nonce="nonce-123"/);
   assert.match(
     html,
-    /Redoc\.init\("\/openapi\.json",\{"disableSearch":true,"hideDownloadButtons":true\},document\.getElementById\("redoc"\)\)/,
+    /Redoc\.init\("\/openapi\.json",\{"disableSearch":true,"hideDownloadButtons":true\},document\.getElementById\("redoc"\)\)/
   );
 });
 
@@ -240,14 +278,13 @@ test("redocHtml emits pinned SRI and rejects a malformed integrity value", () =>
   const html = redocHtml({
     specUrl: "/openapi.json",
     assets: {
-      redocScriptUrl:
-        "https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js",
+      redocScriptUrl: "https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js",
       redocScriptIntegrity: "sha384-abcDEF123+/456ghiJKL789mnoPQR012stuVWX",
     },
   });
   assert.match(
     html,
-    /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/redoc@2\.1\.5\/bundles\/redoc\.standalone\.js" integrity="sha384-abcDEF123\+\/456ghiJKL789mnoPQR012stuVWX" crossorigin="anonymous">/,
+    /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/redoc@2\.1\.5\/bundles\/redoc\.standalone\.js" integrity="sha384-abcDEF123\+\/456ghiJKL789mnoPQR012stuVWX" crossorigin="anonymous">/
   );
 
   assert.throws(
@@ -256,7 +293,7 @@ test("redocHtml emits pinned SRI and rejects a malformed integrity value", () =>
         specUrl: "/openapi.json",
         assets: { redocScriptIntegrity: "md5-notallowed" },
       }),
-    /Invalid Subresource Integrity value/,
+    /Invalid Subresource Integrity value/
   );
 });
 
@@ -337,7 +374,10 @@ test("htmlResponse forwards allowBlobWorkers for custom Redoc routes", () => {
 });
 
 test("docsContentSecurityPolicy can target custom asset origins", () => {
-  const csp = docsContentSecurityPolicy({ assetOrigins: ["https://docs.example.com"], scriptNonce: "abc" });
+  const csp = docsContentSecurityPolicy({
+    assetOrigins: ["https://docs.example.com"],
+    scriptNonce: "abc",
+  });
   assert.match(csp, /script-src 'self' https:\/\/docs\.example\.com 'nonce-abc'/);
   assert.match(csp, /style-src 'self' https:\/\/docs\.example\.com 'unsafe-inline'/);
 });
@@ -346,10 +386,7 @@ test("docsContentSecurityPolicy can target custom API connect origins", () => {
   const csp = docsContentSecurityPolicy({
     connectOrigins: ["https://api.example.com", "http://localhost:4000"],
   });
-  assert.match(
-    csp,
-    /connect-src 'self' https:\/\/api\.example\.com http:\/\/localhost:4000/,
-  );
+  assert.match(csp, /connect-src 'self' https:\/\/api\.example\.com http:\/\/localhost:4000/);
 });
 
 test("docsContentSecurityPolicy omits unsafe-inline scripts when nonce is present", () => {
@@ -366,13 +403,23 @@ test("htmlResponse omits CDN origins when asset origins are empty", () => {
 
 test("structured logger respects level, child bindings, and string messages", () => {
   const lines: string[] = [];
-  const logger = createLogger({ level: "warn", bindings: { app: "test" }, write: (line) => lines.push(line) });
+  const logger = createLogger({
+    level: "warn",
+    bindings: { app: "test" },
+    write: (line) => lines.push(line),
+  });
   logger.info("hidden");
   logger.warn({ route: "/x" }, "warned");
   logger.child({ requestId: "r1" }).error("failed");
 
   assert.equal(lines.length, 2);
-  assert.deepEqual(JSON.parse(lines[0]!), { level: "warn", app: "test", route: "/x", msg: "warned", time: JSON.parse(lines[0]!).time });
+  assert.deepEqual(JSON.parse(lines[0]!), {
+    level: "warn",
+    app: "test",
+    route: "/x",
+    msg: "warned",
+    time: JSON.parse(lines[0]!).time,
+  });
   const err = JSON.parse(lines[1]!);
   assert.equal(err.level, "error");
   assert.equal(err.app, "test");
@@ -417,12 +464,39 @@ test("cloudflare and vercel adapters delegate to app.fetch", async () => {
   assert.deepEqual(await vercelFetch.json(), { ok: true });
 
   const routes = toRouteHandlers(app);
-  assert.deepEqual(
-    Object.keys(routes).sort(),
-    ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-  );
+  assert.deepEqual(Object.keys(routes).sort(), [
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+  ]);
   const routeRes = await routes.GET(new Request("http://test.local/ok"));
   assert.equal(routeRes.status, 200);
+});
+
+test("built-in docs render through Cloudflare and Vercel adapter shapes", async () => {
+  const app = new App({
+    logger: false,
+    docs: true,
+    openapi: { info: { title: "Portable Docs", version: "1.0.0" } },
+  });
+  const request = () => new Request("https://api.example.com/docs");
+
+  const cloudflare = await toCloudflareFetchHandler(app).fetch(request());
+  const vercel = await toVercelFetchHandler(app).fetch(request());
+  const web = await toWebHandler(app)(request());
+
+  for (const response of [cloudflare, vercel, web]) {
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /^text\/html/);
+    const html = await response.text();
+    assert.match(html, /Portable Docs/);
+    assert.match(html, /@scalar\/api-reference@1\.62\.5/);
+    assert.match(html, /integrity="sha384-/);
+  }
 });
 
 test("bun and deno adapters fail loudly outside their runtimes", () => {
@@ -491,14 +565,21 @@ test("bun adapter passes modern options through to Bun.serve", async () => {
 });
 
 test("deno adapter wires signal-based shutdown and TLS options", async () => {
-  const captured: Array<{ init: Record<string, unknown>; handler: (req: Request) => Promise<Response> }> = [];
+  const captured: Array<{
+    init: Record<string, unknown>;
+    handler: (req: Request) => Promise<Response>;
+  }> = [];
   const signalListeners: Array<{ sig: string; fn: () => void }> = [];
   const removedSignalListeners: Array<{ sig: string; fn: () => void }> = [];
   let shutdownCalls = 0;
   const fakeDeno = {
     serve(init: Record<string, unknown>, handler: (req: Request) => Promise<Response>) {
       captured.push({ init, handler });
-      return { shutdown: async () => { shutdownCalls += 1; } };
+      return {
+        shutdown: async () => {
+          shutdownCalls += 1;
+        },
+      };
     },
     addSignalListener(sig: string, fn: () => void) {
       signalListeners.push({ sig, fn });
@@ -544,10 +625,7 @@ test("deno adapter wires signal-based shutdown and TLS options", async () => {
     signalListeners[0]!.fn(); // after shutdown this is a no-op, but still must not throw
     assert.equal(shutdownCalls, 1);
     assert.equal(sig.aborted, true);
-    assert.deepEqual(
-      removedSignalListeners.map((x) => x.sig).sort(),
-      ["SIGINT", "SIGTERM"]
-    );
+    assert.deepEqual(removedSignalListeners.map((x) => x.sig).sort(), ["SIGINT", "SIGTERM"]);
   } finally {
     if (prev === undefined) delete (globalThis as { Deno?: unknown }).Deno;
     else (globalThis as { Deno?: unknown }).Deno = prev;
@@ -569,9 +647,15 @@ test("fastly adapter delegates to app.fetch and installs a fetch listener", asyn
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { ok: true });
 
-  const captured: Array<{ type: string; listener: (event: { request: Request; respondWith: (r: Promise<Response>) => void }) => void }> = [];
+  const captured: Array<{
+    type: string;
+    listener: (event: { request: Request; respondWith: (r: Promise<Response>) => void }) => void;
+  }> = [];
   const fakeGlobal = {
-    addEventListener(type: string, listener: (event: { request: Request; respondWith: (r: Promise<Response>) => void }) => void) {
+    addEventListener(
+      type: string,
+      listener: (event: { request: Request; respondWith: (r: Promise<Response>) => void }) => void
+    ) {
       captured.push({ type, listener });
     },
   };
@@ -605,7 +689,10 @@ test("installFastlyListener throws when addEventListener is missing", () => {
   const prev = (globalThis as any).addEventListener;
   delete (globalThis as any).addEventListener;
   try {
-    assert.throws(() => installFastlyListener(new App({ logger: false })), /Fastly Compute runtime not detected/);
+    assert.throws(
+      () => installFastlyListener(new App({ logger: false })),
+      /Fastly Compute runtime not detected/
+    );
   } finally {
     if (prev) (globalThis as any).addEventListener = prev;
   }

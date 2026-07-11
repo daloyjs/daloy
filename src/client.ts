@@ -28,30 +28,26 @@ export type RoutesOf<A extends App> = A["routes"][number];
  * the route's request and response schemas.
  *
  * The per-method types are recovered from the `App`'s accumulated route tuple,
- * which is built up as you **chain** `app.route(...)` calls. If the `App` type
- * is widened back to its bare default — e.g. a `const app: App` annotation, a
- * `: App` factory return type, or registering routes as separate statements
- * rather than a chain — the tuple is erased and this type collapses to an
- * untyped, string-indexed record.
+ * built by chained registrations or `app.registerRoutes([...])`. If the result
+ * is widened back to a bare `App` annotation, the tuple is intentionally erased
+ * and this type becomes a string-indexed record.
  */
 export type ClientFor<A extends App> = {
   [R in Extract<RoutesOf<A>, { operationId: string }> as R["operationId"]]: ClientMethod<R>;
 };
 
-type ClientMethod<R> = R extends RouteDefinition<
-  infer P,
-  infer _M,
-  infer Req,
-  infer Res
->
-  ? (input: ClientInput<P, Req>) => Promise<ClientOutput<Res>>
-  : never;
+type ClientMethod<R> =
+  R extends RouteDefinition<infer P, infer _M, infer Req, infer Res>
+    ? (input: ClientInput<P, Req>) => Promise<ClientOutput<Res>>
+    : never;
 
 type ClientInput<P extends string, Req extends RequestSchemas | undefined> = {
   params: InferRequest<Req, P>["params"];
   query?: Partial<InferRequest<Req, P>["query"]>;
   headers?: Record<string, string>;
-} & (Req extends { body: infer _B } ? { body: InferRequest<Req, P>["body"] } : { body?: undefined });
+} & (Req extends { body: infer _B }
+  ? { body: InferRequest<Req, P>["body"] }
+  : { body?: undefined });
 
 type ClientOutput<Res extends ResponsesMap> = HandlerReturn<Res>;
 
@@ -65,8 +61,16 @@ export interface ClientOptions {
   headers?: Record<string, string>;
 }
 
+/** Options for {@link createInProcessClient}. */
+export interface InProcessClientOptions {
+  /** Synthetic absolute origin used while constructing requests. Default: `http://daloy.local`. */
+  baseUrl?: string;
+  /** Default headers merged into every request. Per-call headers win. */
+  headers?: Record<string, string>;
+}
+
 /**
- * Build a typed, in-process fetch client whose methods are keyed by
+ * Build a typed fetch client whose methods are keyed by
  * `operationId`. Parameters and response types are inferred from the same
  * route definitions registered on `app`, so the client and server cannot
  * drift apart at the type level.
@@ -79,11 +83,10 @@ export interface ClientOptions {
  * from the OpenAPI document instead.
  *
  * @remarks
- * The method signatures are inferred from the `App`'s accumulated route tuple,
- * so chain your `app.route(...)` registrations and let TypeScript infer the
- * variable's type. A widening `const app: App` annotation, a `: App` factory
- * return type, or registering routes as separate statements erases the
- * per-route types and yields an untyped client.
+ * The method signatures are inferred from the `App`'s accumulated route tuple.
+ * Chain registrations or compose independently exported contracts with
+ * `app.registerRoutes([...])`, and avoid widening the result to a bare `App`
+ * annotation because that deliberately discards the per-route tuple.
  *
  * @example
  * ```ts
@@ -146,6 +149,33 @@ export function createClient<A extends App>(app: A, opts: ClientOptions): Client
   }
 
   return out as ClientFor<A>;
+}
+
+/**
+ * Build a typed client that dispatches directly through an App without
+ * opening a socket or binding a port.
+ *
+ * Requests still traverse the complete validation, middleware, security, and
+ * serialization pipeline through {@link "./app.js".App.fetch}.
+ *
+ * @param app - App whose registered route tuple drives the client surface.
+ * @param opts - Optional synthetic origin and default request headers.
+ * @returns A typed operation-id client backed by in-process dispatch.
+ * @since 1.0.0
+ */
+export function createInProcessClient<A extends App>(
+  app: A,
+  opts: InProcessClientOptions = {}
+): ClientFor<A> {
+  const clientOptions: ClientOptions = {
+    baseUrl: opts.baseUrl ?? "http://daloy.local",
+    fetch: (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      return app.fetch(request);
+    },
+  };
+  if (opts.headers) clientOptions.headers = opts.headers;
+  return createClient(app, clientOptions);
 }
 
 function safeJson(text: string): unknown {

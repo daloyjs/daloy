@@ -77,6 +77,28 @@ test("POST /books rejects unauthorized", async () => {
 });`}
       />
 
+      <h2 id="typed-in-process-client">Typed in-process client</h2>
+      <p>
+        When the test should use operation ids and contract-derived inputs,
+        build a <code>createInProcessClient(app)</code>. It opens no socket but
+        still traverses routing, authentication, validation, hooks, and response
+        serialization.
+      </p>
+      <CodeBlock
+        code={`import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "../src/app.js";
+
+const client = createInProcessClient(app);
+
+test("getBook is typed end to end", async () => {
+  const response = await client.getBook({ params: { id: "book_1" } });
+  assert.equal(response.status, 200);
+  if (response.status === 200) {
+    assert.equal(response.body.id, "book_1"); // body is narrowed and typed
+  }
+});`}
+      />
+
       <h2 id="mock-mode">Mock mode</h2>
       <p>
         For pure-contract testing (no DB, no side effects), enable{" "}
@@ -216,7 +238,9 @@ console.log(\`\${report.checked} routes - all clean\`);`}
         mismatched example fails CI from the first commit.
       </p>
 
-      <h2 id="gate-it-locally-with-a-pre-push-hook">Gate it locally with a pre-push hook</h2>
+      <h2 id="gate-it-locally-with-a-pre-push-hook">
+        Gate it locally with a pre-push hook
+      </h2>
       <p>
         A contract check is an authoring-time concern, so it belongs on your
         machine, never on the production request path. A <code>pre-push</code>{" "}

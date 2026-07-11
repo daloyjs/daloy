@@ -11,7 +11,7 @@ const POST = {
   title:
     "Middleware Without Mystery: Hooks, Ordering, and Response Transformation",
   description:
-    "The DaloyJS request lifecycle, end to end: onRequest → beforeHandle → handler → afterHandle → onSend → onResponse, plus onError on the error path. Where each hook fires, what it can change, how scopes compose (global → group → route), and what to put in which slot - with real short-circuit, header-stamping, and logging recipes.",
+    "The DaloyJS request lifecycle, end to end: onRequest → preBody → validation → beforeHandle → handler → afterHandle → onSend → onResponse, plus onError on the error path. Where each hook fires and what belongs in each slot.",
   date: "2026-05-30",
   readingTime: "13 min read",
   author: "Devlin Duldulao",
@@ -26,7 +26,7 @@ export const metadata = buildMetadata({
   path: `/blog/${POST.slug}`,
   keywords: [
     "DaloyJS hooks",
-    "onRequest beforeHandle afterHandle",
+    "onRequest preBody beforeHandle afterHandle",
     "onSend onResponse onError",
     "middleware ordering",
     "request lifecycle",
@@ -46,6 +46,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 const HOOKS_INTERFACE = `// @daloyjs/core, the entire Hooks interface, no surprises.
 export interface Hooks {
   onRequest?:    (req: Request)                        => void | Promise<void>;
+  preBody?:      (ctx: PreBodyContext)                 => void | Response | Promise<void | Response>;
   beforeHandle?: (ctx: BaseContext)                    => void | Response | Promise<void | Response>;
   afterHandle?:  (ctx: BaseContext, result: unknown)   => void | unknown | Promise<void | unknown>;
   onSend?:       (res: Response, ctx?: BaseContext)    => void | Response | Promise<void | Response>;
@@ -54,17 +55,17 @@ export interface Hooks {
 }
 //
 // Successful request order:
-//   onRequest → beforeHandle → handler → afterHandle → onSend → onResponse
+//   onRequest → preBody → validation/body read → beforeHandle → handler → afterHandle → onSend → onResponse
 // Error path:
 //   onRequest → (anywhere it throws) → onError → onSend → onResponse`;
 
 const LIFECYCLE_ASCII = `time ─────────────────────────────────────────────────────────────────▶
 
-   ┌──────────┐   ┌──────────────┐   ┌─────────┐   ┌─────────────┐
-   │onRequest │ → │ beforeHandle │ → │ handler │ → │ afterHandle │ → …
-   └──────────┘   └──────────────┘   └─────────┘   └─────────────┘
-        ▲              │ may return                    │ may return
-        │              ▼ a Response (short-circuit)    ▼ a new value
+   ┌──────────┐   ┌─────────┐   ┌────────────┐   ┌──────────────┐   ┌─────────┐
+   │onRequest │ → │ preBody │ → │ validation │ → │ beforeHandle │ → │ handler │ → …
+   └──────────┘   └─────────┘   └────────────┘   └──────────────┘   └─────────┘
+        ▲              │               │ body read            │ may return
+        │              ▼ may reject    │ when declared        ▼ a Response
         │
    raw Request                                              ┌────────┐
         │                  ┌────────────┐   ┌────────────┐  │ socket │
@@ -89,7 +90,7 @@ app.route({
   hooks: { /* (3) ROUTE - runs last, only on THIS route */ },
 });
 
-// Each hook *kind* (onRequest, beforeHandle, etc.) composes pipeline-style:
+// Each hook *kind* (onRequest, preBody, beforeHandle, etc.) composes pipeline-style:
 // global onSend, then every group onSend in registration order, then route onSend.
 // First one to return a new Response wins the next stage's input.`;
 
@@ -123,10 +124,10 @@ export function maintenanceMode(opts: { enabled: () => boolean }): Hooks {
 // Globally:
 app.use(maintenanceMode({ enabled: () => process.env.MAINTENANCE === "1" }));`;
 
-const AUTH_BEFORE = `// src/middleware/require-role.ts, a per-route auth gate.
-// beforeHandle is where authentication and authorization live, because
-// short-circuiting here means the handler never runs, never queries the DB,
-// never consumes the body, never burns its rate-limit slot.
+const AUTH_BEFORE = `// src/middleware/require-role.ts, a per-route authorization gate.
+// Built-in header/certificate authentication runs earlier in preBody, before
+// upload I/O. Authorization that needs validated identity/input belongs in
+// beforeHandle, where short-circuiting still prevents the handler and DB work.
 
 export function requireRole(role: string): Hooks {
   return {
@@ -250,42 +251,46 @@ const ORDERING_EXAMPLE = `// Watch the order. The console output is the easiest 
 const app = new App({
   hooks: {
     onRequest:    () => console.log("[1] global  onRequest"),
-    beforeHandle: () => console.log("[2] global  beforeHandle"),
-    afterHandle:  () => console.log("[6] global  afterHandle"),
-    onSend:       () => console.log("[8] global  onSend"),
-    onResponse:   () => console.log("[10] global onResponse"),
+    preBody:      () => console.log("[2] global  preBody"),
+    beforeHandle: () => console.log("[4] global  beforeHandle"),
+    afterHandle:  () => console.log("[8] global  afterHandle"),
+    onSend:       () => console.log("[10] global onSend"),
+    onResponse:   () => console.log("[12] global onResponse"),
   },
 });
 
 app.use({
-  beforeHandle: () => console.log("[3] group   beforeHandle"),
-  afterHandle:  () => console.log("[7] group   afterHandle"),
-  onSend:       () => console.log("[9] group   onSend"),
+  preBody:      () => console.log("[3] group   preBody"),
+  beforeHandle: () => console.log("[5] group   beforeHandle"),
+  afterHandle:  () => console.log("[9] group   afterHandle"),
+  onSend:       () => console.log("[11] group   onSend"),
 });
 
 app.route({
   method: "GET",
   path: "/x",
   handler: async () => {
-    console.log("[5] handler runs");
+    console.log("[7] handler runs");
     return { status: 200, body: { ok: true } };
   },
   hooks: {
-    beforeHandle: () => console.log("[4] route   beforeHandle"),
+    beforeHandle: () => console.log("[6] route   beforeHandle"),
   },
 });
 
 // $ curl http://localhost:3000/x
 // [1] global  onRequest
-// [2] global  beforeHandle
-// [3] group   beforeHandle
-// [4] route   beforeHandle
-// [5] handler runs
-// [6] global  afterHandle
-// [7] group   afterHandle
-// [8] global  onSend
-// [9] group   onSend
-// [10] global onResponse`;
+// [2] global  preBody
+// [3] group   preBody
+// [4] global  beforeHandle
+// [5] group   beforeHandle
+// [6] route   beforeHandle
+// [7] handler runs
+// [8] global  afterHandle
+// [9] group   afterHandle
+// [10] global onSend
+// [11] group  onSend
+// [12] global onResponse`;
 
 const PLUGIN_COMPOSITION = `// src/plugins/observability.ts, encapsulated plugin.
 // Routes/hooks registered inside \`register\` are scoped to the child app.
@@ -324,8 +329,11 @@ const RECIPE_TABLE = `# What goes where, print this out, tape it to your monitor
 onRequest      ↳ stuff that needs the raw Request (TLS termination metadata,
                  conditional request decoding). No context yet. Cannot decide.
 
-beforeHandle   ↳ AUTH. AUTHZ. RATE LIMITING. Anything that should prevent
-                 the handler from running. THIS is where short-circuiting lives.
+preBody        ↳ CHEAP PERIMETER AUTH. Raw params/query/headers, body undefined.
+                 Reject bearer/basic/JWK/mTLS failures before upload I/O.
+
+beforeHandle   ↳ VALIDATED-INPUT AUTHZ. WAF. IDEMPOTENCY. RATE LIMITING.
+                 Anything that needs parsed schemas before the handler runs.
 
 handler        ↳ your code. Nothing else.
 
@@ -346,8 +354,8 @@ const ANTIPATTERNS = `# Three patterns that look smart but bite you in productio
 # 1) Mutating ctx.state in onResponse. Too late! The response is already gone.
 #    Put state changes in beforeHandle / afterHandle. Put OBSERVATION in onResponse.
 
-# 2) Doing auth in afterHandle. The handler already ran (and probably hit the DB,
-#    and probably consumed the rate-limit budget). Auth belongs in beforeHandle.
+# 2) Doing auth in afterHandle. The handler already ran. Header/certificate auth
+#    belongs in preBody; authorization that needs validated input in beforeHandle.
 
 # 3) Catching errors in beforeHandle to "swallow" them. The framework already
 #    does graceful error → problem+json conversion. Trust it. If you need to
@@ -551,20 +559,34 @@ export default function BlogPostPage() {
                 Fires before any context is built. You see the raw{" "}
                 <code>Request</code>. Use this for things that need the
                 untouched body or headers, TLS hints, conditional decode of the
-                raw byte stream. Almost everything else belongs in{" "}
-                <code>beforeHandle</code>.
+                raw byte stream.
               </>
             }
           />
           <HookCard
             step="2"
+            name="preBody"
+            signature="(ctx: PreBodyContext) => void | Response"
+            canReturn="a Response before request-body I/O"
+            description={
+              <>
+                Fires after routing with raw params, query, and headers, while{" "}
+                <code>ctx.body</code> is guaranteed to be undefined. This is the
+                perimeter slot for cheap bearer, basic, JWK, API-key, and mTLS
+                authentication that should reject an upload before reading it.
+              </>
+            }
+          />
+          <HookCard
+            step="3"
             name="beforeHandle"
             signature="(ctx) => void | Response"
             canReturn="a Response to short-circuit the handler"
             description={
               <>
-                The single most important hook. Authentication, authorization,
-                rate limiting, maintenance gates, feature flags. Return a{" "}
+                This hook sees schema-validated input and any parsed body. Put
+                body-aware authorization, WAF inspection, idempotency, and
+                validated-identity rate limits here. Return a{" "}
                 <code>Response</code> here and the handler never runs. Throw an{" "}
                 <code>HttpError</code> here and the framework turns it into RFC
                 9457 problem+json for you.
@@ -572,7 +594,7 @@ export default function BlogPostPage() {
             }
           />
           <HookCard
-            step="3"
+            step="4"
             name="handler"
             signature="(ctx) => { status; body; headers? }"
             canReturn="the result, always"
@@ -585,7 +607,7 @@ export default function BlogPostPage() {
             }
           />
           <HookCard
-            step="4"
+            step="5"
             name="afterHandle"
             signature="(ctx, result) => void | unknown"
             canReturn="a transformed result"
@@ -600,7 +622,7 @@ export default function BlogPostPage() {
             }
           />
           <HookCard
-            step="5"
+            step="6"
             name="onSend"
             signature="(res: Response, ctx?) => void | Response"
             canReturn="a replacement Response (or mutate headers in place)"
@@ -616,7 +638,7 @@ export default function BlogPostPage() {
             }
           />
           <HookCard
-            step="6"
+            step="7"
             name="onResponse"
             signature="(res: Response) => void | Promise<void>"
             canReturn="nothing (the response already left)"

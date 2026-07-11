@@ -27,12 +27,47 @@ export default function Page() {
         trie in O(path-segments) regardless of how many routes you have.
       </p>
 
+      <h2 id="progressive-shorthands">Progressive shorthands</h2>
+      <p>
+        Method shorthands reduce ceremony without removing the contract.
+        DaloyJS derives a stable operation id from the method and path, such as{" "}
+        <code>getRoot</code> or <code>postBookItemsByItemId</code>. An explicit{" "}
+        <code>operationId</code> still wins.
+      </p>
+      <CodeBlock
+        code={`const app = new App()
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ hello: z.string() }) } } },
+    () => ({ status: 200, body: { hello: "world" } }),
+  )
+  .post(
+    "/books",
+    {
+      request: { body: z.object({ title: z.string().min(1) }) },
+      responses: {
+        201: { body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ body }) => ({ status: 201, body: { id: "book_1" } }),
+  );`}
+      />
+      <p>
+        Shorthands keep the same validation, OpenAPI, security, and typed-client
+        behavior as <code>route()</code>. There is no two-argument form that
+        silently skips a response contract. For an intentionally opaque body,
+        pass <code>acknowledgeNoResponseBodySchema: true</code> explicitly.
+        Response descriptions remain optional; omitted values become a stable{" "}
+        <code>HTTP &lt;status&gt; response</code> description in OpenAPI.
+      </p>
+
       <h2 id="defining-routes">Defining routes</h2>
       <p>
         A route declaration is the source of truth for matching, request
         validation, response validation, OpenAPI output, and typed clients.
-        Provide an <code>operationId</code> for every public route you want in
-        the typed client or generated SDK; DaloyJS rejects duplicate{" "}
+        Provide an <code>operationId</code> when using <code>route()</code> for
+        a public route you want in the typed client or generated SDK. HTTP
+        shorthands derive one automatically. DaloyJS rejects duplicate{" "}
         <code>operationId</code> values at registration.
       </p>
       <CodeBlock
@@ -90,38 +125,46 @@ export const app = new App().route({
 });`}
       />
 
-      <h2 id="type-inference-and-chaining">Type inference and chaining</h2>
+      <h2 id="multi-file-type-inference">Multi-file type inference</h2>
       <p>
-        <code>app.route()</code> returns the same app instance with a widened
-        route tuple type. Chain route registrations when you want{" "}
-        <code>createClient(app)</code> to expose strongly typed methods for each{" "}
-        <code>operationId</code>. Separate statements still register routes at
-        runtime and in OpenAPI, but TypeScript cannot widen the already-created{" "}
-        <code>app</code> variable.
+        Export each route with <code>defineRoute()</code>, then compose the
+        imported contracts through <code>registerRoutes()</code>. The literal
+        tuple survives file and module boundaries, so the no-codegen client
+        retains every operation id and schema.
       </p>
       <CodeBlock
-        code={`// Best for typed clients: app carries both operationIds in its type.
-export const app = new App()
-  .route({
-    method: "GET",
-    path: "/books",
-    operationId: "listBooks",
-    responses: {
-      200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
-    },
-    handler: async () => ({ status: 200, body: [{ id: "1" }] }),
-  })
-  .route({
-    method: "POST",
-    path: "/books",
-    operationId: "createBook",
-    request: { body: z.object({ title: z.string().min(1) }) },
-    responses: {
-      201: { description: "Created", body: z.object({ id: z.string() }) },
-    },
-    handler: async () => ({ status: 201, body: { id: "2" } }),
-  });`}
+        code={`// routes/list-books.ts
+export const listBooksRoute = defineRoute({
+  method: "GET",
+  path: "/books",
+  operationId: "listBooks",
+  responses: {
+    200: { description: "Books", body: z.array(z.object({ id: z.string() })) },
+  },
+  handler: async () => ({ status: 200, body: [{ id: "1" }] }),
+});
+
+// app.ts
+import { listBooksRoute } from "./routes/list-books.js";
+import { createBookRoute } from "./routes/create-book.js";
+
+export const app = new App().registerRoutes([
+  listBooksRoute,
+  createBookRoute,
+] as const);`}
       />
+      <p>
+        Chained <code>route()</code> calls also accumulate correctly. Avoid a
+        bare <code>const app: App</code> annotation on the final composed app,
+        because that explicitly widens away the route tuple.
+      </p>
+      <p>
+        Callback-style <code>group()</code> and plugin <code>register()</code>{" "}
+        still provide runtime scoping, but TypeScript cannot widen the parent
+        variable from inside their callbacks. For a fully typed no-codegen
+        client across large modules, export literal route tuples and make{" "}
+        <code>registerRoutes()</code> the final composition boundary.
+      </p>
 
       <h2 id="http-methods">HTTP methods</h2>
       <p>
@@ -137,6 +180,13 @@ export const app = new App()
         with an empty body. <code>OPTIONS</code> returns a 204 preflight with an{" "}
         <code>Allow</code> header when a path exists but no explicit{" "}
         <code>OPTIONS</code> route is registered.
+      </p>
+      <p>
+        Shorthand methods are available for <code>GET</code>, <code>POST</code>,{" "}
+        <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>, and{" "}
+        <code>HEAD</code>. Register an explicit <code>OPTIONS</code> route with{" "}
+        <code>route()</code>; otherwise DaloyJS supplies automatic preflight
+        handling.
       </p>
 
       <h2 id="path-parameters">Path parameters</h2>
@@ -251,6 +301,10 @@ export const app = new App()
           <code>onRequest</code>: earliest, before parsing.
         </li>
         <li>
+          <code>preBody</code>: after route matching, before schema validation
+          or body I/O. Built-in header/JWT/basic/mTLS auth runs here.
+        </li>
+        <li>
           <code>beforeHandle</code>: after validation, before your handler.
           Return a <code>Response</code> to short-circuit.
         </li>
@@ -274,9 +328,14 @@ export const app = new App()
       <FlowDiagram
         title="Request lifecycle"
         numbered
-        caption="Hooks fire at fixed points around your handler. Validation runs before beforeHandle, so an invalid request never reaches your code. If anything throws, control jumps to onError, then onSend and onResponse still run so the error response is shaped and observed like any other."
+        caption="Hooks fire at fixed points around your handler. Cheap authentication can reject in preBody before request-body I/O; body-aware middleware keeps beforeHandle after validation. If anything throws, control jumps to onError, then onSend and onResponse still run."
         steps={[
           { label: "onRequest", eyebrow: "earliest", detail: "before parsing" },
+          {
+            label: "preBody",
+            eyebrow: "cheapest rejection",
+            detail: "route matched · body untouched",
+          },
           {
             label: "validate",
             eyebrow: "framework",

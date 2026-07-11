@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Docs UI asset integrity (SRI)",
   description:
-    "Pin version-exact Subresource Integrity (SRI) hashes on the CDN-loaded Scalar / Swagger UI / Redoc assets that power the built-in /docs page, or point them at self-hosted copies, so a poisoned jsDelivr asset can't execute. Opt-in, validated, and zero runtime dependencies.",
+    "DaloyJS pins version-exact Subresource Integrity (SRI) hashes on the default Scalar, Swagger UI, Redoc, and AsyncAPI assets, with validated overrides and self-hosting support.",
   path: "/docs/docs-asset-integrity",
   keywords: [
     "Subresource Integrity",
@@ -32,16 +32,15 @@ export default function Page() {
       <p>
         The built-in <code>/docs</code> page renders Scalar (default), Swagger
         UI, or Redoc by loading their JavaScript and CSS bundles from the
-        jsDelivr CDN. A
-        CDN keeps the framework dependency-free and means no build step for the
-        docs UI, but it also means the browser will execute whatever bytes the
-        CDN serves. If a CDN asset were ever poisoned, that code would run in
-        the context of your docs page.
+        jsDelivr CDN. A CDN keeps the framework dependency-free and means no
+        build step for the docs UI, but it also means the browser will execute
+        whatever bytes the CDN serves. If a CDN asset were ever poisoned, that
+        code would run in the context of your docs page.
       </p>
       <p>
-        The docs helpers accept{" "}
-        <strong>Subresource Integrity (SRI)</strong> hashes. When you pin one,
-        DaloyJS emits an <code>integrity=&quot;…&quot;</code> attribute plus a{" "}
+        DaloyJS ships version-exact default assets with matching{" "}
+        <strong>Subresource Integrity (SRI)</strong> hashes. It emits an{" "}
+        <code>integrity=&quot;…&quot;</code> attribute plus a{" "}
         <code>crossorigin</code> attribute on the matching{" "}
         <code>&lt;script&gt;</code> / <code>&lt;link&gt;</code> tag, so the
         browser refuses to execute an asset whose bytes don&apos;t match the
@@ -55,7 +54,7 @@ export default function Page() {
         steps={[
           {
             label: "Version-exact CDN asset",
-            detail: "@scalar/api-reference@1.25.0",
+            detail: "@scalar/api-reference@1.62.5",
             eyebrow: "jsDelivr",
           },
           {
@@ -81,17 +80,22 @@ export default function Page() {
         caption="DaloyJS emits an integrity and crossorigin attribute on the script or link tag for the pinned, version-exact URL. The browser hashes the downloaded bytes and refuses to execute anything that does not match, so a poisoned CDN asset never runs."
       />
 
-      <h2 id="why-it-and-apos-s-opt-in">Why it&apos;s opt-in</h2>
+      <h2 id="secure-defaults">Secure defaults</h2>
       <p>
         SRI only works against a <strong>version-pinned, byte-stable</strong>{" "}
-        URL. The framework&apos;s default asset URLs intentionally track the{" "}
-        <em>latest</em> upstream release (so you get fixes without bumping
-        DaloyJS), which means they cannot carry a fixed hash. The bytes change
-        whenever Scalar or Swagger UI publishes. To pin SRI you therefore supply
-        both a version-exact URL and its matching hash.
+        URL. DaloyJS therefore pins the default Scalar, Swagger UI, Redoc, and
+        AsyncAPI versions together with their SHA-384 digests. The default{" "}
+        <code>/docs</code> and <code>/asyncapi</code> pages are protected
+        without configuration; framework releases update each URL and hash as
+        one reviewed pair.
       </p>
 
-      <h2 id="pin-sri-on-the-auto-mounted-docs">Pin SRI on the auto-mounted docs</h2>
+      <h2 id="override-the-default-assets">Override the default assets</h2>
+      <p>
+        Use <code>assets</code> only when you want another version, another CDN,
+        or self-hosting. When changing a URL, provide the digest of those exact
+        bytes; a custom URL does not inherit the default asset&apos;s hash.
+      </p>
       <CodeBlock
         language="ts"
         code={`import { App } from "@daloyjs/core";
@@ -99,9 +103,9 @@ export default function Page() {
 const app = new App({
   docs: {
     assets: {
-      // Pin the exact version you verified...
+      // Override with the exact version you verified...
       scalarScriptUrl:
-        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
+        "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5",
       // ...and the SRI hash of that exact file.
       scalarScriptIntegrity: "sha384-<base64-digest>",
     },
@@ -152,7 +156,7 @@ const app = new App({
       </p>
       <CodeBlock
         language="sh"
-        code={`curl -sSL https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0 \\
+        code={`curl -sSL https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5 \\
   | openssl dgst -sha384 -binary \\
   | openssl base64 -A \\
   | sed 's/^/sha384-/'`}
@@ -166,9 +170,9 @@ const app = new App({
       <h2 id="self-hosting-instead">Self-hosting instead</h2>
       <p>
         If your Content-Security-Policy forbids third-party CDNs, point the same{" "}
-        <code>assets</code> URLs at copies you serve yourself. SRI is optional
-        in that case (the assets are same-origin and under your control), but
-        you can still pin hashes for defense in depth.
+        <code>assets</code> URLs at copies you serve yourself. A custom URL may
+        omit SRI (for example for same-origin assets under your control), but
+        pinning a hash still adds defense in depth.
       </p>
       <CodeBlock
         language="ts"
@@ -204,7 +208,7 @@ scalarHtml({
   specUrl: "/openapi.json",
   assets: {
     scalarScriptUrl:
-      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
+      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5",
     scalarScriptIntegrity: "md5-nope",
   },
 });
@@ -218,8 +222,8 @@ scalarHtml({
         The same options flow through the <code>scalarHtml()</code>,{" "}
         <code>swaggerUiHtml()</code>, and <code>redocHtml()</code> helpers (from
         the <code>@daloyjs/core/docs</code> subpath) if you render the docs page
-        yourself. Multiple digests are supported: separate them with
-        whitespace, and the strongest one the browser understands wins. The{" "}
+        yourself. Multiple digests are supported: separate them with whitespace,
+        and the strongest one the browser understands wins. The{" "}
         <code>crossOrigin</code> field defaults to{" "}
         <code>&quot;anonymous&quot;</code>; set it to{" "}
         <code>&quot;use-credentials&quot;</code> only when the asset host needs
@@ -233,7 +237,7 @@ const html = scalarHtml({
   specUrl: "/openapi.json",
   assets: {
     scalarScriptUrl:
-      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0",
+      "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.5",
     scalarScriptIntegrity:
       "sha384-<primary> sha512-<fallback>",
     crossOrigin: "anonymous",

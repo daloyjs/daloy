@@ -240,6 +240,13 @@ app.use(
         that rewrites the header it is safe; exposed directly it is an evasion
         hole. When in doubt, key off the authenticated user instead.
       </blockquote>
+      <p>
+        For credential-entry routes, register <code>loginThrottle()</code> (or
+        an IP/raw-header keyed <code>rateLimit()</code>) before authentication
+        so failed credentials consume the budget before the body is read. Keep a
+        per-authenticated-user limiter after auth when its key depends on{" "}
+        <code>ctx.state.user</code>.
+      </p>
 
       <h2 id="failure-mode">Failure mode</h2>
       <p>

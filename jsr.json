@@ -4,6 +4,7 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
+    "./app": "./src/app.ts",
     "./node": "./src/adapters/node.ts",
     "./bun": "./src/adapters/bun.ts",
     "./deno": "./src/adapters/deno.ts",

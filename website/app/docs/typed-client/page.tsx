@@ -30,31 +30,18 @@ export default function Page() {
         type-safety. Use whichever fits your consumer.
       </p>
 
-      <h2 id="1-in-process-typed-client-zero-codegen">1. In-process typed client (zero codegen)</h2>
+      <h2 id="1-in-process-typed-client-zero-codegen">
+        1. In-process typed client (zero codegen)
+      </h2>
       <p>
         For TypeScript consumers in the same monorepo (tests, internal tools,
         Next.js server actions):
       </p>
       <CodeBlock
-        code={`import { createClient } from "@daloyjs/core/client";
-import { App } from "@daloyjs/core";
-import { z } from "zod";
+        code={`import { createInProcessClient } from "@daloyjs/core/client";
+import { app } from "./app.js";
 
-// Chain .route() calls so the App type accumulates each route.
-const app = new App()
-  .route({
-    method: "GET",
-    path: "/books/:id",
-    operationId: "getBookById",
-    request: { params: z.object({ id: z.string() }) },
-    responses: {
-      200: { description: "OK", body: z.object({ id: z.string(), title: z.string() }) },
-      404: { description: "Not Found" },
-    },
-    handler: ({ params }) => ({ status: 200, body: { id: params.id, title: "Dune" } }),
-  });
-
-const client = createClient(app, { baseUrl: "http://localhost:3000" });
+const client = createInProcessClient(app);
 
 const r = await client.getBookById({ params: { id: "1" } });
 //    ^? { status: 200; body: { id: string; title: string } }
@@ -73,12 +60,11 @@ if (r.status === 200) {
 
       <div role="note">
         <p>
-          <strong>Inference requires method chaining.</strong> Each{" "}
-          <code>app.route(...)</code> call returns a new <code>App</code> type
-          that accumulates the route, so chain your registrations (
-          <code>new App().route(a).route(b)</code>) and let TypeScript infer the
-          variable&apos;s type. Two things erase inference and collapse the
-          client back to a loose, untyped surface:
+          <strong>Compose route tuples instead of widening the App.</strong>{" "}
+          Export route files with <code>defineRoute()</code> and register a
+          literal tuple with <code>app.registerRoutes([...])</code>. Chained{" "}
+          <code>route()</code> calls also work. Two things deliberately erase
+          inference and collapse the client to a loose surface:
         </p>
         <ul>
           <li>
@@ -88,22 +74,24 @@ if (r.status === 200) {
             routes, so let the type be inferred instead.
           </li>
           <li>
-            Registering routes as separate statements (
-            <code>app.route(a); app.route(b);</code>) on a previously-declared
-            variable. The variable keeps its original type, so the new routes
-            never reach the client.
+            Registering routes as separate statements on a previously-declared
+            variable instead of returning the chained result or using{" "}
+            <code>registerRoutes()</code>.
           </li>
         </ul>
         <p>
-          If you import <code>app</code> from another module, export it without
-          a widening annotation (
-          <code>export const app = new App().route(...)...;</code>) so its
-          inferred type, and the typed client, crosses the module boundary
-          intact.
+          The modular-monolith guide shows a multi-file composition with route
+          tuples from several bounded contexts. Callback-style{" "}
+          <code>group()</code> and plugin <code>register()</code> still provide
+          runtime encapsulation, but their callbacks cannot widen the parent
+          variable&apos;s TypeScript generic. Use route tuples as the
+          typed-client composition boundary.
         </p>
       </div>
 
-      <h2 id="2-hey-api-sdk-cross-language-cross-repo-build-time">2. Hey API SDK (cross-language, cross-repo, build-time)</h2>
+      <h2 id="2-hey-api-sdk-cross-language-cross-repo-build-time">
+        2. Hey API SDK (cross-language, cross-repo, build-time)
+      </h2>
       <p>
         For consumers outside the monorepo or in other languages, generate a
         fully typed fetch SDK with{" "}
@@ -193,7 +181,7 @@ else if (data) console.log(data.title);`}
           <tr>
             <td>Same-repo TypeScript caller (tests, internal tools)</td>
             <td>
-              In-process <code>createClient</code>
+              <code>createInProcessClient</code>
             </td>
           </tr>
           <tr>

@@ -75,6 +75,7 @@ import {
   CORS_ORIGIN_ALLOW_MARKER,
   CORS_WILDCARD_ORIGIN_MARKER,
   CSRF_HOOK_MARKER,
+  _mergePreBodyWithEarlyRejections,
   REQUIRE_SCOPES_AGGREGATE_KEY,
   REQUIRE_SCOPES_HOOK_MARKER,
   SECURE_HEADERS_MARKER,
@@ -763,7 +764,7 @@ export interface PluginExtension {
   /** Unique extension name. Referenced by `before` / `after` on siblings. */
   name: string;
   /** Lifecycle event the handler attaches to. */
-  event: "onRequest" | "beforeHandle" | "afterHandle" | "onSend" | "onError";
+  event: "onRequest" | "preBody" | "beforeHandle" | "afterHandle" | "onSend" | "onError";
   /** Hook handler. The shape mirrors the matching {@link Hooks} entry. */
   handler: (...args: any[]) => any;
   /** Extension names this one must run before. */
@@ -1265,6 +1266,53 @@ type AppendRoute<
 > = readonly RouteDefinition<any, any, any, any>[] extends Routes
   ? readonly [R]
   : readonly [...Routes, R];
+
+/** Append a literal tuple of route contracts to an App's accumulated routes. */
+type AppendRoutes<
+  Routes extends readonly RouteDefinition<any, any, any, any>[],
+  Added extends readonly RouteDefinition<any, any, any, any>[],
+> = readonly RouteDefinition<any, any, any, any>[] extends Routes
+  ? Added
+  : readonly [...Routes, ...Added];
+
+type PascalWords<S extends string> = S extends `${infer Head}-${infer Tail}`
+  ? `${Capitalize<Head>}${PascalWords<Tail>}`
+  : S extends `${infer Head}_${infer Tail}`
+    ? `${Capitalize<Head>}${PascalWords<Tail>}`
+    : Capitalize<S>;
+
+type OperationSegment<S extends string> = S extends `:${infer Param}`
+  ? `By${PascalWords<Param>}`
+  : PascalWords<S>;
+
+type OperationPathTail<P extends string> = P extends `${infer Segment}/${infer Rest}`
+  ? `${OperationSegment<Segment>}${OperationPathTail<Rest>}`
+  : OperationSegment<P>;
+
+type AutoOperationId<
+  M extends HttpMethod,
+  P extends PathString,
+> = `${Lowercase<M>}${P extends "/" ? "Root" : P extends `/${infer Tail}` ? OperationPathTail<Tail> : never}`;
+
+type ShorthandOptions<
+  P extends PathString,
+  M extends HttpMethod,
+  Req extends RequestSchemas | undefined,
+  Res extends ResponsesMap,
+  Op extends string | undefined,
+> = Omit<RouteDefinition<P, M, Req, Res>, "method" | "path" | "operationId" | "handler"> & {
+  operationId?: Op;
+};
+
+type ShorthandRoute<
+  P extends PathString,
+  M extends HttpMethod,
+  Req extends RequestSchemas | undefined,
+  Res extends ResponsesMap,
+  Op extends string | undefined,
+> = RouteDefinition<P, M, Req, Res> & {
+  operationId: Op extends string ? Op : AutoOperationId<M, P>;
+};
 
 /**
  * The DaloyJS application: a contract-first router plus a web-standard
@@ -1811,6 +1859,7 @@ export class App<
     if (hooks !== null && typeof hooks === "object") {
       const HOOK_KEYS = [
         "onRequest",
+        "preBody",
         "beforeHandle",
         "afterHandle",
         "onError",
@@ -1832,7 +1881,7 @@ export class App<
         }
         if (Object.keys(hooks).length > 0) {
           throw new Error(
-            "Hooks object carries none of the recognized hook keys (onRequest, " +
+            "Hooks object carries none of the recognized hook keys (onRequest, preBody, " +
               "beforeHandle, afterHandle, onError, onSend, onResponse), so it would " +
               "silently apply no hooks. To compose multiple hook bundles use " +
               "every(...) / some(...) from @daloyjs/core."
@@ -2146,24 +2195,19 @@ export class App<
     const ui = opts.ui ?? "scalar";
     const tags = opts.tags ?? ["Docs"];
 
-    // Best-effort lazy read of the host project's package.json so that
-    // `new App({ docs: true })` with no explicit `openapi.info` still produces
-    // a spec titled after the user's package (`name` → title,
-    // `version` → version, `description` → description). Silently skipped on
-    // edge runtimes that lack `node:fs`.
-    const resolveInfo = async (): Promise<OpenAPIInfo> => {
+    // Keep docs generation purely web-standard. Host metadata is explicit so
+    // edge bundlers never need to resolve or stub `node:fs` from the core.
+    const resolveInfo = (): OpenAPIInfo => {
       const fromOpenapi = this.options.openapi?.info ?? {};
-      const fromPkg = await readHostPackageJsonInfo();
-      const title = fromOpenapi.title ?? this.options.title ?? fromPkg.title ?? "DaloyJS API";
-      const version = fromOpenapi.version ?? this.options.version ?? fromPkg.version ?? "0.0.0";
-      const description =
-        fromOpenapi.description ?? this.options.description ?? fromPkg.description;
+      const title = fromOpenapi.title ?? this.options.title ?? "DaloyJS API";
+      const version = fromOpenapi.version ?? this.options.version ?? "0.0.0";
+      const description = fromOpenapi.description ?? this.options.description;
       return description ? { title, version, description } : { title, version };
     };
 
     const generate = async (): Promise<Record<string, unknown>> =>
       generateOpenAPI(this, {
-        info: await resolveInfo(),
+        info: resolveInfo(),
         ...(this.options.openapi?.servers ? { servers: this.options.openapi.servers } : {}),
         ...(this.options.openapi?.securitySchemes
           ? { securitySchemes: this.options.openapi.securitySchemes }
@@ -2242,7 +2286,7 @@ export class App<
         200: { description: "Interactive API documentation UI." },
       },
       handler: async () => {
-        const title = opts.title ?? (await resolveInfo()).title;
+        const title = opts.title ?? resolveInfo().title;
         const html =
           ui === "swagger"
             ? swaggerUiHtml({
@@ -2321,11 +2365,10 @@ export class App<
     const uiPath = (opts.path ?? "/asyncapi") as PathString;
     const tags = opts.tags ?? ["AsyncAPI"];
 
-    const resolveInfo = async (): Promise<AsyncAPIInfo> => {
+    const resolveInfo = (): AsyncAPIInfo => {
       const fromOpenapi = this.options.openapi?.info ?? {};
-      const fromPkg = await readHostPackageJsonInfo();
-      const title = fromOpenapi.title ?? this.options.title ?? fromPkg.title ?? "DaloyJS API";
-      const version = fromOpenapi.version ?? this.options.version ?? fromPkg.version ?? "0.0.0";
+      const title = fromOpenapi.title ?? this.options.title ?? "DaloyJS API";
+      const version = fromOpenapi.version ?? this.options.version ?? "0.0.0";
       return { title, version };
     };
 
@@ -2333,7 +2376,7 @@ export class App<
 
     const generate = async (): Promise<Record<string, unknown>> =>
       generateAsyncAPI(this, {
-        info: await resolveInfo(),
+        info: resolveInfo(),
         ...(servers ? { servers } : {}),
       });
 
@@ -2555,6 +2598,185 @@ export class App<
     return this as unknown as App<
       AppendRoute<Routes, RouteDefinition<P, M, Req, Res> & { operationId: Op }>
     >;
+  }
+
+  /**
+   * Register a literal tuple of independently defined route contracts.
+   *
+   * Unlike repeated statements against an already-declared `App` variable,
+   * this method returns an App whose route tuple includes every supplied
+   * contract. That preserves the exact no-codegen client surface across route
+   * files and feature modules.
+   *
+   * @param definitions - Readonly literal tuple of route definitions.
+   * @returns This App instance widened with every supplied route contract.
+   * @since 1.0.0
+   */
+  registerRoutes<const Added extends readonly RouteDefinition<any, any, any, any>[]>(
+    definitions: Added
+  ): App<AppendRoutes<Routes, Added>> {
+    for (const definition of definitions) this.route(definition);
+    return this as unknown as App<AppendRoutes<Routes, Added>>;
+  }
+
+  /**
+   * Register a contract-backed `GET` route with validation and typed responses.
+   * @param path - Literal route path.
+   * @param options - Route schemas, responses, metadata, hooks, and security.
+   * @param handler - Handler contextually typed from the contract options.
+   * @returns This App widened with the registered route.
+   * @since 1.0.0
+   */
+  get<
+    const P extends PathString,
+    Req extends RequestSchemas | undefined,
+    Res extends ResponsesMap,
+    const Op extends string | undefined = undefined,
+  >(
+    path: P,
+    options: ShorthandOptions<P, "GET", Req, Res, Op>,
+    handler: RouteDefinition<P, "GET", Req, Res>["handler"]
+  ): App<AppendRoute<Routes, ShorthandRoute<P, "GET", Req, Res, Op>>>;
+  get(path: PathString, options: unknown, handler: unknown): App<any> {
+    return this.addHttpShorthand("GET", path, options, handler);
+  }
+
+  /**
+   * Register a contract-backed `POST` route with validation and typed responses.
+   * @param path - Literal route path.
+   * @param options - Route schemas, responses, metadata, hooks, and security.
+   * @param handler - Handler contextually typed from the contract options.
+   * @returns This App widened with the registered route.
+   * @since 1.0.0
+   */
+  post<
+    const P extends PathString,
+    Req extends RequestSchemas | undefined,
+    Res extends ResponsesMap,
+    const Op extends string | undefined = undefined,
+  >(
+    path: P,
+    options: ShorthandOptions<P, "POST", Req, Res, Op>,
+    handler: RouteDefinition<P, "POST", Req, Res>["handler"]
+  ): App<AppendRoute<Routes, ShorthandRoute<P, "POST", Req, Res, Op>>>;
+  post(path: PathString, options: unknown, handler: unknown): App<any> {
+    return this.addHttpShorthand("POST", path, options, handler);
+  }
+
+  /**
+   * Register a contract-backed `PUT` route with validation and typed responses.
+   * @param path - Literal route path.
+   * @param options - Route schemas, responses, metadata, hooks, and security.
+   * @param handler - Handler contextually typed from the contract options.
+   * @returns This App widened with the registered route.
+   * @since 1.0.0
+   */
+  put<
+    const P extends PathString,
+    Req extends RequestSchemas | undefined,
+    Res extends ResponsesMap,
+    const Op extends string | undefined = undefined,
+  >(
+    path: P,
+    options: ShorthandOptions<P, "PUT", Req, Res, Op>,
+    handler: RouteDefinition<P, "PUT", Req, Res>["handler"]
+  ): App<AppendRoute<Routes, ShorthandRoute<P, "PUT", Req, Res, Op>>>;
+  put(path: PathString, options: unknown, handler: unknown): App<any> {
+    return this.addHttpShorthand("PUT", path, options, handler);
+  }
+
+  /**
+   * Register a contract-backed `PATCH` route with validation and typed responses.
+   * @param path - Literal route path.
+   * @param options - Route schemas, responses, metadata, hooks, and security.
+   * @param handler - Handler contextually typed from the contract options.
+   * @returns This App widened with the registered route.
+   * @since 1.0.0
+   */
+  patch<
+    const P extends PathString,
+    Req extends RequestSchemas | undefined,
+    Res extends ResponsesMap,
+    const Op extends string | undefined = undefined,
+  >(
+    path: P,
+    options: ShorthandOptions<P, "PATCH", Req, Res, Op>,
+    handler: RouteDefinition<P, "PATCH", Req, Res>["handler"]
+  ): App<AppendRoute<Routes, ShorthandRoute<P, "PATCH", Req, Res, Op>>>;
+  patch(path: PathString, options: unknown, handler: unknown): App<any> {
+    return this.addHttpShorthand("PATCH", path, options, handler);
+  }
+
+  /**
+   * Register a contract-backed `DELETE` route with typed response statuses.
+   * @param path - Literal route path.
+   * @param options - Route schemas, responses, metadata, hooks, and security.
+   * @param handler - Handler contextually typed from the contract options.
+   * @returns This App widened with the registered route.
+   * @since 1.0.0
+   */
+  delete<
+    const P extends PathString,
+    Req extends RequestSchemas | undefined,
+    Res extends ResponsesMap,
+    const Op extends string | undefined = undefined,
+  >(
+    path: P,
+    options: ShorthandOptions<P, "DELETE", Req, Res, Op>,
+    handler: RouteDefinition<P, "DELETE", Req, Res>["handler"]
+  ): App<AppendRoute<Routes, ShorthandRoute<P, "DELETE", Req, Res, Op>>>;
+  delete(path: PathString, options: unknown, handler: unknown): App<any> {
+    return this.addHttpShorthand("DELETE", path, options, handler);
+  }
+
+  /**
+   * Register an explicit contract-backed `HEAD` route.
+   * @param path - Literal route path.
+   * @param options - Route schemas, responses, metadata, hooks, and security.
+   * @param handler - Handler contextually typed from the contract options.
+   * @returns This App widened with the registered route.
+   * @since 1.0.0
+   */
+  head<
+    const P extends PathString,
+    Req extends RequestSchemas | undefined,
+    Res extends ResponsesMap,
+    const Op extends string | undefined = undefined,
+  >(
+    path: P,
+    options: ShorthandOptions<P, "HEAD", Req, Res, Op>,
+    handler: RouteDefinition<P, "HEAD", Req, Res>["handler"]
+  ): App<AppendRoute<Routes, ShorthandRoute<P, "HEAD", Req, Res, Op>>>;
+  head(path: PathString, options: unknown, handler: unknown): App<any> {
+    return this.addHttpShorthand("HEAD", path, options, handler);
+  }
+
+  private addHttpShorthand(
+    method: HttpMethod,
+    path: PathString,
+    options: unknown,
+    possibleHandler: unknown
+  ): App<any> {
+    if (
+      options === null ||
+      typeof options !== "object" ||
+      typeof possibleHandler !== "function"
+    ) {
+      throw new TypeError(
+        `app.${method.toLowerCase()}(): expected (path, contract, handler); opaque responses require an explicit contract with acknowledgeNoResponseBodySchema: true`
+      );
+    }
+    const contract = options as Record<string, unknown>;
+    return this.route({
+      ...contract,
+      method,
+      path,
+      operationId:
+        typeof contract.operationId === "string"
+          ? contract.operationId
+          : inferOperationId(method, path),
+      handler: possibleHandler as RouteDefinition["handler"],
+    } as RouteDefinition);
   }
 
   /**
@@ -3612,11 +3834,14 @@ export class App<
         // `decorations`, iterate headers, or materialize a `Headers`
         // instance just to be thrown away. The 204 OPTIONS preflight branch
         // below uses its own `synthCtx`, so this skip is safe for it too.
+        const coldPreBody = method === "OPTIONS" ? undefined : this.coldPathHooks.preBody;
         const coldGuards = method === "OPTIONS" ? undefined : this.coldPathHooks.beforeHandle;
         const needsCtx =
           allowed.length > 0 && method === "OPTIONS"
             ? false // OPTIONS path builds synthCtx
-            : activeErrorHook !== undefined || coldGuards !== undefined;
+            : activeErrorHook !== undefined ||
+              coldPreBody !== undefined ||
+              coldGuards !== undefined;
         if (needsCtx) {
           // `query` and `headers` are materialized lazily — the common
           // `onError` hook reads `requestId` / path and never touches them,
@@ -3655,6 +3880,18 @@ export class App<
             // it must compile even when a consumer augments `AppState`.
           } as unknown as BaseContext<any, any>;
           ctx.set.headers.set("x-request-id", requestId);
+        }
+        if (coldPreBody !== undefined) {
+          const guardResult = coldPreBody(ctx!);
+          const guarded = isPromiseLike(guardResult) ? await guardResult : guardResult;
+          if (guarded instanceof Response) {
+            copyContextHeaders(ctx!, guarded);
+            if (!guarded.headers.has("x-request-id")) {
+              guarded.headers.set("x-request-id", requestId);
+            }
+            const fin = finalizeResponse(guarded, ctx!, this.coldPathHooks, stripFingerprint);
+            return isPromiseLike(fin) ? await fin : fin;
+          }
         }
         if (coldGuards !== undefined) {
           const guardResult = coldGuards(ctx!);
@@ -3717,11 +3954,10 @@ export class App<
         if (isPromiseLike(routeOnRequestResult)) await routeOnRequestResult;
       }
 
-      // buildContext is sync unless a schema validator or body read actually
-      // suspends — branch on the promise so the fully-sync case never
-      // schedules a microtask.
-      const builtCtx = buildContext(request, getUrl, match.params, def, this.options);
-      ctx = isPromiseLike(builtCtx) ? await builtCtx : builtCtx;
+      // Build a minimal route context before validation or body I/O so cheap
+      // perimeter hooks can reject unauthenticated callers without consuming
+      // an attacker-controlled request stream.
+      ctx = createPreBodyContext(request, getUrl, match.params);
       // Stable two-field write keeps `ctx.state`'s hidden class consistent across
       // requests for the common no-decorator case. The decorations spread only
       // fires when `app.decorate()` was actually called.
@@ -3734,6 +3970,30 @@ export class App<
       // the scope had none keeps the common case allocation-free.
       const routeDecorations = match.handler.decorations;
       if (routeDecorations !== undefined) Object.assign(state, routeDecorations);
+
+      if (allHooks.preBody !== undefined) {
+        const preBodyResult = allHooks.preBody(ctx);
+        const preBody = isPromiseLike(preBodyResult) ? await preBodyResult : preBodyResult;
+        const overriddenId = state.requestId;
+        if (typeof overriddenId === "string" && overriddenId.length > 0) {
+          requestId = overriddenId;
+        }
+        if (preBody instanceof Response) {
+          copyContextHeaders(ctx, preBody);
+          if (!preBody.headers.has("x-request-id")) preBody.headers.set("x-request-id", requestId);
+          if (hasFinalizeHook) {
+            const fin = finalizeResponse(preBody, ctx, allHooks, stripFingerprint);
+            return isPromiseLike(fin) ? await fin : fin;
+          }
+          return finalizeFast(preBody, stripFingerprint);
+        }
+      }
+
+      // Validation remains sync-first; only an async schema or an actual body
+      // stream read suspends. `beforeHandle` still receives the fully validated
+      // context for compatibility with body-aware middleware.
+      const validatedCtx = validateContext(ctx as RequestContext, def, this.options);
+      ctx = isPromiseLike(validatedCtx) ? await validatedCtx : validatedCtx;
 
       if (allHooks.beforeHandle !== undefined) {
         const beforeResult = allHooks.beforeHandle(ctx);
@@ -3767,16 +4027,20 @@ export class App<
         if (afterReturn !== undefined) result = afterReturn;
       }
 
-      // Escape hatch: a handler (or an `afterHandle` transform) may return a
-      // raw web-standard `Response` — an AI SDK stream, a forwarded upstream
-      // response, or any pre-built body that no response schema can describe.
-      // It bypasses response-schema validation by design, but is finalized
-      // through the exact same path as every other response (and as the
-      // `beforeHandle` `Response` passthrough above), so no security control
-      // is skipped: `ctx.set` headers (secureHeaders / CORS) are copied on, the
-      // request id is added when absent, `onSend` / `onResponse` hooks run,
-      // fingerprint headers are stripped, and `HEAD` yields an empty body.
+      // Explicit escape hatch: a handler (or an `afterHandle` transform) may
+      // return a raw web-standard `Response` only when the route acknowledges
+      // that its body is opaque and will not be schema-validated. Without the
+      // acknowledgement, fail closed instead of silently bypassing response
+      // field stripping. Acknowledged responses still use the normal finalizer
+      // so headers, request ids, hooks, fingerprint stripping, and HEAD
+      // semantics remain intact.
       if (result instanceof Response) {
+        if (def.acknowledgeNoResponseBodySchema !== true) {
+          throw new InternalError(
+            "Raw Response refused: set acknowledgeNoResponseBodySchema: true on the route " +
+              "to explicitly accept that its response body bypasses schema validation."
+          );
+        }
         copyContextHeaders(ctx, result);
         if (!result.headers.has("x-request-id")) {
           result.headers.set("x-request-id", requestId);
@@ -4070,6 +4334,25 @@ export class App<
 
 // ---------- helpers ----------
 
+/** Derive a stable camel-case operation id from an HTTP method and route path. */
+function inferOperationId(method: HttpMethod, path: PathString): string {
+  if (path === "/") return `${method.toLowerCase()}Root`;
+  const capitalizeWords = (value: string): string =>
+    value
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join("");
+  const suffix = path
+    .slice(1)
+    .split("/")
+    .map((segment) =>
+      segment.startsWith(":") ? `By${capitalizeWords(segment.slice(1))}` : capitalizeWords(segment)
+    )
+    .join("");
+  return `${method.toLowerCase()}${suffix}`;
+}
+
 function joinPath(a: string, b: string): string {
   const left = a.replace(/\/+$/, "");
   const right = b.startsWith("/") ? b : `/${b}`;
@@ -4341,6 +4624,7 @@ function mergeHooks(layers: Hooks[]): Hooks {
   const beforeHandle = mergeBeforeHandle(firstResponse(pick("beforeHandle")), requiredScopes);
   const hooks: Hooks = {
     onRequest: chain(pick("onRequest")),
+    preBody: _mergePreBodyWithEarlyRejections(layers),
     beforeHandle,
     afterHandle: pipeline(pick("afterHandle")),
     onError: firstResponse(pick("onError")),
@@ -4687,10 +4971,21 @@ class RequestContext {
   }
 }
 
-function buildContext(
+function createPreBodyContext(
   request: Request,
   getUrl: () => URL,
-  rawParams: Record<string, string>,
+  rawParams: Record<string, string>
+): RequestContext {
+  let headersObj: Record<string, string> | undefined;
+  let queryObj: Record<string, string | string[]> | undefined;
+  const ctx = new RequestContext(request, rawParams, {}, new LazyResponseSet());
+  ctx._hBuilder = () => (headersObj ??= headersToObject(request.headers));
+  ctx._qBuilder = () => (queryObj ??= queryToObject(getUrl().searchParams));
+  return ctx;
+}
+
+function validateContext(
+  ctx: RequestContext,
   def: RouteDefinition<any, any, any, any>,
   opts: {
     bodyLimitBytes: number;
@@ -4700,41 +4995,17 @@ function buildContext(
     jsonMaxDepth?: number;
   }
 ): BaseContext<any, any> | PromiseLike<BaseContext<any, any>> {
-  const set = new LazyResponseSet();
   const hasHeadersSchema = !!def.request?.headers;
   const hasQuerySchema = !!def.request?.query;
-  let headersObj: Record<string, string> | undefined;
-  let queryObj: Record<string, string | string[]> | undefined;
-  const buildHeaders = (): Record<string, string> =>
-    (headersObj ??= headersToObject(request.headers));
-  const buildQuery = (): Record<string, string | string[]> =>
-    (queryObj ??= queryToObject(getUrl().searchParams));
-
-  let params: any = rawParams;
-  let query: any;
-  let headers: any;
-  let body: any = undefined;
+  const request = ctx.request;
+  const rawParams = ctx.params;
+  const buildHeaders = (): Record<string, string> => ctx.headers;
+  const buildQuery = (): Record<string, string | string[]> => ctx.query;
 
   const hasSchema =
     def.request?.params || def.request?.query || def.request?.headers || def.request?.body;
 
-  const finishContext = (): BaseContext<any, any> => {
-    const ctx = new RequestContext(request, params, {}, set);
-    ctx.body = body;
-    if (hasQuerySchema) {
-      ctx._q = query;
-      ctx._qSet = true;
-    } else {
-      ctx._qBuilder = buildQuery;
-    }
-    if (hasHeadersSchema) {
-      ctx._h = headers;
-      ctx._hSet = true;
-    } else {
-      ctx._hBuilder = buildHeaders;
-    }
-    return ctx as unknown as BaseContext<any, any>;
-  };
+  const finishContext = (): BaseContext<any, any> => ctx as unknown as BaseContext<any, any>;
 
   if (!hasSchema) {
     return finishContext();
@@ -4749,10 +5020,7 @@ function buildContext(
   // body, each throwing the same ValidationError on failure.
   type Ctx = BaseContext<any, any>;
   type StdResult = { issues?: unknown; value?: unknown };
-  const applyChecked = (
-    r: StdResult,
-    part: "params" | "query" | "headers" | "body"
-  ): unknown => {
+  const applyChecked = (r: StdResult, part: "params" | "query" | "headers" | "body"): unknown => {
     if (r.issues) throw new ValidationError(part, toIssues(r.issues as any));
     return r.value;
   };
@@ -4761,11 +5029,11 @@ function buildContext(
     const r = def.request!.body!["~standard"].validate(raw);
     if (isPromiseLike(r)) {
       return r.then((resolved) => {
-        body = applyChecked(resolved as StdResult, "body");
+        ctx.body = applyChecked(resolved as StdResult, "body");
         return finishContext();
       });
     }
-    body = applyChecked(r as StdResult, "body");
+    ctx.body = applyChecked(r as StdResult, "body");
     return finishContext();
   };
 
@@ -4798,11 +5066,11 @@ function buildContext(
     const r = def.request!.headers!["~standard"].validate(buildHeaders());
     if (isPromiseLike(r)) {
       return r.then((resolved) => {
-        headers = applyChecked(resolved as StdResult, "headers");
+        ctx.headers = applyChecked(resolved as StdResult, "headers");
         return stepBody();
       });
     }
-    headers = applyChecked(r as StdResult, "headers");
+    ctx.headers = applyChecked(r as StdResult, "headers");
     return stepBody();
   };
 
@@ -4811,11 +5079,11 @@ function buildContext(
     const r = def.request!.query!["~standard"].validate(buildQuery());
     if (isPromiseLike(r)) {
       return r.then((resolved) => {
-        query = applyChecked(resolved as StdResult, "query");
+        ctx.query = applyChecked(resolved as StdResult, "query");
         return stepHeaders();
       });
     }
-    query = applyChecked(r as StdResult, "query");
+    ctx.query = applyChecked(r as StdResult, "query");
     return stepHeaders();
   };
 
@@ -4823,11 +5091,11 @@ function buildContext(
     const r = def.request.params["~standard"].validate(rawParams);
     if (isPromiseLike(r)) {
       return r.then((resolved) => {
-        params = applyChecked(resolved as StdResult, "params");
+        ctx.params = applyChecked(resolved as StdResult, "params");
         return stepQuery();
       });
     }
-    params = applyChecked(r as StdResult, "params");
+    ctx.params = applyChecked(r as StdResult, "params");
   }
   return stepQuery();
 }
@@ -4894,11 +5162,7 @@ function readBodyBytesFast(req: Request, limit: number): Uint8Array | undefined 
   return undefined;
 }
 
-function parseJsonBodyBytes(
-  bytes: Uint8Array,
-  maxKeys: number,
-  maxDepth: number
-): unknown {
+function parseJsonBodyBytes(bytes: Uint8Array, maxKeys: number, maxDepth: number): unknown {
   if (bytes.byteLength === 0) return undefined;
   const text = TEXT_DECODER.decode(bytes);
   // Use the limited parser when limits are enabled; falls back to safe behavior
@@ -4937,7 +5201,9 @@ function readBody(
   if (ct.includes("application/json")) {
     const fast = readBodyBytesFast(req, limit);
     if (fast !== undefined) return parseJsonBodyBytes(fast, jsonMaxKeys, jsonMaxDepth);
-    return readBodyLimited(req, limit).then((b) => parseJsonBodyBytes(b, jsonMaxKeys, jsonMaxDepth));
+    return readBodyLimited(req, limit).then((b) =>
+      parseJsonBodyBytes(b, jsonMaxKeys, jsonMaxDepth)
+    );
   }
   if (ct.includes("application/x-www-form-urlencoded")) {
     const fast = readBodyBytesFast(req, limit);
@@ -5231,116 +5497,4 @@ function serializeErr(err: unknown): Record<string, unknown> {
  */
 export function createApp(options: AppOptions = {}): App {
   return new App(options);
-}
-
-const PACKAGE_JSON_CACHE: {
-  value?: Promise<{ title?: string; version?: string; description?: string }>;
-} = {};
-
-/**
- * Best-effort lazy read of the host project's `package.json` so that
- * `new App({ docs: true })` with no explicit `openapi.info` still produces
- * a spec titled after the user's package. Reads `package.json` first; if
- * none is found while walking up from `process.cwd()`, falls back to
- * `deno.json` / `deno.jsonc` so Deno projects get the same DX without a
- * `package.json`. Returns an empty object on edge runtimes (Cloudflare
- * Workers) where `node:fs` is absent, on any I/O or parse
- * error, and when nothing is found.
- *
- * The result is memoized at module scope: manifests do not change
- * during a process lifetime and we never want this to add latency to
- * subsequent docs requests.
- */
-function readHostPackageJsonInfo(): Promise<{
-  title?: string;
-  version?: string;
-  description?: string;
-}> {
-  if (PACKAGE_JSON_CACHE.value !== undefined) return PACKAGE_JSON_CACHE.value;
-  const promise = (async () => {
-    const empty = {};
-    const proc = (globalThis as { process?: { cwd?: () => string } }).process;
-    if (!proc || typeof proc.cwd !== "function") return empty;
-
-    let fs: typeof import("node:fs");
-    let path: typeof import("node:path");
-    try {
-      fs = await import("node:fs");
-      path = await import("node:path");
-    } catch {
-      return empty;
-    }
-
-    let dir: string;
-    try {
-      dir = proc.cwd();
-    } catch {
-      return empty;
-    }
-
-    const parseManifest = (raw: string, allowComments: boolean) => {
-      // deno.jsonc allows // line comments and /* block */ comments. Strip
-      // them before parsing — naively, but well enough for typical manifests.
-      const text = allowComments
-        ? raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/.*$/gm, "$1")
-        : raw;
-      return JSON.parse(text) as {
-        name?: unknown;
-        version?: unknown;
-        description?: unknown;
-      };
-    };
-
-    const extractInfo = (json: { name?: unknown; version?: unknown; description?: unknown }) => {
-      const result: { title?: string; version?: string; description?: string } = {};
-      if (typeof json.name === "string" && json.name.length > 0) {
-        result.title = json.name;
-      }
-      if (typeof json.version === "string" && json.version.length > 0) {
-        result.version = json.version;
-      }
-      if (typeof json.description === "string" && json.description.length > 0) {
-        result.description = json.description;
-      }
-      return result;
-    };
-
-    // Walk up to the filesystem root looking for a manifest. Cap depth so
-    // a deeply-nested cwd can't cause excessive stat calls. At each level,
-    // prefer package.json, then deno.json, then deno.jsonc.
-    for (let i = 0; i < 12; i++) {
-      const pkg = path.join(dir, "package.json");
-      const denoJson = path.join(dir, "deno.json");
-      const denoJsonc = path.join(dir, "deno.jsonc");
-      try {
-        if (fs.existsSync(pkg)) {
-          return extractInfo(parseManifest(fs.readFileSync(pkg, "utf8"), false));
-        }
-        if (fs.existsSync(denoJson)) {
-          return extractInfo(parseManifest(fs.readFileSync(denoJson, "utf8"), false));
-        }
-        if (fs.existsSync(denoJsonc)) {
-          return extractInfo(parseManifest(fs.readFileSync(denoJsonc, "utf8"), true));
-        }
-      } catch {
-        return empty;
-      }
-      const parent = path.dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
-    return empty;
-  })();
-  PACKAGE_JSON_CACHE.value = promise;
-  return promise;
-}
-
-/**
- * Test helper: clear the cached package.json read so each test starts
- * from a fresh lookup. Not part of the public API.
- *
- * @internal
- */
-export function _resetPackageJsonCacheForTests(): void {
-  PACKAGE_JSON_CACHE.value = undefined;
 }

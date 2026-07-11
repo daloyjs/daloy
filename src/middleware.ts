@@ -5,7 +5,7 @@
  * groups, and per-route hooks identically.
  */
 
-import type { Hooks, BaseContext } from "./types.js";
+import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { assertCookieAttributes, readRequestCookie, serializeCookie } from "./cookie.js";
 import { TooManyRequestsError, ForbiddenError } from "./errors.js";
 import { randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
@@ -46,7 +46,7 @@ export function requestId(opts: RequestIdOptions = {}): Hooks {
   const header = (opts.header ?? "x-request-id").toLowerCase();
   const gen = opts.generator ?? randomId;
   return {
-    beforeHandle(ctx) {
+    preBody(ctx) {
       const incoming = opts.trustIncoming ? ctx.request.headers.get(header) : null;
       const id = incoming && /^[A-Za-z0-9._-]{1,200}$/.test(incoming) ? incoming : gen();
       (ctx.state as Record<string, unknown>).requestId = id;
@@ -646,6 +646,54 @@ export const CSRF_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.middleware.cs
 export const AUTH_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.auth.hook");
 
 /**
+ * Internal list of request-budget hooks that must run when a later `preBody`
+ * guard rejects. This preserves registration order for `rateLimit()` before
+ * authentication without moving body-aware middleware ahead of validation.
+ *
+ * @internal
+ */
+export const EARLY_REJECTION_HOOK_MARKER: unique symbol = Symbol.for(
+  "daloyjs.middleware.earlyRejectionHooks"
+);
+
+type EarlyRejectionHook = (ctx: PreBodyContext<any>) => void | Response | Promise<void | Response>;
+
+/**
+ * Compose `preBody` hooks while honoring request-budget hooks registered
+ * before the guard that rejects. Used internally by App and hook combinators.
+ *
+ * @param layers - Hook layers in registration order.
+ * @returns A composed `preBody` hook, or `undefined` when no layer has one.
+ * @internal
+ */
+export function _mergePreBodyWithEarlyRejections(
+  layers: Hooks[]
+): NonNullable<Hooks["preBody"]> | undefined {
+  if (!layers.some((hooks) => hooks.preBody !== undefined)) return undefined;
+  return async (ctx) => {
+    const pending: EarlyRejectionHook[] = [];
+    for (const hooks of layers) {
+      const early = (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER];
+      if (Array.isArray(early)) {
+        for (const candidate of early) {
+          if (typeof candidate === "function") pending.push(candidate as EarlyRejectionHook);
+        }
+      }
+      if (hooks.preBody === undefined) continue;
+      const result = await hooks.preBody(ctx);
+      if (!(result instanceof Response)) continue;
+      let response = result;
+      for (const hook of pending) {
+        const replacement = await hook(ctx);
+        if (replacement instanceof Response) response = replacement;
+      }
+      return response;
+    }
+    return undefined;
+  };
+}
+
+/**
  * Mark a custom {@link Hooks} bundle as performing request authentication.
  *
  * Use this when you authenticate with your own hook (not one of the built-in
@@ -661,7 +709,7 @@ export const AUTH_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.auth.hook");
  * @example
  * ```ts
  * app.use(markAuthHook({
- *   async beforeHandle(ctx) {
+ *   async preBody(ctx) {
  *     if (!(await myVerify(ctx.request))) throw new UnauthorizedError();
  *   },
  * }));
@@ -844,14 +892,28 @@ export interface RateLimitStore {
   hit(key: string, windowMs: number): Promise<{ count: number; resetMs: number }>;
 }
 
+/**
+ * Context accepted by rate-limit key generators. It is validated on the
+ * ordinary path, but may be a pre-body context when a limiter registered
+ * before authentication counts an early credential rejection.
+ *
+ * @since 1.0.0
+ */
+export type RateLimitContext = PreBodyContext<any> | BaseContext<any, any>;
+
 /** Options for {@link rateLimit}. */
 export interface RateLimitOptions {
   /** Rolling-window width in milliseconds (e.g. `60_000` for one minute). */
   windowMs: number;
   /** Maximum allowed requests per `windowMs` per key. */
   max: number;
-  /** Derive the bucket key from `ctx`. Default returns `"global"`. */
-  keyGenerator?: (ctx: BaseContext<any, any>) => string;
+  /**
+   * Derive the bucket key from `ctx`. Default returns `"global"`. When the
+   * limiter precedes `preBody` authentication, it also receives failed
+   * attempts before body I/O; rely only on the raw request and state populated
+   * by earlier `preBody` hooks.
+   */
+  keyGenerator?: (ctx: RateLimitContext) => string;
   /** Custom backend (default: shared in-memory store). */
   store?: RateLimitStore;
   /**
@@ -940,6 +1002,11 @@ class MemoryStore implements RateLimitStore {
  * `X-Forwarded-For` / `X-Real-IP` when behind a trusted proxy, or supply a
  * custom `keyGenerator` (e.g. derive from the authenticated user id).
  *
+ * Registration order remains security-significant: a limiter placed before a
+ * `preBody` auth hook counts rejected credentials and can replace the later
+ * `401` with `429`, without consuming the request body. On ordinary accepted
+ * requests it retains the validated `beforeHandle` timing.
+ *
  * @example
  * ```ts
  * import { rateLimit } from "@daloyjs/core";
@@ -972,7 +1039,7 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   const groupPrefix = opts.groupId ? `${opts.groupId}:` : "";
   const keyOf =
     opts.keyGenerator ??
-    ((ctx: BaseContext<any, any>) => {
+    ((ctx: RateLimitContext) => {
       if (opts.trustProxyHeaders) {
         const xff = ctx.request.headers.get("x-forwarded-for");
         const first = xff ? xff.split(",")[0]!.trim() : "";
@@ -981,21 +1048,22 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
       return "global";
     });
 
-  return {
-    async beforeHandle(ctx) {
-      const key = `${groupPrefix}${keyOf(ctx)}`;
-      const { count, resetMs } = await store.hit(key, opts.windowMs);
-      const remaining = Math.max(0, opts.max - count);
-      ctx.set.headers.set("x-ratelimit-limit", String(opts.max));
-      ctx.set.headers.set("x-ratelimit-remaining", String(remaining));
-      ctx.set.headers.set("x-ratelimit-reset", String(Math.ceil(resetMs / 1000)));
-      if (count > opts.max) {
-        const retry = Math.ceil((resetMs - Date.now()) / 1000);
-        throw new TooManyRequestsError(opts.retryAfter !== false ? retry : undefined);
-      }
-      return undefined;
-    },
+  const enforce = async (ctx: RateLimitContext) => {
+    const key = `${groupPrefix}${keyOf(ctx)}`;
+    const { count, resetMs } = await store.hit(key, opts.windowMs);
+    const remaining = Math.max(0, opts.max - count);
+    ctx.set.headers.set("x-ratelimit-limit", String(opts.max));
+    ctx.set.headers.set("x-ratelimit-remaining", String(remaining));
+    ctx.set.headers.set("x-ratelimit-reset", String(Math.ceil(resetMs / 1000)));
+    if (count > opts.max) {
+      const retry = Math.ceil((resetMs - Date.now()) / 1000);
+      throw new TooManyRequestsError(opts.retryAfter !== false ? retry : undefined);
+    }
+    return undefined;
   };
+  const hooks: Hooks = { beforeHandle: enforce };
+  (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] = [enforce];
+  return hooks;
 }
 
 // ---------- Login throttle ----------
@@ -1009,7 +1077,7 @@ export interface LoginThrottleOptions {
   /** Shared bucket id. Default: `"login"`. */
   groupId?: string;
   /** Derive the caller key. Defaults to trusted proxy headers only when enabled. */
-  keyGenerator?: (ctx: BaseContext<any, any>) => string;
+  keyGenerator?: (ctx: RateLimitContext) => string;
   /** Shared store for the hard limit. Uses rateLimit()'s in-memory group bucket by default. */
   store?: RateLimitStore;
   /** Trust x-forwarded-for / x-real-ip when deriving the default key. Default: false. */
@@ -1038,7 +1106,7 @@ function assertPositiveInteger(name: string, value: number): void {
 
 function defaultLoginThrottleKey(
   trustProxyHeaders: boolean | undefined
-): (ctx: BaseContext<any, any>) => string {
+): (ctx: RateLimitContext) => string {
   return (ctx) => {
     if (trustProxyHeaders) {
       const forwardedFor = ctx.request.headers.get("x-forwarded-for");
@@ -1061,6 +1129,8 @@ function wait(ms: number): Promise<void> {
  * Mount the same `loginThrottle()` instance (or multiple instances with the
  * same `groupId`) across related routes so an attacker cannot bypass the limit
  * by rotating between password, OTP, and reset endpoints.
+ * When registered before `preBody` authentication it counts and progressively
+ * delays rejected credentials without consuming a declared request body.
  *
  * @param opts - Throttle tuning (see {@link LoginThrottleOptions}); every field has a safe default.
  * @returns A {@link Hooks} bundle ready for `app.use(...)` or per-route `hooks`.
@@ -1097,28 +1167,29 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
     SHARED_LOGIN_THROTTLE_BUCKETS.set(groupId, slowdownBuckets);
   }
 
-  return {
-    async beforeHandle(ctx) {
-      const now = Date.now();
-      const key = `${groupId}:${keyGenerator(ctx)}`;
-      let bucket = slowdownBuckets.get(key);
-      if (!bucket || bucket.resetMs <= now) {
-        bucket = { count: 0, resetMs: now + windowMs };
-        slowdownBuckets.set(key, bucket);
+  const enforce = async (ctx: RateLimitContext) => {
+    const now = Date.now();
+    const key = `${groupId}:${keyGenerator(ctx)}`;
+    let bucket = slowdownBuckets.get(key);
+    if (!bucket || bucket.resetMs <= now) {
+      bucket = { count: 0, resetMs: now + windowMs };
+      slowdownBuckets.set(key, bucket);
+    }
+    bucket.count += 1;
+    if (slowdownBuckets.size > 10_000) {
+      for (const [bucketKey, value] of slowdownBuckets) {
+        if (value.resetMs <= now) slowdownBuckets.delete(bucketKey);
       }
-      bucket.count += 1;
-      if (slowdownBuckets.size > 10_000) {
-        for (const [bucketKey, value] of slowdownBuckets) {
-          if (value.resetMs <= now) slowdownBuckets.delete(bucketKey);
-        }
-      }
-      if (bucket.count > delayAfter && delayMs > 0 && maxDelayMs > 0) {
-        const delay = Math.min(maxDelayMs, (bucket.count - delayAfter) * delayMs);
-        if (delay > 0) await wait(delay);
-      }
-      return limiter.beforeHandle?.(ctx);
-    },
+    }
+    if (bucket.count > delayAfter && delayMs > 0 && maxDelayMs > 0) {
+      const delay = Math.min(maxDelayMs, (bucket.count - delayAfter) * delayMs);
+      if (delay > 0) await wait(delay);
+    }
+    return limiter.beforeHandle?.(ctx as BaseContext<any, any>);
   };
+  const hooks: Hooks = { beforeHandle: enforce };
+  (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER] = [enforce];
+  return hooks;
 }
 
 // ---------- Timing ----------
@@ -1194,7 +1265,7 @@ export function timing(headerName = "server-timing"): Hooks {
  */
 export type BearerAuthVerifyHook<TCredentials = string> = (
   credentials: TCredentials,
-  ctx: BaseContext<any, any>
+  ctx: PreBodyContext<any>
 ) => boolean | void | Promise<boolean | void>;
 
 /** Options for {@link bearerAuth}. */
@@ -1225,6 +1296,8 @@ export interface BearerAuthOptions {
  * optional `verify` hook is the integration point for revocation
  * lists, token-version counters, and other per-request invalidation checks
  * that `validate` cannot answer statelessly.
+ * Both checks run before request-body I/O; `verify` receives a
+ * {@link PreBodyContext} whose `body` is always `undefined`.
  *
  * @example
  * ```ts
@@ -1254,7 +1327,7 @@ export function bearerAuth(opts: BearerAuthOptions): Hooks {
     throw new Error("bearerAuth(): realm must not contain quotes, CR, LF, or NUL bytes.");
   }
   return markAuthHook({
-    async beforeHandle(ctx) {
+    async preBody(ctx) {
       const h = ctx.request.headers.get("authorization") ?? "";
       const m = /^Bearer\s+(.+)$/i.exec(h);
       if (!m) {
@@ -1510,8 +1583,7 @@ export function csrf(opts: CsrfOptions = {}): Hooks {
     onSend(res, ctx) {
       if (!ctx || !wantsDoubleSubmit) return undefined;
       const issued = (ctx.state as Record<string, unknown>)[CSRF_STATE_ISSUED] as
-        | string
-        | undefined;
+        string | undefined;
       if (!issued) return undefined;
       res.headers.append(
         "set-cookie",
@@ -1555,12 +1627,14 @@ export interface BasicAuthOptions {
    * after the framework has stamped `ctx.state.user`. Use this to decorate
    * `ctx.state` with extra fields (typed via `AppState`) so handlers do not
    * re-parse the `Authorization` header in every route.
+   * Runs before request-body I/O with a {@link PreBodyContext}; `ctx.body` is
+   * always `undefined`.
    *
    * @since 0.22.0
    */
   onAuthSuccess?: (
     creds: { username: string; password: string },
-    ctx: BaseContext<any, any>
+    ctx: PreBodyContext<any>
   ) => void | Promise<void>;
 }
 
@@ -1652,7 +1726,7 @@ export function basicAuth(opts: BasicAuthOptions): Hooks {
     throw new Error("basicAuth(): maxCredentialBytes must be a positive integer.");
   }
   return markAuthHook({
-    async beforeHandle(ctx) {
+    async preBody(ctx) {
       const header = ctx.request.headers.get("authorization") ?? "";
       const match = BASIC_AUTH_TOKEN_RE.exec(header);
       if (!match || match[1]!.length > maxBytes) return basicAuthChallenge(realm);

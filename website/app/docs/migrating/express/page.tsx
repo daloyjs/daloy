@@ -253,7 +253,7 @@ app.get(path, (req,res,next) => {    app.route({
                                        },
                                      })
 
-middleware chain (req,res,next)       hooks (onRequest, beforeHandle,
+middleware chain (req,res,next)       hooks (onRequest, preBody, beforeHandle,
                                        afterHandle, onError, onSend, onResponse)
 
 express.Router() mini-app             app.group(prefix, opts, fn) / plugins
@@ -1441,7 +1441,6 @@ function requireToken(req, res, next) {
   }
   next();
 }
-
 app.get("/books", (req, res) => {
   res.json([...books.values()]);
 });

@@ -35,15 +35,21 @@ import {
   type JwtKeyMaterial,
   type JwtVerified,
 } from "./jwt.js";
-import type { BaseContext, Hooks } from "./types.js";
+import type { Hooks, PreBodyContext } from "./types.js";
 
 /** Asymmetric algorithms accepted by {@link jwk}. */
 export type JwkAlgorithm = Exclude<JwtAlgorithm, "HS256" | "HS384" | "HS512">;
 
 const ALLOWED_JWK_ALGS: ReadonlySet<JwkAlgorithm> = new Set([
-  "RS256", "RS384", "RS512",
-  "PS256", "PS384", "PS512",
-  "ES256", "ES384", "ES512",
+  "RS256",
+  "RS384",
+  "RS512",
+  "PS256",
+  "PS384",
+  "PS512",
+  "ES256",
+  "ES384",
+  "ES512",
   "EdDSA",
 ]);
 
@@ -57,15 +63,16 @@ export interface JwkSet {
  * Source for the verifier's public keys. Either an in-memory JWKS, a
  * `https://` URL (fetched with TTL caching), or a custom async resolver.
  */
-export type JwkSource =
-  | JwkSet
-  | string
-  | (() => JwkSet | Promise<JwkSet>);
+export type JwkSource = JwkSet | string | (() => JwkSet | Promise<JwkSet>);
 
-/** Per-request payload-revalidation hook. */
+/**
+ * Per-request payload-revalidation hook run before request-body I/O.
+ * The supplied {@link PreBodyContext} exposes raw headers/query/params and an
+ * always-`undefined` body.
+ */
 export type JwkVerifyHook = (
   payload: Record<string, unknown>,
-  ctx: BaseContext<any, any>,
+  ctx: PreBodyContext<any>
 ) => boolean | void | Promise<boolean | void>;
 
 /**
@@ -115,10 +122,10 @@ export interface JwkOptions {
    */
   fetch?: typeof fetch;
   /**
-  * Optional per-request revalidation hook. Returning `false` rejects the
-  * request with `403`; returning `true` or `undefined` accepts. Use for
-  * revocation lists / token-version counters / "user changed password since
-  * this JWT was issued".
+   * Optional per-request revalidation hook. Returning `false` rejects the
+   * request with `403`; returning `true` or `undefined` accepts. Use for
+   * revocation lists / token-version counters / "user changed password since
+   * this JWT was issued". Runs before request-body I/O.
    *
    * @since 0.22.0
    */
@@ -148,7 +155,7 @@ function unauthorized(realm: string, errorCode?: string, description?: string): 
         "www-authenticate": parts.join(", "),
         "cache-control": "no-store",
       },
-    },
+    }
   );
 }
 
@@ -158,9 +165,7 @@ function sanitizeAuthParam(value: string): string {
 
 function isJwkSet(value: unknown): value is JwkSet {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray((value as { keys?: unknown }).keys)
+    typeof value === "object" && value !== null && Array.isArray((value as { keys?: unknown }).keys)
   );
 }
 
@@ -177,13 +182,11 @@ function makeJwksLoader(
   source: JwkSource,
   fetchImpl: typeof fetch,
   ttlSeconds: number,
-  maxStaleSeconds: number,
+  maxStaleSeconds: number
 ): () => Promise<JwkSet> {
   if (typeof source === "string") {
     if (!source.startsWith("https://")) {
-      throw new Error(
-        "jwk(): jwks URL must be https:// — refusing plaintext JWKS source.",
-      );
+      throw new Error("jwk(): jwks URL must be https:// — refusing plaintext JWKS source.");
     }
     let cache: JwksCacheEntry | undefined;
     let inflight: Promise<JwkSet> | undefined;
@@ -239,7 +242,9 @@ function makeJwksLoader(
     };
   }
   if (!isJwkSet(source)) {
-    throw new Error("jwk(): jwks option must be a JWK Set, an https:// URL, or a resolver function.");
+    throw new Error(
+      "jwk(): jwks option must be a JWK Set, an https:// URL, or a resolver function."
+    );
   }
   return () => Promise.resolve(source);
 }
@@ -288,7 +293,7 @@ export function jwk(opts: JwkOptions): Hooks {
   for (const alg of opts.algorithms) {
     if (!ALLOWED_JWK_ALGS.has(alg)) {
       throw new Error(
-        `jwk(): algorithm "${String(alg)}" is not asymmetric — symmetric (HS*) algorithms are refused by jwk() to close the JWKS confused-deputy attack.`,
+        `jwk(): algorithm "${String(alg)}" is not asymmetric — symmetric (HS*) algorithms are refused by jwk() to close the JWKS confused-deputy attack.`
       );
     }
   }
@@ -320,7 +325,7 @@ export function jwk(opts: JwkOptions): Hooks {
     opts.jwks,
     opts.fetch ?? (globalThis.fetch as typeof fetch),
     ttl,
-    maxStale,
+    maxStale
   );
 
   const algorithms = [...opts.algorithms] as JwtAlgorithm[];
@@ -352,7 +357,7 @@ export function jwk(opts: JwkOptions): Hooks {
         if (typeof jwkAlg === "string" && jwkAlg !== headerAlg) {
           throw new JwtError(
             "alg_mismatch",
-            `jwk(): token alg "${String(headerAlg)}" does not match JWK alg "${jwkAlg}".`,
+            `jwk(): token alg "${String(headerAlg)}" does not match JWK alg "${jwkAlg}".`
           );
         }
         return jwkMatch as JwtKeyMaterial;
@@ -362,7 +367,7 @@ export function jwk(opts: JwkOptions): Hooks {
   }
 
   const authHooks: Hooks = {
-    async beforeHandle(ctx) {
+    async preBody(ctx) {
       const header = ctx.request.headers.get("authorization") ?? "";
       const match = /^Bearer\s+(.+)$/i.exec(header);
       if (!match) {

@@ -199,7 +199,10 @@ import { App, scalarHtml, htmlResponse } from "@daloyjs/core";
 
 export const app = new App({ docs: false });
 
-app.get("/docs", (ctx) => {
+app.get("/docs", {
+  acknowledgeNoResponseBodySchema: true,
+  responses: { 200: {} },
+}, (ctx) => {
   // scalarHtml() takes the same configuration shape, but here you can
   // also assemble the page yourself (extra <link>, an extra <script>
   // that registers a Scalar plugin, etc).

@@ -150,8 +150,9 @@ const res = sseResponse(async function* () {
       <p>
         A handler may also <strong>return a raw <code>Response</code></strong>{" "}
         directly, instead of the <code>{"{ status, body, headers }"}</code>{" "}
-        shape. It bypasses response-schema validation (there is no schema for an
-        opaque stream) but is still finalized like any other response: the
+        shape. Because it bypasses response-schema validation, the route must
+        explicitly set <code>acknowledgeNoResponseBodySchema: true</code>. It is
+        still finalized like any other response: the
         request id, <code>secureHeaders()</code>, CORS, your <code>onSend</code>{" "}
         hooks, and fingerprint stripping all still apply. This is what lets you
         forward a stream from a library such as the{" "}
@@ -162,6 +163,7 @@ const res = sseResponse(async function* () {
   method: "GET",
   path: "/ping",
   operationId: "ping",
+  acknowledgeNoResponseBodySchema: true,
   responses: { 200: { description: "SSE stream" } },
   // Return the Response as-is. Useful for AI SDK streams or a
   // forwarded upstream fetch() response.

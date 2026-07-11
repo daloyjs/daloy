@@ -560,6 +560,25 @@ test("except() accepts a predicate function", async () => {
   assert.equal((await app.fetch(new Request("http://x/"))).status, 401);
 });
 
+test("except() also exempts early-rejection rate-limit accounting", async () => {
+  const app = new App({ env: "development", logger: false });
+  app.use(except("/exempt", rateLimit({ windowMs: 60_000, max: 1 })));
+  app.use(bearerAuth({ validate: () => false }));
+  for (const path of ["/exempt", "/protected"] as const) {
+    app.route({
+      method: "GET",
+      path,
+      responses: { 200: {} },
+      handler: () => ({ status: 200, body: undefined }),
+    });
+  }
+
+  assert.equal((await app.request("/exempt")).status, 401);
+  assert.equal((await app.request("/exempt")).status, 401);
+  assert.equal((await app.request("/protected")).status, 401);
+  assert.equal((await app.request("/protected")).status, 429);
+});
+
 test("except() rejects path patterns that don't start with /", () => {
   assert.throws(
     () => except("health", { beforeHandle: () => {} }),

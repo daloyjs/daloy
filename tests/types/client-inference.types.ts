@@ -7,22 +7,23 @@
  * type erased per-route information: `createClient(app).getBookById` resolved
  * to an `any`-ish method instead of a precise, operationId-keyed signature.
  *
- * Inference requires **method chaining** (`new App().route(a).route(b)`) and
- * no widening `: App` annotation, so the accumulated route tuple survives.
+ * Inference supports method chaining and literal tuples passed to
+ * `registerRoutes()`. A widening `: App` annotation still intentionally
+ * discards the accumulated route tuple.
  */
 
 import { z } from "zod";
 
 import { App } from "../../src/app.js";
 import { createClient } from "../../src/client.js";
+import { getBookRoute } from "./fixtures/get-book.route.js";
+import { listBooksRoute } from "./fixtures/list-books.route.js";
 
 /** Compile-time assertion that `T` is exactly `true`. */
 type Expect<T extends true> = T;
 /** Structural equality check between two types. */
 type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-    ? true
-    : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
 const app = new App({ logger: false })
   .route({
@@ -54,9 +55,7 @@ const client = createClient(app, { baseUrl: "http://localhost:3000" });
 
 // The client is keyed by operationId with precise method signatures.
 type ClientKeys = keyof typeof client;
-type _KeysAreExactlyOperationIds = Expect<
-  Equal<ClientKeys, "getBookById" | "createBook">
->;
+type _KeysAreExactlyOperationIds = Expect<Equal<ClientKeys, "getBookById" | "createBook">>;
 
 // `getBookById` takes a typed `params.id: string`.
 type GetByIdInput = Parameters<(typeof client)["getBookById"]>[0];
@@ -81,3 +80,37 @@ async function probes() {
 }
 
 void probes;
+
+// Independently defined routes retain their complete tuple when composed.
+const modularApp = new App({ logger: false }).registerRoutes([
+  listBooksRoute,
+  getBookRoute,
+] as const);
+const modularClient = createClient(modularApp, { baseUrl: "http://localhost" });
+type _ModularKeysArePreserved = Expect<Equal<keyof typeof modularClient, "listBooks" | "getBook">>;
+type ModularGetInput = Parameters<(typeof modularClient)["getBook"]>[0];
+type _ModularParamsAreTyped = Expect<Equal<ModularGetInput["params"], { id: string }>>;
+
+const shorthandApp = new App({ logger: false })
+  .get(
+    "/",
+    { responses: { 200: { body: z.object({ ok: z.boolean() }) } } },
+    () => ({ status: 200, body: { ok: true } })
+  )
+  .post(
+    "/book-items/:item_id",
+    {
+      request: { body: z.object({ title: z.string() }) },
+      responses: {
+        201: { description: "Created", body: z.object({ id: z.string() }) },
+      },
+    },
+    ({ params, body }) => ({ status: 201, body: { id: `${params.item_id}:${body.title}` } })
+  );
+const shorthandClient = createClient(shorthandApp, { baseUrl: "http://localhost" });
+type _ShorthandOperationIdsAreInferred = Expect<
+  Equal<keyof typeof shorthandClient, "getRoot" | "postBookItemsByItemId">
+>;
+
+// @ts-expect-error - method shorthands never silently opt out of response contracts.
+new App({ logger: false }).get("/unsafe", () => Response.json({ secret: true }));

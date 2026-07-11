@@ -266,7 +266,7 @@ const POSTS = [
     title:
       "Middleware Without Mystery: Hooks, Ordering, and Response Transformation",
     description:
-      "The DaloyJS request lifecycle, end to end: onRequest \u2192 beforeHandle \u2192 handler \u2192 afterHandle \u2192 onSend \u2192 onResponse, plus onError on the error path. Where each hook fires, what it can change, how scopes compose (global \u2192 group \u2192 route), and what to put in which slot, with real short-circuit, header-stamping, and logging recipes.",
+      "The DaloyJS request lifecycle, end to end: onRequest \u2192 preBody \u2192 validation \u2192 beforeHandle \u2192 handler \u2192 afterHandle \u2192 onSend \u2192 onResponse, plus onError on the error path. Where each hook fires and what belongs in each slot.",
     date: "2026-05-30",
     readingTime: "13 min read",
     author: "Devlin Duldulao",
@@ -340,8 +340,7 @@ const POSTS = [
   },
   {
     slug: "same-app-five-runtimes-verified",
-    title:
-      "The Same App on Node, Bun, Deno, and Cloudflare Workers, Verified",
+    title: "The Same App on Node, Bun, Deno, and Cloudflare Workers, Verified",
     description:
       "One Bookstore app, five entry files, five deployments, Node serve(), Bun handle.url, Deno onListen, Workers ctx.waitUntil, and Vercel's three handler shapes. With receipts.",
     date: "2026-05-22",

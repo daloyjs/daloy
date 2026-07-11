@@ -350,7 +350,7 @@ function buildOperation(
         ? { ...(metaResponseExamples ?? {}), ...(spec.examples ?? {}) }
         : undefined;
     responses[status] = {
-      description: spec.description,
+      description: spec.description ?? `HTTP ${status} response`,
       ...(spec.body
         ? {
             content: {

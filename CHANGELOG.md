@@ -15,6 +15,63 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Breaking changes before GA
+
+- Auth callbacks supplied to `bearerAuth()`, `basicAuth()`, `jwk()`, and
+  `clientCertAuth()` now execute in `preBody`. They can read the raw request,
+  route params, query, headers, and shared state, but `ctx.body` is always
+  `undefined`. Move payload-dependent authorization to `beforeHandle`.
+- `some()` / `except()` now gate `preBody` hooks as well as `beforeHandle`
+  hooks. Early-auth stacks can therefore reject before validation/body I/O.
+- The built-in OpenAPI/AsyncAPI routes no longer infer metadata from a host
+  `package.json`, `deno.json`, or `deno.jsonc`. Set `openapi.info` (or top-level
+  `title`/`version`) for branded metadata; otherwise portable defaults are used.
+- Default documentation asset URLs no longer float to the latest upstream
+  release. They are pinned to reviewed versions and matching SRI hashes.
+- Handlers and `afterHandle` transforms that return a raw web-standard
+  `Response` must now set `acknowledgeNoResponseBodySchema: true` on the route.
+  Unacknowledged raw responses fail closed with `500` instead of silently
+  bypassing response-body validation and field stripping.
+
+### Added
+
+- **Multi-file route contracts keep exact client types.** Export route objects
+  with `defineRoute()`, compose literal tuples with `app.registerRoutes([...])`,
+  and call them through `createInProcessClient(app)` without opening a socket.
+  The full operation-id, request-schema, and response union surface now survives
+  file and feature-module boundaries.
+- **Progressive HTTP shorthands.** `get()`, `post()`, `put()`, `patch()`,
+  `delete()`, and `head()` accept contract options plus a typed handler and
+  derive stable operation ids from their method and path unless one is supplied
+  explicitly. They deliberately do not provide a two-argument opaque overload:
+  schema-less responses require `acknowledgeNoResponseBodySchema: true`.
+- **Response descriptions are optional.** OpenAPI and AI contract output use a
+  stable `HTTP <status> response` fallback when a response spec omits one.
+- **A `preBody` lifecycle phase** runs after route matching but before body I/O
+  or schema validation. It exposes raw params/query/headers, shared state and
+  response helpers, while guaranteeing `ctx.body === undefined`.
+
+### Changed
+
+- **Built-in bearer, basic, JWK, and mTLS authentication now reject before
+  request bodies are consumed.** Request IDs are also established in the same
+  early phase. Body-aware authorization and HTTP Message Signatures remain in
+  `beforeHandle` where validated payloads are available.
+- **Built-in docs generation is runtime-portable.** OpenAPI/AsyncAPI metadata
+  now comes from explicit options or portable defaults, with no host
+  `package.json`/`deno.json` filesystem probing. The default Scalar, Swagger
+  UI, Redoc, and AsyncAPI assets are version-pinned with matching SHA-384 SRI.
+
+### Security
+
+- Unauthenticated uploads covered by built-in header/certificate auth are
+  rejected before DaloyJS reads or parses their body, reducing avoidable CPU,
+  memory, and bandwidth work at the application boundary.
+- A `rateLimit()` or `loginThrottle()` layer registered before early auth still
+  counts rejected credentials and can return `429` after the cap, without
+  forcing request-body validation. This preserves brute-force lockout semantics
+  across the new lifecycle phase.
+
 ## [1.0.0-rc.3] - 2026-07-09
 
 ### Fixed
