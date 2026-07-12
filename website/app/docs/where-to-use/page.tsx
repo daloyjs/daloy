@@ -268,16 +268,17 @@ export default function Page() {
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
-const app = new App({ docs: true }).route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBook",
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "Found", body: z.object({ id: z.string(), title: z.string() }) },
+const app = new App({ docs: true }).get(
+  "/books/:id",
+  {
+    operationId: "getBook",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: z.object({ id: z.string(), title: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({ status: 200, body: { id: params.id, title: "..." } }),
-});
+  async ({ params }) => ({ status: 200, body: { id: params.id, title: "..." } }),
+);
 
 serve(app, { port: 3000 });`}
       />

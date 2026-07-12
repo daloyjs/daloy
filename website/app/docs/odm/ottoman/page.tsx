@@ -146,16 +146,17 @@ const UserSchema = z.object({
 const app = new App();
 app.register(ottomanPlugin);
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const user = await state.db.User.findById(params.id);
     if (!user) {
       throw new HttpError(404, { title: "User not found" });
@@ -170,7 +171,7 @@ app.route({
       },
     };
   },
-});
+);
 
 await app.ready();
 serve(app, { port: 3000 });`}
@@ -183,20 +184,21 @@ serve(app, { port: 3000 });`}
         traffic. Keep index creation out of request handlers.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "GET",
-  path: "/users/by-email/:email",
-  operationId: "getUserByEmail",
-  request: { params: z.object({ email: z.email() }) },
-  responses: { 200: { description: "Found", body: UserSchema } },
-  handler: async ({ params, state }) => {
+        code={`app.get(
+  "/users/by-email/:email",
+  {
+    operationId: "getUserByEmail",
+    request: { params: z.object({ email: z.email() }) },
+    responses: { 200: { description: "Found", body: UserSchema } },
+  },
+  async ({ params, state }) => {
     const user = await state.db.User.findOne({ email: params.email });
     if (!user) {
       throw new HttpError(404, { title: "User not found" });
     }
     return { status: 200, body: { id: user.id, email: user.email, name: user.name ?? null } };
   },
-});`}
+);`}
       />
 
       <h2 id="transactions">Transactions</h2>

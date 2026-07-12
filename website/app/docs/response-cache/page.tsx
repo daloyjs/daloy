@@ -66,18 +66,19 @@ const app = new App();
 // Reuse rendered bodies for 30 seconds.
 app.use(responseCache({ ttlSeconds: 30 }));
 
-app.route({
-  method: "GET",
-  path: "/products",
-  operationId: "listProducts",
-  responses: {
-    200: { description: "ok", body: z.array(z.object({ id: z.string() })) },
+app.get(
+  "/products",
+  {
+    operationId: "listProducts",
+    responses: {
+      200: { description: "ok", body: z.array(z.object({ id: z.string() })) },
+    },
   },
-  handler: async () => {
+  async () => {
     const products = await db.listProducts(); // skipped on a fresh cache hit
     return { status: 200 as const, body: products };
   },
-});`}
+);`}
         language="ts"
       />
       <p>

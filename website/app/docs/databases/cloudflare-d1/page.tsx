@@ -104,12 +104,13 @@ app.use(secureHeaders());
 
 const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
 
-app.route({
-  method: "GET",
-  path: "/todos",
-  operationId: "listTodos",
-  responses: { 200: { description: "ok", body: z.array(TodoSchema) } },
-  handler: async ({ state }) => {
+app.get(
+  "/todos",
+  {
+    operationId: "listTodos",
+    responses: { 200: { description: "ok", body: z.array(TodoSchema) } },
+  },
+  async ({ state }) => {
     const { results } = await state.db
       .prepare("select id, title, done from todos")
       .all<{ id: number; title: string; done: number }>();
@@ -118,7 +119,7 @@ app.route({
       body: results.map((r) => ({ ...r, done: Boolean(r.done) })),
     };
   },
-});
+);
 
 export default {
   async fetch(req: Request, env: Env) {

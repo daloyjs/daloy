@@ -146,23 +146,24 @@ app.register(neonPlugin);
 
 const UserSchema = z.object({ id: z.uuid(), email: z.email() });
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const rows = await state.sql\`select id, email from users where id = \${params.id} limit 1\`;
     const user = rows[0];
     return user
       ? { status: 200, body: user }
       : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
   },
-});`}
+);`}
       />
 
       <h2 id="cloudflare-workers">Cloudflare Workers</h2>

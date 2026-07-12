@@ -240,33 +240,34 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(adyenPlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/session",
-  operationId: "createAdyenSession",
-  request: {
-    body: z.object({
-      amount: z.object({
-        currency: z.string().length(3),
-        value: z.number().int().positive(),  // minor units
-      }),
-      reference: z.string().min(1).max(80),
-      countryCode: z.string().length(2).optional(),
-      shopperReference: z.string().max(80).optional(),
-      shopperEmail: z.email().optional(),
-    }),
-  },
-  responses: {
-    201: {
-      description: "session created",
+app.post(
+  "/checkout/session",
+  {
+    operationId: "createAdyenSession",
+    request: {
       body: z.object({
-        id: z.string(),
-        sessionData: z.string(),
-        clientKey: z.string(),
+        amount: z.object({
+          currency: z.string().length(3),
+          value: z.number().int().positive(),  // minor units
+        }),
+        reference: z.string().min(1).max(80),
+        countryCode: z.string().length(2).optional(),
+        shopperReference: z.string().max(80).optional(),
+        shopperEmail: z.email().optional(),
       }),
     },
+    responses: {
+      201: {
+        description: "session created",
+        body: z.object({
+          id: z.string(),
+          sessionData: z.string(),
+          clientKey: z.string(),
+        }),
+      },
+    },
   },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const session = await state.adyen.createSession({
       ...body,
       returnUrl: \`\${process.env.APP_URL}/checkout/return?ref=\${encodeURIComponent(body.reference)}\`,
@@ -280,7 +281,7 @@ app.route({
       },
     };
   },
-});`}
+);`}
       />
 
       <h2 id="6-standard-webhook-notifications">6. Standard webhook notifications</h2>
@@ -339,23 +340,24 @@ function basicAuthOk(headerValue: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-app.route({
-  method: "POST",
-  path: "/webhooks/adyen",
-  operationId: "adyenWebhook",
-  request: {
-    body: z.object({
-      live: z.string(),
-      notificationItems: z.array(
-        z.object({ NotificationRequestItem: z.any() }),
-      ),
-    }),
+app.post(
+  "/webhooks/adyen",
+  {
+    operationId: "adyenWebhook",
+    request: {
+      body: z.object({
+        live: z.string(),
+        notificationItems: z.array(
+          z.object({ NotificationRequestItem: z.any() }),
+        ),
+      }),
+    },
+    responses: {
+      200: { description: "ack", body: z.object({ notificationResponse: z.literal("[accepted]") }) },
+      401: { description: "unauthorized", body: z.object({ error: z.string() }) },
+    },
   },
-  responses: {
-    200: { description: "ack", body: z.object({ notificationResponse: z.literal("[accepted]") }) },
-    401: { description: "unauthorized", body: z.object({ error: z.string() }) },
-  },
-  handler: async ({ body, request, state }) => {
+  async ({ body, request, state }) => {
     if (!basicAuthOk(request.headers.get("authorization"))) {
       return { status: 401, body: { error: "bad basic auth" } };
     }
@@ -374,7 +376,7 @@ app.route({
     // Always 200 + [accepted] when HMAC + auth check pass; do the work async.
     return { status: 200, body: { notificationResponse: "[accepted]" as const } };
   },
-});`}
+);`}
       />
       <p>
         The event you care about most is <code>AUTHORISATION</code> with{" "}

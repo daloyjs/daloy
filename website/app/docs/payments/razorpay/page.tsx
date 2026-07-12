@@ -261,30 +261,31 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(razorpayPlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/razorpay/order",
-  operationId: "createRazorpayOrder",
-  request: {
-    body: z.object({
-      orderId: z.string().min(1).max(40),               // becomes "receipt"
-      amount: z.number().int().positive(),              // paise
-      currency: z.string().length(3).default("INR"),
-      notes: z.record(z.string(), z.string()).optional(),
-    }),
-  },
-  responses: {
-    201: {
-      description: "order created",
+app.post(
+  "/checkout/razorpay/order",
+  {
+    operationId: "createRazorpayOrder",
+    request: {
       body: z.object({
-        orderId: z.string(),
-        amount: z.number(),
-        currency: z.string(),
-        keyId: z.string(),
+        orderId: z.string().min(1).max(40),               // becomes "receipt"
+        amount: z.number().int().positive(),              // paise
+        currency: z.string().length(3).default("INR"),
+        notes: z.record(z.string(), z.string()).optional(),
       }),
     },
+    responses: {
+      201: {
+        description: "order created",
+        body: z.object({
+          orderId: z.string(),
+          amount: z.number(),
+          currency: z.string(),
+          keyId: z.string(),
+        }),
+      },
+    },
   },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const order = await state.razorpay.createOrder({
       amount: body.amount,
       currency: body.currency,
@@ -301,7 +302,7 @@ app.route({
       },
     };
   },
-});`}
+);`}
       />
 
       <h2 id="6-verify-the-client-callback">6. Verify the client callback</h2>
@@ -354,22 +355,23 @@ app.route({
         anything:
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/checkout/razorpay/verify",
-  operationId: "verifyRazorpayCheckout",
-  request: {
-    body: z.object({
-      razorpay_order_id: z.string(),
-      razorpay_payment_id: z.string(),
-      razorpay_signature: z.string(),
-    }),
+        code={`app.post(
+  "/checkout/razorpay/verify",
+  {
+    operationId: "verifyRazorpayCheckout",
+    request: {
+      body: z.object({
+        razorpay_order_id: z.string(),
+        razorpay_payment_id: z.string(),
+        razorpay_signature: z.string(),
+      }),
+    },
+    responses: {
+      200: { description: "verified", body: z.object({ status: z.literal("captured") }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  responses: {
-    200: { description: "verified", body: z.object({ status: z.literal("captured") }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const valid = state.razorpay.verifyCheckoutSignature({
       orderId: body.razorpay_order_id,
       paymentId: body.razorpay_payment_id,
@@ -388,7 +390,7 @@ app.route({
 
     return { status: 200, body: { status: "captured" as const } };
   },
-});`}
+);`}
       />
 
       <h2 id="7-webhook">7. Webhook</h2>
@@ -430,15 +432,16 @@ app.route({
       <CodeBlock
         code={`import { readRawBody } from "@daloyjs/core/raw";
 
-app.route({
-  method: "POST",
-  path: "/webhooks/razorpay",
-  operationId: "razorpayWebhook",
-  responses: {
-    200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
+app.post(
+  "/webhooks/razorpay",
+  {
+    operationId: "razorpayWebhook",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const raw = await readRawBody(request);
     const signature = request.headers.get("x-razorpay-signature");
 
@@ -469,7 +472,7 @@ app.route({
 
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
       <p>
         Always return 200 once the signature checks out, even for events you

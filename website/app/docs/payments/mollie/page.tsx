@@ -250,31 +250,32 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(molliePlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/mollie",
-  operationId: "createMolliePayment",
-  request: {
-    body: z.object({
-      orderId: z.string().min(1).max(80),
-      amount: z.object({
-        currency: z.string().length(3),
-        value: z.string().regex(/^\\d+\\.\\d{2}$/),  // "10.00"
-      }),
-      description: z.string().min(1).max(255),
-      method: z.array(z.string()).optional(),
-    }),
-  },
-  responses: {
-    201: {
-      description: "payment created",
+app.post(
+  "/checkout/mollie",
+  {
+    operationId: "createMolliePayment",
+    request: {
       body: z.object({
-        paymentId: z.string(),
-        checkoutUrl: z.url(),
+        orderId: z.string().min(1).max(80),
+        amount: z.object({
+          currency: z.string().length(3),
+          value: z.string().regex(/^\\d+\\.\\d{2}$/),  // "10.00"
+        }),
+        description: z.string().min(1).max(255),
+        method: z.array(z.string()).optional(),
       }),
     },
+    responses: {
+      201: {
+        description: "payment created",
+        body: z.object({
+          paymentId: z.string(),
+          checkoutUrl: z.url(),
+        }),
+      },
+    },
   },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const payment = await state.mollie.createPayment({
       amount: body.amount,
       description: body.description,
@@ -288,7 +289,7 @@ app.route({
       body: { paymentId: payment.id, checkoutUrl: payment.checkoutUrl },
     };
   },
-});`}
+);`}
       />
 
       <h2 id="6-webhook">6. Webhook</h2>
@@ -337,15 +338,16 @@ app.route({
       <CodeBlock
         code={`import { readRawBody } from "@daloyjs/core/raw";
 
-app.route({
-  method: "POST",
-  path: "/webhooks/mollie",
-  operationId: "mollieWebhook",
-  responses: {
-    200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
+app.post(
+  "/webhooks/mollie",
+  {
+    operationId: "mollieWebhook",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const raw = await readRawBody(request);
     const signature = request.headers.get("x-mollie-signature");
 
@@ -369,7 +371,7 @@ app.route({
 
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
 
       <h2 id="7-refunds-captures-and-cancellation">7. Refunds, captures, and cancellation</h2>

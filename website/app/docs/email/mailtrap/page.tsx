@@ -151,20 +151,21 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
 app.register(mailtrapPlugin);
 
-app.route({
-  method: "POST",
-  path: "/feedback",
-  operationId: "sendFeedback",
-  request: {
-    body: z.object({
-      to: z.email(),
-      message: z.string().min(1).max(2000),
-    }),
+app.post(
+  "/feedback",
+  {
+    operationId: "sendFeedback",
+    request: {
+      body: z.object({
+        to: z.email(),
+        message: z.string().min(1).max(2000),
+      }),
+    },
+    responses: {
+      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    },
   },
-  responses: {
-    202: { description: "Sent", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const { id } = await state.email.send({
       to: body.to,
       subject: "Thanks for your feedback",
@@ -172,7 +173,7 @@ app.route({
     });
     return { status: 202, body: { id } };
   },
-});`}
+);`}
       />
 
       <h2 id="bulk-sending">Bulk sending</h2>

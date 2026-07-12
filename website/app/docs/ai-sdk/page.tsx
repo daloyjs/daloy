@@ -39,26 +39,27 @@ import { openai } from "@ai-sdk/openai";
 
 export const app = new App();
 
-app.route({
-  method: "POST",
-  path: "/api/chat",
-  operationId: "chat",
-  acknowledgeNoResponseBodySchema: true,
-  request: {
-    // You still validate the request. A message count cap plus the
-    // default 1 MiB body limit are your first abuse guard, even on a
-    // streaming route. Tighten z.unknown() to a UIMessage schema if
-    // you want a stricter contract.
-    body: z
-      .object({ messages: z.array(z.unknown()).min(1).max(50) })
-      .strict(),
+app.post(
+  "/api/chat",
+  {
+    operationId: "chat",
+    acknowledgeNoResponseBodySchema: true,
+    request: {
+      // You still validate the request. A message count cap plus the
+      // default 1 MiB body limit are your first abuse guard, even on a
+      // streaming route. Tighten z.unknown() to a UIMessage schema if
+      // you want a stricter contract.
+      body: z
+        .object({ messages: z.array(z.unknown()).min(1).max(50) })
+        .strict(),
+    },
+    responses: {
+      // Streaming routes do not carry a response-body schema; OpenAPI
+      // documents them as a stream. That is the one honest trade-off.
+      200: { description: "UI message stream (text/event-stream)" },
+    },
   },
-  responses: {
-    // Streaming routes do not carry a response-body schema; OpenAPI
-    // documents them as a stream. That is the one honest trade-off.
-    200: { description: "UI message stream (text/event-stream)" },
-  },
-  handler: async ({ body, request }) => {
+  async ({ body, request }) => {
     const result = streamText({
       model: openai("gpt-5.1"),
       messages: convertToModelMessages(body.messages as never),
@@ -69,7 +70,7 @@ app.route({
     // Return the Response as-is. No mapping, no adapter.
     return result.toUIMessageStreamResponse();
   },
-});`;
+);`;
 
 const STRUCTURED = `// This is the pattern that is genuinely better on a contract-first
 // framework: the SAME Zod schema is the model's output schema, the
@@ -91,18 +92,19 @@ const Analysis = z
   })
   .strict();
 
-app.route({
-  method: "POST",
-  path: "/api/analyze",
-  operationId: "analyzeText",
-  request: {
-    body: z.object({ text: z.string().min(1).max(10_000) }).strict(),
+app.post(
+  "/api/analyze",
+  {
+    operationId: "analyzeText",
+    request: {
+      body: z.object({ text: z.string().min(1).max(10_000) }).strict(),
+    },
+    responses: {
+      // Reuse the exact schema the model is constrained to.
+      200: { description: "analysis", schema: Analysis },
+    },
   },
-  responses: {
-    // Reuse the exact schema the model is constrained to.
-    200: { description: "analysis", schema: Analysis },
-  },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     const { object } = await generateObject({
       model: openai("gpt-5.1"),
       schema: Analysis,
@@ -114,7 +116,7 @@ app.route({
     // SDK or schema mismatch becomes a controlled 500, never a leak.
     return { status: 200 as const, body: object };
   },
-});`;
+);`;
 
 const TOOLS = `// Tool calls are where prompt injection turns into SSRF: the model
 // asks your tool to fetch a URL, and a poisoned prompt points it at
@@ -143,16 +145,17 @@ const getWeather = tool({
   },
 });
 
-app.route({
-  method: "POST",
-  path: "/api/agent",
-  operationId: "agent",
-  acknowledgeNoResponseBodySchema: true,
-  request: {
-    body: z.object({ messages: z.array(z.unknown()).min(1).max(50) }).strict(),
+app.post(
+  "/api/agent",
+  {
+    operationId: "agent",
+    acknowledgeNoResponseBodySchema: true,
+    request: {
+      body: z.object({ messages: z.array(z.unknown()).min(1).max(50) }).strict(),
+    },
+    responses: { 200: { description: "UI message stream" } },
   },
-  responses: { 200: { description: "UI message stream" } },
-  handler: async ({ body, request }) => {
+  async ({ body, request }) => {
     const result = streamText({
       model: openai("gpt-5.1"),
       messages: convertToModelMessages(body.messages as never),
@@ -165,7 +168,7 @@ app.route({
 
     return result.toUIMessageStreamResponse();
   },
-});`;
+);`;
 
 const HARDEN = `// The deployment-time layer the model never gets a vote in.
 // All of this ships in @daloyjs/core with zero runtime dependencies.

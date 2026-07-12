@@ -78,19 +78,20 @@ import { serve } from "@daloyjs/core/node";
 
 const app = new App();
 
-app.route({
-  method: "GET",
-  path: "/hello/:name",
-  operationId: "sayHello",
-  request: { params: z.object({ name: z.string() }) },
-  responses: {
-    200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+app.get(
+  "/hello/:name",
+  {
+    operationId: "sayHello",
+    request: { params: z.object({ name: z.string() }) },
+    responses: {
+      200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+    },
   },
-  handler: async ({ params }) => ({
+  async ({ params }) => ({
     status: 200,
     body: { msg: \`Hello, \${params.name}\` },
   }),
-});
+);
 
 serve(app, { port: 3000 });`}
       />
@@ -101,7 +102,7 @@ serve(app, { port: 3000 });`}
         title="One route, five outputs"
         source={{
           eyebrow: "single declaration",
-          label: "app.route({ ... })",
+          label: "app.get(path, contract, handler)",
           detail: "method, path, request, responses, handler",
         }}
         branches={[

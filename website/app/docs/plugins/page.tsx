@@ -80,18 +80,19 @@ export const usersPlugin = {
       },
     });
 
-    app.route({
-      method: "GET",
-      path: "/me",
-      operationId: "me",
-      responses: {
-        200: { description: "Current user", body: CurrentUser },
+    app.get(
+      "/me",
+      {
+        operationId: "me",
+        responses: {
+          200: { description: "Current user", body: CurrentUser },
+        },
       },
-      handler: async () => ({
+      async () => ({
         status: 200,
         body: { user: "alice" },
       }),
-    });
+    );
   },
 };`}
       />
@@ -195,23 +196,24 @@ const Item = z.object({
 app.decorate("db", await openDatabase());
 app.decorate("logger", createLogger({ level: "info" }));
 
-app.route({
-  method: "GET",
-  path: "/items/:id",
-  operationId: "getItem",
-  request: {
-    params: z.object({ id: z.string() }),
+app.get(
+  "/items/:id",
+  {
+    operationId: "getItem",
+    request: {
+      params: z.object({ id: z.string() }),
+    },
+    responses: {
+      200: { description: "Item", body: Item },
+      404: { description: "Not found" },
+    },
   },
-  responses: {
-    200: { description: "Item", body: Item },
-    404: { description: "Not found" },
-  },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const row = await state.db.findOne("items", { id: params.id });
     state.logger.info({ id: params.id }, "item fetched");
     return { status: 200, body: row };
   },
-});`}
+);`}
       />
 
       <h2 id="extension-ordering">Extension ordering</h2>

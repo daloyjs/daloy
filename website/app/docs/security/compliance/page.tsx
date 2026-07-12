@@ -914,7 +914,7 @@ export default function Page() {
               DaloyJS commits to a{" "}
               <strong>minimum 5-year security-update support period</strong> for
               every major release line starting with 1.0, measured from that
-              line&apos;s first GA release. The current 0.x line is pre-1.0 and
+              line&apos;s first stable release. The current 0.x line is pre-1.0 and
               rolls forward on the latest minor until 1.0 ships.
             </td>
           </tr>

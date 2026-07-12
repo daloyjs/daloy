@@ -93,16 +93,17 @@ import { z } from "zod";
 const app = new App();
 const safeFetch = fetchGuard();
 
-app.route({
-  method: "POST",
-  path: "/import",
-  operationId: "importFromUrl",
-  request: { body: z.object({ url: z.url() }) },
-  responses: {
-    200: { description: "ok" },
-    422: { description: "bad url or refused: ssrf" },
+app.post(
+  "/import",
+  {
+    operationId: "importFromUrl",
+    request: { body: z.object({ url: z.url() }) },
+    responses: {
+      200: { description: "ok" },
+      422: { description: "bad url or refused: ssrf" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     const { url } = body;
     try {
       const upstream = await safeFetch(url);
@@ -115,7 +116,7 @@ app.route({
       throw err;
     }
   },
-});`}
+);`}
       />
 
       <h2 id="what-gets-blocked-by-default">What gets blocked by default</h2>

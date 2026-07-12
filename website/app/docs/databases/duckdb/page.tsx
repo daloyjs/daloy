@@ -134,15 +134,16 @@ const SalesSummary = z.object({
   revenue: z.number(),
 });
 
-app.route({
-  method: "GET",
-  path: "/analytics/sales",
-  operationId: "salesSummary",
-  request: { query: z.object({ region: z.string().min(1).optional() }) },
-  responses: {
-    200: { description: "ok", body: z.array(SalesSummary) },
+app.get(
+  "/analytics/sales",
+  {
+    operationId: "salesSummary",
+    request: { query: z.object({ region: z.string().min(1).optional() }) },
+    responses: {
+      200: { description: "ok", body: z.array(SalesSummary) },
+    },
   },
-  handler: async ({ query, state }) => {
+  async ({ query, state }) => {
     const reader = await state.duckdb.runAndReadAll(
       \`select region, sum(revenue)::double as revenue
        from read_parquet('data/sales/*.parquet')
@@ -157,7 +158,7 @@ app.route({
       body: SalesSummary.array().parse(reader.getRowObjectsJson()),
     };
   },
-});`}
+);`}
       />
 
       <h2 id="runtime-support">Runtime support</h2>

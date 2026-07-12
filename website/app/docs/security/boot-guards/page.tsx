@@ -183,9 +183,7 @@ const app = new App({ env: "production" });
 app.use(session({ secret: process.env.SESSION_SECRET! }));
 app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: ["https://app.example.com"] }));
 
-app.route({
-  method: "POST",
-  path: "/items",
+app.post("/items", {
   // ...
 });`}
       />
@@ -287,13 +285,14 @@ app.use(
   })
 );
 
-app.route({
-  method: "GET",
-  path: "/me",
-  auth: { scheme: "bearer" }, // advertised as protected
-  responses: { 200: { description: "ok" } },
-  handler: () => ({ status: 200, body: {} }),
-});`}
+app.get(
+  "/me",
+  {
+    auth: { scheme: "bearer" }, // advertised as protected
+    responses: { 200: { description: "ok" } },
+  },
+  () => ({ status: 200, body: {} }),
+);`}
       />
       <p>
         The exported <code>AUTH_HOOK_MARKER</code> symbol is the marker{" "}

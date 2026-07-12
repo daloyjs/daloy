@@ -302,30 +302,31 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(authorizeNetPlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout",
-  operationId: "checkout",
-  request: {
-    body: z.object({
-      amount: z.string().regex(/^\\d+\\.\\d{2}$/),
-      dataDescriptor: z.string().min(1),
-      dataValue: z.string().min(1),
-      invoiceNumber: z.string().max(20).optional(),
-      email: z.email().optional(),
-    }),
-  },
-  responses: {
-    201: {
-      description: "approved",
+app.post(
+  "/checkout",
+  {
+    operationId: "checkout",
+    request: {
       body: z.object({
-        transId: z.string(),
-        authCode: z.string(),
-        last4: z.string(),
+        amount: z.string().regex(/^\\d+\\.\\d{2}$/),
+        dataDescriptor: z.string().min(1),
+        dataValue: z.string().min(1),
+        invoiceNumber: z.string().max(20).optional(),
+        email: z.email().optional(),
       }),
     },
+    responses: {
+      201: {
+        description: "approved",
+        body: z.object({
+          transId: z.string(),
+          authCode: z.string(),
+          last4: z.string(),
+        }),
+      },
+    },
   },
-  handler: async ({ body, request, state }) => {
+  async ({ body, request, state }) => {
     const result = await state.authnet.chargeOpaqueData({
       amount: body.amount,
       dataDescriptor: body.dataDescriptor,
@@ -343,7 +344,7 @@ app.route({
       },
     };
   },
-});`}
+);`}
       />
       <p>
         Refunds, voids, and prior-auth captures all go through the same{" "}
@@ -436,15 +437,16 @@ await fetch(\`\${host}/rest/v1/webhooks\`, {
         code={`import { z } from "zod";
 import { readRawBody } from "@daloyjs/core/raw";
 
-app.route({
-  method: "POST",
-  path: "/webhooks/authorizenet",
-  operationId: "authorizenetWebhook",
-  responses: {
-    200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
+app.post(
+  "/webhooks/authorizenet",
+  {
+    operationId: "authorizenetWebhook",
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const raw = await readRawBody(request);
     if (!state.authnet.verifyWebhook(request.headers, raw)) {
       return { status: 401, body: { error: "invalid signature" } };
@@ -467,7 +469,7 @@ app.route({
     await enqueueAuthnetEvent(event);
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
       <p>
         Ack fast. Authorize.Net retries failed deliveries 10 times, 3× at

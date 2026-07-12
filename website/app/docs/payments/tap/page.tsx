@@ -329,30 +329,31 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(tapPlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/tap",
-  operationId: "createTapCharge",
-  request: {
-    body: z.object({
-      orderId: z.string().min(1).max(80),
-      amount: z.number().positive(),
-      currency: z.enum(["KWD", "SAR", "AED", "BHD", "QAR", "OMR", "EGP", "USD"]),
-      description: z.string().min(1).max(200),
-      source: z.string().default("src_all"),
-      customer: z.object({
-        first_name: z.string().min(1).max(80),
-        email: z.email().optional(),
+app.post(
+  "/checkout/tap",
+  {
+    operationId: "createTapCharge",
+    request: {
+      body: z.object({
+        orderId: z.string().min(1).max(80),
+        amount: z.number().positive(),
+        currency: z.enum(["KWD", "SAR", "AED", "BHD", "QAR", "OMR", "EGP", "USD"]),
+        description: z.string().min(1).max(200),
+        source: z.string().default("src_all"),
+        customer: z.object({
+          first_name: z.string().min(1).max(80),
+          email: z.email().optional(),
+        }),
       }),
-    }),
-  },
-  responses: {
-    201: {
-      description: "redirect to Tap",
-      body: z.object({ chargeId: z.string(), redirectUrl: z.url() }),
+    },
+    responses: {
+      201: {
+        description: "redirect to Tap",
+        body: z.object({ chargeId: z.string(), redirectUrl: z.url() }),
+      },
     },
   },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const charge = await state.tap.createCharge({
       amount: body.amount,
       currency: body.currency,
@@ -366,7 +367,7 @@ app.route({
     if (!url) throw new Error("Tap did not return a redirect URL");
     return { status: 201, body: { chargeId: charge.id, redirectUrl: url } };
   },
-});`}
+);`}
       />
 
       <h2 id="5-webhook">5. Webhook</h2>
@@ -411,15 +412,16 @@ app.route({
         anything irreversible:
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/webhooks/tap",
-  operationId: "tapWebhook",
-  responses: {
-    200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad hash", body: z.object({ error: z.string() }) },
+        code={`app.post(
+  "/webhooks/tap",
+  {
+    operationId: "tapWebhook",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad hash", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const event = (await request.json()) as Awaited<ReturnType<typeof state.tap.getCharge>>;
     const signature = request.headers.get("hashstring");
 
@@ -437,7 +439,7 @@ app.route({
 
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
 
       <h2 id="6-refunds">6. Refunds</h2>

@@ -125,16 +125,17 @@ app.register(planetscalePlugin);
 
 const UserSchema = z.object({ id: z.string(), email: z.email() });
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const result = await state.db.execute(
       "select id, email from users where id = ? limit 1",
       [params.id],
@@ -144,7 +145,7 @@ app.route({
       ? { status: 200, body: row }
       : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
   },
-});`}
+);`}
       />
 
       <h2 id="cloudflare-workers">Cloudflare Workers</h2>

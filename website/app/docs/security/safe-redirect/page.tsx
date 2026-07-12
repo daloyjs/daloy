@@ -87,12 +87,13 @@ export default function Page() {
 
 const app = new App();
 
-app.route({
-  method: "GET",
-  path: "/login/callback",
-  operationId: "loginCallback",
-  responses: { 303: { description: "redirect" } },
-  handler: async ({ request }) => {
+app.get(
+  "/login/callback",
+  {
+    operationId: "loginCallback",
+    responses: { 303: { description: "redirect" } },
+  },
+  async ({ request }) => {
     const next = new URL(request.url).searchParams.get("next") ?? "/";
     return safeRedirect(next, {
       allowedPaths: ["/", "/dashboard", "/account"],
@@ -100,7 +101,7 @@ app.route({
       fallback: "/",
     });
   },
-});`}
+);`}
       />
       <p>
         <code>safeRedirect()</code> returns a Web-standard <code>Response</code>{" "}

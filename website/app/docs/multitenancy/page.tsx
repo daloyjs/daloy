@@ -91,17 +91,18 @@ const app = new App({
 // Each tenant gets an independent 100-req/min bucket.
 app.use(rateLimit({ windowMs: 60_000, max: 100, keyGenerator: tenantScope() }));
 
-app.route({
-  method: "GET",
-  path: "/orders",
-  operationId: "listOrders",
-  responses: { 200: { description: "ok" } },
-  handler: ({ state }) => {
+app.get(
+  "/orders",
+  {
+    operationId: "listOrders",
+    responses: { 200: { description: "ok" } },
+  },
+  ({ state }) => {
     // acme.example.com → state.tenant === "acme"
     const tenant = state.tenant as string;
     return { status: 200 as const, body: { tenant, orders: ordersFor(tenant) } };
   },
-});`}
+);`}
         language="ts"
       />
 

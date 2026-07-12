@@ -161,15 +161,16 @@ webhook-signature: sha256=9f8a...c2
         language="ts"
         code={`import { verifyWebhookSignature } from "@daloyjs/core";
 
-app.route({
-  method: "POST",
-  path: "/hooks",
-  operationId: "receiveWebhook",
-  responses: {
-    200: { description: "ok" },
-    401: { description: "invalid signature" },
+app.post(
+  "/hooks",
+  {
+    operationId: "receiveWebhook",
+    responses: {
+      200: { description: "ok" },
+      401: { description: "invalid signature" },
+    },
   },
-  handler: async ({ request }) => {
+  async ({ request }) => {
     const body = new Uint8Array(await request.arrayBuffer());
     const ok = await verifyWebhookSignature({
       payload: body,
@@ -182,7 +183,7 @@ app.route({
     // ... handle the event
     return { status: 200 as const, body: { ok: true } };
   },
-});`}
+);`}
       />
 
       <h2 id="retry-and-backoff">Retry &amp; backoff</h2>

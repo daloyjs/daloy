@@ -177,36 +177,38 @@ const UserSchema = z.object({
   createdAt: z.coerce.date(),
 });
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const repo = state.db.getRepository(User);
     const user = await repo.findOneBy({ id: params.id });
     return user
       ? { status: 200, body: user }
       : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/users",
-  operationId: "createUser",
-  request: { body: z.object({ email: z.email(), name: z.string().optional() }) },
-  responses: { 201: { description: "Created", body: UserSchema } },
-  handler: async ({ body, state }) => {
+app.post(
+  "/users",
+  {
+    operationId: "createUser",
+    request: { body: z.object({ email: z.email(), name: z.string().optional() }) },
+    responses: { 201: { description: "Created", body: UserSchema } },
+  },
+  async ({ body, state }) => {
     const repo = state.db.getRepository(User);
     const created = await repo.save(repo.create(body));
     return { status: 201, body: created };
   },
-});
+);
 
 await app.ready();
 serve(app, { port: 3000 });`}

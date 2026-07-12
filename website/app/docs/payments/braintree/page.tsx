@@ -243,21 +243,22 @@ const app = new App();
 app.use(secureHeaders());
 app.register(braintreePlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/client-token",
-  operationId: "createBraintreeClientToken",
-  request: {
-    body: z.object({ customerId: z.string().optional() }),
+app.post(
+  "/checkout/client-token",
+  {
+    operationId: "createBraintreeClientToken",
+    request: {
+      body: z.object({ customerId: z.string().optional() }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ clientToken: z.string() }) },
+    },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ clientToken: z.string() }) },
-  },
-  handler: async ({ body, state }) => ({
+  async ({ body, state }) => ({
     status: 200,
     body: { clientToken: await state.braintree.clientToken(body.customerId) },
   }),
-});`}
+);`}
       />
 
       <h2 id="6-create-a-transaction">6. Create a transaction</h2>
@@ -275,25 +276,26 @@ app.route({
         decimals, floats lose pennies.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/checkout",
-  operationId: "checkout",
-  request: {
-    body: z.object({
-      amount: z.string().regex(/^\\d+\\.\\d{2}$/),
-      paymentMethodNonce: z.string().min(1),
-      deviceData: z.string().optional(),
-      orderId: z.string().max(36).optional(),
-    }),
-  },
-  responses: {
-    201: {
-      description: "transaction settled or submitted",
-      body: z.object({ id: z.string(), status: z.string() }),
+        code={`app.post(
+  "/checkout",
+  {
+    operationId: "checkout",
+    request: {
+      body: z.object({
+        amount: z.string().regex(/^\\d+\\.\\d{2}$/),
+        paymentMethodNonce: z.string().min(1),
+        deviceData: z.string().optional(),
+        orderId: z.string().max(36).optional(),
+      }),
+    },
+    responses: {
+      201: {
+        description: "transaction settled or submitted",
+        body: z.object({ id: z.string(), status: z.string() }),
+      },
     },
   },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const tx = await state.braintree.sale({
       amount: body.amount,
       paymentMethodNonce: body.paymentMethodNonce,
@@ -303,7 +305,7 @@ app.route({
     });
     return { status: 201, body: tx };
   },
-});`}
+);`}
       />
       <p>
         For <strong>recurring</strong> charges that re-use a vaulted payment
@@ -359,22 +361,23 @@ app.route({
         . You don&apos;t hash anything yourself.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/webhooks/braintree",
-  operationId: "braintreeWebhook",
-  request: {
-    // Braintree posts form-encoded data.
-    body: z.object({
-      bt_signature: z.string(),
-      bt_payload: z.string(),
-    }),
+        code={`app.post(
+  "/webhooks/braintree",
+  {
+    operationId: "braintreeWebhook",
+    request: {
+      // Braintree posts form-encoded data.
+      body: z.object({
+        bt_signature: z.string(),
+        bt_payload: z.string(),
+      }),
+    },
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  responses: {
-    200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     let notification: Awaited<ReturnType<typeof state.braintree.parseWebhook>>;
     try {
       notification = await state.braintree.parseWebhook(body.bt_signature, body.bt_payload);
@@ -387,7 +390,7 @@ app.route({
     await enqueueBraintreeEvent(notification);
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
       <p>
         Braintree expects a 2xx within <strong>30 seconds</strong> and retries

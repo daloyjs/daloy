@@ -306,30 +306,31 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(stripePlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/stripe",
-  operationId: "createStripeCheckoutSession",
-  request: {
-    body: z.object({
-      cartId: z.string().min(1).max(80),
-      customerEmail: z.email().optional(),
-      items: z.array(
-        z.object({
-          name: z.string().min(1).max(120),
-          quantity: z.number().int().positive().max(99),
-          unitAmount: z.number().int().positive(), // cents for USD
-        }),
-      ).min(1).max(50),
-    }),
-  },
-  responses: {
-    200: {
-      description: "checkout session",
-      body: z.object({ sessionId: z.string(), url: z.url() }),
+app.post(
+  "/checkout/stripe",
+  {
+    operationId: "createStripeCheckoutSession",
+    request: {
+      body: z.object({
+        cartId: z.string().min(1).max(80),
+        customerEmail: z.email().optional(),
+        items: z.array(
+          z.object({
+            name: z.string().min(1).max(120),
+            quantity: z.number().int().positive().max(99),
+            unitAmount: z.number().int().positive(), // cents for USD
+          }),
+        ).min(1).max(50),
+      }),
+    },
+    responses: {
+      200: {
+        description: "checkout session",
+        body: z.object({ sessionId: z.string(), url: z.url() }),
+      },
     },
   },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const session = await state.stripe.createCheckoutSession({
       clientReferenceId: body.cartId,
       customerEmail: body.customerEmail,
@@ -347,7 +348,7 @@ app.route({
 
     return { status: 200, body: { sessionId: session.id, url: session.url } };
   },
-});`}
+);`}
       />
 
       <h2 id="6-redirect-from-the-browser">6. Redirect from the browser</h2>
@@ -427,15 +428,16 @@ export async function startCheckout(cartId: string) {
 import type Stripe from "stripe";
 import { readRawBody } from "@daloyjs/core/raw";
 
-app.route({
-  method: "POST",
-  path: "/webhooks/stripe",
-  operationId: "stripeWebhook",
-  responses: {
-    200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
-    400: { description: "bad signature", body: z.object({ error: z.string() }) },
+app.post(
+  "/webhooks/stripe",
+  {
+    operationId: "stripeWebhook",
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      400: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const raw = await readRawBody(request);
     const signature = request.headers.get("stripe-signature");
 
@@ -468,7 +470,7 @@ app.route({
 
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
       <p>During local development, forward events with the Stripe CLI:</p>
       <CodeBlock

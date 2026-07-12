@@ -39,7 +39,7 @@ export default function Page() {
         source={{
           eyebrow: "single source of truth",
           label: "Route definition",
-          detail: "app.route({ request, responses, handler })",
+          detail: "app.get(path, { request, responses }, handler)",
         }}
         branches={[
           {
@@ -232,12 +232,13 @@ console.log(JSON.stringify(doc, null, 2));`}
       <CodeBlock
         code={`import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/core/docs";
 
-app.route({
-  method: "GET",
-  path: "/docs",
-  operationId: "docs",
-  responses: { 200: { description: "API reference" } },
-  handler: async () => {
+app.get(
+  "/docs",
+  {
+    operationId: "docs",
+    responses: { 200: { description: "API reference" } },
+  },
+  async () => {
     const html = scalarHtml({
       specUrl: "/openapi.json",
       title: "My API",
@@ -246,7 +247,7 @@ app.route({
     const res = htmlResponse(html);
     return { status: 200, body: await res.text(), headers: Object.fromEntries(res.headers) };
   },
-});`}
+);`}
       />
 
       <p>
@@ -357,27 +358,28 @@ const doc = generateOpenAPI(app, {
         <code>callbacks</code> map directly to a route or webhook.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/subscribe",
-  operationId: "subscribe",
-  request: { body: z.object({ callbackUrl: z.url() }) },
-  responses: { 201: { description: "Subscribed" } },
-  callbacks: {
-    onEvent: {
-      "{$request.body#/callbackUrl}": {
-        method: "POST",
-        operationId: "onEventCallback",
-        request: { body: z.object({ id: z.string() }) },
-        responses: {
-          200: { description: "ack" },
-          410: { description: "gone" },
+        code={`app.post(
+  "/subscribe",
+  {
+    operationId: "subscribe",
+    request: { body: z.object({ callbackUrl: z.url() }) },
+    responses: { 201: { description: "Subscribed" } },
+    callbacks: {
+      onEvent: {
+        "{$request.body#/callbackUrl}": {
+          method: "POST",
+          operationId: "onEventCallback",
+          request: { body: z.object({ id: z.string() }) },
+          responses: {
+            200: { description: "ack" },
+            410: { description: "gone" },
+          },
         },
       },
     },
   },
-  handler: async () => ({ status: 201, body: undefined }),
-});`}
+  async () => ({ status: 201, body: undefined }),
+);`}
       />
       <p>
         Each callback name maps to one or more runtime expression keys (e.g.{" "}
@@ -419,14 +421,15 @@ const Animal = discriminatedUnion(
   { mapping: { cat: "#/components/schemas/Cat", dog: "#/components/schemas/Dog" } },
 );
 
-app.route({
-  method: "POST",
-  path: "/animals",
-  operationId: "createAnimal",
-  request: { body: Animal },
-  responses: { 201: { description: "ok", body: Animal } },
-  handler: async ({ body }) => ({ status: 201, body }),
-});`}
+app.post(
+  "/animals",
+  {
+    operationId: "createAnimal",
+    request: { body: Animal },
+    responses: { 201: { description: "ok", body: Animal } },
+  },
+  async ({ body }) => ({ status: 201, body }),
+);`}
       />
       <p>
         At runtime the wrapper rejects non-objects, missing or non-string

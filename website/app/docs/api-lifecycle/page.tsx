@@ -56,13 +56,14 @@ export default function Page() {
         that route.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "GET",
-  path: "/v1/reports",
-  deprecated: true,
-  responses: { 200: { description: "OK" } },
-  handler: () => ({ status: 200, body: { ok: true } }),
-});
+        code={`app.get(
+  "/v1/reports",
+  {
+    deprecated: true,
+    responses: { 200: { description: "OK" } },
+  },
+  () => ({ status: 200, body: { ok: true } }),
+);
 
 // Response headers:
 //   Deprecation: true`}
@@ -77,13 +78,14 @@ export default function Page() {
         need to set both.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "GET",
-  path: "/v1/reports",
-  sunset: "2026-12-31T00:00:00Z",
-  responses: { 200: { description: "OK" } },
-  handler: () => ({ status: 200, body: { ok: true } }),
-});
+        code={`app.get(
+  "/v1/reports",
+  {
+    sunset: "2026-12-31T00:00:00Z",
+    responses: { 200: { description: "OK" } },
+  },
+  () => ({ status: 200, body: { ok: true } }),
+);
 
 // Response headers:
 //   Deprecation: true
@@ -91,7 +93,7 @@ export default function Page() {
       />
       <p>
         The RFC 8594 <code>Sunset</code> value is normalized to an IMF-fixdate
-        (HTTP date) once, at <code>app.route(...)</code> registration time, so
+        (HTTP date) once, at route registration time, so
         a typo fails fast instead of silently shipping a malformed header. The
         OpenAPI operation also carries the normalized value as an{" "}
         <code>x-sunset</code> vendor extension. If your handler sets its own{" "}

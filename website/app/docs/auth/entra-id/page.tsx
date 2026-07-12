@@ -36,7 +36,11 @@ export default function Page() {
         identity platform. For a backend API, the job is to verify the v2.0
         access token in the <code>Authorization</code> header against the
         tenant&apos;s public JWKS. The{" "}
-        <a href="https://github.com/panva/jose" target="_blank" rel="noreferrer">
+        <a
+          href="https://github.com/panva/jose"
+          target="_blank"
+          rel="noreferrer"
+        >
           <code>jose</code>
         </a>{" "}
         library is the modern, runtime-portable choice for that. Use{" "}
@@ -53,12 +57,7 @@ export default function Page() {
 
       <SequenceDiagram
         title="Entra ID v2.0 access-token verification"
-        participants={[
-          "Client app",
-          "Entra ID",
-          "DaloyJS API",
-          "Tenant JWKS",
-        ]}
+        participants={["Client app", "Entra ID", "DaloyJS API", "Tenant JWKS"]}
         steps={[
           {
             from: "Client app",
@@ -97,11 +96,20 @@ export default function Page() {
         caption="The DaloyJS API verifies the v2.0 token against the tenant's JWKS with jose. Keys refresh automatically on a missing kid, so signing-key rollover needs no redeploy. Multi-tenant apps must also validate the tid claim against an allowlist."
       />
 
-      <h2 id="1-register-the-api-in-entra-id">1. Register the API in Entra ID</h2>
+      <h2 id="1-register-the-api-in-entra-id">
+        1. Register the API in Entra ID
+      </h2>
       <ol>
         <li>
-          In the <a href="https://entra.microsoft.com" target="_blank" rel="noreferrer">Microsoft
-          Entra admin center</a>, go to{" "}
+          In the{" "}
+          <a
+            href="https://entra.microsoft.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Microsoft Entra admin center
+          </a>
+          , go to{" "}
           <strong>Entra ID → App registrations → New registration</strong> and
           register your API app.
         </li>
@@ -122,7 +130,10 @@ export default function Page() {
             https://login.microsoftonline.com/&#123;tenantId&#125;/v2.0/.well-known/openid-configuration
           </code>{" "}
           and references the JWKS at{" "}
-          <code>https://login.microsoftonline.com/&#123;tenantId&#125;/discovery/v2.0/keys</code>.
+          <code>
+            https://login.microsoftonline.com/&#123;tenantId&#125;/discovery/v2.0/keys
+          </code>
+          .
         </li>
       </ol>
 
@@ -197,8 +208,8 @@ declare module "@daloyjs/core" {
 }`}
       />
       <p>
-        <code>createRemoteJWKSet</code> caches keys in memory and refreshes on
-        a missing <code>kid</code>, so key rollover is handled automatically.
+        <code>createRemoteJWKSet</code> caches keys in memory and refreshes on a
+        missing <code>kid</code>, so key rollover is handled automatically.
       </p>
 
       <h2 id="5-guard-a-route">5. Guard a route</h2>
@@ -213,19 +224,19 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 app.register(entraPlugin);
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "getMe",
-  middleware: [requireAuth(process.env.ENTRA_REQUIRED_SCOPE!)],
-  responses: {
-    200: { description: "OK", body: z.object({ oid: z.string().optional(), tid: z.string().optional() }) },
+app.get(
+  "/me",
+  {
+    hooks: requireAuth(process.env.ENTRA_REQUIRED_SCOPE!),
+    responses: {
+      200: { description: "OK", body: z.object({ oid: z.string().optional(), tid: z.string().optional() }) },
+    },
   },
-  handler: ({ state }) => ({
+  ({ state }) => ({
     status: 200,
     body: { oid: state.principal!.oid, tid: state.principal!.tid },
   }),
-});`}
+);`}
       />
       <p>
         <strong>App roles vs delegated scopes:</strong> app-only tokens
@@ -235,15 +246,15 @@ app.route({
         you support both shapes.
       </p>
 
-      <h2 id="acquiring-downstream-tokens-with-msal-node">Acquiring downstream tokens with MSAL Node</h2>
+      <h2 id="acquiring-downstream-tokens-with-msal-node">
+        Acquiring downstream tokens with MSAL Node
+      </h2>
       <p>
         If your API needs to call Microsoft Graph or another protected service{" "}
         <em>on behalf of</em> the user, use MSAL Node&apos;s{" "}
         <code>ConfidentialClientApplication</code>:
       </p>
-      <CodeBlock
-        code={`pnpm add @azure/msal-node`}
-      />
+      <CodeBlock code={`pnpm add @azure/msal-node`} />
       <CodeBlock
         code={`import { ConfidentialClientApplication } from "@azure/msal-node";
 
@@ -264,16 +275,18 @@ console.log(result?.accessToken);`}
       />
       <p>
         Prefer <strong>certificates over client secrets</strong> in production,
-        and store credentials in Azure Key Vault or your platform&apos;s
-        secret manager.
+        and store credentials in Azure Key Vault or your platform&apos;s secret
+        manager.
       </p>
 
       <h2 id="notes">Notes</h2>
       <ul>
         <li>
           The <code>issuer</code> for v2.0 tokens is{" "}
-          <code>https://login.microsoftonline.com/&#123;tenantId&#125;/v2.0</code>.
-          Multi-tenant apps must validate the <code>tid</code> claim against
+          <code>
+            https://login.microsoftonline.com/&#123;tenantId&#125;/v2.0
+          </code>
+          . Multi-tenant apps must validate the <code>tid</code> claim against
           an allowlist rather than relying on the issuer alone.
         </li>
         <li>

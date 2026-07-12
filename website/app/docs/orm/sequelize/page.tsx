@@ -151,23 +151,24 @@ const UserSchema = z.object({
 const app = new App();
 app.register(sequelizePlugin);
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const user = await state.db.User.findByPk(params.id);
     if (!user) {
       throw new HttpError(404, { title: "User not found" });
     }
     return { status: 200, body: user.toJSON() };
   },
-});
+);
 
 await app.ready();
 serve(app, { port: 3000 });`}

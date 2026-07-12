@@ -203,17 +203,18 @@ const TEMPLATES = `const mcp = createMcpHandler({
 const ACKNOWLEDGE = `// Hand-rolled MCP mount (instead of mcpRoutes()): the response is an opaque
 // JSON-RPC envelope built by createMcpHandler, so acknowledge the missing
 // response body schema instead of leaving the boot warning unanswered.
-app.route({
-  method: "POST",
-  path: "/mcp",
-  operationId: "mcpStreamableHttp",
-  acknowledgeNoResponseBodySchema: true,
-  responses: {
-    200: { description: "MCP JSON-RPC response" },
-    202: { description: "Accepted (notification, no content)" },
+app.post(
+  "/mcp",
+  {
+    operationId: "mcpStreamableHttp",
+    acknowledgeNoResponseBodySchema: true,
+    responses: {
+      200: { description: "MCP JSON-RPC response" },
+      202: { description: "Accepted (notification, no content)" },
+    },
   },
-  handler: ({ request }) => mcp(request),
-});`;
+  ({ request }) => mcp(request),
+);`;
 
 const INPUT_INVALID = `{
   "jsonrpc": "2.0",

@@ -165,21 +165,22 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
 app.register(sendgridPlugin);
 
-app.route({
-  method: "POST",
-  path: "/contact",
-  operationId: "submitContact",
-  request: {
-    body: z.object({
-      to: z.email(),
-      subject: z.string().min(1).max(200),
-      message: z.string().min(1).max(5000),
-    }),
+app.post(
+  "/contact",
+  {
+    operationId: "submitContact",
+    request: {
+      body: z.object({
+        to: z.email(),
+        subject: z.string().min(1).max(200),
+        message: z.string().min(1).max(5000),
+      }),
+    },
+    responses: {
+      202: { description: "Queued", body: z.object({ id: z.string() }) },
+    },
   },
-  responses: {
-    202: { description: "Queued", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const { id } = await state.email.send({
       to: body.to,
       subject: body.subject,
@@ -187,7 +188,7 @@ app.route({
     });
     return { status: 202, body: { id } };
   },
-});`}
+);`}
       />
 
       <h2 id="dynamic-templates">Dynamic templates</h2>

@@ -96,26 +96,28 @@ const app = new App();
 
 app.use(csrf());
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "me",
-  responses: { 200: { description: "ok" } },
-  handler: async ({ state }) => ({
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => ({
     status: 200 as const,
     // ctx.state.csrfToken is always populated; render it into your form
     // or expose it to the SPA via a JSON envelope.
     body: { csrfToken: state.csrfToken },
   }),
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/transfer",
-  operationId: "transfer",
-  responses: { 204: { description: "ok" }, 403: { description: "denied" } },
-  handler: async () => ({ status: 204 as const, body: undefined }),
-});`}
+app.post(
+  "/transfer",
+  {
+    operationId: "transfer",
+    responses: { 204: { description: "ok" }, 403: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);`}
       />
 
       <h2 id="how-clients-send-the-token">How clients send the token</h2>

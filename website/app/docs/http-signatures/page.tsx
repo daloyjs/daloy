@@ -171,15 +171,16 @@ app.use(
   }),
 );
 
-app.route({
-  method: "POST",
-  path: "/internal/charge",
-  responses: { 200: { description: "ok" } },
-  handler: (ctx) => {
+app.post(
+  "/internal/charge",
+  {
+    responses: { 200: { description: "ok" } },
+  },
+  (ctx) => {
     const sig = ctx.state.httpSignature; // verified VerifySuccess
     return { status: 200, body: { caller: sig.keyid } };
   },
-});`}
+);`}
       />
 
       <h2 id="sign-an-outbound-request">Sign an outbound request</h2>

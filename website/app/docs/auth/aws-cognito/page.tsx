@@ -24,13 +24,21 @@ export default function Page() {
     <>
       <h1>Protect a DaloyJS API with AWS Cognito</h1>
       <p>
-        <a href="https://aws.amazon.com/cognito/" target="_blank" rel="noreferrer">
+        <a
+          href="https://aws.amazon.com/cognito/"
+          target="_blank"
+          rel="noreferrer"
+        >
           Amazon Cognito
         </a>{" "}
         user pools provide hosted sign-up, sign-in, MFA, and federation. This
         guide verifies the access tokens Cognito issues using the
         AWS-recommended{" "}
-        <a href="https://github.com/awslabs/aws-jwt-verify" target="_blank" rel="noreferrer">
+        <a
+          href="https://github.com/awslabs/aws-jwt-verify"
+          target="_blank"
+          rel="noreferrer"
+        >
           <code>aws-jwt-verify</code>
         </a>{" "}
         library, pure TypeScript, zero runtime dependencies, and edge-runtime
@@ -69,7 +77,8 @@ export default function Page() {
           {
             from: "DaloyJS API",
             to: "DaloyJS API",
-            label: "Verify signature, tokenUse, clientId, scope & cognito:groups",
+            label:
+              "Verify signature, tokenUse, clientId, scope & cognito:groups",
             kind: "note",
           },
           {
@@ -91,13 +100,13 @@ export default function Page() {
           <strong>App client ID</strong>.
         </li>
         <li>
-          Configure a <strong>resource server</strong> with custom scopes
-          (e.g. <code>my-api/read</code>, <code>my-api/write</code>) and
-          authorize them on the app client.
+          Configure a <strong>resource server</strong> with custom scopes (e.g.{" "}
+          <code>my-api/read</code>, <code>my-api/write</code>) and authorize
+          them on the app client.
         </li>
         <li>
-          Enable a hosted UI domain or use the OAuth 2.0 authorization-code
-          flow from your client app. Your DaloyJS API only needs to verify the
+          Enable a hosted UI domain or use the OAuth 2.0 authorization-code flow
+          from your client app. Your DaloyJS API only needs to verify the
           resulting access token, it never sees passwords.
         </li>
       </ol>
@@ -159,9 +168,9 @@ declare module "@daloyjs/core" {
 }`}
       />
       <p>
-        <code>verifier.hydrate()</code> downloads the JWKS up front so the
-        first authenticated request doesn&apos;t pay a network round-trip.
-        Subsequent key rotations are picked up automatically.
+        <code>verifier.hydrate()</code> downloads the JWKS up front so the first
+        authenticated request doesn&apos;t pay a network round-trip. Subsequent
+        key rotations are picked up automatically.
       </p>
 
       <h2 id="5-guard-a-route">5. Guard a route</h2>
@@ -176,25 +185,27 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 app.register(cognitoPlugin);
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "getMe",
-  middleware: [requireAuth(process.env.COGNITO_REQUIRED_SCOPE!)],
-  responses: {
-    200: {
-      description: "OK",
-      body: z.object({ sub: z.string(), groups: z.array(z.string()) }),
+app.get(
+  "/me",
+  {
+    hooks: requireAuth(process.env.COGNITO_REQUIRED_SCOPE!),
+    responses: {
+      200: {
+        description: "OK",
+        body: z.object({ sub: z.string(), groups: z.array(z.string()) }),
+      },
     },
   },
-  handler: ({ state }) => ({
+  ({ state }) => ({
     status: 200,
     body: { sub: state.principal!.sub, groups: state.principal!.groups },
   }),
-});`}
+);`}
       />
 
-      <h2 id="trusting-multiple-pools-or-idps">Trusting multiple pools or IdPs</h2>
+      <h2 id="trusting-multiple-pools-or-idps">
+        Trusting multiple pools or IdPs
+      </h2>
       <p>
         <code>CognitoJwtVerifier.create([...])</code> accepts an array of pool
         configurations to trust JWTs from more than one user pool. To trust a
@@ -206,9 +217,9 @@ app.route({
       <h2 id="notes-on-tokens">Notes on tokens</h2>
       <ul>
         <li>
-          <strong>Access tokens</strong> carry <code>scope</code> (space-separated
-          string) and <code>cognito:groups</code>: use them for API
-          authorization.
+          <strong>Access tokens</strong> carry <code>scope</code>{" "}
+          (space-separated string) and <code>cognito:groups</code>: use them for
+          API authorization.
         </li>
         <li>
           <strong>ID tokens</strong> carry user attributes (<code>email</code>,{" "}

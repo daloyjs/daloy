@@ -174,21 +174,22 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
 app.register(postmarkPlugin);
 
-app.route({
-  method: "POST",
-  path: "/receipts",
-  operationId: "sendReceipt",
-  request: {
-    body: z.object({
-      to: z.email(),
-      orderId: z.string().min(1),
-      total: z.number().nonnegative(),
-    }),
+app.post(
+  "/receipts",
+  {
+    operationId: "sendReceipt",
+    request: {
+      body: z.object({
+        to: z.email(),
+        orderId: z.string().min(1),
+        total: z.number().nonnegative(),
+      }),
+    },
+    responses: {
+      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    },
   },
-  responses: {
-    202: { description: "Sent", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const { id } = await state.email.send({
       to: body.to,
       subject: \`Receipt for order \${body.orderId}\`,
@@ -197,7 +198,7 @@ app.route({
     });
     return { status: 202, body: { id } };
   },
-});`}
+);`}
       />
 
       <h2 id="server-side-templates">Server-side templates</h2>

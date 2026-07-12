@@ -172,20 +172,21 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
 app.register(mailgunPlugin);
 
-app.route({
-  method: "POST",
-  path: "/invites",
-  operationId: "sendInvite",
-  request: {
-    body: z.object({
-      to: z.email(),
-      inviter: z.string().min(1).max(80),
-    }),
+app.post(
+  "/invites",
+  {
+    operationId: "sendInvite",
+    request: {
+      body: z.object({
+        to: z.email(),
+        inviter: z.string().min(1).max(80),
+      }),
+    },
+    responses: {
+      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    },
   },
-  responses: {
-    202: { description: "Sent", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const { id } = await state.email.send({
       to: body.to,
       subject: \`\${body.inviter} invited you to Acme\`,
@@ -193,7 +194,7 @@ app.route({
     });
     return { status: 202, body: { id } };
   },
-});`}
+);`}
       />
 
       <h2 id="templates">Templates</h2>

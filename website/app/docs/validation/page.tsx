@@ -107,28 +107,29 @@ const LineItem = z.object({
   dryRun: z.boolean(),
 });
 
-export const app = new App().route({
-  method: "POST",
-  path: "/orders/:orderId/items",
-  operationId: "createOrderItem",
-  request: {
-    params: z.object({ orderId: z.uuid() }),
-    query: z
-      .object({
-        dryRun: z
-          .enum(["true", "false"])
-          .transform((value) => value === "true")
-          .optional(),
-      })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string().min(1) }),
-    body: CreateLineItem,
+export const app = new App().post(
+  "/orders/:orderId/items",
+  {
+    operationId: "createOrderItem",
+    request: {
+      params: z.object({ orderId: z.uuid() }),
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateLineItem,
+    },
+    responses: {
+      201: { description: "Created", body: LineItem },
+      422: { description: "Validation error" },
+    },
   },
-  responses: {
-    201: { description: "Created", body: LineItem },
-    422: { description: "Validation error" },
-  },
-  handler: async ({ params, query, headers, body }) => {
+  async ({ params, query, headers, body }) => {
     const tenantId = headers["x-tenant"];
     const dryRun = query?.dryRun ?? false;
 
@@ -142,7 +143,7 @@ export const app = new App().route({
       },
     };
   },
-});`}
+);`}
       />
 
       <h2 id="pick-your-validator">Pick your validator</h2>
@@ -273,22 +274,23 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
         schema.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/legacy-form",
-  operationId: "legacyForm",
-  accepts: ["application/x-www-form-urlencoded"],
-  request: {
-    body: z.object({
-      email: z.email(),
-      qty: z.coerce.number().int().positive(),
-    }),
+        code={`app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ ok: z.boolean() }) },
-  },
-  handler: async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
-});`}
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);`}
       />
 
       <h2 id="mixing-validators">Mixing validators</h2>

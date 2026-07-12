@@ -103,15 +103,16 @@ app.use(
   }),
 );
 
-app.route({
-  method: "POST",
-  path: "/internal/charge",
-  responses: { 200: { description: "ok" } },
-  handler: (ctx) => {
+app.post(
+  "/internal/charge",
+  {
+    responses: { 200: { description: "ok" } },
+  },
+  (ctx) => {
     const cert = ctx.state.clientCertificate; // the accepted ClientCertificate
     return { status: 200, body: { caller: cert.subjectCN } };
   },
-});`}
+);`}
       />
       <p>
         On success the accepted{" "}

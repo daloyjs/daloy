@@ -272,15 +272,16 @@ const app = new App({
       </p>
       <CodeBlock
         language="ts"
-        code={`app.route({
-  method: "GET",
-  path: "/__security",
-  operationId: "securityPosture",
-  responses: {
-    200: { description: "Live security posture snapshot", body: z.any() },
+        code={`app.get(
+  "/__security",
+  {
+    operationId: "securityPosture",
+    responses: {
+      200: { description: "Live security posture snapshot", body: z.any() },
+    },
   },
-  handler: async () => ({ status: 200, body: app.getSecurityPosture() }),
-});`}
+  async () => ({ status: 200, body: app.getSecurityPosture() }),
+);`}
       />
 
       <h2 id="when-not-to-use-the-preset">When NOT to use the preset</h2>

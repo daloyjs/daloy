@@ -188,20 +188,21 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
 app.register(sesPlugin);
 
-app.route({
-  method: "POST",
-  path: "/notify",
-  operationId: "sendWelcome",
-  request: {
-    body: z.object({
-      to: z.email(),
-      name: z.string().min(1).max(80),
-    }),
+app.post(
+  "/notify",
+  {
+    operationId: "sendWelcome",
+    request: {
+      body: z.object({
+        to: z.email(),
+        name: z.string().min(1).max(80),
+      }),
+    },
+    responses: {
+      202: { description: "Queued", body: z.object({ id: z.string() }) },
+    },
   },
-  responses: {
-    202: { description: "Queued", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const { id } = await state.email.send({
       to: body.to,
       subject: \`Welcome, \${body.name}!\`,
@@ -210,7 +211,7 @@ app.route({
     });
     return { status: 202, body: { id } };
   },
-});`}
+);`}
       />
 
       <h2 id="templates-and-attachments">Templates &amp; attachments</h2>

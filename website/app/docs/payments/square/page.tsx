@@ -300,31 +300,32 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(squarePlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/square",
-  operationId: "createSquarePayment",
-  request: {
-    body: z.object({
-      sourceId: z.string().min(1),                  // from Web Payments SDK
-      amountMinor: z.coerce.bigint().positive(),    // accepts string from JSON
-      currency: z.string().length(3),
-      orderId: z.string().min(1).max(40),           // your internal id
-      note: z.string().max(500).optional(),
-    }),
-  },
-  responses: {
-    201: {
-      description: "captured",
+app.post(
+  "/checkout/square",
+  {
+    operationId: "createSquarePayment",
+    request: {
       body: z.object({
-        paymentId: z.string(),
-        status: z.string(),
-        receiptUrl: z.url().optional(),
+        sourceId: z.string().min(1),                  // from Web Payments SDK
+        amountMinor: z.coerce.bigint().positive(),    // accepts string from JSON
+        currency: z.string().length(3),
+        orderId: z.string().min(1).max(40),           // your internal id
+        note: z.string().max(500).optional(),
       }),
     },
-    402: { description: "card declined", body: z.object({ error: z.string() }) },
+    responses: {
+      201: {
+        description: "captured",
+        body: z.object({
+          paymentId: z.string(),
+          status: z.string(),
+          receiptUrl: z.url().optional(),
+        }),
+      },
+      402: { description: "card declined", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     try {
       const payment = await state.square.createPayment({
         sourceId: body.sourceId,
@@ -345,7 +346,7 @@ app.route({
       throw err;
     }
   },
-});`}
+);`}
       />
       <p className="text-sm text-muted-foreground">
         <strong>BigInt + JSON gotcha:</strong> JavaScript&apos;s default JSON serialiser
@@ -395,15 +396,16 @@ app.route({
       <CodeBlock
         code={`import { readRawBody } from "@daloyjs/core/raw";
 
-app.route({
-  method: "POST",
-  path: "/webhooks/square",
-  operationId: "squareWebhook",
-  responses: {
-    200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
+app.post(
+  "/webhooks/square",
+  {
+    operationId: "squareWebhook",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const raw = await readRawBody(request);
     const signature = request.headers.get("x-square-hmacsha256-signature");
 
@@ -435,7 +437,7 @@ app.route({
 
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
       <p>
         Square retries non-2xx responses with backoff for up to 72 hours. Once the

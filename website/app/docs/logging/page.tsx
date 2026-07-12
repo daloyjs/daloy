@@ -57,17 +57,18 @@ export default function Page() {
 
 const app = new App();
 
-app.route({
-  method: "GET",
-  path: "/orders/:id",
-  operationId: "getOrder",
-  responses: { 200: { description: "ok" } },
-  handler: async ({ params, state }) => {
+app.get(
+  "/orders/:id",
+  {
+    operationId: "getOrder",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ params, state }) => {
     // Request-scoped child logger, already bound to the request id.
     state.log.info({ orderId: params.id }, "fetching order");
     return { status: 200 as const, body: { id: params.id } };
   },
-});`}
+);`}
       />
       <p>
         The app-level logger is also available directly when you are outside a

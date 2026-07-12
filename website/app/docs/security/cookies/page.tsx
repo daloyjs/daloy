@@ -72,12 +72,13 @@ export default function Page() {
 
 const app = new App();
 
-app.route({
-  method: "POST",
-  path: "/prefs",
-  operationId: "savePrefs",
-  responses: { 204: { description: "saved" } },
-  handler: async () => ({
+app.post(
+  "/prefs",
+  {
+    operationId: "savePrefs",
+    responses: { 204: { description: "saved" } },
+  },
+  async () => ({
     status: 204 as const,
     body: undefined,
     headers: {
@@ -86,7 +87,7 @@ app.route({
       }),
     },
   }),
-});`}
+);`}
       />
       <p>
         The <code>__Host-</code> prefix is the strongest anti-cookie-tossing
@@ -138,16 +139,16 @@ app.route({
         language="ts"
         code={`import { readRequestCookie } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/prefs",
-  operationId: "getPrefs",
-  responses: { 200: { description: "ok" } },
-  handler: async ({ request }) => {
+app.get(
+  "/prefs",
+  {
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ request }) => {
     const theme = readRequestCookie(request.headers.get("cookie"), "__Host-theme");
     return { status: 200 as const, body: { theme: theme ?? "light" } };
   },
-});`}
+);`}
       />
 
       <h2 id="clearing-a-cookie">Clearing a cookie</h2>

@@ -73,17 +73,18 @@ export default function Page() {
       <h2 id="throwing-in-a-handler">Throwing in a handler</h2>
       <CodeBlock code={`import { NotFoundError } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  responses: { 200: { description: "ok" }, 404: { description: "missing" } },
-  handler: async ({ params }) => {
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    responses: { 200: { description: "ok" }, 404: { description: "missing" } },
+  },
+  async ({ params }) => {
     const user = await db.find(params.id);
     if (!user) throw new NotFoundError(\`user \${params.id} not found\`);
     return { status: 200, body: user };
   },
-});`} />
+);`} />
 
       <h2 id="wire-format">Wire format</h2>
       <p>

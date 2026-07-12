@@ -117,27 +117,28 @@ const Order = z.object({
   dryRun: z.boolean(),
 });
 
-export const app = new App().route({
-  method: "POST",
-  path: "/orders",
-  operationId: "createOrder",
-  request: {
-    query: z
-      .object({
-        dryRun: z
-          .enum(["true", "false"])
-          .transform((value) => value === "true")
-          .optional(),
-      })
-      .optional(),
-    headers: z.object({ "x-tenant": z.string().min(1) }),
-    body: CreateOrder,
+export const app = new App().post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    request: {
+      query: z
+        .object({
+          dryRun: z
+            .enum(["true", "false"])
+            .transform((value) => value === "true")
+            .optional(),
+        })
+        .optional(),
+      headers: z.object({ "x-tenant": z.string().min(1) }),
+      body: CreateOrder,
+    },
+    responses: {
+      201: { description: "Created", body: Order },
+      422: { description: "Validation failed" },
+    },
   },
-  responses: {
-    201: { description: "Created", body: Order },
-    422: { description: "Validation failed" },
-  },
-  handler: async ({ query, headers, body }) => {
+  async ({ query, headers, body }) => {
     const tenantId = headers["x-tenant"];
     const dryRun = query?.dryRun ?? false;
 
@@ -152,7 +153,7 @@ export const app = new App().route({
       },
     };
   },
-});`}
+);`}
       />
 
       <p>
@@ -211,22 +212,23 @@ export const app = new App().route({
         <code>z.string()</code> body.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/legacy-form",
-  operationId: "legacyForm",
-  accepts: ["application/x-www-form-urlencoded"],
-  request: {
-    body: z.object({
-      email: z.email(),
-      qty: z.coerce.number().int().positive(),
-    }),
+        code={`app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: z.object({
+        email: z.email(),
+        qty: z.coerce.number().int().positive(),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.boolean() }) },
+    },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ ok: z.boolean() }) },
-  },
-  handler: async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
-});`}
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);`}
       />
 
       <h2 id="response-validation">Response validation</h2>
@@ -243,19 +245,20 @@ export const app = new App().route({
   email: z.email(),
 });
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "me",
-  responses: {
-    200: { description: "Current user", body: PublicUser },
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: {
+      200: { description: "Current user", body: PublicUser },
+    },
   },
-  handler: async () => ({
+  async () => ({
     status: 200,
     // passwordHash is stripped before serialization.
     body: { id: "u_1", email: "dev@example.com", passwordHash: "secret" },
   }),
-});`}
+);`}
       />
 
       <h2 id="type-inference">Type inference</h2>

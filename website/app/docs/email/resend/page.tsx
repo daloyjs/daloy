@@ -151,17 +151,18 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 10 }));
 app.register(resendPlugin);
 
-app.route({
-  method: "POST",
-  path: "/magic-link",
-  operationId: "sendMagicLink",
-  request: {
-    body: z.object({ email: z.email() }),
+app.post(
+  "/magic-link",
+  {
+    operationId: "sendMagicLink",
+    request: {
+      body: z.object({ email: z.email() }),
+    },
+    responses: {
+      202: { description: "Sent", body: z.object({ id: z.string() }) },
+    },
   },
-  responses: {
-    202: { description: "Sent", body: z.object({ id: z.string() }) },
-  },
-  handler: async ({ body, state }) => {
+  async ({ body, state }) => {
     const link = await issueMagicLink(body.email); // your own logic
     const { id } = await state.email.send({
       to: body.email,
@@ -171,7 +172,7 @@ app.route({
     });
     return { status: 202, body: { id } };
   },
-});
+);
 
 async function issueMagicLink(_email: string) {
   return "https://acme.example.com/auth/callback?token=...";

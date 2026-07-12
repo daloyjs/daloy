@@ -9,7 +9,7 @@ const POST = {
   slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
   title: "DaloyJS 1.0.0-rc.0: The First Release Candidate",
   description:
-    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what actually landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and 1.0.0 GA.",
+    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what actually landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the 1.0.0 stable release.",
   date: "2026-07-03",
   readingTime: "7 min read",
   author: "Devlin Duldulao",
@@ -144,7 +144,7 @@ export default function BlogPostPage() {
 
           <p>
             The rule for a release candidate is short and unglamorous: from here
-            to the <code>1.0.0</code> GA, only bug fixes and documentation land.
+            to the <code>1.0.0</code> stable release, only bug fixes and documentation land.
             No new middleware, no new adapter, no new helper. The public API you
             see in <code>1.0.0-rc.0</code> is the public API you get in{" "}
             <code>1.0.0</code>, minus whatever bugs you help me find. That is the
@@ -204,7 +204,7 @@ export default function BlogPostPage() {
 
           <CodeBlock language="bash" code={INSTALL} />
 
-          <h2>The honest part: what is between here and GA</h2>
+          <h2>The honest part: what is between here and the stable release</h2>
 
           <p>
             I could pretend a release candidate means we are basically done. We
@@ -212,7 +212,7 @@ export default function BlogPostPage() {
             The engineering bar is met: the API has been additive across the
             whole beta train, coverage sits around 99% lines and 92% branches,
             the supply-chain gates are green, and the benchmark suite is public.
-            What is left before <code>1.0.0</code> GA is deliberately not code.
+            What is left before <code>1.0.0</code> stable is deliberately not code.
           </p>
 
           <p>
@@ -235,7 +235,7 @@ export default function BlogPostPage() {
             useful thing you can do in the next few weeks is build a real thing
             on <code>1.0.0-rc.0</code> and find the corner I sanded wrong. Report
             the bug. Tell me the name that reads badly. Show me the adapter that
-            drifts from the docs. Once GA ships, that feedback costs a
+            drifts from the docs. Once the stable release ships, that feedback costs a
             deprecation cycle to act on. Right now it is free.
           </p>
 

@@ -16,7 +16,7 @@ const POSTS = [
     slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
     title: "DaloyJS 1.0.0-rc.0: The First Release Candidate",
     description:
-      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what actually landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and 1.0.0 GA.",
+      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what actually landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the 1.0.0 stable release.",
     date: "2026-07-03",
     readingTime: "7 min read",
     author: "Devlin Duldulao",
@@ -44,7 +44,7 @@ const POSTS = [
     slug: "daloyjs-1-0-0-beta-is-here",
     title: "DaloyJS 1.0.0-beta.0 Is Here (and Nothing Broke, On Purpose)",
     description:
-      "After a long 0.x preview line, DaloyJS enters its 1.0.0 beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the 1.0.0 GA.",
+      "After a long 0.x preview line, DaloyJS enters its 1.0.0 beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the 1.0.0 stable release.",
     date: "2026-06-21",
     readingTime: "6 min read",
     author: "Devlin Duldulao",

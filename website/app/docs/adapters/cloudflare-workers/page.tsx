@@ -186,16 +186,17 @@ export default {
       </p>
       <CodeBlock
         language="ts"
-        code={`app.route({
-  method: "GET",
-  path: "/cached/:key",
-  request: { params: z.object({ key: z.string() }) },
-  responses: { 200: { body: z.object({ value: z.string().nullable() }) } },
-  handler: async ({ params, ctx }) => {
+        code={`app.get(
+  "/cached/:key",
+  {
+    request: { params: z.object({ key: z.string() }) },
+    responses: { 200: { body: z.object({ value: z.string().nullable() }) } },
+  },
+  async ({ params, ctx }) => {
     const value = await ctx.state.env.CACHE.get(params.key);
     return { status: 200, body: { value } };
   },
-});`}
+);`}
       />
 
       <h2 id="gotchas">Gotchas</h2>

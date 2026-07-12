@@ -125,24 +125,25 @@ const CreateOrder = z.object({
   items: z.array(z.object({ sku: z.string(), quantity: z.number().int().positive() })),
 });
 
-app.route({
-  method: "POST",
-  path: "/orders",
-  operationId: "createOrder",
-  request: { body: CreateOrder },
-  responses: {
-    201: {
-      description: "created",
-      body: z.object({ id: z.string(), itemCount: z.number() }),
+app.post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    request: { body: CreateOrder },
+    responses: {
+      201: {
+        description: "created",
+        body: z.object({ id: z.string(), itemCount: z.number() }),
+      },
     },
   },
-  handler: async ({ state, body }) => {
+  async ({ state, body }) => {
     const span = state.otelSpan as TracingSpan | undefined;
     span?.setAttribute("order.size", body.items.length);
     span?.setAttributes?.({ "tenant.id": state.tenantId as string });
     return { status: 201 as const, body: { id: "ord_123", itemCount: body.items.length } };
   },
-});`}
+);`}
       />
 
       <h2 id="customizing-span-name-and-attributes">Customizing span name and attributes</h2>

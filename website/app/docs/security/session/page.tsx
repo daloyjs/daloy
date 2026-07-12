@@ -102,12 +102,13 @@ const app = new App();
 app.use(session({ secret: process.env.SESSION_SECRET! }));
 app.use(rotateSession({ watch: ["userId", "roles", "tenantId"] }));
 
-app.route({
-  method: "POST",
-  path: "/login",
-  operationId: "login",
-  responses: { 200: { description: "ok" } },
-  handler: async ({ state }) => {
+app.post(
+  "/login",
+  {
+    operationId: "login",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => {
     // After authenticating the user, rotate the id to defend against fixation
     // and write the user payload. Mutating ctx.state.session.data is enough -
     // the middleware persists changes once per request in onSend.
@@ -115,29 +116,31 @@ app.route({
     state.session.set("userId", "u_123");
     return { status: 200 as const, body: { ok: true } };
   },
-});
+);
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "me",
-  responses: { 200: { description: "ok" } },
-  handler: async ({ state }) => ({
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => ({
     status: 200 as const,
     body: { userId: state.session.get<string>("userId") ?? null },
   }),
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/logout",
-  operationId: "logout",
-  responses: { 204: { description: "logged out" } },
-  handler: async ({ state }) => {
+app.post(
+  "/logout",
+  {
+    operationId: "logout",
+    responses: { 204: { description: "logged out" } },
+  },
+  async ({ state }) => {
     state.session.destroy();
     return { status: 204 as const };
   },
-});`}
+);`}
       />
 
       <h2 id="defaults">Defaults</h2>
@@ -219,15 +222,16 @@ app.route({
         code={`app.use(session({ secret: process.env.SESSION_SECRET! }));
 app.use(rotateSession({ watch: ["userId", "roles", "tenantId"] }));
 
-app.route({
-  method: "POST",
-  path: "/admin/promote",
-  responses: { 200: { description: "ok" } },
-  handler: async ({ state }) => {
+app.post(
+  "/admin/promote",
+  {
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => {
     state.session.set("roles", ["admin"]);
     return { status: 200 as const, body: { ok: true } };
   },
-});`}
+);`}
       />
 
       <h2 id="key-rotation">Key rotation</h2>

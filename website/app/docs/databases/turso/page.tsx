@@ -127,12 +127,13 @@ app.register(tursoPlugin);
 
 const TodoSchema = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
 
-app.route({
-  method: "GET",
-  path: "/todos",
-  operationId: "listTodos",
-  responses: { 200: { description: "ok", body: z.array(TodoSchema) } },
-  handler: async ({ state }) => {
+app.get(
+  "/todos",
+  {
+    operationId: "listTodos",
+    responses: { 200: { description: "ok", body: z.array(TodoSchema) } },
+  },
+  async ({ state }) => {
     const result = await state.db.execute("select id, title, done from todos");
     const rows = result.rows.map((r) => ({
       id: Number(r.id),
@@ -141,7 +142,7 @@ app.route({
     }));
     return { status: 200, body: rows };
   },
-});`}
+);`}
       />
 
       <h2 id="embedded-replicas-node-bun">Embedded replicas (Node, Bun)</h2>

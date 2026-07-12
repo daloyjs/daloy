@@ -232,16 +232,17 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
       </p>
       <CodeBlock
         language="ts"
-        code={`app.route({
-  method: "GET",
-  path: "/pricing",
-  operationId: "pricing",
-  responses: { 200: { description: "ok" } },
-  handler: (ctx) => {
+        code={`app.get(
+  "/pricing",
+  {
+    operationId: "pricing",
+    responses: { 200: { description: "ok" } },
+  },
+  (ctx) => {
     const country = (ctx.state.geo as { country?: string } | undefined)?.country;
     return { status: 200 as const, body: { currency: country === "GB" ? "GBP" : "USD" } };
   },
-});`}
+);`}
       />
 
       <h2 id="rejection-response">Rejection response</h2>

@@ -124,16 +124,17 @@ const UserSchema = z.object({
 const app = new App();
 app.register(mongoosePlugin);
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const user = await state.db.User.findById(params.id).lean();
     if (!user) {
       throw new HttpError(404, { title: "User not found" });
@@ -148,7 +149,7 @@ app.route({
       },
     };
   },
-});
+);
 
 await app.ready();
 serve(app, { port: 3000 });`}

@@ -206,15 +206,16 @@ app.use(cors({ origin: ["https://app.example.com"] }));
         global allowlist.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/legacy/webhook",
-  operationId: "legacyWebhook",
-  accepts: ["application/x-www-form-urlencoded"],
-  request: { body: z.object({ payload: z.string() }) },
-  responses: { 200: { description: "ok" } },
-  handler: async ({ body }) => ({ status: 200 as const, body: { ok: true } }),
-});`}
+        code={`app.post(
+  "/legacy/webhook",
+  {
+    operationId: "legacyWebhook",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: { body: z.object({ payload: z.string() }) },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ body }) => ({ status: 200 as const, body: { ok: true } }),
+);`}
       />
 
       <h2 id="the-master-escape-hatch">The master escape hatch</h2>

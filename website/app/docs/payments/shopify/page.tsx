@@ -236,32 +236,33 @@ const ProductsQuery = /* GraphQL */ \`
   }
 \`;
 
-app.route({
-  method: "GET",
-  path: "/catalog/products",
-  operationId: "listShopifyProducts",
-  request: {
-    query: z.object({
-      first: z.coerce.number().int().min(1).max(50).default(20),
-      after: z.string().optional(),
-    }),
-  },
-  responses: {
-    200: {
-      description: "Page of products",
-      body: z.object({
-        products: z.array(z.object({
-          id: z.string(),
-          title: z.string(),
-          handle: z.string(),
-          status: z.string(),
-          price: z.object({ amount: z.string(), currency: z.string() }),
-        })),
-        nextCursor: z.string().nullable(),
+app.get(
+  "/catalog/products",
+  {
+    operationId: "listShopifyProducts",
+    request: {
+      query: z.object({
+        first: z.coerce.number().int().min(1).max(50).default(20),
+        after: z.string().optional(),
       }),
     },
+    responses: {
+      200: {
+        description: "Page of products",
+        body: z.object({
+          products: z.array(z.object({
+            id: z.string(),
+            title: z.string(),
+            handle: z.string(),
+            status: z.string(),
+            price: z.object({ amount: z.string(), currency: z.string() }),
+          })),
+          nextCursor: z.string().nullable(),
+        }),
+      },
+    },
   },
-  handler: async ({ query, state }) => {
+  async ({ query, state }) => {
     const data = await state.shopify.graphql<{
       products: {
         pageInfo: { hasNextPage: boolean; endCursor: string | null };
@@ -289,7 +290,7 @@ app.route({
       },
     };
   },
-});`}
+);`}
       />
       <p>
         GraphQL pagination uses opaque cursors (<code>endCursor</code>) rather
@@ -345,16 +346,17 @@ app.route({
         code={`import { z } from "zod";
 import { readRawBody } from "@daloyjs/core/raw";
 
-app.route({
-  method: "POST",
-  path: "/webhooks/shopify",
-  operationId: "shopifyWebhook",
-  // No body schema - we hash bytes before parsing.
-  responses: {
-    200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
+app.post(
+  "/webhooks/shopify",
+  {
+    operationId: "shopifyWebhook",
+    // No body schema - we hash bytes before parsing.
+    responses: {
+      200: { description: "ack", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const raw = await readRawBody(request);
     const result = state.shopify.verifyWebhook(request.headers, raw);
     if (!result.ok) {
@@ -381,7 +383,7 @@ app.route({
 
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
       <p>
         Shopify expects a 2xx within ~5 seconds, retries with exponential

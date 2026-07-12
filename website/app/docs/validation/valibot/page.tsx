@@ -115,31 +115,32 @@ const Order = v.object({
   dryRun: v.boolean(),
 });
 
-export const app = new App().route({
-  method: "POST",
-  path: "/orders",
-  operationId: "createOrder",
-  request: {
-    query: v.optional(
-      v.object({
-        dryRun: v.optional(
-          v.pipe(
-            v.union([v.literal("true"), v.literal("false")]),
-            v.transform((value) => value === "true"),
+export const app = new App().post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    request: {
+      query: v.optional(
+        v.object({
+          dryRun: v.optional(
+            v.pipe(
+              v.union([v.literal("true"), v.literal("false")]),
+              v.transform((value) => value === "true"),
+            ),
           ),
-        ),
+        }),
+      ),
+      headers: v.object({
+        "x-tenant": v.pipe(v.string(), v.minLength(1)),
       }),
-    ),
-    headers: v.object({
-      "x-tenant": v.pipe(v.string(), v.minLength(1)),
-    }),
-    body: CreateOrder,
+      body: CreateOrder,
+    },
+    responses: {
+      201: { description: "Created", body: Order },
+      422: { description: "Validation failed" },
+    },
   },
-  responses: {
-    201: { description: "Created", body: Order },
-    422: { description: "Validation failed" },
-  },
-  handler: async ({ query, headers, body }) => {
+  async ({ query, headers, body }) => {
     const tenantId = headers["x-tenant"];
     const dryRun = query?.dryRun ?? false;
 
@@ -154,7 +155,7 @@ export const app = new App().route({
       },
     };
   },
-});`}
+);`}
       />
       <p>
         <code>body</code> in the handler is inferred from{" "}
@@ -218,17 +219,20 @@ const Headers = v.object({
   "x-request-id": v.optional(v.pipe(v.string(), v.uuid())),
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBook",
-  request: { params: Params, query: Query, headers: Headers },
-  responses: { 200: { description: "OK", body: v.object({ id: v.string() }) } },
-  handler: async ({ params, query, headers }) => ({
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBook",
+    request: { params: Params, query: Query, headers: Headers },
+    responses: {
+      200: { description: "OK", body: v.object({ id: v.string() }) },
+    },
+  },
+  async ({ params, query, headers }) => ({
     status: 200,
     body: { id: params.id },
   }),
-});`}
+);`}
       />
 
       <h2 id="body-limits-and-content-types">Body limits and content types</h2>
@@ -263,22 +267,23 @@ app.route({
         <code>v.string()</code> body.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/legacy-form",
-  operationId: "legacyForm",
-  accepts: ["application/x-www-form-urlencoded"],
-  request: {
-    body: v.object({
-      email: v.pipe(v.string(), v.email()),
-      qty: v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1)),
-    }),
+        code={`app.post(
+  "/legacy-form",
+  {
+    operationId: "legacyForm",
+    accepts: ["application/x-www-form-urlencoded"],
+    request: {
+      body: v.object({
+        email: v.pipe(v.string(), v.email()),
+        qty: v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1)),
+      }),
+    },
+    responses: {
+      200: { description: "ok", body: v.object({ ok: v.boolean() }) },
+    },
   },
-  responses: {
-    200: { description: "ok", body: v.object({ ok: v.boolean() }) },
-  },
-  handler: async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
-});`}
+  async ({ body }) => ({ status: 200, body: { ok: body.qty > 0 } }),
+);`}
       />
 
       <h2 id="response-validation">Response validation</h2>
@@ -296,19 +301,20 @@ app.route({
   email: v.pipe(v.string(), v.email()),
 });
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "me",
-  responses: {
-    200: { description: "Current user", body: PublicUser },
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: {
+      200: { description: "Current user", body: PublicUser },
+    },
   },
-  handler: async () => ({
+  async () => ({
     status: 200,
     // passwordHash is stripped before serialization.
     body: { id: "u_1", email: "dev@example.com", passwordHash: "secret" },
   }),
-});`}
+);`}
       />
 
       <h2 id="discriminated-unions">Discriminated unions</h2>
@@ -326,19 +332,20 @@ const Event = v.variant("type", [
   v.object({ type: v.literal("deleted"), id: v.string() }),
 ]);
 
-app.route({
-  method: "POST",
-  path: "/events",
-  operationId: "ingestEvent",
-  request: { body: Event },
-  responses: { 202: { description: "Accepted" } },
-  handler: async ({ body }) => {
+app.post(
+  "/events",
+  {
+    operationId: "ingestEvent",
+    request: { body: Event },
+    responses: { 202: { description: "Accepted" } },
+  },
+  async ({ body }) => {
     if (body.type === "updated") {
       // body.fields is string[] here - narrowed by the discriminator.
     }
     return { status: 202, body: undefined };
   },
-});`}
+);`}
       />
 
       <h2 id="reusing-types">Reusing types</h2>

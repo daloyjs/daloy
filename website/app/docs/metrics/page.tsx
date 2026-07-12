@@ -95,13 +95,14 @@ const BooksResponse = z.object({
   items: z.array(z.object({ id: z.string(), title: z.string() })),
 });
 
-app.route({
-  method: "GET",
-  path: "/books",
-  operationId: "listBooks",
-  responses: { 200: { description: "ok", body: BooksResponse } },
-  handler: () => ({ status: 200 as const, body: { items: [] } }),
-});
+app.get(
+  "/books",
+  {
+    operationId: "listBooks",
+    responses: { 200: { description: "ok", body: BooksResponse } },
+  },
+  () => ({ status: 200 as const, body: { items: [] } }),
+);
 
 // GET /metrics  (Authorization: Bearer <METRICS_TOKEN>)
 // # TYPE daloy_http_requests_total counter
@@ -370,11 +371,12 @@ app.use(httpMetrics({
   exclude: (path) => path === "/metrics",
 }));
 
-app.route({
-  method: "GET",
-  path: "/metrics",
-  responses: { 200: { description: "ok", body: z.string() } },
-  handler: () => ({
+app.get(
+  "/metrics",
+  {
+    responses: { 200: { description: "ok", body: z.string() } },
+  },
+  () => ({
     status: 200 as const,
     body: registry.render(),
     headers: {
@@ -382,7 +384,7 @@ app.route({
       "cache-control": "no-store",
     },
   }),
-});`}
+);`}
         language="ts"
       />
 

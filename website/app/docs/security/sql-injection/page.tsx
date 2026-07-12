@@ -157,14 +157,15 @@ import { eq } from "drizzle-orm";
 
 const app = new App();
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  // 1) The HTTP layer validates BEFORE the handler runs.
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: "ok" } },
-  handler: async ({ params }) => {
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    // 1) The HTTP layer validates BEFORE the handler runs.
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ params }) => {
     // 2) The ORM emits a parameterized query - params.id is bound, never spliced.
     const [user] = await db
       .select()
@@ -173,7 +174,7 @@ app.route({
       .limit(1);
     return { status: 200 as const, body: user ?? null };
   },
-});`}
+);`}
       />
       <p>
         Notice what is <em>not</em> here: no template string with{" "}
@@ -275,18 +276,19 @@ await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
 // returns the first user whose email is not empty (i.e. any user).
 const Login = z.object({ email: z.any(), password: z.any() });
 
-app.route({
-  method: "POST",
-  path: "/login",
-  request: { body: Login },
-  responses: { 200: { description: "ok" } },
-  handler: async ({ body, state }) => {
+app.post(
+  "/login",
+  {
+    request: { body: Login },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ body, state }) => {
     const user = await state.db.user.findFirst({
       where: { email: body.email, password: body.password },
     });
     return { status: 200 as const, body: { ok: Boolean(user) } };
   },
-});
+);
 
 // SAFE - primitives are enforced at the wire, so \`body.email\` is a string.
 const SafeLogin = z.object({
@@ -361,19 +363,20 @@ const ListUsersQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-app.route({
-  method: "GET",
-  path: "/users",
-  operationId: "listUsers",
-  request: { query: ListUsersQuery },
-  responses: { 200: { description: "ok" } },
-  handler: async ({ query }) => {
+app.get(
+  "/users",
+  {
+    operationId: "listUsers",
+    request: { query: ListUsersQuery },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ query }) => {
     const column = SORT_COLUMNS[query.sort];           // guaranteed safe
     const order = query.dir === "asc" ? asc(column) : desc(column);
     const rows = await db.select().from(users).orderBy(order).limit(query.limit);
     return { status: 200 as const, body: rows };
   },
-});`}
+);`}
       />
       <p>Rules of thumb when even allowlisting isn&apos;t enough:</p>
       <ul>

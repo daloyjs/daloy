@@ -37,7 +37,7 @@ export default function Page() {
           { label: "Scaffold", detail: "pnpm add @daloyjs/core zod" },
           {
             label: "Write a route",
-            detail: "app.route({ ... })",
+            detail: "app.get(path, contract, handler)",
             tone: "accent",
           },
           { label: "Add OpenAPI & docs UI", detail: "docs: true" },
@@ -100,20 +100,20 @@ const app = new App({
 })
   .use(requestId())
   .use(secureHeaders())
-  .route({
-    method: "GET",
-    path: "/greet/:name",
-    operationId: "greet",
-    tags: ["Demo"],
-    request: { params: z.object({ name: z.string().min(1) }) },
-    responses: {
-      200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+  .get(
+    "/greet/:name",
+    {
+      tags: ["Demo"],
+      request: { params: z.object({ name: z.string().min(1) }) },
+      responses: {
+        200: { description: "Greeting", body: z.object({ msg: z.string() }) },
+      },
     },
-    handler: async ({ params }) => ({
+    async ({ params }) => ({
       status: 200,
       body: { msg: \`Hello, \${params.name}!\` },
     }),
-  });
+  );
 
 const { port } = serve(app, { port: 3000 });
 console.log(\`listening on http://localhost:\${port}\`);`}

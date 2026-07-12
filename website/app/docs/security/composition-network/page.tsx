@@ -56,9 +56,9 @@ const app = new App({ env: "production" });
 const authLimit = () =>
   rateLimit({ windowMs: 60_000, max: 10, groupId: "auth" });
 
-app.route({ method: "POST", path: "/login",          hooks: authLimit(), ... });
-app.route({ method: "POST", path: "/login/otp",      hooks: authLimit(), ... });
-app.route({ method: "POST", path: "/password-reset", hooks: authLimit(), ... });
+app.post("/login",          { hooks: authLimit(), ... });
+app.post("/login/otp",      { hooks: authLimit(), ... });
+app.post("/password-reset", { hooks: authLimit(), ... });
 // All three endpoints spend from the same bucket per IP.`}
         language="ts"
       />
@@ -248,13 +248,14 @@ app.use(ipRestriction({
 
 const app = new App();
 
-app.route({
-  method: "POST",
-  path: "/__admin/reindex",
-  internal: true,
-  responses: { 204: { description: "Started" } },
-  handler: () => ({ status: 204 }),
-});
+app.post(
+  "/__admin/reindex",
+  {
+    internal: true,
+    responses: { 204: { description: "Started" } },
+  },
+  () => ({ status: 204 }),
+);
 
 // Public adapter - 404
 await app.fetch(new Request("http://app/__admin/reindex", { method: "POST" }));

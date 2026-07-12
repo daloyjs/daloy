@@ -100,13 +100,14 @@ export default function Page() {
 
 const app = new App();
 
-app.route({
-  method: "GET",
-  path: "/books",
-  operationId: "listBooks",
-  request: { query: paginationQuery({ defaultLimit: 25, maxLimit: 100 }) },
-  responses: { 200: { description: "ok" } },
-  handler: async ({ query, request, set }) => {
+app.get(
+  "/books",
+  {
+    operationId: "listBooks",
+    request: { query: paginationQuery({ defaultLimit: 25, maxLimit: 100 }) },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ query, request, set }) => {
     const { limit, cursor } = query; // typed + validated
     const after = cursor ? decodeCursor<{ id: number }>(cursor).id : 0;
 
@@ -128,7 +129,7 @@ app.route({
 
     return { status: 200 as const, body: { items: page } };
   },
-});`}
+);`}
         language="ts"
       />
 

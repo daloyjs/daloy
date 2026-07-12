@@ -60,19 +60,20 @@ const app = new App();
 // Safe retries for the whole write surface.
 app.use(idempotency({ ttlSeconds: 86_400 }));
 
-app.route({
-  method: "POST",
-  path: "/charges",
-  operationId: "createCharge",
-  request: { body: z.object({ amount: z.number() }) },
-  responses: {
-    201: { description: "created", body: z.object({ id: z.string() }) },
+app.post(
+  "/charges",
+  {
+    operationId: "createCharge",
+    request: { body: z.object({ amount: z.number() }) },
+    responses: {
+      201: { description: "created", body: z.object({ id: z.string() }) },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     const id = await chargeCard(body.amount); // runs at most once per key
     return { status: 201 as const, body: { id } };
   },
-});`}
+);`}
         language="ts"
       />
 

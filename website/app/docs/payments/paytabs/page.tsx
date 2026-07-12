@@ -328,36 +328,37 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 30 }));
 app.register(paytabsPlugin);
 
-app.route({
-  method: "POST",
-  path: "/checkout/paytabs",
-  operationId: "createPayTabsPaymentPage",
-  request: {
-    body: z.object({
-      orderId: z.string().min(1).max(80),
-      amount: z.number().positive(),
-      currency: z.enum(["AED", "SAR", "KWD", "BHD", "OMR", "QAR", "EGP", "JOD", "USD"]),
-      description: z.string().min(1).max(255),
-      paymentMethods: z.array(z.string()).optional(),
-      customer: z.object({
-        name: z.string().min(1).max(80),
-        email: z.email(),
-        phone: z.string().min(7).max(20),
-        street: z.string().max(120),
-        city: z.string().max(60),
-        state: z.string().max(60),
-        country: z.string().length(2),
-        zip: z.string().max(20),
+app.post(
+  "/checkout/paytabs",
+  {
+    operationId: "createPayTabsPaymentPage",
+    request: {
+      body: z.object({
+        orderId: z.string().min(1).max(80),
+        amount: z.number().positive(),
+        currency: z.enum(["AED", "SAR", "KWD", "BHD", "OMR", "QAR", "EGP", "JOD", "USD"]),
+        description: z.string().min(1).max(255),
+        paymentMethods: z.array(z.string()).optional(),
+        customer: z.object({
+          name: z.string().min(1).max(80),
+          email: z.email(),
+          phone: z.string().min(7).max(20),
+          street: z.string().max(120),
+          city: z.string().max(60),
+          state: z.string().max(60),
+          country: z.string().length(2),
+          zip: z.string().max(20),
+        }),
       }),
-    }),
-  },
-  responses: {
-    201: {
-      description: "redirect to PayTabs",
-      body: z.object({ tranRef: z.string(), redirectUrl: z.url() }),
+    },
+    responses: {
+      201: {
+        description: "redirect to PayTabs",
+        body: z.object({ tranRef: z.string(), redirectUrl: z.url() }),
+      },
     },
   },
-  handler: async ({ body, request, state }) => {
+  async ({ body, request, state }) => {
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       request.headers.get("x-real-ip") ??
@@ -379,7 +380,7 @@ app.route({
       body: { tranRef: response.tran_ref!, redirectUrl: response.redirect_url! },
     };
   },
-});`}
+);`}
       />
 
       <h2 id="6-ipn-webhook">6. IPN webhook</h2>
@@ -427,15 +428,16 @@ app.route({
       <CodeBlock
         code={`import { readRawBody } from "@daloyjs/core/raw";
 
-app.route({
-  method: "POST",
-  path: "/webhooks/paytabs",
-  operationId: "paytabsIpn",
-  responses: {
-    200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "bad signature", body: z.object({ error: z.string() }) },
+app.post(
+  "/webhooks/paytabs",
+  {
+    operationId: "paytabsIpn",
+    responses: {
+      200: { description: "ok", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "bad signature", body: z.object({ error: z.string() }) },
+    },
   },
-  handler: async ({ request, state }) => {
+  async ({ request, state }) => {
     const raw = await readRawBody(request);
     const signature = request.headers.get("signature");
 
@@ -457,7 +459,7 @@ app.route({
 
     return { status: 200, body: { ok: true as const } };
   },
-});`}
+);`}
       />
 
       <h2 id="7-refunds-and-capture">7. Refunds and capture</h2>

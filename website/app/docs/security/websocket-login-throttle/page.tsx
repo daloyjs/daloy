@@ -105,13 +105,14 @@ const authBucket = {
   keyGenerator: (ctx) => ctx.request.headers.get("x-user-key") ?? "global",
 };
 
-app.route({
-  method: "POST",
-  path: "/login",
-  hooks: loginThrottle(authBucket),
-  responses: { 200: { description: "ok" } },
-  handler: async () => ({ status: 200 as const, body: { ok: true } }),
-});
+app.post(
+  "/login",
+  {
+    hooks: loginThrottle(authBucket),
+    responses: { 200: { description: "ok" } },
+  },
+  async () => ({ status: 200 as const, body: { ok: true } }),
+);
 
 app.ws("/session", {
   beforeUpgrade: wsRateLimit(authBucket),
@@ -133,20 +134,21 @@ app.ws("/session", {
         <code>trustProxyHeaders: true</code> only behind a trusted proxy.
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "POST",
-  path: "/password-reset",
-  hooks: loginThrottle({
-    windowMs: 15 * 60_000,
-    max: 5,
-    groupId: "auth-entry",
-    delayAfter: 2,
-    delayMs: 250,
-    maxDelayMs: 2_000,
-  }),
-  responses: { 204: { description: "accepted" } },
-  handler: async () => ({ status: 204 as const }),
-});`}
+        code={`app.post(
+  "/password-reset",
+  {
+    hooks: loginThrottle({
+      windowMs: 15 * 60_000,
+      max: 5,
+      groupId: "auth-entry",
+      delayAfter: 2,
+      delayMs: 250,
+      maxDelayMs: 2_000,
+    }),
+    responses: { 204: { description: "accepted" } },
+  },
+  async () => ({ status: 204 as const }),
+);`}
         language="ts"
       />
 
@@ -165,15 +167,16 @@ app.ws("/session", {
 app.use(session({ secret: process.env.SESSION_SECRET! }));
 app.use(rotateSession({ watch: ["userId", "roles", "tenantId"] }));
 
-app.route({
-  method: "POST",
-  path: "/admin/promote",
-  responses: { 200: { description: "ok" } },
-  handler: async ({ state }) => {
+app.post(
+  "/admin/promote",
+  {
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ state }) => {
     state.session.set("roles", ["admin"]);
     return { status: 200 as const, body: { ok: true } };
   },
-});`}
+);`}
         language="ts"
       />
 
@@ -222,13 +225,14 @@ fileField({
   },
 });
 
-app.route({
-  method: "POST",
-  path: "/webhooks/provider",
-  auth: { scheme: "webhook" },
-  responses: { 204: { description: "accepted" } },
-  handler: async () => ({ status: 204 as const }),
-});`}
+app.post(
+  "/webhooks/provider",
+  {
+    auth: { scheme: "webhook" },
+    responses: { 204: { description: "accepted" } },
+  },
+  async () => ({ status: 204 as const }),
+);`}
         language="ts"
       />
 

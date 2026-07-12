@@ -113,21 +113,22 @@ import { z } from "zod";
 
 const app = new App({ mockMode: true });
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  responses: {
-    200: {
-      description: "ok",
-      body: z.object({ id: z.string(), name: z.string() }),
-      examples: { default: { id: "u_1", name: "Alice" } },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    responses: {
+      200: {
+        description: "ok",
+        body: z.object({ id: z.string(), name: z.string() }),
+        examples: { default: { id: "u_1", name: "Alice" } },
+      },
     },
   },
-  handler: async () => {
+  async () => {
     throw new Error("not called in mock mode");
   },
-});`}
+);`}
       />
 
       <h2 id="contract-test-runner">Contract test runner</h2>

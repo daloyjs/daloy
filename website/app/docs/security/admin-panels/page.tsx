@@ -116,38 +116,40 @@ export default function Page() {
 const app = new App({ env: "production" });
 
 // Public surface stays minimal and visible.
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "health",
-  responses: { 200: { description: "ok" } },
-  handler: async () => ({ status: 200 as const, body: { ok: true } }),
-});
+app.get(
+  "/health",
+  {
+    operationId: "health",
+    responses: { 200: { description: "ok" } },
+  },
+  async () => ({ status: 200 as const, body: { ok: true } }),
+);
 
 // Admin surface is opt-in only. The internal flag keeps it out of the
 // OpenAPI document and out of the public listener entirely.
-app.route({
-  method: "POST",
-  path: "/admin/users/:id/disable",
-  operationId: "adminDisableUser",
-  internal: true,
-  // route.hooks is a SINGLE Hooks object: combine layers with every(...).
-  // Passing a raw array would silently apply no hooks at all.
-  hooks: every(
-    ipRestriction({
-      allow: ["10.0.0.0/8", "203.0.113.4/32"],
-      trustProxyHeaders: true, // resolve the real client IP behind your proxy/VPN
-    }),
-    bearerAuth({
-      // validate receives the token only; reach for verify(token, ctx) when
-      // you need per-request context.
-      validate: (token) => verifyAdminToken(token),
-      realm: "daloy-admin",
-    }),
-  ),
-  responses: { 204: { description: "ok" } },
-  handler: async () => ({ status: 204 as const, body: undefined }),
-});`}
+app.post(
+  "/admin/users/:id/disable",
+  {
+    operationId: "adminDisableUser",
+    internal: true,
+    // route.hooks is a SINGLE Hooks object: combine layers with every(...).
+    // Passing a raw array would silently apply no hooks at all.
+    hooks: every(
+      ipRestriction({
+        allow: ["10.0.0.0/8", "203.0.113.4/32"],
+        trustProxyHeaders: true, // resolve the real client IP behind your proxy/VPN
+      }),
+      bearerAuth({
+        // validate receives the token only; reach for verify(token, ctx) when
+        // you need per-request context.
+        validate: (token) => verifyAdminToken(token),
+        realm: "daloy-admin",
+      }),
+    ),
+    responses: { 204: { description: "ok" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);`}
       />
       <p>
         Front the internal listener with a VPN, a Cloudflare Access tunnel, or a
@@ -202,34 +204,35 @@ const adminAuth = jwk({
     (payload as { roles: string[] }).roles.includes("admin"),
 });
 
-app.route({
-  method: "POST",
-  path: "/admin/feature-flags/:flag",
-  operationId: "adminToggleFlag",
-  internal: true,
-  hooks: every(
-    ipRestriction({ allow: ["10.0.0.0/8"], trustProxyHeaders: true }),
-    adminAuth,
-    {
-      // afterHandle receives (ctx, result), in that order.
-      afterHandle: (ctx) => {
-        const user = ctx.state.user as
-          | { sub?: string; claims?: { email?: string } }
-          | undefined;
-        // Structured audit record - one line per sensitive change.
-        app.log.info({
-          event: "admin.flag.toggle",
-          actor: user?.sub,
-          actorEmail: user?.claims?.email,
-          flag: ctx.params.flag,
-          requestId: ctx.state.requestId,
-        }, "admin toggled feature flag");
+app.post(
+  "/admin/feature-flags/:flag",
+  {
+    operationId: "adminToggleFlag",
+    internal: true,
+    hooks: every(
+      ipRestriction({ allow: ["10.0.0.0/8"], trustProxyHeaders: true }),
+      adminAuth,
+      {
+        // afterHandle receives (ctx, result), in that order.
+        afterHandle: (ctx) => {
+          const user = ctx.state.user as
+            | { sub?: string; claims?: { email?: string } }
+            | undefined;
+          // Structured audit record - one line per sensitive change.
+          app.log.info({
+            event: "admin.flag.toggle",
+            actor: user?.sub,
+            actorEmail: user?.claims?.email,
+            flag: ctx.params.flag,
+            requestId: ctx.state.requestId,
+          }, "admin toggled feature flag");
+        },
       },
-    },
-  ),
-  responses: { 204: { description: "ok" } },
-  handler: async () => ({ status: 204 as const, body: undefined }),
-});`}
+    ),
+    responses: { 204: { description: "ok" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);`}
       />
 
       <h2 id="3-enforce-2fa-or-3fa-for-admin-auth">3. Enforce 2FA (or 3FA) for admin auth</h2>
@@ -274,23 +277,25 @@ app.use(session({
 }));
 app.use(csrf({ strategy: "fetch-metadata" }));
 
-app.route({
-  method: "POST",
-  path: "/admin/login",
-  operationId: "adminLogin",
-  internal: true,
-  // Combine the limiter with your IdP verification via every(...).
-  hooks: every(adminLoginLimit() /* , verifyIdpLogin */),
+app.post(
+  "/admin/login",
+  {
+    operationId: "adminLogin",
+    internal: true,
+    // Combine the limiter with your IdP verification via every(...).
+    hooks: every(adminLoginLimit() /* , verifyIdpLogin */),
+  },
   // …
-});
-app.route({
-  method: "POST",
-  path: "/admin/otp",
-  operationId: "adminOtp",
-  internal: true,
-  hooks: every(adminLoginLimit() /* , verifyTotpOrWebauthn */),
+);
+app.post(
+  "/admin/otp",
+  {
+    operationId: "adminOtp",
+    internal: true,
+    hooks: every(adminLoginLimit() /* , verifyTotpOrWebauthn */),
+  },
   // …
-});`}
+);`}
       />
 
       <h2 id="4-block-unknown-javascript-with-csp">4. Block unknown JavaScript with CSP</h2>

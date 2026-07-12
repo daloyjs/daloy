@@ -9,7 +9,7 @@ const POST = {
   slug: "daloyjs-1-0-0-beta-is-here",
   title: "DaloyJS 1.0.0-beta.0 Is Here (and Nothing Broke, On Purpose)",
   description:
-    "After a long 0.x preview line, DaloyJS enters its 1.0.0 beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the 1.0.0 GA.",
+    "After a long 0.x preview line, DaloyJS enters its 1.0.0 beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the 1.0.0 stable release.",
   date: "2026-06-21",
   readingTime: "6 min read",
   author: "Devlin Duldulao",
@@ -148,7 +148,7 @@ export default function BlogPostPage() {
             changes in a <code>1.x</code> minor, and deprecations get at least
             one minor cycle of warning before anything disappears. The beta is me
             saying I think we are ready, then handing it to you to prove me wrong
-            before the GA.
+            before the stable release.
           </p>
 
           <h2>Wait, nothing changed, really?</h2>

@@ -661,13 +661,14 @@ app.use(secureHeaders({
   },
 }));
 
-app.route({
-  method: "GET",
-  path: "/page",
-  operationId: "page",
-  responses: { 200: { description: "ok" } },
+app.get(
+  "/page",
+  {
+    operationId: "page",
+    responses: { 200: { description: "ok" } },
+  },
   // Return the HTML yourself so the secureHeaders nonce CSP is the one that ships.
-  handler: async ({ state }) => ({
+  async ({ state }) => ({
     status: 200,
     body: \`<!doctype html>
 <script nonce="\${state.cspNonce}">
@@ -675,7 +676,7 @@ app.route({
 </script>\`,
     headers: { "content-type": "text/html; charset=utf-8" },
   }),
-});`}
+);`}
       />
       <p>
         Do <strong>not</strong> render this page with{" "}
@@ -693,17 +694,18 @@ app.route({
         code={`import { bearerAuth, basicAuth, timingSafeEqual } from "@daloyjs/core";
 
 // Bearer (opaque tokens, JWT verified via your own \`validate\`).
-app.route({
-  method: "POST",
-  path: "/admin/purge",
-  operationId: "adminPurge",
-  hooks: bearerAuth({
-    validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
-    realm: "admin",
-  }),
-  responses: { 204: { description: "ok" }, 401: { description: "denied" } },
-  handler: async () => ({ status: 204 as const, body: undefined }),
-});
+app.post(
+  "/admin/purge",
+  {
+    operationId: "adminPurge",
+    hooks: bearerAuth({
+      validate: (token) => timingSafeEqual(token, process.env.ADMIN_TOKEN!),
+      realm: "admin",
+    }),
+    responses: { 204: { description: "ok" }, 401: { description: "denied" } },
+  },
+  async () => ({ status: 204 as const, body: undefined }),
+);
 
 // Basic auth (RFC 7617).
 app.use(basicAuth({

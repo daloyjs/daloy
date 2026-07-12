@@ -136,19 +136,20 @@ export function databasePlugin(client: DbClient) {
 const app = new App();
 app.register(databasePlugin(await createClient()));
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: { 200: { description: "ok", body: UserSchema } },
-  handler: async ({ params, state }) => {
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: { 200: { description: "ok", body: UserSchema } },
+  },
+  async ({ params, state }) => {
     const user = await state.db.user.findUnique({ where: { id: params.id } });
     return user
       ? { status: 200, body: user }
       : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
   },
-});`}
+);`}
       />
 
       <h2 id="pick-your-orm">Pick your ORM</h2>

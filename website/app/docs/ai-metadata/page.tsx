@@ -84,40 +84,41 @@ const app = new App();
 
 const Book = z.object({ id: z.string(), title: z.string() });
 
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  request: { body: z.object({ title: z.string().min(1) }) },
-  responses: {
-    201: { description: "Created", body: Book },
-    400: { description: "Invalid" },
-  },
-  meta: {
-    description: "Create a book record.",
-    tags: ["AI"],
-    examples: {
-      happy: {
-        summary: "Standard create",
-        request: { body: { title: "Dune" } },
-        response: { status: 201, body: { id: "1", title: "Dune" } },
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    request: { body: z.object({ title: z.string().min(1) }) },
+    responses: {
+      201: { description: "Created", body: Book },
+      400: { description: "Invalid" },
+    },
+    meta: {
+      description: "Create a book record.",
+      tags: ["AI"],
+      examples: {
+        happy: {
+          summary: "Standard create",
+          request: { body: { title: "Dune" } },
+          response: { status: 201, body: { id: "1", title: "Dune" } },
+        },
+        duplicateTitle: {
+          summary: "Duplicate title",
+          request: { body: { title: "Dune" } },
+          response: { status: 400 },
+        },
       },
-      duplicateTitle: {
-        summary: "Duplicate title",
-        request: { body: { title: "Dune" } },
-        response: { status: 400 },
+      extensions: {
+        "x-codegen-hint": "books-table",
       },
     },
-    extensions: {
-      "x-codegen-hint": "books-table",
-    },
   },
-  handler: async ({ body }) => ({
+  async ({ body }) => ({
     status: 201 as const,
     body: { id: crypto.randomUUID(), title: body.title },
   }),
-});`}
+);`}
       />
 
       <h2 id="shape-of-a-meta-block">Shape of a meta block</h2>

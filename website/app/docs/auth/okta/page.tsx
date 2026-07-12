@@ -87,7 +87,9 @@ export default function Page() {
         caption="Only tokens from a Custom Authorization Server are meant to be verified by your app. The Org Authorization Server issues opaque tokens that you introspect instead, never verify locally."
       />
 
-      <h2 id="1-configure-an-okta-authorization-server">1. Configure an Okta Authorization Server</h2>
+      <h2 id="1-configure-an-okta-authorization-server">
+        1. Configure an Okta Authorization Server
+      </h2>
       <ol>
         <li>
           In the Okta admin console, go to{" "}
@@ -180,16 +182,17 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 app.register(oktaPlugin);
 
-app.route({
-  method: "GET",
-  path: "/items",
-  operationId: "listItems",
-  middleware: [requireAuth(process.env.OKTA_REQUIRED_SCOPE!)],
-  responses: {
-    200: { description: "OK", body: z.object({ user: z.string() }) },
+app.get(
+  "/items",
+  {
+    operationId: "listItems",
+    hooks: requireAuth(process.env.OKTA_REQUIRED_SCOPE!),
+    responses: {
+      200: { description: "OK", body: z.object({ user: z.string() }) },
+    },
   },
-  handler: ({ state }) => ({ status: 200, body: { user: state.principal!.sub } }),
-});`}
+  ({ state }) => ({ status: 200, body: { user: state.principal!.sub } }),
+);`}
       />
 
       <h2 id="custom-claim-assertions">Custom claim assertions</h2>
@@ -235,13 +238,16 @@ app.route({
         <code>@okta/jwt-verifier</code> is a <strong>Node-only</strong> library
         (it imports Node modules transitively). For Node, Bun, and AWS Lambda it
         works out of the box; for{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link>, use <code>jose</code>&apos;s{" "}
-        <code>createRemoteJWKSet</code> + <code>jwtVerify</code> against the
-        same issuer (the <Link href="/docs/auth/auth0">Auth0</Link> page shows
-        that exact pattern, only the issuer URL changes).
+        <Link href="/docs/adapters">Cloudflare Workers</Link>, use{" "}
+        <code>jose</code>&apos;s <code>createRemoteJWKSet</code> +{" "}
+        <code>jwtVerify</code> against the same issuer (the{" "}
+        <Link href="/docs/auth/auth0">Auth0</Link> page shows that exact
+        pattern, only the issuer URL changes).
       </p>
 
-      <h2 id="org-server-vs-custom-authorization-server">Org server vs Custom Authorization Server</h2>
+      <h2 id="org-server-vs-custom-authorization-server">
+        Org server vs Custom Authorization Server
+      </h2>
       <p>
         Only tokens from a <strong>Custom Authorization Server</strong> are
         meant to be verified by your app, those issuers look like{" "}

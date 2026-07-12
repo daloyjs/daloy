@@ -81,33 +81,34 @@ const app = new App({
   multipart: { maxFileBytes: 5_000_000, maxFields: 32, maxFiles: 4 },
 });
 
-app.route({
-  method: "POST",
-  path: "/avatars",
-  operationId: "uploadAvatar",
-  request: {
-    body: multipartObject({
-      title: z.string().min(1),
-      file: fileField({
-        maxBytes: 1_000_000,
-        accept: ["image/png", "image/jpeg"],
-        magicBytes: true,
+app.post(
+  "/avatars",
+  {
+    operationId: "uploadAvatar",
+    request: {
+      body: multipartObject({
+        title: z.string().min(1),
+        file: fileField({
+          maxBytes: 1_000_000,
+          accept: ["image/png", "image/jpeg"],
+          magicBytes: true,
+        }),
       }),
-    }),
-  },
-  responses: {
-    201: {
-      description: "Created",
-      body: z.object({ ok: z.boolean() }),
+    },
+    responses: {
+      201: {
+        description: "Created",
+        body: z.object({ ok: z.boolean() }),
+      },
     },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     // body.file is a File; body.title is a validated string.
     const stream = body.file.stream(); // pass this to S3, disk, or another upstream
     void stream;
     return { status: 201 as const, body: { ok: true } };
   },
-});`}
+);`}
       />
 
       <h2 id="filefield-options">fileField() options</h2>

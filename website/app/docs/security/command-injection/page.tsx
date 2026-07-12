@@ -195,13 +195,14 @@ const ConvertBody = z.object({
     .max(256),
 });
 
-app.route({
-  method: "POST",
-  path: "/convert",
-  operationId: "convert",
-  request: { body: ConvertBody },
-  responses: { 200: { description: "ok" } },
-  handler: async ({ body }) => {
+app.post(
+  "/convert",
+  {
+    operationId: "convert",
+    request: { body: ConvertBody },
+    responses: { 200: { description: "ok" } },
+  },
+  async ({ body }) => {
     // 2) execFile with an argv array - no shell, no interpolation.
     const { stdout } = await execFileAsync(
       "ffmpeg",
@@ -210,7 +211,7 @@ app.route({
     );
     return { status: 200 as const, body: { bytes: stdout.length } };
   },
-});`}
+);`}
       />
       <p>
         Even if <code>body.sourcePath</code> were{" "}

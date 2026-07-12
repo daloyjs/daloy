@@ -75,8 +75,8 @@ export default function Page() {
         title="What one DaloyJS route declaration buys you"
         source={{
           eyebrow: "declare once",
-          label: "app.route({ ... })",
-          detail: "method, path, request, responses, handler",
+          label: "app.get(path, { ... }, handler)",
+          detail: "path, request, responses, handler",
         }}
         branches={[
           {
@@ -227,8 +227,8 @@ export default function Page() {
       <p>
         Stand up an empty DaloyJS app, port your middleware to hooks/plugins,
         rewrite each <code>app.METHOD(path, handler)</code> as an{" "}
-        <code>app.route({"{ ... }"})</code> declaration that returns a value
-        instead of mutating <code>res</code>, replace your error middleware with
+        <code>app.method(path, {"{ ... }"}, handler)</code> declaration that
+        returns a value instead of mutating <code>res</code>, replace your error middleware with
         thrown <code>HttpError</code> values, and swap <code>app.listen()</code>{" "}
         for a <Link href="/docs/adapters/node">runtime adapter</Link>. The rest
         of this page is that sentence, expanded.
@@ -357,13 +357,14 @@ const app = new App({
   // "middleware everywhere" -> hooks registered globally
   .use(requestId())
   .use(secureHeaders())
-  .route({
-    method: "GET",
-    path: "/",
-    operationId: "root",
-    responses: { 200: { description: "Greeting", body: z.string() } },
-    handler: async () => ({ status: 200, body: "hello world" }),
-  });
+  .get(
+    "/",
+    {
+      operationId: "root",
+      responses: { 200: { description: "Greeting", body: z.string() } },
+    },
+    async () => ({ status: 200, body: "hello world" }),
+  );
 
 const { port } = serve(app, { port: 3000 });
 console.log(\`listening on http://localhost:\${port}\`);`}
@@ -379,11 +380,11 @@ console.log(\`listening on http://localhost:\${port}\`);`}
 
       <h2 id="step-2-routing">Step 2: Routing</h2>
       <p>
-        Every <code>app.get</code> / <code>app.post</code> / etc. becomes one{" "}
-        <code>app.route(...)</code> call. The HTTP method moves <em>inside</em>{" "}
-        the object as a <code>method</code> field. Each route needs a unique{" "}
-        <code>operationId</code> (this is what names the generated client method
-        and the OpenAPI operation).
+        Every <code>app.get</code> / <code>app.post</code> / etc. becomes a
+        matching <code>app.get(path, contract, handler)</code> /{" "}
+        <code>app.post(...)</code> call, the HTTP method is simply the function
+        you call. Each route needs a unique <code>operationId</code> (this is
+        what names the generated client method and the OpenAPI operation).
       </p>
       <CodeBlock
         language="typescript"
@@ -396,23 +397,26 @@ app.delete("/user", (req, res) => res.send("DELETE /user"));`}
       <CodeBlock
         language="typescript"
         code={`// DaloyJS
-app.route({
-  method: "GET",
-  path: "/",
-  operationId: "getHome",
-  responses: { 200: { description: "ok" } },
-  handler: async () => ({ status: 200, body: "GET homepage" }),
-});
+app.get(
+  "/",
+  {
+    operationId: "getHome",
+    responses: { 200: { description: "ok" } },
+  },
+  async () => ({ status: 200, body: "GET homepage" }),
+);
 
-app.route({
-  method: "POST",
-  path: "/",
-  operationId: "postHome",
-  responses: { 200: { description: "ok" } },
-  handler: async () => ({ status: 200, body: "Got a POST" }),
-});
+app.post(
+  "/",
+  {
+    operationId: "postHome",
+    responses: { 200: { description: "ok" } },
+  },
+  async () => ({ status: 200, body: "Got a POST" }),
+);
 
-// ...one app.route per Express route. PUT/DELETE/PATCH/OPTIONS all supported.`}
+// ...one shorthand call per Express route. PUT/DELETE/PATCH/HEAD too;
+// OPTIONS has no shorthand, use app.route({ method: "OPTIONS", ... }).`}
       />
       <p>
         Supported methods include <code>GET</code>, <code>POST</code>,{" "}
@@ -443,17 +447,18 @@ app.get("/users/:userId/books/:bookId", (req, res) => {
         code={`// DaloyJS
 import { z } from "zod";
 
-app.route({
-  method: "GET",
-  path: "/users/:userId/books/:bookId",
-  operationId: "getUserBook",
-  request: {
-    params: z.object({ userId: z.string(), bookId: z.string() }),
+app.get(
+  "/users/:userId/books/:bookId",
+  {
+    operationId: "getUserBook",
+    request: {
+      params: z.object({ userId: z.string(), bookId: z.string() }),
+    },
+    responses: { 200: { description: "ok" } },
   },
-  responses: { 200: { description: "ok" } },
   // ctx.params is { userId: string; bookId: string } - inferred from the schema
-  handler: async ({ params }) => ({ status: 200, body: params }),
-});`}
+  async ({ params }) => ({ status: 200, body: params }),
+);`}
       />
       <p>
         <strong>Route path differences to know:</strong> Express 5 uses
@@ -493,23 +498,24 @@ app.post("/search", (req, res) => {
       <CodeBlock
         language="typescript"
         code={`// DaloyJS - no body-parser line needed
-app.route({
-  method: "POST",
-  path: "/search",
-  operationId: "search",
-  request: {
-    query: z.object({ q: z.string().min(1) }),
-    body: z.object({ page: z.number().int().min(1).default(1) }),
+app.post(
+  "/search",
+  {
+    operationId: "search",
+    request: {
+      query: z.object({ q: z.string().min(1) }),
+      body: z.object({ page: z.number().int().min(1).default(1) }),
+    },
+    responses: {
+      200: { description: "ok", body: z.object({ term: z.string(), page: z.number() }) },
+      422: { description: "Validation error" }, // returned automatically on bad input
+    },
   },
-  responses: {
-    200: { description: "ok", body: z.object({ term: z.string(), page: z.number() }) },
-    422: { description: "Validation error" }, // returned automatically on bad input
-  },
-  handler: async ({ query, body }) => ({
+  async ({ query, body }) => ({
     status: 200,
     body: { term: query.q, page: body.page },
   }),
-});`}
+);`}
       />
       <p>
         If a request fails validation, DaloyJS short-circuits with an{" "}
@@ -684,20 +690,21 @@ app.get("/admin", requireAuth, (req, res) => res.send("secret"));`}
         code={`// DaloyJS - per-route hook
 import { UnauthorizedError } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/admin",
-  operationId: "admin",
-  hooks: {
-    beforeHandle(ctx) {
-      if (!ctx.request.headers.get("x-auth")) {
-        throw new UnauthorizedError("no auth");
-      }
+app.get(
+  "/admin",
+  {
+    operationId: "admin",
+    hooks: {
+      beforeHandle(ctx) {
+        if (!ctx.request.headers.get("x-auth")) {
+          throw new UnauthorizedError("no auth");
+        }
+      },
     },
+    responses: { 200: { description: "ok" }, 401: { description: "denied" } },
   },
-  responses: { 200: { description: "ok" }, 401: { description: "denied" } },
-  handler: async () => ({ status: 200, body: "secret" }),
-});`}
+  async () => ({ status: 200, body: "secret" }),
+);`}
       />
       <p>
         For real authentication you rarely hand-roll this. DaloyJS ships{" "}
@@ -926,21 +933,22 @@ app.use((err, req, res, next) => {
         code={`// DaloyJS - just throw; no try/catch boilerplate, no next(err)
 import { NotFoundError } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "ok", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "ok", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const user = await db.find(params.id);
     if (!user) throw new NotFoundError(\`No user \${params.id}\`);
     return { status: 200, body: user };
   },
-});`}
+);`}
       />
       <p>
         Available out of the box: <code>BadRequestError</code> (400),{" "}
@@ -1013,17 +1021,17 @@ app.use("/birds", require("./birds")); // -> /birds and /birds/about`}
 app.group("/birds", { tags: ["Birds"] }, (birds) => {
   birds.use({ onRequest: () => console.log("time", Date.now()) });
 
-  birds.route({
-    method: "GET", path: "/", operationId: "birdsHome",
-    responses: { 200: { description: "ok" } },
-    handler: async () => ({ status: 200, body: "Birds home" }),
-  });
+  birds.get(
+    "/",
+    { operationId: "birdsHome", responses: { 200: { description: "ok" } } },
+    async () => ({ status: 200, body: "Birds home" }),
+  );
 
-  birds.route({
-    method: "GET", path: "/about", operationId: "birdsAbout",
-    responses: { 200: { description: "ok" } },
-    handler: async () => ({ status: 200, body: "About birds" }),
-  });
+  birds.get(
+    "/about",
+    { operationId: "birdsAbout", responses: { 200: { description: "ok" } } },
+    async () => ({ status: 200, body: "About birds" }),
+  );
 });
 // final paths: /birds and /birds/about`}
       />
@@ -1037,11 +1045,11 @@ export const birdsPlugin = {
   name: "birds",
   register(app: App) {
     app.use({ onRequest: () => console.log("time", Date.now()) });
-    app.route({
-      method: "GET", path: "/", operationId: "birdsHome",
-      responses: { 200: { description: "ok" } },
-      handler: async () => ({ status: 200, body: "Birds home" }),
-    });
+    app.get(
+      "/",
+      { operationId: "birdsHome", responses: { 200: { description: "ok" } } },
+      async () => ({ status: 200, body: "Birds home" }),
+    );
   },
 };
 
@@ -1285,12 +1293,13 @@ app.get("/me", (req, res) => {
         code={`// DaloyJS
 import { readRequestCookie, serializeCookie } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "me",
-  responses: { 200: { description: "ok" } },
-  handler: async (ctx) => {
+app.get(
+  "/me",
+  {
+    operationId: "me",
+    responses: { 200: { description: "ok" } },
+  },
+  async (ctx) => {
     const sid = readRequestCookie(ctx.request.headers.get("cookie"), "sid");
     ctx.set.headers.set(
       "set-cookie",
@@ -1298,7 +1307,7 @@ app.route({
     );
     return { status: 200, body: { sid } };
   },
-});`}
+);`}
       />
       <p>
         For full server-side sessions (login state, rotation, secure cookie
@@ -1344,13 +1353,14 @@ app.route({
 import { readFile } from "node:fs/promises";
 import { assertSafeRelativePath } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/files/:name",
-  operationId: "downloadFile",
-  request: { params: z.object({ name: z.string() }) },
-  responses: { 200: { description: "file" }, 404: { description: "not found" } },
-  handler: async ({ params }) => {
+app.get(
+  "/files/:name",
+  {
+    operationId: "downloadFile",
+    request: { params: z.object({ name: z.string() }) },
+    responses: { 200: { description: "file" }, 404: { description: "not found" } },
+  },
+  async ({ params }) => {
     assertSafeRelativePath(params.name); // throws on "../" traversal
     const data = await readFile(\`./uploads/\${params.name}\`);
     return {
@@ -1362,7 +1372,7 @@ app.route({
       body: data,
     };
   },
-});`}
+);`}
       />
 
       <h2 id="views">Views and template engines</h2>
@@ -1487,48 +1497,51 @@ const app = new App({
 })
   .use(requestId())
   .use(secureHeaders())
-  .route({
-    method: "GET",
-    path: "/books",
-    operationId: "listBooks",
-    tags: ["Books"],
-    responses: { 200: { description: "All books", body: z.array(Book) } },
-    handler: async () => ({ status: 200, body: [...books.values()] }),
-  })
-  .route({
-    method: "GET",
-    path: "/books/:id",
-    operationId: "getBook",
-    tags: ["Books"],
-    request: { params: z.object({ id: z.string() }) },
-    responses: {
-      200: { description: "Found", body: Book },
-      404: { description: "Not found" },
+  .get(
+    "/books",
+    {
+      operationId: "listBooks",
+      tags: ["Books"],
+      responses: { 200: { description: "All books", body: z.array(Book) } },
     },
-    handler: async ({ params }) => {
+    async () => ({ status: 200, body: [...books.values()] }),
+  )
+  .get(
+    "/books/:id",
+    {
+      operationId: "getBook",
+      tags: ["Books"],
+      request: { params: z.object({ id: z.string() }) },
+      responses: {
+        200: { description: "Found", body: Book },
+        404: { description: "Not found" },
+      },
+    },
+    async ({ params }) => {
       const book = books.get(params.id);
       if (!book) throw new NotFoundError(\`No book \${params.id}\`);
       return { status: 200, body: book };
     },
-  })
-  .route({
-    method: "POST",
-    path: "/books",
-    operationId: "createBook",
-    tags: ["Books"],
-    auth: { scheme: "bearer" },
-    hooks: bearerAuth({ validate: (t) => t === "secret" }),
-    request: { body: Book }, // validation replaces the manual if-check
-    responses: {
-      201: { description: "Created", body: Book },
-      401: { description: "Unauthorized" },
-      422: { description: "Validation error" },
+  )
+  .post(
+    "/books",
+    {
+      operationId: "createBook",
+      tags: ["Books"],
+      auth: { scheme: "bearer" },
+      hooks: bearerAuth({ validate: (t) => t === "secret" }),
+      request: { body: Book }, // validation replaces the manual if-check
+      responses: {
+        201: { description: "Created", body: Book },
+        401: { description: "Unauthorized" },
+        422: { description: "Validation error" },
+      },
     },
-    handler: async ({ body }) => {
+    async ({ body }) => {
       books.set(body.id, body);
       return { status: 201, body };
     },
-  });
+  );
 
 const { port } = serve(app, { port: 3000 });
 console.log(\`up on \${port}\`);`}
@@ -1711,7 +1724,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </li>
         <li>
           Rewrite each <code>app.METHOD(path, ...)</code> as an{" "}
-          <code>app.route({"{...}"})</code> with a unique{" "}
+          <code>app.method(path, {"{...}"}, handler)</code> call with a unique{" "}
           <code>operationId</code>.
         </li>
         <li>

@@ -111,12 +111,13 @@ import { sseStream } from "@daloyjs/core/streaming";`}
       <CodeBlock
         code={`import { sseStream } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/events",
-  operationId: "events",
-  responses: { 200: { description: "SSE stream" } },
-  handler: ({ request }) => ({
+app.get(
+  "/events",
+  {
+    operationId: "events",
+    responses: { 200: { description: "SSE stream" } },
+  },
+  ({ request }) => ({
     status: 200 as const,
     headers: { "content-type": "text/event-stream" },
     body: sseStream(
@@ -129,7 +130,7 @@ app.route({
       { signal: request.signal, keepAliveMs: 15_000 }
     ),
   }),
-});`}
+);`}
       />
 
       <p>
@@ -159,18 +160,19 @@ const res = sseResponse(async function* () {
         <a href="/docs/ai-sdk">Vercel AI SDK</a> in one line:
       </p>
       <CodeBlock
-        code={`app.route({
-  method: "GET",
-  path: "/ping",
-  operationId: "ping",
-  acknowledgeNoResponseBodySchema: true,
-  responses: { 200: { description: "SSE stream" } },
+        code={`app.get(
+  "/ping",
+  {
+    operationId: "ping",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "SSE stream" } },
+  },
   // Return the Response as-is. Useful for AI SDK streams or a
   // forwarded upstream fetch() response.
-  handler: () => sseResponse(async function* () {
+  () => sseResponse(async function* () {
     yield { event: "ping", data: "hi" };
   }),
-});`}
+);`}
       />
 
       <h3 id="keep-alive-comments">Keep-alive comments</h3>
@@ -190,12 +192,13 @@ const res = sseResponse(async function* () {
       <CodeBlock
         code={`import { ndjsonStream } from "@daloyjs/core";
 
-app.route({
-  method: "GET",
-  path: "/exports/users.ndjson",
-  operationId: "exportUsers",
-  responses: { 200: { description: "NDJSON dump" } },
-  handler: ({ request }) => ({
+app.get(
+  "/exports/users.ndjson",
+  {
+    operationId: "exportUsers",
+    responses: { 200: { description: "NDJSON dump" } },
+  },
+  ({ request }) => ({
     status: 200 as const,
     headers: { "content-type": "application/x-ndjson" },
     body: ndjsonStream(
@@ -207,7 +210,7 @@ app.route({
       { signal: request.signal }
     ),
   }),
-});`}
+);`}
       />
 
       <p>

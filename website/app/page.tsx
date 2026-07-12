@@ -76,20 +76,20 @@ app.use(requestId());
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 120 })); // global unless you configure keyGenerator or trustProxyHeaders
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "Found", body: z.object({ id: z.string(), title: z.string() }) },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "Found", body: z.object({ id: z.string(), title: z.string() }) },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => ({
+  async ({ params }) => ({
     status: 200,
     body: { id: params.id, title: \`Book \${params.id}\` },
   }),
-});
+);
 
 serve(app, { port: 3000 });`;
 
@@ -233,7 +233,6 @@ export default function HomePage() {
     "https://bsky.app/profile/daloyjs.dev",
     "https://mastodon.social/@daloyjs",
     "https://www.instagram.com/daloyjs",
-    "https://daloyjs.substack.com",
     "https://dev.to/daloyjs",
     "https://opencollective.com/daloyjs",
   ];
@@ -296,13 +295,16 @@ export default function HomePage() {
               className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
-              The first TypeScript REST API framework built for secure AI-assisted services
+              The first TypeScript REST API framework built for secure
+              AI-assisted services
             </h1>
             <p
               className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
-              DaloyJS combines runtime portability, contract-first OpenAPI, generated typed clients, zero-dependency runtime guardrails, and supply-chain-aware project defaults in one framework.
+              DaloyJS combines runtime portability, contract-first OpenAPI,
+              generated typed clients, zero-dependency runtime guardrails, and
+              supply-chain-aware project defaults in one framework.
             </p>
             <ContractFlowVisual />
             <p

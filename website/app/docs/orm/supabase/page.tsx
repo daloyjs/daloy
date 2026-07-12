@@ -148,16 +148,17 @@ const UserSchema = z.object({
   name: z.string().nullable(),
 });
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  request: { params: z.object({ id: z.uuid() }) },
-  responses: {
-    200: { description: "Found", body: UserSchema },
-    404: { description: "Not found" },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    request: { params: z.object({ id: z.uuid() }) },
+    responses: {
+      200: { description: "Found", body: UserSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params, state }) => {
+  async ({ params, state }) => {
     const { data, error } = await state.supabase
       .from("users")
       .select("id,email,name")
@@ -169,15 +170,16 @@ app.route({
       ? { status: 200, body: data }
       : { status: 404, body: { type: "about:blank", title: "Not found", status: 404 } };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/users",
-  operationId: "createUser",
-  request: { body: z.object({ email: z.email(), name: z.string().optional() }) },
-  responses: { 201: { description: "Created", body: UserSchema } },
-  handler: async ({ body, state }) => {
+app.post(
+  "/users",
+  {
+    operationId: "createUser",
+    request: { body: z.object({ email: z.email(), name: z.string().optional() }) },
+    responses: { 201: { description: "Created", body: UserSchema } },
+  },
+  async ({ body, state }) => {
     const { data, error } = await state.supabase
       .from("users")
       .insert(body)
@@ -186,7 +188,7 @@ app.route({
     if (error) throw error;
     return { status: 201, body: data };
   },
-});
+);
 
 await app.ready();
 serve(app, { port: 3000 });`}

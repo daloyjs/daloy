@@ -133,46 +133,48 @@ export function buildApp() {
   app.use(cors({ origin: ["http://localhost:5173"] }));
   app.use(rateLimit({ windowMs: 60_000, max: 120 })); // global unless you configure keyGenerator or trustProxyHeaders
 
-  app.route({
-    method: "GET",
-    path: "/books/:id",
-    operationId: "getBookById",
-    tags: ["Books"],
-    request: { params: z.object({ id: z.string() }) },
-    responses: {
-      200: {
-        description: "Found",
-        body: BookSchema,
-        examples: { default: { id: "1", title: "Foundation", year: 1951 } },
+  app.get(
+    "/books/:id",
+    {
+      operationId: "getBookById",
+      tags: ["Books"],
+      request: { params: z.object({ id: z.string() }) },
+      responses: {
+        200: {
+          description: "Found",
+          body: BookSchema,
+          examples: { default: { id: "1", title: "Foundation", year: 1951 } },
+        },
+        404: { description: "Not found" },
       },
-      404: { description: "Not found" },
     },
-    handler: async ({ params }) => {
+    async ({ params }) => {
       const book = books.get(params.id);
       if (!book) throw new NotFoundError(\`book \${params.id} not found\`);
       return { status: 200, body: book };
     },
-  });
+  );
 
-  app.route({
-    method: "POST",
-    path: "/books",
-    operationId: "createBook",
-    tags: ["Books"],
-    hooks: bearerAuth({ validate: (t) => t === "demo-token" }),
-    request: { body: BookSchema.omit({ id: true }) },
-    responses: {
-      201: { description: "Created", body: BookSchema },
-      401: { description: "Unauthorized" },
-      422: { description: "Validation error" },
+  app.post(
+    "/books",
+    {
+      operationId: "createBook",
+      tags: ["Books"],
+      hooks: bearerAuth({ validate: (t) => t === "demo-token" }),
+      request: { body: BookSchema.omit({ id: true }) },
+      responses: {
+        201: { description: "Created", body: BookSchema },
+        401: { description: "Unauthorized" },
+        422: { description: "Validation error" },
+      },
     },
-    handler: async ({ body }) => {
+    async ({ body }) => {
       const id = String(books.size + 1);
       const book = { id, ...body };
       books.set(id, book);
       return { status: 201, body: book };
     },
-  });
+  );
 
   return app;
 }`}
