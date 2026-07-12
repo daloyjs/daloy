@@ -31,7 +31,7 @@ Each exercise is a **self-contained TypeScript file** that boots its own DaloyJS
 
 Senior Node/TypeScript developers who have shipped an API at least once and want to learn:
 
-- **Contract-first** routing where a single `app.route({...})` is the source of truth for validation, types, OpenAPI, the typed client, and tests.
+- **Contract-first** routing where a single `app.get(path, contract, handler)` (or the matching `post`/`put`/`patch`/`delete`/`head` shorthand, or `app.route({...})` for reusable/metadata-heavy routes) is the source of truth for validation, types, OpenAPI, the typed client, and tests.
 - **Standard Schema** validation (Zod 4 / Valibot / ArkType / TypeBox) instead of hand-written DTO classes.
 - **Auto-generated OpenAPI 3.1 + Scalar docs** with zero plugins, plus a fully typed fetch SDK via [@hey-api/openapi-ts](https://heyapi.dev/openapi-ts/get-started).
 - **Secure-by-default** posture: body limits, request timeouts, header sanitization, RFC 9457 problem+json, JWT allowlists, `fetchGuard()` SSRF defaults, prototype-pollution-safe parsers.
@@ -117,7 +117,7 @@ This workshop is designed to make the framework's value concrete, not theoretica
 
 | Concern                              | Express / Fastify / Hono              | DaloyJS                                                              |
 | ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------- |
-| Single source of truth for contracts | Multiple plugins, drift-prone         | One `app.route({...})` drives validation, types, OpenAPI, and client |
+| Single source of truth for contracts | Multiple plugins, drift-prone         | One `app.get(path, contract, handler)` drives validation, types, OpenAPI, and client |
 | Runtime portability                  | Node-only / Bun-only / Workers-only   | Web-standard core + adapters for Node, Bun, Deno, Vercel, Workers    |
 | OpenAPI                              | Plugin afterthought, manual sync      | First-class, auto-generated 3.1 spec, one-line `docs: true`          |
 | Typed client                         | Hand-written or separate codegen step | `pnpm gen` emits a Hey API typed fetch SDK from the live spec        |

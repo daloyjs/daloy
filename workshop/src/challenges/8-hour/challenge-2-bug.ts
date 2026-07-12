@@ -49,15 +49,16 @@ const jwtAuth: Hooks = {
   },
 };
 
-app.route({
-  method: "POST",
-  path: "/admin/exec",
-  operationId: "adminExec",
-  tags: ["Admin"],
-  hooks: jwtAuth,
-  request: { body: z.object({ token: z.string(), command: z.string() }) }, // 🐛 5 (no .strict)
-  responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
-  handler: async ({ body }) => {
+app.post(
+  "/admin/exec",
+  {
+    operationId: "adminExec",
+    tags: ["Admin"],
+    hooks: jwtAuth,
+    request: { body: z.object({ token: z.string(), command: z.string() }) }, // 🐛 5 (no .strict)
+    responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
+  },
+  async ({ body }) => {
     if (body.token === ADMIN_TOKEN) {                                 // 🐛 6
       return { status: 200 as const, body: { ok: true as const } };
     }
@@ -67,19 +68,20 @@ app.route({
       detail: `Bad token ${body.token}; expected ${ADMIN_TOKEN}`,    // 🐛 7
     });
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/proxy",
-  operationId: "proxy",
-  tags: ["Demo"],
-  request: { body: z.object({ url: z.string() }).strict() },
-  responses: { 200: { description: "OK", body: z.object({ status: z.number() }) } },
-  handler: async ({ body }) => {
+app.post(
+  "/proxy",
+  {
+    operationId: "proxy",
+    tags: ["Demo"],
+    request: { body: z.object({ url: z.string() }).strict() },
+    responses: { 200: { description: "OK", body: z.object({ status: z.number() }) } },
+  },
+  async ({ body }) => {
     const res = await fetch(body.url);                                // 🐛 (bonus) — no SSRF guard
     return { status: 200 as const, body: { status: res.status } };
   },
-});
+);
 
 serve(app, { port: 3000 });

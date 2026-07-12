@@ -40,17 +40,18 @@ const app = new App({
 app.use(cors({ origin: () => true, credentials: true })); // REGRESSION #4: predicate reflects ANY origin + credentials
 app.use(rateLimit({ windowMs: 60_000, max: 1_000_000 })); // effectively disabled
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string() }) }, // no .min(1)
-  responses: {
-    200: { description: "OK", body: BookSchema },
-    404: { description: "Not documented well; handler still leaks a hand-rolled body." },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string() }) }, // no .min(1)
+    responses: {
+      200: { description: "OK", body: BookSchema },
+      404: { description: "Not documented well; handler still leaks a hand-rolled body." },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     if (!b) {
       // REGRESSION #5: leaks server internals in the body, bypasses RFC 9457.
@@ -63,24 +64,25 @@ app.route({
     }
     return { status: 200 as const, body: b };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  // REGRESSION (bonus): no `.strict()`, accepts mass-assignment.
-  request: { body: z.object({ id: z.string(), title: z.string() }) },
-  // REGRESSION (bonus): no `auth` field, but `hooks` enforces bearer at runtime.
-  // Docs are wrong on purpose.
-  hooks: bearerAuth({ validate: (token) => token === "demo-token" }),
-  responses: { 201: { description: "Created", body: BookSchema } },
-  handler: async ({ body }) => {
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    // REGRESSION (bonus): no `.strict()`, accepts mass-assignment.
+    request: { body: z.object({ id: z.string(), title: z.string() }) },
+    // REGRESSION (bonus): no `auth` field, but `hooks` enforces bearer at runtime.
+    // Docs are wrong on purpose.
+    hooks: bearerAuth({ validate: (token) => token === "demo-token" }),
+    responses: { 201: { description: "Created", body: BookSchema } },
+  },
+  async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

@@ -7,8 +7,9 @@
  *
  * The return type is intentionally **inferred** — this function does *not*
  * annotate `: App`, and the two routes are registered by *chaining*
- * `.route(...)` calls rather than as separate `app.route(...)` statements.
- * That is what carries the accumulated per-route tuple to callers, so
+ * `.get(...)` / `.post(...)` shorthand calls rather than as separate
+ * `app.get(...)` statements. That is what carries the accumulated per-route
+ * tuple to callers, so
  * `createClient(buildExampleApp())` gets a fully typed `getBookById` /
  * `createBook` surface with **no cast**. Annotating `: App` here, or breaking
  * the chain into separate statements, would widen the type back to a plain
@@ -52,7 +53,7 @@ export function buildExampleApp() {
     ["2", { id: "2", title: "Dune" }],
   ]);
 
-  // One unbroken chain: `new App(...).use(...)....route(...).route(...)`.
+  // One unbroken chain: `new App(...).use(...)....get(...).post(...)`.
   // The inferred return type therefore is `App<[getBookById, createBook]>`.
   return new App({
     title: "Bookstore API",
@@ -70,43 +71,45 @@ export function buildExampleApp() {
     .use(cors({ origin: "*", credentials: false }))
     .use(timing())
     .use(rateLimit({ windowMs: 60_000, max: 120 }))
-    .route({
-      method: "GET",
-      path: "/books/:id",
-      operationId: "getBookById",
-      tags: ["Books"],
-      summary: "Fetch a book by id",
-      request: { params: z.object({ id: z.string() }) },
-      responses: {
-        200: {
-          description: "Book found",
-          body: BookSchema,
-          examples: { default: { id: "1", title: "Foundation" } },
+    .get(
+      "/books/:id",
+      {
+        operationId: "getBookById",
+        tags: ["Books"],
+        summary: "Fetch a book by id",
+        request: { params: z.object({ id: z.string() }) },
+        responses: {
+          200: {
+            description: "Book found",
+            body: BookSchema,
+            examples: { default: { id: "1", title: "Foundation" } },
+          },
+          404: { description: "Book not found", body: ProblemSchema },
         },
-        404: { description: "Book not found", body: ProblemSchema },
       },
-      handler: async ({ params }) => {
+      async ({ params }) => {
         const book = books.get(params.id);
         if (!book) throw new NotFoundError(`No book with id ${params.id}`);
         return { status: 200 as const, body: book };
       },
-    })
-    .route({
-      method: "POST",
-      path: "/books",
-      operationId: "createBook",
-      tags: ["Books"],
-      auth: { scheme: "bearer" },
-      hooks: bearerAuth({ validate: (t) => t === "demo-token" }),
-      request: { body: BookSchema },
-      responses: {
-        201: { description: "Created", body: BookSchema },
-        401: { description: "Unauthorized", body: ProblemSchema },
-        422: { description: "Validation error", body: ProblemSchema },
+    )
+    .post(
+      "/books",
+      {
+        operationId: "createBook",
+        tags: ["Books"],
+        auth: { scheme: "bearer" },
+        hooks: bearerAuth({ validate: (t) => t === "demo-token" }),
+        request: { body: BookSchema },
+        responses: {
+          201: { description: "Created", body: BookSchema },
+          401: { description: "Unauthorized", body: ProblemSchema },
+          422: { description: "Validation error", body: ProblemSchema },
+        },
       },
-      handler: async ({ body }) => {
+      async ({ body }) => {
         books.set(body.id, body);
         return { status: 201 as const, body };
       },
-    });
+    );
 }

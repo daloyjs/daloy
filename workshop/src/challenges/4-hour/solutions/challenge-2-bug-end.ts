@@ -29,41 +29,43 @@ app.use(secureHeaders());
 app.use(cors({ origin: "https://app.example.com", credentials: true }));
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "OK", body: BookSchema },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "OK", body: BookSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     // FIX #5: throw a framework error → uniform problem+json handling.
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  auth: { scheme: "bearer" },                                       // FIX: declare auth on op
-  hooks: bearerAuth({ validate: (token) => token === "demo-token" }),
-  request: { body: CreateBookSchema },                              // FIX: .strict() schema
-  responses: {
-    201: { description: "Created", body: BookSchema },
-    401: { description: "Unauthorized" },
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    auth: { scheme: "bearer" },                                       // FIX: declare auth on op
+    hooks: bearerAuth({ validate: (token) => token === "demo-token" }),
+    request: { body: CreateBookSchema },                              // FIX: .strict() schema
+    responses: {
+      201: { description: "Created", body: BookSchema },
+      401: { description: "Unauthorized" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

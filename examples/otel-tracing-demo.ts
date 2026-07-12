@@ -309,27 +309,29 @@ const app = new App({
   }),
 });
 
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "healthCheck",
-  summary: "Liveness probe",
-  responses: { 200: { description: "OK", body: z.object({ status: z.string() }) } },
-  handler: () => ({ status: 200 as const, body: { status: "ok" } }),
-});
+app.get(
+  "/health",
+  {
+    operationId: "healthCheck",
+    summary: "Liveness probe",
+    responses: { 200: { description: "OK", body: z.object({ status: z.string() }) } },
+  },
+  () => ({ status: 200 as const, body: { status: "ok" } }),
+);
 
-app.route({
-  method: "GET",
-  path: "/orders",
-  operationId: "listOrders",
-  summary: "List orders",
-  responses: {
-    200: {
-      description: "Order list",
-      body: z.object({ orders: z.array(z.object({ id: z.string(), total: z.number() })) }),
+app.get(
+  "/orders",
+  {
+    operationId: "listOrders",
+    summary: "List orders",
+    responses: {
+      200: {
+        description: "Order list",
+        body: z.object({ orders: z.array(z.object({ id: z.string(), total: z.number() })) }),
+      },
     },
   },
-  handler: ({ state }) => {
+  ({ state }) => {
     // Handlers can read the active span off ctx.state and enrich it.
     const span = (state as Record<string, unknown>).otelSpan as TracingSpan | undefined;
     span?.setAttribute("app.orders.count", 2);
@@ -343,21 +345,22 @@ app.route({
       },
     };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/orders",
-  operationId: "createOrder",
-  summary: "Create an order",
-  request: { body: z.object({ item: z.string(), total: z.number().positive() }) },
-  responses: {
-    201: {
-      description: "Order created",
-      body: z.object({ id: z.string(), item: z.string(), total: z.number() }),
+app.post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    summary: "Create an order",
+    request: { body: z.object({ item: z.string(), total: z.number().positive() }) },
+    responses: {
+      201: {
+        description: "Order created",
+        body: z.object({ id: z.string(), item: z.string(), total: z.number() }),
+      },
     },
   },
-  handler: ({ body, state }) => {
+  ({ body, state }) => {
     const span = (state as Record<string, unknown>).otelSpan as TracingSpan | undefined;
     span?.setAttribute("app.order.item", body.item);
     span?.setAttribute("app.order.total", body.total);
@@ -366,31 +369,33 @@ app.route({
       body: { id: `ord-${randomHex(4)}`, item: body.item, total: body.total },
     };
   },
-});
+);
 
-app.route({
-  method: "GET",
-  path: "/slow",
-  operationId: "slowEndpoint",
-  summary: "Artificially slow endpoint (visible span duration)",
-  responses: { 200: { description: "OK", body: z.object({ waitedMs: z.number() }) } },
-  handler: async () => {
+app.get(
+  "/slow",
+  {
+    operationId: "slowEndpoint",
+    summary: "Artificially slow endpoint (visible span duration)",
+    responses: { 200: { description: "OK", body: z.object({ waitedMs: z.number() }) } },
+  },
+  async () => {
     const waitedMs = 150;
     await new Promise((r) => setTimeout(r, waitedMs));
     return { status: 200 as const, body: { waitedMs } };
   },
-});
+);
 
-app.route({
-  method: "GET",
-  path: "/boom",
-  operationId: "boom",
-  summary: "Always throws (produces an ERROR span with an exception event)",
-  responses: { 500: { description: "Internal error" } },
-  handler: () => {
+app.get(
+  "/boom",
+  {
+    operationId: "boom",
+    summary: "Always throws (produces an ERROR span with an exception event)",
+    responses: { 500: { description: "Internal error" } },
+  },
+  () => {
     throw new Error("synthetic failure for tracing demo");
   },
-});
+);
 
 const PORT = 3002;
 const { port } = serve(app, { port: PORT });

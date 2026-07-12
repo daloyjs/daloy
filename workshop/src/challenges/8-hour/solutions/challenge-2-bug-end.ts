@@ -57,36 +57,38 @@ const jwtAuth: Hooks = {
   },
 };
 
-app.route({
-  method: "POST",
-  path: "/admin/exec",
-  operationId: "adminExec",
-  tags: ["Admin"],
-  hooks: jwtAuth,
-  request: { body: z.object({ token: z.string(), command: z.string() }).strict() }, // ✅ 5
-  responses: {
-    200: { description: "OK", body: z.object({ ok: z.literal(true) }) },
-    401: { description: "Unauthorized" },
+app.post(
+  "/admin/exec",
+  {
+    operationId: "adminExec",
+    tags: ["Admin"],
+    hooks: jwtAuth,
+    request: { body: z.object({ token: z.string(), command: z.string() }).strict() }, // ✅ 5
+    responses: {
+      200: { description: "OK", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "Unauthorized" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     if (!eq(body.token, ADMIN_TOKEN)) {                                 // ✅ 6
       throw new UnauthorizedError("Unauthorized");
     }
     return { status: 200 as const, body: { ok: true as const } };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/proxy",
-  operationId: "proxy",
-  tags: ["Demo"],
-  request: { body: z.object({ url: z.string().url() }).strict() },
-  responses: {
-    200: { description: "OK", body: z.object({ status: z.number() }) },
-    400: { description: "URL refused" },
+app.post(
+  "/proxy",
+  {
+    operationId: "proxy",
+    tags: ["Demo"],
+    request: { body: z.object({ url: z.string().url() }).strict() },
+    responses: {
+      200: { description: "OK", body: z.object({ status: z.number() }) },
+      400: { description: "URL refused" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     try {
       const res = await safeFetch(body.url, { signal: AbortSignal.timeout(5_000) }); // ✅ bonus
       return { status: 200 as const, body: { status: res.status } };
@@ -94,7 +96,7 @@ app.route({
       throw new BadRequestError((e as Error).message);
     }
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

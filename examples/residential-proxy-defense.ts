@@ -157,16 +157,17 @@ app.use(
 );
 
 // --- Business route ----------------------------------------------------------
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "health",
-  tags: ["Ops"],
-  responses: {
-    200: { description: "OK", body: z.object({ ok: z.literal(true) }) },
+app.get(
+  "/health",
+  {
+    operationId: "health",
+    tags: ["Ops"],
+    responses: {
+      200: { description: "OK", body: z.object({ ok: z.literal(true) }) },
+    },
   },
-  handler: async () => ({ status: 200 as const, body: { ok: true as const } }),
-});
+  async () => ({ status: 200 as const, body: { ok: true as const } }),
+);
 
 const port = Number(process.env.PORT ?? 3002);
 serve(app, { port });

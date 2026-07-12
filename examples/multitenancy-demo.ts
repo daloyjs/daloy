@@ -72,45 +72,47 @@ const app = new App({
 // Per-tenant rate limiting: each tenant gets its own 5-requests/minute bucket.
 app.use(rateLimit({ windowMs: 60_000, max: 5, keyGenerator: tenantScope() }));
 
-app.route({
-  method: "GET",
-  path: "/orders",
-  operationId: "listOrders",
-  summary: "List the calling tenant's orders",
-  responses: {
-    200: {
-      description: "Order list (scoped to the resolved tenant)",
-      body: z.object({
-        tenant: z.string(),
-        orders: z.array(z.object({ id: z.string(), item: z.string(), total: z.number() })),
-      }),
+app.get(
+  "/orders",
+  {
+    operationId: "listOrders",
+    summary: "List the calling tenant's orders",
+    responses: {
+      200: {
+        description: "Order list (scoped to the resolved tenant)",
+        body: z.object({
+          tenant: z.string(),
+          orders: z.array(z.object({ id: z.string(), item: z.string(), total: z.number() })),
+        }),
+      },
     },
   },
-  handler: ({ state }) => {
+  ({ state }) => {
     const tenant = state.tenant!; // guaranteed by tenancy({ require: true })
     return { status: 200 as const, body: { tenant, orders: ordersFor(tenant) } };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/orders",
-  operationId: "createOrder",
-  summary: "Create an order for the calling tenant",
-  request: { body: z.object({ item: z.string(), total: z.number().positive() }) },
-  responses: {
-    201: {
-      description: "Order created",
-      body: z.object({ id: z.string(), item: z.string(), total: z.number() }),
+app.post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    summary: "Create an order for the calling tenant",
+    request: { body: z.object({ item: z.string(), total: z.number().positive() }) },
+    responses: {
+      201: {
+        description: "Order created",
+        body: z.object({ id: z.string(), item: z.string(), total: z.number() }),
+      },
     },
   },
-  handler: ({ body, state }) => {
+  ({ body, state }) => {
     const tenant = state.tenant!;
     const order: Order = { id: `ord-${ordersFor(tenant).length + 1}`, item: body.item, total: body.total };
     ordersFor(tenant).push(order);
     return { status: 201 as const, body: order };
   },
-});
+);
 
 const PORT = 3003;
 const { port } = serve(app, { port: PORT });

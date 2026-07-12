@@ -6,13 +6,13 @@
 
 Both tracks are designed around production judgment:
 
-- Where should the request schema live, and what does `app.route({...})` give you for free once it's there?
+- Where should the request schema live, and what does `app.get(path, contract, handler)` give you for free once it's there?
 - When do you let the framework reject a request (body limit, content-type, validation, secureHeaders, rateLimit) versus reject it in the handler?
 - How do you keep the OpenAPI spec, the typed client, and the runtime behavior all in sync from one definition?
 - How do you build a feature so it works identically on Node, Bun, Deno, and Cloudflare Workers?
 - How do you reason about supply-chain risk in a backend stack, and what defaults already protect you?
 
-Tutorial note: the workshop exercises intentionally avoid file-based routing or magic auto-discovery so attendees see the explicit `app.route(...)` contract first. The `examples/` and `website/` apps in the parent repo still use larger composition patterns because those remain the preferred production patterns at scale.
+Tutorial note: the workshop exercises intentionally avoid file-based routing or magic auto-discovery so attendees see the explicit `app.get(path, contract, handler)` contract first. The `examples/` and `website/` apps in the parent repo still use larger composition patterns because those remain the preferred production patterns at scale.
 
 ## 4-Hour Workshop
 
@@ -21,7 +21,7 @@ The 4-hour track lives under [`src/challenges/4-hour/`](./src/challenges/4-hour)
 | Step | Activity                                | Focus                                                                         |
 | ---- | --------------------------------------- | ----------------------------------------------------------------------------- |
 | 0    | Setup & Hello World                     | `new App()`, `serve()`, `docs: true`, `/openapi.json`, Scalar at `/docs`      |
-| 1    | Contract-First Route                    | `app.route({ request, responses, handler })`, Zod params, response body schema |
+| 1    | Contract-First Route                    | `app.get(path, { request, responses }, handler)` shorthand, Zod params, response body schema |
 | 2    | Validation + RFC 9457 Errors            | `.strict()` schemas, `throw new NotFoundError`, problem+json shape            |
 | 3    | Security Middleware Stack               | `requestId`, `secureHeaders`, `cors`, `rateLimit`, body limit, request timeout |
 | 4    | Bearer Auth on a Route                  | `auth: { scheme: 'bearer' }`, `bearerAuth({ validate })`, security schemes    |
@@ -69,7 +69,7 @@ The 8-hour track lives under [`src/challenges/8-hour/`](./src/challenges/8-hour)
 
 | Concern                             | Express / Fastify              | Hono                  | FastAPI (Python)     | DaloyJS                       |
 | ----------------------------------- | ------------------------------ | --------------------- | -------------------- | ----------------------------- |
-| Single source of truth for contract | Multiple plugins, drift-prone  | Plugin afterthought   | Yes                  | Yes — one `app.route({...})`  |
+| Single source of truth for contract | Multiple plugins, drift-prone  | Plugin afterthought   | Yes                  | Yes — one `app.get(path, contract, handler)`  |
 | Runtime portability                 | Node / Bun only                | Yes                   | Python only          | Node, Bun, Deno, Vercel, CF   |
 | Auto OpenAPI 3.1                    | Manual or plugin               | Plugin                | Yes                  | First-class, one line         |
 | Typed client codegen                | Separate, you wire it          | Optional              | Separate             | `pnpm gen` (Hey API)          |

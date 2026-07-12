@@ -106,7 +106,7 @@ import { z } from "zod";
 const app = new App({ /* … */ });
 
 // app.use(...)
-// app.route({...})
+// app.get(path, contract, handler)
 
 serve(app, { port: 3000 });
 ```

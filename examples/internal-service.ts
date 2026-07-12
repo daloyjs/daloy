@@ -60,48 +60,50 @@ const app = new App({
 
 const User = z.object({ id: z.string(), name: z.string() });
 
-app.route({
-  method: "GET",
-  path: "/users/:id",
-  operationId: "getUser",
-  tags: ["Users"],
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: { description: "OK", body: User },
+app.get(
+  "/users/:id",
+  {
+    operationId: "getUser",
+    tags: ["Users"],
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: { description: "OK", body: User },
+    },
   },
-  handler: async ({ params }) => ({
+  async ({ params }) => ({
     status: 200 as const,
     body: { id: params.id, name: `User ${params.id}` },
   }),
-});
+);
 
 // --- Operator-facing posture introspection -----------------------------------
 //
 // Exposes the live security posture so SREs, mesh operators, and CI audits
 // can see exactly which guards are on without reading the framework source.
 
-app.route({
-  method: "GET",
-  path: "/__security",
-  operationId: "securityPosture",
-  tags: ["Ops"],
-  responses: {
-    200: {
-      description: "Live security posture snapshot",
-      body: z.object({
-        preset: z.string().nullable(),
-        secureDefaults: z.boolean(),
-        secureHeaders: z.boolean(),
-        corsCrossOriginGuard: z.boolean(),
-        csrf: z.enum(["on", "off"]),
-        trustProxy: z.union([z.boolean(), z.literal("unconfigured")]),
-        bodyLimitBytes: z.number(),
-        requestTimeoutMs: z.number(),
-        production: z.boolean(),
-      }),
+app.get(
+  "/__security",
+  {
+    operationId: "securityPosture",
+    tags: ["Ops"],
+    responses: {
+      200: {
+        description: "Live security posture snapshot",
+        body: z.object({
+          preset: z.string().nullable(),
+          secureDefaults: z.boolean(),
+          secureHeaders: z.boolean(),
+          corsCrossOriginGuard: z.boolean(),
+          csrf: z.enum(["on", "off"]),
+          trustProxy: z.union([z.boolean(), z.literal("unconfigured")]),
+          bodyLimitBytes: z.number(),
+          requestTimeoutMs: z.number(),
+          production: z.boolean(),
+        }),
+      },
     },
   },
-  handler: async () => {
+  async () => {
     const p = app.getSecurityPosture();
     return {
       status: 200 as const,
@@ -118,7 +120,7 @@ app.route({
       },
     };
   },
-});
+);
 
 const port = Number(process.env.PORT ?? 3001);
 serve(app, { port });

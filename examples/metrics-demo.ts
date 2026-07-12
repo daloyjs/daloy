@@ -43,27 +43,29 @@ app.metrics({
   exclude: (p) => p === "/health",
 });
 
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "healthCheck",
-  summary: "Liveness probe",
-  responses: { 200: { description: "OK", body: z.object({ status: z.string() }) } },
-  handler: () => ({ status: 200 as const, body: { status: "ok" } }),
-});
+app.get(
+  "/health",
+  {
+    operationId: "healthCheck",
+    summary: "Liveness probe",
+    responses: { 200: { description: "OK", body: z.object({ status: z.string() }) } },
+  },
+  () => ({ status: 200 as const, body: { status: "ok" } }),
+);
 
-app.route({
-  method: "GET",
-  path: "/orders",
-  operationId: "listOrders",
-  summary: "List orders",
-  responses: {
-    200: {
-      description: "Order list",
-      body: z.object({ orders: z.array(z.object({ id: z.string(), total: z.number() })) }),
+app.get(
+  "/orders",
+  {
+    operationId: "listOrders",
+    summary: "List orders",
+    responses: {
+      200: {
+        description: "Order list",
+        body: z.object({ orders: z.array(z.object({ id: z.string(), total: z.number() })) }),
+      },
     },
   },
-  handler: () => ({
+  () => ({
     status: 200 as const,
     body: {
       orders: [
@@ -72,23 +74,24 @@ app.route({
       ],
     },
   }),
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/orders",
-  operationId: "createOrder",
-  summary: "Create an order",
-  request: {
-    body: z.object({ item: z.string(), total: z.number().positive() }),
-  },
-  responses: {
-    201: {
-      description: "Order created",
-      body: z.object({ id: z.string(), item: z.string(), total: z.number() }),
+app.post(
+  "/orders",
+  {
+    operationId: "createOrder",
+    summary: "Create an order",
+    request: {
+      body: z.object({ item: z.string(), total: z.number().positive() }),
+    },
+    responses: {
+      201: {
+        description: "Order created",
+        body: z.object({ id: z.string(), item: z.string(), total: z.number() }),
+      },
     },
   },
-  handler: ({ body }) => {
+  ({ body }) => {
     ordersCreated.inc({ item: body.item });
     orderValue.observe({}, body.total);
     return {
@@ -96,7 +99,7 @@ app.route({
       body: { id: `ord-${Date.now()}`, item: body.item, total: body.total },
     };
   },
-});
+);
 
 const PORT = 3001;
 const { port } = serve(app, { port: PORT });
