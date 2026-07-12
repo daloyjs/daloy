@@ -30,7 +30,7 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **
 
 ## Core rules
 
-1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.route({...})`.
+1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.get(path, contract, handler)` (or `app.route({...})` for reusable `defineRoute()` contracts or metadata-heavy routes).
 2. Validate every input with Zod or another Standard Schema-compatible validator. For Zod object schemas, use `.strict()` to reject unknown keys at the boundary.
 3. Preserve literal types in responses: `status: 200 as const`, `z.literal(...)` on discriminator fields.
 4. Throw typed errors (`NotFoundError`, `BadRequestError`, etc.) from `@daloyjs/core`.

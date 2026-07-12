@@ -35,10 +35,14 @@ DaloyJS is a **contract-first** framework. Internalize these rules — every
 recommendation below follows from them:
 
 1. **The route definition is the contract.** Method, path, request schemas,
-   and response schemas live in one place (`app.route({...})`). The OpenAPI
-   spec, the typed client, and the runtime validation are all derived from
-   it. Never duplicate that information by hand-writing fetch calls, types,
-   or `openapi.json` entries.
+   and response schemas live in one place — `app.get(path, contract, handler)`
+   (and the matching `app.post`/`put`/`patch`/`delete`/`head` shorthands), or
+   `app.route({...})` when you need a reusable `defineRoute()` contract or a
+   metadata-heavy route. Both forms produce identical runtime behavior,
+   validation, security, and OpenAPI output. The OpenAPI spec, the typed
+   client, and the runtime validation are all derived from the route
+   definition. Never duplicate that information by hand-writing fetch calls,
+   types, or `openapi.json` entries.
 2. **Validation schemas protect every boundary.** This template uses Zod,
    and Daloy accepts any Standard Schema-compatible library. Body, params,
    query, and headers go through the declared schema. If a field is not in
@@ -136,10 +140,14 @@ bugs (drifted client SDK, missing test, broken codegen).
    them in `src/build-app.ts` or extract a `src/schemas/*.ts` module if
    they grow. Prefer `z.object({...}).strict()` for inputs so unknown
    keys are rejected at the boundary.
-3. **Call `app.route({...})`.** Required keys: `method`, `path`,
-   `operationId`, `tags`, `responses`, `handler`. Add `request` when the
-   route accepts input, and add `meta` examples / descriptions when the
-   route is user-facing or consumed by agents.
+3. **Call the method shorthand: `app.get(path, contract, handler)`** (or
+   `app.post`/`put`/`patch`/`delete`/`head` for other methods). The contract
+   object's required keys are `operationId`, `tags`, `responses`. Add
+   `request` when the route accepts input, and add `meta` examples /
+   descriptions when the route is user-facing or consumed by agents. Reach
+   for the full `app.route({ method, path, ...contract, handler })` form
+   instead when the route is built from a reusable `defineRoute()` contract,
+   or when composing many routes at once via `registerRoutes()`.
 4. **Return `{ status, body, headers? }` from the handler.** Always use
    `status: 200 as const` (or whatever code) so the typed client can
    narrow. For literal discriminators in `body`, use `as const` or
@@ -166,22 +174,23 @@ import { NotFoundError } from "@daloyjs/core";
 const Book = z.object({ id: z.string(), title: z.string() }).strict();
 const BookParams = z.object({ id: z.string().min(1) }).strict();
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: BookParams },
-  responses: {
-    200: { description: "Found", body: Book },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: BookParams },
+    responses: {
+      200: { description: "Found", body: Book },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const book = await store.find(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
     return { status: 200 as const, body: book };
   },
-});
+);
 ```
 
 ## Validation & schema conventions

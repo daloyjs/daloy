@@ -48,7 +48,7 @@ You import the file you see. On `pnpm build`, TypeScript rewrites the `.ts` spec
 
 ## Core rules
 
-1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.route({...})`.
+1. The route definition is the contract: `app.get(path, contract, handler)` shorthand, or `app.route({...})` for reusable `defineRoute()` contracts.
 2. Validate every input with Zod or another Standard Schema-compatible validator. For Zod object schemas, use `.strict()` to reject unknown keys at the boundary.
 3. Preserve literal types in responses: `status: 200 as const`, `z.literal(...)` on discriminator fields. Codegen depends on these.
 4. Throw typed errors (`NotFoundError`, `BadRequestError`, etc.) from `@daloyjs/core` — never return raw error responses.
@@ -71,9 +71,6 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 
 ## Process expectations
 
-- Quality gates must pass before declaring work done: `pnpm typecheck` and `pnpm test`.
-- Update the OpenAPI spec and typed client whenever route shapes change (`pnpm gen`) and run the contract gate (`pnpm contract`).
 - Bug fixes include a regression test.
-- Never bypass safety checks (`--no-verify`, `--ignore-scripts=false`) without a clear reason.
 
 For the full workflow — adding routes step-by-step, schema conventions, testing patterns, security guidance, and deployment notes — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

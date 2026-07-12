@@ -87,7 +87,7 @@ Each existing stack is excellent at one thing and forces tradeoffs everywhere el
 
 DaloyJS combines the wins:
 
-1. **Explicit contracts, minimal ceremony.** One `app.route({...})` is the source of truth for validation, types, OpenAPI, the typed client, and contract tests.
+1. **Explicit contracts, minimal ceremony.** One `app.get(path, contract, handler)` (or the matching shorthand, or `app.route({...})` for reusable contracts) is the source of truth for validation, types, OpenAPI, the typed client, and contract tests.
 2. **One source of truth for validation, typing, and docs** via [Standard Schema](https://github.com/standard-schema/standard-schema) — Zod 4 / Valibot / ArkType / TypeBox all work, no lock-in.
 3. **Portable core, optional runtime optimizations** — the only thing the core knows is `Request → Response`. Adapters live at the edge.
 4. **Security guardrails by default — bad defaults are bugs.** The core enforces body limits, prototype-pollution-safe JSON, path-traversal rejection, request timeouts, content-type checks, and RFC 9457 problem+json errors with prod-mode redaction. First-party middleware covers Helmet-grade headers, CORS, CSRF, rate limits, request ids, and signed-cookie sessions.
@@ -180,24 +180,24 @@ app.use(requestId());
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string() }) },
-  responses: {
-    200: {
-      description: "Found",
-      body: z.object({ id: z.string(), title: z.string() }),
+app.get(
+  "/books/:id",
+  {
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: {
+        description: "Found",
+        body: z.object({ id: z.string(), title: z.string() }),
+      },
+      404: { description: "Not found" },
     },
-    404: { description: "Not found" },
   },
-  handler: async ({ params }) => ({
+  async ({ params }) => ({
     status: 200,
     body: { id: params.id, title: `Book ${params.id}` },
   }),
-});
+);
 
 serve(app, { port: 3000 });
 ```
@@ -521,13 +521,14 @@ Gate it in CI two ways: `daloy inspect --check <entry>` exits non-zero on any er
 const usersPlugin = {
   name: "users",
   register(app) {
-    app.route({
-      method: "GET",
-      path: "/me",
-      operationId: "me",
-      responses: { 200: { description: "ok" } },
-      handler: async () => ({ status: 200, body: { user: "alice" } }),
-    });
+    app.get(
+      "/me",
+      {
+        operationId: "me",
+        responses: { 200: { description: "ok" } },
+      },
+      async () => ({ status: 200, body: { user: "alice" } }),
+    );
   },
 };
 app.register(usersPlugin, { prefix: "/users", tags: ["Users"] });
@@ -571,7 +572,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status
 
-DaloyJS is at **`1.0.0-rc.3`**, a security-hardening release candidate. Because the framework has no external users yet, this RC makes a few intentional changes (see the [CHANGELOG](CHANGELOG.md)) to get the secure-by-default posture right before GA rather than deferring them; the generated OpenAPI contract is unchanged. From `1.0.0` GA onward, the API follows SemVer with deprecations getting at least one minor cycle. The framework is already in use for production trials.
+DaloyJS is at **`1.0.0-rc.3`**, a security-hardening release candidate. Because the framework has no external users yet, this RC makes a few intentional changes (see the [CHANGELOG](CHANGELOG.md)) to get the secure-by-default posture right before the stable release rather than deferring them; the generated OpenAPI contract is unchanged. From `1.0.0` stable onward, the API follows SemVer with deprecations getting at least one minor cycle. The framework is already in use for production trials.
 
 **Release quality bar.** Every release ships with **≥90% line + function coverage and ≥90% branch coverage**, strict TypeScript, OpenSSF Scorecard, CodeQL + Opengrep dual SAST, zizmor workflow linting, and npm provenance. Coverage was relaxed from a former 100% gate so complex security work isn't blocked chasing throwaway tests for unreachable defensive branches or tsx source-map phantoms; see [AGENTS.md](AGENTS.md) for the policy.
 

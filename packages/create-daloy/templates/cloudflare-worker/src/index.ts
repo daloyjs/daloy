@@ -32,22 +32,23 @@ app.use(secureHeaders());
 // this baseline. Do not remove it to make a test pass; raise `max` per route.
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
-app.route({
-  method: "GET",
-  path: "/healthz",
-  operationId: "healthz",
-  tags: ["Ops"],
-  responses: {
-    200: {
-      description: "Service is healthy",
-      body: z.object({ ok: z.literal(true), runtime: z.literal("cloudflare-worker") }),
+app.get(
+  "/healthz",
+  {
+    operationId: "healthz",
+    tags: ["Ops"],
+    responses: {
+      200: {
+        description: "Service is healthy",
+        body: z.object({ ok: z.literal(true), runtime: z.literal("cloudflare-worker") }),
+      },
     },
   },
-  handler: async () => ({
+  async () => ({
     status: 200 as const,
     body: { ok: true as const, runtime: "cloudflare-worker" as const },
   }),
-});
+);
 
 // daloy-minimal:strip-start books
 const Book = z.object({ id: z.string(), title: z.string() }).strict();
@@ -55,22 +56,23 @@ const books = new Map<string, z.infer<typeof Book>>([
   ["1", { id: "1", title: "Noli Me Tangere" }],
 ]);
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }).strict() },
-  responses: {
-    200: { description: "Found", body: Book },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }).strict() },
+    responses: {
+      200: { description: "Found", body: Book },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const book = books.get(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
     return { status: 200 as const, body: book };
   },
-});
+);
 // daloy-minimal:strip-end books
 
 // Cloudflare invokes the default export's `fetch`. The `app` instance is also

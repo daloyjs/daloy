@@ -42,7 +42,7 @@ You import the file you see. Vercel resolves `.ts` at deploy time; Node runs it 
 
 ## Core rules
 
-1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.route({...})`.
+1. The route definition is the contract. Method, path, request schemas, and response schemas live in one place — `app.get(path, contract, handler)` (or `app.route({...})` for reusable `defineRoute()` contracts or metadata-heavy routes).
 2. Validate every input with Zod or another Standard Schema-compatible validator. For Zod object schemas, use `.strict()` to reject unknown keys at the boundary.
 3. Preserve literal types in responses: `status: 200 as const`, `z.literal(...)` on discriminator fields.
 4. Throw typed errors (`NotFoundError`, `BadRequestError`, etc.) from `@daloyjs/core`.
@@ -57,11 +57,11 @@ You import the file you see. Vercel resolves `.ts` at deploy time; Node runs it 
 Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development): _"If you tell an AI to make something work, it might remove the very security checks that protect you."_ When a guard rejects a request, **satisfy it, do not delete it.**
 
 - Keep `secureHeaders()`, `requestId()`, `rateLimit()`, `bodyLimitBytes`, and `requestTimeoutMs`. For production, back rate limits with a shared store such as Upstash Redis from the Vercel Marketplace.
-- Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. For other validators, use the strict / no-extra-keys equivalent. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
+- Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
 - Every protected route attaches auth `beforeHandle` and tests unauthenticated `401` plus wrong-scope `403`.
 - JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
 - Credential / HMAC comparisons use constant-time comparison, never `===`. Throw typed errors so problem+json redacts in prod.
-- Keep the single `api/index.ts` entry and the `vercel.json` rewrite so DaloyJS owns routing — do not split into per-path files that bypass the middleware chain, and do not remove the rewrite (the root domain would 404).
+- Keep the single `api/index.ts` entry and the `vercel.json` rewrite; do not split into per-path files or remove the rewrite (the root domain would 404).
 - `.env`, `.env.local`, secrets, private keys: never commit. Use `vercel env` for production secrets.
 
 ## Process expectations

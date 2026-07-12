@@ -117,7 +117,7 @@ This is the maintainer's upstream commitment. Downstream commercial consumers re
 
 CRA Article 13(8) requires a "support period" reflecting expected product lifetime, with **5 years** as the regulatory floor for most consumer products.
 
-DaloyJS commits to a **minimum 5-year security-update support period** for every major release line starting with `1.0`, measured from that line's first GA release. The current `0.x` line is security-supported on the latest minor until `1.0` ships; the 5-year clock starts at `1.0` and resets on every subsequent major. End-of-support dates will be published here and on [`/docs/security/compliance`](https://daloyjs.dev/docs/security/compliance) once `1.0` lands.
+DaloyJS commits to a **minimum 5-year security-update support period** for every major release line starting with `1.0`, measured from that line's first stable release. The current `0.x` line is security-supported on the latest minor until `1.0` ships; the 5-year clock starts at `1.0` and resets on every subsequent major. End-of-support dates will be published here and on [`/docs/security/compliance`](https://daloyjs.dev/docs/security/compliance) once `1.0` lands.
 
 ---
 
@@ -296,7 +296,7 @@ DaloyJS ships first-party middleware for the surface the "API security tools" ma
 - **API6 Sensitive Business Flows** — `rateLimit({ key })` per-account / per-card-bin + Fetch-Metadata `csrf()`.
 - **API7 SSRF** — `fetchGuard()`. See the SSRF entries below.
 - **API8 Misconfiguration** — `secureHeaders()`, CORS opt-in, prod 5xx redaction, default body cap + timeout, hardened `.npmrc`.
-- **API9 Improper Inventory** — OpenAPI 3.1 from the same `app.route({...})`; `pnpm gen` emits Hey API; `app.introspect()` is public.
+- **API9 Improper Inventory** — OpenAPI 3.1 from the same route contract (`app.get()`/`app.route()`); `pnpm gen` emits Hey API; `app.introspect()` is public.
 - **API10 Unsafe API Consumption** — outbound calls through `fetchGuard()`; JWT verifier applies the prototype-pollution reviver to attacker-controlled claims.
 
 ### In scope: outbound request classes (SSRF)

@@ -104,11 +104,11 @@ body:
         import { App } from "@daloyjs/core";
 
         const app = new App();
-        app.route({
-          method: "POST",
-          path: "/widgets",
-          // ...minimal schema + handler that shows the bug
-        });
+        app.post(
+          "/widgets",
+          { /* ...minimal schema that shows the bug */ },
+          async () => ({ status: 201, body: {} }),
+        );
 
         // Request that triggers it:
         // curl -X POST localhost:3000/widgets -H 'content-type: application/json' -d '{...}'

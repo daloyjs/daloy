@@ -35,7 +35,11 @@ Do **not** use this skill for tasks unrelated to the API itself.
 DaloyJS is a **contract-first** framework. Internalize these rules:
 
 1. **The route definition is the contract.** Method, path, request schemas,
-   and response schemas live in one place (`app.route({...})`).
+   and response schemas live in one place. Use the method shorthand —
+   `app.get(path, contract, handler)`, `app.post(...)`, etc. — for ordinary
+   routes; use `app.route({...})` for reusable `defineRoute()` contracts,
+   metadata-heavy routes, or when composing many routes via
+   `registerRoutes()`.
 2. **Validation schemas protect every boundary.** This template uses Zod,
    and Daloy accepts any Standard Schema-compatible library.
 3. **Preserve literal types.** Return `status: 200 as const`; use
@@ -120,10 +124,15 @@ when it helps consumers understand or safely automate the route:
 2. **Design schemas first.** Define request body/params/query/headers and a
    response body per status code. Prefer `z.object({...}).strict()` for
    inputs.
-3. **Call `app.route({...})`** with `method`, `path`, `operationId`,
-   `tags`, `responses`, `handler` (plus `request` when accepting input).
+3. **Call `app.get(path, {...}, handler)`** (or `app.post`, `app.put`,
+   `app.patch`, `app.delete`, `app.head` — the method shorthand) with
+   `operationId`, `tags`, `responses` in the contract object (plus
+   `request` when accepting input) and the handler as the third argument.
    Add `meta` examples / descriptions when the route is user-facing or
-   consumed by agents.
+   consumed by agents. Reach for the full `app.route({ method, path, ... })`
+   form instead when the contract is a reusable `defineRoute()` object,
+   the route carries heavy metadata, or you're composing many routes via
+   `registerRoutes()`.
 4. **Return `{ status, body, headers? }` from the handler.** Always
    `status: 200 as const`.
 5. **Throw typed errors** (`NotFoundError`, `BadRequestError`, etc.) from
@@ -143,22 +152,23 @@ import { NotFoundError } from "@daloyjs/core";
 const Book = z.object({ id: z.string(), title: z.string() }).strict();
 const BookParams = z.object({ id: z.string().min(1) }).strict();
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: BookParams },
-  responses: {
-    200: { description: "Found", body: Book },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: BookParams },
+    responses: {
+      200: { description: "Found", body: Book },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const book = await store.find(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
     return { status: 200 as const, body: book };
   },
-});
+);
 ```
 
 ## Validation & schema conventions

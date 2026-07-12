@@ -37,7 +37,11 @@ DaloyJS is a **contract-first** framework. On Workers, additionally:
    Cloudflare-specific bindings. No `node:` modules unless the user
    explicitly adds `nodejs_compat` to `wrangler.toml` and opts in.
 2. **The route definition is the contract.** Method, path, request
-   schemas, and response schemas live in one place (`app.route({...})`).
+   schemas, and response schemas live in one place. Use the shorthand
+   `app.get(path, contract, handler)` (`app.post`, `app.put`, `app.patch`,
+   `app.delete`, `app.head`) for ordinary routes; use `app.route({...})`
+   for reusable `defineRoute()` contracts, metadata-heavy routes, or when
+   composing many routes via `registerRoutes()`.
 3. **Validation schemas protect every boundary.** This template uses Zod,
    and Daloy accepts any Standard Schema-compatible library.
 4. **Preserve literal types.** Return `status: 200 as const`.
@@ -112,10 +116,14 @@ when it helps consumers understand or safely automate the route:
 
 1. **Open `src/index.ts`.**
 2. **Design schemas first.** Use `z.object({...}).strict()` for inputs.
-3. **Call `app.route({...})`** with `method`, `path`, `operationId`,
-   `tags`, `responses`, `handler` (plus `request` when accepting input).
-   Add `meta` examples / descriptions when the route is user-facing or
-   consumed by agents.
+3. **Call `app.get(path, contract, handler)`** (or the matching
+   `app.post`/`app.put`/`app.patch`/`app.delete`/`app.head` shorthand) with
+   a contract object holding `operationId`, `tags`, `responses` (plus
+   `request` when accepting input). Add `meta` examples / descriptions when
+   the route is user-facing or consumed by agents. Reach for the full
+   `app.route({...})` form instead when the contract is a reusable
+   `defineRoute()` value, is metadata-heavy, or is being composed with many
+   other routes via `registerRoutes()`.
 4. **Return `{ status, body, headers? }`** with `status: 200 as const`.
 5. **Throw typed errors** (`NotFoundError`, `BadRequestError`, etc.).
 6. **Add a test** under `tests/`. Use `app.request(...)` for pure logic;
@@ -144,22 +152,23 @@ function buildApp(env: Env) {
   app.use(secureHeaders());
   app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
-  app.route({
-    method: "GET",
-    path: "/books/:id",
-    operationId: "getBookById",
-    tags: ["Books"],
-    request: { params: z.object({ id: z.string().min(1) }).strict() },
-    responses: {
-      200: { description: "Found", body: Book },
-      404: { description: "Not found" },
+  app.get(
+    "/books/:id",
+    {
+      operationId: "getBookById",
+      tags: ["Books"],
+      request: { params: z.object({ id: z.string().min(1) }).strict() },
+      responses: {
+        200: { description: "Found", body: Book },
+        404: { description: "Not found" },
+      },
     },
-    handler: async ({ params }) => {
+    async ({ params }) => {
       const raw = await env.BOOKS.get(params.id, "json");
       if (!raw) throw new NotFoundError(`Book ${params.id} not found`);
       return { status: 200 as const, body: Book.parse(raw) };
     },
-  });
+  );
 
   return app;
 }
