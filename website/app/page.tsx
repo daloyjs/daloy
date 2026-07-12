@@ -180,11 +180,6 @@ const FEATURES = [
     body: "Run pnpm gen and get a fully typed fetch SDK, for any consumer, in any TS project, generated from your real spec. Or skip codegen with the in-process typed client.",
   },
   {
-    icon: LightningIcon,
-    title: "Faster than you'd expect",
-    body: "Static routes resolve via a single Map.get (~12.3M ops/sec). Dynamic routes walk a trie in O(segments) regardless of route count.",
-  },
-  {
     icon: RocketLaunchIcon,
     title: "Streaming & observability",
     body: "Backpressure-safe SSE and NDJSON helpers, plus an OpenTelemetry tracing hook that emits HTTP server spans with semantic-convention attributes.",
