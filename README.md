@@ -572,7 +572,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status
 
-DaloyJS is at **`1.0.0-rc.3`**, a security-hardening release candidate. Because the framework has no external users yet, this RC makes a few intentional changes (see the [CHANGELOG](CHANGELOG.md)) to get the secure-by-default posture right before the stable release rather than deferring them; the generated OpenAPI contract is unchanged. From `1.0.0` stable onward, the API follows SemVer with deprecations getting at least one minor cycle. The framework is already in use for production trials.
+DaloyJS is at **`1.0.0-rc.4`**, a security-hardening release candidate. Because the framework has no external users yet, this RC makes a few intentional changes (see the [CHANGELOG](CHANGELOG.md)) to get the secure-by-default posture right before the stable release rather than deferring them; the generated OpenAPI contract is unchanged. From `1.0.0` stable onward, the API follows SemVer with deprecations getting at least one minor cycle. The framework is already in use for production trials.
 
 **Release quality bar.** Every release ships with **≥90% line + function coverage and ≥90% branch coverage**, strict TypeScript, OpenSSF Scorecard, CodeQL + Opengrep dual SAST, zizmor workflow linting, and npm provenance. Coverage was relaxed from a former 100% gate so complex security work isn't blocked chasing throwaway tests for unreachable defensive branches or tsx source-map phantoms; see [AGENTS.md](AGENTS.md) for the policy.
 

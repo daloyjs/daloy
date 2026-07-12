@@ -15,6 +15,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.0.0-rc.4] - 2026-07-12
+
 ### Fixed
 
 - **Type-level auto operation ids now match runtime inference for mixed
@@ -1935,7 +1937,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.3...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.4...HEAD
+[1.0.0-rc.4]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.0...v1.0.0-rc.1
