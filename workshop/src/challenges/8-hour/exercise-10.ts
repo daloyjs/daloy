@@ -28,27 +28,29 @@ app.use(requestId());
 app.use(secureHeaders());
 // TODO: app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
-app.route({
-  method: "GET",
-  path: "/slow",
-  operationId: "slow",
-  tags: ["Demo"],
-  responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
-  handler: async () => {
+app.get(
+  "/slow",
+  {
+    operationId: "slow",
+    tags: ["Demo"],
+    responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
+  },
+  async () => {
     await new Promise((r) => setTimeout(r, 10_000)); // will hit 5s timeout
     return { status: 200 as const, body: { ok: true as const } };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/echo",
-  operationId: "echo",
-  tags: ["Demo"],
-  request: { body: z.object({ blob: z.string() }).strict() },
-  responses: { 200: { description: "OK", body: z.object({ length: z.number() }) } },
-  handler: async ({ body }) => ({ status: 200 as const, body: { length: body.blob.length } }),
-});
+app.post(
+  "/echo",
+  {
+    operationId: "echo",
+    tags: ["Demo"],
+    request: { body: z.object({ blob: z.string() }).strict() },
+    responses: { 200: { description: "OK", body: z.object({ length: z.number() }) } },
+  },
+  async ({ body }) => ({ status: 200 as const, body: { length: body.blob.length } }),
+);
 
 // TODO: POST /password-reset with hooks: rateLimit({ windowMs: 60_000, max: 5 }).
 

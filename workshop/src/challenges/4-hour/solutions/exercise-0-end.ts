@@ -9,19 +9,20 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "getHealth",
-  tags: ["Meta"],
-  responses: {
-    200: {
-      description: "Service is healthy",
-      body: z.object({ status: z.literal("ok") }),
+app.get(
+  "/health",
+  {
+    operationId: "getHealth",
+    tags: ["Meta"],
+    responses: {
+      200: {
+        description: "Service is healthy",
+        body: z.object({ status: z.literal("ok") }),
+      },
     },
   },
-  handler: async () => ({ status: 200 as const, body: { status: "ok" as const } }),
-});
+  async () => ({ status: 200 as const, body: { status: "ok" as const } }),
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/health");

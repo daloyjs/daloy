@@ -18,14 +18,15 @@ const app = new App({
 ## Step 2 — Register `/health`
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "getHealth",
-  tags: ["Meta"],
-  responses: { 200: { description: "OK", body: z.object({ status: z.literal("ok") }) } },
-  handler: async () => ({ status: 200 as const, body: { status: "ok" as const } }),
-});
+app.get(
+  "/health",
+  {
+    operationId: "getHealth",
+    tags: ["Meta"],
+    responses: { 200: { description: "OK", body: z.object({ status: z.literal("ok") }) } },
+  },
+  async () => ({ status: 200 as const, body: { status: "ok" as const } }),
+);
 ```
 
 ## Step 3 — `serve(app, { port: 3000 })`
@@ -50,7 +51,7 @@ for (const op of app.introspect()) {
 | Step | Where     | Change                                                                    |
 | ---- | --------- | ------------------------------------------------------------------------- |
 | 1    | Top       | `const app = new App({ title, version, openapi: { info }, docs: true })` |
-| 2    | Mid       | `app.route({ ... })` for `GET /health`                                   |
+| 2    | Mid       | `app.get("/health", { ... }, handler)`                                   |
 | 3    | Bottom    | `serve(app, { port: 3000 })`                                              |
 | 4    | Above (3) | `for (const op of app.introspect()) console.log(...)`                    |
 

@@ -49,26 +49,27 @@ const IdempotencyHeaders = z.object({ "idempotency-key": z.string().uuid() });
 ## Step 2 — Register `GET /books` with the query schema
 
 ```ts
-app.route({
-  method: "GET",
-  path: "/books",
-  operationId: "listBooks",
-  tags: ["Books"],
-  request: { query: ListBooksQuery },
-  responses: {
-    200: {
-      description: "List of books",
-      body: z.object({ items: z.array(BookSchema), total: z.number() }),
+app.get(
+  "/books",
+  {
+    operationId: "listBooks",
+    tags: ["Books"],
+    request: { query: ListBooksQuery },
+    responses: {
+      200: {
+        description: "List of books",
+        body: z.object({ items: z.array(BookSchema), total: z.number() }),
+      },
     },
   },
-  handler: async ({ query }) => {
+  async ({ query }) => {
     const filtered = [...books.values()].filter((b) => !query.status || b.status === query.status);
     return {
       status: 200 as const,
       body: { items: filtered.slice(0, query.limit), total: filtered.length },
     };
   },
-});
+);
 ```
 
 Inside the handler, `query.limit` is typed as `number` (already coerced) and `query.status` is typed as the enum union. You never touch a string-to-number conversion in user code.
@@ -76,17 +77,18 @@ Inside the handler, `query.limit` is typed as `number` (already coerced) and `qu
 ## Step 3 — Register `POST /books` with body + headers
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  request: { headers: IdempotencyHeaders, body: CreateBookBody },
-  responses: {
-    201: { description: "Created", body: BookSchema },
-    409: { description: "Replay or duplicate id" },
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    request: { headers: IdempotencyHeaders, body: CreateBookBody },
+    responses: {
+      201: { description: "Created", body: BookSchema },
+      409: { description: "Replay or duplicate id" },
+    },
   },
-  handler: async ({ headers, body }) => {
+  async ({ headers, body }) => {
     const key = headers["idempotency-key"];
     if (seenIdempotencyKeys.has(key)) {
       throw new HttpError(409, { title: "Conflict", detail: "This idempotency-key was already used" });
@@ -98,7 +100,7 @@ app.route({
     books.set(body.id, body);
     return { status: 201 as const, body };
   },
-});
+);
 ```
 
 **Why idempotency-key uses a header, not the body:** the body is the resource being created. The key is metadata _about_ the request — a different concern. Per industry convention (Stripe, IETF draft), it always goes in a header.

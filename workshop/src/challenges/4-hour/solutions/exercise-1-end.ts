@@ -22,22 +22,23 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  summary: "Fetch a book by id",
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: {
-      description: "Book found",
-      body: BookSchema,
-      examples: { default: { id: "1", title: "Foundation" } },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    summary: "Fetch a book by id",
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: {
+        description: "Book found",
+        body: BookSchema,
+        examples: { default: { id: "1", title: "Foundation" } },
+      },
+      404: { description: "Book not found", body: ProblemSchema },
     },
-    404: { description: "Book not found", body: ProblemSchema },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const book = books.get(params.id);
     if (!book) {
       return {
@@ -52,7 +53,7 @@ app.route({
     }
     return { status: 200 as const, body: book };
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/books/1");

@@ -44,7 +44,7 @@ openapi: {
 
 ## Step 2 — Attach the scheme to `POST /books`
 
-Inside the `app.route({ method: "POST", path: "/books", ... })` options object, add two new fields above `request`:
+Inside the `app.post("/books", { ... })` contract options object, add two new fields above `request`:
 
 ```ts
 auth: { scheme: "bearer" },

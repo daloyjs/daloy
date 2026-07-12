@@ -28,39 +28,41 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "OK", body: BookSchema },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "OK", body: BookSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
   },
-});
+);
 
 // TODO: wire bearer auth on POST /books.
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  request: { body: CreateBookSchema },
-  responses: {
-    201: { description: "Created", body: BookSchema },
-    401: { description: "Unauthorized" },
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    request: { body: CreateBookSchema },
+    responses: {
+      201: { description: "Created", body: BookSchema },
+      401: { description: "Unauthorized" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

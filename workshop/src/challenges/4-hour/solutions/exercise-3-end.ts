@@ -17,27 +17,29 @@ app.use(secureHeaders());
 app.use(cors({ origin: "https://app.example.com", credentials: false }));
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
-app.route({
-  method: "GET",
-  path: "/slow",
-  operationId: "slow",
-  tags: ["Demo"],
-  responses: { 200: { description: "Slow OK", body: z.object({ ok: z.literal(true) }) } },
-  handler: async () => {
+app.get(
+  "/slow",
+  {
+    operationId: "slow",
+    tags: ["Demo"],
+    responses: { 200: { description: "Slow OK", body: z.object({ ok: z.literal(true) }) } },
+  },
+  async () => {
     await new Promise((r) => setTimeout(r, 10_000));
     return { status: 200 as const, body: { ok: true as const } };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/echo",
-  operationId: "echo",
-  tags: ["Demo"],
-  request: { body: z.object({ payload: z.string() }).strict() },
-  responses: { 200: { description: "Echoed", body: z.object({ payload: z.string() }) } },
-  handler: async ({ body }) => ({ status: 200 as const, body }),
-});
+app.post(
+  "/echo",
+  {
+    operationId: "echo",
+    tags: ["Demo"],
+    request: { body: z.object({ payload: z.string() }).strict() },
+    responses: { 200: { description: "Echoed", body: z.object({ payload: z.string() }) } },
+  },
+  async ({ body }) => ({ status: 200 as const, body }),
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

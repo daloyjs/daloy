@@ -25,12 +25,13 @@ if (b.status === "checked-out") {
 Below the checkout route:
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  ...
-  handler: async ({ body }) => {
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    ...
+  },
+  async ({ body }) => {
     if (books.has(body.id)) {
       throw new HttpError(409, { title: "Conflict", detail: `Book ${body.id} already exists` });
     }
@@ -38,7 +39,7 @@ app.route({
     books.set(body.id, created);
     return { status: 201 as const, body: created };
   },
-});
+);
 ```
 
 ## Step 3 — Verify 4xx detail and 5xx redaction

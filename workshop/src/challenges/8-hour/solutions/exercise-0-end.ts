@@ -9,16 +9,17 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "getHealth",
-  tags: ["Meta"],
-  responses: {
-    200: { description: "OK", body: z.object({ status: z.literal("ok") }) },
+app.get(
+  "/health",
+  {
+    operationId: "getHealth",
+    tags: ["Meta"],
+    responses: {
+      200: { description: "OK", body: z.object({ status: z.literal("ok") }) },
+    },
   },
-  handler: async () => ({ status: 200 as const, body: { status: "ok" as const } }),
-});
+  async () => ({ status: 200 as const, body: { status: "ok" as const } }),
+);
 
 console.log("Registered routes:");
 for (const op of app.introspect()) {

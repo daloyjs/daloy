@@ -20,35 +20,37 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "OK", body: BookSchema },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "OK", body: BookSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/books/:id/checkout",
-  operationId: "checkoutBook",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "Checked out", body: BookSchema },
-    404: { description: "Not found" },
-    422: { description: "Cannot checkout" },
+app.post(
+  "/books/:id/checkout",
+  {
+    operationId: "checkoutBook",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "Checked out", body: BookSchema },
+      404: { description: "Not found" },
+      422: { description: "Cannot checkout" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     if (b.status === "checked-out") {
@@ -61,19 +63,20 @@ app.route({
     b.status = "checked-out";
     return { status: 200 as const, body: b };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  request: { body: CreateBookBody },
-  responses: {
-    201: { description: "Created", body: BookSchema },
-    409: { description: "Duplicate" },
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    request: { body: CreateBookBody },
+    responses: {
+      201: { description: "Created", body: BookSchema },
+      409: { description: "Duplicate" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     if (books.has(body.id)) {
       throw new HttpError(409, { title: "Conflict", detail: `Book ${body.id} already exists` });
     }
@@ -81,18 +84,19 @@ app.route({
     books.set(body.id, created);
     return { status: 201 as const, body: created };
   },
-});
+);
 
-app.route({
-  method: "GET",
-  path: "/explode",
-  operationId: "explode",
-  tags: ["Demo"],
-  responses: { 500: { description: "Redacted internal failure" } },
-  handler: async () => {
+app.get(
+  "/explode",
+  {
+    operationId: "explode",
+    tags: ["Demo"],
+    responses: { 500: { description: "Redacted internal failure" } },
+  },
+  async () => {
     throw new InternalError("database DSN postgres://demo:secret@localhost/library leaked internally");
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

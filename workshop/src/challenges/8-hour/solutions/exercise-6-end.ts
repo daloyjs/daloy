@@ -35,19 +35,20 @@ const jwtAuth: Hooks = {
   },
 };
 
-app.route({
-  method: "POST",
-  path: "/auth/login",
-  operationId: "login",
-  tags: ["Auth"],
-  request: {
-    body: z.object({ username: z.string().min(1), password: z.string().min(1) }).strict(),
+app.post(
+  "/auth/login",
+  {
+    operationId: "login",
+    tags: ["Auth"],
+    request: {
+      body: z.object({ username: z.string().min(1), password: z.string().min(1) }).strict(),
+    },
+    responses: {
+      200: { description: "OK", body: z.object({ token: z.string() }) },
+      401: { description: "Bad credentials" },
+    },
   },
-  responses: {
-    200: { description: "OK", body: z.object({ token: z.string() }) },
-    401: { description: "Bad credentials" },
-  },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     if (USERS.get(body.username) !== body.password) {
       throw new UnauthorizedError("Bad credentials");
     }
@@ -55,21 +56,22 @@ app.route({
     const token = await signer.sign({ sub: body.username, iat: now, exp: now + 60 * 60 });
     return { status: 200 as const, body: { token } };
   },
-});
+);
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "getMe",
-  tags: ["Auth"],
-  auth: { scheme: "bearer" },
-  hooks: jwtAuth,
-  responses: {
-    200: { description: "OK", body: z.object({ sub: z.string() }) },
-    401: { description: "Unauthorized" },
+app.get(
+  "/me",
+  {
+    operationId: "getMe",
+    tags: ["Auth"],
+    auth: { scheme: "bearer" },
+    hooks: jwtAuth,
+    responses: {
+      200: { description: "OK", body: z.object({ sub: z.string() }) },
+      401: { description: "Unauthorized" },
+    },
   },
-  handler: async (ctx) => ({ status: 200 as const, body: { sub: String(ctx.state.user) } }),
-});
+  async (ctx) => ({ status: 200 as const, body: { sub: String(ctx.state.user) } }),
+);
 
 // Bonus: JWKS-based asymmetric verification
 //

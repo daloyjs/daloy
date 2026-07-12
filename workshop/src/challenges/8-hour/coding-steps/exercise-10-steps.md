@@ -25,11 +25,15 @@ app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 ## Step 3 — Per-route override on `/password-reset`
 
 ```ts
-app.route({
-  ...
-  hooks: rateLimit({ windowMs: 60_000, max: 5 }),
-  ...
-});
+app.post(
+  "/password-reset",
+  {
+    ...
+    hooks: rateLimit({ windowMs: 60_000, max: 5 }),
+    ...
+  },
+  handler,
+);
 ```
 
 **Why per-route is critical here:** sending a password-reset email is expensive and abusable. A user who already passed the global 60/min check can still be blocked by the stricter 5/min limit. Both run; the stricter one wins.

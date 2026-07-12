@@ -9,17 +9,18 @@ export function buildApp(): App {
     docs: true,
   });
 
-  app.route({
-    method: "GET",
-    path: "/health",
-    operationId: "getHealth",
-    tags: ["Meta"],
-    responses: { 200: { description: "OK", body: z.object({ runtime: z.string() }) } },
-    handler: async () => ({
+  app.get(
+    "/health",
+    {
+      operationId: "getHealth",
+      tags: ["Meta"],
+      responses: { 200: { description: "OK", body: z.object({ runtime: z.string() }) } },
+    },
+    async () => ({
       status: 200 as const,
       body: { runtime: detectRuntime() },
     }),
-  });
+  );
 
   return app;
 }

@@ -60,13 +60,14 @@ const csrf: Hooks = {
   },
 };
 
-app.route({
-  method: "GET",
-  path: "/csrf",
-  operationId: "issueCsrf",
-  tags: ["Auth"],
-  responses: { 200: { description: "OK", body: z.object({ token: z.string() }) } },
-  handler: async () => {
+app.get(
+  "/csrf",
+  {
+    operationId: "issueCsrf",
+    tags: ["Auth"],
+    responses: { 200: { description: "OK", body: z.object({ token: z.string() }) } },
+  },
+  async () => {
     const token = randomBytes(32).toString("base64url");
     return {
       status: 200 as const,
@@ -76,18 +77,19 @@ app.route({
       },
     };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/actions",
-  operationId: "doAction",
-  tags: ["Auth"],
-  hooks: csrf,
-  request: { body: z.object({ name: z.string().min(1) }).strict() },
-  responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
-  handler: async () => ({ status: 200 as const, body: { ok: true as const } }),
-});
+app.post(
+  "/actions",
+  {
+    operationId: "doAction",
+    tags: ["Auth"],
+    hooks: csrf,
+    request: { body: z.object({ name: z.string().min(1) }).strict() },
+    responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
+  },
+  async () => ({ status: 200 as const, body: { ok: true as const } }),
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

@@ -30,35 +30,37 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "OK", body: BookSchema },
-    404: { description: "Not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "OK", body: BookSchema },
+      404: { description: "Not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/books/:id/checkout",
-  operationId: "checkoutBook",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "Checked out", body: BookSchema },
-    404: { description: "Not found" },
-    422: { description: "Cannot checkout" },
+app.post(
+  "/books/:id/checkout",
+  {
+    operationId: "checkoutBook",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "Checked out", body: BookSchema },
+      404: { description: "Not found" },
+      422: { description: "Cannot checkout" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     // TODO: when status === "checked-out", throw a 422 HttpError with
@@ -66,7 +68,7 @@ app.route({
     b.status = "checked-out";
     return { status: 200 as const, body: b };
   },
-});
+);
 
 // TODO: POST /books → already wired via 4-hour pattern, HttpError(409) on duplicate.
 

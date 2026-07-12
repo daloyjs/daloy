@@ -21,17 +21,18 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "getHealth",
-  tags: ["Meta"],
-  responses: { 200: { description: "OK", body: z.object({ runtime: z.string() }) } },
-  handler: async () => ({
+app.get(
+  "/health",
+  {
+    operationId: "getHealth",
+    tags: ["Meta"],
+    responses: { 200: { description: "OK", body: z.object({ runtime: z.string() }) } },
+  },
+  async () => ({
     status: 200 as const,
     body: { runtime: process.versions.bun ? "Bun" : "Node.js" },
   }),
-});
+);
 
 serveNode(app, { port: 3000 });
 console.log("→ http://localhost:3000/health");

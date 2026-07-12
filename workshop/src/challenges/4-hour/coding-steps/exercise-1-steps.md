@@ -8,7 +8,7 @@ You are editing [`exercise-1.ts`](../exercise-1.ts). Reference: [`solutions/exer
 
 ## Mental model first
 
-`app.route({...})` has four contract slots that map 1:1 to OpenAPI:
+`app.get(path, {...}, handler)` (and its sibling shorthands `app.post`, `app.put`, `app.patch`, `app.delete`, `app.head`) has four contract slots that map 1:1 to OpenAPI:
 
 | Slot                  | What it does at runtime                                          | What it does in the spec               |
 | --------------------- | ---------------------------------------------------------------- | -------------------------------------- |
@@ -43,7 +43,7 @@ const ProblemSchema = z.object({
 
 ## Step 2 — Validate the path param
 
-Inside the `app.route({...})` options object, add a `request` slot:
+Inside the `app.get(...)` contract options object, add a `request` slot:
 
 ```ts
 request: { params: z.object({ id: z.string().min(1) }) },
@@ -136,7 +136,7 @@ The OpenAPI op should now have a `parameters` array (your path param), a `200` r
 | Step | Where             | Change                                                                       |
 | ---- | ----------------- | ---------------------------------------------------------------------------- |
 | 1    | Top of file        | Add `BookSchema` and `ProblemSchema`                                         |
-| 2    | `app.route(...)`   | Add `request: { params: z.object({ id: z.string().min(1) }) }`               |
+| 2    | `app.get(...)`   | Add `request: { params: z.object({ id: z.string().min(1) }) }`               |
 | 3    | `responses`        | Add `body: BookSchema, examples: { default }` to 200, add full 404 entry      |
 | 4    | `handler`          | Look up the book, return 404 problem body if missing, else 200 with the book |
 

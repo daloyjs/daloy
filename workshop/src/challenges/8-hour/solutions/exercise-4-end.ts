@@ -30,14 +30,15 @@ app.use(timing);
 app.use(cors({ origin: "https://app.example.com", credentials: false }));
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
-app.route({
-  method: "GET",
-  path: "/health",
-  operationId: "getHealth",
-  tags: ["Meta"],
-  responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
-  handler: async () => ({ status: 200 as const, body: { ok: true as const } }),
-});
+app.get(
+  "/health",
+  {
+    operationId: "getHealth",
+    tags: ["Meta"],
+    responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
+  },
+  async () => ({ status: 200 as const, body: { ok: true as const } }),
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/health");

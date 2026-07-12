@@ -69,24 +69,25 @@ const CreateBookSchema = z
 Below the existing `GET /books/:id` route:
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  request: { body: CreateBookSchema },
-  responses: {
-    201: { description: "Created", body: BookSchema },
-    409: { description: "Already exists" },
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    request: { body: CreateBookSchema },
+    responses: {
+      201: { description: "Created", body: BookSchema },
+      409: { description: "Already exists" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     if (books.has(body.id)) {
       throw new HttpError(409, { title: "Conflict", detail: `Book ${body.id} already exists` });
     }
     books.set(body.id, body);
     return { status: 201 as const, body };
   },
-});
+);
 ```
 
 **Why `body` is destructured but not validated again:** by the time the handler runs, the framework has already parsed and validated the body against `CreateBookSchema`. The `body` inside the handler is typed as `z.infer<typeof CreateBookSchema>`. You're guaranteed both fields exist and have the right types.
@@ -134,7 +135,7 @@ Expected 4xx errors can carry useful client-facing `detail` in production. Inter
 | 1    | Top imports         | Add `NotFoundError`, `HttpError`                                  |
 | 1    | `GET` handler       | `throw new NotFoundError(...)` instead of manual 404 body         |
 | 2    | Top of file         | Add `CreateBookSchema` with `.strict()`                           |
-| 3    | New `app.route(...)` | Register `POST /books` with the schema and `HttpError(409, ...)`  |
+| 3    | New `app.post(...)` | Register `POST /books` with the schema and `HttpError(409, ...)`  |
 
 ---
 

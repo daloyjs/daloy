@@ -52,14 +52,15 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "POST",
-  path: "/login",
-  operationId: "login",
-  tags: ["Auth"],
-  request: { body: z.object({ username: z.string(), password: z.string() }).strict() },
-  responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) }, 401: { description: "Bad credentials" } },
-  handler: async ({ body }) => {
+app.post(
+  "/login",
+  {
+    operationId: "login",
+    tags: ["Auth"],
+    request: { body: z.object({ username: z.string(), password: z.string() }).strict() },
+    responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) }, 401: { description: "Bad credentials" } },
+  },
+  async ({ body }) => {
     if (users.get(body.username) !== body.password) throw new UnauthorizedError("Bad credentials");
     const token = signSession(body.username);
     return {
@@ -70,19 +71,20 @@ app.route({
       },
     };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/preview",
-  operationId: "previewLink",
-  tags: ["Demo"],
-  request: { body: z.object({ url: z.string().url() }).strict() },
-  responses: {
-    200: { description: "OK", body: z.object({ status: z.number(), title: z.string().nullable() }) },
-    400: { description: "URL rejected by fetchGuard" },
+app.post(
+  "/preview",
+  {
+    operationId: "previewLink",
+    tags: ["Demo"],
+    request: { body: z.object({ url: z.string().url() }).strict() },
+    responses: {
+      200: { description: "OK", body: z.object({ status: z.number(), title: z.string().nullable() }) },
+      400: { description: "URL rejected by fetchGuard" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     let res: Response;
     try {
       res = await safeFetch(body.url, { signal: AbortSignal.timeout(5_000) });
@@ -93,7 +95,7 @@ app.route({
     const m = text.match(/<title[^>]*>([^<]+)<\/title>/i);
     return { status: 200 as const, body: { status: res.status, title: m?.[1] ?? null } };
   },
-});
+);
 
 app.ws("/ws", {
   allowedOrigins: "same-origin",

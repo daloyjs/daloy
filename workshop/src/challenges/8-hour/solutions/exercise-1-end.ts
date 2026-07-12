@@ -16,31 +16,32 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  summary: "Fetch a book by id",
-  description: "Returns the book record. Throws `NotFoundError` if no book with that id exists.",
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: {
-      description: "Book found",
-      body: BookSchema,
-      examples: {
-        foundation: { id: "1", title: "Foundation" },
-        dune: { id: "2", title: "Dune" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    summary: "Fetch a book by id",
+    description: "Returns the book record. Throws `NotFoundError` if no book with that id exists.",
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: {
+        description: "Book found",
+        body: BookSchema,
+        examples: {
+          foundation: { id: "1", title: "Foundation" },
+          dune: { id: "2", title: "Dune" },
+        },
       },
+      404: { description: "Book not found" },
     },
-    404: { description: "Book not found" },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

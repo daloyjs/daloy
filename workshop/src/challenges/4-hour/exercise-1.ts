@@ -23,16 +23,17 @@ const app = new App({
 });
 
 // TODO: replace this stub with a contract-first route.
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  responses: {
-    200: { description: "Book found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    responses: {
+      200: { description: "Book found" },
+    },
   },
-  handler: async () => ({ status: 200 as const, body: { id: "?", title: "?" } }),
-});
+  async () => ({ status: 200 as const, body: { id: "?", title: "?" } }),
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/books/1");

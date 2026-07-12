@@ -19,41 +19,43 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "Book found", body: BookSchema },
-    404: { description: "Book not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "Book found", body: BookSchema },
+      404: { description: "Book not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const book = books.get(params.id);
     if (!book) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: book };
   },
-});
+);
 
-app.route({
-  method: "POST",
-  path: "/books",
-  operationId: "createBook",
-  tags: ["Books"],
-  request: { body: CreateBookSchema },
-  responses: {
-    201: { description: "Created", body: BookSchema },
-    409: { description: "Already exists" },
+app.post(
+  "/books",
+  {
+    operationId: "createBook",
+    tags: ["Books"],
+    request: { body: CreateBookSchema },
+    responses: {
+      201: { description: "Created", body: BookSchema },
+      409: { description: "Already exists" },
+    },
   },
-  handler: async ({ body }) => {
+  async ({ body }) => {
     if (books.has(body.id)) {
       throw new HttpError(409, { title: "Conflict", detail: `Book ${body.id} already exists` });
     }
     books.set(body.id, body);
     return { status: 201 as const, body };
   },
-});
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/books/1");

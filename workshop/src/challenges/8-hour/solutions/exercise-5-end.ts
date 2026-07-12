@@ -37,35 +37,37 @@ const app = new App({
 const BookSchema = z.object({ id: z.string(), title: z.string() });
 const books = new Map<string, { id: string; title: string }>();
 
-app.route({
-  method: "POST",
-  path: "/admin/books",
-  operationId: "createBookAsAdmin",
-  tags: ["Admin"],
-  auth: { scheme: "bearer" },
-  hooks: bearerAuth({ validate: async (token) => constantTimeEqual(token, VALID_ADMIN_TOKEN) }),
-  request: { body: z.object({ id: z.string().min(1), title: z.string().min(1) }).strict() },
-  responses: { 201: { description: "Created", body: BookSchema }, 401: { description: "Missing token" }, 403: { description: "Bad token" } },
-  handler: async ({ body }) => {
+app.post(
+  "/admin/books",
+  {
+    operationId: "createBookAsAdmin",
+    tags: ["Admin"],
+    auth: { scheme: "bearer" },
+    hooks: bearerAuth({ validate: async (token) => constantTimeEqual(token, VALID_ADMIN_TOKEN) }),
+    request: { body: z.object({ id: z.string().min(1), title: z.string().min(1) }).strict() },
+    responses: { 201: { description: "Created", body: BookSchema }, 401: { description: "Missing token" }, 403: { description: "Bad token" } },
+  },
+  async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
   },
-});
+);
 
-app.route({
-  method: "GET",
-  path: "/partner/books",
-  operationId: "listBooksAsPartner",
-  tags: ["Partner"],
-  auth: { scheme: "apiKey" },
-  hooks: apiKeyAuth,
-  responses: {
-    200: { description: "OK", body: z.object({ items: z.array(BookSchema) }) },
-    401: { description: "Missing key" },
-    403: { description: "Bad key" },
+app.get(
+  "/partner/books",
+  {
+    operationId: "listBooksAsPartner",
+    tags: ["Partner"],
+    auth: { scheme: "apiKey" },
+    hooks: apiKeyAuth,
+    responses: {
+      200: { description: "OK", body: z.object({ items: z.array(BookSchema) }) },
+      401: { description: "Missing key" },
+      403: { description: "Bad key" },
+    },
   },
-  handler: async () => ({ status: 200 as const, body: { items: [...books.values()] } }),
-});
+  async () => ({ status: 200 as const, body: { items: [...books.values()] } }),
+);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/docs");

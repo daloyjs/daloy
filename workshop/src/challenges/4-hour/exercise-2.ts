@@ -25,17 +25,18 @@ const app = new App({
   docs: true,
 });
 
-app.route({
-  method: "GET",
-  path: "/books/:id",
-  operationId: "getBookById",
-  tags: ["Books"],
-  request: { params: z.object({ id: z.string().min(1) }) },
-  responses: {
-    200: { description: "Book found", body: BookSchema },
-    404: { description: "Book not found" },
+app.get(
+  "/books/:id",
+  {
+    operationId: "getBookById",
+    tags: ["Books"],
+    request: { params: z.object({ id: z.string().min(1) }) },
+    responses: {
+      200: { description: "Book found", body: BookSchema },
+      404: { description: "Book not found" },
+    },
   },
-  handler: async ({ params }) => {
+  async ({ params }) => {
     const book = books.get(params.id);
     // TODO: replace this manual 404 with `throw new NotFoundError(...)`.
     if (!book) {
@@ -46,13 +47,13 @@ app.route({
     }
     return { status: 200 as const, body: book };
   },
-});
+);
 
 // TODO: add POST /books with a `.strict()` request body schema.
 //   - 201 returns the created book
 //   - 409 if the id already exists (throw new HttpError(409, ...))
 //
-// app.route({ method: "POST", path: "/books", ... });
+// app.post(path, contract, handler);
 
 serve(app, { port: 3000 });
 console.log("→ http://localhost:3000/books/1");

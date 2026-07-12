@@ -17,32 +17,34 @@ export function buildApp(): App {
     docs: true,
   });
 
-  app.route({
-    method: "GET",
-    path: "/books/:id",
-    operationId: "getBookById",
-    tags: ["Books"],
-    request: { params: z.object({ id: z.string().min(1) }) },
-    responses: { 200: { description: "OK", body: BookSchema }, 404: { description: "Not found" } },
-    handler: async ({ params }) => {
+  app.get(
+    "/books/:id",
+    {
+      operationId: "getBookById",
+      tags: ["Books"],
+      request: { params: z.object({ id: z.string().min(1) }) },
+      responses: { 200: { description: "OK", body: BookSchema }, 404: { description: "Not found" } },
+    },
+    async ({ params }) => {
       const b = books.get(params.id);
       if (!b) throw new NotFoundError(`No book with id ${params.id}`);
       return { status: 200 as const, body: b };
     },
-  });
+  );
 
-  app.route({
-    method: "POST",
-    path: "/books",
-    operationId: "createBook",
-    tags: ["Books"],
-    request: { body: z.object({ id: z.string().min(1), title: z.string().min(1) }).strict() },
-    responses: { 201: { description: "Created", body: BookSchema } },
-    handler: async ({ body }) => {
+  app.post(
+    "/books",
+    {
+      operationId: "createBook",
+      tags: ["Books"],
+      request: { body: z.object({ id: z.string().min(1), title: z.string().min(1) }).strict() },
+      responses: { 201: { description: "Created", body: BookSchema } },
+    },
+    async ({ body }) => {
       books.set(body.id, body);
       return { status: 201 as const, body };
     },
-  });
+  );
 
   return app;
 }

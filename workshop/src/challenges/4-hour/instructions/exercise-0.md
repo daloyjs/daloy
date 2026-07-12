@@ -29,7 +29,7 @@ Many frameworks treat OpenAPI as a plugin you bolt on later, and the spec drifts
 
 ## Why This Matters
 
-`docs: true` and `openapi.info` are the **only** ceremony required for first-class API docs. Every later exercise — validation, errors, auth, typed-client codegen — flows from the same `app.route({...})` call. Nothing about your docs setup will change as your app grows.
+`docs: true` and `openapi.info` are the **only** ceremony required for first-class API docs. Every later exercise — validation, errors, auth, typed-client codegen — flows from the same `app.get(...)` / `app.post(...)` style call. Nothing about your docs setup will change as your app grows.
 
 ## Training Resources
 

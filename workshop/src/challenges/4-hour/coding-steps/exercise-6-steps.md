@@ -14,7 +14,7 @@ DaloyJS adapters are intentionally tiny. Each one does three things:
 2. Convert it to a Web-standard `Request`.
 3. Hand it to `app.fetch(request)` and write back the resulting `Response`.
 
-That means your application code never imports anything runtime-specific. It only uses `app.route(...)` and `app.use(...)`. The adapter is a boot detail, not a programming model.
+That means your application code never imports anything runtime-specific. It only uses `app.get(...)` (and its sibling method shorthands) and `app.use(...)`. The adapter is a boot detail, not a programming model.
 
 Order of work:
 
@@ -26,7 +26,7 @@ Order of work:
 
 ## Step 1 — Extract `buildApp()`
 
-Move everything from `const app = new App({...})` through the last `app.route(...)` into a function:
+Move everything from `const app = new App({...})` through the last `app.get(...)` into a function:
 
 ```ts
 export function buildApp(): App {
@@ -37,17 +37,18 @@ export function buildApp(): App {
     docs: true,
   });
 
-  app.route({
-    method: "GET",
-    path: "/health",
-    operationId: "getHealth",
-    tags: ["Meta"],
-    responses: { 200: { description: "OK", body: z.object({ runtime: z.string() }) } },
-    handler: async () => ({
+  app.get(
+    "/health",
+    {
+      operationId: "getHealth",
+      tags: ["Meta"],
+      responses: { 200: { description: "OK", body: z.object({ runtime: z.string() }) } },
+    },
+    async () => ({
       status: 200 as const,
       body: { runtime: detectRuntime() },
     }),
-  });
+  );
 
   return app;
 }

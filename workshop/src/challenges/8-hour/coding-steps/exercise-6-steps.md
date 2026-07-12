@@ -5,12 +5,13 @@
 ## Step 1 — Wire `POST /auth/login`
 
 ```ts
-app.route({
-  method: "POST",
-  path: "/auth/login",
-  operationId: "login",
-  ...
-  handler: async ({ body }) => {
+app.post(
+  "/auth/login",
+  {
+    operationId: "login",
+    ...
+  },
+  async ({ body }) => {
     if (USERS.get(body.username) !== body.password) {
       throw new UnauthorizedError("Bad credentials");
     }
@@ -18,7 +19,7 @@ app.route({
     const token = await signer.sign({ sub: body.username, iat: now, exp: now + 60 * 60 });
     return { status: 200 as const, body: { token } };
   },
-});
+);
 ```
 
 **Workshop simplification:** `USERS` is an in-memory map and the password check uses `===`. In production, hash the password (argon2id) and compare with the verifier's built-in constant-time check.

@@ -16,22 +16,23 @@ export function buildApp(): App {
     docs: true,
   });
 
-  app.route({
-    method: "GET",
-    path: "/books/:id",
-    operationId: "getBookById",
-    tags: ["Books"],
-    request: { params: z.object({ id: z.string().min(1) }) },
-    responses: {
-      200: { description: "OK", body: BookSchema },
-      404: { description: "Not found" },
+  app.get(
+    "/books/:id",
+    {
+      operationId: "getBookById",
+      tags: ["Books"],
+      request: { params: z.object({ id: z.string().min(1) }) },
+      responses: {
+        200: { description: "OK", body: BookSchema },
+        404: { description: "Not found" },
+      },
     },
-    handler: async ({ params }) => {
+    async ({ params }) => {
       const b = books.get(params.id);
       if (!b) throw new NotFoundError(`No book with id ${params.id}`);
       return { status: 200 as const, body: b };
     },
-  });
+  );
 
   return app;
 }
