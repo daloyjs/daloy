@@ -1276,8 +1276,12 @@ type AppendRoutes<
   ? Added
   : readonly [...Routes, ...Added];
 
+// Type-level mirror of `inferOperationId()`'s word capitalization. The head of
+// a `-` split may itself still contain `_` separators (e.g. "legacy_admin-tools"),
+// so it must recurse through PascalWords rather than a bare Capitalize —
+// otherwise the typed client's key would diverge from the runtime operation id.
 type PascalWords<S extends string> = S extends `${infer Head}-${infer Tail}`
-  ? `${Capitalize<Head>}${PascalWords<Tail>}`
+  ? `${PascalWords<Head>}${PascalWords<Tail>}`
   : S extends `${infer Head}_${infer Tail}`
     ? `${Capitalize<Head>}${PascalWords<Tail>}`
     : Capitalize<S>;

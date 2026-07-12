@@ -8,14 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 For the forward-looking plan and the full thematic release log, see
 [`ROADMAP.md`](ROADMAP.md).
 
-> Now in the **1.0.0 beta**. The public API is feature-complete and stable for
-> the 1.0 line; from 1.0 onward the API follows semver. `@daloyjs/core`
+> Now in the **1.0.0 release candidate**. The public API is feature-complete and
+> stable for the 1.0 line; from 1.0 onward the API follows semver. `@daloyjs/core`
 > and `create-daloy` ship together, so every release publishes a matching
 > scaffolder and generated projects pin the latest peer.
 
 ## [Unreleased]
 
-### Breaking changes before GA
+### Fixed
+
+- **Type-level auto operation ids now match runtime inference for mixed
+  `snake_case`/`kebab-case` segments.** For shorthand routes without an explicit
+  `operationId`, a path segment containing `_` before `-` (e.g.
+  `/legacy_admin-tools/export`) produced a typed-client key of
+  `getLegacy_adminToolsExport` at the type level while the runtime operation id
+  (OpenAPI spec and actual client key) was `getLegacyAdminToolsExport` — so the
+  advertised method did not exist at runtime. The type-level encoding now
+  recurses through both separators, and a sync-pin test asserts the type-level
+  and runtime encodings against one shared literal list so any future drift
+  fails `pnpm typecheck` or `pnpm test`.
+
+### Breaking changes before the stable release
 
 - Auth callbacks supplied to `bearerAuth()`, `basicAuth()`, `jwk()`, and
   `clientCertAuth()` now execute in `preBody`. They can read the raw request,
@@ -129,7 +142,7 @@ For the forward-looking plan and the full thematic release log, see
 A security-hardening release from an internal audit against a 17-category threat
 model. It tightens several secure-by-default guarantees and, because the
 framework has no external users yet, makes those changes now rather
-than deferring them past GA.
+than deferring them past the stable release.
 
 ### Security
 
@@ -185,7 +198,7 @@ than deferring them past GA.
 ## [1.0.0-rc.0] - 2026-07-03
 
 The **first `1.0.0` release candidate**. The public API is frozen: from here to
-GA only bug fixes and documentation land, no new surface. `@daloyjs/core`,
+the stable release, only bug fixes and documentation land, no new surface. `@daloyjs/core`,
 `create-daloy`, and the JSR package `@daloyjs/daloy` move to `1.0.0-rc.0` in
 lockstep, and every `create-daloy` template now pins `@daloyjs/core@^1.0.0-rc.0`.
 Projects on `^1.0.0-beta.7` upgrade with a version bump.
@@ -429,14 +442,14 @@ candidate, while shipping hardening and docs polish gathered after
   `create-daloy` templates, workshop, README status line, website version
   reference, Deno adapter docs, and SBOMs synced to `1.0.0-beta.3`.
 - **Template pre-push hooks and docs were refreshed** to match the current
-  verification workflow and reduce stale generated-project guidance before GA.
+  verification workflow and reduce stale generated-project guidance before the stable release.
 - **Framework docs received broad polish** across routing, validation, CLI,
   AsyncAPI, plugins, testing, pagination, config, and migration pages.
 
 ## [1.0.0-beta.2] - 2026-06-22
 
 The third **1.0.0 beta**. The public API remains feature-complete and stable for
-the 1.0 line, but the release train stays open for final polish before GA.
+the 1.0 line, but the release train stays open for final polish before the stable release.
 Projects on `^1.0.0-beta.1` upgrade with a version bump. `@daloyjs/core`,
 `create-daloy`, and the JSR package `@daloyjs/daloy` move to `1.0.0-beta.2` in
 lockstep, and every `create-daloy` template now pins
@@ -529,7 +542,7 @@ every `create-daloy` template now pins `@daloyjs/core@^1.0.0-beta.1`.
 
 The first public **1.0.0 beta**. After the `0.x` preview line, the public API is
 now feature-complete and considered stable for the 1.0 release. This is the build
-we want people to test in anger and report back on before the `1.0.0` GA. There
+we want people to test in anger and report back on before the `1.0.0` stable release. There
 are no functional code changes from `0.44.0`: every guardrail, adapter, and
 helper that shipped across `0.x` is here, unchanged. What changed is the promise.
 From 1.0 onward, the API follows SemVer (compatible within a `1.x`
@@ -549,7 +562,7 @@ minor).
 
 - **No API changes from `0.44.0`.** If you are on `^0.44.0` today, nothing
   breaks; the upgrade is a version bump.
-- Still pre-GA: small adjustments are possible before `1.0.0` final if beta
+- Still pre-1.0: small adjustments are possible before `1.0.0` final if beta
   feedback surfaces something. Once `1.0.0` ships, deprecations follow the
   one-minor-cycle policy.
 

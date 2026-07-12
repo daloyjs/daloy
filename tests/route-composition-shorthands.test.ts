@@ -118,3 +118,59 @@ test("HTTP shorthand runtime guard rejects malformed JavaScript calls", () => {
     /opaque responses require an explicit contract/
   );
 });
+
+// ---------------------------------------------------------------------------
+// Drift guard: the operation-id inference algorithm is implemented twice —
+// once at the type level (`AutoOperationId` in src/app.ts, powering the typed
+// client's keys) and once at runtime (`inferOperationId`, powering the OpenAPI
+// spec and the in-process client's actual keys). If the two ever diverge, the
+// typed client would advertise a method name that does not exist at runtime.
+// This test pins BOTH encodings to one shared literal list: a type-level
+// drift fails `pnpm typecheck` (this file is part of tests/tsconfig.json),
+// and a runtime drift fails `pnpm test`.
+// ---------------------------------------------------------------------------
+
+/** Compile-time assertion that `T` is exactly `true`. */
+type Expect<T extends true> = T;
+/** Structural equality check between two types. */
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+
+test("inferred operation ids stay in sync between type level and runtime", () => {
+  const okContract = {
+    responses: { 200: { body: z.object({ ok: z.boolean() }) } },
+  };
+  const okHandler = () => ({ status: 200 as const, body: { ok: true } });
+
+  const app = new App({ logger: false })
+    // Root path special case.
+    .get("/", okContract, okHandler)
+    // Kebab-case segment + snake_case param.
+    .get("/book-items/:item_id", okContract, okHandler)
+    // Mixed snake_case and kebab-case words inside one segment.
+    .get("/legacy_admin-tools/export", okContract, okHandler)
+    // Param in the middle of the path + non-GET method prefixes.
+    .post("/books/:book_id/reviews", okContract, okHandler)
+    .delete("/books/:book_id", okContract, okHandler);
+
+  const client = createInProcessClient(app);
+
+  const expected = [
+    "getRoot",
+    "getBookItemsByItemId",
+    "getLegacyAdminToolsExport",
+    "postBooksByBookIdReviews",
+    "deleteBooksByBookId",
+  ] as const;
+
+  // Compile-time half: the typed client's keys must be exactly the literals
+  // above, as derived by `AutoOperationId`.
+  type _TypeLevelIdsMatchExpected = Expect<Equal<keyof typeof client, (typeof expected)[number]>>;
+
+  // Runtime half: `inferOperationId` must produce the same literals, in
+  // registration order.
+  assert.deepEqual(
+    app.introspect().map((route) => route.operationId),
+    [...expected]
+  );
+});
