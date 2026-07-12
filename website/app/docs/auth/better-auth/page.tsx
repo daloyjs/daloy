@@ -134,7 +134,10 @@ BETTER_AUTH_SECRET=replace-with-at-least-32-random-bytes`}
         redirects, status codes, and multiple <code>Set-Cookie</code> headers
         are preserved exactly. <code>preBody</code> runs after routing but
         before any body I/O, which is the right place to delegate to another
-        web-standard <code>Request → Response</code> handler.
+        web-standard <code>Request → Response</code> handler. Because Better
+        Auth owns the successful response body, cookies, and redirects, both
+        routes explicitly set <code>acknowledgeNoResponseBodySchema: true</code>
+        .
       </p>
       <CodeBlock
         code={`// src/routes/auth.ts
@@ -147,36 +150,41 @@ const betterAuthHook = {
   preBody: ({ request }: { request: Request }) => auth.handler(request),
 };
 
-app.route({
-  method: "GET",
-  path: "/api/auth/*path",
-  operationId: "betterAuthGet",
-  summary: "Better Auth GET endpoint",
-  responses: {
-    200: { description: "Handled by Better Auth" },
-    302: { description: "Redirect" },
-    400: { description: "Bad Request" },
-    401: { description: "Unauthorized" },
+app.get(
+  "/api/auth/*path",
+  {
+    operationId: "betterAuthGet",
+    summary: "Better Auth GET endpoint",
+    // Better Auth owns serialization, cookies, and redirects for this route.
+    acknowledgeNoResponseBodySchema: true,
+    responses: {
+      200: { description: "Handled by Better Auth" },
+      302: { description: "Redirect" },
+      400: { description: "Bad Request" },
+      401: { description: "Unauthorized" },
+    },
+    hooks: betterAuthHook,
   },
-  hooks: betterAuthHook,
-  handler: () => ({ status: 200, body: null }),
-});
+  () => ({ status: 200, body: null }),
+);
 
-app.route({
-  method: "POST",
-  path: "/api/auth/*path",
-  operationId: "betterAuthPost",
-  summary: "Better Auth POST endpoint",
-  responses: {
-    200: { description: "Handled by Better Auth" },
-    201: { description: "Created" },
-    204: { description: "No Content" },
-    400: { description: "Bad Request" },
-    401: { description: "Unauthorized" },
+app.post(
+  "/api/auth/*path",
+  {
+    operationId: "betterAuthPost",
+    summary: "Better Auth POST endpoint",
+    acknowledgeNoResponseBodySchema: true,
+    responses: {
+      200: { description: "Handled by Better Auth" },
+      201: { description: "Created" },
+      204: { description: "No Content" },
+      400: { description: "Bad Request" },
+      401: { description: "Unauthorized" },
+    },
+    hooks: betterAuthHook,
   },
-  hooks: betterAuthHook,
-  handler: () => ({ status: 200, body: null }),
-});`}
+  () => ({ status: 200, body: null }),
+);`}
       />
 
       <h2 id="5-protect-daloyjs-routes">5. Protect DaloyJS routes</h2>
@@ -189,7 +197,7 @@ app.route({
       </p>
       <CodeBlock
         code={`// src/plugins/better-auth.ts
-import type { Hooks } from "@daloyjs/core";
+import { UnauthorizedError, type Hooks } from "@daloyjs/core";
 import { auth } from "../auth.ts";
 
 export type BetterAuthSession = Awaited<
@@ -204,7 +212,7 @@ export function requireBetterAuth(): Hooks {
       });
 
       if (!session) {
-        return ctx.problem(401, "unauthorized", "Missing or expired session");
+        throw new UnauthorizedError("Missing or expired session");
       }
 
       ctx.state.session = session;
@@ -228,28 +236,28 @@ const app = new App();
 app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "getMe",
-  hooks: requireBetterAuth(),
-  responses: {
-    200: {
-      description: "OK",
-      body: z.object({
-        userId: z.string(),
-        email: z.email(),
-      }),
+app.get(
+  "/me",
+  {
+    hooks: requireBetterAuth(),
+    responses: {
+      200: {
+        description: "OK",
+        body: z.object({
+          userId: z.string(),
+          email: z.email(),
+        }),
+      },
     },
   },
-  handler: ({ state }) => ({
+  ({ state }) => ({
     status: 200,
     body: {
       userId: state.session!.user.id,
       email: state.session!.user.email,
     },
   }),
-});`}
+);`}
       />
 
       <h2 id="client-usage">Client usage</h2>

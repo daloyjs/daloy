@@ -27,9 +27,9 @@ export default function Page() {
         <strong>Think of it like…</strong> the fire marshal&apos;s inspection
         checklist. Each item is a known way buildings burn down; this page maps
         every item to the equivalent fire-safety feature already installed in
-        the framework, sprinklers, fire doors, smoke alarms, so you can point
-        at the actual hardware instead of writing &quot;we&apos;ll get to
-        it&quot; on the form.
+        the framework, sprinklers, fire doors, smoke alarms, so you can point at
+        the actual hardware instead of writing &quot;we&apos;ll get to it&quot;
+        on the form.
       </blockquote>
       <p>
         The{" "}
@@ -114,10 +114,8 @@ export default function Page() {
         <tbody>
           <tr>
             <td>
-              <strong>
-                API1: Broken Object Level Authorization (BOLA)
-              </strong>
-              . Attacker swaps an <code>id</code> in the URL to read someone
+              <strong>API1: Broken Object Level Authorization (BOLA)</strong>.
+              Attacker swaps an <code>id</code> in the URL to read someone
               else&apos;s record.
             </td>
             <td>
@@ -164,9 +162,7 @@ export default function Page() {
           </tr>
           <tr id="api3">
             <td>
-              <strong>
-                API3: Broken Object Property Level Authorization
-              </strong>{" "}
+              <strong>API3: Broken Object Property Level Authorization</strong>{" "}
               (excessive data exposure + mass assignment).
             </td>
             <td>
@@ -186,13 +182,16 @@ export default function Page() {
               <code>daloy doctor</code> emits{" "}
               <code>audit.response.bodySchema</code> (and a dev-mode boot
               warning) for any success response that has none. For routes that
-              intentionally return an opaque or framework-controlled body (a
-              raw <code>Response</code>, HTML, a proxied payload), set{" "}
-              <code>acknowledgeNoResponseBodySchema: true</code> on the route
-              to record that intent and silence the finding. Framework-mounted
-              routes (<code>/openapi.json</code>, <code>/docs</code>,{" "}
-              <code>/asyncapi</code>, health, metrics) acknowledge themselves —
-              the warning only ever names routes you wrote.
+              intentionally return an opaque or framework-controlled body (a raw{" "}
+              <code>Response</code>, HTML, a proxied payload), set{" "}
+              <code>acknowledgeNoResponseBodySchema: true</code> on the route to
+              record that intent and silence the finding. Successful raw{" "}
+              <code>preBody</code>/<code>beforeHandle</code> short-circuits
+              require the same acknowledgement; error denials do not.
+              Framework-mounted routes (<code>/openapi.json</code>,{" "}
+              <code>/docs</code>, <code>/asyncapi</code>, health, metrics)
+              acknowledge themselves — the warning only ever names routes you
+              wrote.
             </td>
           </tr>
           <tr>
@@ -218,9 +217,7 @@ export default function Page() {
           </tr>
           <tr>
             <td>
-              <strong>
-                API5: Broken Function Level Authorization (BFLA)
-              </strong>
+              <strong>API5: Broken Function Level Authorization (BFLA)</strong>
             </td>
             <td>
               <code>requireScopes()</code> with RFC-6750 challenge and
@@ -343,13 +340,12 @@ export default function Page() {
               <code>fetchGuard()</code> for outbound calls (blocks SSRF pivots
               through third-party redirects);{" "}
               <code>verifyWebhookSignature()</code> /{" "}
-              <code>signWebhookPayload()</code> from{" "}
-              <code>@daloyjs/core</code> for HMAC-verified inbound webhooks
-              (HMAC-SHA256 / 384 / 512, accepting GitHub-style{" "}
-              <code>sha256=</code> prefixes or raw hex); Standard Schema
-              validation on third-party response bodies so a compromised vendor
-              can&apos;t inject unexpected fields; request timeouts so a slow
-              upstream can&apos;t exhaust your event loop.
+              <code>signWebhookPayload()</code> from <code>@daloyjs/core</code>{" "}
+              for HMAC-verified inbound webhooks (HMAC-SHA256 / 384 / 512,
+              accepting GitHub-style <code>sha256=</code> prefixes or raw hex);
+              Standard Schema validation on third-party response bodies so a
+              compromised vendor can&apos;t inject unexpected fields; request
+              timeouts so a slow upstream can&apos;t exhaust your event loop.
             </td>
             <td>
               Pin the vendor URL list, set <code>fetchGuard()</code> options to
@@ -461,7 +457,9 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2 id="what-no-framework-can-do-for-you">What no framework can do for you</h2>
+      <h2 id="what-no-framework-can-do-for-you">
+        What no framework can do for you
+      </h2>
       <ul>
         <li>
           <strong>Business-logic abuse:</strong> only your code knows whether a
@@ -494,8 +492,8 @@ export default function Page() {
           audit.
         </li>
         <li>
-          <code>pnpm verify:parity-audits</code>: static gates that fail CI if
-          a secure default is regressed.
+          <code>pnpm verify:parity-audits</code>: static gates that fail CI if a
+          secure default is regressed.
         </li>
         <li>
           <code>pnpm verify:governance-audits</code>: release-workflow rotation

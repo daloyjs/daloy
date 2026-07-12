@@ -214,28 +214,28 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 app.register(loginRadiusPlugin);
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "getMe",
-  middleware: [requireAuth()],
-  responses: {
-    200: {
-      description: "OK",
-      body: z.object({
-        userId: z.string(),
-        email: z.string().optional(),
-      }),
+app.get(
+  "/me",
+  {
+    hooks: requireAuth(),
+    responses: {
+      200: {
+        description: "OK",
+        body: z.object({
+          userId: z.string(),
+          email: z.string().optional(),
+        }),
+      },
     },
   },
-  handler: ({ state }) => ({
+  ({ state }) => ({
     status: 200,
     body: {
       userId: state.principal!.sub,
       email: state.principal!.email,
     },
   }),
-});`}
+);`}
       />
 
       <h2 id="role-checks">Role checks</h2>
@@ -243,17 +243,19 @@ app.route({
         LoginRadius profile shape depends on your account configuration and
         selected fields. If your site stores roles or authorization flags in the
         profile, normalize them in the plugin and enforce them with a narrow
-        middleware:
+        hooks:
       </p>
       <CodeBlock
-        code={`import type { Middleware } from "@daloyjs/core";
+        code={`import { ForbiddenError, type Hooks } from "@daloyjs/core";
 
-export function requireLoginRadiusRole(role: string): Middleware {
-  return async (ctx, next) => {
-    if (!ctx.state.principal?.roles.includes(role)) {
-      return ctx.problem(403, "forbidden", \`Requires \${role}\`);
-    }
-    return next();
+export function requireLoginRadiusRole(role: string): Hooks {
+  return {
+    preBody: (ctx) => {
+      if (!ctx.state.principal?.roles.includes(role)) {
+        throw new ForbiddenError(\`Requires \${role}\`);
+      }
+      // continue
+    },
   };
 }`}
       />
@@ -272,9 +274,9 @@ export function requireLoginRadiusRole(role: string): Middleware {
         <code>loginradius-sdk</code> is a Node-style CommonJS SDK. Use it on the{" "}
         <Link href="/docs/adapters/node">Node adapter</Link>, Bun when your
         deployment supports CommonJS packages, Vercel Node functions, and AWS
-        Lambda. It is not a fit for Cloudflare Workers. For edge
-        APIs, put LoginRadius validation behind a small Node service or use
-        direct HTTP calls from a runtime that can safely keep server secrets.
+        Lambda. It is not a fit for Cloudflare Workers. For edge APIs, put
+        LoginRadius validation behind a small Node service or use direct HTTP
+        calls from a runtime that can safely keep server secrets.
       </p>
 
       <h2 id="security-notes">Security notes</h2>

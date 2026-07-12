@@ -29,8 +29,8 @@ export default function Page() {
 
       <h2 id="progressive-shorthands">Progressive shorthands</h2>
       <p>
-        Method shorthands reduce ceremony without removing the contract.
-        DaloyJS derives a stable operation id from the method and path, such as{" "}
+        Method shorthands reduce ceremony without removing the contract. DaloyJS
+        derives a stable operation id from the method and path, such as{" "}
         <code>getRoot</code> or <code>postBookItemsByItemId</code>. An explicit{" "}
         <code>operationId</code> still wins.
       </p>
@@ -57,7 +57,10 @@ export default function Page() {
         behavior as <code>route()</code>. There is no two-argument form that
         silently skips a response contract. For an intentionally opaque body,
         pass <code>acknowledgeNoResponseBodySchema: true</code> explicitly.
-        Response descriptions remain optional; omitted values become a stable{" "}
+        Successful raw responses returned by <code>preBody</code> or{" "}
+        <code>beforeHandle</code> require the same acknowledgement; ordinary{" "}
+        <code>4xx</code>/<code>5xx</code> hook denials do not. Response
+        descriptions remain optional; omitted values become a stable{" "}
         <code>HTTP &lt;status&gt; response</code> description in OpenAPI.
       </p>
 

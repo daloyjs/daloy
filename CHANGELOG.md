@@ -32,6 +32,10 @@ For the forward-looking plan and the full thematic release log, see
   `Response` must now set `acknowledgeNoResponseBodySchema: true` on the route.
   Unacknowledged raw responses fail closed with `500` instead of silently
   bypassing response-body validation and field stripping.
+- Successful (`2xx`/`3xx`) raw responses returned by `preBody` or
+  `beforeHandle` hooks require the same acknowledgement. Security denials and
+  errors (`4xx`/`5xx`) remain available without an acknowledgement, so auth
+  middleware can still reject safely by default.
 
 ### Added
 
@@ -492,7 +496,7 @@ every `create-daloy` template now pins `@daloyjs/core@^1.0.0-beta.1`.
 
 - **Indeterminate-environment security warning.** When a production-only
   refuse-to-boot guard (a wildcard `cors({ origin: "*" })`, a weak `session()`
-  secret) is bypassed *only* because the runtime environment is indeterminate
+  secret) is bypassed _only_ because the runtime environment is indeterminate
   (no `env` option and no `NODE_ENV`, the default on edge runtimes such as
   Cloudflare Workers / Deno Deploy / Vercel), the framework now logs a
   single once-per-process warning pointing at `app({ env: "production" })`.
@@ -577,7 +581,7 @@ SSRF DNS-pinning knob that closes the documented rebinding window for `http:`.
 - **The Node adapter now enforces `connectionTimeoutMs` promptly (slowloris
   fix).** `serve()` derived `headersTimeout` / `requestTimeout` from
   `connectionTimeoutMs`, but left Node's `connectionsCheckingInterval` at its
-  30-second default — so Node only *checked* for timed-out connections every
+  30-second default — so Node only _checked_ for timed-out connections every
   30s. A client that stalled (or trickled its request headers a byte at a time)
   held a socket open until the next sweep, far past the configured timeout. The
   adapter now lowers `connectionsCheckingInterval` to a fraction of
@@ -666,7 +670,7 @@ Scalar / Swagger / Redoc OpenAPI viewers), plus a WebSocket close-lifecycle fix.
 
 ### Fixed
 
-- **WebSocket close lifecycle (Node adapter).** A socket error arriving *after*
+- **WebSocket close lifecycle (Node adapter).** A socket error arriving _after_
   the close handshake — e.g. a peer that resets the TCP connection right after
   closing, or a `terminate()` racing the OS — no longer fires the handler's
   `error()` callback after `close()` already fired. This restores the "no events
@@ -789,7 +793,7 @@ with a **Sigstore provenance attestation**.
 ### Security
 
 - **The JSR build now ships with a provenance attestation.** `@daloyjs/daloy@0.39.0`
-  published to JSR but *without* provenance: the `publish-jsr` CI job's hardened
+  published to JSR but _without_ provenance: the `publish-jsr` CI job's hardened
   egress allowlist was missing the Sigstore hosts (`fulcio.sigstore.dev`,
   `rekor.sigstore.dev`, `tuf-repo-cdn.sigstore.dev`), so `jsr publish` created the
   version and then failed attaching its attestation. The allowlist is fixed, so
@@ -816,7 +820,7 @@ with a **Sigstore provenance attestation**.
 
 - **`otelTracing` now follows the OTel HTTP semantic conventions for
   `server.address`/`server.port`.** The span attribute `server.address`
-  previously carried the host *with* its port (e.g. `api.example.com:8443`);
+  previously carried the host _with_ its port (e.g. `api.example.com:8443`);
   it now holds the bare hostname and the port is emitted separately as the
   numeric `server.port`, so traces line up with conformant backends.
 - **`httpMetrics` no longer drives the in-flight gauge negative on OPTIONS
@@ -866,7 +870,7 @@ project deploys cleanly.
   from a CDN, so the Worker bundle cost is negligible).
 - **The `vercel` template's `pnpm dev` no longer recurses.** It previously
   aliased `vercel dev`, which Vercel rejects (`vercel dev must not recursively
-  invoke itself`) because it re-reads that script as its dev command. `pnpm dev`
+invoke itself`) because it re-reads that script as its dev command. `pnpm dev`
   now runs a local Node dev server (`src/dev.ts`) that serves the same app over
   `@daloyjs/core/node` at the site root — fast iteration with no `vercel dev` or
   Vercel login.
@@ -1091,7 +1095,7 @@ scaffolded projects pin the latest peer.
   simply fails on the compressed bytes. For services that genuinely must accept
   compressed uploads, this opt-in middleware inflates `gzip` / `deflate` bodies
   **with the decompression-bomb (zip-bomb) guard baked in**: two independent caps
-  are enforced *during* inflation so a bomb is aborted long before it is fully
+  are enforced _during_ inflation so a bomb is aborted long before it is fully
   materialised — a required absolute `maxDecompressedBytes` cap and an
   expansion-`maxRatio` cap (default `100`, the inflated size may never exceed
   `compressedBytes * maxRatio`), both rejecting with `413`. The compressed upload
@@ -1609,7 +1613,7 @@ scaffolded projects pin the latest peer.
   `verify:actions-pinned` (GitHub Actions SHA-pin); `verify:secret-comparisons`
   tightened.
 - Lockfiles reject all npm git-shorthand specifiers; daily SCA + container-scan
-  + DAST workflows; Log4Shell / Spring4Shell regression tests.
+  - DAST workflows; Log4Shell / Spring4Shell regression tests.
 
 > The `0.34.0` release commit itself is TSDoc-only across the public API; the
 > behavior above landed in the preceding commits of the release.
@@ -1762,8 +1766,8 @@ scaffolded projects pin the latest peer.
 ### Added
 
 - `loadShedding()`, `app.cspReportRoute()` + `secureHeaders({ reportingEndpoints,
-  reportTo })`, `disconnectStatusCode: 499` default, `defineConfig({ schema,
-  source })`.
+reportTo })`, `disconnectStatusCode: 499` default, `defineConfig({ schema,
+source })`.
 
 ## [0.19.0] — 2026-05-20
 
@@ -1781,8 +1785,8 @@ scaffolded projects pin the latest peer.
 - Secure-by-default slice 4: connection-draining shutdown (`Connection: close`
   on `503` + in-flight), Node idle-close hook, `crashOnUnhandledRejection`
   default-on in prod, `app.healthcheck()` / `app.readinesscheck()` (bearer-token
-  + per-IP rate limit), prod refuse-to-boot without
-  `acknowledgeUnauthenticated: true`.
+  - per-IP rate limit), prod refuse-to-boot without
+    `acknowledgeUnauthenticated: true`.
 
 ## [0.17.0] — 2026-05-19
 

@@ -1,14 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import {
-  App,
-  bearerAuth,
-  cors,
-  requestId,
-  secureHeaders,
-  sseResponse,
-} from "../src/index.js";
+import { App, bearerAuth, cors, requestId, secureHeaders, sseResponse } from "../src/index.js";
 
 // A handler may return a raw web-standard `Response` only through the explicit
 // acknowledgement escape hatch used for streaming / proxying / pre-built
@@ -22,15 +15,92 @@ test("a raw Response without an explicit acknowledgement fails closed", async ()
     path: "/unacknowledged",
     operationId: "unacknowledgedRawResponse",
     responses: {
-      200: { description: "safe", body: z.object({ public: z.string() }) as never },
+      200: { description: "safe", body: z.object({ public: z.string() }) },
     },
-    handler: () =>
-      Response.json({ public: "ok", private: "must-never-leak" }),
+    handler: () => Response.json({ public: "ok", private: "must-never-leak" }),
   });
 
   const res = await app.request("/unacknowledged");
   assert.equal(res.status, 500);
   assert.doesNotMatch(await res.text(), /must-never-leak/);
+});
+
+test("a successful preBody Response without acknowledgement fails closed", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/pre-body-success",
+    operationId: "unacknowledgedPreBodyResponse",
+    responses: {
+      200: { description: "safe", body: z.object({ public: z.string() }) },
+    },
+    hooks: {
+      preBody: () => Response.json({ public: "ok", private: "must-never-leak" }),
+    },
+    handler: () => ({ status: 200, body: { public: "fallback" } }),
+  });
+
+  const res = await app.request("/pre-body-success");
+  assert.equal(res.status, 500);
+  assert.doesNotMatch(await res.text(), /must-never-leak/);
+});
+
+test("a successful beforeHandle redirect requires acknowledgement", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/before-redirect",
+    operationId: "unacknowledgedBeforeHandleRedirect",
+    responses: { 302: { description: "redirect" } },
+    hooks: {
+      beforeHandle: () =>
+        new Response(null, { status: 302, headers: { location: "/private-target" } }),
+    },
+    handler: () => ({ status: 302, body: undefined }),
+  });
+
+  const res = await app.request("/before-redirect");
+  assert.equal(res.status, 500);
+  assert.equal(res.headers.get("location"), null);
+});
+
+test("hook denials remain secure by default without an acknowledgement", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/denied",
+    operationId: "defaultHookDenial",
+    responses: { 200: { description: "ok" }, 401: { description: "denied" } },
+    hooks: {
+      preBody: () => new Response("denied", { status: 401 }),
+    },
+    handler: () => ({ status: 200, body: { ok: true } }),
+  });
+
+  const res = await app.request("/denied");
+  assert.equal(res.status, 401);
+  assert.equal(await res.text(), "denied");
+});
+
+test("acknowledged successful preBody Responses preserve normal finalization", async () => {
+  const app = new App({ logger: false });
+  app.use(secureHeaders());
+  app.route({
+    method: "GET",
+    path: "/acknowledged-pre-body",
+    operationId: "acknowledgedPreBodyResponse",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "opaque" } },
+    hooks: {
+      preBody: () => new Response("opaque", { status: 200 }),
+    },
+    handler: () => ({ status: 200, body: undefined }),
+  });
+
+  const res = await app.request("/acknowledged-pre-body");
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "opaque");
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
 });
 
 test("a handler can return a raw Response (status, headers, body preserved)", async () => {
@@ -76,10 +146,7 @@ test("a streaming Response from a handler passes through (AI SDK shape)", async 
 
   const res = await app.request("/stream");
   assert.equal(res.status, 200);
-  assert.equal(
-    res.headers.get("content-type"),
-    "text/event-stream; charset=utf-8",
-  );
+  assert.equal(res.headers.get("content-type"), "text/event-stream; charset=utf-8");
   const body = await res.text();
   assert.match(body, /data: 1\n\n/);
   assert.match(body, /data: 2\n\n/);
@@ -266,7 +333,7 @@ test("SECURITY PARITY: a raw-Response route gets the identical guardrails as a s
     assert.equal(
       r.headers.get(key),
       value,
-      `raw-Response route must apply the same '${key}' as the structured route`,
+      `raw-Response route must apply the same '${key}' as the structured route`
     );
   }
 
@@ -278,6 +345,6 @@ test("SECURITY PARITY: a raw-Response route gets the identical guardrails as a s
   assert.equal(
     r.headers.get("access-control-allow-origin"),
     origin,
-    "CORS applied to the raw route",
+    "CORS applied to the raw route"
   );
-})
+});

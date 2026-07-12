@@ -48,6 +48,7 @@ import {
   type OpenAPIInfo,
   type OpenAPIOptions,
 } from "./openapi.js";
+import { isSchemaValidatedResponse } from "./internal-response.js";
 import {
   asyncapiHtml,
   docsContentSecurityPolicy,
@@ -2757,11 +2758,7 @@ export class App<
     options: unknown,
     possibleHandler: unknown
   ): App<any> {
-    if (
-      options === null ||
-      typeof options !== "object" ||
-      typeof possibleHandler !== "function"
-    ) {
+    if (options === null || typeof options !== "object" || typeof possibleHandler !== "function") {
       throw new TypeError(
         `app.${method.toLowerCase()}(): expected (path, contract, handler); opaque responses require an explicit contract with acknowledgeNoResponseBodySchema: true`
       );
@@ -3979,6 +3976,7 @@ export class App<
           requestId = overriddenId;
         }
         if (preBody instanceof Response) {
+          assertAcknowledgedSuccessfulHookResponse(preBody, def, "preBody");
           copyContextHeaders(ctx, preBody);
           if (!preBody.headers.has("x-request-id")) preBody.headers.set("x-request-id", requestId);
           if (hasFinalizeHook) {
@@ -4006,6 +4004,7 @@ export class App<
           requestId = overriddenId;
         }
         if (before instanceof Response) {
+          assertAcknowledgedSuccessfulHookResponse(before, def, "beforeHandle");
           copyContextHeaders(ctx, before);
           if (!before.headers.has("x-request-id")) before.headers.set("x-request-id", requestId);
           if (hasFinalizeHook) {
@@ -4860,6 +4859,29 @@ function copyContextHeaders(ctx: BaseContext<any, any>, res: Response): void {
   set._h!.forEach((v, k) => {
     if (!res.headers.has(k)) res.headers.set(k, v);
   });
+}
+
+/**
+ * Refuse a successful opaque hook response unless the route explicitly opts
+ * out of response-body schema protection. Error/denial responses remain
+ * available to authentication and authorization hooks without an opt-out.
+ */
+function assertAcknowledgedSuccessfulHookResponse(
+  response: Response,
+  def: RouteDefinition<any, any, any, any>,
+  phase: "preBody" | "beforeHandle"
+): void {
+  if (
+    response.status >= 400 ||
+    def.acknowledgeNoResponseBodySchema === true ||
+    isSchemaValidatedResponse(response)
+  ) {
+    return;
+  }
+  throw new InternalError(
+    `Raw ${phase} Response refused: set acknowledgeNoResponseBodySchema: true on the route ` +
+      "to explicitly accept that its successful response body bypasses schema validation."
+  );
 }
 
 function hasRequestSchema(request: RequestSchemas | undefined, key: keyof RequestSchemas): boolean {

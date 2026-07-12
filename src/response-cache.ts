@@ -41,6 +41,7 @@
  */
 
 import type { BaseContext, Hooks } from "./types.js";
+import { markSchemaValidatedResponse } from "./internal-response.js";
 
 /** Internal `ctx.state` key carrying the pending cache key between hooks. */
 const PENDING_STATE_KEY = "__responseCachePending";
@@ -321,7 +322,9 @@ function buildResponseFromCache(
   headers.set("age", String(ageSeconds));
   if (statusHeaderName) headers.set(statusHeaderName, outcome);
   const body = isHead || entry.body === "" ? null : base64ToBytes(entry.body);
-  return new Response(body as BodyInit | null, { status: entry.status, headers });
+  return markSchemaValidatedResponse(
+    new Response(body as BodyInit | null, { status: entry.status, headers })
+  );
 }
 
 function isPromiseLike<T>(value: unknown): value is Promise<T> {

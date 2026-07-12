@@ -192,19 +192,20 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 app.register(auth0Plugin);
 
-app.route({
-  method: "GET",
-  path: "/items",
-  operationId: "listItems",
-  middleware: [requireAuth(process.env.AUTH0_REQUIRED_SCOPE!)],
-  responses: {
-    200: { description: "OK", body: z.object({ user: z.string(), items: z.array(z.string()) }) },
+app.get(
+  "/items",
+  {
+    operationId: "listItems",
+    hooks: requireAuth(process.env.AUTH0_REQUIRED_SCOPE!),
+    responses: {
+      200: { description: "OK", body: z.object({ user: z.string(), items: z.array(z.string()) }) },
+    },
   },
-  handler: ({ state }) => ({
+  ({ state }) => ({
     status: 200,
     body: { user: state.principal!.sub, items: ["a", "b"] },
   }),
-});`}
+);`}
       />
 
       <h2 id="permissions-rbac">Permissions (RBAC)</h2>
@@ -215,19 +216,25 @@ app.route({
         when you want to enforce role assignments rather than OAuth 2.0 scopes:
       </p>
       <CodeBlock
-        code={`export function requirePermission(...perms: string[]): Middleware {
-  return async (ctx, next) => {
-    // ... bearer extraction & verify() as before ...
-    const have = ctx.state.principal!.permissions;
-    if (!perms.every((p) => have.includes(p))) {
-      return ctx.problem(403, "forbidden", "Missing permission");
-    }
-    return next();
+        code={`import { ForbiddenError, type Hooks } from "@daloyjs/core";
+
+export function requirePermission(...perms: string[]): Hooks {
+  return {
+    preBody: (ctx) => {
+      // ... bearer extraction & verify() as before ...
+      const have = ctx.state.principal!.permissions;
+      if (!perms.every((p) => have.includes(p))) {
+        throw new ForbiddenError("Missing permission");
+      }
+      // continue
+    },
   };
 }`}
       />
 
-      <h2 id="auth0-actions-and-custom-claims">Auth0 Actions &amp; custom claims</h2>
+      <h2 id="auth0-actions-and-custom-claims">
+        Auth0 Actions &amp; custom claims
+      </h2>
       <p>
         Add custom claims through an{" "}
         <a
@@ -245,8 +252,8 @@ app.route({
       <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>jose</code> uses Web Crypto, so this setup runs on Node 18+, Bun,
-        Deno, Cloudflare Workers, and AWS Lambda. No need to swap
-        libraries between environments.
+        Deno, Cloudflare Workers, and AWS Lambda. No need to swap libraries
+        between environments.
       </p>
 
       <h2 id="notes">Notes</h2>

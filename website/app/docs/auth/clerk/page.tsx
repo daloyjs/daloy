@@ -28,8 +28,8 @@ export default function Page() {
           Clerk
         </a>{" "}
         is a developer-first auth platform that bundles user management,
-        organizations, billing, and embeddable UI components. For a backend
-        API, the{" "}
+        organizations, billing, and embeddable UI components. For a backend API,
+        the{" "}
         <a
           href="https://clerk.com/docs/reference/backend/overview"
           target="_blank"
@@ -46,8 +46,8 @@ export default function Page() {
           <code>authenticateRequest()</code>
         </a>
         , which takes a standard <code>Request</code> and returns an{" "}
-        <code>Auth</code> object, a perfect fit for DaloyJS&apos;s
-        Web-standard handlers.
+        <code>Auth</code> object, a perfect fit for DaloyJS&apos;s Web-standard
+        handlers.
       </p>
 
       <SequenceDiagram
@@ -82,7 +82,8 @@ export default function Page() {
           {
             from: "DaloyJS API",
             to: "Frontend SDK",
-            label: "Return protected data, or 401 when isAuthenticated is false",
+            label:
+              "Return protected data, or 401 when isAuthenticated is false",
             kind: "response",
           },
         ]}
@@ -93,8 +94,14 @@ export default function Page() {
       <ol>
         <li>
           Create an application in the{" "}
-          <a href="https://dashboard.clerk.com" target="_blank" rel="noreferrer">Clerk
-          dashboard</a>. From <strong>API Keys</strong>, copy the{" "}
+          <a
+            href="https://dashboard.clerk.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Clerk dashboard
+          </a>
+          . From <strong>API Keys</strong>, copy the{" "}
           <strong>Publishable Key</strong> and <strong>Secret Key</strong>.
           Optionally copy the <strong>JWT Public Key (PEM)</strong> for
           networkless verification.
@@ -106,10 +113,9 @@ export default function Page() {
           DaloyJS API.
         </li>
         <li>
-          For machine-to-machine calls, create an{" "}
-          <strong>M2M token</strong> or use Clerk&apos;s OAuth applications
-          and accept <code>oauth_token</code> /{" "}
-          <code>m2m_token</code> in the verifier.
+          For machine-to-machine calls, create an <strong>M2M token</strong> or
+          use Clerk&apos;s OAuth applications and accept{" "}
+          <code>oauth_token</code> / <code>m2m_token</code> in the verifier.
         </li>
       </ol>
 
@@ -130,7 +136,7 @@ CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----\\n...\\n-----END PUBLIC KEY-----"`}
       <CodeBlock
         code={`// src/plugins/clerk.ts
 import { createClerkClient } from "@clerk/backend";
-import type { App, Middleware } from "@daloyjs/core";
+import { UnauthorizedError, type App, type Hooks } from "@daloyjs/core";
 
 const clerk = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY!,
@@ -153,28 +159,32 @@ export const clerkPlugin = {
   },
 };
 
+type ClerkTokenType = "session_token" | "oauth_token" | "m2m_token" | "api_key";
+
 export function requireClerkAuth(opts?: {
-  acceptsToken?: "session_token" | "oauth_token" | "m2m_token" | "api_key" | "any";
+  acceptsToken?: ClerkTokenType | ClerkTokenType[] | "any";
   authorizedParties?: string[];
-}): Middleware {
+}): Hooks {
   const acceptsToken = opts?.acceptsToken ?? "session_token";
-  return async (ctx, next) => {
-    const result = await ctx.state.clerk.authenticateRequest(ctx.request, {
-      acceptsToken,
-      authorizedParties: opts?.authorizedParties,
-    });
-    if (!result.isAuthenticated) {
-      return ctx.problem(401, "unauthorized", result.message ?? "Unauthorized");
-    }
-    const auth = result.toAuth();
-    ctx.state.principal = {
-      userId: (auth as { userId?: string }).userId ?? "",
-      sessionId: (auth as { sessionId?: string | null }).sessionId ?? null,
-      orgId: (auth as { orgId?: string | null }).orgId ?? null,
-      orgRole: (auth as { orgRole?: string | null }).orgRole ?? null,
-      tokenType: result.tokenType,
-    };
-    return next();
+  return {
+    preBody: async (ctx) => {
+      const result = await ctx.state.clerk.authenticateRequest(ctx.request, {
+        acceptsToken,
+        authorizedParties: opts?.authorizedParties,
+      });
+      if (!result.isAuthenticated) {
+        throw new UnauthorizedError(result.message ?? "Unauthorized");
+      }
+      const auth = result.toAuth();
+      ctx.state.principal = {
+        userId: (auth as { userId?: string }).userId ?? "",
+        sessionId: (auth as { sessionId?: string | null }).sessionId ?? null,
+        orgId: (auth as { orgId?: string | null }).orgId ?? null,
+        orgRole: (auth as { orgRole?: string | null }).orgRole ?? null,
+        tokenType: result.tokenType,
+      };
+      // continue
+    },
   };
 }
 
@@ -186,11 +196,14 @@ declare module "@daloyjs/core" {
 }`}
       />
       <p>
-        Setting <strong><code>authorizedParties</code></strong> is strongly
-        recommended, it pins the origins allowed to make requests and
-        protects against the subdomain-cookie-leaking attack described in
-        Clerk&apos;s docs. Setting <code>jwtKey</code> turns verification into
-        a pure crypto check (no network), which is ideal for edge runtimes.
+        Setting{" "}
+        <strong>
+          <code>authorizedParties</code>
+        </strong>{" "}
+        is strongly recommended, it pins the origins allowed to make requests
+        and protects against the subdomain-cookie-leaking attack described in
+        Clerk&apos;s docs. Setting <code>jwtKey</code> turns verification into a
+        pure crypto check (no network), which is ideal for edge runtimes.
       </p>
 
       <h2 id="5-guard-a-route">5. Guard a route</h2>
@@ -204,22 +217,22 @@ app.use(secureHeaders());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 app.register(clerkPlugin);
 
-app.route({
-  method: "GET",
-  path: "/me",
-  operationId: "getMe",
-  middleware: [requireClerkAuth({ authorizedParties: ["https://acme.example.com"] })],
-  responses: {
-    200: {
-      description: "OK",
-      body: z.object({
-        userId: z.string(),
-        orgId: z.string().nullable(),
-        orgRole: z.string().nullable(),
-      }),
+app.get(
+  "/me",
+  {
+    hooks: requireClerkAuth({ authorizedParties: ["https://acme.example.com"] }),
+    responses: {
+      200: {
+        description: "OK",
+        body: z.object({
+          userId: z.string(),
+          orgId: z.string().nullable(),
+          orgRole: z.string().nullable(),
+        }),
+      },
     },
   },
-  handler: ({ state }) => ({
+  ({ state }) => ({
     status: 200,
     body: {
       userId: state.principal!.userId,
@@ -227,10 +240,12 @@ app.route({
       orgRole: state.principal!.orgRole,
     },
   }),
-});`}
+);`}
       />
 
-      <h2 id="organizations-and-role-checks">Organizations &amp; role checks</h2>
+      <h2 id="organizations-and-role-checks">
+        Organizations &amp; role checks
+      </h2>
       <p>
         Clerk&apos;s <code>Auth</code> object includes the active{" "}
         <code>orgId</code>, <code>orgSlug</code>, <code>orgRole</code> (e.g.{" "}
@@ -238,23 +253,29 @@ app.route({
         helper to require a role on top of <code>requireClerkAuth</code>:
       </p>
       <CodeBlock
-        code={`export function requireOrgRole(role: string): Middleware {
-  return async (ctx, next) => {
-    if (ctx.state.principal?.orgRole !== role) {
-      return ctx.problem(403, "forbidden", \`Requires \${role}\`);
-    }
-    return next();
+        code={`import { every, ForbiddenError, type Hooks } from "@daloyjs/core";
+
+export function requireOrgRole(role: string): Hooks {
+  return {
+    preBody: (ctx) => {
+      if (ctx.state.principal?.orgRole !== role) {
+        throw new ForbiddenError(\`Requires \${role}\`);
+      }
+      // continue
+    },
   };
 }
 
 // Usage:
-middleware: [
+hooks: every(
   requireClerkAuth(),
   requireOrgRole("org:admin"),
-],`}
+),`}
       />
 
-      <h2 id="machine-to-machine-authentication">Machine-to-machine authentication</h2>
+      <h2 id="machine-to-machine-authentication">
+        Machine-to-machine authentication
+      </h2>
       <p>
         Set <code>acceptsToken</code> to <code>&quot;m2m_token&quot;</code>,{" "}
         <code>&quot;oauth_token&quot;</code>, or an array like{" "}
@@ -266,17 +287,17 @@ middleware: [
       <h2 id="webhooks">Webhooks</h2>
       <p>
         Clerk delivers user, organization, and session events via Svix-signed
-        webhooks. Use <code>clerk.verifyWebhook(request)</code> to validate
-        the signature before processing the payload, never trust an
-        unverified webhook body.
+        webhooks. Use <code>clerk.verifyWebhook(request)</code> to validate the
+        signature before processing the payload, never trust an unverified
+        webhook body.
       </p>
 
       <h2 id="runtimes">Runtimes</h2>
       <p>
-        <code>@clerk/backend</code> is built on the Web <code>Request</code>{" "}
-        and <code>fetch</code> APIs, so it runs on Node 18+, Bun, Deno, AWS
-        Lambda, Vercel (Serverless and Edge), and Cloudflare Workers. Pair it
-        with the <Link href="/docs/adapters">edge adapters</Link>.
+        <code>@clerk/backend</code> is built on the Web <code>Request</code> and{" "}
+        <code>fetch</code> APIs, so it runs on Node 18+, Bun, Deno, AWS Lambda,
+        Vercel (Serverless and Edge), and Cloudflare Workers. Pair it with the{" "}
+        <Link href="/docs/adapters">edge adapters</Link>.
       </p>
 
       <p>

@@ -33,6 +33,7 @@
  */
 
 import { BadRequestError, ConflictError, HttpError } from "./errors.js";
+import { markSchemaValidatedResponse } from "./internal-response.js";
 import type { BaseContext, Hooks } from "./types.js";
 
 const enc = new TextEncoder();
@@ -368,7 +369,9 @@ function buildReplayResponse(stored: StoredIdempotentResponse, replayHeaderName:
   for (const [name, value] of stored.headers) headers.set(name, value);
   headers.set(replayHeaderName, "true");
   const body = stored.body ? base64ToBytes(stored.body) : null;
-  return new Response(body as BodyInit | null, { status: stored.status, headers });
+  return markSchemaValidatedResponse(
+    new Response(body as BodyInit | null, { status: stored.status, headers })
+  );
 }
 
 // ---------- Middleware ----------

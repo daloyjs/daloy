@@ -83,9 +83,10 @@ pnpm dev    # hot-reload via daloy dev`}
 
       <h2 id="install">Install</h2>
       <p>
-        Requires <strong>Node.js 24 LTS or Node.js 26+</strong>. The adapter ships
-        with <code>@daloyjs/core</code>; no extra dependency. Node.js 25 is not
-        supported because it is already end-of-life.
+        Requires <strong>Node.js 24 LTS or Node.js 26+</strong>. The adapter
+        ships with <code>@daloyjs/core</code>; no extra dependency. Node.js 25
+        is not supported because it is end-of-life and no longer receives
+        security fixes.
       </p>
       <CodeBlock language="bash" code={`pnpm add @daloyjs/core`} />
 
@@ -113,18 +114,20 @@ console.log(\`listening on :\${port}\`);
 await close();`}
       />
 
-      <h2 id="what-the-adapter-wires-for-you">What the adapter wires for you</h2>
+      <h2 id="what-the-adapter-wires-for-you">
+        What the adapter wires for you
+      </h2>
       <ul>
         <li>
           <code>requestTimeout</code>, <code>headersTimeout</code>, and{" "}
           <code>keepAliveTimeout</code> set to safe production values. Both
           request timeouts derive from <code>connectionTimeoutMs</code>, and the
-          adapter also lowers Node&apos;s connection-check interval to a fraction
-          of that value so a slowloris (a client that stalls or trickles its
-          request headers to hold a socket open) is reaped close to the deadline
-          with a <code>408</code>, instead of surviving until Node&apos;s default
-          30&nbsp;second sweep. Set <code>connectionTimeoutMs: 0</code> to
-          disable the timeouts entirely.
+          adapter also lowers Node&apos;s connection-check interval to a
+          fraction of that value so a slowloris (a client that stalls or
+          trickles its request headers to hold a socket open) is reaped close to
+          the deadline with a <code>408</code>, instead of surviving until
+          Node&apos;s default 30&nbsp;second sweep. Set{" "}
+          <code>connectionTimeoutMs: 0</code> to disable the timeouts entirely.
         </li>
         <li>
           SIGTERM / SIGINT handlers that call <code>server.close()</code>{" "}
@@ -154,7 +157,9 @@ await close();`}
         </li>
       </ul>
 
-      <h2 id="graceful-degradation-under-overload">Graceful degradation under overload</h2>
+      <h2 id="graceful-degradation-under-overload">
+        Graceful degradation under overload
+      </h2>
       <p>
         Steady-state throughput is only half the story. Once a Node process is
         pushed <em>past</em> saturation, the multi-second part of the tail
@@ -196,7 +201,9 @@ serve(app, {
         a very different point than I/O-bound proxying.
       </p>
 
-      <h3 id="pair-it-with-an-upstream-gateway">Pair it with an upstream gateway</h3>
+      <h3 id="pair-it-with-an-upstream-gateway">
+        Pair it with an upstream gateway
+      </h3>
       <p>
         When the cap is hit, the overflow socket is refused at the TCP layer,
         the client sees a connection reset, not an HTTP response. In production

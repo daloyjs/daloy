@@ -7,7 +7,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Auth architecture: where DaloyJS fits in OAuth2 & OpenID Connect",
   description:
-    "DaloyJS is a resource server and relying-party toolkit, not an identity provider. Learn how it compares to .NET and Duende IdentityServer, why you still need an OpenID Connect provider (managed like Auth0/Okta/Clerk or self-hosted like Keycloak/Zitadel/Ory), and the two architectures we recommend.",
+    "DaloyJS is a resource server and relying-party toolkit, not an identity provider. Learn when to use an OpenID Connect provider such as Auth0, Okta, Keycloak, or Zitadel, when an embedded session system such as Better Auth fits, and the two architectures we recommend.",
   path: "/docs/auth/architecture",
   keywords: [
     "DaloyJS OAuth2",
@@ -17,6 +17,7 @@ export const metadata = buildMetadata({
     "resource server vs authorization server",
     "do I need Auth0 Okta Clerk",
     "self-hosted OIDC Keycloak Zitadel Ory",
+    "embedded authentication Better Auth",
     "BFF pattern Node",
     "JWT verification edge",
   ],
@@ -50,9 +51,11 @@ export default function Page() {
           login pages, manage clients and consent, and mint tokens.
         </li>
         <li>
-          <strong>You do need an OpenID Connect provider</strong>, but it does
-          not have to be Auth0, Okta, or Clerk specifically. It can be any
-          standards-compliant IdP, including self-hosted open-source ones.
+          <strong>You need an identity and session system.</strong> For an
+          OAuth2/OIDC architecture, use a standards-compliant managed or
+          self-hosted IdP. For a first-party application that does not need an
+          external token issuer, an embedded system such as Better Auth can own
+          login and cookie sessions inside your DaloyJS deployment.
         </li>
         <li>
           <strong>Do not build your own authorization server.</strong> Verify
@@ -228,8 +231,7 @@ export default function Page() {
             <td>Authorization server / login (issues tokens)</td>
             <td>Duende IdentityServer, OpenIddict, ASP.NET Core Identity</td>
             <td>
-              A separate IdP (managed or self-hosted), no built-in
-              equivalent
+              A separate IdP (managed or self-hosted), no built-in equivalent
             </td>
           </tr>
         </tbody>
@@ -243,10 +245,10 @@ export default function Page() {
 
       <h2 id="do-you-need-a-provider">Do you need Auth0, Okta, or Clerk?</h2>
       <p>
-        You need <em>an</em> OpenID Connect provider. You do not need those
-        three brands specifically. Any provider that exposes a standard JWKS
-        endpoint and OIDC discovery works with the same one line of DaloyJS
-        code. Pick the operational model that fits your team:
+        If your architecture uses OAuth2/OIDC bearer tokens, you need an OpenID
+        Connect provider, but not one of those three brands specifically. Any
+        provider that exposes standard JWKS and OIDC discovery works with the
+        same DaloyJS verifier. Pick the operational model that fits your team:
       </p>
       <h3 id="managed-providers">Managed (fastest to ship)</h3>
       <p>
@@ -301,12 +303,19 @@ export default function Page() {
           </a>
         </li>
       </ul>
+      <h3 id="embedded-auth">Embedded authentication (same deployment)</h3>
+      <p>
+        <Link href="/docs/auth/better-auth">Better Auth</Link> runs inside your
+        application and can own first-party login plus cookie sessions without
+        acting as an external OIDC provider. Its optional OIDC/OAuth provider
+        plugins can add that role when your architecture genuinely needs it.
+      </p>
       <p>
         Whatever you pick, treat building your own authorization server as a
         non-goal. Implementing OAuth2 / OIDC correctly (authorization-code +
         PKCE, token rotation, key management and rotation, consent, discovery,
-        and the long tail of spec edge cases) is a large, high-risk surface
-        that vetted IdPs already solve.
+        and the long tail of spec edge cases) is a large, high-risk surface that
+        vetted IdPs already solve.
       </p>
 
       <h2 id="resource-server">
@@ -326,7 +335,8 @@ import { jwk } from "@daloyjs/core/jwk";
 const app = new App();
 
 // Verify every Bearer token against your IdP's JWKS. The same one line works
-// for Auth0, Okta, Entra ID, Cognito, Keycloak, Zitadel, Ory, and others.
+// for Auth0, Okta, Entra ID, Cognito, Keycloak, Zitadel, Ory, and others
+// (JWT-based IdPs). Better Auth uses its own handler + getSession API instead.
 app.use(
   jwk({
     jwks: "https://login.example.com/.well-known/jwks.json",
@@ -337,13 +347,14 @@ app.use(
 );
 
 // Authorize per route by scope/permission.
-app.route({
-  method: "GET",
-  path: "/orders",
-  hooks: requireScopes("orders:read"),
-  responses: { 200: { description: "ok" } },
-  handler: () => ({ status: 200, body: { orders: [] } }),
-});`}
+app.get(
+  "/orders",
+  {
+    hooks: requireScopes("orders:read"),
+    responses: { 200: { description: "ok" } },
+  },
+  () => ({ status: 200, body: { orders: [] } }),
+);`}
       />
       <p>
         The <code>jwk()</code> middleware enforces an asymmetric-only algorithm
@@ -356,8 +367,9 @@ app.route({
         <Link href="/docs/auth/auth0">Auth0</Link>,{" "}
         <Link href="/docs/auth/okta">Okta</Link>,{" "}
         <Link href="/docs/auth/entra-id">Entra ID</Link>,{" "}
-        <Link href="/docs/auth/aws-cognito">Cognito</Link>, and{" "}
-        <Link href="/docs/auth/clerk">Clerk</Link>.
+        <Link href="/docs/auth/aws-cognito">Cognito</Link>,{" "}
+        <Link href="/docs/auth/clerk">Clerk</Link>, and{" "}
+        <Link href="/docs/auth/better-auth">Better Auth</Link>.
       </p>
 
       <h2 id="bff">

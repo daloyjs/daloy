@@ -210,14 +210,16 @@ response schema preserves validation, OpenAPI, and data-exposure protection:
 const app = new App().get(
   "/",
   { responses: { 200: { body: z.object({ hello: z.string() }) } } },
-  () => ({ status: 200, body: { hello: "world" } }),
+  () => ({ status: 200, body: { hello: "world" } })
 );
 ```
 
 There is intentionally no `app.get(path, handler)` form. If a streaming or
 proxy route genuinely needs to return a raw `Response`, declare a contract and
 set `acknowledgeNoResponseBodySchema: true`; otherwise DaloyJS fails closed
-rather than silently bypassing response-body validation.
+rather than silently bypassing response-body validation. The same rule applies
+when `preBody` or `beforeHandle` short-circuits with a successful raw response;
+ordinary `4xx`/`5xx` hook denials remain secure by default without an opt-out.
 
 Add request schemas and other contract options as the endpoint grows:
 
@@ -232,7 +234,7 @@ app.post(
       },
     },
   },
-  ({ body }) => ({ status: 201, body: { id: "1", title: body.title } }),
+  ({ body }) => ({ status: 201, body: { id: "1", title: body.title } })
 );
 ```
 

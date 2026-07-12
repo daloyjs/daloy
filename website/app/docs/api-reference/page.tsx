@@ -40,18 +40,19 @@ import { z } from "zod";
 import { App } from "@daloyjs/core";          // root barrel
 import { serve } from "@daloyjs/core/node";   // adapters are subpath-only
 
-const app = new App({ title: "Hello API", version: "1.0.0" }).route({
-  method: "GET",
-  path: "/hello",
-  operationId: "hello",
-  responses: {
-    // A response \`body\` schema enables OWASP-API3 field stripping.
-    200: { description: "Greeting", body: z.object({ message: z.string() }) },
+const app = new App({ title: "Hello API", version: "1.0.0" }).get(
+  "/hello",
+  {
+    operationId: "hello",
+    responses: {
+      // A response \`body\` schema enables OWASP-API3 field stripping.
+      200: { description: "Greeting", body: z.object({ message: z.string() }) },
+    },
   },
   // The handler returns the discriminated union HandlerReturn<Res>:
   // { status, body, headers? }, keyed by a status declared above.
-  handler: () => ({ status: 200, body: { message: "Hello from DaloyJS" } }),
-});
+  () => ({ status: 200, body: { message: "Hello from DaloyJS" } }),
+);
 
 const { port } = serve(app);                  // NodeServerOptions.port defaults to 3000
 console.log(\`listening on http://localhost:\${port}\`);`}
@@ -338,6 +339,10 @@ interface Hooks {
   onSend?:       (res: Response, ctx?) => void | Response | Promise<void | Response>;
   onResponse?:   (res: Response, ctx?) => void;
 }
+
+// A successful raw Response from preBody/beforeHandle bypasses response-body
+// validation and therefore requires acknowledgeNoResponseBodySchema: true on
+// the route. Error/denial Responses (4xx/5xx) do not require an opt-out.
 
 interface RouteDefinition<P, Req, Res, S> {
   method: HttpMethod;

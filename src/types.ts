@@ -355,9 +355,9 @@ export interface PreBodyContext<P extends string = string> {
 export interface Hooks {
   /** Runs first, before validation or context building. Receives the raw web-standard `Request`. */
   onRequest?: (req: Request) => void | Promise<void>;
-  /** Runs after route matching but before request-body I/O or schema validation. Use for cheap header/certificate auth; `ctx.body` is always undefined. */
+  /** Runs after route matching but before request-body I/O or schema validation. Use for cheap header/certificate auth; `ctx.body` is always undefined. A successful raw `Response` requires the route's `acknowledgeNoResponseBodySchema` flag; `4xx`/`5xx` denials do not. */
   preBody?: (ctx: PreBodyContext<any>) => void | Response | Promise<void | Response>;
-  /** Runs with the validated {@link BaseContext} before the handler. Returning a `Response` short-circuits the handler entirely (useful for auth guards). */
+  /** Runs with the validated {@link BaseContext} before the handler. Returning a `Response` short-circuits the handler entirely. Successful raw responses require the route's `acknowledgeNoResponseBodySchema` flag; `4xx`/`5xx` auth denials do not. */
   beforeHandle?: (ctx: BaseContext<any, any>) => void | Response | Promise<void | Response>;
   /** Runs after the handler with its raw return value. Return a non-`undefined` value to replace the result before serialization and response-schema validation. */
   afterHandle?: (
@@ -448,11 +448,14 @@ export interface RouteDefinition<
    * Setting this suppresses the `security.response.bodySchemaMissing` boot
    * warning and the `audit.response.bodySchema` `daloy doctor` finding for
    * this route only. It also explicitly authorizes a handler or `afterHandle`
-   * hook to return a raw `Response`; DaloyJS fails closed with a `500` if they
-   * return one without this acknowledgement. It documents intent; it does not
-   * add protection — response field-level stripping (OWASP API3) does not run
-   * for an opaque body, so never set this on a route whose handler builds JSON
-   * from domain objects.
+   * hook to return a raw `Response`, or a `preBody` / `beforeHandle` hook to
+   * short-circuit with a successful (`2xx`/`3xx`) raw `Response`. DaloyJS fails
+   * closed with a `500` when those cases lack this acknowledgement. Ordinary
+   * `4xx`/`5xx` hook denials and errors remain available without opting out of
+   * response validation. This flag documents intent; it does not add
+   * protection — response field-level stripping (OWASP API3) does not run for
+   * an opaque body, so never set this on a route whose handler builds JSON from
+   * domain objects.
    */
   acknowledgeNoResponseBodySchema?: boolean;
 
