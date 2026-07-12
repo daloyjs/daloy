@@ -241,7 +241,7 @@
     "fast-check": "^4.8.0",
     "prettier": "^3.8.3",
     "tsx": "^4.22.3",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "zod": "^4.4.3"
   },
   "scripts": {
