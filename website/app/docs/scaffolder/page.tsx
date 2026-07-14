@@ -210,6 +210,22 @@ bun  create daloy           my-api`}
         shows the link instead. When every required tool is present, no hint is
         printed.
       </p>
+      <p>
+        The CLI also checks <strong>versions</strong>, not just presence.{" "}
+        <code>npm create daloy</code> and <code>npx</code> will run the
+        scaffolder on an old Node.js because <code>engines</code> are only
+        advisory there, so the CLI verifies it itself: if you are on a Node.js
+        older than <strong>24</strong>, it stops before scaffolding with a clear
+        message, the <a href="https://nodejs.org" target="_blank" rel="noreferrer">
+          nodejs.org
+        </a>{" "}
+        link, and a nudge toward a version manager (nvm, fnm, Volta) rather than
+        generating a project your runtime cannot run. And when you pick{" "}
+        <code>npm</code>, it detects an npm older than <strong>12</strong> up
+        front, tells you to run <code>npm install -g npm@latest</code>, and skips
+        the automatic install so you get a readable explanation instead of npm&apos;s
+        raw <code>EBADENGINE</code> error partway through.
+      </p>
 
       <h2 id="templates">Templates</h2>
       <p>
@@ -433,11 +449,11 @@ bun  create daloy           my-api`}
         directory and never run scripts during scaffolding. When you choose{" "}
         <code>pnpm</code>, the generated app keeps the hardened{" "}
         <code>.npmrc</code> and <code>pnpm-workspace.yaml</code>; when you
-        choose <code>npm</code>, the CLI swaps in an npm-native{" "}
-        <code>.npmrc</code> with <code>engine-strict=true</code> so the{" "}
-        <code>npm &gt;= 12</code> floor in <code>engines</code> becomes a hard
-        install-time failure rather than a warning; yarn and bun scaffolds drop
-        the pnpm-specific config so installs stay warning-free. When you choose{" "}
+        choose <code>npm</code>, the CLI adds an <code>npm &gt;= 12</code> floor
+        to <code>engines</code> and swaps in an npm-native <code>.npmrc</code>{" "}
+        with <code>engine-strict=true</code> so that floor is a hard install-time
+        failure rather than a warning; yarn and bun scaffolds drop the
+        pnpm-specific config so installs stay warning-free. When you choose{" "}
         <code>--with-ci</code>, it
         also adds the GitHub-side security files that a company repo normally
         has to assemble by hand.

@@ -58,8 +58,8 @@ const PACKAGE_MANAGERS = PACKAGE_MANAGER_OPTIONS.map((option) => option.value);
 // `--template <old>` commands (and published docs/blog posts) keep working.
 // Each maps to its current canonical template value.
 const TEMPLATE_ALIASES = new Map([
-  // `vercel` shipped before Vercel deprecated standalone Edge Functions;
-  // the template now targets the recommended Node.js runtime as `vercel`.
+  // The `vercel` template targets the Node.js runtime, which Vercel
+  // recommends over Edge for standalone functions (both run on Fluid compute).
 ]);
 
 const RENAME_ON_COPY = new Map([
@@ -487,6 +487,56 @@ const TOOL_INSTALL_GUIDES = {
   deno: { label: "Deno", url: "https://docs.deno.com/runtime/getting_started/installation/" },
 };
 
+// Version floors the scaffolder and the projects it generates depend on. The
+// CLI itself targets Node >= 24; npm scaffolds require npm >= 12 (see the
+// injected `engines.npm` + engine-strict `.npmrc`). We surface these up front
+// so a user on an old runtime gets a clear "here's what to install" message
+// instead of a cryptic syntax error or npm's raw EBADENGINE dump mid-install.
+const MIN_NODE_MAJOR = 24;
+const MIN_NPM_MAJOR = 12;
+
+/**
+ * Parse the leading major-version integer out of a version string such as
+ * `"v24.3.0"`, `"24.3.0"`, or `"10.8.2\n"`. Returns `NaN` when no leading
+ * number can be found so callers can fail open on an unrecognizable value.
+ *
+ * @param {string} version - a version string, e.g. `process.version` or `npm --version` output.
+ * @returns {number} the major version, or `NaN` if it cannot be parsed.
+ */
+function parseMajorVersion(version) {
+  const match = /(\d+)/.exec(String(version ?? "").trim());
+  return match ? Number(match[1]) : NaN;
+}
+
+/**
+ * Decide whether the running Node.js satisfies the DaloyJS floor. Fails **open**
+ * on an unparseable version so a valid-but-unusual runtime is never wrongly
+ * blocked.
+ *
+ * @param {string} [version=process.version] - the Node.js version to check.
+ * @returns {{ ok: boolean, major: number }} whether it meets the floor, plus the parsed major.
+ */
+function checkNodeVersion(version = process.version) {
+  const major = parseMajorVersion(version);
+  const ok = !Number.isFinite(major) || major >= MIN_NODE_MAJOR;
+  return { ok, major };
+}
+
+/**
+ * Resolve the installed major version of a CLI tool by running `<tool>
+ * --version`. Returns `NaN` when the tool is absent, errors, or prints an
+ * unparseable version — callers treat `NaN` as "unknown, don't block".
+ *
+ * @param {string} tool - bare executable name, e.g. `npm`.
+ * @param {string} [cwd] - working directory for the probe.
+ * @returns {Promise<number>} the tool's major version, or `NaN`.
+ */
+async function detectToolMajor(tool, cwd) {
+  const { code, output } = await runQuiet(tool, ["--version"], cwd);
+  if (code !== 0) return NaN;
+  return parseMajorVersion(output);
+}
+
 /**
  * Compute the CLIs a freshly-scaffolded project needs to run, given the chosen
  * template (which fixes the runtime) and package manager. Runtime-only
@@ -621,6 +671,14 @@ async function patchPackageJson(dir, projectName, packageManager) {
   if (json.scripts && packageManager && packageManager !== "pnpm") {
     json.scripts = rewriteScriptsForPackageManager(json.scripts, packageManager);
   }
+  // Only npm scaffolds get an `engines.npm` floor. pnpm/yarn/bun users never
+  // run npm here, so the templates ship without it; we inject `>=12.0.0` (npm 12
+  // or newer) only when the user picks npm, paired with the engine-strict
+  // `.npmrc` from normalizePackageManagerFiles so the floor is enforced, not
+  // just advisory.
+  if (packageManager === "npm") {
+    json.engines = { ...json.engines, npm: ">=12.0.0" };
+  }
   await writeFile(file, JSON.stringify(json, null, 2) + "\n", "utf8");
 }
 
@@ -707,16 +765,36 @@ function rewriteScriptsForPackageManager(scripts, pm) {
   return out;
 }
 
+// npm-native `.npmrc` written for npm scaffolds. The pnpm-specific hardening
+// keys (minimum-release-age, verify-store-integrity, …) mean nothing to npm,
+// but `engine-strict=true` is honored by npm and turns the `engines.npm`
+// floor in package.json into a hard failure instead of a silent warning — so
+// DaloyJS's "npm >= 12" requirement is actually enforced at install time.
+const NPM_STRICT_NPMRC = `# DaloyJS install-time guardrails for the npm CLI.
+#
+# engine-strict makes npm refuse to install when the developer's npm (or
+# Node.js) is older than the "engines" floor in package.json — DaloyJS
+# requires npm >= 12 — instead of only printing a warning. Remove this line
+# only if you deliberately want to install on an unsupported npm version.
+engine-strict=true
+`;
+
 async function normalizePackageManagerFiles(dir, packageManager) {
   if (packageManager === "pnpm") return;
-  // The hardened `.npmrc` and `pnpm-workspace.yaml` only make sense for pnpm.
-  // Removing them keeps npm/yarn/bun scaffolds from inheriting pnpm-specific
-  // settings the chosen package manager would either ignore or misinterpret.
-  for (const file of [".npmrc", "pnpm-workspace.yaml"]) {
-    const target = path.join(dir, file);
-    if (existsSync(target)) {
-      await rm(target, { force: true });
-    }
+  // pnpm-workspace.yaml is pnpm-only; drop it for every other manager.
+  const workspace = path.join(dir, "pnpm-workspace.yaml");
+  if (existsSync(workspace)) {
+    await rm(workspace, { force: true });
+  }
+  // The hardened `.npmrc` is authored for pnpm. For npm we replace it with an
+  // npm-native `.npmrc` that keeps the one guardrail npm understands
+  // (`engine-strict=true`, enforcing the npm >= 12 engine floor). yarn and bun
+  // ignore or misinterpret these keys, so they get no `.npmrc` at all.
+  const npmrc = path.join(dir, ".npmrc");
+  if (packageManager === "npm") {
+    await writeFile(npmrc, NPM_STRICT_NPMRC, "utf8");
+  } else if (existsSync(npmrc)) {
+    await rm(npmrc, { force: true });
   }
 }
 
@@ -1789,6 +1867,26 @@ async function main() {
     process.exit(0);
   }
 
+  // Preflight: the CLI and every template it emits require a modern Node.js.
+  // `npm create daloy` / npx will happily run this on an old Node (engines are
+  // advisory there), so we check ourselves and stop with a clear, actionable
+  // message rather than scaffolding a project the user's runtime can't run.
+  const nodeCheck = checkNodeVersion();
+  if (!nodeCheck.ok) {
+    printBanner(await readPkgVersion());
+    logError(
+      `DaloyJS needs Node.js ${MIN_NODE_MAJOR} or newer — you're on ${process.version}.`,
+    );
+    console.log(
+      `  ${color(COLORS.yellow, SYMBOLS.pointer)} Install an up-to-date Node.js: ${color(COLORS.cyan + COLORS.underline, TOOL_INSTALL_GUIDES.node.url)}`,
+    );
+    console.log(
+      `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Or switch versions with a manager like nvm, fnm, or Volta.")}`,
+    );
+    console.log("");
+    process.exit(1);
+  }
+
   printBanner(await readPkgVersion());
 
   const detectedPm = detectPackageManager();
@@ -1989,6 +2087,25 @@ async function main() {
       installDeps = false;
     }
 
+    // npm scaffolds require npm >= 12 (enforced by the injected engines.npm +
+    // engine-strict .npmrc). Detect an older npm here so we can explain the fix
+    // clearly instead of leaving the user with npm's raw EBADENGINE failure.
+    if (packageManager === "npm" && !missingTools.some((tool) => tool.tool === "npm")) {
+      const npmMajor = await detectToolMajor("npm", targetDir);
+      if (Number.isFinite(npmMajor) && npmMajor < MIN_NPM_MAJOR) {
+        logWarn(`This project requires npm >= ${MIN_NPM_MAJOR}, but you're on npm ${npmMajor}.x.`);
+        console.log(
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} Upgrade npm: ${color(COLORS.cyan, "npm install -g npm@latest")} ${color(COLORS.dim, `(or reinstall Node.js: ${TOOL_INSTALL_GUIDES.npm.url})`)}`,
+        );
+        if (installDeps) {
+          console.log(
+            `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Skipping the automatic install until npm is up to date.")}`,
+          );
+          installDeps = false;
+        }
+      }
+    }
+
     if (installDeps) {
       const spinner = createSpinner(`Installing dependencies with ${color(COLORS.cyan, packageManager)}\u2026`);
       spinner.start();
@@ -2033,4 +2150,14 @@ if (process.env.DALOY_TEST_IMPORT !== "1") {
   await main();
 }
 
-export { choiceInputMode, requiredTools, missingToolGuides, isToolInstalled, TOOL_INSTALL_GUIDES };
+export {
+  choiceInputMode,
+  requiredTools,
+  missingToolGuides,
+  isToolInstalled,
+  TOOL_INSTALL_GUIDES,
+  parseMajorVersion,
+  checkNodeVersion,
+  MIN_NODE_MAJOR,
+  MIN_NPM_MAJOR,
+};

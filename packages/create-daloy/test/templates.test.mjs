@@ -75,6 +75,55 @@ async function importCliModule() {
   }
 }
 
+test("parseMajorVersion extracts the leading major version, NaN on garbage", async () => {
+  const { parseMajorVersion } = await importCliModule();
+  assert.equal(parseMajorVersion("v24.3.0"), 24);
+  assert.equal(parseMajorVersion("24.3.0"), 24);
+  assert.equal(parseMajorVersion("10.8.2\n"), 10);
+  assert.equal(parseMajorVersion(" 12.0.0 "), 12);
+  assert.ok(Number.isNaN(parseMajorVersion("")));
+  assert.ok(Number.isNaN(parseMajorVersion("not-a-version")));
+  assert.ok(Number.isNaN(parseMajorVersion(undefined)));
+});
+
+test("checkNodeVersion enforces the Node >= 24 floor and fails open on garbage", async () => {
+  const { checkNodeVersion, MIN_NODE_MAJOR, MIN_NPM_MAJOR } = await importCliModule();
+  assert.equal(MIN_NODE_MAJOR, 24);
+  assert.equal(MIN_NPM_MAJOR, 12);
+  assert.equal(checkNodeVersion("v24.0.0").ok, true);
+  assert.equal(checkNodeVersion("v26.1.0").ok, true);
+  const outdated = checkNodeVersion("v20.11.0");
+  assert.equal(outdated.ok, false);
+  assert.equal(outdated.major, 20);
+  // Unparseable version → fail open so a valid-but-unusual runtime isn't blocked.
+  assert.equal(checkNodeVersion("garbage").ok, true);
+});
+
+test("scaffolding on a supported Node does not trip the version preflight", async () => {
+  // The test runner uses the dev machine's Node (>= 24), so a real scaffold
+  // must succeed without emitting the "needs Node.js 24" guard message.
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+  try {
+    const { exitCode, output } = await runCreateDaloy(
+      [
+        "node-preflight",
+        "--template",
+        "node-basic",
+        "--package-manager",
+        "pnpm",
+        "--no-install",
+        "--no-git",
+        "--yes",
+      ],
+      { cwd: tmpDir },
+    );
+    assert.equal(exitCode, 0);
+    assert.doesNotMatch(output, /needs Node\.js/i);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test("requiredTools maps each template + package manager to the CLIs it needs", async () => {
   const { requiredTools } = await importCliModule();
 
@@ -701,6 +750,74 @@ test("pnpm templates ship a local SCA `audit` script", async () => {
   }
 });
 
+test("templates do not hardcode an npm engine floor (npm-only, injected by the CLI)", async () => {
+  // The npm >= 12 floor only makes sense for npm scaffolds. Templates must not
+  // ship it in `engines.npm`, or pnpm/yarn/bun projects would inherit an
+  // irrelevant constraint. The CLI injects it only when the user picks npm.
+  const templates = [
+    "node-basic",
+    "vercel",
+    "cloudflare-worker",
+    "bun-basic",
+  ];
+
+  for (const template of templates) {
+    const pkg = JSON.parse(
+      await readFile(
+        path.join(pkgRoot, "templates", template, "package.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(
+      pkg.engines?.npm,
+      undefined,
+      `${template} should not hardcode engines.npm`,
+    );
+  }
+});
+
+test("npm scaffolds get an engines.npm >= 12 floor; pnpm scaffolds do not", async () => {
+  for (const packageManager of ["npm", "pnpm"]) {
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+    const projectName = `${packageManager}-engine`;
+    try {
+      const exitCode = await new Promise((resolve) => {
+        const proc = spawn(
+          process.execPath,
+          [
+            path.join(pkgRoot, "bin/create-daloy.mjs"),
+            projectName,
+            "--template",
+            "node-basic",
+            "--package-manager",
+            packageManager,
+            "--no-install",
+            "--no-git",
+            "--yes",
+          ],
+          { cwd: tmpDir, stdio: "ignore" },
+        );
+        proc.on("exit", (code) => resolve(code ?? 1));
+        proc.on("error", () => resolve(1));
+      });
+      assert.equal(exitCode, 0);
+      const pkg = JSON.parse(
+        await readFile(
+          path.join(tmpDir, projectName, "package.json"),
+          "utf8",
+        ),
+      );
+      if (packageManager === "npm") {
+        assert.equal(pkg.engines?.npm, ">=12.0.0");
+      } else {
+        assert.equal(pkg.engines?.npm, undefined);
+      }
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("pnpm templates ship workspace-level supply-chain defaults", async () => {
   const templates = [
     "node-basic",
@@ -769,7 +886,7 @@ test("pnpm scaffolds keep hardened .npmrc", async () => {
   }
 });
 
-test("non-pnpm scaffolds do not keep pnpm-specific .npmrc or pnpm-workspace.yaml", async () => {
+test("npm scaffolds ship an engine-strict .npmrc without pnpm-specific keys", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   const projectName = "npm-clean";
   try {
@@ -793,12 +910,56 @@ test("non-pnpm scaffolds do not keep pnpm-specific .npmrc or pnpm-workspace.yaml
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    await assert.rejects(access(path.join(tmpDir, projectName, ".npmrc")));
+    // npm scaffolds keep a minimal npm-native .npmrc that enforces the
+    // npm >= 12 engine floor, but must NOT inherit the pnpm-only hardening keys.
+    const npmrc = await readFile(
+      path.join(tmpDir, projectName, ".npmrc"),
+      "utf8",
+    );
+    assert.match(npmrc, /^engine-strict=true$/m);
+    assert.doesNotMatch(npmrc, /minimum-release-age/);
+    assert.doesNotMatch(npmrc, /verify-store-integrity/);
+    assert.doesNotMatch(npmrc, /ignore-scripts/);
     await assert.rejects(
       access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")),
     );
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("yarn and bun scaffolds keep no pnpm-specific .npmrc or pnpm-workspace.yaml", async () => {
+  for (const packageManager of ["yarn", "bun"]) {
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
+    const projectName = `${packageManager}-clean`;
+    try {
+      const exitCode = await new Promise((resolve) => {
+        const proc = spawn(
+          process.execPath,
+          [
+            path.join(pkgRoot, "bin/create-daloy.mjs"),
+            projectName,
+            "--template",
+            "vercel",
+            "--package-manager",
+            packageManager,
+            "--no-install",
+            "--no-git",
+            "--yes",
+          ],
+          { cwd: tmpDir, stdio: "ignore" },
+        );
+        proc.on("exit", (code) => resolve(code ?? 1));
+        proc.on("error", () => resolve(1));
+      });
+      assert.equal(exitCode, 0);
+      await assert.rejects(access(path.join(tmpDir, projectName, ".npmrc")));
+      await assert.rejects(
+        access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")),
+      );
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -1128,7 +1289,10 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
     assert.equal(exitCode, 0);
 
     const projectDir = path.join(tmpDir, projectName);
-    await assert.rejects(access(path.join(projectDir, ".npmrc")));
+    // npm keeps an engine-strict .npmrc (npm >= 12 floor) but no pnpm config.
+    const npmrc = await readFile(path.join(projectDir, ".npmrc"), "utf8");
+    assert.match(npmrc, /^engine-strict=true$/m);
+    assert.doesNotMatch(npmrc, /minimum-release-age/);
     await assert.rejects(access(path.join(projectDir, "pnpm-workspace.yaml")));
 
     const pkg = JSON.parse(

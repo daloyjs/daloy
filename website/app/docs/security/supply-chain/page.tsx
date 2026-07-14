@@ -254,14 +254,15 @@ verify-store-integrity=true
 strict-peer-dependencies=true`}
       />
       <p>
-        Every npm-capable template also declares an <code>npm &gt;= 12</code>{" "}
-        floor in <code>engines</code>. When you scaffold with{" "}
-        <code>--package-manager npm</code>, the CLI swaps the pnpm{" "}
-        <code>.npmrc</code> for an npm-native one containing{" "}
+        When (and only when) you scaffold with{" "}
+        <code>--package-manager npm</code>, the CLI adds an{" "}
+        <code>npm &gt;= 12</code> floor to <code>engines</code> and swaps the
+        pnpm <code>.npmrc</code> for an npm-native one containing{" "}
         <code>engine-strict=true</code>, so npm <em>refuses</em> to install on an
-        older CLI instead of only printing a warning. That keeps every developer
-        on a package manager new enough for the modern lockfile and
-        provenance-verification behavior the project relies on.
+        older CLI instead of only printing a warning. pnpm, Yarn, and Bun
+        scaffolds never run npm, so they get no npm floor. This keeps npm users
+        on a CLI new enough for the modern lockfile and provenance-verification
+        behavior the project relies on.
       </p>
 
       <h2 id="optional-ci-bundle-for-user-projects">Optional CI bundle for user projects</h2>
