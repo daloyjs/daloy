@@ -30,28 +30,6 @@ For the forward-looking plan and the full thematic release log, see
   and runtime encodings against one shared literal list so any future drift
   fails `pnpm typecheck` or `pnpm test`.
 
-### Breaking changes before the stable release
-
-- Auth callbacks supplied to `bearerAuth()`, `basicAuth()`, `jwk()`, and
-  `clientCertAuth()` now execute in `preBody`. They can read the raw request,
-  route params, query, headers, and shared state, but `ctx.body` is always
-  `undefined`. Move payload-dependent authorization to `beforeHandle`.
-- `some()` / `except()` now gate `preBody` hooks as well as `beforeHandle`
-  hooks. Early-auth stacks can therefore reject before validation/body I/O.
-- The built-in OpenAPI/AsyncAPI routes no longer infer metadata from a host
-  `package.json`, `deno.json`, or `deno.jsonc`. Set `openapi.info` (or top-level
-  `title`/`version`) for branded metadata; otherwise portable defaults are used.
-- Default documentation asset URLs no longer float to the latest upstream
-  release. They are pinned to reviewed versions and matching SRI hashes.
-- Handlers and `afterHandle` transforms that return a raw web-standard
-  `Response` must now set `acknowledgeNoResponseBodySchema: true` on the route.
-  Unacknowledged raw responses fail closed with `500` instead of silently
-  bypassing response-body validation and field stripping.
-- Successful (`2xx`/`3xx`) raw responses returned by `preBody` or
-  `beforeHandle` hooks require the same acknowledgement. Security denials and
-  errors (`4xx`/`5xx`) remain available without an acknowledgement, so auth
-  middleware can still reject safely by default.
-
 ### Added
 
 - **Multi-file route contracts keep exact client types.** Export route objects
@@ -73,13 +51,29 @@ For the forward-looking plan and the full thematic release log, see
 ### Changed
 
 - **Built-in bearer, basic, JWK, and mTLS authentication now reject before
-  request bodies are consumed.** Request IDs are also established in the same
-  early phase. Body-aware authorization and HTTP Message Signatures remain in
-  `beforeHandle` where validated payloads are available.
+  request bodies are consumed.** Auth callbacks supplied to `bearerAuth()`,
+  `basicAuth()`, `jwk()`, and `clientCertAuth()` run in `preBody`: they can read
+  the raw request, route params, query, headers, and shared state, but
+  `ctx.body` is always `undefined`, so payload-dependent authorization belongs
+  in `beforeHandle`. Request IDs are established in the same early phase, and
+  HTTP Message Signatures remain in `beforeHandle` where validated payloads are
+  available.
+- **`some()` / `except()` now gate `preBody` hooks** as well as `beforeHandle`
+  hooks, so early-auth stacks can reject before validation or body I/O.
 - **Built-in docs generation is runtime-portable.** OpenAPI/AsyncAPI metadata
   now comes from explicit options or portable defaults, with no host
-  `package.json`/`deno.json` filesystem probing. The default Scalar, Swagger
-  UI, Redoc, and AsyncAPI assets are version-pinned with matching SHA-384 SRI.
+  `package.json`/`deno.json`/`deno.jsonc` filesystem probing — set `openapi.info`
+  (or top-level `title`/`version`) for branded metadata. The default Scalar,
+  Swagger UI, Redoc, and AsyncAPI assets are version-pinned to reviewed releases
+  with matching SHA-384 SRI hashes instead of floating to the latest upstream.
+- **Raw web-standard `Response` values need explicit acknowledgement.** Handlers
+  and `afterHandle` transforms that return a raw `Response` must set
+  `acknowledgeNoResponseBodySchema: true` on the route; unacknowledged raw
+  responses fail closed with `500` instead of silently bypassing response-body
+  validation and field stripping. Successful (`2xx`/`3xx`) raw responses
+  returned by `preBody` or `beforeHandle` hooks require the same acknowledgement,
+  while security denials and errors (`4xx`/`5xx`) remain available without one so
+  auth middleware can still reject safely by default.
 
 ### Security
 
