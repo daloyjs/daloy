@@ -214,7 +214,7 @@ printStartupBanner({
 });`;
 
 const BANNER_OUTPUT = `╭───────────────────────────────────────────────────────────╮
-│  ✦  my-api  - v0.1.0  · Node.js v20.18.0                   │
+│  ✦  my-api  - v0.1.0  · Node.js v24.10.0                   │
 │                                                            │
 │  ➜  Local    http://localhost:3000                         │
 │  ➜  Docs     http://localhost:3000/docs                    │

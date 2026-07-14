@@ -115,20 +115,25 @@ app.use(some(
           boot-time guards still see them on the composed bundle.
         </li>
         <li>
-          <code>some(...layers)</code> tries each layer&apos;s{" "}
-          <code>beforeHandle</code> until one passes. A returned{" "}
-          <code>Response</code> is treated as a denial, the next layer gets a
-          turn. The first failure wins when every layer rejects, so place the
-          auth scheme whose <code>WWW-Authenticate</code> challenge you want
-          clients to see first.
+          <code>some(...layers)</code> runs each layer&apos;s auth gate in order
+          until one passes. When every candidate uses <code>preBody</code> (as
+          the built-in <code>bearerAuth()</code>, <code>basicAuth()</code>,{" "}
+          <code>jwk()</code>, and <code>clientCertAuth()</code> now do),
+          selection happens before body I/O; mixed stacks defer to{" "}
+          <code>beforeHandle</code>. A returned <code>Response</code> is treated
+          as a denial, the next layer gets a turn. The first failure wins when
+          every layer rejects, so place the auth scheme whose{" "}
+          <code>WWW-Authenticate</code> challenge you want clients to see first.
         </li>
         <li>
-          <code>except(when, hooks)</code> skips the wrapped{" "}
-          <code>beforeHandle</code> for matching paths (<code>/health</code>,{" "}
-          <code>/public/**</code>, <code>/v1/*/meta</code>) or for any request
-          where the supplied predicate returns <code>true</code>. Only{" "}
-          <code>beforeHandle</code> is gated so shared concerns like request-id
-          propagation keep running.
+          <code>except(when, hooks)</code> skips the wrapped bundle&apos;s{" "}
+          <code>preBody</code> and <code>beforeHandle</code> gates for matching
+          paths (<code>/health</code>, <code>/public/**</code>,{" "}
+          <code>/v1/*/meta</code>) or for any request where the supplied
+          predicate returns <code>true</code>. Its <code>onRequest</code>,{" "}
+          <code>afterHandle</code>, <code>onSend</code>, and{" "}
+          <code>onResponse</code> phases still run, so shared concerns wired
+          through those phases keep working.
         </li>
       </ul>
 

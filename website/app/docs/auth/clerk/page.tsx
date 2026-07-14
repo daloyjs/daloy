@@ -295,8 +295,9 @@ hooks: every(
       <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>@clerk/backend</code> is built on the Web <code>Request</code> and{" "}
-        <code>fetch</code> APIs, so it runs on Node 18+, Bun, Deno, AWS Lambda,
-        Vercel (Serverless and Edge), and Cloudflare Workers. Pair it with the{" "}
+        <code>fetch</code> APIs, so it runs everywhere DaloyJS does: Node.js,
+        Bun, Deno, AWS Lambda, Vercel (Serverless and Edge), and Cloudflare
+        Workers. Pair it with the{" "}
         <Link href="/docs/adapters">edge adapters</Link>.
       </p>
 

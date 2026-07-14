@@ -123,10 +123,10 @@ const app = new App({
     ui: "swagger",
     assets: {
       swaggerUiCssUrl:
-        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8/swagger-ui.css",
       swaggerUiCssIntegrity: "sha384-<css-digest>",
       swaggerUiBundleUrl:
-        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.8/swagger-ui-bundle.js",
       swaggerUiBundleIntegrity: "sha384-<bundle-digest>",
     },
   },
@@ -142,7 +142,7 @@ const app = new App({
     ui: "redoc",
     assets: {
       redocScriptUrl:
-        "https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js",
+        "https://cdn.jsdelivr.net/npm/redoc@2.5.3/bundles/redoc.standalone.js",
       redocScriptIntegrity: "sha384-<redoc-digest>",
     },
   },
