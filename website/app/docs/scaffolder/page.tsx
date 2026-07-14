@@ -433,8 +433,12 @@ bun  create daloy           my-api`}
         directory and never run scripts during scaffolding. When you choose{" "}
         <code>pnpm</code>, the generated app keeps the hardened{" "}
         <code>.npmrc</code> and <code>pnpm-workspace.yaml</code>; when you
-        choose another package manager, the CLI removes pnpm-specific config so
-        installs stay warning-free. When you choose <code>--with-ci</code>, it
+        choose <code>npm</code>, the CLI swaps in an npm-native{" "}
+        <code>.npmrc</code> with <code>engine-strict=true</code> so the{" "}
+        <code>npm &gt;= 12</code> floor in <code>engines</code> becomes a hard
+        install-time failure rather than a warning; yarn and bun scaffolds drop
+        the pnpm-specific config so installs stay warning-free. When you choose{" "}
+        <code>--with-ci</code>, it
         also adds the GitHub-side security files that a company repo normally
         has to assemble by hand.
       </p>

@@ -83,8 +83,7 @@ export default function Page() {
       <h2 id="1-check-node-and-pnpm">1. Check Node and pnpm</h2>
       <p>
         DaloyJS requires <strong>Node.js 24 LTS or Node.js 26+</strong> and
-        pnpm 11 or newer. Node.js 25 is not supported because it is already
-        end-of-life. In Replit Shell, verify the runtime before publishing:
+        pnpm 11 or newer. In Replit Shell, verify the runtime before publishing:
       </p>
       <CodeBlock
         language="bash"

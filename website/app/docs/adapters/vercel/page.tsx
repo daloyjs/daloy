@@ -1,19 +1,18 @@
 import Link from "next/link";
 
 import { CodeBlock } from "@/components/code-block";
-import { BranchDiagram } from "@/components/diagram";
+import { FlowDiagram } from "@/components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Vercel adapter",
   description:
-    "Deploy a DaloyJS REST API to Vercel Node.js Functions or Edge Functions. One app object, two standalone function shapes.",
+    "Deploy a DaloyJS REST API to Vercel Functions on the Node.js runtime with Fluid compute. One app object, one standalone function.",
   path: "/docs/adapters/vercel",
   keywords: [
     "DaloyJS Vercel adapter",
     "Vercel Functions",
-    "Vercel Functions",
-    "toWebHandler",
+    "Vercel Node.js Functions",
     "toFetchHandler",
     "Fluid compute",
   ],
@@ -25,32 +24,32 @@ export default function Page() {
     <>
       <h1>Vercel</h1>
       <p>
-        Vercel has two standalone places you can mount a DaloyJS REST API
-        handler, Node.js Functions and Edge Functions. Each target expects a
-        slightly different export shape; the underlying <code>app</code> object
-        is identical.
+        Deploy a DaloyJS REST API to Vercel as a single standalone function on
+        the Node.js runtime. Node.js is the default runtime and what Vercel
+        recommends, and it runs on Fluid compute with per-request billing.
       </p>
 
-      <BranchDiagram
-        title="One app, two Vercel targets"
-        source={{
-          eyebrow: "identical app",
-          label: "Your DaloyJS App",
-          detail: "import { app } from '../src/server.ts'",
-        }}
-        branches={[
+      <FlowDiagram
+        title="One app, one Vercel function"
+        steps={[
           {
-            eyebrow: "node.js runtime",
-            label: "Node.js Function",
-            detail: "export default toFetchHandler(app)",
+            eyebrow: "your code",
+            label: "DaloyJS App",
+            detail: "import { app } from '../src/server.ts'",
           },
           {
-            eyebrow: "edge runtime",
-            label: "Edge Function",
-            detail: "export const runtime = 'edge' · toWebHandler(app)",
+            eyebrow: "adapter",
+            label: "toFetchHandler(app)",
+            detail: "export default at api/index.ts",
+          },
+          {
+            eyebrow: "vercel.json",
+            label: "/(.*) → /api rewrite",
+            detail: "DaloyJS owns routing at the site root",
+            tone: "accent",
           },
         ]}
-        caption="Both shapes live at api/index.ts and need the /(.*) → /api rewrite so DaloyJS owns routing at the site root. Only the export shape and runtime differ; the app object is the same."
+        caption="The function lives at api/index.ts on the Node.js runtime. The /(.*) → /api rewrite sends every path to the function so DaloyJS owns routing at the site root."
       />
 
       <h2 id="when-to-choose-vercel">When to choose Vercel</h2>
@@ -67,8 +66,7 @@ export default function Page() {
       <p>
         The Vercel starter scaffolds a standalone REST API on the Node.js
         runtime (the <code>toFetchHandler</code> entrypoint shown below), which
-        Vercel now recommends for standalone functions. The old{" "}
-        <code>vercel</code> template name still works as a deprecated alias.
+        Vercel recommends for standalone functions.
       </p>
       <CodeBlock
         language="bash"
@@ -77,7 +75,7 @@ cd my-api
 pnpm vercel dev`}
       />
 
-      <h2 id="1-vercel-node-js-functions-standalone-api">1. Vercel Node.js Functions (standalone API)</h2>
+      <h2 id="1-vercel-node-js-functions-standalone-api">Vercel Node.js Functions (standalone API)</h2>
       <p>
         For a standalone DaloyJS REST API on the Node.js runtime, use a single
         function at <code>api/index.ts</code>. Vercel Node.js Functions expect a
@@ -107,27 +105,6 @@ export default toFetchHandler(app);`}
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }`}
       />
-
-      <h2 id="2-vercel-functions-standalone-api">
-        2. Edge runtime opt-in (deprecated by Vercel)
-      </h2>
-      <CodeBlock
-        language="ts"
-        code={`// api/index.ts
-import { toWebHandler } from "@daloyjs/core/vercel";
-import { app } from "../src/server.ts";
-
-export const runtime = "edge";
-export default toWebHandler(app);`}
-      />
-      <p>
-        The same <code>/(.*)</code> → <code>/api</code> rewrite applies. Vercel
-        has <strong>deprecated standalone Edge Functions</strong>, so prefer the
-        Node.js runtime in section 1; reach for this opt-in only for an existing
-        Edge workload. The Edge runtime uses the web-standard{" "}
-        <code>toWebHandler</code> and its code must avoid <code>node:</code>{" "}
-        modules.
-      </p>
 
       <h2 id="vercel-json">vercel.json</h2>
       <p>
@@ -194,19 +171,19 @@ pnpm vercel env add SESSION_SECRET production`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Edge runtime has no <code>node:*</code>: keep middleware portable, and
-          prefer fetch-based drivers (Neon serverless, PlanetScale, Turso) when
-          running on Edge.
-        </li>
-        <li>
           Standalone Vercel Node functions want a <strong>default</strong>{" "}
           export with <code>&#123; fetch &#125;</code>. Use{" "}
           <code>toFetchHandler</code>.
         </li>
         <li>
-          Vercel sets <code>process.env</code> on Node functions; on Edge,
-          secrets are bundled at build time, so don&apos;t read them outside the
-          handler.
+          Without the <code>/(.*)</code> → <code>/api</code> rewrite, Vercel
+          serves the function only at <code>/api</code> and the root domain
+          returns a 404. The rewrite is what lets DaloyJS own routing at the
+          site root.
+        </li>
+        <li>
+          Secrets are available on <code>process.env</code> at runtime. Add them
+          with <code>vercel env add</code> rather than committing them.
         </li>
       </ul>
 

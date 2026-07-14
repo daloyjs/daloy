@@ -84,9 +84,7 @@ pnpm dev    # hot-reload via daloy dev`}
       <h2 id="install">Install</h2>
       <p>
         Requires <strong>Node.js 24 LTS or Node.js 26+</strong>. The adapter
-        ships with <code>@daloyjs/core</code>; no extra dependency. Node.js 25
-        is not supported because it is end-of-life and no longer receives
-        security fixes.
+        ships with <code>@daloyjs/core</code>; no extra dependency.
       </p>
       <CodeBlock language="bash" code={`pnpm add @daloyjs/core`} />
 
