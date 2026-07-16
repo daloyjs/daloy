@@ -7,7 +7,6 @@ import {
   ButterflyIcon,
   GithubLogoIcon,
   ListIcon,
-  PackageIcon,
   XLogoIcon,
 } from "@phosphor-icons/react/ssr";
 import { buttonVariants } from "./ui/button";
@@ -129,20 +128,6 @@ export function SiteHeader() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <NavLink
-              href="/docs/installation"
-              aria-label="Installation"
-              onClick={closeMobileNav}
-              className={({ isActive }) =>
-                buttonVariants({
-                  variant: isActive ? "secondary" : "ghost",
-                  size: "sm",
-                }) + " hidden sm:inline-flex xl:hidden"
-              }
-            >
-              <PackageIcon className="size-4" />
-            </NavLink>
-
             <ThemeSwitcher />
 
             <div className="hidden items-center gap-2 xl:flex">
@@ -163,19 +148,6 @@ export function SiteHeader() {
                   </a>
                 );
               })}
-
-              <NavLink
-                href="/docs/installation"
-                aria-label="Installation"
-                className={({ isActive }) =>
-                  buttonVariants({
-                    variant: isActive ? "secondary" : "ghost",
-                    size: "sm",
-                  })
-                }
-              >
-                <PackageIcon className="size-4" />
-              </NavLink>
             </div>
 
             <div className="relative xl:hidden">
