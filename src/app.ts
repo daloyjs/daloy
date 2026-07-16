@@ -25,8 +25,7 @@ import {
   safeJsonParseLimited,
   randomId,
   assertNoDuplicateSingletonHeaders,
-  assertNoReservedInternalHeaders,
-  assertHeaderCountWithinLimit,
+  assertInboundHeaderGuards,
   DEFAULT_MAX_HEADER_COUNT,
   assertStrongSecret,
   timingSafeEqual,
@@ -3772,8 +3771,9 @@ export class App<
 
     try {
       assertNoDuplicateSingletonHeaders(request.headers);
-      assertNoReservedInternalHeaders(request.headers);
-      assertHeaderCountWithinLimit(
+      // Reserved-prefix + header-count cap share one Headers.forEach walk
+      // (assertInboundHeaderGuards) instead of two sequential passes.
+      assertInboundHeaderGuards(
         request.headers,
         this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT
       );

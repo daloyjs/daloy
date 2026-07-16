@@ -397,6 +397,8 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
   }
 
   const headerEntries = Object.entries(headers);
+  // Lowercased name set for the common-path fast apply below.
+  const headerKeySet = headerEntries.length > 0 ? new Set(headerEntries.map(([k]) => k)) : null;
   const hooks: Hooks = {};
   if (cspIsDynamic) {
     hooks.beforeHandle = (ctx) => {
@@ -415,10 +417,30 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
       return undefined;
     };
   }
-  if (headerEntries.length > 0) {
+  if (headerEntries.length > 0 && headerKeySet !== null) {
+    // Apply baseline security headers without overwriting values the handler
+    // (or an earlier hook) already set. Two paths, same accept/reject
+    // semantics:
+    //
+    //  1. Fast path (common): response carries none of our keys (typical
+    //     after serializeResult: content-type + content-length +
+    //     x-request-id only). One cheap forEach over the small response
+    //     header map, then unconditional set of each default — avoids N
+    //     `has()` probes that miss on every request.
+    //  2. Careful path: at least one of our keys is already present; fall
+    //     back to set-if-absent so user-supplied CSP / frame-options / etc.
+    //     still win.
     hooks.onResponse = (res) => {
-      for (const [k, v] of headerEntries) {
-        if (!res.headers.has(k)) res.headers.set(k, v);
+      let conflict = false;
+      res.headers.forEach((_v, name) => {
+        if (headerKeySet.has(name)) conflict = true;
+      });
+      if (!conflict) {
+        for (const [k, v] of headerEntries) res.headers.set(k, v);
+      } else {
+        for (const [k, v] of headerEntries) {
+          if (!res.headers.has(k)) res.headers.set(k, v);
+        }
       }
     };
   }

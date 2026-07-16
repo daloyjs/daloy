@@ -23,7 +23,7 @@ const bodySchema = z.object({
 
 function makeApp(limited: boolean): App {
   const app = new App(
-    limited ? { logger: false } : { logger: false, jsonMaxKeys: 0, jsonMaxDepth: 0 },
+    limited ? { logger: false } : { logger: false, jsonMaxKeys: 0, jsonMaxDepth: 0 }
   );
   app.route({
     method: "POST",
@@ -59,20 +59,34 @@ async function bench(label: string, app: App, iters: number): Promise<number> {
   const dt = performance.now() - t0;
   const opsPerSec = (iters / dt) * 1000;
   console.log(
-    `${label.padEnd(28)} ${opsPerSec.toLocaleString("en-US", { maximumFractionDigits: 0 }).padStart(10)} ops/sec  (${dt.toFixed(0)}ms / ${iters})`,
+    `${label.padEnd(28)} ${opsPerSec.toLocaleString("en-US", { maximumFractionDigits: 0 }).padStart(10)} ops/sec  (${dt.toFixed(0)}ms / ${iters})`
   );
   return opsPerSec;
 }
 
 console.log("End-to-end POST /users (typical body, zod-validated)\n");
 const ITERS = 100_000;
-// Interleave a couple of rounds to smooth out JIT/GC noise.
-let onA = 0;
-let offA = 0;
-for (let round = 0; round < 3; round++) {
-  onA = await bench(`limits ON  (default)`, makeApp(true), ITERS);
-  offA = await bench(`limits OFF (0/0)`, makeApp(false), ITERS);
+const ROUNDS = 5;
+// Interleave rounds to smooth out JIT/GC noise, then summarize with the
+// median across rounds — a single round's delta swings several points.
+const onRounds: number[] = [];
+const offRounds: number[] = [];
+for (let round = 0; round < ROUNDS; round++) {
+  onRounds.push(await bench(`limits ON  (default)`, makeApp(true), ITERS));
+  offRounds.push(await bench(`limits OFF (0/0)`, makeApp(false), ITERS));
   console.log("");
 }
-const deltaPct = ((offA - onA) / offA) * 100;
-console.log(`overhead of limits vs disabled (last round): ${deltaPct.toFixed(1)}%`);
+const median = (xs: number[]): number => {
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
+const onMed = median(onRounds);
+const offMed = median(offRounds);
+const perRound = onRounds
+  .map((on, i) => (((offRounds[i] - on) / offRounds[i]) * 100).toFixed(1) + "%")
+  .join(", ");
+console.log(`per-round overhead of limits vs disabled: ${perRound}`);
+console.log(
+  `overhead of limits vs disabled (median of ${ROUNDS} rounds): ${(((offMed - onMed) / offMed) * 100).toFixed(1)}%`
+);

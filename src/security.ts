@@ -39,10 +39,7 @@ const REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
  * @throws {BadRequestError} When `Content-Length` is present but invalid.
  * @since 0.1.0
  */
-export async function readBodyLimited(
-  req: Request,
-  limit: number
-): Promise<Uint8Array> {
+export async function readBodyLimited(req: Request, limit: number): Promise<Uint8Array> {
   // Trust Content-Length when present — fail fast.
   const cl = req.headers.get("content-length");
   if (cl) {
@@ -323,6 +320,10 @@ export const RESERVED_INBOUND_HEADER_PREFIXES: readonly string[] = Object.freeze
  * `400 problem+json` instead of routing a request that may be probing
  * for an internal-dispatch bypass.
  *
+ * The framework's dispatch path runs this check and the header-count cap
+ * in a single shared walk internally (see {@link assertInboundHeaderGuards});
+ * calling this helper directly is only needed for custom pipelines.
+ *
  * @param headers - Normalized request headers to inspect (names arrive lowercased).
  * @since 0.36.0
  */
@@ -369,6 +370,11 @@ export const DEFAULT_MAX_HEADER_COUNT = 100;
  * framework returns a structured `problem+json` response instead of routing
  * a flood.
  *
+ * The framework's dispatch path runs this check and the reserved-prefix
+ * check in a single shared walk internally (see
+ * {@link assertInboundHeaderGuards}); calling this helper directly is only
+ * needed for custom pipelines.
+ *
  * @param headers - The incoming request headers.
  * @param limit - Maximum distinct header fields to allow. `0` disables.
  * @since 0.38.0
@@ -385,6 +391,49 @@ export function assertHeaderCountWithinLimit(headers: Headers, limit: number): v
       throw new RequestHeaderFieldsTooLargeError(limit);
     }
   });
+}
+
+/**
+ * Combined inbound header guards for the dispatch hot path (internal).
+ *
+ * Runs the reserved-internal-prefix check ({@link assertNoReservedInternalHeaders})
+ * and the header-count cap ({@link assertHeaderCountWithinLimit}) in a
+ * **single** walk of the header map, with the same observable semantics as
+ * calling both helpers in sequence: a reserved internal header anywhere in
+ * the map is rejected with `400` even when the map also exceeds the count
+ * cap. To preserve that precedence, the `431` count-cap rejection is
+ * deferred until the reserved-prefix scan has covered every header — the
+ * same full-walk cost the sequential pair already paid.
+ *
+ * A non-positive / non-finite `limit` disables the count cap (same as
+ * {@link assertHeaderCountWithinLimit}) while still rejecting reserved
+ * internal prefixes.
+ *
+ * @param headers - Normalized request headers (names arrive lowercased).
+ * @param limit - Maximum distinct header fields to allow. `0` disables the count cap.
+ * @throws {BadRequestError} When a reserved internal header is present (takes
+ *   precedence over the count cap).
+ * @throws {RequestHeaderFieldsTooLargeError} When no reserved header is
+ *   present and the distinct-header count exceeds `limit`.
+ * @since 1.0.0
+ */
+export function assertInboundHeaderGuards(headers: Headers, limit: number): void {
+  const enforceCount = limit > 0 && Number.isFinite(limit);
+  let count = 0;
+  let overLimit = false;
+  // Single forEach: reserved-prefix rejection + distinct-name count. The
+  // reserved check throws immediately; the count-cap rejection is deferred
+  // past the walk so a reserved header after position `limit` still yields
+  // 400 (matching the sequential guards, where the prefix scan ran first).
+  headers.forEach((_value, name) => {
+    for (const prefix of RESERVED_INBOUND_HEADER_PREFIXES) {
+      if (name.startsWith(prefix)) {
+        throw new BadRequestError(`Reserved internal header rejected: ${name}`);
+      }
+    }
+    if (enforceCount && ++count > limit) overLimit = true;
+  });
+  if (overLimit) throw new RequestHeaderFieldsTooLargeError(limit);
 }
 
 /**
@@ -454,28 +503,26 @@ const WEAK_SECRET_SET = new Set(WEAK_SECRET_STRINGS.map((s) => s.toLowerCase()))
  */
 export function assertStrongSecret(secret: unknown, scope: string): void {
   if (typeof secret !== "string" || secret.length === 0) {
-    throw new Error(
-      `${scope}(): production secret is missing or not a string.`,
-    );
+    throw new Error(`${scope}(): production secret is missing or not a string.`);
   }
   const lower = secret.toLowerCase();
   if (WEAK_SECRET_SET.has(lower)) {
     throw new Error(
       `${scope}(): production secret matches a well-known placeholder (${secret.slice(0, 4)}…). ` +
-        `Replace it with a real random value loaded from an env var or secret manager.`,
+        `Replace it with a real random value loaded from an env var or secret manager.`
     );
   }
   const bytes = new TextEncoder().encode(secret).byteLength;
   if (bytes < MIN_PROD_SECRET_BYTES) {
     throw new Error(
       `${scope}(): production secret is too short (${bytes} bytes; require >= ${MIN_PROD_SECRET_BYTES}). ` +
-        `Generate one with \`openssl rand -base64 48\` and load it from an env var.`,
+        `Generate one with \`openssl rand -base64 48\` and load it from an env var.`
     );
   }
   // Reject all-identical-character secrets ("aaaaaaaa…", "00000000…").
   if (/^(.)\1+$/.test(secret)) {
     throw new Error(
-      `${scope}(): production secret is a single repeated character (${secret[0]}…) — refuse-to-boot.`,
+      `${scope}(): production secret is a single repeated character (${secret[0]}…) — refuse-to-boot.`
     );
   }
 }
@@ -492,7 +539,7 @@ const WEBHOOK_HMAC_ALGORITHMS: Record<
 };
 
 function resolveWebhookAlgorithm(
-  algorithm: unknown,
+  algorithm: unknown
 ): { name: WebhookHmacAlgorithm; hashName: string; signatureBytes: number } | null {
   if (algorithm !== "sha256" && algorithm !== "sha384" && algorithm !== "sha512") {
     return null;
@@ -543,7 +590,7 @@ function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
 function decodeWebhookSignature(
   signature: string | Uint8Array,
   expected: WebhookHmacAlgorithm,
-  expectedBytes: number,
+  expectedBytes: number
 ): Uint8Array | null {
   if (signature instanceof Uint8Array) {
     return signature.length === expectedBytes ? signature : null;
@@ -591,7 +638,7 @@ export const WEBHOOK_DEFAULT_TOLERANCE_SECONDS = 300;
 const WEBHOOK_MAX_TIMESTAMP_SECONDS = Math.floor(Number.MAX_SAFE_INTEGER / 1000);
 
 function normalizeWebhookTimestamp(
-  ts: string | number | undefined,
+  ts: string | number | undefined
 ): { seconds: number; canonical: string } | null {
   if (ts === undefined || ts === null) return null;
   let seconds: number;
@@ -614,7 +661,7 @@ function normalizeWebhookTimestamp(
 
 function buildSignedPayloadBytes(
   payload: Uint8Array,
-  timestamp: { canonical: string } | null,
+  timestamp: { canonical: string } | null
 ): Uint8Array {
   if (!timestamp) return payload;
   const prefix = new TextEncoder().encode(`${timestamp.canonical}.`);
@@ -719,19 +766,11 @@ export async function verifyWebhookSignature(opts: {
   }
 
   const payloadBytes =
-    typeof opts.payload === "string"
-      ? new TextEncoder().encode(opts.payload)
-      : opts.payload;
+    typeof opts.payload === "string" ? new TextEncoder().encode(opts.payload) : opts.payload;
   const secretBytes =
-    typeof opts.secret === "string"
-      ? new TextEncoder().encode(opts.secret)
-      : opts.secret;
+    typeof opts.secret === "string" ? new TextEncoder().encode(opts.secret) : opts.secret;
 
-  const providedBytes = decodeWebhookSignature(
-    opts.signature,
-    algo.name,
-    algo.signatureBytes,
-  );
+  const providedBytes = decodeWebhookSignature(opts.signature, algo.name, algo.signatureBytes);
   if (!providedBytes) return false;
 
   const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp);
@@ -743,7 +782,7 @@ export async function verifyWebhookSignature(opts: {
     secretBytes as BufferSource,
     { name: "HMAC", hash: algo.hashName },
     false,
-    ["sign"],
+    ["sign"]
   );
   const computed = new Uint8Array(await c.subtle.sign("HMAC", key, signedBytes as BufferSource));
   return timingSafeEqualBytes(computed, providedBytes);
@@ -782,18 +821,14 @@ export async function signWebhookPayload(opts: {
     timestamp = normalizeWebhookTimestamp(opts.timestamp);
     if (!timestamp) {
       throw new TypeError(
-        "signWebhookPayload(): timestamp must be a non-negative integer number of seconds",
+        "signWebhookPayload(): timestamp must be a non-negative integer number of seconds"
       );
     }
   }
   const payloadBytes =
-    typeof opts.payload === "string"
-      ? new TextEncoder().encode(opts.payload)
-      : opts.payload;
+    typeof opts.payload === "string" ? new TextEncoder().encode(opts.payload) : opts.payload;
   const secretBytes =
-    typeof opts.secret === "string"
-      ? new TextEncoder().encode(opts.secret)
-      : opts.secret;
+    typeof opts.secret === "string" ? new TextEncoder().encode(opts.secret) : opts.secret;
   const c: Crypto | undefined = (globalThis as any).crypto;
   if (!c?.subtle) throw new Error("WebCrypto unavailable: cannot sign webhook payload");
   const key = await c.subtle.importKey(
@@ -801,7 +836,7 @@ export async function signWebhookPayload(opts: {
     secretBytes as BufferSource,
     { name: "HMAC", hash: algo.hashName },
     false,
-    ["sign"],
+    ["sign"]
   );
   const signedBytes = buildSignedPayloadBytes(payloadBytes, timestamp);
   const computed = new Uint8Array(await c.subtle.sign("HMAC", key, signedBytes as BufferSource));
@@ -821,9 +856,28 @@ export async function signWebhookPayload(opts: {
 const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
 const WINDOWS_RESERVED_CHARS_RE = /[<>:"|?*]/g;
 const WINDOWS_RESERVED_NAMES = new Set([
-  "con", "prn", "aux", "nul",
-  "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
-  "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+  "con",
+  "prn",
+  "aux",
+  "nul",
+  "com1",
+  "com2",
+  "com3",
+  "com4",
+  "com5",
+  "com6",
+  "com7",
+  "com8",
+  "com9",
+  "lpt1",
+  "lpt2",
+  "lpt3",
+  "lpt4",
+  "lpt5",
+  "lpt6",
+  "lpt7",
+  "lpt8",
+  "lpt9",
 ]);
 
 /**
@@ -1078,11 +1132,7 @@ function assertJsonTextStructure(text: string, maxKeys: number, maxDepth: number
  * @throws {BadRequestError} on invalid JSON or when limits are exceeded.
  * @since 1.0.0
  */
-export function safeJsonParseLimited(
-  text: string,
-  maxKeys = 10_000,
-  maxDepth = 50
-): unknown {
+export function safeJsonParseLimited(text: string, maxKeys = 10_000, maxDepth = 50): unknown {
   if (text.length === 0) return undefined;
   if (maxKeys > 0 || maxDepth > 0) {
     assertJsonTextStructure(text, maxKeys, maxDepth);
