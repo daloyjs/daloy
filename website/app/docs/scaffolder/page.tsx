@@ -448,12 +448,17 @@ bun  create daloy           my-api`}
         are copied verbatim from the package&apos;s <code>templates/</code>{" "}
         directory and never run scripts during scaffolding. When you choose{" "}
         <code>pnpm</code>, the generated app keeps the hardened{" "}
-        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code>; when you
-        choose <code>npm</code>, the CLI adds an <code>npm &gt;= 12</code> floor
-        to <code>engines</code> and swaps in an npm-native <code>.npmrc</code>{" "}
-        with <code>engine-strict=true</code> so that floor is a hard install-time
-        failure rather than a warning; yarn and bun scaffolds drop the
-        pnpm-specific config so installs stay warning-free. When you choose{" "}
+        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code>, and the CLI
+        adds a <code>pnpm &gt;= 11</code> floor to <code>engines</code> (pnpm
+        always enforces <code>engines.pnpm</code>) — older pnpm silently
+        ignores <code>minimumReleaseAge</code>, which would disable the 24h
+        supply-chain cooldown; the CLI also warns up front if the installed
+        pnpm is older. When you choose <code>npm</code>, the CLI adds an{" "}
+        <code>npm &gt;= 12</code> floor to <code>engines</code> and swaps in an
+        npm-native <code>.npmrc</code> with <code>engine-strict=true</code> so
+        that floor is a hard install-time failure rather than a warning; yarn
+        and bun scaffolds drop the pnpm-specific config so installs stay
+        warning-free. When you choose{" "}
         <code>--with-ci</code>, it
         also adds the GitHub-side security files that a company repo normally
         has to assemble by hand.

@@ -259,8 +259,15 @@ strict-peer-dependencies=true`}
         <code>npm &gt;= 12</code> floor to <code>engines</code> and swaps the
         pnpm <code>.npmrc</code> for an npm-native one containing{" "}
         <code>engine-strict=true</code>, so npm <em>refuses</em> to install on an
-        older CLI instead of only printing a warning. pnpm, Yarn, and Bun
-        scaffolds never run npm, so they get no npm floor. This keeps npm users
+        older CLI instead of only printing a warning. pnpm scaffolds get the
+        equivalent guard: a <code>pnpm &gt;= 11</code> floor in{" "}
+        <code>engines.pnpm</code>, which pnpm always enforces at install time —
+        this matters because pnpm older than 11 silently ignores the{" "}
+        <code>minimumReleaseAge</code> setting in{" "}
+        <code>pnpm-workspace.yaml</code>, quietly disabling the 24-hour
+        release-age cooldown. The CLI also warns during scaffolding when the
+        installed pnpm is below the floor. Yarn and Bun scaffolds never run npm
+        or pnpm, so they get neither floor. This keeps npm users
         on a CLI new enough for the modern lockfile and provenance-verification
         behavior the project relies on.
       </p>

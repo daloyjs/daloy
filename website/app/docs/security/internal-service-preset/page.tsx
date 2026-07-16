@@ -20,6 +20,10 @@ export const metadata = buildMetadata({
     "sidecar",
     "topology-aware security",
     "secure-by-default",
+    "intranet app security",
+    "employee-only internal app",
+    "enterprise internal tools",
+    "CSRF behind firewall",
   ],
   type: "article",
 });
@@ -222,7 +226,8 @@ const app = new App({
           stayed on, and keep everything else
         </strong>
         . That is closer to the <code>config.force_ssl</code> /{" "}
-        <code>SECURE_*</code> settings shape used by Rails and Django than to a
+        <code>SECURE_*</code>{" "}
+        settings shape used by Rails and Django than to a
         master &quot;disable everything&quot; switch.
       </p>
 
@@ -284,12 +289,105 @@ const app = new App({
 );`}
       />
 
+      <h2 id="employee-only-internal-apps">
+        Employee-only internal apps are NOT this topology
+      </h2>
+      <blockquote>
+        <strong>Think of it like…</strong> a staff-only cafeteria. The building
+        is private, but your employees walk in from the street all day, and
+        every one of their browsers is a revolving door to the public internet.
+        The raincoats (CSRF, secure headers, same-origin checks) stay on
+        indoors, because the weather walks in with the people.
+      </blockquote>
+      <p>
+        A back-office tool, HR portal, or admin dashboard that only employees
+        can reach, behind a VPN, firewall, or corporate proxy, is{" "}
+        <em>browser-facing</em>, not service-to-service. The firewall stops
+        outsiders from connecting to the server directly; it does nothing about
+        what an employee&apos;s browser can be tricked into sending. That
+        browser sits inside the perimeter and carries the corporate session
+        cookie:
+      </p>
+      <ul>
+        <li>
+          <strong>CSRF is the textbook intranet attack.</strong> An employee
+          visits a malicious public site on a lunch break; that site fires a{" "}
+          <code>POST</code> at <code>https://intranet.corp/transfer</code>. The
+          browser is inside the network and attaches the session cookie, so the
+          request lands. The firewall never sees anything wrong.
+        </li>
+        <li>
+          <strong>DNS rebinding and clickjacking</strong> cross the perimeter
+          the same way: the victim&apos;s browser executes the attack from the
+          inside.
+        </li>
+      </ul>
+      <p>
+        So the right posture for an employee-only browser app is the{" "}
+        <strong>default posture</strong>, exactly what you get with no preset.
+        A hypothetical <code>&quot;intranet-app&quot;</code> preset would flip
+        nothing off; naming one would only imply a relaxation that must not
+        happen. What distinguishes the intranet topology is <em>additive</em>,
+        not subtractive:
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`import { App, ipRestriction, session, csrf, loginThrottle } from "@daloyjs/core";
+
+// Employee-only intranet app: default posture (NO preset), plus add-ons.
+const app = new App({
+  production: process.env.NODE_ENV === "production",
+  behindProxy: { hops: 1 }, // the corporate reverse proxy / TLS terminator
+});
+
+app.use(ipRestriction({ allow: ["10.0.0.0/8"] })); // corporate ranges only
+app.use(session({ secret: process.env.SESSION_SECRET! }));
+app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: ["https://intranet.corp"] }));
+app.use(loginThrottle()); // employees mistype passwords too`}
+      />
+      <p>
+        The three topologies side by side:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Topology</th>
+            <th>Who calls it</th>
+            <th>Posture</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Public app / API</td>
+            <td>Browsers and clients on the internet</td>
+            <td>Default (no preset)</td>
+          </tr>
+          <tr>
+            <td>Employee-only internal app</td>
+            <td>Browsers on the corporate network</td>
+            <td>
+              Default (no preset) + <code>ipRestriction()</code>,{" "}
+              <code>session()</code> + <code>csrf()</code>,{" "}
+              <code>behindProxy</code>, <code>loginThrottle()</code>
+            </td>
+          </tr>
+          <tr>
+            <td>Service-to-service / machine-to-machine</td>
+            <td>Other services (bearer, JWT, mTLS), never a browser</td>
+            <td>
+              <code>{`preset: "internal-service"`}</code>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
       <h2 id="when-not-to-use-the-preset">When NOT to use the preset</h2>
       <ul>
         <li>
           The service is reachable from a browser, even indirectly (BFF pattern,
-          admin UI, embedded widgets). Use the default posture and add{" "}
-          <code>cors()</code> per route.
+          admin UI, embedded widgets, or an{" "}
+          <a href="#employee-only-internal-apps">employee-only internal app</a>
+          ). Use the default posture and add <code>cors()</code> per route.
         </li>
         <li>
           The service is exposed directly to the public internet without a mesh

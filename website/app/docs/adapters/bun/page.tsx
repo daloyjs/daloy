@@ -98,6 +98,25 @@ const handle = serve(app, {
 console.log("listening on " + handle.url);`}
       />
 
+      <h2 id="graceful-shutdown">Graceful shutdown</h2>
+      <p>
+        The adapter listens for <code>SIGTERM</code> / <code>SIGINT</code> by
+        default (matching the Node and Deno adapters), drains{" "}
+        <code>app.shutdown()</code> hooks, and stops the Bun server — so a
+        rolling deploy under Kubernetes or systemd never hard-kills in-flight
+        requests. Tune or opt out per deployment:
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`const handle = serve(app, {
+  shutdownTimeoutMs: 15_000, // drain window passed to app.shutdown() (default 10s)
+  handleSignals: false,      // manage signals yourself; call handle.stop() manually
+});
+
+// handle.stop() is idempotent: drains hooks first, then force-stops Bun.
+await handle.stop();`}
+      />
+
       <h2 id="hot-reload-in-dev">Hot reload in dev</h2>
       <CodeBlock language="bash" code={`bun --hot src/server.ts`} />
 

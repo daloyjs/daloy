@@ -97,7 +97,8 @@ export default function Page() {
             <td>
               A customs form that ignores hand-written notes in the margins.
               Only the printed boxes count, so smugglers can&apos;t scribble
-              extra instructions.
+              extra instructions (<code>__proto__</code>) that would quietly
+              change how every later parcel in the building gets handled.
             </td>
           </tr>
           <tr>
@@ -112,16 +113,16 @@ export default function Page() {
             <td>Path-traversal safety</td>
             <td>
               A library desk that quietly rewrites any call number with
-              &quot;..&quot; in it back to a real shelf, you always end up at a
+              &quot;..&quot; in it back to a real shelf. You always end up at a
               valid book, never in the staff-only basement.
             </td>
           </tr>
           <tr>
             <td>Request timeout</td>
             <td>
-              A taxi meter that auto-ends the trip after 30 seconds of no
-              progress, so a passenger who fell asleep can&apos;t hold the cab
-              forever.
+              A taxi with a hard limit on the meter: at 30 seconds the ride
+              ends whether you arrived or not, so a passenger who fell asleep
+              can&apos;t hold the cab forever.
             </td>
           </tr>
           <tr>
@@ -159,17 +160,20 @@ export default function Page() {
           <tr>
             <td>cors (explicit allowlist)</td>
             <td>
-              A guest list at the door. &quot;Everyone, including
-              credentials&quot; is the same as no guest list, the guard refuses
-              to enforce it.
+              A guest list at the door. &quot;Let everyone in, VIP wristbands
+              included&quot; is not a guest list at all, so the guard refuses
+              to enforce that combination (no <code>*</code> origin with
+              credentials).
             </td>
           </tr>
           <tr>
-            <td>csrf (double-submit cookie)</td>
+            <td>csrf, cross-site request forgery (double-submit cookie)</td>
             <td>
-              A coat-check ticket: the doorman gave you one stub, you hand back
-              the matching stub at the counter. A stranger who didn&apos;t walk
-              past the doorman can&apos;t guess the number.
+              A doorman slips a numbered token into your pocket on the way in
+              (the cookie). To hand anything over the counter you must also say
+              the number out loud (the header), and the two must match. Another
+              website never walked past the doorman, so it can&apos;t know your
+              number.
             </td>
           </tr>
           <tr>
@@ -209,7 +213,8 @@ export default function Page() {
             <td>ipRestriction (CIDR allow/deny)</td>
             <td>
               A gated community guard list of which addresses can drive in or
-              out, only the ranges you wrote down.
+              out: only the ranges you wrote down (CIDR notation is just
+              shorthand for a range of IP addresses).
             </td>
           </tr>
           <tr>
@@ -223,9 +228,10 @@ export default function Page() {
           <tr>
             <td>bearerAuth / basicAuth</td>
             <td>
-              An ID badge swiped at the door. <code>timingSafeEqual</code> means
-              the guard reads the whole badge before deciding, even an attacker
-              timing the response can&apos;t tell which digit was wrong.
+              An ID badge swiped at the door. <code>timingSafeEqual</code>{" "}
+              means the guard reads the whole badge before deciding, so even an
+              attacker timing the response can&apos;t tell which digit was
+              wrong.
             </td>
           </tr>
           <tr>
@@ -255,16 +261,18 @@ export default function Page() {
           <tr>
             <td>rotateSession</td>
             <td>
-              Re-issuing a new keycard the moment you get promoted, so anyone
-              holding the old one loses access on the spot.
+              Re-issuing a new keycard the moment you log in or get promoted,
+              so anyone holding the old one loses access on the spot.
             </td>
           </tr>
           <tr>
-            <td>fetchGuard (SSRF defense)</td>
+            <td>fetchGuard (SSRF, server-side request forgery)</td>
             <td>
-              A corporate firewall that won&apos;t let your office laptop dial
-              internal admin servers, even if a phishing email tries to trick it
-              into hitting the cloud metadata endpoint.
+              A corporate firewall, but for your server&apos;s own outgoing
+              calls. SSRF is an attacker handing your code a URL and hoping it
+              fetches your internal admin panel or the cloud metadata endpoint
+              on their behalf; <code>fetchGuard()</code> refuses to dial inside
+              the building.
             </td>
           </tr>
           <tr>
@@ -273,7 +281,8 @@ export default function Page() {
               Vacuum-sealing parcels for shipping, but never vacuum-sealing
               anything with a return address visible through the wrap, because a
               thief watching the truck could measure the bulge and figure out
-              what&apos;s inside.
+              what&apos;s inside. (BREACH is the real attack that does exactly
+              this: guessing secrets from compressed response sizes.)
             </td>
           </tr>
           <tr>
@@ -302,9 +311,9 @@ export default function Page() {
             </td>
           </tr>
           <tr>
-            <td>WebSocket CSWSH refuse-to-boot</td>
+            <td>WebSocket CSWSH (cross-site WebSocket hijacking) refuse-to-boot</td>
             <td>
-              A doorman who refuses to open the back fire-exit unless he can
+              A doorman who refuses to open the back fire-exit unless they can
               confirm who you are <em>and</em> which street you walked in from.
             </td>
           </tr>
@@ -312,7 +321,8 @@ export default function Page() {
             <td>Webhook HMAC verify</td>
             <td>
               A wax seal on a letter. Anyone can write a letter; only the real
-              sender owns the signet ring that makes that exact pattern.
+              sender owns the signet ring (the shared secret key) that makes
+              that exact pattern.
             </td>
           </tr>
           <tr>
@@ -327,8 +337,9 @@ export default function Page() {
             <td>Supply-chain hardening (pnpm, provenance, SBOM)</td>
             <td>
               Tamper-evident seals on every ingredient before it goes into the
-              kitchen, plus a paper trail (provenance) showing exactly which
-              farm grew it.
+              kitchen, a printed ingredient list for the finished dish (the
+              SBOM), plus a paper trail (provenance) showing exactly which farm
+              grew each ingredient.
             </td>
           </tr>
           <tr>
@@ -505,10 +516,10 @@ app.use(timing());              // Server-Timing header for observability`}
       </p>
 
       <p>
-        The official starters wire these in for you: Node, Bun, and Deno enable
+        The official starters wire these in for you: Node, Bun, and Deno enable{" "}
         <code>secureHeaders()</code>, <code>requestId()</code>, and{" "}
         <code>rateLimit()</code>; Cloudflare Worker and Vercel enable{" "}
-        <code>secureHeaders()</code> and
+        <code>secureHeaders()</code> and{" "}
         <code>requestId()</code> plus tighter edge-friendly body and timeout
         limits.
       </p>
@@ -744,7 +755,7 @@ app.use(basicAuth({
         <a href="/docs/security/admin-panels">Secure admin panels</a> for the
         recommended pattern: <code>internal: true</code> routes,{" "}
         <code>ipRestriction()</code>, strict CSP with per-request nonces,
-        per-admin authentication, login-throttle <code>rateLimit()</code>
+        per-admin authentication, login-throttle <code>rateLimit()</code>{" "}
         groups, and structured audit logging, mapped one-to-one to
         Aikido&apos;s public &quot;secure admin panel&quot; checklist.
       </p>

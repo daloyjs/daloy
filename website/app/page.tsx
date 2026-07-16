@@ -3,7 +3,6 @@ import {
   ArrowRightIcon,
   CubeIcon,
   FileCodeIcon,
-  LightningIcon,
   LockIcon,
   SparkleIcon,
   RocketLaunchIcon,
@@ -303,7 +302,7 @@ export default function HomePage() {
             </p>
             <ContractFlowVisual />
             <p
-              className="float-up max-w-2xl text-lg leading-8 text-muted-foreground max-sm:mt-12"
+              className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
               style={{ animationDelay: "180ms" }}
             >
               Contract-first routing, Standard Schema validation, OpenAPI 3.1
@@ -353,10 +352,10 @@ export default function HomePage() {
               targets (Node, Deno, Bun, Edge). Secure by default out of the box.
             </p>
             <div
-              className="float-up flex items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
+              className="float-up flex max-w-full items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
               style={{ animationDelay: "380ms" }}
             >
-              <code className="text-sm">$ {CREATE_COMMAND}</code>
+              <code className="overflow-x-auto text-sm whitespace-nowrap">$ {CREATE_COMMAND}</code>
               <CodeCopyButton code={CREATE_COMMAND} />
             </div>
             <div className='flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'>

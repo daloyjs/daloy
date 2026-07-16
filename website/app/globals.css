@@ -431,36 +431,6 @@
 }
 
 /* ---------- Flow / landing page motion ---------- */
-@keyframes flow-dash {
-  to {
-    stroke-dashoffset: -800;
-  }
-}
-
-@keyframes flow-pulse {
-  0%,
-  100% {
-    opacity: 0.85;
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    opacity: 1;
-    transform: translate3d(0, -1.5%, 0);
-  }
-}
-
-@keyframes flow-gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
 @keyframes float-up {
   from {
     opacity: 0;
@@ -469,43 +439,6 @@
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes fade {
-  from {
-    filter: blur(3px);
-    opacity: 0;
-  }
-
-  to {
-    filter: blur(0);
-    opacity: 1;
-  }
-}
-
-@keyframes slide {
-  from {
-    translate: var(--slide-offset);
-  }
-
-  to {
-    translate: 0;
-  }
-}
-
-@keyframes packet-flow {
-  0% {
-    opacity: 0;
-    transform: translate3d(-18vw, 18px, 0) scale(0.94);
-  }
-  12%,
-  84% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(118vw, -26px, 0) scale(1);
   }
 }
 
@@ -539,36 +472,6 @@
   }
 }
 
-@keyframes visual-spark-a {
-  0% {
-    opacity: 0;
-    offset-distance: 0%;
-  }
-  10%,
-  86% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    offset-distance: 100%;
-  }
-}
-
-@keyframes visual-spark-b {
-  0% {
-    opacity: 0;
-    offset-distance: 100%;
-  }
-  12%,
-  82% {
-    opacity: 0.92;
-  }
-  100% {
-    opacity: 0;
-    offset-distance: 0%;
-  }
-}
-
 @keyframes visual-flow-band {
   0% {
     transform: translateX(-45%) skewX(-14deg);
@@ -588,36 +491,6 @@
   }
 }
 
-.flow-line {
-  fill: none;
-  stroke-linecap: round;
-  stroke-dasharray: 220 600;
-  animation: flow-dash 18s linear infinite;
-}
-.flow-line-1 { animation-duration: 22s; }
-.flow-line-2 { animation-duration: 28s; animation-delay: -6s; }
-.flow-line-3 { animation-duration: 24s; animation-delay: -12s; }
-.flow-line-4 { animation-duration: 32s; animation-delay: -3s; }
-
-.animate-flow-pulse {
-  animation: flow-pulse 14s ease-in-out infinite;
-}
-
-.flow-gradient-text {
-  background-image: linear-gradient(
-    100deg,
-    var(--foreground) 0%,
-    color-mix(in oklab, var(--primary) 60%, var(--foreground)) 35%,
-    color-mix(in oklab, var(--ring) 75%, var(--foreground)) 55%,
-    var(--foreground) 100%
-  );
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: flow-gradient 12s ease-in-out infinite;
-}
-
 .float-up {
   animation: float-up 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -625,8 +498,11 @@
 .interactive-flow {
   min-height: 100%;
   mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 82%, transparent 100%);
-  transform: translate3d(0, var(--flow-scroll), 0);
   z-index: 0;
+  /* Skip style/paint work for the whole decorative scene once the hero is
+     scrolled offscreen — its infinite stroke animations otherwise keep
+     invalidating on the main thread for the lifetime of the tab. */
+  content-visibility: auto;
 }
 
 .flow-aurora {
@@ -634,8 +510,6 @@
   inset: -28% -18%;
   opacity: 0.78;
   filter: blur(42px) saturate(1.25);
-  transform: translate3d(var(--flow-x-strong), var(--flow-y-strong), 0) rotate(var(--flow-rotate));
-  transition: opacity 200ms ease;
 }
 
 .flow-aurora-a {
@@ -649,7 +523,6 @@
     radial-gradient(42% 30% at 32% 62%, color-mix(in oklab, var(--chart-2) 16%, transparent), transparent 74%),
     radial-gradient(34% 24% at 78% 62%, color-mix(in oklab, var(--chart-4) 18%, transparent), transparent 70%);
   opacity: 0.55;
-  transform: translate3d(var(--flow-x-inverse), var(--flow-y-inverse), 0) rotate(var(--flow-rotate-inverse));
 }
 
 .flow-grid {
@@ -660,7 +533,7 @@
     linear-gradient(color-mix(in oklab, var(--foreground) 8%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in oklab, var(--foreground) 8%, transparent) 1px, transparent 1px);
   background-size: 64px 64px;
-  transform: translate3d(var(--flow-x-inverse), var(--flow-scroll-grid), 0) skewY(-4deg);
+  transform: skewY(-4deg);
 }
 
 .flow-river {
@@ -668,20 +541,10 @@
   inset: -6% 0 0;
   height: 112%;
   width: 100%;
-  transform: translate3d(var(--flow-x-river), calc(var(--flow-y-river) + var(--flow-scroll-river)), 0) rotate(var(--flow-rotate));
-  transform-origin: center;
 }
 
 .flow-river-layer {
   animation: current-breathe 9s ease-in-out infinite;
-}
-
-.flow-river-layer-front {
-  transform: translate3d(var(--flow-x-medium), var(--flow-y-medium), 0);
-}
-
-.flow-river-layer-back {
-  transform: translate3d(var(--flow-x-back), var(--flow-y-back), 0);
 }
 
 .flow-current {
@@ -705,26 +568,18 @@
   animation-delay: -3s;
 }
 
-.contract-flow-visual {
-  perspective: 1100px;
-}
-
 .contract-flow-visual__shell {
   position: relative;
   overflow: hidden;
   border: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(420px circle at var(--visual-glow-x) var(--visual-glow-y), color-mix(in oklab, var(--primary) 16%, transparent), transparent 48%),
+    radial-gradient(420px circle at 50% 50%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 48%),
     linear-gradient(180deg, color-mix(in oklab, var(--background) 86%, transparent), color-mix(in oklab, var(--muted) 72%, transparent));
   box-shadow:
     0 24px 70px color-mix(in oklab, var(--foreground) 10%, transparent),
     inset 0 1px 0 color-mix(in oklab, white 55%, transparent);
-  transform: rotateX(var(--visual-tilt-x)) rotateY(var(--visual-tilt-y));
-  transform-style: preserve-3d;
-  transition:
-    transform 160ms ease,
-    border-color 200ms ease;
+  transition: border-color 200ms ease;
 }
 
 .contract-flow-visual__shell::before {
@@ -802,7 +657,9 @@
   width: calc(100% - 2rem);
   height: calc(100% - 1.5rem);
   color: color-mix(in oklab, var(--primary) 68%, var(--foreground));
-  filter: drop-shadow(0 0 12px color-mix(in oklab, var(--primary) 26%, transparent));
+  /* No drop-shadow filter here: filtering an element with infinitely
+     animating children forces a full re-rasterization of the filtered
+     layer every frame. The __glow layer supplies the ambient glow. */
 }
 
 .contract-flow-visual__path {
@@ -817,36 +674,6 @@
   animation-delay: -4s;
   animation-duration: 10s;
   opacity: 0.72;
-}
-
-.contract-flow-visual__spark {
-  position: absolute;
-  z-index: 1;
-  width: 0.62rem;
-  height: 0.62rem;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--primary) 70%, white);
-  box-shadow:
-    0 0 0 6px color-mix(in oklab, var(--primary) 14%, transparent),
-    0 0 24px color-mix(in oklab, var(--primary) 48%, transparent);
-  offset-path: path("M 36 112 C 170 30, 260 190, 392 112 S 620 35, 864 112");
-  offset-rotate: 0deg;
-  transform: translate(1rem, 0.75rem);
-  animation: visual-spark-a 5.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-}
-
-.contract-flow-visual__spark-b {
-  offset-path: path("M 36 112 C 170 194, 260 34, 392 112 S 620 190, 864 112");
-  animation-name: visual-spark-b;
-  animation-duration: 7.2s;
-  animation-delay: -2.4s;
-}
-
-.contract-flow-visual__spark-c {
-  animation-duration: 8.4s;
-  animation-delay: -4.8s;
-  width: 0.5rem;
-  height: 0.5rem;
 }
 
 .contract-flow-visual__nodes {
@@ -904,8 +731,7 @@
     padding: 1rem;
   }
 
-  .contract-flow-visual__paths,
-  .contract-flow-visual__spark {
+  .contract-flow-visual__paths {
     display: none;
   }
 
@@ -913,40 +739,22 @@
     grid-template-columns: 1fr 1fr;
     min-height: auto;
   }
-
-  .contract-flow-visual__node {
-    min-height: 104px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flow-line,
-  .animate-flow-pulse,
-  .flow-gradient-text,
   .float-up,
   .flow-river-layer,
   .flow-current,
   .contract-flow-visual__path,
-  .contract-flow-visual__spark,
   .contract-flow-visual__node,
   .contract-flow-visual__shell::after,
   .contract-flow-visual__stage::before {
     animation: none !important;
   }
-  .interactive-flow,
-  .flow-aurora,
-  .flow-grid,
-  .flow-river,
-  .flow-river-layer-front,
-  .flow-river-layer-back,
-  .contract-flow-visual__shell {
-    transform: none !important;
-  }
-  .flow-gradient-text {
-    color: var(--foreground);
-    background: none;
-    -webkit-background-clip: border-box;
-    background-clip: border-box;
+  /* The spark dots animate via SMIL (animateMotion), which `animation:
+     none` cannot stop — hide the decorative dots entirely instead. */
+  .contract-flow-visual__spark {
+    display: none;
   }
 }
 

@@ -1,33 +1,8 @@
-import type { CSSProperties } from "react";
-
-type FlowStyle = CSSProperties & {
-  [key: `--${string}`]: string;
-};
-
 export function FlowHeroScene() {
   return (
     <div
       aria-hidden
       className="interactive-flow pointer-events-none absolute inset-0 overflow-hidden"
-      style={{
-        "--flow-x": "0",
-        "--flow-y": "0",
-        "--flow-scroll": "0px",
-        "--flow-scroll-grid": "0px",
-        "--flow-scroll-river": "0px",
-        "--flow-rotate": "0deg",
-        "--flow-rotate-inverse": "0deg",
-        "--flow-x-strong": "0px",
-        "--flow-y-strong": "0px",
-        "--flow-x-medium": "0px",
-        "--flow-y-medium": "0px",
-        "--flow-x-inverse": "0px",
-        "--flow-y-inverse": "0px",
-        "--flow-x-river": "0px",
-        "--flow-y-river": "0px",
-        "--flow-x-back": "0px",
-        "--flow-y-back": "0px",
-      } as FlowStyle}
     >
       <div className="flow-aurora flow-aurora-a" />
       <div className="flow-aurora flow-aurora-b" />
