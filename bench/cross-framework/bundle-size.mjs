@@ -13,7 +13,7 @@ import { gzipSync } from "node:zlib";
 import path from "node:path";
 import os from "node:os";
 import { build } from "esbuild";
-import { __dirname, ROOT, machineInfo, parseArgs, fmt } from "./lib/common.mjs";
+import { resultsPath, ROOT, machineInfo, parseArgs, fmt } from "./lib/common.mjs";
 import { c, summary, fail, metric, metricsLine } from "./lib/format.mjs";
 
 // Each entry is a minimal source string. Keep them comparable: one route
@@ -437,7 +437,7 @@ async function main() {
   }) + "\n" + c.dim(notes.join("\n")) + "\n");
 
   writeFileSync(
-    path.join(__dirname, "results.bundle-size.json"),
+    resultsPath("results.bundle-size.json"),
     JSON.stringify({ ranAt: new Date().toISOString(), machine: machineInfo(), rows }, null, 2),
   );
 }

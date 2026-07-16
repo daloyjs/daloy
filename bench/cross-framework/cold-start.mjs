@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import {
-  __dirname, ROOT, machineInfo, parseArgs, stats, fmt, httpRequest,
+  resultsPath, orderTargets, ROOT, machineInfo, parseArgs, stats, fmt, httpRequest,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, info, metricsLine } from "./lib/format.mjs";
 
@@ -85,7 +85,7 @@ async function benchOne(fw, port) {
 }
 
 async function main() {
-  const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
+  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
   const rows = [];
   let port = PORT_BASE;
   for (const fw of targets) {
@@ -117,7 +117,7 @@ async function main() {
   }) + "\n");
 
   writeFileSync(
-    path.join(__dirname, "results.cold-start.json"),
+    resultsPath("results.cold-start.json"),
     JSON.stringify({
       ranAt: new Date().toISOString(),
       machine: machineInfo(),

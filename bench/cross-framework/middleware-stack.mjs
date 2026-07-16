@@ -13,10 +13,9 @@
 
 import { writeFileSync } from "node:fs";
 import { createHmac } from "node:crypto";
-import path from "node:path";
 import autocannon from "autocannon";
 import {
-  __dirname, machineInfo, parseArgs,
+  resultsPath, orderTargets, machineInfo, parseArgs,
   startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine, sym } from "./lib/format.mjs";
@@ -98,10 +97,12 @@ async function benchOne(fw) {
         });
       }
       const rps = stats(samples.map((s) => s.reqPerSec));
-      const mean = (k) => samples.reduce((a, s) => a + s[k], 0) / samples.length;
+      // Median, not mean — averaging noisy tail percentiles lets one bad
+      // iteration drag the headline number (see run.mjs summarize()).
+      const medianOf = (k) => stats(samples.map((s) => s[k])).median;
       out[sc.id] = {
         reqPerSec: rps,
-        latency: { p50: mean("p50"), p99: mean("p99"), p999: mean("p999") },
+        latency: { p50: medianOf("p50"), p99: medianOf("p99"), p999: medianOf("p999") },
         non2xx: samples.reduce((a, s) => a + s.non2xx, 0),
         samples,
       };
@@ -120,7 +121,7 @@ async function benchOne(fw) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
+  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
   const rows = [];
   for (const fw of targets) {
     try {
@@ -150,7 +151,7 @@ async function main() {
   }) + "\n");
 
   writeFileSync(
-    path.join(__dirname, "results.middleware-stack.json"),
+    resultsPath("results.middleware-stack.json"),
     JSON.stringify({
       ranAt: new Date().toISOString(),
       machine: machineInfo(),

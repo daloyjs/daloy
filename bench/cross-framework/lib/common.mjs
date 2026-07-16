@@ -2,14 +2,65 @@
 import { spawn, execFileSync } from "node:child_process";
 import { setTimeout as wait } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdirSync, existsSync } from "node:fs";
+import { randomInt } from "node:crypto";
 import net from "node:net";
 import path from "node:path";
 import os from "node:os";
 import { warn } from "./format.mjs";
 
-export const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// NOTE: deliberately not exported. This resolves to lib/, and exporting it
+// once caused every script to write its results file under lib/ by mistake.
+// Scripts should use ROOT (the benchmark root) or resultsPath().
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.dirname(__dirname);
+
+// Where results files are written. Defaults to the benchmark root
+// (bench/cross-framework/), NOT lib/ — lib/ holds harness code only.
+// Overridable via BENCH_RESULTS_DIR so callers that exercise the scripts
+// without producing real numbers (smoke.mjs) can redirect their output and
+// never clobber a real benchmark session.
+export const RESULTS_DIR = process.env.BENCH_RESULTS_DIR
+  ? path.resolve(process.env.BENCH_RESULTS_DIR)
+  : ROOT;
+
+/**
+ * Resolve the absolute path a `results.<scenario>.json` file should be
+ * written to, creating the results directory if needed. All bench scripts
+ * must write results through this helper so BENCH_RESULTS_DIR is honored.
+ *
+ * @param {string} filename - Bare results filename, e.g. "results.json".
+ * @returns {string} Absolute path under RESULTS_DIR.
+ */
+export function resultsPath(filename) {
+  if (!existsSync(RESULTS_DIR)) mkdirSync(RESULTS_DIR, { recursive: true });
+  return path.join(RESULTS_DIR, filename);
+}
+
+/**
+ * Order benchmark targets for execution. Defaults to a fair shuffle
+ * (Fisher-Yates over crypto.randomInt) so no framework systematically
+ * benefits from running first on a cold, cool machine or last on a warm,
+ * thermally-throttled one; run-to-run rotation averages position effects
+ * out of published medians. Pass `--order=fixed` (or BENCH_ORDER=fixed)
+ * to keep the declared order for debugging/reproduction.
+ *
+ * The execution order is observable in every results file: `rows` are
+ * appended in run order.
+ *
+ * @param {Array<object>} targets - Framework descriptors to run.
+ * @param {string} [mode] - "shuffle" (default) or "fixed".
+ * @returns {Array<object>} New array in execution order.
+ */
+export function orderTargets(targets, mode = process.env.BENCH_ORDER ?? "shuffle") {
+  const out = [...targets];
+  if (mode === "fixed" || out.length < 2) return out;
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 export const DEFAULT_PORT = 3456;
 
@@ -83,6 +134,68 @@ export function detectFdLimit() {
   }
 }
 
+// Provenance is stable for the lifetime of a bench process; compute once.
+let provenanceCache;
+
+/**
+ * Best-effort code + dependency provenance for a benchmark run: git commit
+ * SHA and dirty-worktree flag (numbers from an uncommitted tree are not
+ * reproducible), the pnpm version that produced node_modules, and the
+ * resolved version of every direct dependency of the bench harness
+ * (including the file:-linked @daloyjs/core). Never throws — any probe
+ * that fails records "unknown" rather than aborting a run.
+ *
+ * @returns {{gitSha: string, gitDirty: (boolean|string), pnpmVersion: string, depVersions: Record<string, string>}}
+ */
+export function provenance() {
+  if (provenanceCache) return provenanceCache;
+  const tryExec = (cmd, args) => {
+    try {
+      return execFileSync(cmd, args, {
+        cwd: ROOT,
+        encoding: "utf8",
+        timeout: 10_000,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {
+      return undefined;
+    }
+  };
+  const gitSha = tryExec("git", ["rev-parse", "HEAD"]) ?? "unknown";
+  const gitStatus = tryExec("git", ["status", "--porcelain"]);
+  const gitDirty = gitStatus === undefined ? "unknown" : gitStatus.length > 0;
+  const pnpmVersion = tryExec("pnpm", ["--version"]) ?? "unknown";
+
+  const depVersions = {};
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+    for (const name of Object.keys(declared).sort()) {
+      try {
+        const resolved = JSON.parse(
+          readFileSync(path.join(ROOT, "node_modules", name, "package.json"), "utf8"),
+        );
+        depVersions[name] = resolved.version ?? "unknown";
+      } catch {
+        depVersions[name] = "unresolved";
+      }
+    }
+  } catch {
+    /* leave depVersions as collected */
+  }
+
+  provenanceCache = { gitSha, gitDirty, pnpmVersion, depVersions };
+  return provenanceCache;
+}
+
+/**
+ * Snapshot of the machine and code state a benchmark ran under. Recorded
+ * verbatim into every results file so numbers can be judged for
+ * comparability later (battery vs AC, fd limits, background load) and
+ * traced back to the exact commit and dependency set that produced them.
+ *
+ * @returns {object} Machine fingerprint plus {@link provenance} fields.
+ */
 export function machineInfo() {
   const cpus = os.cpus();
   const power = detectPowerSource();
@@ -97,6 +210,7 @@ export function machineInfo() {
     onBattery: power.onBattery,
     powerSource: power.source,
     fdLimit: detectFdLimit(),
+    ...provenance(),
   };
 }
 

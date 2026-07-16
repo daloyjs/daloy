@@ -24,10 +24,9 @@
 //   DURATION=20 WARMUP=30 ITERATIONS=5 node run.mjs
 
 import { writeFileSync } from "node:fs";
-import path from "node:path";
 import autocannon from "autocannon";
 import {
-  __dirname, machineInfo, parseArgs,
+  resultsPath, orderTargets, machineInfo, parseArgs,
   startServer, killServer,
   waitForHealthy, httpRequest,
   stats, fmt, warnBenchEnvironment,
@@ -120,15 +119,18 @@ async function preflight(scenario) {
 
 function summarize(samples) {
   const rps = stats(samples.map((s) => s.reqPerSec));
-  const meanOf = (k) => samples.reduce((a, s) => a + s[k], 0) / samples.length;
+  // Median, not mean: tail percentiles are noisy and skewed, so averaging
+  // them lets one bad iteration drag the headline p99. The per-sample
+  // values are kept in `samples` for anyone who wants a different estimator.
+  const medianOf = (k) => stats(samples.map((s) => s[k])).median;
   return {
     reqPerSec: rps,
     latency: {
-      p50:  meanOf("p50"),
-      p75:  meanOf("p75"),
-      p90:  meanOf("p90"),
-      p99:  meanOf("p99"),
-      p999: meanOf("p999"),
+      p50:  medianOf("p50"),
+      p75:  medianOf("p75"),
+      p90:  medianOf("p90"),
+      p99:  medianOf("p99"),
+      p999: medianOf("p999"),
     },
     errors: {
       non2xx:   samples.reduce((a, s) => a + s.non2xx, 0),
@@ -226,7 +228,7 @@ function renderSummary(rows) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: Math.max(...CONNECTION_POINTS) });
-  const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
+  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
   console.error(banner(
     "Cross-framework HTTP benchmark",
     `${targets.length} framework(s) · ${SCENARIOS.length} scenarios · ` +
@@ -255,7 +257,7 @@ async function main() {
   );
 
   writeFileSync(
-    path.join(__dirname, "results.json"),
+    resultsPath("results.json"),
     JSON.stringify({
       ranAt: new Date().toISOString(),
       machine: machineInfo(),

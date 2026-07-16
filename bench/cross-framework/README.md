@@ -141,7 +141,9 @@ endpoints. Real frameworks differ on many other axes that affect the
 production experience. Each of the scripts below is a sibling of `run.mjs`
 and can be run independently. They all share `lib/common.mjs` for server
 spawning, machine-info capture, and statistics helpers, and write their own
-`results.<scenario>.json`.
+`results.<scenario>.json` into this folder (redirect with
+`BENCH_RESULTS_DIR=/some/dir` — `smoke.mjs` uses that to keep its throwaway
+output away from real results).
 
 | Script                 | Measures                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -157,7 +159,7 @@ spawning, machine-info capture, and statistics helpers, and write their own
 | `middleware-stack.mjs` | Same scenarios as `run.mjs` but with the production middleware stack on (CORS, secure headers, request-id, rate-limit, JWT verify).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `logging.mjs`          | Same scenarios as `run.mjs` but with one structured Pino access log emitted per completed response. Defaults to `LOG_DEST=/dev/null` to avoid terminal or collector backpressure.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `profile-imports.mjs`  | Cold-process import cost per module: each candidate is imported in its own fresh Node process so the loader cache never warms across samples.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `smoke.mjs`            | Runs every bench script above with minimal durations/iterations to verify the harness wiring end-to-end (`pnpm bench:smoke`). CI-suitable; measures nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `smoke.mjs`            | Runs every bench script above with minimal durations/iterations to verify the harness wiring end-to-end (`pnpm bench:smoke`). CI-suitable; measures nothing. Writes to a temp `BENCH_RESULTS_DIR`, so it never overwrites real `results.*.json`.                                                                                                                                                                                                                                                                                                                                               |
 
 ### Server layout
 
@@ -203,7 +205,15 @@ pnpm bench:all   # ~25–40 min wall time depending on the matrix
   has time to tier up to TurboFan. Override with `WARMUP=30`.
 - **Multiple iterations, median + stddev.** Mean alone hides outliers.
   Defaults: 3 iterations of 10s each. Override with `ITERATIONS=5
-DURATION=20`.
+DURATION=20`. Aggregated latency percentiles (p50…p99.9) are the **median**
+  across iterations, not the mean — averaging tail percentiles lets one bad
+  iteration drag the headline number. Raw per-iteration values stay in
+  `samples`.
+- **Shuffled framework order.** Each run executes frameworks in a random
+  order so nobody systematically benefits from running first (cool machine)
+  or last (thermal throttle); repeated runs average position effects out.
+  `rows` in every results file reflect actual execution order. Pass
+  `--order=fixed` (or `BENCH_ORDER=fixed`) to keep the declared order.
 - **Correctness preflight.** `run.mjs` fetches each endpoint once before
   benchmarking and aborts the run for that framework if the response body
   doesn't match the expected shape — so "fastest" can't mean "returned the
@@ -217,6 +227,11 @@ DURATION=20`.
 - **Machine fingerprint captured.** Every results file records Node
   version, OS, CPU model, core count, and total RAM. Compare apples to
   apples.
+- **Provenance captured.** Every results file also records the git commit
+  SHA, whether the worktree was dirty, the pnpm version, and the resolved
+  version of every framework dependency (including the `file:`-linked
+  `@daloyjs/core`), so a number can always be traced back to the exact code
+  and dependency set that produced it.
 
 ### What's still not measured
 
@@ -242,7 +257,9 @@ DURATION=20 CONNECTIONS=200 node run.mjs
 
 ## Output
 
-`run.mjs` writes a `results.json` and prints a markdown table:
+`run.mjs` writes a `results.json` next to this README (all scripts write
+their `results.*.json` here unless `BENCH_RESULTS_DIR` overrides it) and
+prints a markdown table:
 
 ```
 | Framework  | GET /static (req/s) | GET /users/:id (req/s) | POST /echo (req/s) | p99 (ms) /static |
@@ -252,8 +269,11 @@ DURATION=20 CONNECTIONS=200 node run.mjs
 ...
 ```
 
-Reproducible: pin Node version (`.nvmrc`), pin lockfile, run on a quiet
-machine with `--max-old-space-size` left at default.
+Reproducible: pin Node version (`.nvmrc`), install with the committed
+`pnpm-lock.yaml` (`pnpm install --frozen-lockfile`), and run on a quiet
+machine with `--max-old-space-size` left at default. The recorded
+`machine.gitSha` / `machine.gitDirty` / `machine.depVersions` fields tell
+you whether two results files are actually comparable.
 
 ## Honest caveats
 

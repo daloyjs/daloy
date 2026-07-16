@@ -7,10 +7,9 @@
 //   node route-scale.mjs --only=daloy --routes=500
 
 import { writeFileSync } from "node:fs";
-import path from "node:path";
 import autocannon from "autocannon";
 import {
-  __dirname, machineInfo, parseArgs,
+  resultsPath, orderTargets, machineInfo, parseArgs,
   startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine } from "./lib/format.mjs";
@@ -69,15 +68,31 @@ async function benchOneCount(fw, routeCount) {
     const samples = [];
     for (let i = 0; i < ITERATIONS; i++) {
       const r = await runAutocannon({ duration: DURATION, urlPath });
-      samples.push({ reqPerSec: r.requests.average, p99: r.latency.p99 });
+      samples.push({
+        reqPerSec: r.requests.average,
+        p99: r.latency.p99,
+        non2xx:   r.non2xx ?? 0,
+        errors:   r.errors ?? 0,
+        timeouts: r.timeouts ?? 0,
+        resets:   r.resets ?? 0,
+      });
     }
     const rps = stats(samples.map((s) => s.reqPerSec));
-    const p99 = samples.reduce((a, s) => a + s.p99, 0) / samples.length;
+    // Median, not mean — see run.mjs summarize().
+    const p99 = stats(samples.map((s) => s.p99)).median;
+    const errors = {
+      non2xx:   samples.reduce((a, s) => a + s.non2xx, 0),
+      errors:   samples.reduce((a, s) => a + s.errors, 0),
+      timeouts: samples.reduce((a, s) => a + s.timeouts, 0),
+      resets:   samples.reduce((a, s) => a + s.resets, 0),
+    };
+    const totalErr = errors.non2xx + errors.errors + errors.timeouts;
     console.error(metricsLine(`${routeCount} routes`, [
       c.green(c.bold(fmt(rps.median))) + c.dim(" req/s"),
       metric("p99", p99.toFixed(2), { unit: "ms" }),
-    ], { labelWidth: 14 }));
-    return { routeCount, reqPerSec: rps, p99, samples };
+      totalErr > 0 ? c.red(`non2xx=${errors.non2xx} err=${errors.errors} to=${errors.timeouts}`) : "",
+    ].filter(Boolean), { labelWidth: 14 }));
+    return { routeCount, reqPerSec: rps, p99, errors, samples };
   } finally {
     await killServer(child);
   }
@@ -85,7 +100,7 @@ async function benchOneCount(fw, routeCount) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
+  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
   const rows = [];
   for (const fw of targets) {
     const series = [];
@@ -122,7 +137,7 @@ async function main() {
   }) + "\n");
 
   writeFileSync(
-    path.join(__dirname, "results.route-scale.json"),
+    resultsPath("results.route-scale.json"),
     JSON.stringify({
       ranAt: new Date().toISOString(),
       machine: machineInfo(),

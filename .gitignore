@@ -35,9 +35,11 @@ coverage_output.txt
 .vercel
 
 # Bench runtime artifacts only — keep bench/*.ts and bench/cross-framework/ tracked.
+# The bench pnpm-lock.yaml is deliberately COMMITTED: the harness pins its
+# framework versions there so published numbers are reproducible.
 bench/**/node_modules/
 bench/**/results.json
-bench/cross-framework/pnpm-lock.yaml
+bench/**/results.*.json
 bench/cross-framework/package-lock.json
 
 

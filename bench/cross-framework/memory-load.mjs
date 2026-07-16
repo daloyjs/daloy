@@ -12,10 +12,9 @@
 import { writeFileSync } from "node:fs";
 import { setTimeout as wait } from "node:timers/promises";
 import { spawn } from "node:child_process";
-import path from "node:path";
 import autocannon from "autocannon";
 import {
-  __dirname, machineInfo, parseArgs,
+  resultsPath, orderTargets, machineInfo, parseArgs,
   startServer, killServer, waitForHealthy, httpRequest, fmt, warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine } from "./lib/format.mjs";
@@ -168,7 +167,7 @@ async function benchOne(fw) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
+  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
   const rows = [];
   for (const fw of targets) {
     try {
@@ -200,7 +199,7 @@ async function main() {
   }) + "\n");
 
   writeFileSync(
-    path.join(__dirname, "results.memory-load.json"),
+    resultsPath("results.memory-load.json"),
     JSON.stringify({
       ranAt: new Date().toISOString(),
       machine: machineInfo(),

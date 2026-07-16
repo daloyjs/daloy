@@ -22,7 +22,7 @@
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { __dirname, ROOT, machineInfo, parseArgs, fmt } from "./lib/common.mjs";
+import { resultsPath, ROOT, machineInfo, parseArgs, fmt } from "./lib/common.mjs";
 import { c, summary, fail, metric, metricsLine } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
@@ -233,7 +233,7 @@ async function main() {
   }) + "\n" + c.dim(notes.join("\n")) + "\n");
 
   writeFileSync(
-    path.join(__dirname, "results.install-size.json"),
+    resultsPath("results.install-size.json"),
     JSON.stringify({ ranAt: new Date().toISOString(), machine: machineInfo(), rows }, null, 2),
   );
 }

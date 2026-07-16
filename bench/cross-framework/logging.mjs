@@ -12,10 +12,10 @@
 //   LOG_DEST=./access.log node logging.mjs --only=fastify
 
 import { writeFileSync } from "node:fs";
-import path from "node:path";
 import autocannon from "autocannon";
 import {
-  __dirname,
+  resultsPath,
+  orderTargets,
   machineInfo,
   parseArgs,
   startServer,
@@ -213,7 +213,7 @@ function renderSummary(rows) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name));
+  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
   const rows = [];
   for (const fw of targets) {
     try {
@@ -229,7 +229,7 @@ async function main() {
   console.log("\n" + renderSummary(ok) + "\n");
 
   writeFileSync(
-    path.join(__dirname, "results.logging.json"),
+    resultsPath("results.logging.json"),
     JSON.stringify(
       {
         ranAt: new Date().toISOString(),
