@@ -23,6 +23,7 @@ import {
   normalizePeerCertificate,
   type PeerCertificateLike,
 } from "../mtls.js";
+import { setConnInfo } from "../conn-info.js";
 import {
   FrameSink,
   encodeFrame,
@@ -208,7 +209,20 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     server.on("upgrade", (req, socket, head) => {
       wsSockets.add(socket as Duplex);
       (socket as Duplex).on("close", () => wsSockets.delete(socket as Duplex));
-      void handleUpgrade(app, req, socket as Duplex, head, trustProxy);
+      // Safety net: a rejection here would otherwise be unhandled and, under
+      // the production crash-on-unhandledRejection posture, kill the process
+      // from a single malformed upgrade request.
+      handleUpgrade(app, req, socket as Duplex, head, trustProxy).catch(
+        (err) => {
+          app.log.error({ err }, "WebSocket upgrade failed");
+          try {
+            writeUpgradeError(socket as Duplex, 400, "Bad Request");
+          } catch {
+            /* socket already closed */
+          }
+          (socket as Duplex).destroy();
+        },
+      );
     });
   }
   const port = opts.port ?? 3000;
@@ -262,6 +276,14 @@ function dispatchToApp(
     writeAdapterError(res, e);
     return;
   }
+  // Fulfil the conn-info contract: the immediate TCP peer, so
+  // `getConnInfo` / `resolveClientIp` / `behindProxy` and WAF client-IP
+  // attribution work on Node. Never derived from spoofable headers.
+  setConnInfo(request, {
+    remoteAddress: req.socket.remoteAddress,
+    remotePort: req.socket.remotePort,
+    tls: (req.socket as { encrypted?: boolean }).encrypted === true,
+  });
   attachClientCertificate(req, request);
   const responseOrPromise = app.fetch(request);
   if (responseOrPromise instanceof Promise) {
@@ -720,7 +742,20 @@ function sendWebResponse(
   out: ServerResponse,
 ): void | Promise<void> {
   out.statusCode = res.status;
-  res.headers.forEach((v, k) => out.setHeader(k, v));
+  // `Headers.forEach` yields each `Set-Cookie` as a separate callback while
+  // `ServerResponse.setHeader` overwrites repeated keys — copying naively
+  // keeps only the LAST cookie (e.g. dropping the session cookie when
+  // `csrf()` also sets its token cookie). Collect them via `getSetCookie()`
+  // and set the array once so every cookie reaches the wire.
+  let hasSetCookie = false;
+  res.headers.forEach((v, k) => {
+    if (k === "set-cookie") {
+      hasSetCookie = true;
+      return;
+    }
+    out.setHeader(k, v);
+  });
+  if (hasSetCookie) out.setHeader("set-cookie", res.headers.getSetCookie());
   // Fast-path: response was produced by serializeResult and carries the raw
   // body bytes via the DALOY_RAW_BODY Symbol. Skip arrayBuffer() and the
   // reader-loop microtask churn entirely for buffer-backed responses.
@@ -816,7 +851,17 @@ async function handleUpgrade(
   const proto =
     forwardedProto ??
     ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
-  const url = new URL(`${proto}://${host}${req.url ?? "/"}`);
+  // A malformed `Host` header (e.g. containing a space) reaches this point:
+  // Node's HTTP parser accepts it and fires `upgrade`, but WHATWG URL
+  // parsing throws. Reject it as the client error it is instead of letting
+  // the throw escape the adapter.
+  let url: URL;
+  try {
+    url = new URL(`${proto}://${host}${req.url ?? "/"}`);
+  } catch {
+    writeUpgradeError(socket, 400, "Bad Request");
+    return;
+  }
   const match = app.webSocketRoutes.find(url.pathname);
   if (!match) {
     writeUpgradeError(socket, 404, "Not Found");
@@ -837,6 +882,11 @@ async function handleUpgrade(
   const request = new Request(`${proto}://${host}${req.url ?? "/"}`, {
     method: "GET",
     headers,
+  });
+  setConnInfo(request, {
+    remoteAddress: req.socket.remoteAddress,
+    remotePort: req.socket.remotePort,
+    tls: (req.socket as { encrypted?: boolean }).encrypted === true,
   });
   const ctx: WebSocketContext = {
     request,

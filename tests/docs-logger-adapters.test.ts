@@ -19,6 +19,7 @@ import { serve as serveBun } from "../src/adapters/bun.js";
 import { serve as serveDeno } from "../src/adapters/deno.js";
 import { toFastlyHandler, installFastlyListener } from "../src/adapters/fastly.js";
 import { toLambdaHandler } from "../src/adapters/lambda.js";
+import { getConnInfo } from "../src/conn-info.js";
 
 function decodeHtmlAttribute(value: string): string {
   return value
@@ -534,6 +535,7 @@ test("bun adapter passes modern options through to Bun.serve", async () => {
       development: false,
       unix: "/tmp/daloy.sock",
       tls: { cert: "cert", key: "key" },
+      handleSignals: false,
     });
     assert.equal(handle.port, 0);
     assert.equal(handle.url?.toString(), "http://127.0.0.1:3000/");
@@ -911,4 +913,65 @@ test("lambda adapter detects v2 via rawQueryString and falls back to GET / when 
   const result = await toLambdaHandler(app)({ rawQueryString: "q=1" });
   assert.equal(result.statusCode, 200);
   assert.equal(JSON.parse(result.body).url, "https://localhost/?q=1");
+});
+
+test("lambda adapter attaches sourceIp conn-info for v2 and v1 events", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/ip",
+    operationId: "lambdaConnInfo",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }) => {
+      const info = getConnInfo(request);
+      return {
+        status: 200 as const,
+        body: { addr: info?.remoteAddress ?? null, tls: info?.tls ?? null },
+      };
+    },
+  });
+  const handler = toLambdaHandler(app);
+
+  const v2 = await handler({
+    version: "2.0",
+    rawPath: "/ip",
+    headers: { host: "api.example.com" },
+    requestContext: { http: { method: "GET", sourceIp: "203.0.113.9" } },
+  });
+  assert.deepEqual(JSON.parse(v2.body), { addr: "203.0.113.9", tls: true });
+
+  const v1 = await handler({
+    version: "1.0",
+    path: "/ip",
+    httpMethod: "GET",
+    headers: { host: "api.example.com" },
+    requestContext: { identity: { sourceIp: "198.51.100.7" } },
+  });
+  assert.deepEqual(JSON.parse(v1.body), { addr: "198.51.100.7", tls: true });
+
+  // No sourceIp in the event: no conn info attached, no throw.
+  const bare = await handler({
+    version: "2.0",
+    rawPath: "/ip",
+    headers: { host: "api.example.com" },
+    requestContext: { http: { method: "GET" } },
+  });
+  assert.deepEqual(JSON.parse(bare.body), { addr: null, tls: null });
+});
+
+test("lambda adapter answers a malformed event with 400 problem+json instead of throwing", async () => {
+  // A Host that breaks WHATWG URL parsing used to throw out of the handler,
+  // which API Gateway surfaces as an opaque 502.
+  const handler = toLambdaHandler(new App({ logger: false }));
+  const result = await handler({
+    version: "2.0",
+    rawPath: "/x",
+    headers: { host: "bad host" },
+    requestContext: { http: { method: "GET" } },
+  });
+  assert.equal(result.statusCode, 400);
+  assert.equal(result.headers["content-type"], "application/problem+json");
+  const body = JSON.parse(result.body);
+  assert.equal(body.title, "Bad Request");
+  assert.equal(body.status, 400);
 });

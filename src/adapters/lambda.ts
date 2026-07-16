@@ -1,4 +1,5 @@
 import type { App } from "../app.js";
+import { setConnInfo } from "../conn-info.js";
 
 /**
  * AWS Lambda / Netlify Functions adapter.
@@ -31,10 +32,11 @@ export interface LambdaEventV1 {
   queryStringParameters?: Record<string, string | undefined> | null;
   /** Query parameters with every value per name; preferred over the single-value map. */
   multiValueQueryStringParameters?: Record<string, string[] | undefined> | null;
-  /** Request context; `domainName` is the host fallback and `path` the path fallback. */
+  /** Request context; `domainName` is the host fallback, `path` the path fallback, and `identity.sourceIp` the caller address seen by API Gateway. */
   requestContext?: {
     domainName?: string;
     path?: string;
+    identity?: { sourceIp?: string };
   };
   /** Raw request body; base64-encoded when {@link LambdaEventV1.isBase64Encoded} is true. */
   body?: string;
@@ -54,9 +56,9 @@ export interface LambdaEventV2 {
   headers?: Record<string, string | undefined>;
   /** Request cookies as individual strings; re-joined with `; ` into a `cookie` header. */
   cookies?: string[];
-  /** Request context; `http.method`/`http.path` carry the method and path, `domainName` the host fallback. */
+  /** Request context; `http.method`/`http.path` carry the method and path, `http.sourceIp` the caller address, `domainName` the host fallback. */
   requestContext?: {
-    http?: { method?: string; path?: string };
+    http?: { method?: string; path?: string; sourceIp?: string };
     domainName?: string;
   };
   /** Raw request body; base64-encoded when {@link LambdaEventV2.isBase64Encoded} is true. */
@@ -110,12 +112,30 @@ const TEXT_TYPE_RE = /^(text\/|application\/(json|xml|javascript|x-www-form-urle
 /**
  * Wrap an {@link App} as a Lambda/Netlify handler accepting either v1.0 or v2.0 event payloads.
  *
+ * A malformed event (e.g. a `Host`/path combination that cannot form a valid
+ * URL) is answered with a clean `400` problem+json instead of throwing out of
+ * the handler, which API Gateway would otherwise surface as an opaque `502`.
+ *
  * @param app - The DaloyJS {@link App} that serves each translated request.
  * @returns A {@link LambdaHandler} that converts the event to a `Request`, calls {@link App.fetch}, and emits the matching v1.0/v2.0 response shape.
  */
 export function toLambdaHandler(app: App): LambdaHandler {
   return async (event) => {
-    const request = eventToRequest(event);
+    let request: Request;
+    try {
+      request = eventToRequest(event);
+    } catch {
+      return {
+        statusCode: 400,
+        headers: { "content-type": "application/problem+json" },
+        body: JSON.stringify({
+          type: "https://daloyjs.dev/errors/bad-request",
+          title: "Bad Request",
+          status: 400,
+        }),
+        isBase64Encoded: false,
+      };
+    }
     const response = await app.fetch(request);
     return responseToLambda(response, isV2Event(event));
   };
@@ -153,7 +173,18 @@ function eventToRequest(event: LambdaEvent): Request {
       ? (base64ToBytes(event.body) as BodyInit)
       : event.body;
   }
-  return new Request(url, init);
+  const request = new Request(url, init);
+  // Fulfil the conn-info contract with the caller address API Gateway saw
+  // (v2: `requestContext.http.sourceIp`, v1: `requestContext.identity.sourceIp`),
+  // so `getConnInfo` / `resolveClientIp` work on Lambda. API Gateway and
+  // Function URLs only serve TLS.
+  const sourceIp = isV2Event(event)
+    ? event.requestContext?.http?.sourceIp
+    : event.requestContext?.identity?.sourceIp;
+  if (sourceIp) {
+    setConnInfo(request, { remoteAddress: sourceIp, tls: true });
+  }
+  return request;
 }
 
 async function responseToLambda(res: Response, useV2Response: boolean): Promise<LambdaResponse> {

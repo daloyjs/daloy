@@ -7,6 +7,7 @@
  * left at the default).
  */
 import type { App } from "../app.js";
+import { setConnInfo } from "../conn-info.js";
 
 /** Options forwarded to `Deno.serve` by {@link serve}. */
 export interface DenoServeOptions {
@@ -53,7 +54,13 @@ export function serve(app: App, opts: DenoServeOptions = {}): DenoServerHandle {
     };
   }).Deno;
   const denoServe = D?.serve as
-    | ((init: Record<string, unknown>, handler: (req: Request) => Response | Promise<Response>) => { shutdown?: () => Promise<void> })
+    | ((
+        init: Record<string, unknown>,
+        handler: (
+          req: Request,
+          info?: { remoteAddr?: { hostname?: string; port?: number } },
+        ) => Response | Promise<Response>,
+      ) => { shutdown?: () => Promise<void> })
     | undefined;
   if (!denoServe) throw new Error("Deno runtime not detected");
 
@@ -70,7 +77,21 @@ export function serve(app: App, opts: DenoServeOptions = {}): DenoServerHandle {
   if (opts.onListen) init.onListen = opts.onListen;
   if (opts.onError) init.onError = opts.onError;
 
-  const server = denoServe(init, (req) => app.fetch(req));
+  const servesTls = Boolean(opts.cert && opts.key);
+  const server = denoServe(init, (req, info) => {
+    // Fulfil the conn-info contract with the immediate TCP peer from
+    // `Deno.serve`'s handler info, so `getConnInfo` / `resolveClientIp` /
+    // `behindProxy` work on Deno. Never derived from spoofable headers.
+    const addr = info?.remoteAddr;
+    if (addr?.hostname !== undefined) {
+      setConnInfo(req, {
+        remoteAddress: addr.hostname,
+        remotePort: addr.port,
+        tls: servesTls,
+      });
+    }
+    return app.fetch(req);
+  });
 
   const onSignal = () => {
     void shutdown();

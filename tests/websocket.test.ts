@@ -1262,7 +1262,7 @@ test("Bun adapter wires websocket config and routes upgrades", async () => {
         throw new Error("oversized messages should close before message()");
       },
     });
-    serveBun(app, { port: 1234 });
+    serveBun(app, { port: 1234, handleSignals: false });
 
     // websocket config present
     assert.ok(wsConfig.websocket);
@@ -1514,7 +1514,7 @@ test("Bun adapter open/message/drain/close handlers swallow exceptions", () => {
         throw new Error("close");
       },
     });
-    serveBun(app);
+    serveBun(app, { handleSignals: false });
     // Pre-populate connection via fetch+upgrade
     void wsConfig.fetch(
       new Request("http://x.test/x", { headers: { upgrade: "websocket" } }),
@@ -1576,7 +1576,7 @@ test("Bun adapter routes async open/message rejections to error handler", async 
         errors++;
       },
     });
-    serveBun(app);
+    serveBun(app, { handleSignals: false });
     const ws: any = {
       data: {
         handler: app.webSocketRoutes.find("/async")!.handler.handler,

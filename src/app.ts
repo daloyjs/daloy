@@ -4265,8 +4265,8 @@ export class App<
    * "draining" signal); then the app waits up to `timeoutMs` for in-flight
    * requests to settle; finally, {@link App.onClose} cleanups run.
    *
-   * Both Node and Bun adapters call this automatically on `SIGINT` / `SIGTERM`.
-   * Call it manually from custom runtimes or integration tests.
+   * The Node, Bun, and Deno adapters call this automatically on `SIGINT` /
+   * `SIGTERM`. Call it manually from custom runtimes or integration tests.
    *
    * @param timeoutMs - Maximum time (ms) to wait for inflight requests. Default: `10_000`.
    * @param reason - Optional human-readable reason forwarded to listeners.

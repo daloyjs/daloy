@@ -231,6 +231,12 @@ const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([
   ".vercel",
   ".pnpm-store",
   "_vscode",
+  // Claude Code harness scratch (agent worktrees under `.claude/worktrees/`
+  // hold full repo copies whose `tests/`-relative skip prefixes no longer
+  // match, so the copies' own denylist test files trip the gate). The real
+  // tree is still fully scanned; worktree content is scanned again the
+  // moment it lands in the real tree.
+  ".claude",
 ]);
 
 /** Repo-relative path prefixes that are skipped (use POSIX separators). */

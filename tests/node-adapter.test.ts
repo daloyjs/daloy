@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { request as httpRequest } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { z } from "zod";
 import { App } from "../src/index.js";
+import { getConnInfo } from "../src/conn-info.js";
 import { serve as serveNode } from "../src/adapters/node.js";
 
 async function startServer(app: App, opts: Parameters<typeof serveNode>[1] = {}) {
@@ -627,6 +629,153 @@ test("node adapter: onSend hook can read a LightResponse body via clone()", asyn
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { ok: true });
     assert.equal(hookSaw, JSON.stringify({ ok: true }));
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: multiple Set-Cookie headers all reach the client", async () => {
+  // Regression: `Headers.forEach` yields each Set-Cookie separately and
+  // `ServerResponse.setHeader` overwrites repeated keys, so a response that
+  // set a session cookie AND a csrf cookie used to deliver only the last one.
+  const app = new App({
+    logger: false,
+    secureHeaders: false,
+    hooks: {
+      onSend: async (res) => {
+        res.headers.append("set-cookie", "a=1; Path=/");
+        res.headers.append("set-cookie", "b=2; Path=/; HttpOnly");
+        return undefined;
+      },
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/cookies",
+    operationId: "cookies",
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/cookies`);
+    assert.equal(res.status, 200);
+    const cookies = res.headers.getSetCookie();
+    assert.deepEqual(
+      [...cookies].sort(),
+      ["a=1; Path=/", "b=2; Path=/; HttpOnly"],
+    );
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: single Set-Cookie header is delivered unchanged", async () => {
+  const app = new App({
+    logger: false,
+    secureHeaders: false,
+    hooks: {
+      onSend: async (res) => {
+        res.headers.append("set-cookie", "only=1; Path=/");
+        return undefined;
+      },
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/one-cookie",
+    operationId: "oneCookie",
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/one-cookie`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.headers.getSetCookie(), ["only=1; Path=/"]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: attaches conn-info with the immediate TCP peer", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/conn",
+    operationId: "conn",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }) => {
+      const info = getConnInfo(request);
+      return {
+        status: 200 as const,
+        body: {
+          addr: info?.remoteAddress ?? null,
+          hasPort: typeof info?.remotePort === "number",
+          tls: info?.tls ?? null,
+        },
+      };
+    },
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/conn`);
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { addr: string | null; hasPort: boolean; tls: boolean | null };
+    assert.match(body.addr ?? "", /^(::ffff:)?127\.0\.0\.1$|^::1$/);
+    assert.equal(body.hasPort, true);
+    assert.equal(body.tls, false);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: malformed Host on WebSocket upgrade returns 400 and does not crash the process", async () => {
+  // Regression: `new URL("http://exa mple/ws")` throws, and the upgrade
+  // promise was discarded with `void`, so a single malformed upgrade request
+  // became an unhandled rejection (fatal under the production
+  // crash-on-unhandledRejection posture).
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/alive",
+    operationId: "alive",
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  app.ws("/ws", {
+    allowedOrigins: ["https://app.example.com"],
+    open() {},
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest({
+        port,
+        path: "/ws",
+        method: "GET",
+        headers: {
+          host: "exa mple",
+          upgrade: "websocket",
+          connection: "Upgrade",
+          "sec-websocket-version": "13",
+          "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+        },
+      });
+      req.on("response", (res) => {
+        const code = res.statusCode ?? 0;
+        res.on("data", () => {});
+        res.on("end", () => resolve(code));
+        res.on("close", () => resolve(code));
+      });
+      req.on("upgrade", (res) => resolve(res.statusCode ?? 101));
+      req.on("error", reject);
+      req.end();
+    });
+    assert.equal(status, 400);
+    // The process survived: a plain request on the same server still works.
+    const res = await fetch(`http://127.0.0.1:${port}/alive`);
+    assert.equal(res.status, 200);
   } finally {
     await handle.close();
   }

@@ -87,9 +87,10 @@ test("parseMajorVersion extracts the leading major version, NaN on garbage", asy
 });
 
 test("checkNodeVersion enforces the Node >= 24 floor and fails open on garbage", async () => {
-  const { checkNodeVersion, MIN_NODE_MAJOR, MIN_NPM_MAJOR } = await importCliModule();
+  const { checkNodeVersion, MIN_NODE_MAJOR, MIN_NPM_MAJOR, MIN_PNPM_MAJOR } = await importCliModule();
   assert.equal(MIN_NODE_MAJOR, 24);
   assert.equal(MIN_NPM_MAJOR, 12);
+  assert.equal(MIN_PNPM_MAJOR, 11);
   assert.equal(checkNodeVersion("v24.0.0").ok, true);
   assert.equal(checkNodeVersion("v26.1.0").ok, true);
   const outdated = checkNodeVersion("v20.11.0");
@@ -750,10 +751,11 @@ test("pnpm templates ship a local SCA `audit` script", async () => {
   }
 });
 
-test("templates do not hardcode an npm engine floor (npm-only, injected by the CLI)", async () => {
-  // The npm >= 12 floor only makes sense for npm scaffolds. Templates must not
-  // ship it in `engines.npm`, or pnpm/yarn/bun projects would inherit an
-  // irrelevant constraint. The CLI injects it only when the user picks npm.
+test("templates do not hardcode package-manager engine floors (injected per manager by the CLI)", async () => {
+  // The npm >= 12 and pnpm >= 11 floors only make sense for scaffolds that
+  // picked that manager. Templates must not ship them in `engines`, or
+  // projects on other managers would inherit an irrelevant constraint. The
+  // CLI injects each floor only when the user picks the matching manager.
   const templates = [
     "node-basic",
     "vercel",
@@ -773,10 +775,15 @@ test("templates do not hardcode an npm engine floor (npm-only, injected by the C
       undefined,
       `${template} should not hardcode engines.npm`,
     );
+    assert.equal(
+      pkg.engines?.pnpm,
+      undefined,
+      `${template} should not hardcode engines.pnpm`,
+    );
   }
 });
 
-test("npm scaffolds get an engines.npm >= 12 floor; pnpm scaffolds do not", async () => {
+test("npm scaffolds get an engines.npm >= 12 floor; pnpm scaffolds get engines.pnpm >= 11", async () => {
   for (const packageManager of ["npm", "pnpm"]) {
     const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
     const projectName = `${packageManager}-engine`;
@@ -809,8 +816,18 @@ test("npm scaffolds get an engines.npm >= 12 floor; pnpm scaffolds do not", asyn
       );
       if (packageManager === "npm") {
         assert.equal(pkg.engines?.npm, ">=12.0.0");
+        assert.equal(
+          pkg.engines?.pnpm,
+          undefined,
+          "npm scaffolds must not inherit the pnpm floor",
+        );
       } else {
         assert.equal(pkg.engines?.npm, undefined);
+        assert.equal(
+          pkg.engines?.pnpm,
+          ">=11.0.0",
+          "pnpm scaffolds must pin the pnpm >= 11 floor (older pnpm silently ignores minimumReleaseAge)",
+        );
       }
     } finally {
       await rm(tmpDir, { recursive: true, force: true });

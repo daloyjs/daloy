@@ -489,11 +489,17 @@ const TOOL_INSTALL_GUIDES = {
 
 // Version floors the scaffolder and the projects it generates depend on. The
 // CLI itself targets Node >= 24; npm scaffolds require npm >= 12 (see the
-// injected `engines.npm` + engine-strict `.npmrc`). We surface these up front
-// so a user on an old runtime gets a clear "here's what to install" message
-// instead of a cryptic syntax error or npm's raw EBADENGINE dump mid-install.
+// injected `engines.npm` + engine-strict `.npmrc`); pnpm scaffolds require
+// pnpm >= 11 (see the injected `engines.pnpm`, which pnpm always enforces).
+// The pnpm floor is security-relevant: older pnpm silently ignores the
+// `minimumReleaseAge` guardrail in the generated `pnpm-workspace.yaml`, so
+// the 24h supply-chain cooldown would be off without any warning. We surface
+// these up front so a user on an old runtime gets a clear "here's what to
+// install" message instead of a cryptic syntax error, npm's raw EBADENGINE
+// dump, or a silently weakened install posture.
 const MIN_NODE_MAJOR = 24;
 const MIN_NPM_MAJOR = 12;
+const MIN_PNPM_MAJOR = 11;
 
 /**
  * Parse the leading major-version integer out of a version string such as
@@ -671,13 +677,20 @@ async function patchPackageJson(dir, projectName, packageManager) {
   if (json.scripts && packageManager && packageManager !== "pnpm") {
     json.scripts = rewriteScriptsForPackageManager(json.scripts, packageManager);
   }
-  // Only npm scaffolds get an `engines.npm` floor. pnpm/yarn/bun users never
-  // run npm here, so the templates ship without it; we inject `>=12.0.0` (npm 12
-  // or newer) only when the user picks npm, paired with the engine-strict
-  // `.npmrc` from normalizePackageManagerFiles so the floor is enforced, not
-  // just advisory.
+  // Package-manager engine floors are injected per manager so no project
+  // inherits an irrelevant constraint (templates ship without them):
+  // - npm scaffolds get `engines.npm >= 12`, paired with the engine-strict
+  //   `.npmrc` from normalizePackageManagerFiles so the floor is enforced,
+  //   not just advisory.
+  // - pnpm scaffolds get `engines.pnpm >= 11`; pnpm always enforces the
+  //   project's `engines.pnpm` (no engine-strict needed). The floor matters
+  //   because pnpm < 11 silently ignores `minimumReleaseAge` in
+  //   pnpm-workspace.yaml — the 24h supply-chain cooldown would be off.
   if (packageManager === "npm") {
     json.engines = { ...json.engines, npm: ">=12.0.0" };
+  }
+  if (packageManager === "pnpm") {
+    json.engines = { ...json.engines, pnpm: `>=${MIN_PNPM_MAJOR}.0.0` };
   }
   await writeFile(file, JSON.stringify(json, null, 2) + "\n", "utf8");
 }
@@ -2106,6 +2119,30 @@ async function main() {
       }
     }
 
+    // pnpm scaffolds require pnpm >= 11 (enforced by the injected
+    // engines.pnpm, which pnpm always checks). The floor is security-relevant:
+    // pnpm < 11 silently ignores the pnpm-workspace.yaml `minimumReleaseAge`
+    // guardrail, so the 24h supply-chain cooldown would be off without any
+    // warning. Detect an older pnpm here and explain the fix clearly.
+    if (packageManager === "pnpm" && !missingTools.some((tool) => tool.tool === "pnpm")) {
+      const pnpmMajor = await detectToolMajor("pnpm", targetDir);
+      if (Number.isFinite(pnpmMajor) && pnpmMajor < MIN_PNPM_MAJOR) {
+        logWarn(`This project requires pnpm >= ${MIN_PNPM_MAJOR}, but you're on pnpm ${pnpmMajor}.x.`);
+        console.log(
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} Upgrade pnpm: ${color(COLORS.cyan, "npm install -g pnpm@latest")} ${color(COLORS.dim, `(or corepack use pnpm@latest — ${TOOL_INSTALL_GUIDES.pnpm.url})`)}`,
+        );
+        console.log(
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, `pnpm < ${MIN_PNPM_MAJOR} silently ignores minimumReleaseAge in pnpm-workspace.yaml, disabling the 24h supply-chain cooldown.`)}`,
+        );
+        if (installDeps) {
+          console.log(
+            `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Skipping the automatic install until pnpm is up to date.")}`,
+          );
+          installDeps = false;
+        }
+      }
+    }
+
     if (installDeps) {
       const spinner = createSpinner(`Installing dependencies with ${color(COLORS.cyan, packageManager)}\u2026`);
       spinner.start();
@@ -2160,4 +2197,5 @@ export {
   checkNodeVersion,
   MIN_NODE_MAJOR,
   MIN_NPM_MAJOR,
+  MIN_PNPM_MAJOR,
 };

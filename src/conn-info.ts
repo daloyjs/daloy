@@ -74,8 +74,11 @@ const CONN_INFO_SYMBOL: unique symbol = Symbol.for("daloyjs.connInfo");
 
 /**
  * @internal Adapter helper — attach {@link ConnInfo} to a `Request`. Called
- * by the Node / Bun / Deno / Cloudflare / Vercel / Lambda adapters before
- * `app.fetch(request)`.
+ * by the Node / Bun / Deno / Lambda adapters before `app.fetch(request)`.
+ * The pure edge delegators (Cloudflare, Vercel, Fastly) expose no peer
+ * socket to attach — on those platforms the client address arrives via
+ * platform-set headers, which are governed by the `behindProxy` /
+ * `trustProxyHeaders` policies instead.
  *
  * @param request - Incoming request to tag (stored under a private symbol).
  * @param info - Connection metadata gathered by the adapter.

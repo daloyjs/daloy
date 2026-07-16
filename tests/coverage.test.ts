@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
+import { getConnInfo } from "../src/conn-info.js";
 
 import {
   App,
@@ -1167,7 +1168,7 @@ test("bun adapter delegates fetch to app and produces a problem+json error respo
     },
   };
   try {
-    const handle = serveBun(app, { port: 1234, hostname: "127.0.0.1", maxRequestBodySize: 1024 });
+    const handle = serveBun(app, { port: 1234, hostname: "127.0.0.1", maxRequestBodySize: 1024, handleSignals: false });
     assert.equal(handle.port, 1234);
     assert.equal(captured.opts.port, 1234);
     assert.equal(captured.opts.hostname, "127.0.0.1");
@@ -1200,10 +1201,88 @@ test("bun adapter uses defaults when options are omitted", async () => {
     },
   };
   try {
-    const handle = serveBun(new App({ logger: false }));
+    const handle = serveBun(new App({ logger: false }), { handleSignals: false });
     assert.equal(handle.port, 3000);
     assert.equal(opts.hostname, "0.0.0.0");
     assert.equal(opts.maxRequestBodySize, 16 * 1024 * 1024);
+  } finally {
+    delete (globalThis as any).Bun;
+  }
+});
+
+test("bun adapter registers SIGTERM/SIGINT handlers by default and skips them when handleSignals is false", async () => {
+  (globalThis as any).Bun = {
+    serve(o: any) {
+      return { port: o.port ?? 0, stop() {} };
+    },
+  };
+  const before = {
+    term: process.listeners("SIGTERM"),
+    int: process.listeners("SIGINT"),
+  };
+  try {
+    // handleSignals: false must not touch process signal handling.
+    serveBun(new App({ logger: false }), { handleSignals: false });
+    assert.equal(process.listeners("SIGTERM").length, before.term.length);
+    assert.equal(process.listeners("SIGINT").length, before.int.length);
+
+    // Default (omitted) registers one once-listener per signal — graceful
+    // shutdown parity with the Node/Deno adapters.
+    serveBun(new App({ logger: false }));
+    assert.equal(process.listeners("SIGTERM").length, before.term.length + 1);
+    assert.equal(process.listeners("SIGINT").length, before.int.length + 1);
+  } finally {
+    // Remove only the listeners this test added, then drop the fake runtime.
+    for (const l of process.listeners("SIGTERM")) {
+      if (!before.term.includes(l)) process.removeListener("SIGTERM", l);
+    }
+    for (const l of process.listeners("SIGINT")) {
+      if (!before.int.includes(l)) process.removeListener("SIGINT", l);
+    }
+    delete (globalThis as any).Bun;
+  }
+});
+
+test("bun adapter stop() drains app.shutdown with shutdownTimeoutMs and is idempotent", async () => {
+  const stopCalls: boolean[] = [];
+  (globalThis as any).Bun = {
+    serve(o: any) {
+      return {
+        port: o.port ?? 0,
+        stop(force?: boolean) {
+          stopCalls.push(force === true);
+        },
+      };
+    },
+  };
+  try {
+    const app = new App({ logger: false });
+    const shutdownArgs: Array<number | undefined> = [];
+    const originalShutdown = app.shutdown.bind(app);
+    (app as any).shutdown = async (timeoutMs?: number) => {
+      shutdownArgs.push(timeoutMs);
+      return originalShutdown(timeoutMs);
+    };
+    const handle = serveBun(app, {
+      handleSignals: false,
+      shutdownTimeoutMs: 1234,
+    });
+    await handle.stop();
+    await handle.stop(); // second call must be a no-op
+    assert.deepEqual(shutdownArgs, [1234]);
+    assert.deepEqual(stopCalls, [true]);
+
+    // Default drain timeout is 10s when shutdownTimeoutMs is omitted.
+    const app2 = new App({ logger: false });
+    const args2: Array<number | undefined> = [];
+    const orig2 = app2.shutdown.bind(app2);
+    (app2 as any).shutdown = async (timeoutMs?: number) => {
+      args2.push(timeoutMs);
+      return orig2(timeoutMs);
+    };
+    const handle2 = serveBun(app2, { handleSignals: false });
+    await handle2.stop();
+    assert.deepEqual(args2, [10_000]);
   } finally {
     delete (globalThis as any).Bun;
   }
@@ -1256,6 +1335,81 @@ test("deno adapter falls back gracefully when the runtime omits shutdown()", asy
     await handle.shutdown();
   } finally {
     delete (globalThis as any).Deno;
+  }
+});
+
+// ---------- adapters: conn-info wiring ----------
+
+function buildConnInfoApp(): App {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/ip",
+    operationId: "connInfoIp",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }) => {
+      const info = getConnInfo(request);
+      return {
+        status: 200 as const,
+        body: {
+          addr: info?.remoteAddress ?? null,
+          port: info?.remotePort ?? null,
+          tls: info?.tls ?? null,
+        },
+      };
+    },
+  });
+  return app;
+}
+
+test("deno adapter attaches conn-info from the handler info argument", async () => {
+  const captured: { handler?: (req: Request, info?: unknown) => Promise<Response> } = {};
+  (globalThis as any).Deno = {
+    serve(_opts: any, handler: any) {
+      captured.handler = handler;
+      return { async shutdown() {} };
+    },
+  };
+  try {
+    serveDeno(buildConnInfoApp(), { handleSignals: false });
+    const res = await captured.handler!(new Request("http://t/ip"), {
+      remoteAddr: { transport: "tcp", hostname: "203.0.113.7", port: 4242 },
+    });
+    assert.deepEqual(await res.json(), { addr: "203.0.113.7", port: 4242, tls: false });
+
+    // No handler info (old runtime / direct invocation): no conn info, no throw.
+    const bare = await captured.handler!(new Request("http://t/ip"));
+    assert.deepEqual(await bare.json(), { addr: null, port: null, tls: null });
+  } finally {
+    delete (globalThis as any).Deno;
+  }
+});
+
+test("bun adapter attaches conn-info via server.requestIP", async () => {
+  const captured: { fetch?: (req: Request, server?: unknown) => Promise<Response> } = {};
+  (globalThis as any).Bun = {
+    serve(o: any) {
+      captured.fetch = o.fetch;
+      return { port: o.port ?? 0, stop() {} };
+    },
+  };
+  try {
+    serveBun(buildConnInfoApp(), { handleSignals: false });
+    const res = await captured.fetch!(new Request("http://t/ip"), {
+      requestIP: () => ({ address: "198.51.100.3", port: 999, family: "IPv4" }),
+    });
+    assert.deepEqual(await res.json(), { addr: "198.51.100.3", port: 999, tls: false });
+
+    // requestIP returning null (unix sockets) or a missing server object
+    // must degrade to "no conn info" without throwing.
+    const nullIp = await captured.fetch!(new Request("http://t/ip"), {
+      requestIP: () => null,
+    });
+    assert.deepEqual(await nullIp.json(), { addr: null, port: null, tls: null });
+    const bare = await captured.fetch!(new Request("http://t/ip"));
+    assert.deepEqual(await bare.json(), { addr: null, port: null, tls: null });
+  } finally {
+    delete (globalThis as any).Bun;
   }
 });
 

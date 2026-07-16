@@ -2,9 +2,11 @@
  * Bun adapter — `Bun.serve` already speaks web-standard fetch,
  * so this is the smallest possible wrapper. The adapter passes through the
  * commonly-needed modern `Bun.serve` options (`idleTimeout`, `tls`,
- * `development`, `unix`) and exposes the server's `url` for ergonomic logging.
+ * `development`, `unix`), exposes the server's `url` for ergonomic logging,
+ * and wires graceful shutdown to SIGTERM/SIGINT like the Node adapter.
  */
 import type { App } from "../app.js";
+import { setConnInfo } from "../conn-info.js";
 import {
   WS_READY_STATE,
   WS_CLOSE_CODE,
@@ -48,6 +50,23 @@ export interface BunServeOptions {
   unix?: string;
   /** When supplied, Bun.serve listens on HTTPS. */
   tls?: BunTLSOptions;
+  /**
+   * Drain timeout in ms passed to {@link App.shutdown} during graceful
+   * shutdown (signal-triggered or via `stop()`). Default: 10000.
+   *
+   * @since 1.0.0
+   */
+  shutdownTimeoutMs?: number;
+  /**
+   * Listen for SIGTERM/SIGINT and shut down gracefully (drain
+   * {@link App.shutdown} hooks, then stop the Bun server and exit). Matches
+   * the Node and Deno adapters so rolling deploys under Kubernetes/systemd
+   * do not hard-kill in-flight requests. Set `false` to manage signals
+   * yourself. Default: true.
+   *
+   * @since 1.0.0
+   */
+  handleSignals?: boolean;
 }
 
 /** Handle returned by {@link serve} for shutdown and listener introspection. */
@@ -56,7 +75,7 @@ export interface BunServerHandle {
   port: number;
   /** Server URL as reported by `Bun.serve` (e.g. for startup logging), if available. */
   url: URL | undefined;
-  /** Graceful stop: drains {@link App.shutdown} hooks first, then force-stops the Bun server. */
+  /** Graceful stop: drains {@link App.shutdown} hooks first, then force-stops the Bun server. Idempotent. */
   stop: () => Promise<void>;
 }
 
@@ -88,24 +107,45 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
 
   const hasWs = app.webSocketRoutes.size > 0;
 
+  const servesTls = opts.tls !== undefined;
+  // Fulfil the conn-info contract with the immediate TCP peer from Bun's
+  // native `server.requestIP()`, so `getConnInfo` / `resolveClientIp` /
+  // `behindProxy` work on Bun. Never derived from spoofable headers.
+  const tagConnInfo = (
+    req: Request,
+    server: BunRequestIPServer | undefined,
+  ): void => {
+    const ip = server?.requestIP?.(req);
+    if (ip) {
+      setConnInfo(req, {
+        remoteAddress: ip.address,
+        remotePort: ip.port,
+        tls: servesTls,
+      });
+    }
+  };
   const cfg: Record<string, unknown> = {
     maxRequestBodySize: opts.maxRequestBodySize ?? 16 * 1024 * 1024,
     fetch: hasWs
       ? (
           req: Request,
-          server: {
+          server: BunRequestIPServer & {
             upgrade: (
               req: Request,
               opts?: { data?: unknown; headers?: HeadersInit },
             ) => boolean;
           },
         ) => {
+          tagConnInfo(req, server);
           if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
             return tryBunUpgrade(app, req, server);
           }
           return app.fetch(req);
         }
-      : (req: Request) => app.fetch(req),
+      : (req: Request, server: BunRequestIPServer) => {
+          tagConnInfo(req, server);
+          return app.fetch(req);
+        },
     error: (err: Error) => {
       // Last-resort handler reached only if app.fetch itself throws (it
       // normally catches everything). Log the error server-side but never
@@ -137,14 +177,41 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
   if (opts.tls) cfg.tls = opts.tls;
 
   const server = Bun.serve(cfg);
+  let stopped = false;
+  const stop = async () => {
+    if (stopped) return;
+    stopped = true;
+    await app.shutdown(opts.shutdownTimeoutMs ?? 10_000);
+    server.stop(true);
+  };
+  if (opts.handleSignals !== false) {
+    // Parity with the Node/Deno adapters: without this, SIGTERM on a rolling
+    // deploy hard-kills the process — in-flight requests are dropped and
+    // `onShutdown`/`onClose` hooks never run. Bun implements Node's
+    // `process` signal events, so the same wiring works.
+    const onSignal = (sig: string) => {
+      app.log.info({ sig }, "DaloyJS received signal, shutting down");
+      void stop().then(() => process.exit(0));
+    };
+    process.once("SIGTERM", () => onSignal("SIGTERM"));
+    process.once("SIGINT", () => onSignal("SIGINT"));
+  }
   return {
     port: server.port,
     url: server.url,
-    stop: async () => {
-      await app.shutdown();
-      server.stop(true);
-    },
+    stop,
   };
+}
+
+/**
+ * Minimal shape of the `Bun.serve` server object needed for peer-address
+ * lookup. `requestIP` is optional so old Bun versions (or test fakes)
+ * degrade to "no conn info" instead of throwing.
+ *
+ * @internal
+ */
+interface BunRequestIPServer {
+  requestIP?: (req: Request) => { address: string; port: number } | null;
 }
 
 // ---------- WebSocket integration ----------
