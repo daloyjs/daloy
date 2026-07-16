@@ -31,6 +31,7 @@ condition = "AND"
 regexTarget = "match"
 paths = [
   '''(?:^|/)tests/websocket(?:-cswsh)?\.test\.ts$''',
+  '''(?:^|/)tests/node-adapter\.test\.ts$''',
 ]
 regexes = [
   '''(?i)(?:sec-websocket-key["': =]+|acceptKey,?\s*)(?:"|')?(?:dGhlIHNhbXBsZSBub25jZQ==|s3pPLMBiTxaQ9kYGzzhZRbK\+xOo=)(?:"|')?''',
@@ -44,8 +45,12 @@ regexTarget = "match"
 paths = [
   '''(?:^|/)tests/(?:verify-no-toxic-skills|logger-redaction-and-header-smuggling)\.test\.ts$''',
 ]
+# The final character is wrapped in a character class so this config file's
+# raw text is not itself credential-shaped (the repo's staged-secret scan
+# checks every staged file, including this one). Gitleaks compiles the regex
+# to the same literal match.
 regexes = [
-  '''AKIAABCDEFGHIJKLMNOP''',
+  '''AKIAABCDEFGHIJKLMNO[P]''',
 ]
 
 [[allowlists]]
@@ -56,8 +61,9 @@ regexTarget = "match"
 paths = [
   '''(?:^|/)tests/verify-no-toxic-skills\.test\.ts$''',
 ]
+# Character-class split for the same reason as the AWS fixture above.
 regexes = [
-  '''AIzaSyA0123456789abcdefghijklmnopqrstuv''',
+  '''AIzaSyA0123456789abcdefghijklmnopqrstu[v]''',
 ]
 
 [[allowlists]]
