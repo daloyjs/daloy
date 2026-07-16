@@ -172,3 +172,28 @@ export function summary({ head, rows, align, highlight, mdAlign }) {
   const md = mdTable({ head, rows, align: mdAlign ?? align });
   return `${pretty}\n\n${c.dim("Markdown (paste into docs):")}\n${md}`;
 }
+
+// Render parity tiers (see common.mjs parityTiers()) as the primary,
+// rank-honest view of a result set: frameworks in the same tier are
+// statistically indistinguishable, so a table row being "first" inside a
+// tier is noise, not a win.
+//
+//   title:     metric label, e.g. "GET /static (req/s)"
+//   better:    "higher" | "lower" — echoed in the legend
+//   fmtValue:  formats each entry's value (default String)
+//   highlight: optional (name) => boolean; matches are emphasised
+export function renderTiers(tiers, { title, better = "higher", fmtValue = String, highlight } = {}) {
+  const lines = [
+    cOut.bold(`Parity tiers — ${title}`) +
+      cOut.dim(` (${better} is better; overlapping 95% CIs ⇒ same tier)`),
+  ];
+  tiers.forEach((tier, i) => {
+    const members = tier.map((e) => {
+      const name = highlight && highlight(e.name) ? cOut.bold(cOut.cyan(e.name)) : cOut.white(e.name);
+      const ci = e.ci95 != null ? cOut.dim(` ±${fmtValue(e.ci95)}`) : "";
+      return `${name} ${fmtValue(e.value)}${ci}`;
+    });
+    lines.push(`  ${cOut.bold(String(i + 1) + ".")} ${members.join(cOut.dim("  ·  "))}`);
+  });
+  return lines.join("\n");
+}

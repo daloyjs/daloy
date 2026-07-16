@@ -16,9 +16,9 @@ import { createHmac } from "node:crypto";
 import autocannon from "autocannon";
 import {
   resultsPath, orderTargets, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
+  startServer, killServer, waitForHealthy, stats, fmt, parityTiers, warnBenchEnvironment,
 } from "./lib/common.mjs";
-import { c, section, summary, fail, metric, metricsLine, sym } from "./lib/format.mjs";
+import { c, section, summary, fail, metric, metricsLine, sym, renderTiers } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
   { name: "daloy",    file: "servers/secured/daloy.ts" },
@@ -35,7 +35,7 @@ const args = parseArgs(process.argv);
 const ONLY = args.only ? new Set(args.only.split(",")) : null;
 const DURATION = Number(process.env.DURATION ?? 10);
 const WARMUP = Number(process.env.WARMUP ?? 15);
-const ITERATIONS = Number(process.env.ITERATIONS ?? 3);
+const ITERATIONS = Number(process.env.ITERATIONS ?? 5);
 const CONNECTIONS = Number(process.env.CONNECTIONS ?? 100);
 const PORT = 3590;
 
@@ -133,19 +133,30 @@ async function main() {
     }
   }
 
+  const ok = rows.filter((r) => r.results);
+  // Parity tiers first — the primary output; the ranked table is detail.
+  const tierBlocks = SCENARIOS.map((sc) => renderTiers(
+    parityTiers(ok.map((r) => {
+      const rps = r.results[sc.id].reqPerSec;
+      return { name: r.framework, value: rps.median, mean: rps.mean, ci95: rps.ci95 };
+    })),
+    { title: `${sc.title}, secured stack (req/s)`, fmtValue: fmt, highlight: (name) => name.includes("daloy") },
+  ));
+  console.log("\n" + tierBlocks.join("\n\n") + "\n");
+
+  const cell = (rps) => rps.ci95 != null ? `${fmt(rps.median)} ±${fmt(rps.ci95)}` : fmt(rps.median);
   const tableRows = [];
-  for (const r of rows) {
-    if (!r.results) continue;
+  for (const r of ok) {
     tableRows.push([
       r.framework,
-      fmt(r.results.static.reqPerSec.median),
-      fmt(r.results.dynamic.reqPerSec.median),
-      fmt(r.results.echo.reqPerSec.median),
+      cell(r.results.static.reqPerSec),
+      cell(r.results.dynamic.reqPerSec),
+      cell(r.results.echo.reqPerSec),
       r.results.static.latency.p99.toFixed(2),
     ]);
   }
-  console.log("\n" + summary({
-    head: ["Framework", "GET /static (req/s)", "GET /users/:id (req/s)", "POST /echo (req/s)", "p99 /static (ms)"],
+  console.log(summary({
+    head: ["Framework", "GET /static (req/s ±95% CI)", "GET /users/:id (req/s ±95% CI)", "POST /echo (req/s ±95% CI)", "p99 /static (ms)"],
     rows: tableRows,
     highlight: (row) => row[0].includes("daloy"),
   }) + "\n");

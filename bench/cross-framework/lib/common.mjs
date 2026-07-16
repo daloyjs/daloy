@@ -334,7 +334,24 @@ export async function waitForPortFree(port, { timeoutMs = 10_000 } = {}) {
   throw new Error(`Port ${port} did not become free within ${timeoutMs}ms.`);
 }
 
-// Population stats. Operates on a numeric array.
+// Two-tailed 95% Student's t critical values for df = 1..30; beyond that the
+// normal approximation (1.96) is close enough for a benchmark noise gauge.
+const T_95 = [
+  12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+  2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+  2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+];
+
+/**
+ * Population stats over a numeric array, plus `ci95`: the half-width of the
+ * two-sided 95% confidence interval of the mean (Student's t on the sample
+ * variance). `mean ± ci95` is the noise gauge every table renders; two
+ * frameworks whose intervals overlap are statistically indistinguishable at
+ * that sample size. `ci95` is `null` when fewer than 2 samples exist.
+ *
+ * @param {number[]} xs - Samples.
+ * @returns {{n: number, min?: number, max?: number, mean?: number, median?: number, stddev?: number, ci95?: (number|null)}}
+ */
 export function stats(xs) {
   if (xs.length === 0) return { n: 0 };
   const sorted = [...xs].sort((a, b) => a - b);
@@ -342,7 +359,11 @@ export function stats(xs) {
   const sum = sorted.reduce((a, b) => a + b, 0);
   const mean = sum / n;
   const median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
-  const variance = sorted.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
+  const sumSq = sorted.reduce((a, b) => a + (b - mean) ** 2, 0);
+  const variance = sumSq / n;
+  const ci95 = n < 2
+    ? null
+    : (n - 2 < T_95.length ? T_95[n - 2] : 1.96) * Math.sqrt(sumSq / (n - 1)) / Math.sqrt(n);
   return {
     n,
     min: sorted[0],
@@ -350,7 +371,81 @@ export function stats(xs) {
     mean,
     median,
     stddev: Math.sqrt(variance),
+    ci95,
   };
+}
+
+/**
+ * Group benchmark entries into parity tiers — the primary way to read a
+ * cross-framework table. Entries are sorted best-first by `value` (the
+ * headline estimator, usually the median), then walked in order: an entry
+ * joins the current tier when its 95% confidence interval (`mean ± ci95`)
+ * overlaps the tier leader's, i.e. when the two are statistically
+ * indistinguishable at this sample size. When `ci95` is unavailable (single
+ * sample), a ±`fallbackRelSpread` band around the value stands in.
+ *
+ * @param {Array<{name: string, value: number, mean?: number, ci95?: (number|null)}>} entries
+ *   One entry per framework. `value` ranks; `mean`/`ci95` define the interval.
+ * @param {object} [opts]
+ * @param {"higher"|"lower"} [opts.better] - Whether higher or lower values win. Default "higher".
+ * @param {number} [opts.fallbackRelSpread] - Relative half-width used when ci95 is null. Default 0.05.
+ * @returns {Array<Array<{name: string, value: number, mean?: number, ci95?: (number|null)}>>}
+ *   Tiers, best first; each tier keeps its entries in rank order.
+ */
+export function parityTiers(entries, { better = "higher", fallbackRelSpread = 0.05 } = {}) {
+  const ranked = [...entries].sort((a, b) => better === "lower" ? a.value - b.value : b.value - a.value);
+  const interval = (e) => {
+    const center = e.mean ?? e.value;
+    const half = e.ci95 ?? Math.abs(center) * fallbackRelSpread;
+    return [center - half, center + half];
+  };
+  const tiers = [];
+  let leader;
+  for (const e of ranked) {
+    if (leader) {
+      const [lo, hi] = interval(e);
+      const [llo, lhi] = interval(leader);
+      if (hi >= llo && lo <= lhi) {
+        tiers[tiers.length - 1].push(e);
+        continue;
+      }
+    }
+    tiers.push([e]);
+    leader = e;
+  }
+  return tiers;
+}
+
+/**
+ * Compile a TypeScript server entry to a self-contained plain-JS ESM file
+ * that plain `node` can spawn — no tsx, no on-the-fly transpile. Local
+ * relative imports are bundled in; every npm package (including the
+ * file:-linked `@daloyjs/core`, whose exports already point at `dist/*.js`)
+ * stays external and resolves through `node_modules` at runtime, exactly as
+ * a deployed compiled app would. Used by cold-start.mjs so the measured
+ * number is the compiled-JS cold start users actually ship, not the tsx
+ * dev-loader tax.
+ *
+ * @param {string} file - Server entry path relative to the bench root.
+ * @param {string} outDir - Directory the compiled `.mjs` is written into.
+ * @returns {Promise<string>} Absolute path to the compiled entry.
+ * @throws When esbuild fails to resolve or transform the entry.
+ */
+export async function compileServer(file, outDir) {
+  const esbuild = await import("esbuild");
+  const outfile = path.join(outDir, file.replace(/[\\/]/g, "__").replace(/\.[cm]?[jt]s$/, "") + ".mjs");
+  await esbuild.build({
+    entryPoints: [path.join(ROOT, file)],
+    outfile,
+    bundle: true,
+    packages: "external",
+    format: "esm",
+    platform: "node",
+    target: "node24",
+    sourcemap: false,
+    logLevel: "silent",
+  });
+  return outfile;
 }
 
 export function pct(xs, p) {

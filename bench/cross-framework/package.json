@@ -10,6 +10,7 @@
     "bench:sweep:conns": "node run.mjs --sweep=connections",
     "bench:sweep:pipe": "node run.mjs --sweep=pipelining",
     "bench:cold-start": "node cold-start.mjs",
+    "bench:cold-start:tsx": "node cold-start.mjs --mode=tsx",
     "bench:install-size": "node install-size.mjs",
     "bench:bundle-size": "node bundle-size.mjs",
     "bench:body-size": "node body-size-sweep.mjs",

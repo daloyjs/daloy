@@ -29,10 +29,10 @@ import {
   resultsPath, orderTargets, machineInfo, parseArgs,
   startServer, killServer,
   waitForHealthy, httpRequest,
-  stats, fmt, warnBenchEnvironment,
+  stats, fmt, parityTiers, warnBenchEnvironment,
 } from "./lib/common.mjs";
 import {
-  c, section, summary, fail, info, metric, metricsLine, sym, banner,
+  c, section, summary, fail, info, metric, metricsLine, sym, banner, renderTiers,
 } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
@@ -52,7 +52,9 @@ const args = parseArgs(process.argv);
 const ONLY = args.only ? new Set(args.only.split(",")) : null;
 const DURATION = Number(process.env.DURATION ?? 10);
 const WARMUP_SECONDS = Number(process.env.WARMUP ?? 15);
-const ITERATIONS = Number(process.env.ITERATIONS ?? 3);
+// 5 samples by default: enough for a meaningful 95% CI (t=2.776 at df=4)
+// without doubling the wall clock. Push to 10 for publication-grade numbers.
+const ITERATIONS = Number(process.env.ITERATIONS ?? 5);
 const PORT = 3456;
 
 const SWEEP = args.sweep ?? null;
@@ -184,7 +186,8 @@ async function benchOne(fw) {
           const label = (CONNECTION_POINTS.length > 1 || PIPELINING_POINTS.length > 1)
             ? `${sc.title} ${c.dim(`[c=${connections} p=${pipelining}]`)}` : sc.title;
           console.error(metricsLine(label, [
-            c.green(c.bold(fmt(summary.reqPerSec.median))) + c.dim(" req/s") + c.dim(` ±${fmt(summary.reqPerSec.stddev)}`),
+            c.green(c.bold(fmt(summary.reqPerSec.median))) + c.dim(" req/s") +
+              c.dim(summary.reqPerSec.ci95 != null ? ` ±${fmt(summary.reqPerSec.ci95)} (95% CI)` : ` ±${fmt(summary.reqPerSec.stddev)}`),
             metric("p50", summary.latency.p50.toFixed(2), { unit: "ms" }),
             metric("p99", summary.latency.p99.toFixed(2), { unit: "ms" }),
             metric("p99.9", summary.latency.p999.toFixed(2), { unit: "ms" }),
@@ -199,11 +202,17 @@ async function benchOne(fw) {
   }
 }
 
+// `median ±ci95` — the CI half-width is the run-to-run noise gauge; see
+// stats() in lib/common.mjs.
+function cell(rps) {
+  return rps.ci95 != null ? `${fmt(rps.median)} ±${fmt(rps.ci95)}` : fmt(rps.median);
+}
+
 function renderSummary(rows) {
   const pointKey = `c${CONNECTION_POINTS[0]}_p${PIPELINING_POINTS[0]}`;
   const head = [
-    "Framework", "GET /static (req/s)", "GET /users/:id (req/s)",
-    "POST /echo (req/s)", "p50 (ms)", "p99 (ms)", "p99.9 (ms)",
+    "Framework", "GET /static (req/s ±95% CI)", "GET /users/:id (req/s ±95% CI)",
+    "POST /echo (req/s ±95% CI)", "p50 (ms)", "p99 (ms)", "p99.9 (ms)",
   ];
   const tableRows = [];
   for (const r of rows) {
@@ -211,9 +220,9 @@ function renderSummary(rows) {
     if (!p) continue;
     tableRows.push([
       r.framework,
-      fmt(p.static.reqPerSec.median),
-      fmt(p.dynamic.reqPerSec.median),
-      fmt(p.echo.reqPerSec.median),
+      cell(p.static.reqPerSec),
+      cell(p.dynamic.reqPerSec),
+      cell(p.echo.reqPerSec),
       p.static.latency.p50.toFixed(2),
       p.static.latency.p99.toFixed(2),
       p.static.latency.p999.toFixed(2),
@@ -224,6 +233,29 @@ function renderSummary(rows) {
     rows: tableRows,
     highlight: (row) => row[0].includes("daloy"),
   });
+}
+
+// Parity tiers per scenario — the primary output. Ranked tables invite
+// reading a 1% gap as a win; tiers state which gaps are real at this sample
+// size and which are noise.
+function renderScenarioTiers(rows) {
+  const pointKey = `c${CONNECTION_POINTS[0]}_p${PIPELINING_POINTS[0]}`;
+  const blocks = [];
+  for (const sc of SCENARIOS) {
+    const entries = rows
+      .filter((r) => r.results?.[pointKey])
+      .map((r) => {
+        const rps = r.results[pointKey][sc.id].reqPerSec;
+        return { name: r.framework, value: rps.median, mean: rps.mean, ci95: rps.ci95 };
+      });
+    if (entries.length === 0) continue;
+    blocks.push(renderTiers(parityTiers(entries), {
+      title: `${sc.title} (req/s)`,
+      fmtValue: fmt,
+      highlight: (name) => name.includes("daloy"),
+    }));
+  }
+  return blocks.join("\n\n");
 }
 
 async function main() {
@@ -247,7 +279,8 @@ async function main() {
   }
 
   const ok = rows.filter((r) => r.results);
-  console.log("\n" + renderSummary(ok) + "\n");
+  console.log("\n" + renderScenarioTiers(ok) + "\n");
+  console.log(renderSummary(ok) + "\n");
   console.log(
     c.dim(
       "Note: orange-to-apple. daloy validates request + response against Zod\n" +

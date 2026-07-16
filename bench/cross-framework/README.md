@@ -37,9 +37,9 @@ For each framework, a minimal HTTP server exposing the same three endpoints:
 Each server is hit by [autocannon](https://github.com/mcollina/autocannon) on
 `localhost`:
 
-- 1 warmup run (5s, 100 connections) — discarded.
-- 3 measurement runs (10s each, 100 connections, 1 pipelining).
-- Mean req/sec and p99 latency reported across the 3 runs.
+- 1 warmup run (15s, 100 connections) — discarded.
+- 5 measurement runs (10s each, 100 connections, 1 pipelining).
+- Median req/sec (±95% CI of the mean) and median p99 latency across the runs.
 
 The runner spawns each server as a child process, polls `GET /static` until
 the server responds, runs autocannon, kills the process, then moves on. No
@@ -97,8 +97,9 @@ variants:
 
 ```bash
 cd bench/cross-framework
+nvm use        # Node 24 (.nvmrc) — the version baseline numbers are produced on
 pnpm install   # installs all framework deps in this folder only
-node run.mjs   # ~5 min wall time for all 8 frameworks
+node run.mjs   # ~35 min wall time for the full matrix (15s warmup + 5×10s per scenario)
 ```
 
 To run a subset:
@@ -147,8 +148,8 @@ output away from real results).
 
 | Script                 | Measures                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run.mjs`              | Throughput + p50/p75/p90/p99/p99.9 latency. Supports `--sweep=connections` and `--sweep=pipelining`. Correctness preflight before measuring.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `cold-start.mjs`       | Wall-clock from process `spawn()` to first `200 OK`, averaged over N iterations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `run.mjs`              | Throughput + p50/p75/p90/p99/p99.9 latency. Supports `--sweep=connections` and `--sweep=pipelining`. Correctness preflight before measuring. Prints per-scenario **parity tiers** as the primary output (see methodology).                                                                                                                                                                                                                                                                                                                                                                                          |
+| `cold-start.mjs`       | Wall-clock from process `spawn()` to first `200 OK` over N iterations. Default `--mode=compiled`: each server is precompiled to plain JS (esbuild, npm packages external) and spawned with bare `node`, so the number is the compiled-JS cold start a deployed app pays — compile time is not counted. `--mode=tsx` measures the dev-workflow path instead (tsx loader, transpile on boot); the two modes are not comparable and the results file records which one ran.                                                                                                                                            |
 | `install-size.mjs`     | `node_modules` footprint per framework: own size + transitive size + direct + transitive dep counts. Reports two variants per framework: `minimal` (router/runtime only) and `secure parity` (adds helmet/secure-headers, CORS, rate-limit, HS256 JWT). Daloy and Hono's two rows are identical because those guards ship in-package; every other framework grows. pnpm-aware: walks the `.pnpm/` store so transitive deps under symlinked locations are counted. Optional peer deps (e.g. NestJS's class-validator, class-transformer, websockets) are skipped.                                                    |
 | `bundle-size.mjs`      | esbuild ESM bundle of a minimal "hello world" app, raw and gzipped. Reports two variants per framework: `minimal` (bare router) and `secure parity` (request-id, secure headers, CORS allowlist, rate-limit hook, HS256 JWT verify). Daloy ships those guards in core; every other framework requires opt-in middleware, so compare the secure-parity rows to each other for an honest edge/serverless number. The minimal rows are router-only baselines, not production bundles. NestJS optional peer deps (class-validator, class-transformer, websockets, microservices, platform-express) are marked external. |
 | `body-size-sweep.mjs`  | POST throughput across body sizes {100 B, 1 KiB, 16 KiB, 256 KiB, 1 MiB, 4 MiB}.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -196,19 +197,31 @@ node logging.mjs --only=daloy,hono
 Run the full set sequentially:
 
 ```bash
-pnpm bench:all   # ~25–40 min wall time depending on the matrix
+pnpm bench:all   # ~60–90 min wall time depending on the matrix
 ```
 
 ### Methodology notes (apply to all scripts)
 
 - **Long warmup, then measure.** `run.mjs` defaults to a 15s warmup so V8
   has time to tier up to TurboFan. Override with `WARMUP=30`.
-- **Multiple iterations, median + stddev.** Mean alone hides outliers.
-  Defaults: 3 iterations of 10s each. Override with `ITERATIONS=5
-DURATION=20`. Aggregated latency percentiles (p50…p99.9) are the **median**
-  across iterations, not the mean — averaging tail percentiles lets one bad
-  iteration drag the headline number. Raw per-iteration values stay in
-  `samples`.
+- **Multiple iterations, median + 95% CI.** Mean alone hides outliers.
+  Defaults: 5 iterations of 10s each (enough samples for a meaningful
+  confidence interval; push to `ITERATIONS=10 DURATION=20` for
+  publication-grade numbers). Aggregated latency percentiles (p50…p99.9) are
+  the **median** across iterations, not the mean — averaging tail percentiles
+  lets one bad iteration drag the headline number. Raw per-iteration values
+  stay in `samples`.
+- **Confidence intervals on every aggregate.** `stats()` records `ci95`, the
+  half-width of the two-sided 95% confidence interval of the mean (Student's
+  t on the sample variance). Tables render it as `median ±ci95`: the ± is the
+  run-to-run noise gauge, and two frameworks whose intervals overlap are
+  statistically indistinguishable at that sample size.
+- **Parity tiers are the primary output.** `run.mjs`,
+  `middleware-stack.mjs`, and `cold-start.mjs` print tiers before the ranked
+  table: frameworks are walked best-first and grouped while their 95% CIs
+  overlap the tier leader's. Being "first" *inside* a tier is noise, not a
+  win — only tier boundaries are real differences. The ranked table remains
+  as detail.
 - **Shuffled framework order.** Each run executes frameworks in a random
   order so nobody systematically benefits from running first (cool machine)
   or last (thermal throttle); repeated runs average position effects out.
@@ -259,19 +272,27 @@ DURATION=20 CONNECTIONS=200 node run.mjs
 
 `run.mjs` writes a `results.json` next to this README (all scripts write
 their `results.*.json` here unless `BENCH_RESULTS_DIR` overrides it) and
-prints a markdown table:
+prints per-scenario parity tiers followed by a markdown table:
 
 ```
-| Framework  | GET /static (req/s) | GET /users/:id (req/s) | POST /echo (req/s) | p99 (ms) /static |
-| ---------- | ------------------: | ---------------------: | -----------------: | ---------------: |
-| daloy      |             123,456 |                111,222 |             88,777 |             1.21 |
-| hono       |                 ... |                    ... |                ... |              ... |
+Parity tiers — GET /static (req/s) (higher is better; overlapping 95% CIs ⇒ same tier)
+  1. hono 125,001 ±2,113  ·  daloy-bare 123,456 ±1,890
+  2. fastify 101,300 ±955
+...
+
+| Framework  | GET /static (req/s ±95% CI) | GET /users/:id (req/s ±95% CI) | ... |
+| ---------- | --------------------------: | -----------------------------: | --- |
+| daloy      |              123,456 ±1,890 |                 111,222 ±1,404 | ... |
+| hono       |                         ... |                            ... | ... |
 ...
 ```
 
-Reproducible: pin Node version (`.nvmrc`), install with the committed
-`pnpm-lock.yaml` (`pnpm install --frozen-lockfile`), and run on a quiet
-machine with `--max-old-space-size` left at default. The recorded
+Reproducible: the committed [`.nvmrc`](.nvmrc) pins **Node 24** — the
+framework's supported floor and the version baseline numbers are produced
+on (`nvm use` before benchmarking; the harness itself runs on any Node
+≥ 24, and `machine.node` records what actually ran). Install with the
+committed `pnpm-lock.yaml` (`pnpm install --frozen-lockfile`), and run on a
+quiet machine with `--max-old-space-size` left at default. The recorded
 `machine.gitSha` / `machine.gitDirty` / `machine.depVersions` fields tell
 you whether two results files are actually comparable.
 

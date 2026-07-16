@@ -45,7 +45,7 @@ const args = parseArgs(process.argv);
 const ONLY = args.only ? new Set(args.only.split(",")) : null;
 const DURATION = Number(process.env.DURATION ?? 10);
 const WARMUP = Number(process.env.WARMUP ?? 15);
-const ITERATIONS = Number(process.env.ITERATIONS ?? 3);
+const ITERATIONS = Number(process.env.ITERATIONS ?? 5);
 const CONNECTIONS = Number(process.env.CONNECTIONS ?? 100);
 const PORT = 3595;
 const DEFAULT_LOG_DEST = process.platform === "win32" ? "NUL" : "/dev/null";
