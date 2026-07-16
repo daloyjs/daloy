@@ -15,6 +15,74 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Changed
+
+- **The toolchain now builds on TypeScript 7** (`typescript@7.0.2`, the
+  native compiler). Full `pnpm typecheck` across all three projects and the
+  `dist/` build each complete in under two seconds locally. Published
+  packages are unaffected: `@daloyjs/core` ships pre-compiled `.js` and
+  `.d.ts`, so projects consuming the framework on TypeScript 5.5 or 6 keep
+  working unchanged.
+- **Every `create-daloy` template and the workshop now scaffold with
+  `typescript@^7.0.2`**, so new projects get native compiler speeds out of
+  the box. (The docs site stays on TypeScript 6 until Next.js can run on the
+  new compiler API planned for TypeScript 7.1.)
+- **`@hey-api/openapi-ts` is pinned to `0.0.0-next-20260711024907`** — the
+  first build that runs without the TypeScript compiler API, which
+  TypeScript 7 no longer ships (0.99.0 crashes under TS7). Generated client
+  output is byte-for-byte identical to 0.99.0's. Applies to the root,
+  workshop, and the `node-basic` / `bun-basic` templates; switch to
+  `^0.100.0` when the stable Hey API release is published and has cleared
+  the 24h release-age cooldown.
+
+### Fixed
+
+- **Node adapter no longer drops all but the last `Set-Cookie` header.**
+  `Headers.forEach` yields each `Set-Cookie` value separately while
+  `ServerResponse.setHeader` overwrites repeated keys, so a response that set
+  more than one cookie (the common `session()` + `csrf()` pairing) silently
+  delivered only the last one. The adapter now collects cookies via
+  `getSetCookie()` and writes them as one array, emitting every cookie as its
+  own header line. Regression tests cover the multi-cookie and single-cookie
+  paths.
+- **A malformed `Host` header on a WebSocket upgrade no longer crashes the
+  Node process.** Node's HTTP parser accepts `Host` values that WHATWG URL
+  parsing rejects (e.g. containing a space); the upgrade path built a URL from
+  that header outside any try/catch and discarded the promise, so one bad
+  upgrade request became an unhandled rejection — fatal under the production
+  crash-on-unhandledRejection posture. The upgrade path now answers `400 Bad
+  Request` and a call-site catch backstops any future throw.
+- **Lambda adapter answers malformed events with `400` problem+json.** An
+  event whose host/path cannot form a valid URL previously threw out of the
+  handler, which API Gateway surfaces as an opaque `502`.
+
+### Added
+
+- **Bun adapter graceful shutdown.** `serve()` from `@daloyjs/core/bun` now
+  listens for `SIGTERM` / `SIGINT` by default (parity with the Node and Deno
+  adapters), drains `app.shutdown()` hooks, and stops the Bun server — rolling
+  deploys no longer hard-kill in-flight requests. New `handleSignals` (default
+  `true`) and `shutdownTimeoutMs` (default `10000`) options mirror the Node
+  adapter, and `handle.stop()` is idempotent.
+- **create-daloy enforces a pnpm >= 11 floor for pnpm scaffolds.** The CLI now
+  injects `engines.pnpm: ">=11.0.0"` into pnpm projects (pnpm always enforces
+  the project's `engines.pnpm` at install time) and warns during scaffolding
+  when the installed pnpm is older — matching the existing npm >= 12 floor for
+  npm scaffolds. The floor is security-relevant: pnpm older than 11 silently
+  ignores the `minimumReleaseAge` setting in the generated
+  `pnpm-workspace.yaml`, quietly disabling the 24-hour release-age cooldown.
+  Templates still ship without any package-manager engine floor so yarn/bun
+  projects inherit nothing irrelevant.
+- **Adapters now fulfil the conn-info contract.** The Node, Bun, Deno, and
+  Lambda adapters attach the immediate peer address (`setConnInfo`) before
+  dispatch, so `getConnInfo()`, `readRemoteAddress()`, `readRemotePort()`,
+  `resolveClientIp()`, the `behindProxy` posture, and WAF client-IP audit
+  attribution now return real data on those runtimes (Node: TCP socket; Bun:
+  `server.requestIP()`; Deno: the serve handler's `remoteAddr`; Lambda: API
+  Gateway `sourceIp`). The pure edge delegators (Cloudflare, Vercel, Fastly)
+  expose no peer socket; on those platforms client addresses continue to
+  arrive via platform headers governed by `behindProxy` / `trustProxyHeaders`.
+
 ## [1.0.0-rc.4] - 2026-07-12
 
 ### Fixed

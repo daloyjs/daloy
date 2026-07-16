@@ -66,7 +66,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Portable supply-chain hardening** for the apps you build | [pnpm](https://pnpm.io/motivation) defaults + a zero-runtime-dep core | Hardened `.npmrc`, source-verified lockfiles, zero runtime deps, CycloneDX + SPDX SBOM, and npm provenance attestations.                                                                                  |
 
 ```
-framework test suite passing · ≥90% line + function coverage / ≥90% branch coverage · typechecks on TypeScript 6 with `strict: true`
+framework test suite passing · ≥90% line + function coverage / ≥90% branch coverage · typechecks on TypeScript 7 with `strict: true`
 runs on Node, Bun, Deno, Cloudflare, Vercel
 ~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
 ```
@@ -686,13 +686,13 @@ The framework refuses to start (or to construct) when configuration is unsafe:
 
 - Plugin encapsulation (Fastify-style), decorators, structured logging, request-id propagation.
 - Lifecycle events: `onPluginInstalled`, `onShutdown`, `onClose`.
-- Connection-draining graceful shutdown with `Connection: close` on `503` and in-flight responses.
+- Connection-draining graceful shutdown with `Connection: close` on `503` and in-flight responses; the Node, Bun, and Deno adapters all wire it to `SIGTERM`/`SIGINT` by default.
 - `crashOnUnhandledRejection` default-on in production.
 - `app.healthcheck()` / `app.readinesscheck()` primitives with bearer-token auth and per-IP rate limit.
 - `disconnectStatusCode: 499` default for client-aborted requests.
 - `defineConfig({ schema, source })` boot-time typed configuration validation.
 - `app({ behindProxy })` declarative model (replaces `trustProxy`); `behindProxy.hops` collapses to the `(N+1)`-from-rightmost slot.
-- Adapter-independent `ConnInfo` abstraction: `getConnInfo()`, lazy `ctx.remoteAddress`, `ctx.remotePort`.
+- Adapter-independent `ConnInfo` abstraction: `getConnInfo()`, lazy `ctx.remoteAddress`, `ctx.remotePort` — populated by the Node, Bun, Deno, and Lambda adapters from the real peer socket / event source, never from spoofable headers.
 - `daloy doctor` production-posture validator with `--audit-secrets` and `--audit-defaults` (flags wildcard-credentials CORS, > 24h CORS `maxAge`, > 25 MiB blanket body limits, zero `idleTimeoutMs` in production, and unsafe opt-ins).
 - PSL-aware `subdomains()` helper with a `≤ 90 days` snapshot guard.
 - Secure-by-default multitenancy via `tenancy()` + `tenantScope()`: pluggable tenant resolution (subdomain / header / path / JWT claim / custom), refuse-unresolved + format-validated ids + no-enumeration `404` by default, and a key helper that partitions `rateLimit` / `concurrencyLimit` / `idempotency` / `responseCache` per tenant.
