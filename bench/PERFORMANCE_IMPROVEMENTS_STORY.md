@@ -2,7 +2,8 @@
 
 Living notes for benchmarking methodology and hot-path work on `@daloyjs/core`.
 Run micro-benches before and after changes (`pnpm bench`, `pnpm bench:serverless`,
-`pnpm bench:json`, `pnpm bench:json-e2e`). For cross-framework HTTP numbers use
+`pnpm bench:json`, `pnpm bench:json-e2e`, `pnpm bench:ablation`). For
+cross-framework HTTP numbers use
 `bench/cross-framework/` on Node 24 (`.nvmrc`), on AC power, with a raised
 `ulimit -n`.
 
@@ -39,10 +40,17 @@ v26.4.0 (early micro) as recorded per run.
 
 ### In-process dispatch ablation (dist `App.fetch`, no HTTP)
 
-> **Caveat:** these ablation numbers were measured with throwaway scripts —
-> no checked-in harness, raw samples, or before/after SHAs exist yet (see
-> the gaps table below). Treat the deltas as indicative until a
-> reproducible `bench/ablation` script lands.
+> **Caveat:** the numbers in the two tables below were measured with
+> throwaway scripts before a checked-in harness existed, so they carry no
+> raw samples or SHAs. A reproducible harness now lives at
+> `bench/ablation.bench.ts` (`pnpm bench:ablation`): it runs the same config
+> matrix (plus sync-vs-async bare handlers) against in-process
+> `app.fetch` on `GET /static`, interleaves configs across rounds, reports
+> the median across rounds, and writes raw samples + Node version, git SHA
+> (with dirty flag), and machine info to `bench/results.ablation.json`
+> (gitignored). Prefer `pnpm build` first — it benches `dist/` when built
+> (like the tables below) and falls back to `src/` via tsx, recording which
+> one ran as `moduleSource`. Re-run it before quoting these deltas.
 
 Before this pass’s hot-path tweaks:
 
@@ -137,17 +145,17 @@ Earlier hot-path work (still load-bearing — do not regress):
 
 ### Gaps / improvements
 
-| Gap                                                                  | Why it matters                                                                                                                        | Suggested fix                                                                                    |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Missing `PERFORMANCE_IMPROVEMENTS_STORY.md` (was linked from README) | Agents/humans had no history                                                                                                          | This file                                                                                        |
-| Ablation numbers not reproducible                                    | The in-process dispatch tables above have no checked-in script, raw samples, or before/after SHAs — they are assertions, not evidence | Add a `bench/ablation` script that records Node version, git SHA, config matrix, and raw samples |
-| Throughput servers use `async` handlers for pure sync work           | ~15% self-inflicted on Daloy; others often sync                                                                                       | Prefer sync handlers in `servers/throughput/*` where types allow                                 |
-| Orange-to-apple still easy to misread                                | Marketing tables quote bare routers vs full Daloy                                                                                     | Always lead with **parity tiers** + `daloy-bare` row; document in README claim                   |
-| No pin of “quiet machine” gate                                       | High loadAvg makes ±10% noise                                                                                                         | Fail or warn when `loadAvg[0] > cpuCount`                                                        |
-| Full matrix ~35–90 min                                               | Discourages pre-merge runs                                                                                                            | Keep `smoke.mjs`; add `bench:ci` subset (daloy, daloy-bare, hono, fastify, 1 iter / 3s)          |
-| Client is autocannon only                                            | Fine for HTTP; fetch-based scripts understate concurrency fairness                                                                    | Keep autocannon for publish; document client                                                     |
-| Multi-runtime not in matrix                                          | Bun/Deno numbers differ                                                                                                               | Optional `RUNTIME=bun` note already in README — add one scheduled Bun pass                       |
-| Router micro-bench in root README                                    | Not comparable to HTTP                                                                                                                | Keep disclaimer; prefer cross-framework for claims                                               |
+| Gap                                                                  | Why it matters                                                                                                                        | Suggested fix                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Missing `PERFORMANCE_IMPROVEMENTS_STORY.md` (was linked from README) | Agents/humans had no history                                                                                                          | This file                                                                                                                                                                                                                                        |
+| Ablation numbers not reproducible                                    | The in-process dispatch tables above have no checked-in script, raw samples, or before/after SHAs — they are assertions, not evidence | **Fixed:** `bench/ablation.bench.ts` (`pnpm bench:ablation`) runs the config matrix and records Node version, git SHA + dirty flag, machine info, and raw samples to `bench/results.ablation.json`; the historical tables above still predate it |
+| Throughput servers use `async` handlers for pure sync work           | ~15% self-inflicted on Daloy; others often sync                                                                                       | Prefer sync handlers in `servers/throughput/*` where types allow                                                                                                                                                                                 |
+| Orange-to-apple still easy to misread                                | Marketing tables quote bare routers vs full Daloy                                                                                     | Always lead with **parity tiers** + `daloy-bare` row; document in README claim                                                                                                                                                                   |
+| No pin of “quiet machine” gate                                       | High loadAvg makes ±10% noise                                                                                                         | Fail or warn when `loadAvg[0] > cpuCount`                                                                                                                                                                                                        |
+| Full matrix ~35–90 min                                               | Discourages pre-merge runs                                                                                                            | Keep `smoke.mjs`; add `bench:ci` subset (daloy, daloy-bare, hono, fastify, 1 iter / 3s)                                                                                                                                                          |
+| Client is autocannon only                                            | Fine for HTTP; fetch-based scripts understate concurrency fairness                                                                    | Keep autocannon for publish; document client                                                                                                                                                                                                     |
+| Multi-runtime not in matrix                                          | Bun/Deno numbers differ                                                                                                               | Optional `RUNTIME=bun` note already in README — add one scheduled Bun pass                                                                                                                                                                       |
+| Router micro-bench in root README                                    | Not comparable to HTTP                                                                                                                | Keep disclaimer; prefer cross-framework for claims                                                                                                                                                                                               |
 
 ## Safe future optimisations (do not weaken security)
 
@@ -163,6 +171,9 @@ Ranked by expected impact vs risk:
 ```sh
 # Micro
 pnpm bench && pnpm bench:serverless && pnpm bench:json && pnpm bench:json-e2e
+
+# Dispatch ablation (build first so it benches dist, like the tables above)
+pnpm build && pnpm bench:ablation
 
 # Cross-framework (Node 24, plugged in)
 cd bench/cross-framework
