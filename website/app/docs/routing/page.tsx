@@ -433,9 +433,9 @@ app.route({
       <h2 id="performance">Performance</h2>
       <CodeBlock
         language="text"
-        code={`static route lookup        12,363,799 ops/sec
-dynamic 4-segment lookup    1,513,983 ops/sec
-miss                        4,763,878 ops/sec`}
+        code={`static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec`}
       />
     </>
   );
