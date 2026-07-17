@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../../components/code-block";
 import { FlowDiagram } from "../../../../components/diagram";
+import { UseCaseGuide } from "../../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -38,6 +39,21 @@ export default function Page() {
         <code>CompressionStream</code> API instead of a Node-only compression
         package.
       </p>
+
+      <UseCaseGuide
+        featureName="Compression middleware"
+        recommendation="Use compression when serving large text-based responses (HTML, JSON, SVG) directly to clients without an intermediate CDN or reverse proxy doing it for you. Do not compress small responses or payloads that are already compressed (like images or PDFs)."
+        whenToUse={[
+          "Serving large, text-heavy responses (HTML, JSON, XML, SVG) over 1KB in size.",
+          "Direct-to-origin API traffic that bypasses caching CDNs or API gateways.",
+          "Deploying to serverless environments (like AWS Lambda, Deno Deploy, or Cloudflare Workers) that do not compress origin responses by default.",
+        ]}
+        whenNotToUse={[
+          "When a CDN (such as Cloudflare, Fastly, or Vercel Edge) or reverse proxy (NGINX) fronting the app is already configured to compress responses (doing it in the application wastefully consumes CPU).",
+          "For response payloads under 1KB, where compression overhead makes the response larger or yields negligible gains.",
+          "For binary or pre-compressed content types (PNG, JPEG, PDF, ZIP, WOFF2), which are already optimized.",
+        ]}
+      />
 
       <CodeBlock
         code={`import { App, compression } from "@daloyjs/core";

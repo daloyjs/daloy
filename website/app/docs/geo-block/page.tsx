@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
 import { FlowDiagram } from "../../../components/diagram";
+import { UseCaseGuide } from "../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -58,6 +59,21 @@ export default function Page() {
           network guards.
         </li>
       </ul>
+
+      <UseCaseGuide
+        featureName="Geo-blocking middleware (geoBlock)"
+        recommendation="Use geoBlock when you need region-specific compliance, licensing enforcement, or region-targeted threat mitigation inside your application logic. Prefer configuring geo-blocking at the CDN edge (Cloudflare/Fastly) if you want to block traffic before it hits your server resources."
+        whenToUse={[
+          "Enforcing compliance with local laws, trade embargoes, or licensing/distribution agreements (e.g. video streaming regions).",
+          "Targeting region-specific spam, abuse, or scanning activity by blocking traffic from countries where you have no business presence.",
+          "Reading edge headers (like CF-IPCountry or x-vercel-ip-country) to quickly restrict access with near-zero latency.",
+        ]}
+        whenNotToUse={[
+          "When your CDN or DNS provider (Cloudflare, CloudFront, Route 53) can block requests or route traffic more efficiently at the edge (saving bandwidth and origin compute).",
+          "For generic public APIs where global accessibility is expected and IP addresses frequently migrate across regions.",
+          "When you do not have a reliable upstream country-header or a regularly updated local GeoIP database (outdated lookups block legitimate users).",
+        ]}
+      />
 
       <FlowDiagram
         title="Country decision"

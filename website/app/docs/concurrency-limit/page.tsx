@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
 import { FlowDiagram } from "../../../components/diagram";
+import { UseCaseGuide } from "../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -36,6 +37,21 @@ export default function Page() {
         pressure, <code>concurrencyLimit()</code> bounds the number of requests{" "}
         <strong>in flight through a given surface</strong>.
       </p>
+
+      <UseCaseGuide
+        featureName="Concurrency limit middleware"
+        recommendation="Use concurrency limits to protect downstream resources (like databases or third-party APIs) and high-compute CPU operations from exhaustion under heavy load. Avoid limiting standard, lightweight I/O operations."
+        whenToUse={[
+          "Gating resource-heavy tasks like PDF generation, video transcoding, or large-scale data processing.",
+          "Endpoints querying databases with small connection pools or calling rate-limited external services.",
+          "Shedding load under sudden traffic spikes to prioritize system stability over serving every client immediately.",
+        ]}
+        whenNotToUse={[
+          "Standard lightweight, highly-scalable I/O endpoints (like returning a user profile or configuration metadata).",
+          "When autoscaling (such as Kubernetes KEDA or serverless scaling) is configured to handle the load dynamically.",
+          "Where client-side queuing or throttling is already implemented and sufficient.",
+        ]}
+      />
       <p>Each request:</p>
       <ul>
         <li>

@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../../components/code-block";
 import { FlowDiagram } from "../../../../components/diagram";
+import { UseCaseGuide } from "../../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -48,6 +49,21 @@ export default function Page() {
         which handed back short-lived IAM credentials and pivoted into the
         startup&rsquo;s S3 buckets.
       </p>
+
+      <UseCaseGuide
+        featureName="SSRF guard (fetchGuard)"
+        recommendation="Use fetchGuard to wrap outbound fetch calls that request user-controlled, dynamic URLs (such as avatar URLs, webhook endpoints, or url imports). Never wrap requests going to hardcoded, static internal services or known, trusted third-party APIs."
+        whenToUse={[
+          "Fetching resources (avatars, images, attachments) directly from user-supplied URLs.",
+          "Calling user-configured webhooks or callbacks from your application backend.",
+          "Parsing arbitrary links or URLs for rich embed previews ('unfurling').",
+        ]}
+        whenNotToUse={[
+          "Making static outbound API requests to known, trusted external services (e.g. Stripe, SendGrid) where URLs are entirely controlled by your code.",
+          "Communicating with internal microservices, databases, or mesh endpoints (where private IP spaces like 10.0.0.x are expected and must be accessible).",
+          "High-performance proxying where you explicitly intend to relay traffic to arbitrary destinations and DNS resolution is cached separately.",
+        ]}
+      />
       <FlowDiagram
         title="What every guarded fetch goes through"
         steps={[

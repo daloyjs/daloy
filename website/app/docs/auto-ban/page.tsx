@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
 import { FlowDiagram } from "../../../components/diagram";
+import { UseCaseGuide } from "../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -40,6 +41,21 @@ export default function Page() {
         so a one-off burst is forgiven while a persistent attacker is locked out
         for progressively longer. It is dependency-free and runtime-portable.
       </p>
+
+      <UseCaseGuide
+        featureName="Adaptive auto-ban middleware"
+        recommendation="Use adaptive auto-ban to defend critical authentication, sign-up, or high-cost public endpoints against automated brute-force attacks and scrapers. Do not rely on it as a primary defense for apps already shielded by edge-level web application firewalls (WAFs)."
+        whenToUse={[
+          "Protecting credential entry (login, password reset) and signup endpoints against dictionary/brute-force attacks.",
+          "Mitigating scraping attempts on public catalog endpoints or content feeds.",
+          "Limiting aggressive bot probing for vulnerable paths (e.g., searching for /.env or /wp-admin).",
+        ]}
+        whenNotToUse={[
+          "When your hosting platform or CDN (Cloudflare, AWS WAF, Fastly) already handles IP-level rate-limiting and blocking at the edge (edge blocking is far more resource-efficient).",
+          "For endpoints consumed by trusted internal clients or automated partner services sharing the same IP address (risks banning a corporate proxy).",
+          "Behind proxies without configuring proper client IP attribution headers (can lead to banning all users on a shared proxy).",
+        ]}
+      />
 
       <FlowDiagram
         title="Per-request decision"

@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
 import { BranchDiagram } from "../../../components/diagram";
+import { UseCaseGuide } from "../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -49,6 +50,22 @@ export default function Page() {
         Web-standard <code>Request</code>/<code>Response</code>, so it runs
         unchanged on Node, Bun, Deno, and Cloudflare Workers.
       </p>
+
+      <UseCaseGuide
+        featureName="Response caching middleware"
+        recommendation="Use server-side response caching for public, high-read, and computationally expensive GET/HEAD endpoints. Never cache personalized, authenticated, or mutative requests, as this risks leaking sensitive session details between users."
+        whenToUse={[
+          "Public, non-personalized read endpoints (e.g., product lists, public profiles, configuration feeds).",
+          "Handlers that perform expensive database operations, complex calculations, or third-party API fetches.",
+          "GET or HEAD endpoints with high request volumes where responses change infrequently.",
+        ]}
+        whenNotToUse={[
+          "Personalized, user-specific data (e.g., /me, dashboard, checkout pages, billing history) to prevent cross-user data leakage.",
+          "Mutative requests (POST, PUT, PATCH, DELETE) which perform side-effects.",
+          "Real-time data feeds (e.g., live stock prices, chat messages) where any latency is unacceptable.",
+          "Endpoints that carry high-entropy security tokens in headers or response bodies.",
+        ]}
+      />
 
       <h2 id="quick-start">Quick start</h2>
       <p>

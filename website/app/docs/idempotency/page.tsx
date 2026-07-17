@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
 import { SequenceDiagram } from "../../../components/diagram";
+import { UseCaseGuide } from "../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -44,6 +45,21 @@ export default function Page() {
         The behavior mirrors the IETF <em>Idempotency-Key HTTP Header Field</em>{" "}
         draft and the conventions used by major payment processors.
       </p>
+
+      <UseCaseGuide
+        featureName="Idempotency middleware"
+        recommendation="Use idempotency keys for mutative and non-idempotent HTTP methods (POST, PUT, PATCH, DELETE) that perform critical operations like processing payments or updating state. Never require them for safe read-only requests (GET, HEAD, OPTIONS)."
+        whenToUse={[
+          "Critical state-mutating actions where duplicate execution causes business errors (e.g., payments, bank transfers, ticket bookings, creating orders).",
+          "API endpoints exposed to clients on unstable networks (mobile apps, webhooks) that will automatically retry failed requests.",
+          "Any POST/PUT/PATCH/DELETE handler where exactly-once execution is a business constraint.",
+        ]}
+        whenNotToUse={[
+          "Safe HTTP methods (GET, HEAD, OPTIONS, TRACE), which are naturally idempotent and should never change state.",
+          "Non-critical operations where duplicates are harmless (e.g., logging analytic events, page views, search inputs).",
+          "High-frequency low-impact state updates where retries can naturally overwrite state (e.g., updating user cursor positions, simple read counts).",
+        ]}
+      />
 
       <h2 id="quick-start">Quick start</h2>
       <p>

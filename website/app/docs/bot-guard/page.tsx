@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
 import { FlowDiagram } from "../../../components/diagram";
+import { UseCaseGuide } from "../../../components/use-case-guide";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -57,6 +58,21 @@ export default function Page() {
         Every check is opt-in and allowlist-friendly, and the middleware is
         dependency-free and runtime-portable.
       </p>
+
+      <UseCaseGuide
+        featureName="Bot Guard (botGuard)"
+        recommendation="Use botGuard to block simple automated scrapers, headless tools, or spoofed search crawlers at the application layer. Avoid using it as a replacement for commercial Edge WAFs when dealing with high-volume DDoS or sophisticated scraping operations."
+        whenToUse={[
+          "Blocking basic automated scripts, vulnerability scanners, and web scrapers that send requests with empty or generic User-Agents.",
+          "Verifying legitimate search engine crawlers (Googlebot, Bingbot) to prevent attackers from spoofing search engine traffic.",
+          "Protecting content-heavy endpoints (documentation, blogs, product catalogs) from being harvested by unauthorized scraper bots.",
+        ]}
+        whenNotToUse={[
+          "When edge-level protections (e.g. Cloudflare Bot Management) are already active and configured to block automated traffic before it reaches your origins.",
+          "For endpoints that are designed to be consumed by headless API integrations or developers running custom command-line scripts (e.g. curl, postman).",
+          "If DNS resolution is slow or restricted in your runtime (the DNS lookup needed to verify Googlebot/Bingbot can add latency to those requests).",
+        ]}
+      />
 
       <FlowDiagram
         title="Decision order"
