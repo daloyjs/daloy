@@ -568,6 +568,15 @@
   animation-delay: -3s;
 }
 
+.contract-flow-visual {
+  /* Same guard as .interactive-flow: the visual's infinite path sheens, band
+     sweep, and SMIL sparks keep invalidating style/paint for the lifetime of
+     the tab otherwise. `contain-intrinsic-size: auto` remembers the rendered
+     height so skipping it offscreen never shifts scroll position. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}
+
 .contract-flow-visual__shell {
   position: relative;
   overflow: hidden;
@@ -694,12 +703,14 @@
   gap: 0.35rem;
   border: 1px solid color-mix(in oklab, var(--foreground) 13%, transparent);
   border-radius: var(--radius-md);
-  background: color-mix(in oklab, var(--background) 84%, transparent);
+  /* No backdrop-filter here: the flow band animates *behind* these nodes, so a
+     blur backdrop would re-filter every frame while the hero is on screen. A
+     more opaque background stands in for the frosted look at zero cost. */
+  background: color-mix(in oklab, var(--background) 93%, transparent);
   padding: 1rem;
   text-align: left;
   box-shadow: 0 12px 34px color-mix(in oklab, var(--foreground) 7%, transparent);
   animation: flow-node-pop 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  backdrop-filter: blur(16px);
 }
 
 .contract-flow-visual__node-index {

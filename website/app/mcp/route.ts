@@ -1,4 +1,5 @@
-import { getAllDocPages, getDocPage, type DocPage } from "@/lib/docs-content";
+import { getAllDocPages, getDocPage } from "@/lib/docs-content";
+import { rankDocPages, tokenize } from "@/lib/docs-ranking";
 import { SITE_URL } from "@/lib/seo";
 
 /**
@@ -107,7 +108,7 @@ const CORS_HEADERS: Record<string, string> = {
  */
 function jsonResponse(
   body: unknown,
-  init?: { status?: number; headers?: Record<string, string> },
+  init?: { status?: number; headers?: Record<string, string> }
 ): Response {
   return new Response(JSON.stringify(body), {
     status: init?.status ?? 200,
@@ -146,9 +147,12 @@ function rpcError(
   code: number,
   message: string,
   data?: unknown,
-  status = 200,
+  status = 200
 ): Response {
-  const error: { code: number; message: string; data?: unknown } = { code, message };
+  const error: { code: number; message: string; data?: unknown } = {
+    code,
+    message,
+  };
   if (data !== undefined) {
     error.data = data;
   }
@@ -182,7 +186,8 @@ const TOOLS = [
       properties: {
         query: {
           type: "string",
-          description: "Keywords to search for, e.g. 'rate limit' or 'openapi client'.",
+          description:
+            "Keywords to search for, e.g. 'rate limit' or 'openapi client'.",
         },
         limit: {
           type: "integer",
@@ -207,7 +212,8 @@ const TOOLS = [
       properties: {
         path: {
           type: "string",
-          description: 'Page route or slug, e.g. "routing" or "/docs/security".',
+          description:
+            'Page route or slug, e.g. "routing" or "/docs/security".',
         },
       },
       required: ["path"],
@@ -244,46 +250,6 @@ function absoluteUrl(href: string): string {
   return `${SITE_URL}${href}`;
 }
 
-/**
- * Split a query into a deduplicated set of lowercase alphanumeric terms.
- *
- * @param query - Raw query string.
- * @returns Unique search terms.
- */
-function tokenize(query: string): string[] {
-  return [...new Set(query.toLowerCase().match(/[a-z0-9]+/g) ?? [])];
-}
-
-/**
- * Score a docs page against the search terms using weighted field matches
- * (title and route weigh most, body least).
- *
- * @param page - The candidate page.
- * @param terms - Tokenized query terms.
- * @param phrase - The full lowercased query for a whole-phrase title bonus.
- * @returns A non-negative relevance score.
- */
-function scoreDoc(page: DocPage, terms: string[], phrase: string): number {
-  const title = page.title.toLowerCase();
-  const href = page.href.toLowerCase();
-  const description = page.description.toLowerCase();
-  const keywords = page.keywords.join(" ").toLowerCase();
-  const body = page.body.toLowerCase();
-
-  let score = 0;
-  if (phrase.length > 0 && title.includes(phrase)) {
-    score += 25;
-  }
-  for (const term of terms) {
-    if (title.includes(term)) score += 10;
-    if (href.includes(term)) score += 6;
-    if (keywords.includes(term)) score += 4;
-    if (description.includes(term)) score += 3;
-    if (body.includes(term)) score += 1;
-  }
-  return score;
-}
-
 /** Read a string argument from an MCP tool's `arguments` object. */
 function readStringArg(args: Record<string, unknown>, key: string): string {
   const value = args[key];
@@ -292,7 +258,9 @@ function readStringArg(args: Record<string, unknown>, key: string): string {
 
 /** Check whether a decoded JSON value is a valid JSON-RPC id. */
 function isJsonRpcId(value: unknown): value is JsonRpcId {
-  return value === null || typeof value === "string" || typeof value === "number";
+  return (
+    value === null || typeof value === "string" || typeof value === "number"
+  );
 }
 
 /**
@@ -316,17 +284,12 @@ async function runSearchDocs(args: Record<string, unknown>): Promise<string> {
     limit = Math.min(Math.max(Math.trunc(args.limit), 1), MAX_SEARCH_LIMIT);
   }
 
-  const terms = tokenize(query);
-  if (terms.length === 0) {
+  if (tokenize(query).length === 0) {
     throw new ToolError("`query` must contain at least one alphanumeric term.");
   }
 
   const pages = await getAllDocPages();
-  const ranked = pages
-    .map((page) => ({ page, score: scoreDoc(page, terms, query.toLowerCase()) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score || a.page.title.localeCompare(b.page.title))
-    .slice(0, limit);
+  const ranked = rankDocPages(pages, query, limit);
 
   if (ranked.length === 0) {
     return `No documentation pages matched "${query}". Try broader keywords or use list_docs.`;
@@ -334,7 +297,7 @@ async function runSearchDocs(args: Record<string, unknown>): Promise<string> {
 
   const lines = ranked.map(
     (entry, index) =>
-      `${index + 1}. ${entry.page.title} (${entry.page.href})\n   ${entry.page.description}\n   ${absoluteUrl(entry.page.href)}`,
+      `${index + 1}. ${entry.page.title} (${entry.page.href})\n   ${entry.page.description}\n   ${absoluteUrl(entry.page.href)}`
   );
   return `Found ${ranked.length} result(s) for "${query}":\n\n${lines.join("\n\n")}`;
 }
@@ -349,13 +312,15 @@ async function runSearchDocs(args: Record<string, unknown>): Promise<string> {
 async function runGetDoc(args: Record<string, unknown>): Promise<string> {
   const pathArg = readStringArg(args, "path").trim();
   if (pathArg.length === 0) {
-    throw new ToolError("`path` is required, e.g. \"routing\" or \"/docs/security\".");
+    throw new ToolError(
+      '`path` is required, e.g. "routing" or "/docs/security".'
+    );
   }
 
   const page = await getDocPage(pathArg);
   if (!page) {
     throw new ToolError(
-      `No documentation page found for "${pathArg}". Use list_docs or search_docs to find valid routes.`,
+      `No documentation page found for "${pathArg}". Use list_docs or search_docs to find valid routes.`
     );
   }
 
@@ -375,7 +340,7 @@ async function runGetDoc(args: Record<string, unknown>): Promise<string> {
 async function runListDocs(): Promise<string> {
   const pages = await getAllDocPages();
   const lines = pages.map(
-    (page) => `- ${page.title} (${page.href}): ${page.description}`,
+    (page) => `- ${page.title} (${page.href}): ${page.description}`
   );
   return `DaloyJS has ${pages.length} documentation pages:\n\n${lines.join("\n")}`;
 }
@@ -402,7 +367,10 @@ function toolErrorResult(message: string): ToolResult {
  * @param args - Tool arguments object.
  * @returns The MCP tool result.
  */
-async function callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function callTool(
+  name: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
     let text: string;
     switch (name) {
@@ -441,7 +409,9 @@ async function handleRpcRequest(message: JsonRpcMessage): Promise<Response> {
   switch (method) {
     case "initialize": {
       const requested =
-        typeof params.protocolVersion === "string" ? params.protocolVersion : "";
+        typeof params.protocolVersion === "string"
+          ? params.protocolVersion
+          : "";
       const protocolVersion = KNOWN_PROTOCOL_VERSIONS.has(requested)
         ? requested
         : PREFERRED_PROTOCOL_VERSION;
@@ -459,7 +429,11 @@ async function handleRpcRequest(message: JsonRpcMessage): Promise<Response> {
     case "tools/call": {
       const name = typeof params.name === "string" ? params.name : "";
       if (name.length === 0) {
-        return rpcError(id, INVALID_PARAMS, "Missing tool name in `params.name`.");
+        return rpcError(
+          id,
+          INVALID_PARAMS,
+          "Missing tool name in `params.name`."
+        );
       }
       if (!TOOL_NAMES.has(name)) {
         return rpcError(id, INVALID_PARAMS, `Unknown tool: ${name}`);
@@ -471,7 +445,12 @@ async function handleRpcRequest(message: JsonRpcMessage): Promise<Response> {
       try {
         return rpcResult(id, await callTool(name, args));
       } catch (error) {
-        return rpcError(id, INTERNAL_ERROR, "Tool execution failed.", devErrorData(error));
+        return rpcError(
+          id,
+          INTERNAL_ERROR,
+          "Tool execution failed.",
+          devErrorData(error)
+        );
       }
     }
     // Advertised capability set is tools-only; answer the optional list methods
@@ -502,33 +481,57 @@ export async function POST(request: Request): Promise<Response> {
       INVALID_REQUEST,
       `Unsupported MCP-Protocol-Version: ${protocolHeader}`,
       { supported: [...KNOWN_PROTOCOL_VERSIONS] },
-      400,
+      400
     );
   }
 
   // Body-size guard (header hint first, then the actual payload).
   const declaredLength = Number(request.headers.get("content-length") ?? "");
   if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
-    return rpcError(null, INVALID_REQUEST, "Request body too large.", undefined, 413);
+    return rpcError(
+      null,
+      INVALID_REQUEST,
+      "Request body too large.",
+      undefined,
+      413
+    );
   }
 
   const body = await request.arrayBuffer();
   if (body.byteLength > MAX_BODY_BYTES) {
-    return rpcError(null, INVALID_REQUEST, "Request body too large.", undefined, 413);
+    return rpcError(
+      null,
+      INVALID_REQUEST,
+      "Request body too large.",
+      undefined,
+      413
+    );
   }
 
   let raw: string;
   try {
     raw = new TextDecoder("utf-8", { fatal: true }).decode(body);
   } catch {
-    return rpcError(null, PARSE_ERROR, "Request body must be valid UTF-8.", undefined, 400);
+    return rpcError(
+      null,
+      PARSE_ERROR,
+      "Request body must be valid UTF-8.",
+      undefined,
+      400
+    );
   }
 
   let message: JsonRpcMessage;
   try {
     message = JSON.parse(raw) as JsonRpcMessage;
   } catch {
-    return rpcError(null, PARSE_ERROR, "Invalid JSON in request body.", undefined, 400);
+    return rpcError(
+      null,
+      PARSE_ERROR,
+      "Invalid JSON in request body.",
+      undefined,
+      400
+    );
   }
 
   if (Array.isArray(message)) {
@@ -537,29 +540,53 @@ export async function POST(request: Request): Promise<Response> {
       INVALID_REQUEST,
       "JSON-RPC batch requests are not supported.",
       undefined,
-      400,
+      400
     );
   }
 
   if (!message || typeof message !== "object" || message.jsonrpc !== "2.0") {
-    return rpcError(null, INVALID_REQUEST, "Request must be a JSON-RPC 2.0 message.", undefined, 400);
+    return rpcError(
+      null,
+      INVALID_REQUEST,
+      "Request must be a JSON-RPC 2.0 message.",
+      undefined,
+      400
+    );
   }
 
   if (message.id !== undefined && !isJsonRpcId(message.id)) {
-    return rpcError(null, INVALID_REQUEST, "JSON-RPC id must be a string, number, or null.", undefined, 400);
+    return rpcError(
+      null,
+      INVALID_REQUEST,
+      "JSON-RPC id must be a string, number, or null.",
+      undefined,
+      400
+    );
   }
 
   // A message without a method can only be a response to us. We never issue
   // server-to-client requests, so valid responses are simply acknowledged.
   if (message.method === undefined) {
     if (!("result" in message) && !("error" in message)) {
-      return rpcError(null, INVALID_REQUEST, "JSON-RPC message is missing `method`, `result`, or `error`.", undefined, 400);
+      return rpcError(
+        null,
+        INVALID_REQUEST,
+        "JSON-RPC message is missing `method`, `result`, or `error`.",
+        undefined,
+        400
+      );
     }
     return new Response(null, { status: 202, headers: CORS_HEADERS });
   }
 
   if (typeof message.method !== "string") {
-    return rpcError(null, INVALID_REQUEST, "JSON-RPC method must be a string.", undefined, 400);
+    return rpcError(
+      null,
+      INVALID_REQUEST,
+      "JSON-RPC method must be a string.",
+      undefined,
+      400
+    );
   }
 
   // A message without an id is a notification (e.g. notifications/initialized).
@@ -575,7 +602,7 @@ export async function POST(request: Request): Promise<Response> {
       message.id ?? null,
       INTERNAL_ERROR,
       "Internal server error.",
-      devErrorData(error),
+      devErrorData(error)
     );
   }
 }
@@ -597,7 +624,7 @@ export function GET(): Response {
       tools: TOOLS.map((tool) => tool.name),
       hint: "Send JSON-RPC 2.0 over HTTP POST to this URL. See https://daloyjs.dev/#mcp for setup.",
     },
-    { status: 405, headers: { allow: "POST, OPTIONS" } },
+    { status: 405, headers: { allow: "POST, OPTIONS" } }
   );
 }
 

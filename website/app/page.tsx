@@ -1,9 +1,11 @@
 import Link from "next/link";
 import {
   ArrowRightIcon,
+  BookOpenTextIcon,
   CubeIcon,
   FileCodeIcon,
   LockIcon,
+  PlugsConnectedIcon,
   SparkleIcon,
   RocketLaunchIcon,
   ShieldCheckIcon,
@@ -21,6 +23,7 @@ import { CodeBlock } from "../components/code-block";
 import { CodeCopyButton } from "../components/code-copy-button";
 import { ContractFlowVisual } from "../components/contract-flow-visual";
 import { FlowHeroScene } from "../components/flow-hero-scene";
+import { ScalarPreview } from "../components/scalar-preview";
 import {
   buildMetadata,
   CORE_PACKAGE_VERSION,
@@ -119,28 +122,17 @@ const MCP_TOOLS = [
   },
 ] as const;
 
-const DEVELOPER_PITCH = [
-  {
-    icon: ShieldCheckIcon,
-    title: "Security is the product",
-    body: "Most frameworks leave supply-chain posture as a company checklist. DaloyJS puts runtime guardrails, pnpm hardening, CI hygiene, ownership files, and release discipline on the happy path from the first scaffold.",
-  },
-  {
-    icon: FileCodeIcon,
-    title: "One contract, fewer moving parts",
-    body: "Define the route once and get validation, types, OpenAPI 3.1, Scalar docs, Hey API clients, and contract tests from the same source. Less glue code, fewer stale specs, fewer places for an agent or teammate to drift.",
-  },
-  {
-    icon: CubeIcon,
-    title: "Portable without giving up ops",
-    body: "You get a web-standard core that runs on Node, Bun, Deno, Workers, and Edge, plus the production pieces teams expect: request ids, structured logs, plugin encapsulation, graceful shutdown, and first-party middleware.",
-  },
-  {
-    icon: SparkleIcon,
-    title: "Built for the vibe-coding era",
-    body: "When code is vibe-coded and deployed within the hour, the dangerous defaults have to be off when nobody remembered to turn them off. DaloyJS assumes coding agents are in the loop: body limits, prototype-pollution-safe JSON, and path-traversal rejection ship in the constructor, scaffolds carry agent guidance, and installs are source-verified.",
-  },
-];
+const MCP_SERVER_SNIPPET = `import { App, createMcpHandler, mcpRoutes } from "@daloyjs/core";
+
+const mcp = createMcpHandler({
+  serverInfo: { name: "inventory-mcp", version: "1.0.0" },
+  tools: [/* your tools, with validated input schemas */],
+});
+
+const app = new App();
+for (const route of mcpRoutes("/mcp", mcp)) {
+  app.route(route); // your API is now an MCP server too
+}`;
 
 const FEATURES = [
   {
@@ -369,75 +361,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Developer pitch */}
-      <section className="border-b">
-        <div className="mx-auto max-w-7xl px-6 py-16">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight">
-              Why developers pick DaloyJS
-            </h2>
-            <p className="mx-auto mt-3 max-w-3xl leading-8 text-muted-foreground">
-              The pitch is simple: keep the delightful parts of the modern web
-              framework ecosystem, then move security and supply-chain posture
-              from &quot;later&quot; to &quot;already handled.&quot; That is the
-              difference.
-            </p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {DEVELOPER_PITCH.map((item, index) => {
-              const accent = FEATURE_ACCENTS[index % FEATURE_ACCENTS.length];
-
-              return (
-                <Card
-                  key={item.title}
-                  className={`${accent.card} group float-up transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg`}
-                  style={{ animationDelay: `${index * 80}ms` }}
-                >
-                  <CardHeader>
-                    <span
-                      className={`${accent.icon} mb-2 inline-flex size-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110`}
-                    >
-                      <item.icon className="size-6" />
-                    </span>
-                    <CardTitle>{item.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription className="text-sm leading-relaxed">
-                      {item.body}
-                    </CardDescription>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Hello world */}
-      <section className="border-b">
-        <div className="mx-auto max-w-5xl px-6 py-16">
-          <div
-            className="float-up mb-8 text-center"
-            style={{ animationDelay: "80ms" }}
-          >
-            <h2 className="text-3xl font-bold tracking-tight">
-              Hello, contract
-            </h2>
-            <p className="mt-3 leading-8 text-muted-foreground">
-              One route, types, validation, OpenAPI, and the typed client all
-              generated from it.
-            </p>
-          </div>
-          <div className="float-up" style={{ animationDelay: "120ms" }}>
-            <CodeBlock
-              code={HELLO_WORLD}
-              language="ts"
-              showCopyButton={false}
-            />
-          </div>
-        </div>
-      </section>
-
       {/* Features */}
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-16">
@@ -481,6 +404,64 @@ export default function HomePage() {
               })()
             )}
           </div>
+        </div>
+      </section>
+
+      {/* Hello world */}
+      <section className="border-b">
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <div
+            className="float-up mb-8 text-center"
+            style={{ animationDelay: "80ms" }}
+          >
+            <h2 className="text-3xl font-bold tracking-tight">
+              Hello, contract
+            </h2>
+            <p className="mt-3 leading-8 text-muted-foreground">
+              One route, types, validation, OpenAPI, and the typed client all
+              generated from it.
+            </p>
+          </div>
+          <div className="float-up" style={{ animationDelay: "120ms" }}>
+            <CodeBlock
+              code={HELLO_WORLD}
+              language="ts"
+              showCopyButton={false}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Scalar docs */}
+      <section className="border-b">
+        <div className="mx-auto max-w-7xl px-6 py-16">
+          <div className="mb-10 flex flex-col items-center gap-3 text-center">
+            <span className="inline-flex size-11 items-center justify-center rounded-xl bg-mist-100 text-mist-700 ring-1 ring-mist-200/80 dark:bg-mist-950/40 dark:text-mist-200 dark:ring-mist-800/70 dim:bg-mist-950/35 dim:text-mist-100">
+              <BookOpenTextIcon className="size-6" />
+            </span>
+            <h2 className="text-3xl font-bold tracking-tight">
+              Scalar API reference, one line
+            </h2>
+            <p className="max-w-3xl leading-8 text-muted-foreground">
+              Scalar is the modern successor to Swagger UI: fast, clean,
+              dark-mode-native, with built-in try-it requests. In DaloyJS it
+              is the <em>default</em> docs UI, not a plugin:{" "}
+              <code>docs: true</code> on the <code>App</code> constructor
+              auto-mounts this page at <code>/docs</code> and the live OpenAPI
+              3.1 spec at <code>/openapi.json</code>.
+            </p>
+          </div>
+          <ScalarPreview />
+          <p className="mt-4 text-center text-sm leading-6 text-muted-foreground">
+            Generated from your route contracts, zero extra code. Prefer
+            Swagger UI or Redoc? Both are one config field away.{" "}
+            <Link
+              href="/docs/openapi"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              OpenAPI &amp; docs UI guide →
+            </Link>
+          </p>
         </div>
       </section>
 
@@ -642,7 +623,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* MCP endpoint */}
+      {/* MCP */}
       <section id="mcp" className="scroll-mt-20">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <div className="mb-10 text-center">
@@ -650,10 +631,10 @@ export default function HomePage() {
               For developers and AI agents
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight">
-              Read the docs over MCP
+              DaloyJS is MCP-ready
             </h2>
             <p className="mx-auto mt-4 max-w-2xl leading-8 text-muted-foreground">
-              DaloyJS ships a public{" "}
+              The{" "}
               <a
                 href="https://modelcontextprotocol.io"
                 target="_blank"
@@ -662,11 +643,50 @@ export default function HomePage() {
               >
                 Model Context Protocol
               </a>{" "}
-              (MCP) endpoint, so your AI coding agent (Claude, Cursor, VS Code,
-              and friends) can search and read these docs without copy and
-              paste. It is read-only, needs no API key, and speaks the standard
-              Streamable HTTP transport, so it works for humans and LLM agents
-              alike.
+              (MCP) is the open standard AI agents like Claude, Cursor, and VS
+              Code use to call tools and read docs. DaloyJS supports it on both
+              ends: your app can become an MCP server, and these docs already
+              are one.
+            </p>
+          </div>
+
+          <Card className="mb-10 border-olive-200/70 bg-olive-50/55 dark:border-olive-900/70 dark:bg-olive-950/18 dim:border-olive-900/60 dim:bg-olive-950/15">
+            <CardContent className="grid gap-8 pt-2 lg:grid-cols-2 lg:items-center">
+              <div className="flex flex-col gap-4">
+                <span className="inline-flex size-11 items-center justify-center rounded-xl bg-olive-100 text-olive-700 ring-1 ring-olive-200/80 dark:bg-olive-950/40 dark:text-olive-200 dark:ring-olive-800/70 dim:bg-olive-950/35 dim:text-olive-100">
+                  <PlugsConnectedIcon className="size-6" />
+                </span>
+                <h3 className="text-xl font-bold tracking-tight">
+                  Turn your API into an MCP server
+                </h3>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  DaloyJS builds MCP servers from <code>@daloyjs/core</code>{" "}
+                  alone, no SDK required: Streamable HTTP transport,
+                  input-schema validation, and a production boot guard that
+                  refuses to ship an unauthenticated MCP endpoint by accident.
+                </p>
+                <Link
+                  href="/docs/mcp"
+                  className="text-sm font-medium underline underline-offset-4"
+                >
+                  Build an MCP server →
+                </Link>
+              </div>
+              <CodeBlock
+                code={MCP_SERVER_SNIPPET}
+                language="ts"
+                showCopyButton={false}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="mb-6 text-center">
+            <h3 className="text-xl font-bold tracking-tight">
+              Read these docs over MCP
+            </h3>
+            <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              A public, read-only endpoint your AI coding agent can search and
+              read without copy and paste. No API key needed.
             </p>
           </div>
 

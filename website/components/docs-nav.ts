@@ -1,7 +1,7 @@
 import type { Route } from "next";
 
-export type DocsNavItem = { title: string; href: Route }
-export type DocsNavSection = { title: string; items: DocsNavItem[] }
+export type DocsNavItem = { title: string; href: Route };
+export type DocsNavSection = { title: string; items: DocsNavItem[] };
 
 export const docsNav: DocsNavSection[] = [
   {
@@ -44,7 +44,10 @@ export const docsNav: DocsNavSection[] = [
     title: "Contracts & clients",
     items: [
       { title: "OpenAPI generation", href: "/docs/openapi" },
-      { title: "API lifecycle & breaking changes", href: "/docs/api-lifecycle" },
+      {
+        title: "API lifecycle & breaking changes",
+        href: "/docs/api-lifecycle",
+      },
       { title: "AI-friendly route metadata", href: "/docs/ai-metadata" },
       { title: "Model Context Protocol (MCP)", href: "/docs/mcp" as Route },
       { title: "Typed clients (Hey API)", href: "/docs/typed-client" },
@@ -111,7 +114,10 @@ export const docsNav: DocsNavSection[] = [
       { title: "Overview", href: "/docs/payments" as Route },
       { title: "Stripe", href: "/docs/payments/stripe" as Route },
       { title: "Shopify", href: "/docs/payments/shopify" as Route },
-      { title: "Braintree (PayPal)", href: "/docs/payments/braintree" as Route },
+      {
+        title: "Braintree (PayPal)",
+        href: "/docs/payments/braintree" as Route,
+      },
       { title: "Authorize.Net", href: "/docs/payments/authorize-net" as Route },
       { title: "Adyen", href: "/docs/payments/adyen" as Route },
       { title: "Mollie", href: "/docs/payments/mollie" as Route },
@@ -125,7 +131,10 @@ export const docsNav: DocsNavSection[] = [
     title: "Authentication",
     items: [
       { title: "Overview", href: "/docs/auth" },
-      { title: "Architecture (OAuth2 / OIDC)", href: "/docs/auth/architecture" as Route },
+      {
+        title: "Architecture (OAuth2 / OIDC)",
+        href: "/docs/auth/architecture" as Route,
+      },
       { title: "AWS Cognito", href: "/docs/auth/aws-cognito" },
       { title: "Microsoft Entra ID", href: "/docs/auth/entra-id" },
       { title: "Auth0", href: "/docs/auth/auth0" },
@@ -139,47 +148,111 @@ export const docsNav: DocsNavSection[] = [
     title: "Production",
     items: [
       { title: "Security", href: "/docs/security" },
-      { title: "OWASP API Top 10 mapping", href: "/docs/security/owasp-api-top-10" as Route },
-      { title: "Runtime protections (portable)", href: "/docs/security/runtime-protections" as Route },
+      {
+        title: "OWASP API Top 10 mapping",
+        href: "/docs/security/owasp-api-top-10" as Route,
+      },
+      {
+        title: "Runtime protections (portable)",
+        href: "/docs/security/runtime-protections" as Route,
+      },
       { title: "Secure-by-default", href: "/docs/security/secure-defaults" },
       { title: "Boot guards", href: "/docs/security/boot-guards" },
       { title: "Lifecycle & health", href: "/docs/security/lifecycle-health" },
-      { title: "Composition & network", href: "/docs/security/composition-network" },
-      { title: "Lifecycle leftovers", href: "/docs/security/lifecycle-leftovers" },
+      {
+        title: "Composition & network",
+        href: "/docs/security/composition-network",
+      },
+      {
+        title: "Lifecycle leftovers",
+        href: "/docs/security/lifecycle-leftovers",
+      },
       { title: "Auth slice", href: "/docs/security/auth-slice" },
-      { title: "WebSocket + login throttle", href: "/docs/security/websocket-login-throttle" },
+      { title: "Password hashing", href: "/docs/security/hashing" as Route },
+      {
+        title: "WebSocket + login throttle",
+        href: "/docs/security/websocket-login-throttle",
+      },
       { title: "Compression", href: "/docs/security/compression" as Route },
-      { title: "secureDefaults enforcement", href: "/docs/security/secure-defaults-enforcement" as Route },
-      { title: "Internal services & meshes", href: "/docs/security/internal-service-preset" as Route },
+      {
+        title: "secureDefaults enforcement",
+        href: "/docs/security/secure-defaults-enforcement" as Route,
+      },
+      {
+        title: "Internal services & meshes",
+        href: "/docs/security/internal-service-preset" as Route,
+      },
       { title: "CSRF protection", href: "/docs/security/csrf" },
-      { title: "IP allow/deny lists", href: "/docs/security/ip-restriction" as Route },
-      { title: "Open redirect protection", href: "/docs/security/safe-redirect" as Route },
+      {
+        title: "IP allow/deny lists",
+        href: "/docs/security/ip-restriction" as Route,
+      },
+      {
+        title: "Open redirect protection",
+        href: "/docs/security/safe-redirect" as Route,
+      },
       { title: "Cookie helpers", href: "/docs/security/cookies" as Route },
       { title: "SQL injection", href: "/docs/security/sql-injection" as Route },
-      { title: "Command injection", href: "/docs/security/command-injection" as Route },
-      { title: "SSRF guard (fetchGuard)", href: "/docs/security/fetch-guard" as Route },
-      { title: "Outbound resilience (fetch)", href: "/docs/fetch-resilience" as Route },
+      {
+        title: "Command injection",
+        href: "/docs/security/command-injection" as Route,
+      },
+      {
+        title: "SSRF guard (fetchGuard)",
+        href: "/docs/security/fetch-guard" as Route,
+      },
+      {
+        title: "Outbound resilience (fetch)",
+        href: "/docs/fetch-resilience" as Route,
+      },
       { title: "Outbound webhooks", href: "/docs/webhook-delivery" as Route },
       { title: "Scheduled tasks (cron)", href: "/docs/scheduler" as Route },
       { title: "mTLS / client certificates", href: "/docs/mtls" as Route },
-      { title: "HTTP message signatures (RFC 9421)", href: "/docs/http-signatures" as Route },
+      {
+        title: "HTTP message signatures (RFC 9421)",
+        href: "/docs/http-signatures" as Route,
+      },
       { title: "Adaptive auto-ban", href: "/docs/auto-ban" as Route },
-      { title: "Bot / User-Agent management", href: "/docs/bot-guard" as Route },
-      { title: "IP reputation / denylist feed", href: "/docs/ip-reputation" as Route },
+      {
+        title: "Bot / User-Agent management",
+        href: "/docs/bot-guard" as Route,
+      },
+      {
+        title: "IP reputation / denylist feed",
+        href: "/docs/ip-reputation" as Route,
+      },
       { title: "GeoIP / geo-blocking", href: "/docs/geo-block" as Route },
-      { title: "Concurrency limits + queueing", href: "/docs/concurrency-limit" as Route },
-      { title: "Request decompression guard", href: "/docs/request-decompression" as Route },
+      {
+        title: "Concurrency limits + queueing",
+        href: "/docs/concurrency-limit" as Route,
+      },
+      {
+        title: "Request decompression guard",
+        href: "/docs/request-decompression" as Route,
+      },
       { title: "WAF-lite inspection", href: "/docs/waf" as Route },
-      { title: "Docs UI asset integrity (SRI)", href: "/docs/docs-asset-integrity" as Route },
-      { title: "Secure admin panels", href: "/docs/security/admin-panels" as Route },
+      {
+        title: "Docs UI asset integrity (SRI)",
+        href: "/docs/docs-asset-integrity" as Route,
+      },
+      {
+        title: "Secure admin panels",
+        href: "/docs/security/admin-panels" as Route,
+      },
       { title: "Sessions", href: "/docs/security/session" },
       {
         title: "Redis rate-limit store",
         href: "/docs/security/rate-limit-redis",
       },
       { title: "Supply-chain security", href: "/docs/security/supply-chain" },
-      { title: "Scanning tools (Socket, Snyk, Aikido)", href: "/docs/security/scanning-tools" as Route },
-      { title: "Compliance posture", href: "/docs/security/compliance" as Route },
+      {
+        title: "Scanning tools (Socket, Snyk, Aikido)",
+        href: "/docs/security/scanning-tools" as Route,
+      },
+      {
+        title: "Compliance posture",
+        href: "/docs/security/compliance" as Route,
+      },
       { title: "Deployment", href: "/docs/deployment" },
       { title: "Fly.io", href: "/docs/deployment/fly-io" as Route },
       { title: "Render", href: "/docs/deployment/render" as Route },
@@ -195,7 +268,10 @@ export const docsNav: DocsNavSection[] = [
       { title: "Node.js", href: "/docs/adapters/node" as Route },
       { title: "Bun", href: "/docs/adapters/bun" as Route },
       { title: "Deno", href: "/docs/adapters/deno" as Route },
-      { title: "Cloudflare Workers", href: "/docs/adapters/cloudflare-workers" as Route },
+      {
+        title: "Cloudflare Workers",
+        href: "/docs/adapters/cloudflare-workers" as Route,
+      },
       { title: "Vercel", href: "/docs/adapters/vercel" as Route },
       { title: "Netlify", href: "/docs/adapters/netlify" as Route },
       { title: "Fastly Compute", href: "/docs/adapters/fastly" as Route },
@@ -213,4 +289,4 @@ export const docsNav: DocsNavSection[] = [
     title: "Reference",
     items: [{ title: "API reference", href: "/docs/api-reference" }],
   },
-]
+];

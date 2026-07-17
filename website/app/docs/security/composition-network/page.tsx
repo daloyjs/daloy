@@ -218,8 +218,9 @@ app.use(ipRestriction({
         <code>app.inject(request)</code>, which is meant for cron jobs, admin
         scripts, and integration tests. Internal routes are also excluded from
         generated OpenAPI by default; pass <code>includeInternal: true</code> to{" "}
-        <code>generateOpenAPI()</code>
-        for private admin SDK generation. The framework also filters
+        <code>generateOpenAPI()</code> (imported from the{" "}
+        <code>@daloyjs/core/openapi</code> subpath) for private admin SDK
+        generation. The framework also filters
         <code>Allow</code> headers so a probe with a different method stays a
         clean <code>404</code> rather than a leaky <code>405</code>.
       </p>
@@ -250,6 +251,7 @@ app.use(ipRestriction({
 
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
+import { generateOpenAPI } from "@daloyjs/core/openapi";
 
 const app = new App();
 
@@ -266,7 +268,18 @@ app.post(
 await app.fetch(new Request("http://app/__admin/reindex", { method: "POST" }));
 
 // In-process / cron / tests - 204
-await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));`}
+await app.inject(new Request("http://app/__admin/reindex", { method: "POST" }));
+
+// Public spec - internal routes omitted
+const publicSpec = generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+});
+
+// Private admin SDK generation - internal routes included
+const adminSpec = generateOpenAPI(app, {
+  info: { title: "My API", version: "1.0.0" },
+  includeInternal: true,
+});`}
         language="ts"
       />
 

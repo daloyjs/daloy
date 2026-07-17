@@ -1,14 +1,14 @@
-import type { MetadataRoute } from "next"
-import { SITE_URL } from "@/lib/seo"
+import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/seo";
 
 /**
  * Static sitemap for website. Add new docs pages here so they are
  * discoverable by search engines.
  */
 const STATIC_PATHS: Array<{
-  path: string
-  changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]
-  priority: number
+  path: string;
+  changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
+  priority: number;
 }> = [
   { path: "/", changeFrequency: "weekly", priority: 1.0 },
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
@@ -219,11 +219,19 @@ const STATIC_PATHS: Array<{
   { path: "/docs/cli", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/getting-started", changeFrequency: "monthly", priority: 0.9 },
   { path: "/docs/where-to-use", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/docs/migrating/express", changeFrequency: "monthly", priority: 0.8 },
+  {
+    path: "/docs/migrating/express",
+    changeFrequency: "monthly",
+    priority: 0.8,
+  },
   { path: "/docs/routing", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/validation", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/validation/zod", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/validation/valibot", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/validation/valibot",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/plugins", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/combinators", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/logging", changeFrequency: "monthly", priority: 0.7 },
@@ -251,15 +259,43 @@ const STATIC_PATHS: Array<{
     priority: 0.8,
   },
   { path: "/docs/security", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/docs/security/owasp-api-top-10", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/runtime-protections", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/security/owasp-api-top-10",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/runtime-protections",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/security/csrf", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/ip-restriction", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/safe-redirect", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/security/ip-restriction",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/safe-redirect",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/security/cookies", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/sql-injection", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/command-injection", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/fetch-guard", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/security/sql-injection",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/command-injection",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/fetch-guard",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/fetch-resilience", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/webhook-delivery", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/scheduler", changeFrequency: "monthly", priority: 0.8 },
@@ -269,45 +305,142 @@ const STATIC_PATHS: Array<{
   { path: "/docs/bot-guard", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/ip-reputation", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/geo-block", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/docs/concurrency-limit", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/docs/request-decompression", changeFrequency: "monthly", priority: 0.8 },
+  {
+    path: "/docs/concurrency-limit",
+    changeFrequency: "monthly",
+    priority: 0.8,
+  },
+  {
+    path: "/docs/request-decompression",
+    changeFrequency: "monthly",
+    priority: 0.8,
+  },
   { path: "/docs/waf", changeFrequency: "monthly", priority: 0.8 },
   {
     path: "/docs/docs-asset-integrity",
     changeFrequency: "monthly",
     priority: 0.8,
   },
-  { path: "/docs/security/admin-panels", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/secure-defaults", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/boot-guards", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/lifecycle-health", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/composition-network", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/lifecycle-leftovers", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/auth-slice", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/websocket-login-throttle", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/compression", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/secure-defaults-enforcement", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/internal-service-preset", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/security/admin-panels",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/secure-defaults",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/boot-guards",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/lifecycle-health",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/composition-network",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/lifecycle-leftovers",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/auth-slice",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  { path: "/docs/security/hashing", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/security/websocket-login-throttle",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/compression",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/secure-defaults-enforcement",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/internal-service-preset",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/security/session", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/compliance", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/scanning-tools", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/rate-limit-redis", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/security/supply-chain", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/security/compliance",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/scanning-tools",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/rate-limit-redis",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/security/supply-chain",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/adapters", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/adapters/node", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/adapters/bun", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/adapters/deno", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/adapters/cloudflare-workers", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/adapters/cloudflare-workers",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/adapters/vercel", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/adapters/netlify", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/adapters/fastly", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/adapters/aws-lambda", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/adapters/aws-lambda",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/deployment", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/docs/deployment/fly-io", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/deployment/render", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/deployment/railway", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/deployment/heroku", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/deployment/replit", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/deployment/fly-io",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/deployment/render",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/deployment/railway",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/deployment/heroku",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/deployment/replit",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/testing", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/api-reference", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/orm", changeFrequency: "monthly", priority: 0.8 },
@@ -349,16 +482,32 @@ const STATIC_PATHS: Array<{
   { path: "/docs/payments", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/payments/stripe", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments/shopify", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/payments/braintree", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/payments/authorize-net", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/payments/braintree",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/payments/authorize-net",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/payments/adyen", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments/mollie", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments/tap", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/payments/paytabs", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/docs/payments/razorpay", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/payments/razorpay",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/payments/square", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/auth", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/docs/auth/architecture", changeFrequency: "monthly", priority: 0.8 },
+  {
+    path: "/docs/auth/architecture",
+    changeFrequency: "monthly",
+    priority: 0.8,
+  },
   { path: "/docs/auth/aws-cognito", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/auth/entra-id", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/auth/auth0", changeFrequency: "monthly", priority: 0.7 },
@@ -376,14 +525,14 @@ const STATIC_PATHS: Array<{
     changeFrequency: "monthly",
     priority: 0.7,
   },
-]
+];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date()
+  const lastModified = new Date();
   return STATIC_PATHS.map(({ path, changeFrequency, priority }) => ({
     url: `${SITE_URL}${path}`,
     lastModified,
     changeFrequency,
     priority,
-  }))
+  }));
 }

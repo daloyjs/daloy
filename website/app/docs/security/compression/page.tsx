@@ -65,6 +65,34 @@ app.use(compression());
         original response is kept.
       </p>
 
+      <h2 id="application-vs-cdn-or-proxy">
+        Application vs. CDN or reverse proxy
+      </h2>
+      <p>
+        A response only needs to be compressed once. Choose the layer closest
+        to the client that reliably supports the encodings and content types
+        you need:
+      </p>
+      <ul>
+        <li>
+          <strong>No CDN or reverse-proxy compression:</strong> register{" "}
+          <code>compression()</code> globally. Daloy&apos;s skip rules still decide
+          whether each individual response should be compressed.
+        </li>
+        <li>
+          <strong>CDN or reverse proxy already compresses responses:</strong>{" "}
+          let that layer handle compression so the application does not spend
+          CPU compressing the same traffic at the origin.
+        </li>
+      </ul>
+      <p>
+        Do not assume every hosting platform enables compression automatically.
+        Send a request with <code>Accept-Encoding: br, gzip</code> and check the
+        response for <code>Content-Encoding</code>. If some traffic can bypass
+        the CDN or proxy, decide whether those direct origin responses also need
+        application-level compression.
+      </p>
+
       <h2 id="security-skip-rules">Security skip rules</h2>
       <p>
         Compression can become an oracle when secrets and attacker-controlled
