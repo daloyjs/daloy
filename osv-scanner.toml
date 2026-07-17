@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "GHSA-hhx9-57xq-r5rw"
+ignoreUntil = 2026-08-31
+reason = "False positive for the integrity-pinned @hey-api/openapi-ts 0.0.0-next-20260711024907 TypeScript 7 snapshot: its generated parameter slots use null-prototype objects, so the advisory's __proto__ assignment cannot substitute the prototype. Remove this exception when Hey API 0.100.0 is available."

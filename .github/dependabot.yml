@@ -29,6 +29,11 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # Pinned to a TypeScript 7-compatible next snapshot until Hey API
+      # 0.100.0 ships; stable releases are still on TS 6 and would revert
+      # the TS7 migration. Remove alongside the osv-scanner.toml exception.
+      - dependency-name: "@hey-api/openapi-ts"
     commit-message:
       prefix: "chore(deps)"
 

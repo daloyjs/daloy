@@ -56,6 +56,7 @@ on:
       - "pnpm-lock.yaml"
       - "package.json"
       - "packages/**/package.json"
+      - "osv-scanner.toml"
       - ".github/workflows/osv-scan.yml"
   pull_request:
     branches: [main]
@@ -63,6 +64,7 @@ on:
       - "pnpm-lock.yaml"
       - "package.json"
       - "packages/**/package.json"
+      - "osv-scanner.toml"
       - ".github/workflows/osv-scan.yml"
   schedule:
     # 06:47 UTC daily — offset from vuln-scan (06:13) and Zizmor (07:00)
@@ -136,4 +138,5 @@ jobs:
           set -euo pipefail
           ./osv-scanner scan source \
             --lockfile=pnpm-lock.yaml \
+            --config=osv-scanner.toml \
             --format=table
