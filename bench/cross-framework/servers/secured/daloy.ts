@@ -6,15 +6,16 @@
 // We don't enforce scopes on these routes so the middleware just verifies
 // the signature — that's the cost we want to measure.
 import { z } from "zod";
-import { App, secureHeaders, requestId, cors, rateLimit, createJwtVerifier } from "@daloyjs/core";
+import { App, cors, rateLimit, createJwtVerifier } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const HS256_KEY = new TextEncoder().encode("bench-secret-key-do-not-use-in-prod");
 
-const app = new App();
+// Daloy's secure defaults already install request IDs and secure headers.
+// Do not install duplicate middleware here: that would generate two request
+// IDs and apply the header policy twice while peers do each job once.
+const app = new App({ logger: false });
 
-app.use(requestId());
-app.use(secureHeaders());
 // Explicit allowlist — the secure-by-default guard refuses wildcard origins
 // in production. Use a realistic single-origin allowlist for the bench.
 app.use(cors({ origin: ["http://127.0.0.1"], credentials: false }));
@@ -50,7 +51,7 @@ app.route({
   path: "/static",
   operationId: "getStatic",
   responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) } },
-  handler: async () => ({ status: 200, body: { ok: true } }),
+  handler: () => ({ status: 200, body: { ok: true } }),
 });
 
 app.route({
@@ -59,7 +60,7 @@ app.route({
   operationId: "getUser",
   request: { params: z.object({ id: z.string() }) },
   responses: { 200: { description: "ok", body: z.object({ id: z.string() }) } },
-  handler: async ({ params }) => ({ status: 200, body: { id: params.id } }),
+  handler: ({ params }) => ({ status: 200, body: { id: params.id } }),
 });
 
 app.route({
@@ -68,7 +69,7 @@ app.route({
   operationId: "echo",
   request: { body: z.object({ name: z.string() }) },
   responses: { 200: { description: "ok", body: z.object({ name: z.string() }) } },
-  handler: async ({ body }) => ({ status: 200, body: { name: body.name } }),
+  handler: ({ body }) => ({ status: 200, body: { name: body.name } }),
 });
 
 const port = Number(process.env.PORT ?? 3000);

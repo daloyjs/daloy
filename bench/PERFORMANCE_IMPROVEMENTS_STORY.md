@@ -7,16 +7,16 @@ cross-framework HTTP numbers use
 `bench/cross-framework/` on Node 24 (`.nvmrc`), on AC power, with a raised
 `ulimit -n`.
 
-## Verdict (2026-07-16)
+## Verdict (2026-07-17)
 
 **DaloyJS performance is acceptable.** It is not a “slow framework”; the
 default matrix measures a different product than bare Hono/Fastify:
 
-| Posture                                                                 | What it does                                                                                                                       | Relative cost                                                                                                                                              |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Full defaults** (`daloy`)                                             | Zod request + response validation, auto `secureHeaders`, cross-origin write guard, header smuggling / reserved-prefix / count caps | ~21–27% fewer req/s than `daloy-bare` in the stored run (static 21.5%, dynamic 23.3%, echo 26.8%); ~25–37% vs the fastest bare frameworks, route-dependent |
-| **Apple-to-apple** (`daloy-bare`, `preset: "internal-service"`, no Zod) | Router + dispatch only                                                                                                             | Within ~5–10% of Hono/Fastify/Nest on the same machine                                                                                                     |
-| **In-process router**                                                   | `Router.find()` only                                                                                                               | ~15M static lookups/s — not the bottleneck                                                                                                                 |
+| Posture                                                                 | What it does                                                                                                                       | Relative cost                                                                                                                           |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Full defaults** (`daloy`)                                             | Zod request + response validation, auto `secureHeaders`, cross-origin write guard, header smuggling / reserved-prefix / count caps | ~18–20% fewer req/s than `daloy-bare` in the 2026-07-17 run; ~25–26% behind validation-matched Hono on GET, but ~42% ahead on JSON echo |
+| **Apple-to-apple** (`daloy-bare`, `preset: "internal-service"`, no Zod) | Router + dispatch only                                                                                                             | ~7–9% behind Fastify and ~10–12% behind Hono on GET; ~20–75% ahead on JSON echo                                                         |
+| **In-process router**                                                   | `Router.find()` only                                                                                                               | ~26M static lookups/s — not the bottleneck                                                                                              |
 
 Production apps almost always pay validation and security headers. Compare
 secure-parity rows (`middleware-stack.mjs`, install/bundle secure parity) when
@@ -29,14 +29,14 @@ v26.4.0 (early micro) as recorded per run.
 
 ### In-process micro (`pnpm bench*`)
 
-| Bench                                          |                                                                                                         Result |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------: |
-| Router static lookup                           |                                                                                                   ~15.3M ops/s |
-| Router dynamic 4-segment                       |                                                                                                    ~1.4M ops/s |
-| Router miss                                    |                                                                                                    ~4.5M ops/s |
-| Serverless warm fetch (1 route, full contract) |                                                                                                         ~25 µs |
-| Serverless warm fetch (scaled routes)          |                                                                                                      ~11–12 µs |
-| JSON body limits ON vs OFF (e2e)               | ~4% overhead (median of 5 rounds; per-round spread ~2–7%, so the bench reports the median, not a single round) |
+| Bench                            |                                                                                                         Result |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------: |
+| Router static lookup             |                                                                     ~25.8M ops/s median (seven rotated rounds) |
+| Router dynamic 4-segment         |                                                                                             ~2.1M ops/s median |
+| Router miss                      |                                                                                             ~7.7M ops/s median |
+| Serverless first fetch           |                                              ~2.6–3.7 ms median; every scenario sample runs in a fresh process |
+| Serverless warm fetch            |                                                                                               ~21–23 µs median |
+| JSON body limits ON vs OFF (e2e) | ~4% overhead (median of 5 rounds; per-round spread ~2–7%, so the bench reports the median, not a single round) |
 
 ### In-process dispatch ablation (dist `App.fetch`, no HTTP)
 
@@ -82,7 +82,26 @@ router.
 
 ### Cross-framework HTTP (local `results.json`, autocannon)
 
-Median req/s @ 100 connections, 5×10s, 15s warmup (prior run same day).
+Focused post-change run on Node 24.3.0, 100 connections, 5×5s, 10s warmup.
+The headline is mean req/s with a 95% CI; rounded means are shown here:
+
+| Framework        | GET /static | GET /users/:id | POST /echo |
+| ---------------- | ----------: | -------------: | ---------: |
+| hono             |      ~51.0k |         ~48.6k |     ~21.7k |
+| hono-validated   |      ~48.8k |         ~47.9k |     ~21.4k |
+| fastify          |      ~48.1k |         ~47.8k |     ~31.8k |
+| **daloy-bare**   |  **~44.8k** |     **~43.6k** | **~38.0k** |
+| **daloy** (full) |  **~36.6k** |     **~35.4k** | **~30.5k** |
+| **daloy-nozod**  |  **~35.3k** |     **~34.8k** | **~30.7k** |
+
+The secured-stack run (request ID, headers, CORS, rate limit, HS256 JWT)
+measured Daloy at ~23.1k / 22.7k / 20.6k. That beat validation-matched Hono
+(~17.4k / 17.3k / 11.7k) and trailed non-Zod Fastify on GET
+(~29.3k / 29.1k) while matching its echo path (~21.0k). Do not call the
+Fastify comparison full behavioral parity until it uses the same Zod request
+and response schemas.
+
+The older full-matrix run used 5×10s and a 15s warmup.
 `bench/cross-framework/results.json` is **gitignored** — these numbers come
 from a local run whose provenance recorded a dirty tree and loadAvg ~15–18,
 so treat them as indicative, not publication-grade:
@@ -131,13 +150,19 @@ Earlier hot-path work (still load-bearing — do not regress):
    carry any of the default security header names, bulk-`set` without N
    `has()` probes; if any conflict exists, keep set-if-absent so handler /
    earlier-hook values still win (OWASP / clickjacking posture unchanged).
+3. **Router allocation removal** — exact static lookups probe the static map
+   before allocating a trailing-slash-normalized string; normalization now
+   uses character scans instead of regex replacements; dynamic and wildcard
+   segments skip `decodeURIComponent` when no `%` is present. Traversal
+   rejection and malformed percent-escape behavior are unchanged and covered
+   by router plus auth-bypass regression tests.
 
 ## Benchmarking methodology — keep / improve
 
 ### Already strong
 
 - Isolated `bench/cross-framework` (does not pollute core lockfile)
-- Warmup + multi-iteration median + 95% CI + parity tiers
+- Warmup + multi-iteration mean + 95% CI + uncertainty groups
 - Correctness preflight (wrong body cannot win “fastest”)
 - Framework order shuffle; machine / git / dep provenance in results
 - Battery + FD-limit warnings
@@ -149,8 +174,8 @@ Earlier hot-path work (still load-bearing — do not regress):
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Missing `PERFORMANCE_IMPROVEMENTS_STORY.md` (was linked from README) | Agents/humans had no history                                                                                                          | This file                                                                                                                                                                                                                                        |
 | Ablation numbers not reproducible                                    | The in-process dispatch tables above have no checked-in script, raw samples, or before/after SHAs — they are assertions, not evidence | **Fixed:** `bench/ablation.bench.ts` (`pnpm bench:ablation`) runs the config matrix and records Node version, git SHA + dirty flag, machine info, and raw samples to `bench/results.ablation.json`; the historical tables above still predate it |
-| Throughput servers use `async` handlers for pure sync work           | ~15% self-inflicted on Daloy; others often sync                                                                                       | Prefer sync handlers in `servers/throughput/*` where types allow                                                                                                                                                                                 |
-| Orange-to-apple still easy to misread                                | Marketing tables quote bare routers vs full Daloy                                                                                     | Always lead with **parity tiers** + `daloy-bare` row; document in README claim                                                                                                                                                                   |
+| Throughput servers use `async` handlers for pure sync work           | ~15% self-inflicted on Daloy; others often sync                                                                                       | **Fixed:** synchronous work now uses synchronous handlers where framework APIs allow                                                                                                                                                             |
+| Orange-to-apple still easy to misread                                | Marketing tables quote bare routers vs full Daloy                                                                                     | Lead with uncertainty groups plus `daloy-bare`, `daloy-nozod`, and `hono-validated`; document the posture in every claim                                                                                                                         |
 | No pin of “quiet machine” gate                                       | High loadAvg makes ±10% noise                                                                                                         | Fail or warn when `loadAvg[0] > cpuCount`                                                                                                                                                                                                        |
 | Full matrix ~35–90 min                                               | Discourages pre-merge runs                                                                                                            | Keep `smoke.mjs`; add `bench:ci` subset (daloy, daloy-bare, hono, fastify, 1 iter / 3s)                                                                                                                                                          |
 | Client is autocannon only                                            | Fine for HTTP; fetch-based scripts understate concurrency fairness                                                                    | Keep autocannon for publish; document client                                                                                                                                                                                                     |

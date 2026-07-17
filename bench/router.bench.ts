@@ -12,24 +12,60 @@ for (let i = 0; i < 500; i++) {
   r.add("GET", `/users/:userId/posts/${i}/comments/:commentId`, { id: i + 10000 });
 }
 
-function bench(label: string, iters: number, fn: () => void) {
-  // warm
-  for (let i = 0; i < 1000; i++) fn();
+type Scenario = {
+  label: string;
+  iters: number;
+  fn: () => void;
+};
+
+const rounds = 7;
+
+function bench(scenario: Scenario): number {
+  for (let i = 0; i < 2_000; i++) scenario.fn();
   const t0 = performance.now();
-  for (let i = 0; i < iters; i++) fn();
+  for (let i = 0; i < scenario.iters; i++) scenario.fn();
   const t1 = performance.now();
-  const opsPerSec = ((iters / (t1 - t0)) * 1000).toLocaleString("en-US", {
-    maximumFractionDigits: 0,
-  });
-  console.log(`${label.padEnd(40)} ${opsPerSec} ops/sec  (${(t1 - t0).toFixed(1)}ms / ${iters} iters)`);
+  return (scenario.iters / (t1 - t0)) * 1_000;
 }
 
-bench("static route lookup", 1_000_000, () => {
-  r.find("GET", "/static/250/items");
-});
-bench("dynamic 4-segment lookup", 500_000, () => {
-  r.find("GET", "/users/abc/posts/250/comments/xyz");
-});
-bench("miss", 1_000_000, () => {
-  r.find("GET", "/no/such/path");
-});
+const scenarios: Scenario[] = [
+  {
+    label: "static route lookup",
+    iters: 1_000_000,
+    fn: () => void r.find("GET", "/static/250/items"),
+  },
+  {
+    label: "dynamic 4-segment lookup",
+    iters: 500_000,
+    fn: () => void r.find("GET", "/users/abc/posts/250/comments/xyz"),
+  },
+  {
+    label: "miss",
+    iters: 1_000_000,
+    fn: () => void r.find("GET", "/no/such/path"),
+  },
+];
+
+const samples = new Map(scenarios.map((scenario) => [scenario.label, [] as number[]]));
+for (let round = 0; round < rounds; round++) {
+  const offset = round % scenarios.length;
+  for (let i = 0; i < scenarios.length; i++) {
+    const scenario = scenarios[(i + offset) % scenarios.length]!;
+    samples.get(scenario.label)!.push(bench(scenario));
+  }
+}
+
+const format = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]!;
+};
+
+console.log(`Router lookup benchmark — median of ${rounds} rotated rounds`);
+for (const scenario of scenarios) {
+  const values = samples.get(scenario.label)!;
+  console.log(
+    `${scenario.label.padEnd(30)} ${format(median(values)).padStart(12)} ops/sec` +
+      `  (range ${format(Math.min(...values))}–${format(Math.max(...values))})`
+  );
+}

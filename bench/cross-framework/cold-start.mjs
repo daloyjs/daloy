@@ -18,21 +18,29 @@ import { spawn } from "node:child_process";
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import {
-  resultsPath, orderTargets, ROOT, machineInfo, parseArgs, stats, fmt, httpRequest,
-  compileServer, parityTiers,
+  resultsPath,
+  orderTargets,
+  ROOT,
+  machineInfo,
+  parseArgs,
+  stats,
+  fmt,
+  httpRequest,
+  compileServer,
+  parityTiers,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, info, metricsLine, renderTiers } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",        file: "servers/throughput/daloy.ts" },
-  { name: "daloy-nozod",  file: "servers/throughput/daloy-nozod.ts" },
-  { name: "hono",         file: "servers/throughput/hono.ts" },
-  { name: "fastify",      file: "servers/throughput/fastify.ts" },
-  { name: "express",      file: "servers/throughput/express.ts" },
-  { name: "koa",          file: "servers/throughput/koa.ts" },
-  { name: "nest",         file: "servers/throughput/nest.ts" },
-  { name: "elysia",       file: "servers/throughput/elysia.ts" },
-  { name: "feathers",     file: "servers/throughput/feathers.ts" },
+  { name: "daloy", file: "servers/throughput/daloy.ts" },
+  { name: "daloy-nozod", file: "servers/throughput/daloy-nozod.ts" },
+  { name: "hono", file: "servers/throughput/hono.ts" },
+  { name: "fastify", file: "servers/throughput/fastify.ts" },
+  { name: "express", file: "servers/throughput/express.ts" },
+  { name: "koa", file: "servers/throughput/koa.ts" },
+  { name: "nest", file: "servers/throughput/nest.ts" },
+  { name: "elysia", file: "servers/throughput/elysia.ts" },
+  { name: "feathers", file: "servers/throughput/feathers.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -47,9 +55,10 @@ const PORT_BASE = 3500;
 
 async function measureColdStart(entry, port) {
   const t0 = process.hrtime.bigint();
-  const nodeArgs = MODE === "compiled"
-    ? ["--no-warnings", entry]
-    : ["--no-warnings", "--import", "tsx", path.join(ROOT, entry)];
+  const nodeArgs =
+    MODE === "compiled"
+      ? ["--no-warnings", entry]
+      : ["--no-warnings", "--import", "tsx", path.join(ROOT, entry)];
   const child = spawn(process.execPath, nodeArgs, {
     cwd: ROOT,
     env: { ...process.env, PORT: String(port), NODE_ENV: "production" },
@@ -72,15 +81,18 @@ async function measureColdStart(entry, port) {
           firstResponseAt = process.hrtime.bigint();
           break;
         }
-      } catch { /* not ready yet */ }
+      } catch {
+        /* not ready yet */
+      }
       // ~5ms granularity is plenty for spawn-to-first-200 timing and avoids
       // hot-spinning the CPU which would skew the measurement.
       await new Promise((r) => setTimeout(r, 5));
     }
     if (!firstResponseAt) {
-      const why = child.exitCode != null || child.signalCode != null
-        ? `server exited (code ${child.exitCode}, signal ${child.signalCode}) before first 200`
-        : "server never responded with 200 within 30s";
+      const why =
+        child.exitCode != null || child.signalCode != null
+          ? `server exited (code ${child.exitCode}, signal ${child.signalCode}) before first 200`
+          : "server never responded with 200 within 30s";
       throw new Error(`${why}${stderrBuf ? `\nstderr: ${stderrBuf.trim()}` : ""}`);
     }
   } finally {
@@ -88,7 +100,9 @@ async function measureColdStart(entry, port) {
     // exited the event fired long ago and will never fire again — awaiting it
     // would drain the event loop and silently exit the whole bench process.
     if (child.exitCode == null && child.signalCode == null) {
-      try { child.kill("SIGKILL"); } catch {}
+      try {
+        child.kill("SIGKILL");
+      } catch {}
       await new Promise((r) => child.once("exit", r));
     }
   }
@@ -107,16 +121,21 @@ async function benchOne(fw, port, buildDir) {
   for (let i = 0; i < ITERATIONS; i++) {
     const ms = await measureColdStart(entry, port);
     samples.push(ms);
-    console.error(metricsLine(`iter ${i + 1}/${ITERATIONS}`, [
-      c.green(c.bold(ms.toFixed(1))) + c.dim(" ms"),
-    ], { labelWidth: 14 }));
+    console.error(
+      metricsLine(`iter ${i + 1}/${ITERATIONS}`, [c.green(c.bold(ms.toFixed(1))) + c.dim(" ms")], {
+        labelWidth: 14,
+      })
+    );
     await new Promise((r) => setTimeout(r, 250));
   }
   return { samples, stats: stats(samples) };
 }
 
 async function main() {
-  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
+  const targets = orderTargets(
+    FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)),
+    args.order
+  );
   // The compiled entries must live under the bench root: Node resolves their
   // bare imports relative to the importing FILE, so a build dir in the OS
   // tmpdir would never find this folder's node_modules. node_modules/.cache
@@ -145,15 +164,24 @@ async function main() {
 
   const ok = rows.filter((r) => r.stats);
   const tiers = parityTiers(
-    ok.map((r) => ({ name: r.framework, value: r.stats.median, mean: r.stats.mean, ci95: r.stats.ci95 })),
-    { better: "lower" },
+    ok.map((r) => ({
+      name: r.framework,
+      value: r.stats.mean,
+      mean: r.stats.mean,
+      ci95: r.stats.ci95,
+    })),
+    { better: "lower" }
   );
-  console.log("\n" + renderTiers(tiers, {
-    title: `cold start, ${MODE} (ms)`,
-    better: "lower",
-    fmtValue: (v) => v.toFixed(1),
-    highlight: (name) => name.includes("daloy"),
-  }) + "\n");
+  console.log(
+    "\n" +
+      renderTiers(tiers, {
+        title: `cold start, ${MODE} (ms)`,
+        better: "lower",
+        fmtValue: (v) => v.toFixed(1),
+        highlight: (name) => name.includes("daloy"),
+      }) +
+      "\n"
+  );
 
   const tableRows = [];
   for (const r of ok) {
@@ -167,23 +195,36 @@ async function main() {
       r.stats.max.toFixed(1),
     ]);
   }
-  console.log(summary({
-    head: ["Framework", "min (ms)", "median (ms)", "mean (ms)", "±95% CI", "stddev", "max (ms)"],
-    rows: tableRows,
-    highlight: (row) => row[0].includes("daloy"),
-  }) + "\n");
+  console.log(
+    summary({
+      head: ["Framework", "min (ms)", "median (ms)", "mean (ms)", "±95% CI", "stddev", "max (ms)"],
+      rows: tableRows,
+      highlight: (row) => row[0].includes("daloy"),
+    }) + "\n"
+  );
 
   writeFileSync(
     resultsPath("results.cold-start.json"),
-    JSON.stringify({
-      ranAt: new Date().toISOString(),
-      machine: machineInfo(),
-      mode: MODE,
-      iterations: ITERATIONS,
-      rows,
-    }, null, 2),
+    JSON.stringify(
+      {
+        ranAt: new Date().toISOString(),
+        machine: machineInfo(),
+        mode: MODE,
+        iterations: ITERATIONS,
+        rows,
+      },
+      null,
+      2
+    )
   );
-  console.error(info(`Wrote ${c.bold("results.cold-start.json")} ${c.dim(`(mode=${MODE}, ${ok.length}/${rows.length} OK)`)}`));
+  console.error(
+    info(
+      `Wrote ${c.bold("results.cold-start.json")} ${c.dim(`(mode=${MODE}, ${ok.length}/${rows.length} OK)`)}`
+    )
+  );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

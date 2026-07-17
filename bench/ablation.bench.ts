@@ -220,7 +220,9 @@ console.log(
 
 const samples: Record<string, number[]> = Object.fromEntries(CONFIGS.map((c) => [c.name, []]));
 for (let round = 0; round < ROUNDS; round++) {
-  for (const config of CONFIGS) {
+  const offset = round % CONFIGS.length;
+  for (let i = 0; i < CONFIGS.length; i++) {
+    const config = CONFIGS[(i + offset) % CONFIGS.length]!;
     const ops = await benchOnce(config.makeApp());
     samples[config.name].push(ops);
     console.log(

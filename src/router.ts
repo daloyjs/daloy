@@ -2,9 +2,9 @@
  * Trie / radix-style router with a static-route fast path.
  *
  * Performance:
- *   - Static (parameter-free) paths resolve via a single Map.get — O(1).
+ *   - Exact static (parameter-free) paths resolve via a Map lookup — O(1).
  *   - Dynamic paths walk a trie, O(path-segments) regardless of route count.
- *   - Path string is split by `indexOf` rather than a regex/replace.
+ *   - Path normalization and splitting avoid regular expressions.
  *
  * Safety:
  *   - Path traversal (`..`) and empty segments are rejected at lookup time.
@@ -59,7 +59,8 @@ export class Router<T> {
    */
   add(method: HttpMethod, path: string, handler: T, operationId?: string): void {
     const segments = splitPath(path);
-    if (operationId && this.operationIds.has(operationId)) throw new Error(`Duplicate operationId: "${operationId}"`);
+    if (operationId && this.operationIds.has(operationId))
+      throw new Error(`Duplicate operationId: "${operationId}"`);
     if (operationId) this.operationIds.add(operationId);
     const isStatic = segments.every((s) => !s.startsWith(":") && !s.startsWith("*"));
     const normalized = "/" + segments.join("/");
@@ -122,9 +123,12 @@ export class Router<T> {
       return undefined;
     }
 
-    // Static fast path.
-    const normalized = path.replace(/\/+$/, "") || "/";
-    const staticEntry = this.staticTable.get(normalized);
+    // Static fast path. Avoid allocating a normalized string for the common
+    // exact-path case; only trim when a trailing slash is actually present.
+    let staticEntry = this.staticTable.get(path);
+    if (!staticEntry && path.endsWith("/")) {
+      staticEntry = this.staticTable.get(trimTrailingSlashes(path));
+    }
     if (staticEntry && staticEntry[method]) {
       return { handler: staticEntry[method]!, params: {} };
     }
@@ -140,8 +144,10 @@ export class Router<T> {
 
   /** Returns the set of methods registered at this exact path (for 405 responses). */
   allowedMethods(path: string): HttpMethod[] {
-    const normalized = path.replace(/\/+$/, "") || "/";
-    const fromStatic = this.staticTable.get(normalized);
+    let fromStatic = this.staticTable.get(path);
+    if (!fromStatic && path.endsWith("/")) {
+      fromStatic = this.staticTable.get(trimTrailingSlashes(path));
+    }
     if (fromStatic) return Object.keys(fromStatic) as HttpMethod[];
     const segments = splitPath(path);
     const found = this.walk(this.root, segments, 0, {});
@@ -189,6 +195,7 @@ export class Router<T> {
  * than letting a `URIError` bubble up as a generic 500.
  */
 function safeDecodeURIComponent(segment: string): string | undefined {
+  if (!segment.includes("%")) return segment;
   try {
     return decodeURIComponent(segment);
   } catch {
@@ -211,9 +218,15 @@ function decodeSegments(segs: string[], index: number): string | undefined {
   return parts.join("/");
 }
 
+function trimTrailingSlashes(path: string): string {
+  if (path.length === 0) return "/";
+  let end = path.length;
+  while (end > 1 && path.charCodeAt(end - 1) === 47) end--;
+  return end === path.length ? path : path.slice(0, end);
+}
 
 function splitPath(path: string): string[] {
-  const clean = path.replace(/\/+$/, "") || "/";
+  const clean = trimTrailingSlashes(path);
   if (clean === "/") return [];
-  return clean.replace(/^\//, "").split("/");
+  return (clean.charCodeAt(0) === 47 ? clean.slice(1) : clean).split("/");
 }

@@ -30,9 +30,9 @@ const MAX_CONNECTIONS = Number(process.env.MAX_CONNECTIONS ?? 200);
 const app = new App({
   logger: false,
   loadShedding: {
-    maxEventLoopDelayMs: 100,      // shed when the loop falls 100ms behind
-    maxEventLoopUtilization: 0,    // DISABLED — wrong signal for a busy server
-    sampleIntervalMs: 100,         // react in 100ms, not the default 1s
+    maxEventLoopDelayMs: 100, // shed when the loop falls 100ms behind
+    maxEventLoopUtilization: 0, // DISABLED — wrong signal for a busy server
+    sampleIntervalMs: 100, // react in 100ms, not the default 1s
     retryAfterSeconds: 1,
   },
 });
@@ -42,7 +42,7 @@ app.route({
   path: "/static",
   operationId: "getStatic",
   responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) } },
-  handler: async () => ({ status: 200, body: { ok: true } }),
+  handler: () => ({ status: 200, body: { ok: true } }),
 });
 
 app.route({
@@ -51,7 +51,7 @@ app.route({
   operationId: "getUser",
   request: { params: z.object({ id: z.string() }) },
   responses: { 200: { description: "ok", body: z.object({ id: z.string() }) } },
-  handler: async ({ params }) => ({ status: 200, body: { id: params.id } }),
+  handler: ({ params }) => ({ status: 200, body: { id: params.id } }),
 });
 
 app.route({
@@ -60,7 +60,7 @@ app.route({
   operationId: "echo",
   request: { body: z.object({ name: z.string() }) },
   responses: { 200: { description: "ok", body: z.object({ name: z.string() }) } },
-  handler: async ({ body }) => ({ status: 200, body: { name: body.name } }),
+  handler: ({ body }) => ({ status: 200, body: { name: body.name } }),
 });
 
 const port = Number(process.env.PORT ?? 3000);

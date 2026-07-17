@@ -72,8 +72,13 @@ const ROUNDS = 5;
 const onRounds: number[] = [];
 const offRounds: number[] = [];
 for (let round = 0; round < ROUNDS; round++) {
-  onRounds.push(await bench(`limits ON  (default)`, makeApp(true), ITERS));
-  offRounds.push(await bench(`limits OFF (0/0)`, makeApp(false), ITERS));
+  if (round % 2 === 0) {
+    onRounds.push(await bench(`limits ON  (default)`, makeApp(true), ITERS));
+    offRounds.push(await bench(`limits OFF (0/0)`, makeApp(false), ITERS));
+  } else {
+    offRounds.push(await bench(`limits OFF (0/0)`, makeApp(false), ITERS));
+    onRounds.push(await bench(`limits ON  (default)`, makeApp(true), ITERS));
+  }
   console.log("");
 }
 const median = (xs: number[]): number => {

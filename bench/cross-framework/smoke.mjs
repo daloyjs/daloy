@@ -48,6 +48,7 @@ const SCRIPTS = [
   ["error-path.mjs", []],
   ["streaming.mjs", []],
   ["middleware-stack.mjs", []],
+  ["logging.mjs", []],
 ];
 
 function runOne(file, extraArgs) {

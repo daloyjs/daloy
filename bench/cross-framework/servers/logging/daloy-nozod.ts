@@ -6,7 +6,7 @@ import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { accessLogStart, writeAccessLog } from "./access-log";
 
-const app = new App();
+const app = new App({ logger: false });
 
 app.use({
   beforeHandle: (ctx) => {
@@ -28,7 +28,7 @@ app.route({
   path: "/static",
   operationId: "getStatic",
   responses: { 200: { description: "ok" } },
-  handler: async () => ({ status: 200, body: { ok: true } }),
+  handler: () => ({ status: 200, body: { ok: true } }),
 });
 
 app.route({
@@ -36,8 +36,10 @@ app.route({
   path: "/users/:id",
   operationId: "getUser",
   responses: { 200: { description: "ok" } },
-  handler: async ({ params }: { params: Record<string, string> }) =>
-    ({ status: 200, body: { id: params.id } }),
+  handler: ({ params }: { params: Record<string, string> }) => ({
+    status: 200,
+    body: { id: params.id },
+  }),
 });
 
 app.route({
@@ -45,8 +47,10 @@ app.route({
   path: "/echo",
   operationId: "echo",
   responses: { 200: { description: "ok" } },
-  handler: async ({ body }: { body: { name: string } }) =>
-    ({ status: 200, body: { name: body.name } }),
+  handler: async ({ request }: { request: Request }) => {
+    const body = (await request.json()) as { name: string };
+    return { status: 200, body: { name: body.name } };
+  },
 });
 
 const port = Number(process.env.PORT ?? 3000);

@@ -7,7 +7,12 @@ const app = new Hono();
 app.get("/static", (c) => c.json({ ok: true }));
 app.get("/users/:id", (c) => c.json({ id: c.req.param("id") }));
 app.post("/echo", async (c) => {
-  const body = await c.req.json();
+  let body: { name?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "bad" }, 400);
+  }
   if (typeof body?.name !== "string") return c.json({ error: "bad" }, 400);
   return c.json({ name: body.name });
 });

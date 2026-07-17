@@ -26,26 +26,45 @@
 import { writeFileSync } from "node:fs";
 import autocannon from "autocannon";
 import {
-  resultsPath, orderTargets, machineInfo, parseArgs,
-  startServer, killServer,
-  waitForHealthy, httpRequest,
-  stats, fmt, parityTiers, warnBenchEnvironment,
+  resultsPath,
+  orderTargets,
+  machineInfo,
+  parseArgs,
+  startServer,
+  killServer,
+  waitForHealthy,
+  httpRequest,
+  stats,
+  fmt,
+  parityTiers,
+  warnBenchEnvironment,
 } from "./lib/common.mjs";
 import {
-  c, section, summary, fail, info, metric, metricsLine, sym, banner, renderTiers,
+  c,
+  section,
+  summary,
+  fail,
+  info,
+  metric,
+  metricsLine,
+  sym,
+  banner,
+  renderTiers,
 } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",      file: "servers/throughput/daloy.ts" },
+  { name: "daloy", file: "servers/throughput/daloy.ts" },
+  { name: "daloy-nozod", file: "servers/throughput/daloy-nozod.ts" },
   { name: "daloy-bare", file: "servers/throughput/daloy-bare.ts" },
   { name: "daloy-shed", file: "servers/throughput/daloy-shed.ts" },
-  { name: "hono",       file: "servers/throughput/hono.ts" },
-  { name: "fastify",    file: "servers/throughput/fastify.ts" },
-  { name: "express",    file: "servers/throughput/express.ts" },
-  { name: "koa",        file: "servers/throughput/koa.ts" },
-  { name: "nest",       file: "servers/throughput/nest.ts" },
-  { name: "elysia",     file: "servers/throughput/elysia.ts" },
-  { name: "feathers",   file: "servers/throughput/feathers.ts" },
+  { name: "hono", file: "servers/throughput/hono.ts" },
+  { name: "hono-validated", file: "servers/throughput/hono-validated.ts" },
+  { name: "fastify", file: "servers/throughput/fastify.ts" },
+  { name: "express", file: "servers/throughput/express.ts" },
+  { name: "koa", file: "servers/throughput/koa.ts" },
+  { name: "nest", file: "servers/throughput/nest.ts" },
+  { name: "elysia", file: "servers/throughput/elysia.ts" },
+  { name: "feathers", file: "servers/throughput/feathers.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -58,8 +77,10 @@ const ITERATIONS = Number(process.env.ITERATIONS ?? 5);
 const PORT = 3456;
 
 const SWEEP = args.sweep ?? null;
-const CONNECTION_POINTS = SWEEP === "connections" ? [10, 100, 500, 1000] : [Number(process.env.CONNECTIONS ?? 100)];
-const PIPELINING_POINTS = SWEEP === "pipelining" ? [1, 4, 10] : [Number(process.env.PIPELINING ?? 1)];
+const CONNECTION_POINTS =
+  SWEEP === "connections" ? [10, 100, 500, 1000] : [Number(process.env.CONNECTIONS ?? 100)];
+const PIPELINING_POINTS =
+  SWEEP === "pipelining" ? [1, 4, 10] : [Number(process.env.PIPELINING ?? 1)];
 
 const SCENARIOS = [
   {
@@ -89,16 +110,23 @@ const SCENARIOS = [
 
 function runAutocannon(scenario, { duration, connections, pipelining }) {
   return new Promise((resolve, reject) => {
-    const instance = autocannon({
-      url: `http://127.0.0.1:${PORT}${scenario.path}`,
-      method: scenario.method,
-      headers: scenario.headers,
-      body: scenario.body,
-      connections,
-      pipelining,
-      duration,
-    }, (err, result) => err ? reject(err) : resolve(result));
-    autocannon.track(instance, { renderProgressBar: false, renderResultsTable: false, renderLatencyTable: false });
+    const instance = autocannon(
+      {
+        url: `http://127.0.0.1:${PORT}${scenario.path}`,
+        method: scenario.method,
+        headers: scenario.headers,
+        body: scenario.body,
+        connections,
+        pipelining,
+        duration,
+      },
+      (err, result) => (err ? reject(err) : resolve(result))
+    );
+    autocannon.track(instance, {
+      renderProgressBar: false,
+      renderResultsTable: false,
+      renderLatencyTable: false,
+    });
   });
 }
 
@@ -113,7 +141,11 @@ async function preflight(scenario) {
     throw new Error(`preflight ${scenario.id}: status ${r.status} (expected 200)`);
   }
   let ok = false;
-  try { ok = scenario.expect(r.body); } catch { /* ok stays false */ }
+  try {
+    ok = scenario.expect(r.body);
+  } catch {
+    /* ok stays false */
+  }
   if (!ok) {
     throw new Error(`preflight ${scenario.id}: body did not match. Got: ${r.body.slice(0, 200)}`);
   }
@@ -128,17 +160,17 @@ function summarize(samples) {
   return {
     reqPerSec: rps,
     latency: {
-      p50:  medianOf("p50"),
-      p75:  medianOf("p75"),
-      p90:  medianOf("p90"),
-      p99:  medianOf("p99"),
+      p50: medianOf("p50"),
+      p75: medianOf("p75"),
+      p90: medianOf("p90"),
+      p99: medianOf("p99"),
       p999: medianOf("p999"),
     },
     errors: {
-      non2xx:   samples.reduce((a, s) => a + s.non2xx, 0),
-      errors:   samples.reduce((a, s) => a + s.errors, 0),
+      non2xx: samples.reduce((a, s) => a + s.non2xx, 0),
+      errors: samples.reduce((a, s) => a + s.errors, 0),
       timeouts: samples.reduce((a, s) => a + s.timeouts, 0),
-      resets:   samples.reduce((a, s) => a + s.resets, 0),
+      resets: samples.reduce((a, s) => a + s.resets, 0),
     },
     samples,
   };
@@ -165,34 +197,50 @@ async function benchOne(fw) {
             const r = await runAutocannon(sc, { duration: DURATION, connections, pipelining });
             samples.push({
               reqPerSec: r.requests.average,
-              p50:  r.latency.p50,
-              p75:  r.latency.p75,
-              p90:  r.latency.p90,
-              p99:  r.latency.p99,
+              p50: r.latency.p50,
+              p75: r.latency.p75,
+              p90: r.latency.p90,
+              p99: r.latency.p99,
               p999: r.latency.p99_9 ?? r.latency.p99,
-              non2xx:   r.non2xx ?? 0,
-              errors:   r.errors ?? 0,
+              non2xx: r.non2xx ?? 0,
+              errors: r.errors ?? 0,
               timeouts: r.timeouts ?? 0,
-              resets:   r.resets ?? 0,
+              resets: r.resets ?? 0,
             });
             if (global.gc) global.gc();
           }
           const summary = summarize(samples);
           results[pointKey][sc.id] = summary;
           const totalErr = summary.errors.non2xx + summary.errors.errors + summary.errors.timeouts;
-          const errBadge = totalErr > 0
-            ? c.red(`${sym.warn} non2xx=${summary.errors.non2xx} err=${summary.errors.errors} to=${summary.errors.timeouts}`)
-            : "";
-          const label = (CONNECTION_POINTS.length > 1 || PIPELINING_POINTS.length > 1)
-            ? `${sc.title} ${c.dim(`[c=${connections} p=${pipelining}]`)}` : sc.title;
-          console.error(metricsLine(label, [
-            c.green(c.bold(fmt(summary.reqPerSec.median))) + c.dim(" req/s") +
-              c.dim(summary.reqPerSec.ci95 != null ? ` ±${fmt(summary.reqPerSec.ci95)} (95% CI)` : ` ±${fmt(summary.reqPerSec.stddev)}`),
-            metric("p50", summary.latency.p50.toFixed(2), { unit: "ms" }),
-            metric("p99", summary.latency.p99.toFixed(2), { unit: "ms" }),
-            metric("p99.9", summary.latency.p999.toFixed(2), { unit: "ms" }),
-            errBadge,
-          ].filter(Boolean), { labelWidth: 28 }));
+          const errBadge =
+            totalErr > 0
+              ? c.red(
+                  `${sym.warn} non2xx=${summary.errors.non2xx} err=${summary.errors.errors} to=${summary.errors.timeouts}`
+                )
+              : "";
+          const label =
+            CONNECTION_POINTS.length > 1 || PIPELINING_POINTS.length > 1
+              ? `${sc.title} ${c.dim(`[c=${connections} p=${pipelining}]`)}`
+              : sc.title;
+          console.error(
+            metricsLine(
+              label,
+              [
+                c.green(c.bold(fmt(summary.reqPerSec.mean))) +
+                  c.dim(" req/s") +
+                  c.dim(
+                    summary.reqPerSec.ci95 != null
+                      ? ` ±${fmt(summary.reqPerSec.ci95)} (95% CI)`
+                      : ` ±${fmt(summary.reqPerSec.stddev)}`
+                  ),
+                metric("p50", summary.latency.p50.toFixed(2), { unit: "ms" }),
+                metric("p99", summary.latency.p99.toFixed(2), { unit: "ms" }),
+                metric("p99.9", summary.latency.p999.toFixed(2), { unit: "ms" }),
+                errBadge,
+              ].filter(Boolean),
+              { labelWidth: 28 }
+            )
+          );
         }
       }
     }
@@ -202,17 +250,22 @@ async function benchOne(fw) {
   }
 }
 
-// `median ±ci95` — the CI half-width is the run-to-run noise gauge; see
+// `mean ±ci95` — the CI half-width is the run-to-run noise gauge; see
 // stats() in lib/common.mjs.
 function cell(rps) {
-  return rps.ci95 != null ? `${fmt(rps.median)} ±${fmt(rps.ci95)}` : fmt(rps.median);
+  return rps.ci95 != null ? `${fmt(rps.mean)} ±${fmt(rps.ci95)}` : fmt(rps.mean);
 }
 
 function renderSummary(rows) {
   const pointKey = `c${CONNECTION_POINTS[0]}_p${PIPELINING_POINTS[0]}`;
   const head = [
-    "Framework", "GET /static (req/s ±95% CI)", "GET /users/:id (req/s ±95% CI)",
-    "POST /echo (req/s ±95% CI)", "p50 (ms)", "p99 (ms)", "p99.9 (ms)",
+    "Framework",
+    "GET /static (req/s ±95% CI)",
+    "GET /users/:id (req/s ±95% CI)",
+    "POST /echo (req/s ±95% CI)",
+    "p50 (ms)",
+    "p99 (ms)",
+    "p99.9 (ms)",
   ];
   const tableRows = [];
   for (const r of rows) {
@@ -235,9 +288,8 @@ function renderSummary(rows) {
   });
 }
 
-// Parity tiers per scenario — the primary output. Ranked tables invite
-// reading a 1% gap as a win; tiers state which gaps are real at this sample
-// size and which are noise.
+// Uncertainty groups per scenario. Ranked tables invite reading a 1% gap as a
+// win; CI overlap is shown as a noise warning, not as a significance test.
 function renderScenarioTiers(rows) {
   const pointKey = `c${CONNECTION_POINTS[0]}_p${PIPELINING_POINTS[0]}`;
   const blocks = [];
@@ -246,27 +298,34 @@ function renderScenarioTiers(rows) {
       .filter((r) => r.results?.[pointKey])
       .map((r) => {
         const rps = r.results[pointKey][sc.id].reqPerSec;
-        return { name: r.framework, value: rps.median, mean: rps.mean, ci95: rps.ci95 };
+        return { name: r.framework, value: rps.mean, mean: rps.mean, ci95: rps.ci95 };
       });
     if (entries.length === 0) continue;
-    blocks.push(renderTiers(parityTiers(entries), {
-      title: `${sc.title} (req/s)`,
-      fmtValue: fmt,
-      highlight: (name) => name.includes("daloy"),
-    }));
+    blocks.push(
+      renderTiers(parityTiers(entries), {
+        title: `${sc.title} (req/s)`,
+        fmtValue: fmt,
+        highlight: (name) => name.includes("daloy"),
+      })
+    );
   }
   return blocks.join("\n\n");
 }
 
 async function main() {
   warnBenchEnvironment({ maxConnections: Math.max(...CONNECTION_POINTS) });
-  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
-  console.error(banner(
-    "Cross-framework HTTP benchmark",
-    `${targets.length} framework(s) · ${SCENARIOS.length} scenarios · ` +
-    `${WARMUP_SECONDS}s warmup · ${ITERATIONS}×${DURATION}s · ` +
-    `c=${CONNECTION_POINTS.join(",")} p=${PIPELINING_POINTS.join(",")}`,
-  ));
+  const targets = orderTargets(
+    FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)),
+    args.order
+  );
+  console.error(
+    banner(
+      "Cross-framework HTTP benchmark",
+      `${targets.length} framework(s) · ${SCENARIOS.length} scenarios · ` +
+        `${WARMUP_SECONDS}s warmup · ${ITERATIONS}×${DURATION}s · ` +
+        `c=${CONNECTION_POINTS.join(",")} p=${PIPELINING_POINTS.join(",")}`
+    )
+  );
   const rows = [];
   for (const fw of targets) {
     try {
@@ -284,28 +343,34 @@ async function main() {
   console.log(
     c.dim(
       "Note: orange-to-apple. daloy validates request + response against Zod\n" +
-      "schemas on every route; the others validate little to nothing. See\n" +
-      "README.md \u2192 \"Honest caveats\" and the *-nozod / *-validated variants.\n",
-    ),
+        "schemas on every route; bare peers validate little to nothing. Use\n" +
+        "daloy-bare, daloy-nozod, and hono-validated as diagnostic tiers.\n"
+    )
   );
 
   writeFileSync(
     resultsPath("results.json"),
-    JSON.stringify({
-      ranAt: new Date().toISOString(),
-      machine: machineInfo(),
-      config: {
-        duration: DURATION,
-        warmup: WARMUP_SECONDS,
-        iterations: ITERATIONS,
-        connectionPoints: CONNECTION_POINTS,
-        pipeliningPoints: PIPELINING_POINTS,
-        sweep: SWEEP,
+    JSON.stringify(
+      {
+        ranAt: new Date().toISOString(),
+        machine: machineInfo(),
+        config: {
+          duration: DURATION,
+          warmup: WARMUP_SECONDS,
+          iterations: ITERATIONS,
+          connectionPoints: CONNECTION_POINTS,
+          pipeliningPoints: PIPELINING_POINTS,
+          sweep: SWEEP,
+        },
+        rows,
       },
-      rows,
-    }, null, 2),
+      null,
+      2
+    )
   );
-  console.error(info(`Wrote ${c.bold("results.json")} ${c.dim(`(${ok.length}/${rows.length} frameworks OK)`)}`));
+  console.error(
+    info(`Wrote ${c.bold("results.json")} ${c.dim(`(${ok.length}/${rows.length} frameworks OK)`)}`)
+  );
 }
 
 main().catch((err) => {

@@ -24,7 +24,7 @@ For each framework, a minimal HTTP server exposing the same three endpoints:
 > **Read the table as orange-to-apple, not apple-to-apple.** DaloyJS is the
 > only server here that runs its full contract on every route: it Zod-parses
 > the request params, Zod-parses the request body, **and** validates the
-> *response* body against its schema before sending. Every other server does
+> _response_ body against its schema before sending. Every other server does
 > little to no schema work — Hono/Fastify do a single `typeof` check on
 > `/echo` and nothing on the GET routes, and none of them validate responses
 > at all. So the throughput gap is mostly "daloy doing the most work" vs.
@@ -83,15 +83,19 @@ Every server uses `JSON.stringify` / built-in body parsing only. No
 framework-specific perf tricks (no Fastify response schema, no DaloyJS
 typed-client client-side cache).
 
-Besides `daloy`, the default `run.mjs` matrix includes two first-party
+Besides `daloy`, the default `run.mjs` matrix includes these diagnostic
 variants:
 
+- **`daloy-nozod`** — secure defaults retained, with contract validation
+  removed. This isolates the validation cost from the security-default cost.
 - **`daloy-bare`** — validation work (Zod) and browser-facing guards stripped
   to the same posture as the bare routers (`hono.ts`, `fastify.ts`). This is
   the closest apple-to-apple row.
 - **`daloy-shed`** — same full contract as `daloy`, plus connection-cap
   admission control and event-loop-delay load shedding. Compare against
   `daloy` under `--sweep=connections` for the overload / tail-latency story.
+- **`hono-validated`** — Hono with the same request and response Zod schemas
+  as full-contract Daloy, isolating framework dispatch from validation work.
 
 ## Running
 
@@ -99,7 +103,7 @@ variants:
 cd bench/cross-framework
 nvm use        # Node 24 (.nvmrc) — the version baseline numbers are produced on
 pnpm install   # installs all framework deps in this folder only
-node run.mjs   # ~35 min wall time for the full matrix (15s warmup + 5×10s per scenario)
+node run.mjs   # ~42 min wall time for the full matrix (15s warmup + 5×10s per scenario)
 ```
 
 To run a subset:
@@ -148,7 +152,7 @@ output away from real results).
 
 | Script                 | Measures                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run.mjs`              | Throughput + p50/p75/p90/p99/p99.9 latency. Supports `--sweep=connections` and `--sweep=pipelining`. Correctness preflight before measuring. Prints per-scenario **parity tiers** as the primary output (see methodology).                                                                                                                                                                                                                                                                                                                                                                                          |
+| `run.mjs`              | Throughput + p50/p75/p90/p99/p99.9 latency. Supports `--sweep=connections` and `--sweep=pipelining`. Correctness preflight before measuring. Prints per-scenario **uncertainty groups** before the ranked table (see methodology).                                                                                                                                                                                                                                                                                                                                                                                  |
 | `cold-start.mjs`       | Wall-clock from process `spawn()` to first `200 OK` over N iterations. Default `--mode=compiled`: each server is precompiled to plain JS (esbuild, npm packages external) and spawned with bare `node`, so the number is the compiled-JS cold start a deployed app pays — compile time is not counted. `--mode=tsx` measures the dev-workflow path instead (tsx loader, transpile on boot); the two modes are not comparable and the results file records which one ran.                                                                                                                                            |
 | `install-size.mjs`     | `node_modules` footprint per framework: own size + transitive size + direct + transitive dep counts. Reports two variants per framework: `minimal` (router/runtime only) and `secure parity` (adds helmet/secure-headers, CORS, rate-limit, HS256 JWT). Daloy and Hono's two rows are identical because those guards ship in-package; every other framework grows. pnpm-aware: walks the `.pnpm/` store so transitive deps under symlinked locations are counted. Optional peer deps (e.g. NestJS's class-validator, class-transformer, websockets) are skipped.                                                    |
 | `bundle-size.mjs`      | esbuild ESM bundle of a minimal "hello world" app, raw and gzipped. Reports two variants per framework: `minimal` (bare router) and `secure parity` (request-id, secure headers, CORS allowlist, rate-limit hook, HS256 JWT verify). Daloy ships those guards in core; every other framework requires opt-in middleware, so compare the secure-parity rows to each other for an honest edge/serverless number. The minimal rows are router-only baselines, not production bundles. NestJS optional peer deps (class-validator, class-transformer, websockets, microservices, platform-express) are marked external. |
@@ -157,10 +161,10 @@ output away from real results).
 | `route-scale.mjs`      | Throughput when the router holds N routes {10, 100, 500, 2000}, hitting the worst-case slot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `error-path.mjs`       | Throughput of the 400 / 404 paths (malformed JSON, schema failure, route miss).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `streaming.mjs`        | Large `ReadableStream` response throughput in MiB/s and req/s.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `middleware-stack.mjs` | Same scenarios as `run.mjs` but with the production middleware stack on (CORS, secure headers, request-id, rate-limit, JWT verify).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `middleware-stack.mjs` | Same scenarios as `run.mjs` but with the production security middleware stack on (CORS, secure headers, request-id, rate-limit, JWT verify). Daloy and Hono also run matched request/response Zod schemas; most other peers keep their bare validation posture, so read those rows as security-stack cost rather than full behavioral parity.                                                                                                                                                                                                                                                                       |
 | `logging.mjs`          | Same scenarios as `run.mjs` but with one structured Pino access log emitted per completed response. Defaults to `LOG_DEST=/dev/null` to avoid terminal or collector backpressure.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `profile-imports.mjs`  | Cold-process import cost per module: each candidate is imported in its own fresh Node process so the loader cache never warms across samples.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `smoke.mjs`            | Runs every bench script above with minimal durations/iterations to verify the harness wiring end-to-end (`pnpm bench:smoke`). CI-suitable; measures nothing. Writes to a temp `BENCH_RESULTS_DIR`, so it never overwrites real `results.*.json`.                                                                                                                                                                                                                                                                                                                                               |
+| `smoke.mjs`            | Runs every bench script above with minimal durations/iterations to verify the harness wiring end-to-end (`pnpm bench:smoke`). CI-suitable; measures nothing. Writes to a temp `BENCH_RESULTS_DIR`, so it never overwrites real `results.*.json`.                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### Server layout
 
@@ -204,7 +208,8 @@ pnpm bench:all   # ~60–90 min wall time depending on the matrix
 
 - **Long warmup, then measure.** `run.mjs` defaults to a 15s warmup so V8
   has time to tier up to TurboFan. Override with `WARMUP=30`.
-- **Multiple iterations, median + 95% CI.** Mean alone hides outliers.
+- **Multiple iterations, mean + 95% CI.** The throughput headline and its
+  confidence interval use the same estimator.
   Defaults: 5 iterations of 10s each (enough samples for a meaningful
   confidence interval; push to `ITERATIONS=10 DURATION=20` for
   publication-grade numbers). Aggregated latency percentiles (p50…p99.9) are
@@ -213,15 +218,12 @@ pnpm bench:all   # ~60–90 min wall time depending on the matrix
   stay in `samples`.
 - **Confidence intervals on every aggregate.** `stats()` records `ci95`, the
   half-width of the two-sided 95% confidence interval of the mean (Student's
-  t on the sample variance). Tables render it as `median ±ci95`: the ± is the
-  run-to-run noise gauge, and two frameworks whose intervals overlap are
-  statistically indistinguishable at that sample size.
-- **Parity tiers are the primary output.** `run.mjs`,
-  `middleware-stack.mjs`, and `cold-start.mjs` print tiers before the ranked
-  table: frameworks are walked best-first and grouped while their 95% CIs
-  overlap the tier leader's. Being "first" *inside* a tier is noise, not a
-  win — only tier boundaries are real differences. The ranked table remains
-  as detail.
+  t on the sample variance). Tables render it as `mean ±ci95`.
+- **Uncertainty groups are descriptive, not a significance test.** `run.mjs`,
+  `middleware-stack.mjs`, and `cold-start.mjs` visually group frameworks
+  while their marginal 95% CIs overlap the group leader's. CI overlap is a
+  useful noise warning, but it does not prove equal performance or replace a
+  direct test of paired differences. The ranked table remains as detail.
 - **Shuffled framework order.** Each run executes frameworks in a random
   order so nobody systematically benefits from running first (cool machine)
   or last (thermal throttle); repeated runs average position effects out.
@@ -272,10 +274,10 @@ DURATION=20 CONNECTIONS=200 node run.mjs
 
 `run.mjs` writes a `results.json` next to this README (all scripts write
 their `results.*.json` here unless `BENCH_RESULTS_DIR` overrides it) and
-prints per-scenario parity tiers followed by a markdown table:
+prints per-scenario uncertainty groups followed by a markdown table:
 
 ```
-Parity tiers — GET /static (req/s) (higher is better; overlapping 95% CIs ⇒ same tier)
+Uncertainty groups — GET /static (req/s) (higher is better; CI overlap is not a significance test)
   1. hono 125,001 ±2,113  ·  daloy-bare 123,456 ±1,890
   2. fastify 101,300 ±955
 ...
@@ -301,7 +303,7 @@ you whether two results files are actually comparable.
 - Microbenchmarks are **not production performance**. They flatter routers
   and punish any framework that does useful work (validation, OpenAPI,
   refuse-to-boot checks). This is an **orange-to-apple** comparison by
-  construction: on all three endpoints DaloyJS validates the request *and*
+  construction: on all three endpoints DaloyJS validates the request _and_
   the response against Zod schemas, while Express/Koa/Hono/Fastify validate
   nothing on the GET routes and at most do a one-line `typeof` check on
   `POST /echo`. None of the others validate response bodies at all. Read the

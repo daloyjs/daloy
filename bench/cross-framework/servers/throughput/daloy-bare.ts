@@ -36,7 +36,7 @@ app.route({
   path: "/static",
   operationId: "getStatic",
   responses: { 200: { description: "ok" } },
-  handler: async () => ({ status: 200, body: { ok: true } }),
+  handler: () => ({ status: 200, body: { ok: true } }),
 });
 
 app.route({
@@ -44,7 +44,7 @@ app.route({
   path: "/users/:id",
   operationId: "getUser",
   responses: { 200: { description: "ok" } },
-  handler: async ({ params }: { params: Record<string, string> }) => ({
+  handler: ({ params }: { params: Record<string, string> }) => ({
     status: 200,
     body: { id: params.id },
   }),

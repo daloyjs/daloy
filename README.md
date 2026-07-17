@@ -474,15 +474,17 @@ for the full picture, plus the per-provider guides under [`/docs/auth`](https://
 
 ```text
 $ pnpm bench
-static route lookup        12,363,799 ops/sec
-dynamic 4-segment lookup    1,513,983 ops/sec
-miss                        4,763,878 ops/sec
+static route lookup         25,810,420 ops/sec
+dynamic 4-segment lookup     2,105,121 ops/sec
+miss                         7,742,635 ops/sec
 ```
 
-- Static (no-param) routes resolve via a single `Map.get` — **~12M ops/sec**.
+- After traversal checks, exact static routes resolve with an allocation-free
+  `Map.get` fast path — **~26M ops/sec**.
 - Dynamic routes walk a trie, **O(path-segments)** regardless of route count.
 - Body parsing is lazy and only runs when a route declares a body schema.
-- No regex on the hot path.
+- Path normalization and splitting use index/character scans rather than
+  regular expressions.
 
 ### Cold-start tip (serverless / edge)
 

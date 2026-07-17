@@ -3,9 +3,9 @@ import Fastify from "fastify";
 
 const app = Fastify({ logger: false });
 
-app.get("/static", async () => ({ ok: true }));
-app.get<{ Params: { id: string } }>("/users/:id", async (req) => ({ id: req.params.id }));
-app.post<{ Body: { name?: unknown } }>("/echo", async (req, reply) => {
+app.get("/static", () => ({ ok: true }));
+app.get<{ Params: { id: string } }>("/users/:id", (req) => ({ id: req.params.id }));
+app.post<{ Body: { name?: unknown } }>("/echo", (req, reply) => {
   const name = req.body?.name;
   if (typeof name !== "string") {
     reply.code(400);

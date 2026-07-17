@@ -87,7 +87,11 @@ export function detectPowerSource() {
       const base = "/sys/class/power_supply";
       for (const name of readdirSync(base)) {
         let type = "";
-        try { type = readFileSync(path.join(base, name, "type"), "utf8").trim(); } catch { continue; }
+        try {
+          type = readFileSync(path.join(base, name, "type"), "utf8").trim();
+        } catch {
+          continue;
+        }
         if (type === "Mains") {
           const online = readFileSync(path.join(base, name, "online"), "utf8").trim();
           const onAc = online === "1";
@@ -101,7 +105,7 @@ export function detectPowerSource() {
       const out = execFileSync(
         "powershell",
         ["-NoProfile", "-Command", "(Get-CimInstance Win32_Battery).BatteryStatus"],
-        { encoding: "utf8", timeout: 4_000, stdio: ["ignore", "pipe", "ignore"] },
+        { encoding: "utf8", timeout: 4_000, stdio: ["ignore", "pipe", "ignore"] }
       ).trim();
       if (out === "") return { onBattery: false, source: "AC" }; // desktop / no battery
       const status = Number(out.split(/\s+/)[0]);
@@ -173,7 +177,7 @@ export function provenance() {
     for (const name of Object.keys(declared).sort()) {
       try {
         const resolved = JSON.parse(
-          readFileSync(path.join(ROOT, "node_modules", name, "package.json"), "utf8"),
+          readFileSync(path.join(ROOT, "node_modules", name, "package.json"), "utf8")
         );
         depVersions[name] = resolved.version ?? "unknown";
       } catch {
@@ -225,9 +229,9 @@ export function warnBenchEnvironment({ maxConnections = 100 } = {}) {
     console.error(
       warn(
         "Running on BATTERY power. Laptops throttle the CPU on battery, so " +
-        "throughput/latency numbers will be noisy and not comparable to an " +
-        "on-AC run. Plug in for stable results.",
-      ),
+          "throughput/latency numbers will be noisy and not comparable to an " +
+          "on-AC run. Plug in for stable results."
+      )
     );
   }
   // Each connection needs a client socket + an accepted server socket, plus
@@ -239,9 +243,9 @@ export function warnBenchEnvironment({ maxConnections = 100 } = {}) {
       console.error(
         warn(
           `File-descriptor soft limit is ${info.fdLimit}, which may be too low ` +
-          `for ${maxConnections} connections (need ~${needed}). On macOS/Linux run ` +
-          `\`ulimit -n 4096\` in this shell before benchmarking to avoid EMFILE errors.`,
-        ),
+            `for ${maxConnections} connections (need ~${needed}). On macOS/Linux run ` +
+            `\`ulimit -n 4096\` in this shell before benchmarking to avoid EMFILE errors.`
+        )
       );
     }
   }
@@ -249,16 +253,20 @@ export function warnBenchEnvironment({ maxConnections = 100 } = {}) {
 
 export function parseArgs(argv) {
   return Object.fromEntries(
-    argv.slice(2)
+    argv
+      .slice(2)
       .filter((a) => a.startsWith("--"))
       .map((a) => {
         const [k, v] = a.replace(/^--/, "").split("=");
         return [k, v ?? "true"];
-      }),
+      })
   );
 }
 
-export async function startServer(file, { port = DEFAULT_PORT, extraEnv = {}, readyTimeoutMs = 20_000 } = {}) {
+export async function startServer(
+  file,
+  { port = DEFAULT_PORT, extraEnv = {}, readyTimeoutMs = 20_000 } = {}
+) {
   // Avoid EADDRINUSE when a previous SIGKILLed listener hasn't released the
   // socket yet (common on macOS for listeners that didn't set SO_REUSEADDR).
   await waitForPortFree(port).catch(() => {});
@@ -269,7 +277,7 @@ export async function startServer(file, { port = DEFAULT_PORT, extraEnv = {}, re
       cwd: ROOT,
       env: { ...process.env, PORT: String(port), NODE_ENV: "production", ...extraEnv },
       stdio: ["ignore", "pipe", "pipe"],
-    },
+    }
   );
 
   return new Promise((resolve, reject) => {
@@ -293,13 +301,23 @@ export async function startServer(file, { port = DEFAULT_PORT, extraEnv = {}, re
     });
     child.once("exit", (code) => {
       if (!resolved) {
-        reject(new Error(`Server exited with code ${code} before READY.\nstdout: ${stdoutBuf}\nstderr: ${stderrBuf}`));
+        reject(
+          new Error(
+            `Server exited with code ${code} before READY.\nstdout: ${stdoutBuf}\nstderr: ${stderrBuf}`
+          )
+        );
       }
     });
     setTimeout(() => {
       if (!resolved) {
-        try { child.kill("SIGKILL"); } catch {}
-        reject(new Error(`Server did not emit READY within ${readyTimeoutMs}ms.\nstdout: ${stdoutBuf}\nstderr: ${stderrBuf}`));
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+        reject(
+          new Error(
+            `Server did not emit READY within ${readyTimeoutMs}ms.\nstdout: ${stdoutBuf}\nstderr: ${stderrBuf}`
+          )
+        );
       }
     }, readyTimeoutMs);
   });
@@ -320,12 +338,17 @@ export async function killServer(child) {
 // Some adapters (Hono's node-server) bind to "::" and will hit EADDRINUSE
 // against lingering listener sockets from a SIGKILLed predecessor.
 export async function waitForPortFree(port, { timeoutMs = 10_000 } = {}) {
-  const tryBind = (host) => new Promise((resolve) => {
-    const s = net.createServer();
-    s.once("error", () => resolve(false));
-    s.once("listening", () => s.close(() => resolve(true)));
-    try { s.listen(port, host); } catch { resolve(false); }
-  });
+  const tryBind = (host) =>
+    new Promise((resolve) => {
+      const s = net.createServer();
+      s.once("error", () => resolve(false));
+      s.once("listening", () => s.close(() => resolve(true)));
+      try {
+        s.listen(port, host);
+      } catch {
+        resolve(false);
+      }
+    });
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if ((await tryBind("127.0.0.1")) && (await tryBind("::"))) return;
@@ -337,17 +360,18 @@ export async function waitForPortFree(port, { timeoutMs = 10_000 } = {}) {
 // Two-tailed 95% Student's t critical values for df = 1..30; beyond that the
 // normal approximation (1.96) is close enough for a benchmark noise gauge.
 const T_95 = [
-  12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
-  2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
-  2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+  12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.16, 2.145,
+  2.131, 2.12, 2.11, 2.101, 2.093, 2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048,
+  2.045, 2.042,
 ];
 
 /**
  * Population stats over a numeric array, plus `ci95`: the half-width of the
  * two-sided 95% confidence interval of the mean (Student's t on the sample
- * variance). `mean ± ci95` is the noise gauge every table renders; two
- * frameworks whose intervals overlap are statistically indistinguishable at
- * that sample size. `ci95` is `null` when fewer than 2 samples exist.
+ * variance). `mean ± ci95` is the noise gauge every table renders. Overlap is
+ * useful as a visual uncertainty grouping, but it is not by itself a
+ * significance test for the difference between two frameworks. `ci95` is
+ * `null` when fewer than 2 samples exist.
  *
  * @param {number[]} xs - Samples.
  * @returns {{n: number, min?: number, max?: number, mean?: number, median?: number, stddev?: number, ci95?: (number|null)}}
@@ -361,9 +385,10 @@ export function stats(xs) {
   const median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
   const sumSq = sorted.reduce((a, b) => a + (b - mean) ** 2, 0);
   const variance = sumSq / n;
-  const ci95 = n < 2
-    ? null
-    : (n - 2 < T_95.length ? T_95[n - 2] : 1.96) * Math.sqrt(sumSq / (n - 1)) / Math.sqrt(n);
+  const ci95 =
+    n < 2
+      ? null
+      : ((n - 2 < T_95.length ? T_95[n - 2] : 1.96) * Math.sqrt(sumSq / (n - 1))) / Math.sqrt(n);
   return {
     n,
     min: sorted[0],
@@ -376,13 +401,14 @@ export function stats(xs) {
 }
 
 /**
- * Group benchmark entries into parity tiers — the primary way to read a
- * cross-framework table. Entries are sorted best-first by `value` (the
+ * Group benchmark entries into visual uncertainty tiers. Entries are sorted
+ * best-first by `value` (the
  * headline estimator, usually the median), then walked in order: an entry
  * joins the current tier when its 95% confidence interval (`mean ± ci95`)
- * overlaps the tier leader's, i.e. when the two are statistically
- * indistinguishable at this sample size. When `ci95` is unavailable (single
- * sample), a ±`fallbackRelSpread` band around the value stands in.
+ * overlaps the tier leader's. These are visual uncertainty groups, not a
+ * hypothesis test: overlapping marginal intervals do not prove equal
+ * performance. When `ci95` is unavailable (single sample), a
+ * ±`fallbackRelSpread` band around the value stands in.
  *
  * @param {Array<{name: string, value: number, mean?: number, ci95?: (number|null)}>} entries
  *   One entry per framework. `value` ranks; `mean`/`ci95` define the interval.
@@ -393,7 +419,9 @@ export function stats(xs) {
  *   Tiers, best first; each tier keeps its entries in rank order.
  */
 export function parityTiers(entries, { better = "higher", fallbackRelSpread = 0.05 } = {}) {
-  const ranked = [...entries].sort((a, b) => better === "lower" ? a.value - b.value : b.value - a.value);
+  const ranked = [...entries].sort((a, b) =>
+    better === "lower" ? a.value - b.value : b.value - a.value
+  );
   const interval = (e) => {
     const center = e.mean ?? e.value;
     const half = e.ci95 ?? Math.abs(center) * fallbackRelSpread;
@@ -433,7 +461,10 @@ export function parityTiers(entries, { better = "higher", fallbackRelSpread = 0.
  */
 export async function compileServer(file, outDir) {
   const esbuild = await import("esbuild");
-  const outfile = path.join(outDir, file.replace(/[\\/]/g, "__").replace(/\.[cm]?[jt]s$/, "") + ".mjs");
+  const outfile = path.join(
+    outDir,
+    file.replace(/[\\/]/g, "__").replace(/\.[cm]?[jt]s$/, "") + ".mjs"
+  );
   await esbuild.build({
     entryPoints: [path.join(ROOT, file)],
     outfile,
@@ -456,7 +487,10 @@ export function pct(xs, p) {
 }
 
 // HTTP GET with timeout. Returns { status, body } or throws.
-export async function httpRequest(url, { method = "GET", headers = {}, body, timeoutMs = 5_000 } = {}) {
+export async function httpRequest(
+  url,
+  { method = "GET", headers = {}, body, timeoutMs = 5_000 } = {}
+) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -469,19 +503,28 @@ export async function httpRequest(url, { method = "GET", headers = {}, body, tim
 }
 
 // Wait for a server to respond 200 to a probe URL. Used as a soft readiness check.
-export async function waitForHealthy(port, pathOk = "/static", { timeoutMs = 10_000, headers } = {}) {
+export async function waitForHealthy(
+  port,
+  pathOk = "/static",
+  { timeoutMs = 10_000, headers } = {}
+) {
   const start = Date.now();
   let lastErr;
   while (Date.now() - start < timeoutMs) {
     try {
-      const r = await httpRequest(`http://127.0.0.1:${port}${pathOk}`, { timeoutMs: 1_000, headers });
+      const r = await httpRequest(`http://127.0.0.1:${port}${pathOk}`, {
+        timeoutMs: 1_000,
+        headers,
+      });
       if (r.status === 200) return Date.now() - start;
     } catch (e) {
       lastErr = e;
     }
     await wait(20);
   }
-  throw new Error(`Server not healthy within ${timeoutMs}ms: ${lastErr?.message ?? "(no response)"}`);
+  throw new Error(
+    `Server not healthy within ${timeoutMs}ms: ${lastErr?.message ?? "(no response)"}`
+  );
 }
 
 // Format a number with thousands separator.

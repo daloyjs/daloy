@@ -15,19 +15,28 @@ import { writeFileSync } from "node:fs";
 import { createHmac } from "node:crypto";
 import autocannon from "autocannon";
 import {
-  resultsPath, orderTargets, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, stats, fmt, parityTiers, warnBenchEnvironment,
+  resultsPath,
+  orderTargets,
+  machineInfo,
+  parseArgs,
+  startServer,
+  killServer,
+  waitForHealthy,
+  stats,
+  fmt,
+  parityTiers,
+  warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine, sym, renderTiers } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",    file: "servers/secured/daloy.ts" },
-  { name: "hono",     file: "servers/secured/hono.ts" },
-  { name: "fastify",  file: "servers/secured/fastify.ts" },
-  { name: "express",  file: "servers/secured/express.ts" },
-  { name: "koa",      file: "servers/secured/koa.ts" },
-  { name: "nest",     file: "servers/secured/nest.ts" },
-  { name: "elysia",   file: "servers/secured/elysia.ts" },
+  { name: "daloy", file: "servers/secured/daloy.ts" },
+  { name: "hono", file: "servers/secured/hono.ts" },
+  { name: "fastify", file: "servers/secured/fastify.ts" },
+  { name: "express", file: "servers/secured/express.ts" },
+  { name: "koa", file: "servers/secured/koa.ts" },
+  { name: "nest", file: "servers/secured/nest.ts" },
+  { name: "elysia", file: "servers/secured/elysia.ts" },
   { name: "feathers", file: "servers/secured/feathers.ts" },
 ];
 
@@ -42,7 +51,11 @@ const PORT = 3590;
 // Mint a real HS256 token signed with the same key the server uses.
 // Server key is the UTF-8 encoding of "bench-secret-key-do-not-use-in-prod".
 function b64url(buf) {
-  return Buffer.from(buf).toString("base64").replace(/=+$/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  return Buffer.from(buf)
+    .toString("base64")
+    .replace(/=+$/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
 function mintToken() {
   const key = Buffer.from("bench-secret-key-do-not-use-in-prod", "utf8");
@@ -55,25 +68,37 @@ function mintToken() {
 const AUTH = `Bearer ${mintToken()}`;
 
 const SCENARIOS = [
-  { id: "static",  title: "GET /static",    method: "GET",  path: "/static" },
-  { id: "dynamic", title: "GET /users/:id", method: "GET",  path: "/users/42" },
-  { id: "echo",    title: "POST /echo",     method: "POST", path: "/echo",
+  { id: "static", title: "GET /static", method: "GET", path: "/static" },
+  { id: "dynamic", title: "GET /users/:id", method: "GET", path: "/users/42" },
+  {
+    id: "echo",
+    title: "POST /echo",
+    method: "POST",
+    path: "/echo",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "alice" }) },
+    body: JSON.stringify({ name: "alice" }),
+  },
 ];
 
 function runAutocannon(sc, duration) {
   return new Promise((resolve, reject) => {
-    const instance = autocannon({
-      url: `http://127.0.0.1:${PORT}${sc.path}`,
-      method: sc.method,
-      headers: { ...(sc.headers ?? {}), authorization: AUTH },
-      body: sc.body,
-      connections: CONNECTIONS,
-      pipelining: 1,
-      duration,
-    }, (err, result) => err ? reject(err) : resolve(result));
-    autocannon.track(instance, { renderProgressBar: false, renderResultsTable: false, renderLatencyTable: false });
+    const instance = autocannon(
+      {
+        url: `http://127.0.0.1:${PORT}${sc.path}`,
+        method: sc.method,
+        headers: { ...(sc.headers ?? {}), authorization: AUTH },
+        body: sc.body,
+        connections: CONNECTIONS,
+        pipelining: 1,
+        duration,
+      },
+      (err, result) => (err ? reject(err) : resolve(result))
+    );
+    autocannon.track(instance, {
+      renderProgressBar: false,
+      renderResultsTable: false,
+      renderLatencyTable: false,
+    });
   });
 }
 
@@ -106,12 +131,18 @@ async function benchOne(fw) {
         non2xx: samples.reduce((a, s) => a + s.non2xx, 0),
         samples,
       };
-      console.error(metricsLine(sc.title, [
-        c.green(c.bold(fmt(rps.median))) + c.dim(" req/s"),
-        metric("p50", out[sc.id].latency.p50.toFixed(2), { unit: "ms" }),
-        metric("p99", out[sc.id].latency.p99.toFixed(2), { unit: "ms" }),
-        out[sc.id].non2xx ? c.red(`${sym.warn} ${out[sc.id].non2xx} non-2xx`) : "",
-      ].filter(Boolean), { labelWidth: 16 }));
+      console.error(
+        metricsLine(
+          sc.title,
+          [
+            c.green(c.bold(fmt(rps.mean))) + c.dim(" req/s"),
+            metric("p50", out[sc.id].latency.p50.toFixed(2), { unit: "ms" }),
+            metric("p99", out[sc.id].latency.p99.toFixed(2), { unit: "ms" }),
+            out[sc.id].non2xx ? c.red(`${sym.warn} ${out[sc.id].non2xx} non-2xx`) : "",
+          ].filter(Boolean),
+          { labelWidth: 16 }
+        )
+      );
     }
     return out;
   } finally {
@@ -121,7 +152,10 @@ async function benchOne(fw) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
+  const targets = orderTargets(
+    FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)),
+    args.order
+  );
   const rows = [];
   for (const fw of targets) {
     try {
@@ -134,17 +168,25 @@ async function main() {
   }
 
   const ok = rows.filter((r) => r.results);
-  // Parity tiers first — the primary output; the ranked table is detail.
-  const tierBlocks = SCENARIOS.map((sc) => renderTiers(
-    parityTiers(ok.map((r) => {
-      const rps = r.results[sc.id].reqPerSec;
-      return { name: r.framework, value: rps.median, mean: rps.mean, ci95: rps.ci95 };
-    })),
-    { title: `${sc.title}, secured stack (req/s)`, fmtValue: fmt, highlight: (name) => name.includes("daloy") },
-  ));
+  // Uncertainty groups first; the ranked table retains the exact values.
+  const tierBlocks = SCENARIOS.map((sc) =>
+    renderTiers(
+      parityTiers(
+        ok.map((r) => {
+          const rps = r.results[sc.id].reqPerSec;
+          return { name: r.framework, value: rps.mean, mean: rps.mean, ci95: rps.ci95 };
+        })
+      ),
+      {
+        title: `${sc.title}, secured stack (req/s)`,
+        fmtValue: fmt,
+        highlight: (name) => name.includes("daloy"),
+      }
+    )
+  );
   console.log("\n" + tierBlocks.join("\n\n") + "\n");
 
-  const cell = (rps) => rps.ci95 != null ? `${fmt(rps.median)} ±${fmt(rps.ci95)}` : fmt(rps.median);
+  const cell = (rps) => (rps.ci95 != null ? `${fmt(rps.mean)} ±${fmt(rps.ci95)}` : fmt(rps.mean));
   const tableRows = [];
   for (const r of ok) {
     tableRows.push([
@@ -155,21 +197,41 @@ async function main() {
       r.results.static.latency.p99.toFixed(2),
     ]);
   }
-  console.log(summary({
-    head: ["Framework", "GET /static (req/s ±95% CI)", "GET /users/:id (req/s ±95% CI)", "POST /echo (req/s ±95% CI)", "p99 /static (ms)"],
-    rows: tableRows,
-    highlight: (row) => row[0].includes("daloy"),
-  }) + "\n");
+  console.log(
+    summary({
+      head: [
+        "Framework",
+        "GET /static (req/s ±95% CI)",
+        "GET /users/:id (req/s ±95% CI)",
+        "POST /echo (req/s ±95% CI)",
+        "p99 /static (ms)",
+      ],
+      rows: tableRows,
+      highlight: (row) => row[0].includes("daloy"),
+    }) + "\n"
+  );
 
   writeFileSync(
     resultsPath("results.middleware-stack.json"),
-    JSON.stringify({
-      ranAt: new Date().toISOString(),
-      machine: machineInfo(),
-      config: { duration: DURATION, warmup: WARMUP, iterations: ITERATIONS, connections: CONNECTIONS },
-      rows,
-    }, null, 2),
+    JSON.stringify(
+      {
+        ranAt: new Date().toISOString(),
+        machine: machineInfo(),
+        config: {
+          duration: DURATION,
+          warmup: WARMUP,
+          iterations: ITERATIONS,
+          connections: CONNECTIONS,
+        },
+        rows,
+      },
+      null,
+      2
+    )
   );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

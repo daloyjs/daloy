@@ -116,12 +116,12 @@ export function table({ head, rows, align, highlight }) {
   const cols = head.length;
   const al = (i) => (align && align[i]) || (i === 0 ? "l" : "r");
   const widths = head.map((h, i) =>
-    Math.max(visLen(h), ...rows.map((r) => visLen(String(r[i] ?? "")))),
+    Math.max(visLen(h), ...rows.map((r) => visLen(String(r[i] ?? ""))))
   );
 
   const b = cOut.gray; // border colour
   const top = b("┌" + widths.map((w) => "─".repeat(w + 2)).join("┬") + "┐");
-  const mid = b("├" + widths.map((w) => "─".repeat(w + 2)).join("┼") + "┤") ;
+  const mid = b("├" + widths.map((w) => "─".repeat(w + 2)).join("┼") + "┤");
   const bot = b("└" + widths.map((w) => "─".repeat(w + 2)).join("┴") + "┘");
   const bar = b("│");
 
@@ -131,8 +131,7 @@ export function table({ head, rows, align, highlight }) {
     return ` ${padded} `;
   };
 
-  const headLine =
-    bar + head.map((h, i) => renderCell(h, i, cOut.bold)).join(bar) + bar;
+  const headLine = bar + head.map((h, i) => renderCell(h, i, cOut.bold)).join(bar) + bar;
 
   const bodyLines = rows.map((r, ri) => {
     const emphasise = highlight && highlight(r, ri);
@@ -147,7 +146,7 @@ export function table({ head, rows, align, highlight }) {
 export function mdTable({ head, rows, align }) {
   const al = (i) => (align && align[i]) || (i === 0 ? "l" : "r");
   const widths = head.map((h, i) =>
-    Math.max(h.length, 3, ...rows.map((r) => String(r[i] ?? "").length)),
+    Math.max(h.length, 3, ...rows.map((r) => String(r[i] ?? "").length))
   );
   const pad = (s, i) =>
     al(i) === "r" ? String(s).padStart(widths[i]) : String(s).padEnd(widths[i]);
@@ -173,23 +172,27 @@ export function summary({ head, rows, align, highlight, mdAlign }) {
   return `${pretty}\n\n${c.dim("Markdown (paste into docs):")}\n${md}`;
 }
 
-// Render parity tiers (see common.mjs parityTiers()) as the primary,
-// rank-honest view of a result set: frameworks in the same tier are
-// statistically indistinguishable, so a table row being "first" inside a
-// tier is noise, not a win.
+// Render uncertainty tiers (see common.mjs parityTiers()) as an
+// uncertainty-aware view of a result set. Frameworks in the same tier have
+// overlapping marginal confidence intervals. This is a visual grouping, not
+// a significance test for the difference between two frameworks.
 //
 //   title:     metric label, e.g. "GET /static (req/s)"
 //   better:    "higher" | "lower" — echoed in the legend
 //   fmtValue:  formats each entry's value (default String)
 //   highlight: optional (name) => boolean; matches are emphasised
-export function renderTiers(tiers, { title, better = "higher", fmtValue = String, highlight } = {}) {
+export function renderTiers(
+  tiers,
+  { title, better = "higher", fmtValue = String, highlight } = {}
+) {
   const lines = [
-    cOut.bold(`Parity tiers — ${title}`) +
-      cOut.dim(` (${better} is better; overlapping 95% CIs ⇒ same tier)`),
+    cOut.bold(`Uncertainty groups — ${title}`) +
+      cOut.dim(` (${better} is better; CI overlap is not a significance test)`),
   ];
   tiers.forEach((tier, i) => {
     const members = tier.map((e) => {
-      const name = highlight && highlight(e.name) ? cOut.bold(cOut.cyan(e.name)) : cOut.white(e.name);
+      const name =
+        highlight && highlight(e.name) ? cOut.bold(cOut.cyan(e.name)) : cOut.white(e.name);
       const ci = e.ci95 != null ? cOut.dim(` ±${fmtValue(e.ci95)}`) : "";
       return `${name} ${fmtValue(e.value)}${ci}`;
     });

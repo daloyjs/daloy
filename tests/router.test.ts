@@ -20,6 +20,19 @@ test("dynamic params are decoded and trailing slashes normalize", () => {
   assert.deepEqual(match?.params, { name: "report 2024" });
 });
 
+test("unencoded dynamic and wildcard params preserve their values", () => {
+  const router = new Router<string>();
+  router.add("GET", "/files/:name", "file");
+  router.add("GET", "/assets/*path", "asset");
+
+  assert.deepEqual(router.find("GET", "/files/report+2024")?.params, {
+    name: "report+2024",
+  });
+  assert.deepEqual(router.find("GET", "/assets/css/app.css")?.params, {
+    path: "css/app.css",
+  });
+});
+
 test("wildcard routes capture remaining segments", () => {
   const router = new Router<string>();
   router.add("GET", "/assets/*path", "asset");
@@ -48,6 +61,7 @@ test("allowedMethods works for static and dynamic paths", () => {
   router.add("DELETE", "/users/:id", "deleteUser");
 
   assert.deepEqual(router.allowedMethods("/health"), ["GET"]);
+  assert.deepEqual(router.allowedMethods("/health///"), ["GET"]);
   assert.deepEqual(router.allowedMethods("/users/123").sort(), ["DELETE", "POST"]);
 });
 
@@ -57,6 +71,7 @@ test("path traversal and empty path segments are rejected", () => {
 
   assert.equal(router.find("GET", "/files/../secret"), undefined);
   assert.equal(router.find("GET", "/files//secret"), undefined);
+  assert.equal(router.find("GET", "/files/.."), undefined);
 });
 
 test("malformed percent-escapes miss cleanly instead of throwing", () => {
@@ -76,4 +91,3 @@ test("malformed percent-escapes miss cleanly instead of throwing", () => {
   assert.doesNotThrow(() => router.allowedMethods("/files/%zz"));
   assert.deepEqual(router.allowedMethods("/files/%zz"), []);
 });
-

@@ -26,7 +26,7 @@ app.route({
   path: "/static",
   operationId: "getStatic",
   responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) } },
-  handler: async () => ({ status: 200, body: { ok: true } }),
+  handler: () => ({ status: 200, body: { ok: true } }),
 });
 
 app.route({
@@ -35,7 +35,7 @@ app.route({
   operationId: "getUser",
   request: { params: z.object({ id: z.string() }) },
   responses: { 200: { description: "ok", body: z.object({ id: z.string() }) } },
-  handler: async ({ params }) => ({ status: 200, body: { id: params.id } }),
+  handler: ({ params }) => ({ status: 200, body: { id: params.id } }),
 });
 
 app.route({
@@ -44,7 +44,7 @@ app.route({
   operationId: "echo",
   request: { body: z.object({ name: z.string() }) },
   responses: { 200: { description: "ok", body: z.object({ name: z.string() }) } },
-  handler: async ({ body }) => ({ status: 200, body: { name: body.name } }),
+  handler: ({ body }) => ({ status: 200, body: { name: body.name } }),
 });
 
 const port = Number(process.env.PORT ?? 3000);
