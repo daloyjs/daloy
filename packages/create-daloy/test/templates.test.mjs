@@ -2669,19 +2669,26 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
     "deno-basic",
   ];
   for (const template of templates) {
-    const agents = await readFile(
-      path.join(pkgRoot, "templates", template, "AGENTS.md"),
-      "utf8",
-    );
-    const skill = await readFile(
-      path.join(
-        pkgRoot,
-        "templates",
-        template,
-        "_agents/skills/daloyjs-best-practices/SKILL.md",
-      ),
-      "utf8",
-    );
+    // Normalize CRLF -> LF so the byte-budget assertion below measures the
+    // canonical committed content length, not the extra `\r` bytes a Windows
+    // checkout (core.autocrlf=true) adds. This matches what Linux CI measures.
+    const agents = (
+      await readFile(
+        path.join(pkgRoot, "templates", template, "AGENTS.md"),
+        "utf8",
+      )
+    ).replace(/\r\n/g, "\n");
+    const skill = (
+      await readFile(
+        path.join(
+          pkgRoot,
+          "templates",
+          template,
+          "_agents/skills/daloyjs-best-practices/SKILL.md",
+        ),
+        "utf8",
+      )
+    ).replace(/\r\n/g, "\n");
 
     // AGENTS.md is a curated summary that links to SKILL.md. Keep it under
     // ~6KB so it stays inside common agent instruction-context budgets while
