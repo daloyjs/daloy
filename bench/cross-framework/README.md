@@ -103,13 +103,31 @@ variants:
 cd bench/cross-framework
 nvm use        # Node 24 (.nvmrc) — the version baseline numbers are produced on
 pnpm install   # installs all framework deps in this folder only
-node run.mjs   # ~42 min wall time for the full matrix (15s warmup + 5×10s per scenario)
+pnpm bench     # builds local Daloy, then runs the full matrix (~42 min)
 ```
+
+The supported `pnpm bench:*` commands always rebuild the repository with the
+same TypeScript configuration used by `pnpm build` before measuring. Build time
+is not included in the benchmark. They also
+verify that `@daloyjs/core` resolves inside this checkout and refuse to run if
+`node_modules` points to another clone or worktree. If that guard fails after
+moving or copying the repository, repair the local `link:../..` dependency with
+`pnpm install --force` in this directory.
+
+Running a benchmark file directly with `node` bypasses both safeguards. If you
+intentionally do that, run `pnpm build` at the repository root first and verify
+the resolved entry:
+
+```bash
+node --input-type=module -e "console.log(import.meta.resolve('@daloyjs/core'))"
+```
+
+The printed path must be under the current repository's `dist/` directory.
 
 To run a subset:
 
 ```bash
-node run.mjs --only=daloy,fastify,hono
+pnpm bench -- --only=daloy,fastify,hono
 ```
 
 Quick pre-merge / CI-ish subset (daloy, daloy-bare, hono, fastify; short
