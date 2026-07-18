@@ -453,6 +453,31 @@ const STATIC_PATHS: Array<{
   },
   { path: "/docs/testing", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/api-reference", changeFrequency: "monthly", priority: 0.7 },
+  {
+    path: "/docs/api-reference/app",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/api-reference/middleware",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/api-reference/security",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/api-reference/modules",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/api-reference/adapters",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
   { path: "/docs/orm", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/orm/prisma", changeFrequency: "monthly", priority: 0.7 },
   { path: "/docs/orm/drizzle", changeFrequency: "monthly", priority: 0.7 },
