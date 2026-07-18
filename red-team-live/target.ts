@@ -289,7 +289,13 @@ app.route({
   path: "/pay",
   operationId: "pay",
   hooks: idempotency({ store: idemStore }),
-  request: { body: z.object({ amount: z.number() }) as any },
+  // Money must be sign/range-constrained at the schema boundary: reject
+  // negative, zero, and out-of-domain amounts (refund-fraud / ledger-
+  // corruption class) before the handler ever runs. Zod v4 already rejects
+  // NaN/Infinity by default, and amounts are decimal (not integer), so
+  // `.finite()`/`.safe()` are deliberately omitted here — both are no-ops or
+  // wrong for money in v4 (`.safe()` now means `.int()`).
+  request: { body: z.object({ amount: z.number().positive().max(1_000_000) }) as any },
   responses: { 201: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any } },
   handler: async ({ request }: any) => ({
     status: 201 as const,
