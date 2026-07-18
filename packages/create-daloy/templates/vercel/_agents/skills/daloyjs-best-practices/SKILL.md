@@ -164,7 +164,7 @@ app.get(
     const book = await store.find(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
     return { status: 200 as const, body: book };
-  },
+  }
 );
 ```
 
@@ -217,6 +217,9 @@ Cover **happy paths and unhappy paths** for every route: valid input,
 validation failures (400), auth failures (401/403), not-found (404),
 conflict (409), rate limiting (429). For external services, inject an
 in-memory fake during tests.
+For user-owned or tenant-owned resources, use at least two principals and
+prove that Alice's valid token cannot list, read, update, or delete Bob's
+record.
 The shipped contract test should fail invalid examples, duplicate/missing
 `operationId`, or missing responses.
 
@@ -237,6 +240,17 @@ Aim for complete happy- and unhappy-path test coverage of the routes you add.
 - For auth, verify JWT signatures with the Web Crypto API
   (`crypto.subtle`, available on both Node.js and Edge). Never trust the
   `alg` header from the token.
+- Authentication and scopes are not resource authorization. For every route
+  that accepts a resource id, classify the resource as public, user-owned,
+  tenant-owned, shared, or administrator-only.
+- Scope user-owned and tenant-owned database reads and writes with both the
+  caller-controlled id and the trusted owner / tenant from the verified
+  principal. Do not fetch by id alone and rely on the UI or a later caller to
+  remember the ownership check.
+- Never accept `ownerId`, `userId`, `tenantId`, `role`, or another privileged
+  ownership field from an ordinary request body. Derive it from the verified
+  principal and reject the field with a strict request schema.
+- Use an explicit, permissioned, audited path for administrator bypasses.
 - Validate redirects against an allowlist.
 - Set `bodyLimitBytes` and `requestTimeoutMs` on `new App({...})` to
   mitigate DoS.

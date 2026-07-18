@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import { CodeBlock } from "../../../../components/code-block";
 import { FlowDiagram } from "../../../../components/diagram";
 import Link from "next/link";
@@ -226,7 +227,9 @@ console.log(\`wrote \${out}\`);`}
 
       <CodeBlock language="bash" code={`pnpm gen:openapi`} />
 
-      <h2 id="5-generate-a-typed-hey-api-sdk">5. Generate a typed Hey API SDK</h2>
+      <h2 id="5-generate-a-typed-hey-api-sdk">
+        5. Generate a typed Hey API SDK
+      </h2>
       <CodeBlock
         code={`// openapi-ts.config.ts
 import { defineConfig } from "@hey-api/openapi-ts";
@@ -243,7 +246,9 @@ export default defineConfig({
 # generated/client/{client.gen.ts, sdk.gen.ts, types.gen.ts, index.ts}`}
       />
 
-      <h2 id="6-use-the-sdk-from-any-ts-consumer">6. Use the SDK from any TS consumer</h2>
+      <h2 id="6-use-the-sdk-from-any-ts-consumer">
+        6. Use the SDK from any TS consumer
+      </h2>
       <CodeBlock
         code={`import { client } from "../generated/client/client.gen.js";
 import { getBookById } from "../generated/client/sdk.gen.js";
@@ -299,7 +304,11 @@ test("POST /books rejects without token", async () => {
       </ul>
 
       <p>
-        Continue with <Link href="/docs/security">Security</Link>,{" "}
+        Continue with the{" "}
+        <Link href={"/docs/tutorials/multi-user-api" as Route}>
+          multi-user authorization tutorial
+        </Link>
+        , <Link href="/docs/security">Security</Link>,{" "}
         <Link href="/docs/adapters">Adapters</Link>, or the{" "}
         <Link href="/docs/api-reference">API reference</Link>.
       </p>

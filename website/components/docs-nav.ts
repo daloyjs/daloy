@@ -153,6 +153,10 @@ export const docsNav: DocsNavSection[] = [
         href: "/docs/security/owasp-api-top-10" as Route,
       },
       {
+        title: "Resource authorization (BOLA / IDOR)",
+        href: "/docs/security/resource-authorization" as Route,
+      },
+      {
         title: "Runtime protections (portable)",
         href: "/docs/security/runtime-protections" as Route,
       },
@@ -164,13 +168,13 @@ export const docsNav: DocsNavSection[] = [
         href: "/docs/security/composition-network",
       },
       {
-        title: "Lifecycle leftovers",
+        title: "Runtime resilience and configuration",
         href: "/docs/security/lifecycle-leftovers",
       },
-      { title: "Auth slice", href: "/docs/security/auth-slice" },
+      { title: "JWT & auth safeguards", href: "/docs/security/auth-slice" },
       { title: "Password hashing", href: "/docs/security/hashing" as Route },
       {
-        title: "WebSocket + login throttle",
+        title: "WebSocket & login safeguards",
         href: "/docs/security/websocket-login-throttle",
       },
       { title: "Compression", href: "/docs/security/compression" as Route },
@@ -282,6 +286,10 @@ export const docsNav: DocsNavSection[] = [
     title: "Tutorials",
     items: [
       { title: "Build a bookstore API", href: "/docs/tutorials/bookstore" },
+      {
+        title: "Build a multi-user API",
+        href: "/docs/tutorials/multi-user-api" as Route,
+      },
       { title: "Large fake REST demo", href: "/docs/tutorials/fake-rest-api" },
     ],
   },

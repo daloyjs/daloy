@@ -300,7 +300,12 @@ declare module "@daloyjs/core" {
         <li>
           <strong>Authorize, don&apos;t just authenticate.</strong> A valid
           token only proves the caller is who they say they are. Enforce scopes,
-          roles, or organization membership for every privileged action.
+          roles, or organization membership for every privileged action, then
+          apply{" "}
+          <Link href={"/docs/security/resource-authorization" as Route}>
+            resource authorization
+          </Link>{" "}
+          to every user-owned or tenant-owned record.
         </li>
         <li>
           <strong>Use TLS everywhere.</strong> Bearer tokens are

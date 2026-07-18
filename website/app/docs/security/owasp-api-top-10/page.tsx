@@ -127,9 +127,12 @@ export default function Page() {
               context.
             </td>
             <td>
-              The actual <code>resource.ownerId === auth.userId</code> check
-              inside the handler. No framework can know your ownership model.
-              See <a href="/docs/auth">Authentication</a>.
+              The actual owner or tenant constraint inside the data operation.
+              No framework can know your ownership model. Follow the{" "}
+              <a href="/docs/security/resource-authorization">
+                resource authorization guide
+              </a>{" "}
+              and prove it with cross-user tests.
             </td>
           </tr>
           <tr>

@@ -189,7 +189,7 @@ app.get(
     const book = await store.find(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
     return { status: 200 as const, body: book };
-  },
+  }
 );
 ```
 
@@ -277,6 +277,9 @@ Cover both **happy paths** and **unhappy paths** for every route:
 - Validation failure: missing/invalid fields → `400` with problem details.
 - Auth failure (when applicable): unauthenticated → `401`; wrong scope →
   `403`.
+- Resource authorization (when a route accepts an id): Alice can access
+  Alice's record, but the same valid Alice token receives `404` for Bob's
+  record. Cover reads, lists, updates, and deletes where applicable.
 - Not found: unknown id → `404`.
 - Conflict: duplicate create → `409`.
 - Rate limit: hammer the route → `429` after the configured threshold.
@@ -307,6 +310,17 @@ honor them.
 - For auth, prefer a small JWT or session middleware over rolling your
   own. Verify signatures against an allowlist of keys, never trust the
   `alg` header from the token, and always check `exp` / `nbf`.
+- Authentication and scopes are not resource authorization. For every route
+  that accepts a resource id, classify the resource as public, user-owned,
+  tenant-owned, shared, or administrator-only.
+- Scope user-owned and tenant-owned database reads and writes with both the
+  caller-controlled id and the trusted owner / tenant from the verified
+  principal. Do not fetch by id alone and rely on the UI or a later caller to
+  remember the ownership check.
+- Never accept `ownerId`, `userId`, `tenantId`, `role`, or another privileged
+  ownership field from an ordinary request body. Derive it from the verified
+  principal and reject the field with a strict request schema.
+- Use an explicit, permissioned, audited path for administrator bypasses.
 - Validate redirects against an allowlist. Open redirects are an OWASP
   Top-10 issue.
 - Limit body sizes via `bodyLimitBytes` on `new App({...})` — large

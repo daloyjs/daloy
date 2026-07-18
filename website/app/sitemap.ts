@@ -14,6 +14,11 @@ const STATIC_PATHS: Array<{
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
   {
+    path: "/blog/your-jwt-is-valid-and-your-api-is-still-vulnerable",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/daloyjs-1-0-0-rc-0-first-release-candidate",
     changeFrequency: "monthly",
     priority: 0.7,
@@ -263,6 +268,11 @@ const STATIC_PATHS: Array<{
     path: "/docs/security/owasp-api-top-10",
     changeFrequency: "monthly",
     priority: 0.7,
+  },
+  {
+    path: "/docs/security/resource-authorization",
+    changeFrequency: "monthly",
+    priority: 0.8,
   },
   {
     path: "/docs/security/runtime-protections",
@@ -519,6 +529,11 @@ const STATIC_PATHS: Array<{
     path: "/docs/tutorials/bookstore",
     changeFrequency: "monthly",
     priority: 0.7,
+  },
+  {
+    path: "/docs/tutorials/multi-user-api",
+    changeFrequency: "monthly",
+    priority: 0.8,
   },
   {
     path: "/docs/tutorials/fake-rest-api",
