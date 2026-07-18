@@ -102,6 +102,36 @@ test("assertInboundHeaderGuards: reserved header wins (400) even past the count 
   assert.throws(() => assertInboundHeaderGuards(h, DEFAULT_MAX_HEADER_COUNT), BadRequestError);
 });
 
+test("assertInboundHeaderGuards rejects duplicate singleton headers (smuggling fold)", () => {
+  // WHATWG Headers coalesces duplicates to a comma-joined value, so the
+  // folded singleton check fires on "value contains a comma" — the same
+  // semantics as the standalone assertNoDuplicateSingletonHeaders helper.
+  for (const name of ["host", "content-length", "transfer-encoding"]) {
+    const h = new Headers();
+    h.append(name, name === "host" ? "a.example" : "1");
+    h.append(name, name === "host" ? "b.example" : "2");
+    assert.throws(
+      () => assertInboundHeaderGuards(h, DEFAULT_MAX_HEADER_COUNT),
+      BadRequestError,
+      `expected duplicate ${name} to be rejected`
+    );
+    // The duplicate-singleton 400 must also win when the count cap is disabled.
+    assert.throws(() => assertInboundHeaderGuards(h, 0), BadRequestError);
+  }
+});
+
+test("assertInboundHeaderGuards: duplicate singleton wins (400) even past the count cap", () => {
+  // `zz-host`-style names sort after `a-*`, so put the duplicated singleton
+  // (`transfer-encoding`) beyond the cap position: the deferred-431 design
+  // must still reject it with the 400-class smuggling error.
+  const h = new Headers();
+  for (let i = 0; i < DEFAULT_MAX_HEADER_COUNT + 10; i++) {
+    h.set(`a-header-${String(i).padStart(3, "0")}`, "1");
+  }
+  h.set("transfer-encoding", "chunked, chunked");
+  assert.throws(() => assertInboundHeaderGuards(h, DEFAULT_MAX_HEADER_COUNT), BadRequestError);
+});
+
 test("App rejects requests carrying a reserved internal header with 400", async () => {
   const app = new App({ logger: false });
   app.route({

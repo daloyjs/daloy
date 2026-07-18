@@ -270,6 +270,11 @@ export const SMUGGLING_SINGLETON_HEADERS: readonly string[] = Object.freeze([
  * Throws {@link BadRequestError} so the framework returns a structured
  * `400 problem+json` instead of forwarding a smuggling-class request.
  *
+ * The framework's dispatch path runs this check, the reserved-prefix check,
+ * and the header-count cap in a single shared walk internally (see
+ * {@link assertInboundHeaderGuards}); calling this helper directly is only
+ * needed for custom pipelines.
+ *
  * @param headers - Normalized request headers to inspect.
  * @since 0.15.0
  */
@@ -281,6 +286,14 @@ export function assertNoDuplicateSingletonHeaders(headers: Headers): void {
     }
   }
 }
+
+/**
+ * Set view of {@link SMUGGLING_SINGLETON_HEADERS}, built once at module load
+ * so the per-request walk in {@link assertInboundHeaderGuards} pays a Set
+ * lookup instead of three undici `Headers.get()` calls (each of which runs
+ * WebIDL ByteString conversion + header-name token validation).
+ */
+const SMUGGLING_SINGLETON_SET: ReadonlySet<string> = new Set(SMUGGLING_SINGLETON_HEADERS);
 
 /**
  * Reserved inbound header namespaces that an external client must never
@@ -419,24 +432,26 @@ export function assertHeaderCountWithinLimit(headers: Headers, limit: number): v
 /**
  * Combined inbound header guards for the dispatch hot path (internal).
  *
- * Runs the reserved-internal-prefix check ({@link assertNoReservedInternalHeaders})
+ * Runs the singleton-duplicate check ({@link assertNoDuplicateSingletonHeaders}),
+ * the reserved-internal-prefix check ({@link assertNoReservedInternalHeaders}),
  * and the header-count cap ({@link assertHeaderCountWithinLimit}) in a
  * **single** walk of the header map, with the same observable semantics as
- * calling both helpers in sequence: a reserved internal header anywhere in
- * the map is rejected with `400` even when the map also exceeds the count
- * cap. To preserve that precedence, the `431` count-cap rejection is
- * deferred until the reserved-prefix scan has covered every header — the
- * same full-walk cost the sequential pair already paid.
+ * calling the helpers in sequence: any `400`-class violation (duplicate
+ * singleton header or reserved internal header) anywhere in the map is
+ * rejected with `400` even when the map also exceeds the count cap. To
+ * preserve that precedence, the `431` count-cap rejection is deferred until
+ * the scan has covered every header — the same full-walk cost the
+ * sequential helpers already paid.
  *
  * A non-positive / non-finite `limit` disables the count cap (same as
- * {@link assertHeaderCountWithinLimit}) while still rejecting reserved
- * internal prefixes.
+ * {@link assertHeaderCountWithinLimit}) while still rejecting duplicate
+ * singleton headers and reserved internal prefixes.
  *
  * @param headers - Normalized request headers (names arrive lowercased).
  * @param limit - Maximum distinct header fields to allow. `0` disables the count cap.
- * @throws {BadRequestError} When a reserved internal header is present (takes
- *   precedence over the count cap).
- * @throws {RequestHeaderFieldsTooLargeError} When no reserved header is
+ * @throws {BadRequestError} When a duplicate singleton header or a reserved
+ *   internal header is present (takes precedence over the count cap).
+ * @throws {RequestHeaderFieldsTooLargeError} When no `400`-class violation is
  *   present and the distinct-header count exceeds `limit`.
  * @since 1.0.0
  */
@@ -444,11 +459,20 @@ export function assertInboundHeaderGuards(headers: Headers, limit: number): void
   const enforceCount = limit > 0 && Number.isFinite(limit);
   let count = 0;
   let overLimit = false;
-  // Single forEach: reserved-prefix rejection + distinct-name count. The
-  // reserved check throws immediately; the count-cap rejection is deferred
-  // past the walk so a reserved header after position `limit` still yields
-  // 400 (matching the sequential guards, where the prefix scan ran first).
-  headers.forEach((_value, name) => {
+  // Single forEach: singleton-duplicate rejection + reserved-prefix rejection
+  // + distinct-name count. The 400-class checks throw immediately; the
+  // count-cap rejection is deferred past the walk so a violation after
+  // position `limit` still yields 400 (matching the sequential guards,
+  // where the 400-class scans ran first).
+  headers.forEach((value, name) => {
+    // Smuggling-singleton check: the WHATWG Headers collection coalesces
+    // duplicate fields to a comma-joined value, so "value contains a comma"
+    // means the client sent the header more than once (same semantics as
+    // assertNoDuplicateSingletonHeaders, folded into this walk to avoid
+    // three extra undici Headers.get() calls per request).
+    if (SMUGGLING_SINGLETON_SET.has(name) && value.indexOf(",") !== -1) {
+      throw new BadRequestError(`Duplicate ${name} header rejected`);
+    }
     // Fast path: skip the inner prefix loop unless the name starts with the
     // common prefix shared by every reserved prefix (derived at module load
     // from RESERVED_INBOUND_HEADER_PREFIXES — see RESERVED_PREFIX_COMMON —

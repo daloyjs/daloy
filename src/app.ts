@@ -24,7 +24,6 @@ import {
   safeJsonParse,
   safeJsonParseLimited,
   randomId,
-  assertNoDuplicateSingletonHeaders,
   assertInboundHeaderGuards,
   DEFAULT_MAX_HEADER_COUNT,
   assertStrongSecret,
@@ -3770,9 +3769,9 @@ export class App<
     let activeSendHook = globalHooks.onSend;
 
     try {
-      assertNoDuplicateSingletonHeaders(request.headers);
-      // Reserved-prefix + header-count cap share one Headers.forEach walk
-      // (assertInboundHeaderGuards) instead of two sequential passes.
+      // Singleton-duplicate + reserved-prefix + header-count cap share ONE
+      // Headers.forEach walk (assertInboundHeaderGuards) instead of a
+      // three-Headers.get() pass plus a separate walk.
       assertInboundHeaderGuards(
         request.headers,
         this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT
