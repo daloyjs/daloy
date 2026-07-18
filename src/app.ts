@@ -4747,33 +4747,36 @@ function finalizeResponse(
 ): Response | PromiseLike<Response> {
   let final = res;
 
-  const finish = (f: Response) => {
-    if (stripFingerprint) {
-      f.headers.delete("server");
-      f.headers.delete("x-powered-by");
-    }
-    if (hooks.onResponse !== undefined) {
-      const onResponseResult = hooks.onResponse(f);
-      if (isPromiseLike(onResponseResult)) {
-        return onResponseResult.then(() => f);
-      }
-    }
-    return f;
-  };
-
   if (hooks.onSend !== undefined) {
     const sentResult = hooks.onSend(res, ctx);
     if (isPromiseLike(sentResult)) {
       return sentResult.then((sent) => {
         if (sent instanceof Response) final = sent;
-        return finish(final);
+        return finishFinalize(final, hooks, stripFingerprint);
       });
-    } else {
-      if (sentResult instanceof Response) final = sentResult;
     }
+    if (sentResult instanceof Response) final = sentResult;
   }
 
-  return finish(final);
+  return finishFinalize(final, hooks, stripFingerprint);
+}
+
+function finishFinalize(
+  res: Response,
+  hooks: Pick<Hooks, "onResponse">,
+  stripFingerprint: boolean
+): Response | PromiseLike<Response> {
+  if (stripFingerprint) {
+    res.headers.delete("server");
+    res.headers.delete("x-powered-by");
+  }
+  if (hooks.onResponse !== undefined) {
+    const onResponseResult = hooks.onResponse(res);
+    if (isPromiseLike(onResponseResult)) {
+      return onResponseResult.then(() => res);
+    }
+  }
+  return res;
 }
 
 function isPromiseLike<T = unknown>(value: T | PromiseLike<T>): value is PromiseLike<T> {

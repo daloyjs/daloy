@@ -63,6 +63,17 @@ test("assertInboundHeaderGuards rejects reserved internal headers", () => {
   assert.throws(() => assertInboundHeaderGuards(h, DEFAULT_MAX_HEADER_COUNT), BadRequestError);
 });
 
+test("assertInboundHeaderGuards rejects every advertised reserved prefix (fast-path filter must not drop any)", () => {
+  for (const prefix of RESERVED_INBOUND_HEADER_PREFIXES) {
+    const h = new Headers({ [`${prefix}bypass`]: "1" });
+    assert.throws(
+      () => assertInboundHeaderGuards(h, DEFAULT_MAX_HEADER_COUNT),
+      BadRequestError,
+      `expected rejection for prefix ${prefix}`
+    );
+  }
+});
+
 test("assertInboundHeaderGuards enforces the header-count cap", () => {
   const flood = new Headers();
   for (let i = 0; i <= DEFAULT_MAX_HEADER_COUNT; i++) flood.set(`x-${i}`, "1");

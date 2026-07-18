@@ -432,9 +432,15 @@ export function secureHeaders(opts: SecureHeadersOptions = {}): Hooks {
     //     still win.
     hooks.onResponse = (res) => {
       let conflict = false;
-      res.headers.forEach((_v, name) => {
-        if (headerKeySet.has(name)) conflict = true;
-      });
+      // `for...of` over Headers.entries() is faster than the callback-based
+      // forEach and lets us break the instant we find a conflicting header.
+      // WHATWG Headers yields lowercased names, matching headerKeySet.
+      for (const [name] of res.headers) {
+        if (headerKeySet.has(name)) {
+          conflict = true;
+          break;
+        }
+      }
       if (!conflict) {
         for (const [k, v] of headerEntries) res.headers.set(k, v);
       } else {

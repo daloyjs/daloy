@@ -312,6 +312,29 @@ export const RESERVED_INBOUND_HEADER_PREFIXES: readonly string[] = Object.freeze
 ]);
 
 /**
+ * Longest common prefix shared by every entry in
+ * {@link RESERVED_INBOUND_HEADER_PREFIXES}, computed once at module load.
+ *
+ * Used by {@link assertInboundHeaderGuards} as a cheap first-pass filter so
+ * the inner prefix loop is skipped for the overwhelming majority of header
+ * names. Because it is *derived* from the list (never hardcoded), adding a
+ * future reserved prefix that diverges simply shrinks this filter — in the
+ * worst case to `""`, where `String.prototype.startsWith("")` is always
+ * `true` and every header falls through to the full prefix scan. The fast
+ * path can therefore never cause a reserved header to be silently accepted.
+ */
+const RESERVED_PREFIX_COMMON: string = (() => {
+  let common = RESERVED_INBOUND_HEADER_PREFIXES[0] ?? "";
+  for (const prefix of RESERVED_INBOUND_HEADER_PREFIXES) {
+    let i = 0;
+    const max = Math.min(common.length, prefix.length);
+    while (i < max && common.charCodeAt(i) === prefix.charCodeAt(i)) i++;
+    common = common.slice(0, i);
+  }
+  return common;
+})();
+
+/**
  * Reject requests that carry any header in
  * {@link RESERVED_INBOUND_HEADER_PREFIXES}. See that constant for the
  * rationale (Next.js CVE-2025-29927 class).
@@ -426,9 +449,15 @@ export function assertInboundHeaderGuards(headers: Headers, limit: number): void
   // past the walk so a reserved header after position `limit` still yields
   // 400 (matching the sequential guards, where the prefix scan ran first).
   headers.forEach((_value, name) => {
-    for (const prefix of RESERVED_INBOUND_HEADER_PREFIXES) {
-      if (name.startsWith(prefix)) {
-        throw new BadRequestError(`Reserved internal header rejected: ${name}`);
+    // Fast path: skip the inner prefix loop unless the name starts with the
+    // common prefix shared by every reserved prefix (derived at module load
+    // from RESERVED_INBOUND_HEADER_PREFIXES — see RESERVED_PREFIX_COMMON —
+    // so this filter can never silently drop a future reserved prefix).
+    if (name.startsWith(RESERVED_PREFIX_COMMON)) {
+      for (const prefix of RESERVED_INBOUND_HEADER_PREFIXES) {
+        if (name.startsWith(prefix)) {
+          throw new BadRequestError(`Reserved internal header rejected: ${name}`);
+        }
       }
     }
     if (enforceCount && ++count > limit) overLimit = true;
