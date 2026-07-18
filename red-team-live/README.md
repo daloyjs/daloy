@@ -20,29 +20,32 @@ pnpm red-team:live
   - `fetch()` for application-layer attacks — auth bypass, JWT forgery
     (`alg:none`, forged signature, scope escalation), SQLi/XSS/cmdi/NoSQL
     injection, SSRF, open redirect, excessive data exposure (API3), mass
-    assignment, prototype pollution, CORS, credential brute force, CSRF,
-    decompression bombs, idempotency replay + cross-tenant disclosure,
-    concurrency shedding, content-type confusion, HTTP Parameter Pollution,
-    method-override smuggling, stack-bomb / hash-flood JSON, request-id entropy,
-    clickjacking/HSTS posture, bot-guard / geo-block / auto-ban, basic-auth
-    account enumeration, spoofed mTLS client-cert, and `except()`
-    path-confusion auth bypass (probed against a second app on a second port).
+    assignment, prototype pollution, CORS (including a **null-origin bypass**
+    probe), credential brute force, CSRF, decompression bombs, idempotency
+    replay + cross-tenant disclosure, concurrency shedding, content-type
+    confusion, HTTP Parameter Pollution, method-override smuggling, stack-bomb /
+    hash-flood JSON, request-id entropy, clickjacking/HSTS posture, bot-guard /
+    geo-block / auto-ban, basic-auth account enumeration, spoofed mTLS
+    client-cert, and `except()` path-confusion auth bypass (probed against a
+    second app on a second port).
   - raw `net` TCP sockets for wire-level attacks the in-memory dispatch can
     never model — HTTP request smuggling (duplicate `Content-Length`,
     `Transfer-Encoding`+`Content-Length` desync), reserved-internal-header
-    smuggling, header byte/count floods, oversized-body framing, **slowloris**,
-    CRLF response splitting, **TRACE / Cross-Site Tracing**, **Cross-Site
-    WebSocket Hijacking** (raw cross-origin upgrade handshake), **multipart
-    upload abuse** (magic-byte / size bypass), and an **HTTP/2 rapid-reset**
-    probe (confirms the adapter is HTTP/1.1-only, plus a connect/reset
-    connection-churn flood).
+    smuggling, header byte/count floods and **oversized single-header values**,
+    oversized-body framing, **slowloris**, CRLF response splitting,
+    **TRACE / Cross-Site Tracing**, **Cross-Site WebSocket Hijacking** (raw
+    cross-origin upgrade handshake), **multipart upload abuse** (magic-byte /
+    size bypass), an **HTTP/2 rapid-reset** probe (confirms the adapter is
+    HTTP/1.1-only, plus a connect/reset connection-churn flood), **absolute-URI
+    request lines**, **multiple Host headers**, **null-byte path injection**,
+    **backslash path traversal**, and **malformed Host port-suffix** handling.
 
   Because the target runs in its own process, a crash shows up as
   connection-refused — a real DoS **finding** — instead of killing the harness.
   A post-engagement liveness probe records whether the target survived.
 
 It prints a bounty-hunter-style report and exits non-zero if any finding is
-`VULNERABLE`. The current run is **60 probes over the wire** across two target
+`VULNERABLE`. The current run is **68 probes over the wire** across two target
 apps.
 
 ## What is covered live vs. in-process

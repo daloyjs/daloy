@@ -463,6 +463,47 @@ test("node adapter: absolute-form request targets are routed by path and never 5
   }
 });
 
+test("node adapter: malformed Host port suffix returns 400 while a trailing-dot hostname remains valid", async () => {
+  // Regression from a live red-team probe: a Host header like
+  // `127.0.0.1:3000.` produced an invalid WHATWG URL inside the framework,
+  // which surfaced as an unhandled 500. The adapter must validate the
+  // constructed request URL at the boundary and reject it as a client error,
+  // without confusing that malformed port with a valid trailing-dot DNS name.
+  const app = buildEchoApp();
+  const { handle, port } = await startServer(app);
+  try {
+    const malformed = await rawHttp(
+      port,
+      `GET /hello HTTP/1.1\r\nHost: 127.0.0.1:${port}.\r\nConnection: close\r\n\r\n`,
+    );
+    const statusLine = malformed.split("\r\n")[0] ?? "";
+    assert.match(
+      statusLine,
+      /^HTTP\/1\.1 400\b/,
+      `malformed Host must be rejected with 400 Bad Request, got: ${statusLine}`,
+    );
+    assert.doesNotMatch(statusLine, /\b500\b/, "malformed Host must not surface as a 500");
+    assert.match(
+      malformed,
+      /application\/problem\+json/,
+      "malformed Host refusal should be problem+json",
+    );
+
+    const validTrailingDot = await rawHttp(
+      port,
+      `GET /hello HTTP/1.1\r\nHost: example.test.:${port}\r\nConnection: close\r\n\r\n`,
+    );
+    const validStatusLine = validTrailingDot.split("\r\n")[0] ?? "";
+    assert.match(
+      validStatusLine,
+      /^HTTP\/1\.1 200\b/,
+      `a valid trailing-dot hostname must remain accepted, got: ${validStatusLine}`,
+    );
+  } finally {
+    await handle.close();
+  }
+});
+
 // ---------- LightRequest / LightResponse (lazy undici construction) ----------
 //
 // The Node adapter hands dispatch a lazily-materializing Request shim (and

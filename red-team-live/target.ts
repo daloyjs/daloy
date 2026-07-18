@@ -207,6 +207,7 @@ app.route({
   method: "GET",
   path: "/fetch",
   operationId: "fetchUrl",
+  acknowledgeNoResponseBodySchema: true,
   request: { query: z.object({ url: z.string() }) as any },
   // The handler can return 403 (SSRF blocked) / 502 (upstream failure); they
   // MUST be declared or the framework's response-contract guard turns an
@@ -233,6 +234,7 @@ app.route({
   method: "GET",
   path: "/go",
   operationId: "go",
+  acknowledgeNoResponseBodySchema: true,
   request: { query: z.object({ to: z.string() }) as any },
   responses: { 303: { description: "redirect" }, 400: { description: "open redirect blocked" } },
   handler: async ({ query }: any) => {

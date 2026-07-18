@@ -18,6 +18,7 @@ import {
   DALOY_REQUEST_RAW_BODY,
   DALOY_LIGHT_RESPONSE_OK,
 } from "../app.js";
+import { BadRequestError } from "../errors.js";
 import {
   setClientCertificate,
   normalizePeerCertificate,
@@ -438,13 +439,16 @@ function writeMethodRefused(res: ServerResponse): void {
 
 function writeAdapterError(res: ServerResponse, e: unknown): void {
   if (!res.headersSent) {
-    res.statusCode = 500;
+    const clientError = e instanceof BadRequestError;
+    res.statusCode = clientError ? 400 : 500;
     res.setHeader("content-type", "application/problem+json");
     res.end(
       JSON.stringify({
-        type: "https://daloyjs.dev/errors/internal",
-        title: "Internal Server Error",
-        status: 500,
+        type: clientError
+          ? "https://daloyjs.dev/errors/bad-request"
+          : "https://daloyjs.dev/errors/internal",
+        title: clientError ? "Bad Request" : "Internal Server Error",
+        status: clientError ? 400 : 500,
       })
     );
   } else {
@@ -670,6 +674,13 @@ function toWebRequest(
     forwardedProto ??
     ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
   const url = `${proto}://${host}${normalizeRequestTarget(req.url)}`;
+  // Reject malformed Host / request-target combinations at the adapter
+  // boundary instead of letting the invalid URL propagate as a 500 later.
+  // URL.canParse applies WHATWG validation without allocating and immediately
+  // discarding a URL object on every request.
+  if (!URL.canParse(url)) {
+    throw new BadRequestError("Invalid request target or Host header");
+  }
   // Build headers from `rawHeaders` (a flat [k0,v0,k1,v1,...] array) instead
   // of the parsed `req.headers` object. This matches @hono/node-server's
   // `newHeadersFromIncoming`: one `new Headers([[k,v],...])` constructor

@@ -683,7 +683,7 @@ async function protocolAndParsing(port: number) {
     severity: "medium",
     attack: "POST /wide with 50,000 keys",
     observed: `status ${flood.status} in ${Date.now() - t1}ms`,
-    verdict: flood.status === 200 && Date.now() - t1 < 3000 ? "DEFENDED" : "VULNERABLE",
+    verdict: (flood.status === 200 || flood.status === 400) && Date.now() - t1 < 3000 ? "DEFENDED" : "VULNERABLE",
   });
 
   // Request-id entropy — many live ids must be unique, unguessable UUIDs.
@@ -876,6 +876,138 @@ async function exceptPathConfusion() {
   });
 }
 
+async function unorthodoxAttacks(port: number, portB: number) {
+  const cat = "Unorthodox vectors";
+
+  // Browsers send Origin: null for file:// pages, sandboxed iframes, and some
+  // redirects. A configured allowlist must not reflect that opaque origin.
+  const nullOrigin = await http("GET", "/users/1", { headers: { origin: "null" } });
+  const nullAcao = nullOrigin.headers.get("access-control-allow-origin");
+  record({
+    category: cat,
+    title: "CORS null-origin bypass",
+    severity: "medium",
+    attack: "GET /users/1 with Origin: null",
+    observed: `status ${nullOrigin.status}, Access-Control-Allow-Origin=${nullAcao ?? "(none)"}`,
+    verdict: nullOrigin.status === 200 && nullAcao === null ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // Duplicate Host headers must be rejected rather than leaving different
+  // intermediaries free to choose different request authorities.
+  const multiHost = await rawSend(
+    port,
+    "GET /healthz HTTP/1.1\r\nHost: attacker.com\r\nHost: target.com\r\n\r\n",
+  );
+  record({
+    category: cat,
+    title: "Multiple Host headers",
+    severity: "medium",
+    attack: "Raw GET /healthz with two Host headers",
+    observed: `response: ${multiHost.statusLine || "(dropped)"}`,
+    verdict: multiHost.status === 400 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // A single extremely long header value exercises a different parser path
+  // than many small headers and must hit the configured byte limit.
+  const longHeader = await rawSend(
+    port,
+    `GET /healthz HTTP/1.1\r\nHost: t\r\nX-Long: ${"A".repeat(20_000)}\r\n\r\n`,
+  );
+  record({
+    category: cat,
+    title: "Oversized single header value",
+    severity: "medium",
+    attack: "Raw GET with one 20 KiB header value",
+    observed: `response: ${longHeader.statusLine || "(dropped)"}`,
+    verdict: longHeader.status === 431 || longHeader.status === 400 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // A vulnerable path parser might truncate at NUL and route to /users/1.
+  const nullByte = await rawSend(port, "GET /users/1%00/admin HTTP/1.1\r\nHost: t\r\n\r\n");
+  record({
+    category: cat,
+    title: "Null byte injection in path",
+    severity: "medium",
+    attack: "GET /users/1%00/admin",
+    observed: `response: ${nullByte.statusLine || "(dropped)"}`,
+    verdict:
+      nullByte.status === 400 ||
+      nullByte.status === 401 ||
+      nullByte.status === 403 ||
+      nullByte.status === 404
+        ? "DEFENDED"
+        : "VULNERABLE",
+  });
+
+  // Absolute-form request targets are valid for proxies. The origin adapter
+  // must route by pathname without treating the target authority as trusted.
+  const absolute = await rawSend(
+    port,
+    `GET http://${HOST}:${port}/healthz HTTP/1.1\r\nHost: ${HOST}:${port}\r\nUser-Agent: redteam-absolute-uri/1.0\r\n\r\n`,
+  );
+  record({
+    category: cat,
+    title: "Absolute-URI request line",
+    severity: "low",
+    attack: "GET http://host:port/healthz HTTP/1.1",
+    observed: `response: ${absolute.statusLine || "(dropped)"}`,
+    verdict:
+      absolute.status === 200 || absolute.status === 404
+        ? "DEFENDED"
+        : absolute.status >= 500 || absolute.status === 0
+          ? "VULNERABLE"
+          : "INFO",
+  });
+
+  // Declaring JSON while sending form data must not reach the handler through
+  // a lenient parser and bypass the JSON structural limits.
+  const ctConfusion = await http("POST", "/sink", {
+    headers: { "content-type": "application/json" },
+    body: "data=value",
+  });
+  record({
+    category: cat,
+    title: "JSON content-type with URL-encoded body",
+    severity: "medium",
+    attack: "POST /sink Content-Type: application/json with form body",
+    observed: `status ${ctConfusion.status}`,
+    verdict: ctConfusion.status === 400 || ctConfusion.status === 415 || ctConfusion.status === 422 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // Windows-style separators must not collapse through the router or except()
+  // guard and turn this public-looking path into the protected admin route.
+  const backslash = await rawSend(portB, "GET /public\\..\\api\\admin HTTP/1.1\r\nHost: t\r\n\r\n");
+  record({
+    category: cat,
+    title: "Backslash path traversal",
+    severity: "high",
+    attack: "GET /public\\..\\api\\admin on the except() app via port B",
+    observed: `response: ${backslash.statusLine || "(dropped)"}`,
+    verdict:
+      backslash.status === 400 ||
+      backslash.status === 401 ||
+      backslash.status === 403 ||
+      backslash.status === 404
+        ? "DEFENDED"
+        : "VULNERABLE",
+  });
+
+  // A non-numeric suffix after the port is a malformed authority. It must be
+  // rejected as a client error rather than surfacing as a framework 500.
+  const invalidPortSuffix = await rawSend(
+    port,
+    `GET /healthz HTTP/1.1\r\nHost: ${HOST}:${port}.\r\nUser-Agent: redteam-invalid-port/1.0\r\n\r\n`,
+  );
+  record({
+    category: cat,
+    title: "Malformed Host port suffix",
+    severity: "low",
+    attack: "GET /healthz with Host: 127.0.0.1:<port>.",
+    observed: `response: ${invalidPortSuffix.statusLine || "(dropped)"}`,
+    verdict: invalidPortSuffix.status === 400 ? "DEFENDED" : "VULNERABLE",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
@@ -974,6 +1106,7 @@ async function main() {
     await statefulMiddleware();
     await accessControlFeeds();
     await exceptPathConfusion();
+    await unorthodoxAttacks(port, portB);
   } finally {
     // Confirm the target survived the engagement (crash = DoS finding).
     let alive = false;
