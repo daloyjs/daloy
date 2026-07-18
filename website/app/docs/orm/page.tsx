@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { CodeBlock } from "../../../components/code-block";
 import { BranchDiagram, LayerStack } from "../../../components/diagram";
@@ -176,7 +177,9 @@ app.get(
         </li>
       </ul>
 
-      <h2 id="need-a-platform-client-instead">Need a platform client instead?</h2>
+      <h2 id="need-a-platform-client-instead">
+        Need a platform client instead?
+      </h2>
       <p>
         Supabase is not an ORM. It is a hosted Postgres platform with a
         fetch-based JavaScript client, auth, storage, realtime, and
@@ -200,7 +203,9 @@ app.get(
         document models into an ORM-shaped abstraction.
       </p>
 
-      <h2 id="runtime-compatibility-cheat-sheet">Runtime compatibility cheat sheet</h2>
+      <h2 id="runtime-compatibility-cheat-sheet">
+        Runtime compatibility cheat sheet
+      </h2>
       <table>
         <thead>
           <tr>
@@ -257,8 +262,8 @@ app.get(
         </tbody>
       </table>
       <p>
-        For edge runtimes (Cloudflare Workers), prefer Drizzle or
-        Supabase, or use Prisma with{" "}
+        For edge runtimes (Cloudflare Workers), prefer Drizzle or Supabase, or
+        use Prisma with{" "}
         <a
           href="https://www.prisma.io/docs/orm/overview/databases/database-drivers"
           target="_blank"
@@ -276,11 +281,10 @@ app.get(
         decorated clients available on <code>state</code> in every handler.
         Declare it in the module that creates the client (a regular{" "}
         <code>.ts</code> file the compiler always checks), not in a separate{" "}
-        <code>.d.ts</code> file: declaration files are exempt from
-        type-checking when <code>skipLibCheck</code> is on (the scaffolded
-        default), so a broken import inside a <code>.d.ts</code> fails
-        silently and <code>state.db</code> quietly degrades to{" "}
-        <code>any</code>.
+        <code>.d.ts</code> file: declaration files are exempt from type-checking
+        when <code>skipLibCheck</code> is on (the scaffolded default), so a
+        broken import inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/prisma.ts (the module that creates the client)
@@ -335,6 +339,11 @@ try {
 
       <h2 id="next-steps">Next steps</h2>
       <ul>
+        <li>
+          <Link href={"/docs/security/resource-authorization" as Route}>
+            Resource authorization for user-owned and tenant-owned records
+          </Link>
+        </li>
         <li>
           <Link href="/docs/orm/prisma">Prisma guide</Link>
         </li>

@@ -13,10 +13,19 @@ export const metadata = buildMetadata({
 
 const POSTS = [
   {
-    slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
-    title: "DaloyJS 1.0.0-rc.0: The First Release Candidate",
+    slug: "your-jwt-is-valid-and-your-api-is-still-vulnerable",
+    title: "Your JWT Is Valid and Your API Is Still Vulnerable",
     description:
-      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what actually landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the 1.0.0 stable release.",
+      "Login works, the access token is valid, and Alice can still read Bob's data by changing one URL id. This is the resource-authorization gap in AI-generated backends, plus the provider-neutral and database-neutral pattern that closes it.",
+    date: "2026-07-17",
+    readingTime: "11 min read",
+    author: "Devlin Duldulao",
+  },
+  {
+    slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
+    title: "DaloyJS: The First Release Candidate",
+    description:
+      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the stable release.",
     date: "2026-07-03",
     readingTime: "7 min read",
     author: "Devlin Duldulao",
@@ -42,9 +51,9 @@ const POSTS = [
   },
   {
     slug: "daloyjs-1-0-0-beta-is-here",
-    title: "DaloyJS 1.0.0-beta.0 Is Here (and Nothing Broke, On Purpose)",
+    title: "DaloyJS Is in Beta (and Nothing Broke, on Purpose)",
     description:
-      "After a long 0.x preview line, DaloyJS enters its 1.0.0 beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the 1.0.0 stable release.",
+      "After a long public preview, DaloyJS enters beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the stable release.",
     date: "2026-06-21",
     readingTime: "6 min read",
     author: "Devlin Duldulao",
@@ -122,7 +131,7 @@ const POSTS = [
     title:
       "Aikido's Top 10 App Security Problems, Mapped to DaloyJS (and the One Gap We Just Closed)",
     description:
-      "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and the single gap we shipped a new helper for in 0.36.0: safeRedirect().",
+      "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and how safeRedirect() closes the remaining gap.",
     date: "2026-06-14",
     readingTime: "10 min read",
     author: "Devlin Duldulao",
@@ -180,7 +189,7 @@ const POSTS = [
     title:
       "AI-Friendly Route Metadata: Machine-Readable Examples for Codegen Agents",
     description:
-      "DaloyJS 0.14.x adds an optional meta field on every route() (structured examples, extra description copy, and free-form x-* extensions) validated against your Standard Schema at build time and surfaced into OpenAPI 3.1 plus sibling routes.json or routes.yaml dumps via daloy inspect --ai. Additive, non-breaking, and built so Hey API, Claude, GPT, and home-grown codegen agents can write correct call sites on the first try.",
+      "DaloyJS route metadata adds structured examples, extra description copy, and free-form x-* extensions, validated against your Standard Schema at build time and surfaced into OpenAPI 3.1 plus sibling routes.json or routes.yaml dumps via daloy inspect --ai. It is additive, non-breaking, and built so codegen agents can write correct call sites on the first try.",
     date: "2026-06-08",
     readingTime: "11 min read",
     author: "Devlin Duldulao",
@@ -190,7 +199,7 @@ const POSTS = [
     title:
       "Branded API Docs Without Losing the Contract: Customizing Scalar in DaloyJS",
     description:
-      "DaloyJS 0.14 adds docs.scalar, a JSON-only knob that lets you theme the Scalar API reference, hide the Try-it button, drop in a brand stylesheet, and pick a layout, without forking the docs route. And because Daloy locks the spec URL to your live OpenAPI path at serialize time, the prettiest docs page in the company can't drift away from the contract.",
+      "DaloyJS docs.scalar is a JSON-only knob that lets you theme the Scalar API reference, hide the Try-it button, drop in a brand stylesheet, and pick a layout, without forking the docs route. Because Daloy locks the spec URL to your live OpenAPI path at serialize time, the prettiest docs page in the company cannot drift away from the contract.",
     date: "2026-06-07",
     readingTime: "10 min read",
     author: "Devlin Duldulao",

@@ -919,9 +919,9 @@ export default function BlogPostPage() {
 
           <h2>Why I think this is the right bet for 2027</h2>
           <p>
-            I am not going to pretend DaloyJS is magic. It is in public preview,
-            it is a <code>0.x</code>, and the API can still move between minor
-            versions. It will not write your business logic and it will not stop
+            I am not going to pretend DaloyJS is magic. It is maturing in public,
+            and its API follows SemVer. It will not write your business logic or
+            stop
             you from shipping a bug. No framework can save a determined developer
             from themselves, and I say that as a determined developer who has
             needed saving.

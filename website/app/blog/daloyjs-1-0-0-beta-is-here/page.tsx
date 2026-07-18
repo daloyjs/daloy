@@ -7,9 +7,9 @@ import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const POST = {
   slug: "daloyjs-1-0-0-beta-is-here",
-  title: "DaloyJS 1.0.0-beta.0 Is Here (and Nothing Broke, On Purpose)",
+  title: "DaloyJS Is in Beta (and Nothing Broke, on Purpose)",
   description:
-    "After a long 0.x preview line, DaloyJS enters its 1.0.0 beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the 1.0.0 stable release.",
+    "After a long public preview, DaloyJS enters beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the stable release.",
   date: "2026-06-21",
   readingTime: "6 min read",
   author: "Devlin Duldulao",
@@ -23,7 +23,7 @@ export const metadata = buildMetadata({
   description: POST.description,
   path: `/blog/${POST.slug}`,
   keywords: [
-    "DaloyJS 1.0 beta",
+    "DaloyJS beta",
     "DaloyJS release",
     "TypeScript REST API framework",
     "secure by default framework",
@@ -45,8 +45,8 @@ pnpm create daloy@latest my-api
 npm i @daloyjs/core
 pnpm add @daloyjs/core
 
-# Pin it explicitly if you like being specific
-npm i @daloyjs/core@1.0.0-beta.0`;
+# npm works too
+npm i @daloyjs/core`;
 
 const ROUTE = `app.route({
   method: "GET",
@@ -90,7 +90,7 @@ export default function BlogPostPage() {
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <Badge variant="outline">Release</Badge>
-            <Badge variant="outline">1.0.0 beta</Badge>
+            <Badge variant="outline">Beta</Badge>
           </div>
           <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             {POST.title}
@@ -116,46 +116,43 @@ export default function BlogPostPage() {
         <div className="docs-prose max-w-full">
           <p>
             DaloyJS just crossed a line I have been quietly nervous about for
-            months. We tagged <code>1.0.0-beta.0</code>. The framework that
-            spent its whole life as a <code>0.x</code> preview is now in beta for
-            its first major release.
+            months. We tagged the beta. The framework that spent its whole life
+            in public preview is now being tested as a stable foundation for
+            production applications.
           </p>
 
           <p>
             And here is the part that feels like a punchline: the single most
             important line in this changelog is that nothing changed. No new
             middleware. No new adapter. No clever helper I will write three blog
-            posts about. If you were on <code>0.44.0</code> yesterday,{" "}
-            <code>1.0.0-beta.0</code> is the exact same code with a braver
-            version number.
+            posts about. If you were on the final preview release yesterday,
+            the beta is the exact same code with a braver version label.
           </p>
 
           <h2>So why bother tagging it?</h2>
 
           <p>
-            Because a version number is a promise, and I finally felt okay making
-            this one. During <code>0.x</code> the deal was simple and a little
-            rude: any minor release could break you. That is normal for a young
-            framework. You move fast, you rename things, you apologize in the
-            changelog. It is also exhausting for anyone trying to build something
-            real on top of you.
+            Because a stable API is a promise, and I finally felt okay making
+            this one. During preview the deal was simple and a little rude:
+            public APIs could still move. That is normal for a young framework.
+            You move fast, you rename things, you apologize in the changelog. It
+            is also exhausting for anyone trying to build something real.
           </p>
 
           <p>
-            <code>1.0.0-beta.0</code> flips that deal. The public API is
-            feature-complete and stable for the 1.0 line. From{" "}
-            <code>1.0.0</code> onward we follow SemVer like adults: no breaking
-            changes in a <code>1.x</code> minor, and deprecations get at least
-            one minor cycle of warning before anything disappears. The beta is me
-            saying I think we are ready, then handing it to you to prove me wrong
-            before the stable release.
+            The beta flips that deal. The public API is feature-complete and
+            stable. From the stable release onward we follow SemVer like adults:
+            minor releases do not introduce breaking changes, and deprecations
+            get at least one minor cycle of warning before anything disappears.
+            The beta is me saying I think we are ready, then handing it to you
+            to prove me wrong before the stable release.
           </p>
 
           <h2>Wait, nothing changed, really?</h2>
 
           <p>
             Really. But that does not mean nothing happened. The work that earned
-            the <code>1.0</code> happened across the entire <code>0.x</code> run:
+            a stable release happened across the entire public preview:
             the secure-by-default request path, the contract-first route that
             generates OpenAPI plus a typed client, the multi-runtime adapters,
             the supply-chain hardening, the SSRF guard, the auth and rate-limit
@@ -173,7 +170,7 @@ export default function BlogPostPage() {
           <h2>How to get it</h2>
 
           <p>
-            We published <code>1.0.0-beta.0</code> to the <code>latest</code> tag
+            We published the beta to the <code>latest</code> tag
             on npm and to JSR, in lockstep across{" "}
             <code>@daloyjs/core</code>, <code>create-daloy</code>, and{" "}
             <code>@daloyjs/daloy</code>. So a plain install gets you the beta with
@@ -199,11 +196,11 @@ export default function BlogPostPage() {
           <p>
             A beta is not a victory lap, it is a request for evidence. The best
             possible outcome for the next few weeks is that someone builds a real
-            thing on <code>1.0.0-beta.0</code> and finds the rough edge I missed.
-            File the bug. Tell me the API name that reads wrong. Show me the
-            adapter that behaves differently than the docs claim. That is the
-            entire point of shipping a beta instead of just tagging{" "}
-            <code>1.0.0</code> and praying.
+            thing on the beta and finds the rough edge I missed. File the bug.
+            Tell me the API name that reads wrong. Show me the adapter that
+            behaves differently than the docs claim. That is the entire point
+            of shipping a beta instead of just tagging a stable release and
+            praying.
           </p>
 
           <p>
@@ -218,8 +215,8 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            One small, slightly emotional note to close on. Tagging a{" "}
-            <code>1.0</code> beta, even a boring one, is the part of a project
+            One small, slightly emotional note to close on. Tagging a beta, even
+            a boring one, is the part of a project
             where it stops being a thing I am tinkering with and starts being a
             thing other people are allowed to depend on. That is terrifying in
             the good way. Thanks for being early.

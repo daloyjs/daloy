@@ -628,7 +628,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["terminal · zsh"]}
             activeFile="terminal · zsh"
-            status="create-daloy 0.x · template node-basic · minimal demo"
+            status="create-daloy · template node-basic · minimal demo"
           >
             <CodeBlock language="bash" code={SCAFFOLD} />
           </EditorFrame>

@@ -4,9 +4,9 @@ import { FlowDiagram } from "../../../../components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Lifecycle leftovers (0.20.0)",
+  title: "Runtime resilience and configuration",
   description:
-    "Daloy 0.20.0 ships the lifecycle leftover slice of the secure-by-default initiative: loadShedding(), app.cspReportRoute() with secureHeaders reporting wiring, disconnectStatusCode: 499 default, and defineConfig({ schema, source }) boot-time validation.",
+    "Build resilient DaloyJS services with loadShedding(), app.cspReportRoute(), disconnectStatusCode, and boot-time configuration validation through defineConfig().",
   path: "/docs/security/lifecycle-leftovers",
   keywords: [
     "DaloyJS loadShedding",
@@ -19,7 +19,7 @@ export const metadata = buildMetadata({
     "499 client closed request",
     "defineConfig",
     "Standard Schema",
-    "0.20.0",
+    "runtime resilience",
     "secureDefaults",
   ],
   type: "article",
@@ -28,7 +28,7 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>Lifecycle leftovers (0.20.0)</h1>
+      <h1>Runtime resilience and configuration</h1>
       <blockquote>
         <strong>Think of it like…</strong> the load-shedding switch in an
         electrical grid. When the system is near overload, it sheds non-
@@ -39,10 +39,11 @@ export default function Page() {
         in your env file before the first request lands.
       </blockquote>
       <p>
-        Daloy <strong>0.20.0</strong> closes four leftover lifecycle items of
-        the secure-by-default initiative. Each one is additive and opt-in (or,
-        in the case of <code>disconnectStatusCode</code>, only changes the
-        status code recorded for already-aborted requests):
+        Daloy provides four production safeguards for overloaded processes,
+        security reporting, aborted requests, and invalid configuration. Each
+        one is additive and opt-in (or, in the case of{" "}
+        <code>disconnectStatusCode</code>, only changes the status code
+        recorded for already-aborted requests):
       </p>
       <ul>
         <li>

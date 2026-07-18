@@ -10,7 +10,7 @@ const POST = {
   title:
     "Aikido's Top 10 App Security Problems, Mapped to DaloyJS (and the One Gap We Just Closed)",
   description:
-    "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and the single gap we shipped a new helper for in 0.36.0: safeRedirect().",
+    "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and how safeRedirect() closes the remaining gap.",
   date: "2026-05-24",
   readingTime: "10 min read",
   author: "Devlin Duldulao",
@@ -144,7 +144,7 @@ const STATUS_COPY: Record<ItemStatus, { label: string; tone: string }> = {
   default: { label: "On by default", tone: "default" },
   "opt-in": { label: "One opt-in line", tone: "secondary" },
   "n/a": { label: "Not applicable", tone: "outline" },
-  "gap-closed": { label: "Gap → shipped in 0.36.0", tone: "destructive" },
+  "gap-closed": { label: "Gap closed", tone: "destructive" },
 };
 
 function ThreatCard({
@@ -213,7 +213,7 @@ export default function BlogPostPage() {
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <Badge variant="outline">Security</Badge>
             <Badge variant="outline">Field report</Badge>
-            <Badge variant="default">Ships in 0.36.0</Badge>
+            <Badge variant="default">Gap closed</Badge>
           </div>
           <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             {POST.title}
@@ -259,9 +259,8 @@ export default function BlogPostPage() {
             I went down the list with our framework open in another window. The
             honest result: <strong>nine out of ten are already covered</strong>{" "}
 , most of them by default, a couple with a single opt-in line. One, {" "}
-            <em>open redirects</em>: was a real gap. So I shipped a helper for
-            it. You&apos;ll see it below as <code>safeRedirect()</code> in
-            0.36.0.
+            <em>open redirects</em>: was a real gap. So I shipped the
+            <code>safeRedirect()</code> helper you will see below.
           </p>
 
           <p>
@@ -413,18 +412,18 @@ export default function BlogPostPage() {
             num={10}
             threat="Open redirects (?next=, ?returnTo=, ?redirect_uri=)"
             status="gap-closed"
-            framework="As of 0.36.0: safeRedirect(target, { allowedPaths, allowedOrigins, fallback }). Refuses //evil.com, /\\evil.com, javascript:, control-character response-splitting, off-origin absolute URLs, and unparseable input. Defaults to 303 + Cache-Control: no-store."
+            framework="safeRedirect(target, { allowedPaths, allowedOrigins, fallback }) refuses //evil.com, /\\evil.com, javascript:, control-character response-splitting, off-origin absolute URLs, and unparseable input. Defaults to 303 + Cache-Control: no-store."
             user="Pass the explicit allow-list. The helper will not let you publish a redirect helper with no allow-list and no fallback, that combination throws OpenRedirectBlockedError at use time."
           />
 
           <p>
-            This is the one I had to actually ship. Before 0.36.0, if you wanted
-            to redirect from a Daloy handler you wrote something like:
+            This is the one I had to actually ship. Without the helper, a Daloy
+            redirect looked something like this:
           </p>
 
           <CodeBlock
             language="ts"
-            code={`// 0.36.0, fine if \`next\` is a hard-coded string,
+            code={`// Fine if \`next\` is a hard-coded string,
 // open-redirect bait if it came from a query parameter.
 return new Response(null, {
   status: 302,

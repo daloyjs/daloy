@@ -220,10 +220,9 @@ app.use(cors({ origin: ["https://app.example.com"] }));
 
       <h2 id="the-master-escape-hatch">The master escape hatch</h2>
       <p>
-        If you&apos;re upgrading from <code>0.15.x</code> and need to ship the
-        upgrade without any behavior changes, pass{" "}
-        <code>secureDefaults: false</code> to restore the pre-0.16 behavior
-        wholesale:
+        If you need to adopt Daloy without changing an existing
+        application&apos;s behavior in the same deployment, pass{" "}
+        <code>secureDefaults: false</code> as a temporary migration hatch:
       </p>
       <CodeBlock code={`const app = new App({ secureDefaults: false });`} />
       <p>
@@ -291,19 +290,13 @@ export function myCustomHeaders() {
         </li>
       </ul>
 
-      <h2 id="what-and-apos-s-not-in-this-slice">
-        What&apos;s <em>not</em> in this slice
-      </h2>
+      <h2 id="related-secure-defaults">Related secure defaults</h2>
       <p>
-        The full secure-defaults plan in the roadmap lists many additional flips
-        (CSP nonces default-on, per-content-type body caps, response-schema
-        validation in development, conditional
-        <code>/openapi.json</code> in production,{" "}
-        <code>frame-ancestors &apos;none&apos;</code> as immovable,
-        trailing-slash canonicalization, etc.). Those will land in additive{" "}
-        <code>0.16.x</code> patches and follow-up minor releases. The four-item
-        slice above is what shipped first because it is the
-        highest-impact-per-line-of-breaking-change subset.
+        Daloy&apos;s wider secure-default posture also covers CSP nonces,
+        per-content-type body caps, development response-schema validation,
+        conditional <code>/openapi.json</code> exposure in production,
+        clickjacking defenses, and trailing-slash canonicalization. Use the
+        focused security pages for configuration details and scoped opt-outs.
       </p>
     </>
   );

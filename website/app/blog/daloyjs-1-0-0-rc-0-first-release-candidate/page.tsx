@@ -7,9 +7,9 @@ import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const POST = {
   slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
-  title: "DaloyJS 1.0.0-rc.0: The First Release Candidate",
+  title: "DaloyJS: The First Release Candidate",
   description:
-    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what actually landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the 1.0.0 stable release.",
+    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the stable release.",
   date: "2026-07-03",
   readingTime: "7 min read",
   author: "Devlin Duldulao",
@@ -23,8 +23,8 @@ export const metadata = buildMetadata({
   description: POST.description,
   path: `/blog/${POST.slug}`,
   keywords: [
-    "DaloyJS 1.0 release candidate",
-    "DaloyJS rc.0",
+    "DaloyJS release candidate",
+    "DaloyJS RC",
     "TypeScript REST API framework",
     "secure by default framework",
     "MCP server TypeScript",
@@ -45,8 +45,8 @@ pnpm create daloy@latest my-api
 # Or add the core to an existing project
 pnpm add @daloyjs/core
 
-# Pin it explicitly if you like being specific
-pnpm add @daloyjs/core@1.0.0-rc.0`;
+# npm works too
+npm install @daloyjs/core`;
 
 const MCP = `import { App, createMcpHandler, mcpRoutes } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
@@ -107,7 +107,7 @@ export default function BlogPostPage() {
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <Badge variant="outline">Release</Badge>
-            <Badge variant="outline">1.0.0 rc</Badge>
+            <Badge variant="outline">Release candidate</Badge>
           </div>
           <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             {POST.title}
@@ -134,22 +134,21 @@ export default function BlogPostPage() {
           <p>
             A couple of weeks ago I wrote a post whose whole punchline was that{" "}
             <Link href="/blog/daloyjs-1-0-0-beta-is-here">
-              the 1.0.0 beta changed nothing on purpose
+              the beta changed nothing on purpose
             </Link>
             . Today I get to write the sequel, and the tone is different. We just
-            tagged <code>1.0.0-rc.0</code>, the first release candidate. If the
-            beta was me quietly hoping the API was ready, the RC is me locking
-            the door and putting the key on the table.
+            tagged the first release candidate. If the beta was me quietly hoping
+            the API was ready, the RC is me locking the door and putting the key
+            on the table.
           </p>
 
           <p>
             The rule for a release candidate is short and unglamorous: from here
-            to the <code>1.0.0</code> stable release, only bug fixes and documentation land.
-            No new middleware, no new adapter, no new helper. The public API you
-            see in <code>1.0.0-rc.0</code> is the public API you get in{" "}
-            <code>1.0.0</code>, minus whatever bugs you help me find. That is the
-            entire promise, and it is the reason an RC feels heavier to tag than
-            a beta.
+            to the stable release, only bug fixes and documentation land. No new
+            middleware, no new adapter, no new helper. The public API you see in
+            the release candidate is the public API you get at stable, minus
+            whatever bugs you help me find. That is the entire promise, and it is
+            the reason an RC feels heavier to tag than a beta.
           </p>
 
           <h2>So the beta really was the freeze</h2>
@@ -192,19 +191,18 @@ export default function BlogPostPage() {
           <h2>Nothing to do if you are already on the beta</h2>
 
           <p>
-            <code>1.0.0-rc.0</code> is a version bump from <code>beta.7</code>.
-            If you were on <code>^1.0.0-beta.7</code>, upgrading is a lockfile
-            change and a good night&apos;s sleep. We moved{" "}
+            The release candidate is a straightforward upgrade from the beta.
+            Updating is a lockfile change and a good night&apos;s sleep. We moved
             <code>@daloyjs/core</code>, <code>create-daloy</code>, and the JSR
-            package <code>@daloyjs/daloy</code> together, as always, and every{" "}
-            <code>create-daloy</code> template now pins{" "}
-            <code>@daloyjs/core@^1.0.0-rc.0</code>. A plain install gets you the
-            RC, no dist-tag archaeology required:
+            package <code>@daloyjs/daloy</code> together, as always, and every
+            <code>create-daloy</code> template points at the matching core
+            package. A plain install gets you the RC, no dist-tag archaeology
+            required:
           </p>
 
           <CodeBlock language="bash" code={INSTALL} />
 
-          <h2>The honest part: what is between here and the stable release</h2>
+          <h2>The honest part: what remains before stable</h2>
 
           <p>
             I could pretend a release candidate means we are basically done. We
@@ -212,7 +210,7 @@ export default function BlogPostPage() {
             The engineering bar is met: the API has been additive across the
             whole beta train, coverage sits around 99% lines and 92% branches,
             the supply-chain gates are green, and the benchmark suite is public.
-            What is left before <code>1.0.0</code> stable is deliberately not code.
+            What is left before stable is deliberately not code.
           </p>
 
           <p>
@@ -233,7 +231,7 @@ export default function BlogPostPage() {
             Same ask as the beta, higher stakes. A release candidate is a bet
             that the API is right, placed in public so you can call it. The most
             useful thing you can do in the next few weeks is build a real thing
-            on <code>1.0.0-rc.0</code> and find the corner I sanded wrong. Report
+            on the release candidate and find the corner I sanded wrong. Report
             the bug. Tell me the name that reads badly. Show me the adapter that
             drifts from the docs. Once the stable release ships, that feedback costs a
             deprecation cycle to act on. Right now it is free.

@@ -11,7 +11,7 @@ const POST = {
   title:
     "AI-Friendly Route Metadata: Machine-Readable Examples for Codegen Agents",
   description:
-    "DaloyJS 0.14.x adds an optional meta field on every route(), structured examples, extra description copy, and free-form x-* extensions, validated against your Standard Schema at build time and surfaced into OpenAPI 3.1 plus sibling routes.json or routes.yaml dumps via daloy inspect --ai. Additive, non-breaking, and built so Hey API, Claude, GPT, and home-grown codegen agents can write correct call sites on the first try.",
+    "DaloyJS route metadata adds structured examples, extra description copy, and free-form x-* extensions, validated against your Standard Schema at build time and surfaced into OpenAPI 3.1 plus sibling routes.json or routes.yaml dumps via daloy inspect --ai. It is additive, non-breaking, and built so codegen agents can write correct call sites on the first try.",
   date: "2026-06-14",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
@@ -571,21 +571,19 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            Devlin here. <code>@daloyjs/core@0.14.1</code> shipped to npm today
-            and it adds one optional field to <code>app.route()</code> called{" "}
-            <code>meta</code>. That single field carries structured{" "}
+            Devlin here. DaloyJS adds one optional field to{" "}
+            <code>app.route()</code> called <code>meta</code>. That single field
+            carries structured{" "}
             <em>examples</em>, extra <em>description</em> copy, and a{" "}
             <em>free-form extensions</em> bag, all of it validated against your
             Standard Schema at build time and surfaced into the OpenAPI 3.1
             document <em>and</em> a sibling <code>routes.json</code> via{" "}
-            <code>daloy inspect --ai</code>. The whole release is additive and
+            <code>daloy inspect --ai</code>. The whole feature is additive and
             non-breaking: every existing route keeps working with zero changes.
-            The 0.14.2 patch keeps that default JSON shape and adds{" "}
+            The same command keeps its default JSON shape and supports{" "}
             <code>--yaml</code> / <code>--format yaml</code> for the same dump
             when the reader is a human or an LLM context window. This is the
-            &quot;AI-friendly route metadata&quot; milestone from the roadmap,
-            and it is the last pre-1.0 milestone before the secure-by-default
-            initiative takes over.
+            &quot;AI-friendly route metadata&quot; capability from the roadmap.
           </p>
 
           <h2>The failure mode this fixes</h2>
@@ -608,7 +606,7 @@ export default function BlogPostPage() {
             downstream.
           </p>
 
-          <h2>What landed in 0.14.x</h2>
+          <h2>What route metadata adds</h2>
 
           <EditorFrame
             files={["src/build-app.ts"]}
@@ -802,8 +800,8 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            <code>@daloyjs/core@0.14.2</code> and{" "}
-            <code>create-daloy@0.8.2</code> are on npm now. New projects pick up
+            Route metadata and the YAML-friendly CLI flags are available now.
+            New projects pick up
             the field and the YAML-friendly CLI flags automatically; existing
             projects can adopt them one route at a time without changing
             anything else.

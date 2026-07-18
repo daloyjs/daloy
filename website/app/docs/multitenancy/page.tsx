@@ -1,3 +1,5 @@
+import type { Route } from "next";
+import Link from "next/link";
 import { CodeBlock } from "../../../components/code-block";
 import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 
@@ -28,13 +30,12 @@ export default function Page() {
     <>
       <h1>Multitenancy</h1>
       <p>
-        DaloyJS ships <code>tenancy()</code>, a{" "}
-        <strong>dependency-free</strong>, secure-by-default <code>Hooks</code>{" "}
-        bundle that resolves the calling tenant <em>once</em> per request,
-        validates and normalizes it, and exposes it on{" "}
-        <code>ctx.state.tenant</code>. It is the single source of truth for
-        &ldquo;who is this request for&rdquo; so the per-tenant isolation knobs
-        already on the framework (<code>rateLimit</code>,{" "}
+        DaloyJS ships <code>tenancy()</code>, a <strong>dependency-free</strong>
+        , secure-by-default <code>Hooks</code> bundle that resolves the calling
+        tenant <em>once</em> per request, validates and normalizes it, and
+        exposes it on <code>ctx.state.tenant</code>. It is the single source of
+        truth for &ldquo;who is this request for&rdquo; so the per-tenant
+        isolation knobs already on the framework (<code>rateLimit</code>,{" "}
         <code>concurrencyLimit</code>, <code>idempotency</code>,{" "}
         <code>responseCache</code>) can all key off the same resolved value via{" "}
         <code>tenantScope()</code>.
@@ -58,7 +59,8 @@ export default function Page() {
           {
             eyebrow: "tenantScope()",
             label: "Partition isolation knobs",
-            detail: "rateLimit · concurrencyLimit · idempotency · responseCache",
+            detail:
+              "rateLimit · concurrencyLimit · idempotency · responseCache",
           },
           {
             eyebrow: "handler",
@@ -168,8 +170,12 @@ app.get(
           </thead>
           <tbody>
             <tr>
-              <td><code>tenantFromSubdomain({`{ baseDomain }`})</code></td>
-              <td><code>acme.example.com</code> → <code>acme</code></td>
+              <td>
+                <code>tenantFromSubdomain({`{ baseDomain }`})</code>
+              </td>
+              <td>
+                <code>acme.example.com</code> → <code>acme</code>
+              </td>
               <td>
                 PSL-aware via <code>subdomains()</code>. A <code>Host</code> not
                 under <code>baseDomain</code> resolves to <em>unresolved</em>{" "}
@@ -178,7 +184,9 @@ app.get(
               </td>
             </tr>
             <tr>
-              <td><code>tenantFromHeader(&quot;x-tenant-id&quot;)</code></td>
+              <td>
+                <code>tenantFromHeader(&quot;x-tenant-id&quot;)</code>
+              </td>
               <td>request header</td>
               <td>
                 <strong>Spoofable.</strong> Only trust behind a proxy that{" "}
@@ -187,23 +195,33 @@ app.get(
               </td>
             </tr>
             <tr>
-              <td><code>tenantFromPathPrefix()</code></td>
-              <td><code>/acme/orders</code> → <code>acme</code></td>
+              <td>
+                <code>tenantFromPathPrefix()</code>
+              </td>
+              <td>
+                <code>/acme/orders</code> → <code>acme</code>
+              </td>
               <td>
                 Reads the segment only (does not rewrite the path); your routes
                 still include the tenant segment.
               </td>
             </tr>
             <tr>
-              <td><code>tenantFromClaim(&quot;org&quot;)</code></td>
-              <td><code>ctx.state.auth.credentials.org</code></td>
+              <td>
+                <code>tenantFromClaim(&quot;org&quot;)</code>
+              </td>
+              <td>
+                <code>ctx.state.auth.credentials.org</code>
+              </td>
               <td>
                 For a verified JWT/session claim. The auth middleware that
                 populates it must run <em>before</em> <code>tenancy()</code>.
               </td>
             </tr>
             <tr>
-              <td><code>(ctx) =&gt; string | undefined</code></td>
+              <td>
+                <code>(ctx) =&gt; string | undefined</code>
+              </td>
               <td>anything</td>
               <td>Custom resolver: derive the id however you like.</td>
             </tr>
@@ -231,24 +249,38 @@ tenancy({
           </thead>
           <tbody>
             <tr>
-              <td><code>resolve</code></td>
-              <td><code>TenantResolver | TenantResolver[]</code></td>
+              <td>
+                <code>resolve</code>
+              </td>
+              <td>
+                <code>TenantResolver | TenantResolver[]</code>
+              </td>
               <td>(required)</td>
               <td>Resolver(s) tried in order; first non-empty wins.</td>
             </tr>
             <tr>
-              <td><code>require</code></td>
-              <td><code>boolean</code></td>
-              <td><code>true</code></td>
               <td>
-                Reject unresolved requests. The secure default: an
-                unresolved request is never served as an ambient
-                &ldquo;default&rdquo; tenant.
+                <code>require</code>
+              </td>
+              <td>
+                <code>boolean</code>
+              </td>
+              <td>
+                <code>true</code>
+              </td>
+              <td>
+                Reject unresolved requests. The secure default: an unresolved
+                request is never served as an ambient &ldquo;default&rdquo;
+                tenant.
               </td>
             </tr>
             <tr>
-              <td><code>allow</code></td>
-              <td><code>string[] | (id, ctx) =&gt; boolean</code></td>
+              <td>
+                <code>allow</code>
+              </td>
+              <td>
+                <code>string[] | (id, ctx) =&gt; boolean</code>
+              </td>
               <td>-</td>
               <td>
                 Bound the tenant space. Array entries are validated at
@@ -257,8 +289,12 @@ tenancy({
               </td>
             </tr>
             <tr>
-              <td><code>normalize</code></td>
-              <td><code>(raw) =&gt; string | undefined</code></td>
+              <td>
+                <code>normalize</code>
+              </td>
+              <td>
+                <code>(raw) =&gt; string | undefined</code>
+              </td>
               <td>trim + lowercase + strict charset</td>
               <td>
                 Validate/canonicalize the raw id. Return <code>undefined</code>{" "}
@@ -268,21 +304,43 @@ tenancy({
               </td>
             </tr>
             <tr>
-              <td><code>stateKey</code></td>
-              <td><code>string</code></td>
-              <td><code>&quot;tenant&quot;</code></td>
-              <td><code>ctx.state</code> key the resolved id is written to.</td>
+              <td>
+                <code>stateKey</code>
+              </td>
+              <td>
+                <code>string</code>
+              </td>
+              <td>
+                <code>&quot;tenant&quot;</code>
+              </td>
+              <td>
+                <code>ctx.state</code> key the resolved id is written to.
+              </td>
             </tr>
             <tr>
-              <td><code>unresolvedStatus</code></td>
-              <td><code>400 | 401 | 403 | 404</code></td>
-              <td><code>400</code></td>
-              <td>Status when <code>require</code> is true and nothing resolved.</td>
+              <td>
+                <code>unresolvedStatus</code>
+              </td>
+              <td>
+                <code>400 | 401 | 403 | 404</code>
+              </td>
+              <td>
+                <code>400</code>
+              </td>
+              <td>
+                Status when <code>require</code> is true and nothing resolved.
+              </td>
             </tr>
             <tr>
-              <td><code>invalidStatus</code></td>
-              <td><code>400 | 403 | 404</code></td>
-              <td><code>404</code></td>
+              <td>
+                <code>invalidStatus</code>
+              </td>
+              <td>
+                <code>400 | 403 | 404</code>
+              </td>
+              <td>
+                <code>404</code>
+              </td>
               <td>
                 Status for a resolved-but-disallowed/malformed id.{" "}
                 <code>404</code> avoids tenant enumeration.
@@ -292,7 +350,9 @@ tenancy({
         </table>
       </div>
 
-      <h2 id="per-tenant-isolation-with-tenantscope">Per-tenant isolation with <code>tenantScope()</code></h2>
+      <h2 id="per-tenant-isolation-with-tenantscope">
+        Per-tenant isolation with <code>tenantScope()</code>
+      </h2>
       <p>
         <code>tenantScope()</code> returns a <code>(ctx) =&gt; string</code> key
         function that reads <code>ctx.state.tenant</code> and returns a{" "}
@@ -328,11 +388,12 @@ responseCache({
         <code>new App({`{ hooks: tenancy(...) }`}</code>) or the first{" "}
         <code>app.use(...)</code>, so the tenant is populated before any{" "}
         <code>keyGenerator</code> / <code>scope</code> callback runs. If a
-        limiter runs first, its key falls back to{" "}
-        <code>tenant:unknown</code>.
+        limiter runs first, its key falls back to <code>tenant:unknown</code>.
       </p>
 
-      <h2 id="database-isolation-is-yours-to-wire">Database isolation is yours to wire</h2>
+      <h2 id="database-isolation-is-yours-to-wire">
+        Database isolation is yours to wire
+      </h2>
       <p>
         This is the boundary worth being explicit about, because people coming
         from &ldquo;the framework guarantees isolation with Row-Level
@@ -341,9 +402,9 @@ responseCache({
         normalized, non-spoofable <code>ctx.state.tenant</code>) and{" "}
         <code>tenantScope()</code> owns per-tenant <em>resource</em> isolation
         (rate-limit, concurrency, cache, and idempotency buckets). What it
-        deliberately does <em>not</em> do is reach into your database and enforce
-        row isolation, that last inch lives in your data layer. The clean,
-        trustworthy id is exactly what that layer needs:
+        deliberately does <em>not</em> do is reach into your database and
+        enforce row isolation, that last inch lives in your data layer. The
+        clean, trustworthy id is exactly what that layer needs:
       </p>
       <CodeBlock
         code={`// (a) Scope every query with the verified id.
@@ -362,11 +423,18 @@ await db.query("SET app.current_tenant = $1", [ctx.state.tenant]);
       <p>
         Either way, the value reaching your database was already validated and
         normalized by <code>tenancy()</code>, so a spoofed header or a{" "}
-        <code>Host</code> outside your <code>baseDomain</code> can never become a
-        query parameter or an RLS session variable.
+        <code>Host</code> outside your <code>baseDomain</code> can never become
+        a query parameter or an RLS session variable. The{" "}
+        <Link href={"/docs/security/resource-authorization" as Route}>
+          resource authorization guide
+        </Link>{" "}
+        shows how to combine that tenant constraint with user ownership and
+        cross-tenant attack tests.
       </p>
 
-      <h2 id="typing-ctx-state-tenant">Typing <code>ctx.state.tenant</code></h2>
+      <h2 id="typing-ctx-state-tenant">
+        Typing <code>ctx.state.tenant</code>
+      </h2>
       <p>
         Augment <code>AppState</code> so the resolved tenant is strongly typed
         in every handler and hook. Put the <code>declare module</code> block in

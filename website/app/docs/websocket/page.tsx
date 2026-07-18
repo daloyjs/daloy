@@ -44,8 +44,8 @@ export default function Page() {
         <code>Bun.serve</code>&apos;s native <code>websocket</code> config.
       </p>
       <p>
-        Since <strong>0.23.0</strong>, <code>app.ws()</code> also normalizes
-        safe runtime defaults: <code>closeOnBackpressureLimit: true</code>, a 1
+        <code>app.ws()</code> also normalizes safe runtime defaults:{" "}
+        <code>closeOnBackpressureLimit: true</code>, a 1
         MiB <code>backpressureLimit</code>,{" "}
         <code>perMessageDeflate: false</code>, a non-zero{" "}
         <code>idleTimeout</code>, and a 1 MiB <code>maxPayloadLength</code>.

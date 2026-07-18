@@ -4,9 +4,9 @@ import { FlowDiagram, SequenceDiagram } from "../../../../components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Auth-cohesive slice",
+  title: "JWT and authentication safeguards",
   description:
-    "Daloy ships the auth-cohesive leftover slice: jwk() asymmetric-only JWKS middleware, per-scheme verify() revalidation hook on bearerAuth() and jwk(), basicAuth({ onAuthSuccess }) typed callback, and Cache-Control: no-store on every first-party auth helper 401 challenge.",
+    "Secure DaloyJS authentication with asymmetric JWKS middleware, per-scheme revalidation hooks, typed basic-auth callbacks, and non-cacheable authentication challenges.",
   path: "/docs/security/auth-slice",
   keywords: [
     "DaloyJS jwk",
@@ -28,7 +28,7 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>Auth-cohesive slice</h1>
+      <h1>JWT and authentication safeguards</h1>
       <blockquote>
         <strong>Think of it like…</strong> a building lobby that does three
         things most don&apos;t. It checks not just your badge but who issued it
@@ -96,8 +96,8 @@ export default function Page() {
         </li>
       </ul>
       <p>
-        Daloy closes the auth-cohesive subset of the leftover items from the
-        secure-by-default initiative. Each one is additive and opt-in:
+        Daloy provides a cohesive set of authentication safeguards. Each one is
+        additive and opt-in:
       </p>
       <ul>
         <li>
@@ -327,15 +327,15 @@ app.use(
         <code>basicAuth()</code>, and the new <code>jwk()</code>.
       </p>
 
-      <h2 id="what-shipped-next">What shipped next</h2>
+      <h2 id="related-auth-safeguards">Related auth safeguards</h2>
       <p>
-        The remaining leftover items, the <code>wsRateLimit()</code> adapter,{" "}
+        Related protections include the <code>wsRateLimit()</code> adapter,{" "}
         <code>loginThrottle()</code> preset, <code>rotateSession()</code>{" "}
         helper, the file-upload MIME + magic-byte + size guard, the{" "}
         <code>requirePayloadAuth</code> scheme flag, and the WebSocket-helper
-        safe defaults, shipped in the{" "}
+        safe defaults, are covered in{" "}
         <a href="/docs/security/websocket-login-throttle">
-          0.23.0 remaining slice
+          WebSocket and login safeguards
         </a>
         .
       </p>

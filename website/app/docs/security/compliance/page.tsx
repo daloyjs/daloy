@@ -774,8 +774,8 @@ export default function Page() {
               Annex I (1)(c), security updates independent of feature updates
             </td>
             <td>
-              SemVer with patch releases (<code>0.x.Y</code>) reserved for
-              security and regression fixes; consumers pinned with{" "}
+              SemVer patch releases are reserved for security and regression
+              fixes; consumers pinned with{" "}
               <code>^@daloyjs/core</code> get patches via{" "}
               <code>pnpm update</code> or Dependabot without code changes.
             </td>
@@ -913,9 +913,8 @@ export default function Page() {
             <td>
               DaloyJS commits to a{" "}
               <strong>minimum 5-year security-update support period</strong> for
-              every major release line starting with 1.0, measured from that
-              line&apos;s first stable release. The current 0.x line is pre-1.0 and
-              rolls forward on the latest minor until 1.0 ships.
+              every stable major release line, measured from that line&apos;s
+              first stable release.
             </td>
           </tr>
         </tbody>

@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
 import { FlowDiagram } from "../../../../components/diagram";
@@ -168,6 +169,17 @@ declare module "@daloyjs/core" {
       />
 
       <h2 id="5-wire-the-plugin-and-route">5. Wire the plugin and route</h2>
+      <p>
+        <strong>
+          The route below demonstrates Prisma wiring, not ownership.
+        </strong>{" "}
+        If a record is user-owned or tenant-owned, do not query by URL ID alone.
+        Constrain the same query with the trusted principal and follow the{" "}
+        <Link href={"/docs/security/resource-authorization" as Route}>
+          resource authorization guide
+        </Link>
+        .
+      </p>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -242,8 +254,8 @@ serve(app, { port: 3000 });`}
 
       <h2 id="edge-runtimes">Edge runtimes</h2>
       <p>
-        For Cloudflare Workers, set the generated client runtime for
-        your target and use the appropriate{" "}
+        For Cloudflare Workers, set the generated client runtime for your target
+        and use the appropriate{" "}
         <a
           href="https://www.prisma.io/docs/orm/overview/databases/database-drivers"
           target="_blank"
@@ -269,7 +281,9 @@ const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
 export const prisma = new PrismaClient({ adapter });`}
       />
 
-      <h2 id="operator-injection-validate-your-filter-shapes">Operator injection: validate your filter shapes</h2>
+      <h2 id="operator-injection-validate-your-filter-shapes">
+        Operator injection: validate your filter shapes
+      </h2>
       <p>
         Prisma always emits parameterized SQL, but the <em>filter object</em>{" "}
         you pass to <code>where</code> is interpreted by Prisma. If a field
@@ -294,7 +308,9 @@ export const prisma = new PrismaClient({ adapter });`}
         for the full pattern and review-time rules.
       </p>
 
-      <h2 id="mapping-errors-to-problem-json">Mapping errors to problem+json</h2>
+      <h2 id="mapping-errors-to-problem-json">
+        Mapping errors to problem+json
+      </h2>
       <CodeBlock
         code={`import { Prisma } from "../generated/prisma/client.ts";
 import { HttpError } from "@daloyjs/core";

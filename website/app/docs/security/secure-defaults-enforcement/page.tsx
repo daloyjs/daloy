@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "secureDefaults enforcement",
   description:
-    "Daloy 0.26.0 ships a focused cross-cutting bake-in: secureDefaults: false master-flag enforcement (production refuse + once-per-process audit log), JWT HS-secret length refuse-to-construct (< 32 bytes), secureHeaders() refusing simultaneous frame-defense disable, and mandatory hardware-backed 2FA for every contributor with publish access.",
+    "Daloy enforces secureDefaults master-flag acknowledgement, strong JWT HMAC secrets, consistent frame defenses, and hardware-backed 2FA for contributors with publish access.",
   path: "/docs/security/secure-defaults-enforcement",
   keywords: [
     "secureDefaults",
@@ -19,7 +19,7 @@ export const metadata = buildMetadata({
     "mandatory 2FA",
     "npm publish 2FA",
     "secure-by-default",
-    "0.26.0",
+    "security enforcement",
   ],
   type: "article",
 });
@@ -38,15 +38,10 @@ export default function Page() {
         bytes).
       </blockquote>
       <p>
-        Daloy ships a focused slice of <strong>cross-cutting bake-ins</strong>{" "}
-        from the secure-by-default initiative. Three items are implemented now;
-        the remaining cross-cutting bullets (single-source helpers for cookie /
-        client IP / time-claim / secret comparison, the <code>__Secure-</code>{" "}
-        cookie without TLS refuse-to-boot, the{" "}
-        <code>daloy doctor --audit-secrets</code> subcommand, and the
-        zero-runtime-dependency governance CI grep gate) remain tracked on the
-        roadmap and will land in subsequent additive <code>0.26.x</code>{" "}
-        releases.
+        Daloy applies these <strong>cross-cutting security invariants</strong>{" "}
+        at construction time, request time, and release time. The checks are
+        designed to keep an insecure local workaround from silently becoming a
+        production default.
       </p>
 
       <h2 id="1-securedefaults-false-master-flag-enforcement">
@@ -261,17 +256,17 @@ secureHeaders({
         </li>
       </ul>
 
-      <h2 id="what-and-apos-s-next">What&apos;s next</h2>
+      <h2 id="related-cross-cutting-safeguards">
+        Related cross-cutting safeguards
+      </h2>
       <p>
-        The remaining cross-cutting bullets stay tracked on the roadmap and will
-        land in subsequent <code>0.26.x</code> additive patches: single source
-        of truth for cookie writes / client IP / time-claim validation / secret
-        comparison; the <code>__Secure-</code> cookie without TLS refuse-to-boot
-        guard; the <code>daloy doctor --audit-secrets</code> subcommand; the
-        zero-external-runtime-dependency governance CI grep gate; and the
-        timing-safe-comparison CI grep gate. Together these items remove the
-        last &quot;developer remembered to do X but not Y&quot; failure modes by
-        making the framework&apos;s security surface internally self-consistent.
+        The same posture extends to shared helpers for cookie writes, client IP
+        resolution, time-claim validation, and secret comparison; refusal of
+        invalid <code>__Secure-</code> cookie configuration;{" "}
+        <code>daloy doctor --audit-secrets</code>; the zero-runtime-dependency
+        governance gate; and the timing-safe-comparison gate. Together these
+        safeguards replace &quot;the developer remembered to do it&quot; with
+        framework-level consistency.
       </p>
     </>
   );

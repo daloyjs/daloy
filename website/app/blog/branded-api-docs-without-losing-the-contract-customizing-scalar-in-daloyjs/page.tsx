@@ -11,7 +11,7 @@ const POST = {
   title:
     "Branded API Docs Without Losing the Contract: Customizing Scalar in DaloyJS",
   description:
-    "DaloyJS 0.14 adds docs.scalar, a JSON-only knob that lets you theme the Scalar API reference, hide the Try-it button, drop in a brand stylesheet, and pick a layout, without forking the docs route. And because Daloy locks the spec URL to your live OpenAPI path at serialize time, the prettiest docs page in the company can't drift away from the contract.",
+    "DaloyJS docs.scalar is a JSON-only knob that lets you theme the Scalar API reference, hide the Try-it button, drop in a brand stylesheet, and pick a layout, without forking the docs route. Because Daloy locks the spec URL to your live OpenAPI path at serialize time, the prettiest docs page in the company cannot drift away from the contract.",
   date: "2026-06-07",
   readingTime: "10 min read",
   author: "Devlin Duldulao",
@@ -67,7 +67,7 @@ export const app = new App({
   docs: "auto",  // mounts /docs and /openapi.json, generic Scalar theme.
 });`;
 
-const AFTER = `// src/app.ts, after. New in 0.14: docs.scalar accepts any JSON-serialisable
+const AFTER = `// src/app.ts, after. docs.scalar accepts any JSON-serialisable
 // option the Scalar API reference understands.
 import { App } from "@daloyjs/core";
 
@@ -378,7 +378,6 @@ export default function BlogPostPage() {
             <Badge variant="outline">Docs UI</Badge>
             <Badge variant="outline">OpenAPI</Badge>
             <Badge variant="outline">DX</Badge>
-            <Badge variant="outline">0.14</Badge>
           </div>
           <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
             {POST.title}
@@ -403,9 +402,9 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            Hi, Devlin again. I want to talk about a small feature that lands in{" "}
-            <code>@daloyjs/core@0.14.0</code> with a deceptively boring name:{" "}
-            <code>docs.scalar</code>. It is one new option on the App
+            Hi, Devlin again. I want to talk about a small feature with a
+            deceptively boring name: <code>docs.scalar</code>. It is one new
+            option on the App
             constructor. It is also the difference between &quot;our docs page
             looks like everyone else&apos;s docs page&quot; and &quot;our docs
             page looks like the rest of our product, and the Try-It button is
@@ -451,8 +450,8 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <EditorFrame
-            files={["src/app.ts · after (0.14)"]}
-            activeFile="src/app.ts · after (0.14)"
+            files={["src/app.ts · after"]}
+            activeFile="src/app.ts · after"
             status="docs.scalar accepts the JSON-serialisable Scalar config · zero new files"
           >
             <CodeBlock language="ts" code={AFTER} />
@@ -708,10 +707,9 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Upgrade with <code>pnpm add @daloyjs/core@^0.14.0</code> (and{" "}
-            <code>pnpm create daloy@latest</code> if you&apos;re scaffolding
-            fresh, the templates now ship pinned to <code>^0.14.0</code>
-            ). Then add five lines under <code>docs</code>, ship the brand
+            Install with <code>pnpm add @daloyjs/core</code>, or use{" "}
+            <code>pnpm create daloy@latest</code> for a fresh scaffold. Then add
+            five lines under <code>docs</code>, ship the brand
             audit, and go do something more interesting.
           </p>
 

@@ -4,9 +4,9 @@ import { SequenceDiagram } from "../../../../components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "WebSocket + login throttle slice",
+  title: "WebSocket and login safeguards",
   description:
-    "Daloy ships the remaining leftover items: WebSocket upgrade rate limiting, login throttling, automatic session rotation, upload magic-byte guards, payload-auth-required security schemes, and WebSocket safe defaults.",
+    "Protect WebSocket upgrades and login flows with rate limiting, login throttling, session rotation, upload guards, payload authentication, and safe runtime defaults.",
   path: "/docs/security/websocket-login-throttle",
   keywords: [
     "wsRateLimit",
@@ -25,7 +25,7 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>WebSocket + login throttle slice</h1>
+      <h1>WebSocket and login safeguards</h1>
       <blockquote>
         <strong>Think of it like…</strong> a doorman with three jobs at once. He
         limits how often anyone can knock on the door (
@@ -36,10 +36,9 @@ export default function Page() {
         gets nothing.
       </blockquote>
       <p>
-        Daloy closes the remaining expanded leftover items. The theme is narrow
-        but practical: authentication entry points, upload boundaries, and
-        WebSocket upgrades now have first-party helpers instead of copy-pasted
-        local policy.
+        These focused safeguards cover authentication entry points, upload
+        boundaries, and WebSocket upgrades with first-party helpers instead of
+        copy-pasted local policy.
       </p>
 
       <h2 id="1-wsratelimit">
