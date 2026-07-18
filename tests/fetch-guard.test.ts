@@ -34,6 +34,33 @@ test("fetchGuard: blocks AWS/Azure metadata 169.254.169.254 (link-local literal)
   );
 });
 
+test("fetchGuard: rejects a credentialed URL with a typed SsrfBlockedError (not a raw TypeError)", async () => {
+  // Regression: `http://user@host/` is a classic SSRF obfuscation. undici's
+  // Request constructor throws a raw TypeError for userinfo URLs *before* our
+  // host validation runs, which escaped the SsrfBlockedError contract and made
+  // callers misclassify the block as a generic upstream failure.
+  const guarded = fetchGuard();
+  for (const url of ["http://foo@127.0.0.1/", "http://user:pass@169.254.169.254/latest/"]) {
+    let thrown: unknown;
+    try {
+      await guarded(url);
+      assert.fail(`expected guarded(${JSON.stringify(url)}) to throw`);
+    } catch (e) {
+      thrown = e;
+    }
+    assert.ok(
+      thrown instanceof SsrfBlockedError,
+      `expected SsrfBlockedError, got ${(thrown as Error)?.constructor?.name}`,
+    );
+    assert.equal((thrown as SsrfBlockedError).reason, "credentials-in-url");
+    assert.ok(!(thrown instanceof TypeError));
+    // Credentials must be stripped from the URL recorded on the error so a
+    // caller-supplied secret never leaks into logs.
+    assert.ok(!(thrown as SsrfBlockedError).url.includes("foo"));
+    assert.ok(!(thrown as SsrfBlockedError).url.includes("pass"));
+  }
+});
+
 test("fetchGuard: blocks Alibaba metadata 100.100.100.200 (always-deny CGNAT)", async () => {
   const guarded = fetchGuard();
   await assert.rejects(

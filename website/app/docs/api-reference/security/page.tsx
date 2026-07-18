@@ -125,7 +125,8 @@ interface FetchGuardOptions {
 
 type SsrfBlockReason =
   | "protocol-not-allowed" | "host-not-allowed" | "dns-resolution-failed"
-  | "address-not-allowed"  | "too-many-redirects" | "invalid-url";
+  | "address-not-allowed"  | "too-many-redirects" | "credentials-in-url"
+  | "invalid-url";
 
 class SsrfBlockedError extends Error { readonly url; readonly reason: SsrfBlockReason; readonly address?: string }`}
       />
@@ -143,9 +144,9 @@ interface SafeRedirectOptions {
 }
 
 type SafeRedirectBlockReason =
-  | "empty-target" | "invalid-control-characters" | "protocol-relative"
-  | "backslash-path" | "path-not-allowed" | "origin-not-allowed"
-  | "scheme-not-allowed" | "parse-failed";
+  | "empty-target" | "invalid-control-characters" | "non-latin1-target"
+  | "protocol-relative" | "backslash-path" | "path-not-allowed"
+  | "origin-not-allowed" | "scheme-not-allowed" | "parse-failed";
 
 class OpenRedirectBlockedError extends Error { readonly reason; readonly target }`}
       />

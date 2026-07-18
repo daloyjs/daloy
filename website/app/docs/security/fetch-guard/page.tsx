@@ -293,6 +293,11 @@ const safeFetch = fetchGuard({
           <code>maxRedirects</code>.
         </li>
         <li>
+          <code>credentials-in-url</code>: the URL carried userinfo (
+          <code>http://user@host/</code>), a classic SSRF obfuscation. The
+          credentials are stripped from the URL recorded on the error.
+        </li>
+        <li>
           <code>invalid-url</code>: URL or Location header could not be parsed.
         </li>
       </ul>

@@ -118,6 +118,36 @@ test("safeRedirect: refuses CR/LF response-splitting payloads", () => {
   );
 });
 
+test("safeRedirect: refuses non-Latin1 same-origin paths with a typed error (not a raw TypeError)", () => {
+  // Regression: a `/`-prefixed target carrying a code point above U+00FF used
+  // to sail past the control-char check, match the `/*` allowlist, and then
+  // throw a raw `TypeError` from `Headers.set("Location", …)` (ByteString
+  // conversion) — which the documented try/catch rethrows as an uncaught 500.
+  // Includes the Unicode slash homographs U+2044 (⁄), U+FF0F (／), U+2215 (∕).
+  for (const target of ["/⁄evil.example", "/／evil.example", "/∕evil.example", "/x€y"]) {
+    let thrown: unknown;
+    try {
+      safeRedirect(target, { allowedPaths: ["/*"], allowedOrigins: ["https://app.example.com"] });
+      assert.fail(`expected safeRedirect(${JSON.stringify(target)}) to throw`);
+    } catch (e) {
+      thrown = e;
+    }
+    assert.ok(
+      thrown instanceof OpenRedirectBlockedError,
+      `expected OpenRedirectBlockedError, got ${(thrown as Error)?.constructor?.name}`,
+    );
+    assert.equal((thrown as OpenRedirectBlockedError).reason, "non-latin1-target");
+    assert.ok(!(thrown instanceof TypeError));
+  }
+});
+
+test("safeRedirect: still allows ordinary Latin-1 (ASCII) same-origin paths", () => {
+  // Guard against over-blocking: the fix must only reject code points > U+00FF.
+  const res = safeRedirect("/dashboard?tab=1", { allowedPaths: ["/*"] });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("Location"), "/dashboard?tab=1");
+});
+
 test("safeRedirect: refuses `javascript:` even if origin allowlist is empty", () => {
   assert.throws(
     () => safeRedirect("javascript:alert(1)", { allowedOrigins: [] }),

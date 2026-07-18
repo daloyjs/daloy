@@ -19,6 +19,10 @@
  *   Percent-encoded protocol-relative path prefixes such as `/%2f%2f`
  *   are also refused so downstream decoders cannot turn a same-origin
  *   `Location` into an origin-escaping redirect.
+ * - Same-origin paths carrying any code point above `U+00FF` are refused:
+ *   they cannot be represented in the ISO-8859-1 `Location` header, and this
+ *   also blocks the Unicode slash homographs (`U+2044` `⁄`, `U+2215` `∕`,
+ *   `U+FF0F` `／`) that `NFKC` normalization can fold into `/`.
  * - Absolute URLs are only allowed when their `origin` exactly matches
  *   one of the entries in `allowedOrigins`.
  * - `javascript:`, `data:`, `vbscript:`, and `file:` schemes are always
@@ -51,6 +55,7 @@
 export type SafeRedirectBlockReason =
   | "empty-target"
   | "invalid-control-characters"
+  | "non-latin1-target"
   | "protocol-relative"
   | "backslash-path"
   | "path-not-allowed"
@@ -113,6 +118,13 @@ const ALLOWED_REDIRECT_STATUSES = new Set<number>([301, 302, 303, 307, 308]);
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
+// Any code point above U+00FF (outside Latin-1). Such characters cannot be
+// written to a `Location` header — which is serialized as an ISO-8859-1
+// ByteString, so `Headers.set` throws a raw `TypeError` — and they cover the
+// Unicode slash homographs (U+2044, U+2215, U+FF0F) used to smuggle a
+// protocol-relative redirect past a same-origin path check.
+const NON_LATIN1_RE = /[^\x00-\xff]/;
+
 function buildResponse(location: string, status: number, headers?: HeadersInit): Response {
   const merged = new Headers(headers);
   merged.set("Location", location);
@@ -146,6 +158,13 @@ function classify(
     // Same-origin path. Backslashes anywhere in the path can confuse
     // user agents and proxies — refuse them outright.
     if (target.includes("\\")) return { ok: false, reason: "backslash-path" };
+    // The path is written verbatim into the `Location` header (an ISO-8859-1
+    // ByteString). A code point above U+00FF cannot live there — `Headers.set`
+    // would throw a raw `TypeError`, escaping this helper's typed error
+    // contract and surfacing to callers as an uncaught 500 — so refuse it here
+    // with a proper `OpenRedirectBlockedError`. This also blocks Unicode slash
+    // homographs that normalization can fold into an origin-escaping `//`.
+    if (NON_LATIN1_RE.test(target)) return { ok: false, reason: "non-latin1-target" };
     if (allowedPaths.length === 0) {
       return { ok: false, reason: "path-not-allowed" };
     }

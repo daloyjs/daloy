@@ -187,11 +187,13 @@ try {
       />
       <p>
         The <code>reason</code> is one of <code>empty-target</code>,{" "}
-        <code>invalid-control-characters</code>, <code>protocol-relative</code>,{" "}
-        <code>backslash-path</code>, <code>path-not-allowed</code>,{" "}
-        <code>origin-not-allowed</code>, <code>scheme-not-allowed</code>, or{" "}
-        <code>parse-failed</code>, useful for metrics on which attack shape you
-        are seeing.
+        <code>invalid-control-characters</code>, <code>non-latin1-target</code>,{" "}
+        <code>protocol-relative</code>, <code>backslash-path</code>,{" "}
+        <code>path-not-allowed</code>, <code>origin-not-allowed</code>,{" "}
+        <code>scheme-not-allowed</code>, or <code>parse-failed</code>, useful for
+        metrics on which attack shape you are seeing. (<code>non-latin1-target</code>{" "}
+        covers same-origin paths carrying a code point above U+00FF, including
+        the Unicode slash homographs.)
       </p>
 
       <h2 id="choosing-a-status-code">Choosing a status code</h2>

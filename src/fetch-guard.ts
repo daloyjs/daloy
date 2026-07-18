@@ -103,6 +103,7 @@ export type SsrfBlockReason =
   | "dns-resolution-failed"
   | "address-not-allowed"
   | "too-many-redirects"
+  | "credentials-in-url"
   | "invalid-url";
 
 /**
@@ -393,6 +394,28 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
   }
 
   const guarded: typeof fetch = async (input, init) => {
+    // A URL carrying userinfo (`http://user:pass@internal/`) is a classic SSRF
+    // obfuscation — the real host hides after the `@`. undici's `Request`
+    // constructor refuses such URLs with a raw `TypeError`, which would fire
+    // *before* our host validation and escape the `SsrfBlockedError` contract,
+    // so callers misclassify a blocked SSRF attempt as an ordinary upstream
+    // failure. Detect and refuse it ourselves with a typed error first. The
+    // credentials are stripped from the URL recorded on the error so a
+    // caller-supplied secret never leaks into logs. Malformed URLs fall
+    // through to the handling below, which raises `SsrfBlockedError("invalid-url")`.
+    if (typeof input === "string" || input instanceof URL) {
+      let pre: URL | undefined;
+      try {
+        pre = new URL(input as string | URL);
+      } catch {
+        pre = undefined;
+      }
+      if (pre && (pre.username !== "" || pre.password !== "")) {
+        pre.username = "";
+        pre.password = "";
+        throw new SsrfBlockedError(pre.toString(), "credentials-in-url");
+      }
+    }
     let request = new Request(input as RequestInfo, init);
     const userRedirect = (init?.redirect ?? request.redirect) as RequestRedirect;
     // Always dispatch underlying calls with redirect: "manual" so we can
