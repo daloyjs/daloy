@@ -1,5 +1,10 @@
-// DaloyJS without zod — a fair like-for-like comparison with Hono, which also
-// ships no validator. Used by cold-start, memory-load, and route-scale.
+// DaloyJS without zod — isolates validation cost from security-default cost
+// while keeping the same browser-facing defaults as throughput/daloy.ts.
+// Used by cold-start, memory-load, and route-scale (and the throughput matrix).
+//
+// Must use `logger: false` like daloy.ts / daloy-bare.ts — the default info
+// logger allocates a per-request child and confounds the "validation cost"
+// narrative (historically made nozod look slower than full-contract daloy).
 //
 // NOTE on POST /echo: with no request body schema, DaloyJS never parses the
 // body for you (ctx.body stays undefined), exactly like a schema-less route in
@@ -10,7 +15,7 @@
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
-const app = new App();
+const app = new App({ logger: false });
 
 app.route({
   method: "GET",

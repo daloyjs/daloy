@@ -5,7 +5,9 @@ import { z } from "zod";
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
-const app = new App();
+// Parity with throughput/daloy.ts — default info logger is not part of the
+// streaming cost story and allocates a per-request child.
+const app = new App({ logger: false });
 
 const CHUNK = Buffer.alloc(64 * 1024, 0x61);
 const TOTAL_CHUNKS = 160;
