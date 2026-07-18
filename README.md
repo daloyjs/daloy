@@ -22,7 +22,7 @@
 [![Security Responsible
 Disclosure](https://img.shields.io/badge/Security-Responsible%20Disclosure-yellow.svg)](https://github.com/daloyjs/daloy/blob/main/SECURITY.md)
 
-> A **runtime-portable TypeScript web framework** with built-in **contract-first routing**, **validation**, **OpenAPI (Hey API)**, **typed client generation**, **large-scale maintainability**, and **security-focused runtime plus supply-chain posture**.
+> The first TypeScript REST API framework built for secure AI-assisted services. DaloyJS combines runtime portability, contract-first OpenAPI, generated typed clients, zero-dependency runtime guardrails, and supply-chain-aware project defaults in one framework.
 
 **One-line API docs.** `new App({ openapi: { info: ... }, docs: true })` auto-mounts `GET /docs` (Scalar), `GET /openapi.json`, and `GET /openapi.yaml` — the same DX as FastAPI, without leaving TypeScript.
 
