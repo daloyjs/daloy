@@ -21,6 +21,7 @@
     "bench:secured": "node middleware-stack.mjs",
     "bench:logging": "node logging.mjs",
     "bench:all": "node run.mjs && node cold-start.mjs && node install-size.mjs && node bundle-size.mjs && node body-size-sweep.mjs && node memory-load.mjs && node route-scale.mjs && node error-path.mjs && node streaming.mjs && node middleware-stack.mjs && node logging.mjs",
+    "bench:ci": "WARMUP=3 DURATION=3 ITERATIONS=1 BENCH_ORDER=fixed node run.mjs --only=daloy,daloy-bare,hono,fastify",
     "bench:smoke": "node smoke.mjs --only=daloy"
   },
   "devDependencies": {

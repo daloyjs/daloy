@@ -219,10 +219,14 @@ export function machineInfo() {
 }
 
 // Print a one-time warning to stderr when the environment is likely to produce
-// noisy or unreliable benchmark numbers: running on battery (CPU throttling) or
-// a file-descriptor soft limit too low for the requested connection count.
+// noisy or unreliable benchmark numbers: running on battery (CPU throttling),
+// high system load (contended cores), or a file-descriptor soft limit too low
+// for the requested connection count.
 // Purely advisory — never throws, never changes the run. `maxConnections` is
 // the highest connection count the caller will drive (defaults to 100).
+//
+// Override the load gate with BENCH_ALLOW_BUSY=1 when you intentionally want
+// numbers under load (e.g. overload / load-shedding experiments).
 export function warnBenchEnvironment({ maxConnections = 100 } = {}) {
   const info = machineInfo();
   if (info.onBattery === true) {
@@ -231,6 +235,27 @@ export function warnBenchEnvironment({ maxConnections = 100 } = {}) {
         "Running on BATTERY power. Laptops throttle the CPU on battery, so " +
           "throughput/latency numbers will be noisy and not comparable to an " +
           "on-AC run. Plug in for stable results."
+      )
+    );
+  }
+  // 1-minute load average above the core count usually means other processes
+  // are contending for CPU; published medians can shift ±10% under that noise.
+  // Skip when BENCH_ALLOW_BUSY=1 so intentional busy-machine runs stay quiet.
+  const load1 = Array.isArray(info.loadAvg) ? info.loadAvg[0] : undefined;
+  const allowBusy = process.env.BENCH_ALLOW_BUSY === "1" || process.env.BENCH_ALLOW_BUSY === "true";
+  if (
+    !allowBusy &&
+    typeof load1 === "number" &&
+    typeof info.cpuCount === "number" &&
+    info.cpuCount > 0 &&
+    load1 > info.cpuCount
+  ) {
+    console.error(
+      warn(
+        `High system load: loadAvg[0]=${load1.toFixed(2)} > cpuCount=${info.cpuCount}. ` +
+          "Background work is contending for cores; throughput numbers will be noisy " +
+          "and not publication-grade. Re-run on a quieter machine, or set " +
+          "BENCH_ALLOW_BUSY=1 to silence this warning."
       )
     );
   }

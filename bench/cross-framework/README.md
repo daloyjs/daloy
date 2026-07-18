@@ -112,6 +112,13 @@ To run a subset:
 node run.mjs --only=daloy,fastify,hono
 ```
 
+Quick pre-merge / CI-ish subset (daloy, daloy-bare, hono, fastify; short
+durations; fixed order):
+
+```bash
+pnpm bench:ci
+```
+
 To change durations:
 
 ```bash
@@ -120,7 +127,7 @@ DURATION=20 CONNECTIONS=200 node run.mjs
 
 ## Running on macOS / laptops
 
-The runners are cross-platform (macOS, Linux, Windows). Two laptop-specific
+The runners are cross-platform (macOS, Linux, Windows). Three environment
 gotchas are detected automatically and printed to stderr at startup:
 
 - **Battery throttling.** On battery, laptops (especially Apple-silicon
@@ -128,6 +135,9 @@ gotchas are detected automatically and printed to stderr at startup:
   noisy and non-comparable. The runner warns when it detects battery power —
   **plug in before benchmarking.** The AC/battery state is also recorded in
   every `results*.json` under `machine.onBattery` / `machine.powerSource`.
+- **High system load.** When 1-minute `loadAvg` exceeds the CPU core count,
+  other processes are contending for cores and medians can shift ~±10%. The
+  runner warns (silence intentional busy runs with `BENCH_ALLOW_BUSY=1`).
 - **File-descriptor limit.** macOS defaults to a soft `ulimit -n` of 256,
   which hundreds of autocannon client sockets plus the server's accepted
   sockets can exhaust (`EMFILE`, inflated error rates). The runner warns when
