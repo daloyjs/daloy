@@ -426,7 +426,7 @@ app.post(
         before fulfilment if you don&apos;t fully trust the body:
       </p>
       <CodeBlock
-        code={`import { readRawBody } from "@daloyjs/core/raw";
+        code={`import { readBodyLimited } from "@daloyjs/core";
 
 app.post(
   "/webhooks/paytabs",
@@ -438,7 +438,9 @@ app.post(
     },
   },
   async ({ request, state }) => {
-    const raw = await readRawBody(request);
+    // Decode only after a bounded read. Keep this string unchanged for verification.
+    const rawBytes = await readBodyLimited(request, 1_048_576);
+    const raw = new TextDecoder().decode(rawBytes);
     const signature = request.headers.get("signature");
 
     if (!state.paytabs.verifyIpnSignature(raw, signature)) {

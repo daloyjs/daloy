@@ -119,7 +119,14 @@ export interface NodeServerOptions {
 export interface NodeServerHandle {
   /** The underlying `node:http` `Server` instance, for advanced wiring (extra listeners, address introspection). */
   server: Server;
-  /** Port the server was asked to listen on ({@link NodeServerOptions.port}, default `3000`). */
+  /**
+   * Bound TCP port once the server emits `listening`.
+   *
+   * Before the listener is ready, this is the requested
+   * {@link NodeServerOptions.port} (default `3000`). In particular, callers
+   * using `port: 0` must await the server's `listening` event before reading
+   * this property to receive the OS-assigned ephemeral port.
+   */
   port: number;
   /** Graceful shutdown: drains {@link App.shutdown} hooks, destroys WebSocket sockets, then closes the server. Idempotent. */
   close(): Promise<void>;
@@ -227,8 +234,8 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
       );
     });
   }
-  const port = opts.port ?? 3000;
-  server.listen(port, opts.hostname ?? "0.0.0.0");
+  const requestedPort = opts.port ?? 3000;
+  server.listen(requestedPort, opts.hostname ?? "0.0.0.0");
   // Kill idle keep-alive sockets immediately when draining begins.
   // In-flight requests keep their socket because Node's
   // `closeIdleConnections()` is a no-op for sockets with an in-flight request.
@@ -252,7 +259,17 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     process.once("SIGTERM", () => onSignal("SIGTERM"));
     process.once("SIGINT", () => onSignal("SIGINT"));
   }
-  return { server, port, close }; }
+  return {
+    server,
+    get port() {
+      const address = server.address();
+      return address !== null && typeof address === "object"
+        ? address.port
+        : requestedPort;
+    },
+    close,
+  };
+}
 
 /**
  * Default pre-buffer ceiling for the Node adapter. 256 KiB is a compromise:

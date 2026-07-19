@@ -84,6 +84,20 @@ interface NodeServerOptions {
 }
 interface NodeServerHandle { server: Server; port: number; close(): Promise<void> }`}
       />
+      <p>
+        Pass <code>port: 0</code> when a test needs an ephemeral port. Because
+        Node binds asynchronously, wait for the server&apos;s{" "}
+        <code>listening</code> event before reading <code>handle.port</code>; it
+        then reports the OS-assigned port instead of <code>0</code>.
+      </p>
+      <CodeBlock
+        code={`import { once } from "node:events";
+
+const handle = serve(app, { port: 0, handleSignals: false });
+await once(handle.server, "listening");
+
+const baseUrl = \`http://127.0.0.1:\${handle.port}\`;`}
+      />
 
       <h2 id="daloyjs-core-bun">
         <code>@daloyjs/core/bun</code>

@@ -430,7 +430,7 @@ app.post(
         caption="The webhook uses a different secret than the client callback. Verify X-Razorpay-Signature over the raw body with the webhook secret, then ack 200 for every event once it checks out, even ones you do not handle."
       />
       <CodeBlock
-        code={`import { readRawBody } from "@daloyjs/core/raw";
+        code={`import { readBodyLimited } from "@daloyjs/core";
 
 app.post(
   "/webhooks/razorpay",
@@ -442,7 +442,9 @@ app.post(
     },
   },
   async ({ request, state }) => {
-    const raw = await readRawBody(request);
+    // Decode only after a bounded read. Keep this string unchanged for verification.
+    const rawBytes = await readBodyLimited(request, 1_048_576);
+    const raw = new TextDecoder().decode(rawBytes);
     const signature = request.headers.get("x-razorpay-signature");
 
     if (!state.razorpay.verifyWebhookSignature(raw, signature)) {

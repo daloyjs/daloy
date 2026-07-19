@@ -426,7 +426,7 @@ export async function startCheckout(cartId: string) {
       <CodeBlock
         code={`import { z } from "zod";
 import type Stripe from "stripe";
-import { readRawBody } from "@daloyjs/core/raw";
+import { readBodyLimited } from "@daloyjs/core";
 
 app.post(
   "/webhooks/stripe",
@@ -438,7 +438,8 @@ app.post(
     },
   },
   async ({ request, state }) => {
-    const raw = await readRawBody(request);
+    // Keep webhook reads bounded and preserve the exact bytes Stripe signed.
+    const raw = Buffer.from(await readBodyLimited(request, 1_048_576));
     const signature = request.headers.get("stripe-signature");
 
     let event: Stripe.Event;

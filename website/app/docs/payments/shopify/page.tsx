@@ -340,11 +340,12 @@ app.get(
         the <em>raw</em> body. Skip JSON parsing until the signature matches,
         and dedupe on <code>X-Shopify-Webhook-Id</code> so retries don&apos;t
         double-process. Use the{" "}
-        <Link href="/docs/multipart">raw-body helper</Link> to get the bytes:
+        <Link href="/docs/api-reference/security">bounded raw-body helper</Link>{" "}
+        to get the bytes:
       </p>
       <CodeBlock
         code={`import { z } from "zod";
-import { readRawBody } from "@daloyjs/core/raw";
+import { readBodyLimited } from "@daloyjs/core";
 
 app.post(
   "/webhooks/shopify",
@@ -357,7 +358,8 @@ app.post(
     },
   },
   async ({ request, state }) => {
-    const raw = await readRawBody(request);
+    // Keep webhook reads bounded and preserve the exact bytes Shopify signed.
+    const raw = Buffer.from(await readBodyLimited(request, 1_048_576));
     const result = state.shopify.verifyWebhook(request.headers, raw);
     if (!result.ok) {
       return { status: 401, body: { error: "invalid signature" } };

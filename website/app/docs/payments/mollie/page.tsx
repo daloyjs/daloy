@@ -336,7 +336,7 @@ app.post(
         responses.
       </p>
       <CodeBlock
-        code={`import { readRawBody } from "@daloyjs/core/raw";
+        code={`import { readBodyLimited } from "@daloyjs/core";
 
 app.post(
   "/webhooks/mollie",
@@ -348,7 +348,9 @@ app.post(
     },
   },
   async ({ request, state }) => {
-    const raw = await readRawBody(request);
+    // Decode only after a bounded read. Keep this string unchanged for verification.
+    const rawBytes = await readBodyLimited(request, 1_048_576);
+    const raw = new TextDecoder().decode(rawBytes);
     const signature = request.headers.get("x-mollie-signature");
 
     const status = await state.mollie.verifyWebhook(raw, signature);

@@ -394,7 +394,7 @@ app.post(
         caption="verifySignature needs the raw body, the signature key, and the exact registered notificationUrl. A wrong URL (trailing slash, http vs https) fails every event. Refetch the payment to confirm COMPLETED before fulfilling."
       />
       <CodeBlock
-        code={`import { readRawBody } from "@daloyjs/core/raw";
+        code={`import { readBodyLimited } from "@daloyjs/core";
 
 app.post(
   "/webhooks/square",
@@ -406,7 +406,9 @@ app.post(
     },
   },
   async ({ request, state }) => {
-    const raw = await readRawBody(request);
+    // Decode only after a bounded read. Keep this string unchanged for verification.
+    const rawBytes = await readBodyLimited(request, 1_048_576);
+    const raw = new TextDecoder().decode(rawBytes);
     const signature = request.headers.get("x-square-hmacsha256-signature");
 
     if (!state.square.verifyWebhookSignature(raw, signature)) {
@@ -468,10 +470,10 @@ await state.square.refund({
         The v40+ SDK is Fern-generated and uses the platform <code>fetch</code> when
         available, falling back to <code>node-fetch</code>. Square officially supports
         Node.js 18+, Cloudflare Workers, Deno 1.25+, Bun 1.0+, and
-        React Native, so the same plugin runs on Edge runtimes unchanged. The only thing
-        to watch is reading the raw body: on Edge, use{" "}
-        <code>await request.text()</code> instead of <code>readRawBody</code> if your
-        adapter doesn&apos;t expose Node streams.
+        React Native, so the same plugin runs on Edge runtimes unchanged. The
+        portable <code>readBodyLimited()</code> helper reads the standard{" "}
+        <code>Request</code> body while enforcing the explicit byte cap shown
+        above.
       </p>
 
       <h2 id="errors">Errors</h2>

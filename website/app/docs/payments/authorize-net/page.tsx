@@ -435,7 +435,7 @@ await fetch(\`\${host}/rest/v1/webhooks\`, {
       </p>
       <CodeBlock
         code={`import { z } from "zod";
-import { readRawBody } from "@daloyjs/core/raw";
+import { readBodyLimited } from "@daloyjs/core";
 
 app.post(
   "/webhooks/authorizenet",
@@ -447,7 +447,8 @@ app.post(
     },
   },
   async ({ request, state }) => {
-    const raw = await readRawBody(request);
+    // Keep webhook reads bounded and preserve the exact bytes Authorize.Net signed.
+    const raw = Buffer.from(await readBodyLimited(request, 1_048_576));
     if (!state.authnet.verifyWebhook(request.headers, raw)) {
       return { status: 401, body: { error: "invalid signature" } };
     }

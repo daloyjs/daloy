@@ -11,7 +11,7 @@ import { serve as serveNode } from "../src/adapters/node.js";
 async function startServer(app: App, opts: Parameters<typeof serveNode>[1] = {}) {
   const handle = serveNode(app, { port: 0, handleSignals: false, ...opts });
   await once(handle.server, "listening");
-  const port = (handle.server.address() as AddressInfo).port;
+  const port = handle.port;
   return { handle, port };
 }
 
@@ -58,6 +58,18 @@ test("node adapter: GET request flows through toWebRequest and sendWebResponse",
     const res = await fetch(`http://127.0.0.1:${port}/hello`);
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { msg: "hi" });
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: handle.port exposes the OS-assigned ephemeral port after listening", async () => {
+  const handle = serveNode(buildEchoApp(), { port: 0, handleSignals: false });
+  try {
+    await once(handle.server, "listening");
+    const address = handle.server.address() as AddressInfo;
+    assert.notEqual(address.port, 0);
+    assert.equal(handle.port, address.port);
   } finally {
     await handle.close();
   }

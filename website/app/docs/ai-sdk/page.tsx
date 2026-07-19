@@ -174,15 +174,17 @@ const HARDEN = `// The deployment-time layer the model never gets a vote in.
 // All of this ships in @daloyjs/core with zero runtime dependencies.
 import {
   App,
+  createLogger,
   secureHeaders,
   requestId,
-  structuredLogger,
   rateLimit,
   loadShedding,
   bearerAuth,
 } from "@daloyjs/core";
 
 export const app = new App({
+  // Structured JSON logs with provider credentials redacted by default.
+  logger: createLogger({ level: "info" }),
   // bodyLimitBytes: 1 << 20    // 1 MiB default: caps prompt size
   // requestTimeoutMs: 30_000   // default: a stuck model call cannot hang forever
   // production auto-detected   // prod-mode 5xx redaction by default
@@ -190,7 +192,6 @@ export const app = new App({
 
 app.use(secureHeaders());
 app.use(requestId());
-app.use(structuredLogger()); // provider keys are redacted by default
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 app.use(loadShedding({ maxQueueDepth: 100, maxEventLoopDelayMs: 50 }));
 
