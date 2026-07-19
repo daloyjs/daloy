@@ -58,6 +58,13 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Added
 
+- **AWS Lambda response streaming now matches the documented adapter API.**
+  `toLambdaStreamHandler(app)` wraps the managed Node.js runtime's
+  `awslambda.streamifyResponse()`, preserves status, headers, and cookies via
+  `HttpResponseStream.from()`, and pumps web-standard response bodies without
+  buffering while respecting writable-stream backpressure. It refuses to
+  construct outside the Lambda streaming runtime, and malformed events still
+  receive a streamed `400` problem response.
 - **Bun adapter graceful shutdown.** `serve()` from `@daloyjs/core/bun` now
   listens for `SIGTERM` / `SIGINT` by default (parity with the Node and Deno
   adapters), drains `app.shutdown()` hooks, and stops the Bun server — rolling

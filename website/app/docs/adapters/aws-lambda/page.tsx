@@ -105,7 +105,7 @@ import { toLambdaStreamHandler } from "@daloyjs/core/lambda";
 import { app } from "./server.js";
 
 export const handler = toLambdaStreamHandler(app);
-// equivalent to: awslambda.streamifyResponse(toLambdaHandler(app))`}
+// Uses awslambda.streamifyResponse + HttpResponseStream.from internally.`}
       />
 
       <h2 id="sam-template">SAM template</h2>

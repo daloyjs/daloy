@@ -98,11 +98,10 @@ type ModularGetInput = Parameters<(typeof modularClient)["getBook"]>[0];
 type _ModularParamsAreTyped = Expect<Equal<ModularGetInput["params"], { id: string }>>;
 
 const shorthandApp = new App({ logger: false })
-  .get(
-    "/",
-    { responses: { 200: { body: z.object({ ok: z.boolean() }) } } },
-    () => ({ status: 200, body: { ok: true } })
-  )
+  .get("/", { responses: { 200: { body: z.object({ ok: z.boolean() }) } } }, () => ({
+    status: 200,
+    body: { ok: true },
+  }))
   .post(
     "/book-items/:item_id",
     {
@@ -126,3 +125,66 @@ void shorthandClient.postBookItemsByItemId({ body: { title: "Dune" } });
 
 // @ts-expect-error - method shorthands never silently opt out of response contracts.
 new App({ logger: false }).get("/unsafe", () => Response.json({ secret: true }));
+
+// Request inference flows from every documented schema location into both the
+// handler and the in-process client, while response statuses stay discriminated.
+const endToEndApp = new App({ logger: false }).patch(
+  "/inventory/:sku",
+  {
+    request: {
+      params: z.object({ sku: z.string() }),
+      query: z.object({ dryRun: z.coerce.boolean() }),
+      headers: z.object({ "x-trace-id": z.string() }),
+      body: z.object({ quantity: z.number().int() }),
+    },
+    responses: {
+      200: {
+        description: "updated",
+        body: z.object({ sku: z.string(), quantity: z.number().int() }),
+      },
+      409: {
+        description: "conflict",
+        body: z.object({ reason: z.string() }),
+      },
+    },
+  },
+  ({ params, query, headers, body }) => {
+    type _HandlerParam = Expect<Equal<typeof params.sku, string>>;
+    type _HandlerQuery = Expect<Equal<typeof query.dryRun, boolean>>;
+    type _HandlerHeader = Expect<Equal<(typeof headers)["x-trace-id"], string>>;
+    type _HandlerBody = Expect<Equal<typeof body.quantity, number>>;
+    return { status: 200, body: { sku: params.sku, quantity: body.quantity } };
+  }
+);
+
+const endToEndClient = createClient(endToEndApp, { baseUrl: "http://localhost" });
+
+async function endToEndProbes() {
+  const result = await endToEndClient.patchInventoryBySku({
+    params: { sku: "book-1" },
+    query: { dryRun: false },
+    headers: { "x-trace-id": "trace-1" },
+    body: { quantity: 2 },
+  });
+  if (result.status === 200) {
+    const quantity: number = result.body.quantity;
+    void quantity;
+  }
+  if (result.status === 409) {
+    const reason: string = result.body.reason;
+    void reason;
+  }
+
+  // @ts-expect-error - every declared request location remains required.
+  await endToEndClient.patchInventoryBySku({ params: { sku: "book-1" } });
+
+  await endToEndClient.patchInventoryBySku({
+    params: { sku: "book-1" },
+    query: { dryRun: false },
+    headers: { "x-trace-id": "trace-1" },
+    // @ts-expect-error - inferred request bodies reject the wrong field type.
+    body: { quantity: "two" },
+  });
+}
+
+void endToEndProbes;

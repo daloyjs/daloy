@@ -594,7 +594,7 @@ DaloyJS is at **`1.0.0-rc.4`**, a security-hardening release candidate. Because 
 
 ### Runtimes and deployment
 
-- Adapters for Node (Heroku, Railway, Render, Fly.io), Bun, Deno, Cloudflare Workers, Vercel Node / Edge / Next.js / Netlify Edge, Fastly Compute, and AWS Lambda / Netlify Functions / Lambda Function URLs.
+- Adapters for Node (Heroku, Railway, Render, Fly.io), Bun, Deno, Cloudflare Workers, Vercel Node / Edge / Next.js / Netlify Edge, Fastly Compute, and AWS Lambda / Netlify Functions / Lambda Function URLs, including backpressure-safe Lambda response streaming via `toLambdaStreamHandler()`.
 - `daloy dev` watch loop delegates to the host runtime's native watcher (`node --watch`, `bun --hot`, or `deno run --watch`) with a `--runtime` override for cross-runtime `package.json` scripts.
 - `pnpm create daloy` scaffolder with Node, Bun, Deno, Cloudflare Worker, and Vercel templates, plus optional `--with-ci` GitHub Actions / Dependabot / CODEOWNERS / SECURITY.md hardening. The completion summary surfaces official install links (nodejs.org, pnpm.io, bun.sh) for any runtime or package manager your selections need but that is missing from `PATH`, and skips a doomed dependency install when the chosen package manager is absent.
 - Container-first templates: `HEALTHCHECK` to `/readyz`, `STOPSIGNAL SIGTERM`, non-root user, `tini` as PID 1.

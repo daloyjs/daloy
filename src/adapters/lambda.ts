@@ -107,7 +107,56 @@ export type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;
 /** Async handler shape consumed by AWS Lambda / Netlify Functions runtimes. */
 export type LambdaHandler = (event: LambdaEvent) => Promise<LambdaResponse>;
 
-const TEXT_TYPE_RE = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded|.*\+json|.*\+xml))/i;
+/**
+ * Writable response stream supplied to a response-streaming AWS Lambda handler.
+ *
+ * The contract intentionally models only the Node.js writable-stream methods
+ * used by DaloyJS, keeping the adapter free of Node-only imports while still
+ * respecting backpressure.
+ */
+export interface LambdaResponseStream {
+  /** Writes one response chunk and returns false when the producer must wait for `drain`. */
+  write(chunk: Uint8Array): boolean;
+  /** Ends the response after every previously written chunk has flushed. */
+  end(): void;
+  /** Registers a one-shot writable-stream event listener. */
+  once(event: "drain", listener: () => void): this;
+  /** Registers a one-shot writable-stream error listener. */
+  once(event: "error", listener: (error: Error) => void): this;
+  /** Removes a previously registered drain listener when supported. */
+  off?(event: "drain", listener: () => void): this;
+  /** Removes a previously registered error listener when supported. */
+  off?(event: "error", listener: (error: Error) => void): this;
+  /** Resolves when AWS has flushed the ended response stream, when provided by the runtime. */
+  finished?(): Promise<void>;
+}
+
+/** HTTP response metadata accepted by `awslambda.HttpResponseStream.from()`. */
+export interface LambdaStreamMetadata {
+  /** HTTP response status code. */
+  statusCode: number;
+  /** Single-value response headers, excluding `set-cookie`. */
+  headers: Record<string, string>;
+  /** Multi-value response headers, used to preserve every `set-cookie` value. */
+  multiValueHeaders?: Record<string, string[]>;
+}
+
+/** Async response-streaming handler shape consumed by the AWS Lambda Node.js runtime. */
+export type LambdaStreamHandler = (
+  event: LambdaEvent,
+  responseStream: LambdaResponseStream,
+  context?: unknown
+) => Promise<void>;
+
+interface LambdaStreamingRuntime {
+  streamifyResponse(handler: LambdaStreamHandler): LambdaStreamHandler;
+  HttpResponseStream: {
+    from(stream: LambdaResponseStream, metadata: LambdaStreamMetadata): LambdaResponseStream;
+  };
+}
+
+const TEXT_TYPE_RE =
+  /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded|.*\+json|.*\+xml))/i;
 
 /**
  * Wrap an {@link App} as a Lambda/Netlify handler accepting either v1.0 or v2.0 event payloads.
@@ -125,20 +174,39 @@ export function toLambdaHandler(app: App): LambdaHandler {
     try {
       request = eventToRequest(event);
     } catch {
-      return {
-        statusCode: 400,
-        headers: { "content-type": "application/problem+json" },
-        body: JSON.stringify({
-          type: "https://daloyjs.dev/errors/bad-request",
-          title: "Bad Request",
-          status: 400,
-        }),
-        isBase64Encoded: false,
-      };
+      return responseToLambda(badRequestResponse(), isV2Event(event));
     }
     const response = await app.fetch(request);
     return responseToLambda(response, isV2Event(event));
   };
+}
+
+/**
+ * Wrap an {@link App} as an AWS Lambda response-streaming handler.
+ *
+ * The returned handler is decorated with the managed Node.js runtime's
+ * `awslambda.streamifyResponse()` helper, attaches status/headers with
+ * `HttpResponseStream.from()`, and pumps the web-standard response body while
+ * honoring writable-stream backpressure. The function throws during startup
+ * outside an AWS Lambda Node.js runtime so an accidentally buffered or broken
+ * deployment cannot start silently.
+ *
+ * @param app - The DaloyJS {@link App} that serves each translated request.
+ * @returns A response-streaming Lambda handler for Function URLs, API Gateway streaming proxy integrations, or `InvokeWithResponseStream`.
+ * @throws {Error} If the AWS Lambda response-streaming globals are unavailable.
+ */
+export function toLambdaStreamHandler(app: App): LambdaStreamHandler {
+  const runtime = lambdaStreamingRuntime();
+  return runtime.streamifyResponse(async (event, rawStream) => {
+    let request: Request;
+    try {
+      request = eventToRequest(event);
+    } catch {
+      await streamLambdaResponse(badRequestResponse(), rawStream, runtime);
+      return;
+    }
+    await streamLambdaResponse(await app.fetch(request), rawStream, runtime);
+  });
 }
 
 function eventToRequest(event: LambdaEvent): Request {
@@ -156,22 +224,22 @@ function eventToRequest(event: LambdaEvent): Request {
   }
   if ("cookies" in event && event.cookies?.length) headers.set("cookie", event.cookies.join("; "));
 
-  const method = isV2Event(event) ? event.requestContext?.http?.method ?? "GET" : event.httpMethod ?? "GET";
+  const method = isV2Event(event)
+    ? (event.requestContext?.http?.method ?? "GET")
+    : (event.httpMethod ?? "GET");
   const rawPath = isV2Event(event)
-    ? event.rawPath ?? event.requestContext?.http?.path ?? "/"
-    : event.path ?? event.requestContext?.path ?? "/";
+    ? (event.rawPath ?? event.requestContext?.http?.path ?? "/")
+    : (event.path ?? event.requestContext?.path ?? "/");
   const host = headers.get("host") ?? event.requestContext?.domainName ?? "localhost";
   const proto = headers.get("x-forwarded-proto") ?? "https";
-  const rawQueryString = isV2Event(event) ? event.rawQueryString ?? "" : queryStringForV1(event);
+  const rawQueryString = isV2Event(event) ? (event.rawQueryString ?? "") : queryStringForV1(event);
   const qs = rawQueryString ? `?${rawQueryString}` : "";
   const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
   const url = `${proto}://${host}${path}${qs}`;
 
   const init: RequestInit = { method, headers };
   if (method !== "GET" && method !== "HEAD" && event.body != null) {
-    init.body = event.isBase64Encoded
-      ? (base64ToBytes(event.body) as BodyInit)
-      : event.body;
+    init.body = event.isBase64Encoded ? (base64ToBytes(event.body) as BodyInit) : event.body;
   }
   const request = new Request(url, init);
   // Fulfil the conn-info contract with the caller address API Gateway saw
@@ -188,15 +256,7 @@ function eventToRequest(event: LambdaEvent): Request {
 }
 
 async function responseToLambda(res: Response, useV2Response: boolean): Promise<LambdaResponse> {
-  const headers: Record<string, string> = {};
-  const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
-  const cookies: string[] = typeof getSetCookie === "function"
-    ? getSetCookie.call(res.headers)
-    : cookieFallback(res.headers);
-  res.headers.forEach((value, key) => {
-    if (key.toLowerCase() === "set-cookie") return;
-    headers[key] = value;
-  });
+  const { headers, cookies } = responseHeaders(res);
 
   const contentType = res.headers.get("content-type") ?? "";
   const isText = TEXT_TYPE_RE.test(contentType);
@@ -228,7 +288,12 @@ async function responseToLambda(res: Response, useV2Response: boolean): Promise<
 
 function isV2Event(event: LambdaEvent): event is LambdaEventV2 {
   const requestContext = event.requestContext as { http?: unknown } | undefined;
-  return event.version === "2.0" || "rawPath" in event || "rawQueryString" in event || !!requestContext?.http;
+  return (
+    event.version === "2.0" ||
+    "rawPath" in event ||
+    "rawQueryString" in event ||
+    !!requestContext?.http
+  );
 }
 
 function queryStringForV1(event: LambdaEventV1): string {
@@ -246,6 +311,90 @@ function queryStringForV1(event: LambdaEventV1): string {
 function cookieFallback(headers: Headers): string[] {
   const cookie = headers.get("set-cookie");
   return cookie ? [cookie] : [];
+}
+
+function responseHeaders(res: Response): { headers: Record<string, string>; cookies: string[] } {
+  const headers: Record<string, string> = {};
+  const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  const cookies =
+    typeof getSetCookie === "function"
+      ? getSetCookie.call(res.headers)
+      : cookieFallback(res.headers);
+  res.headers.forEach((value, key) => {
+    if (key.toLowerCase() !== "set-cookie") headers[key] = value;
+  });
+  return { headers, cookies };
+}
+
+function badRequestResponse(): Response {
+  return Response.json(
+    {
+      type: "https://daloyjs.dev/errors/bad-request",
+      title: "Bad Request",
+      status: 400,
+    },
+    { status: 400, headers: { "content-type": "application/problem+json" } }
+  );
+}
+
+function lambdaStreamingRuntime(): LambdaStreamingRuntime {
+  const runtime = (globalThis as typeof globalThis & { awslambda?: LambdaStreamingRuntime })
+    .awslambda;
+  if (
+    !runtime ||
+    typeof runtime.streamifyResponse !== "function" ||
+    typeof runtime.HttpResponseStream?.from !== "function"
+  ) {
+    throw new Error(
+      "AWS Lambda response streaming runtime not detected; toLambdaStreamHandler requires the managed Node.js awslambda globals"
+    );
+  }
+  return runtime;
+}
+
+async function streamLambdaResponse(
+  response: Response,
+  rawStream: LambdaResponseStream,
+  runtime: LambdaStreamingRuntime
+): Promise<void> {
+  const { headers, cookies } = responseHeaders(response);
+  const metadata: LambdaStreamMetadata = { statusCode: response.status, headers };
+  if (cookies.length) metadata.multiValueHeaders = { "set-cookie": cookies };
+  const responseStream = runtime.HttpResponseStream.from(rawStream, metadata);
+
+  if (response.body) {
+    const reader = response.body.getReader();
+    try {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        if (!responseStream.write(chunk.value)) await waitForDrain(responseStream);
+      }
+    } catch (error) {
+      await reader.cancel(error).catch(() => undefined);
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  responseStream.end();
+  if (responseStream.finished) await responseStream.finished();
+}
+
+function waitForDrain(stream: LambdaResponseStream): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onDrain = (): void => {
+      stream.off?.("error", onError);
+      resolve();
+    };
+    const onError = (error: Error): void => {
+      stream.off?.("drain", onDrain);
+      reject(error);
+    };
+    stream.once("drain", onDrain);
+    stream.once("error", onError);
+  });
 }
 
 function base64ToBytes(b64: string): Uint8Array {

@@ -173,8 +173,10 @@ installFastlyListener(app: App): void;   // wires addEventListener("fetch", ...)
       </h2>
       <CodeBlock
         code={`toLambdaHandler(app: App): LambdaHandler;
+toLambdaStreamHandler(app: App): LambdaStreamHandler;
 
 type LambdaHandler  = (event: LambdaEvent) => Promise<LambdaResponse>;
+type LambdaStreamHandler = (event: LambdaEvent, responseStream: LambdaResponseStream, context?: unknown) => Promise<void>;
 type LambdaEvent    = LambdaEventV1   | LambdaEventV2;     // API Gateway REST + HTTP/Function URLs
 type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;`}
       />

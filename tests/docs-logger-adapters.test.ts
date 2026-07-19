@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { App } from "../src/index.js";
 import {
   scalarHtml,
@@ -18,7 +19,13 @@ import {
 import { serve as serveBun } from "../src/adapters/bun.js";
 import { serve as serveDeno } from "../src/adapters/deno.js";
 import { toFastlyHandler, installFastlyListener } from "../src/adapters/fastly.js";
-import { toLambdaHandler } from "../src/adapters/lambda.js";
+import {
+  toLambdaHandler,
+  toLambdaStreamHandler,
+  type LambdaResponseStream,
+  type LambdaStreamHandler,
+  type LambdaStreamMetadata,
+} from "../src/adapters/lambda.js";
 import { getConnInfo } from "../src/conn-info.js";
 
 function decodeHtmlAttribute(value: string): string {
@@ -40,6 +47,67 @@ function swaggerConfigurationFrom(html: string): Record<string, unknown> {
   const match = html.match(/SwaggerUIBundle\((\{.*\})\);<\/script>/);
   assert.ok(match);
   return JSON.parse(match[1]!);
+}
+
+function createLambdaStreamHarness(backpressure = false) {
+  const emitter = new EventEmitter();
+  const chunks: Uint8Array[] = [];
+  const metadata: LambdaStreamMetadata[] = [];
+  let ended = false;
+  let finished = false;
+  let writes = 0;
+
+  const stream: LambdaResponseStream = {
+    write(chunk) {
+      chunks.push(chunk);
+      writes++;
+      if (backpressure && writes === 1) {
+        queueMicrotask(() => emitter.emit("drain"));
+        return false;
+      }
+      return true;
+    },
+    end() {
+      ended = true;
+    },
+    once(event: "drain" | "error", listener: (...args: unknown[]) => void) {
+      emitter.once(event, listener);
+      return this;
+    },
+    off(event: "drain" | "error", listener: (...args: unknown[]) => void) {
+      emitter.off(event, listener);
+      return this;
+    },
+    async finished() {
+      finished = true;
+    },
+  } as LambdaResponseStream;
+
+  const runtime = {
+    streamifyResponse(handler: LambdaStreamHandler) {
+      return handler;
+    },
+    HttpResponseStream: {
+      from(candidate: LambdaResponseStream, value: LambdaStreamMetadata) {
+        assert.equal(candidate, stream);
+        metadata.push(value);
+        return candidate;
+      },
+    },
+  };
+
+  return {
+    runtime,
+    stream,
+    chunks,
+    metadata,
+    get ended() {
+      return ended;
+    },
+    get finished() {
+      return finished;
+    },
+  };
 }
 
 test("docs HTML escapes untrusted title and spec URL", () => {
@@ -749,6 +817,94 @@ test("lambda adapter converts API Gateway v2 events to Request and back", async 
   });
   assert.equal(b64Result.statusCode, 200);
   assert.equal(JSON.parse(b64Result.body).received.hello, "b64");
+});
+
+test("lambda streaming adapter preserves metadata, cookies, chunks, and backpressure", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/events",
+    operationId: "lambdaStreamEvents",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "stream" } },
+    handler: async () => {
+      const headers = new Headers({ "content-type": "text/event-stream" });
+      headers.append("set-cookie", "session=abc; Path=/; HttpOnly");
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("data: first\n\n"));
+            controller.enqueue(new TextEncoder().encode("data: second\n\n"));
+            controller.close();
+          },
+        }),
+        { status: 200, headers }
+      );
+    },
+  });
+
+  const harness = createLambdaStreamHarness(true);
+  const previous = (globalThis as { awslambda?: unknown }).awslambda;
+  (globalThis as { awslambda?: unknown }).awslambda = harness.runtime;
+  try {
+    const handler = toLambdaStreamHandler(app);
+    await handler(
+      {
+        version: "2.0",
+        rawPath: "/events",
+        headers: { host: "api.example.com" },
+        requestContext: { http: { method: "GET" } },
+      },
+      harness.stream
+    );
+  } finally {
+    if (previous === undefined) delete (globalThis as { awslambda?: unknown }).awslambda;
+    else (globalThis as { awslambda?: unknown }).awslambda = previous;
+  }
+
+  assert.equal(harness.metadata.length, 1);
+  assert.equal(harness.metadata[0]?.statusCode, 200);
+  assert.equal(harness.metadata[0]?.headers["content-type"], "text/event-stream");
+  assert.deepEqual(harness.metadata[0]?.multiValueHeaders, {
+    "set-cookie": ["session=abc; Path=/; HttpOnly"],
+  });
+  assert.equal(Buffer.concat(harness.chunks).toString(), "data: first\n\ndata: second\n\n");
+  assert.equal(harness.ended, true);
+  assert.equal(harness.finished, true);
+});
+
+test("lambda streaming adapter fails closed outside Lambda and streams malformed events as 400", async () => {
+  const globalWithLambda = globalThis as { awslambda?: unknown };
+  const previous = globalWithLambda.awslambda;
+  delete globalWithLambda.awslambda;
+  try {
+    assert.throws(
+      () => toLambdaStreamHandler(new App({ logger: false })),
+      /AWS Lambda response streaming runtime not detected/
+    );
+
+    const harness = createLambdaStreamHarness();
+    globalWithLambda.awslambda = harness.runtime;
+    const handler = toLambdaStreamHandler(new App({ logger: false }));
+    await handler(
+      {
+        version: "2.0",
+        rawPath: "/x",
+        headers: { host: "bad host" },
+        requestContext: { http: { method: "GET" } },
+      },
+      harness.stream
+    );
+
+    assert.equal(harness.metadata[0]?.statusCode, 400);
+    assert.equal(harness.metadata[0]?.headers["content-type"], "application/problem+json");
+    const body = JSON.parse(Buffer.concat(harness.chunks).toString());
+    assert.equal(body.title, "Bad Request");
+    assert.equal(body.status, 400);
+  } finally {
+    if (previous === undefined) delete globalWithLambda.awslambda;
+    else globalWithLambda.awslambda = previous;
+  }
 });
 
 test("lambda adapter supports API Gateway v1 and Netlify-style events", async () => {
