@@ -174,9 +174,11 @@ const MCP_SEARCH_CALL = `{
 const ORIGINS = `const mcp = createMcpHandler({
   serverInfo: { name: "inventory-mcp", version: "1.0.0" },
   // Streamable HTTP DNS-rebinding defense (spec requirement) is built in:
-  // requests without an Origin header (Claude, Cursor, CLIs), same-origin
-  // requests, and loopback origins (localhost, *.localhost, 127.0.0.1, [::1])
-  // are allowed. Every other browser origin gets 403 unless listed here.
+  // requests without an Origin header (Claude, Cursor, CLIs) and loopback
+  // origins (localhost, *.localhost, 127.0.0.1, [::1]) are allowed. Every
+  // other browser origin gets 403 unless listed here. A same-origin Origin is
+  // NOT implicitly trusted: under DNS rebinding the attacker hostname resolves
+  // to your host, so Origin.host can equal Host — the allowlist is the gate.
   allowedOrigins: ["https://app.example.com"],
   tools: [/* ... */],
 });`;
@@ -425,8 +427,13 @@ export default function Page() {
         rebinding to drive a local MCP server. <code>createMcpHandler()</code>{" "}
         does this on every request. Non-browser clients that send no{" "}
         <code>Origin</code> header work unchanged; browser clients must be
-        same-origin, loopback, or explicitly allowlisted, and everything else
-        receives <code>403</code>.
+        loopback or explicitly allowlisted, and everything else receives{" "}
+        <code>403</code>. A same-origin <code>Origin</code> is deliberately{" "}
+        <strong>not</strong> treated as sufficient on its own: under DNS
+        rebinding the attacker&apos;s hostname resolves to your host, so{" "}
+        <code>Origin.host</code> can equal the request <code>Host</code> — the{" "}
+        <code>allowedOrigins</code> allowlist is the real gate for public
+        browser clients.
       </p>
       <CodeBlock code={ORIGINS} />
 

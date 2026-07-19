@@ -277,3 +277,20 @@ test("default BotResolver forward-resolves loopback via node:dns", async () => {
   const ptr = await resolver.reverse("127.0.0.1").catch(() => []);
   assert.ok(Array.isArray(ptr));
 });
+
+test("botGuard blockedUserAgents with /g regex is consistent across requests", async () => {
+  const app = new App({ env: "development", logger: false });
+  app.use(botGuard({ blockedUserAgents: [/sqlmap/gi] }));
+  app.route({
+    method: "GET",
+    path: "/",
+    responses: { 200: { description: "ok" } },
+    handler: async () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  for (let i = 0; i < 5; i++) {
+    const res = await app.fetch(
+      new Request("http://x/", { headers: { "user-agent": "sqlmap/1.0" } }),
+    );
+    assert.equal(res.status, 403, `request ${i + 1} must stay blocked`);
+  }
+});

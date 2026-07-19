@@ -81,6 +81,40 @@ app.use(compression());
         original response is kept.
       </p>
 
+      <h2 id="memory-bound">Memory bound for large responses</h2>
+      <p>
+        Compressing a response means buffering its bytes in memory first. To
+        keep a single large (or unknown-and-growing) response from forcing
+        unbounded heap growth, the middleware only compresses bodies up to{" "}
+        <code>maxCompressibleBytes</code>, which defaults to{" "}
+        <code>1_048_576</code> (1&nbsp;MiB). Anything larger is sent{" "}
+        <strong>uncompressed</strong> rather than buffered. When a response
+        declares a <code>Content-Length</code> above the cap it is skipped
+        immediately, without buffering a single byte; streamed responses are
+        read up to the cap and released untouched if they exceed it.
+      </p>
+      <p>
+        This is a deliberate trade-off: it spends bandwidth and latency on very
+        large responses to protect the origin&apos;s memory. Large responses are
+        usually already-compressed media (skipped anyway) or belong behind a
+        CDN. If you serve large, highly compressible payloads from the origin
+        and can afford the heap, raise the cap:
+      </p>
+      <CodeBlock
+        code={`app.use(
+  compression({
+    // Compress bodies up to 8 MiB; larger responses stream uncompressed.
+    maxCompressibleBytes: 8 * 1024 * 1024,
+  }),
+);`}
+        language="ts"
+      />
+      <p>
+        <code>maxCompressibleBytes</code> must be a positive integer no larger
+        than <code>2**31 - 1</code>, and must be greater than or equal to{" "}
+        <code>minimumSize</code>; violating either is refused at construction.
+      </p>
+
       <h2 id="application-vs-cdn-or-proxy">
         Application vs. CDN or reverse proxy
       </h2>

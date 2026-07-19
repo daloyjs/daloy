@@ -183,12 +183,12 @@ const SIG_KEY = new TextEncoder().encode(SECRET32);
 
 test("[http-sig] a valid signature verifies; a tampered one is rejected", async () => {
   const url = "https://api.example.com/transfer";
+  // Default covered set is @method + @target-uri (aligned with verify defaults).
   const sig = await signMessage({
     method: "POST",
     url,
     headers: { "content-type": "application/json" },
-    // Cover @method + @path so the verifier's default required-component set is satisfied.
-    components: ["@method", "@path", "content-type"],
+    components: ["@method", "@target-uri", "content-type"],
     alg: "hmac-sha256",
     key: SIG_KEY,
     keyid: "key-1",
@@ -226,7 +226,7 @@ test("[http-sig] a stale signature (created too long ago) is rejected", async ()
   const stale = await signMessage({
     method: "POST",
     url,
-    components: ["@method", "@path"], // satisfy the verifier's default required components
+    // Default components satisfy the verifier's default required set.
     alg: "hmac-sha256",
     key: SIG_KEY,
     created: Math.floor(Date.now() / 1000) - 4000, // way past a 300s window

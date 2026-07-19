@@ -362,3 +362,19 @@ test("clientCertAuth honors a custom resolve function", async () => {
   });
   assert.equal((await app.fetch(new Request("http://x/"))).status, 200);
 });
+
+test("clientCertAuth structured headers without verify header are unverified by default", async () => {
+  const app = guardedApp({
+    header: {
+      format: "structured",
+      subjectDN: "x-ssl-client-s-dn",
+      // no verify header configured
+    },
+  });
+  const res = await app.fetch(
+    new Request("http://x/", {
+      headers: { "x-ssl-client-s-dn": "CN=attacker" },
+    }),
+  );
+  assert.equal(res.status, 403, "identity-only headers must not satisfy requireVerified");
+});

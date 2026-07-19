@@ -611,8 +611,13 @@ function certFromHeaders(
   const sanRaw = readHeader(request, cfg.san);
   const verifyRaw = cfg.verify ? readHeader(request, cfg.verify) : undefined;
   const successValue = (cfg.verifySuccessValue ?? "SUCCESS").toLowerCase();
+  // Without a configured verification header there is no cryptographic proof
+  // the terminator validated the chain. Default to unverified so
+  // requireVerified (default true) rejects spoofed identity-only headers.
+  // Operators that intentionally trust a proxy which only forwards identity
+  // must set requireVerified: false (and keep a strict behindProxy posture).
   const verified =
-    cfg.verify === undefined ? true : (verifyRaw ?? "").toLowerCase() === successValue;
+    cfg.verify === undefined ? false : (verifyRaw ?? "").toLowerCase() === successValue;
   const sans: string[] = [];
   if (sanRaw) {
     for (const piece of sanRaw.split(",")) {

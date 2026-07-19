@@ -536,6 +536,17 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
             `@query-param;name="${c.paramName}" is not present in the query`,
           );
         }
+        // Reject multi-value params: signing only the first value while an app
+        // or intermediary uses the last value (or the full array) is a classic
+        // HTTP parameter-pollution differential. Prefer `@query` / `@target-uri`
+        // when multiple values are legitimate.
+        if (values.length > 1) {
+          throw new ComponentError(
+            `@query-param;name="${c.paramName}" appears ${values.length} times; ` +
+              "duplicate query parameters are not supported (parameter pollution risk). " +
+              "Cover `@query` or `@target-uri` instead, or send a single value.",
+          );
+        }
         return values[0]!;
       }
       case "@status":
@@ -854,7 +865,10 @@ export interface VerifyMessageOptions {
   label?: string;
   /**
    * Component identifiers that MUST be covered. Defaults to
-   * `["@method", "@path"]`. Pass `[]` to disable the check (not recommended).
+   * `["@method", "@target-uri"]` so the verifier binds scheme, authority,
+   * path, **and query** (matching {@link signMessage}'s default covered set).
+   * Prefer this over bare `@path`, which leaves query parameters unsigned.
+   * Pass `[]` to disable the check (not recommended).
    */
   requiredComponents?: string[];
   /** Require the `created` parameter. Defaults to `true`. */
@@ -937,7 +951,10 @@ export async function verifyMessage(
   };
 
   // Required components.
-  const requiredComponents = opts.requiredComponents ?? ["@method", "@path"];
+  // Align with signMessage()'s default covered components so a default sign
+  // is accepted by a default verify, and so query/authority cannot be swapped
+  // out under a signature that only bound `@path`.
+  const requiredComponents = opts.requiredComponents ?? ["@method", "@target-uri"];
   const coveredIds = input.components.map(serializeComponentId);
   for (const req of requiredComponents) {
     const wanted = serializeComponentId(parseComponentSpec(req));

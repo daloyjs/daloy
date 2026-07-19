@@ -497,3 +497,34 @@ test("httpMetrics in-flight stays balanced when OPTIONS preflight interleaves wi
   // In-flight at zero after all requests completed.
   assert.match(out, /\ndaloy_http_requests_in_flight 0\n/);
 });
+
+test("app.metrics() rate limit ignores spoofed X-Real-IP without trustProxy", async () => {
+  const app = new App({ env: "development" });
+  app.metrics({ rateLimit: { limit: 1, windowMs: 60_000 } });
+  const first = await app.fetch(
+    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
+  );
+  assert.equal(first.status, 200);
+  // Different spoofed IP must still share the global bucket when trustProxy is unset.
+  const second = await app.fetch(
+    new Request("http://x/metrics", { headers: { "x-real-ip": "2.2.2.2" } }),
+  );
+  assert.equal(second.status, 429);
+});
+
+test("app.metrics() rate limit may key on X-Real-IP when trustProxy is true", async () => {
+  const app = new App({ env: "development", trustProxy: true });
+  app.metrics({ rateLimit: { limit: 1, windowMs: 60_000 } });
+  const a = await app.fetch(
+    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
+  );
+  assert.equal(a.status, 200);
+  const b = await app.fetch(
+    new Request("http://x/metrics", { headers: { "x-real-ip": "2.2.2.2" } }),
+  );
+  assert.equal(b.status, 200, "distinct trusted-proxy client IPs get distinct buckets");
+  const a2 = await app.fetch(
+    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
+  );
+  assert.equal(a2.status, 429);
+});

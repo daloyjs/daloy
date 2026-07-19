@@ -265,12 +265,16 @@ export function safeRedirect(target: string, options: SafeRedirectOptions = {}):
   if (result.ok) return buildResponse(result.location, status, options.headers);
 
   if (options.fallback !== undefined) {
-    if (!options.fallback.startsWith("/") || options.fallback.startsWith("//")) {
+    // Fallback must pass the same path safety checks as a primary same-origin
+    // target (no protocol-relative, no backslash confusion, no controls).
+    // Do not widen Location emission beyond what classify() would accept.
+    const fallbackResult = classify(options.fallback, ["/*"], []);
+    if (!fallbackResult.ok || !options.fallback.startsWith("/") || options.fallback.startsWith("//")) {
       throw new TypeError(
-        `safeRedirect: fallback must be a same-origin path starting with "/"; got ${options.fallback}`
+        `safeRedirect: fallback must be a safe same-origin path starting with "/"; got ${options.fallback}`
       );
     }
-    return buildResponse(options.fallback, status, options.headers);
+    return buildResponse(fallbackResult.location, status, options.headers);
   }
 
   throw new OpenRedirectBlockedError(result.reason, target);

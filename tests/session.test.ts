@@ -829,3 +829,206 @@ async function getSig(value: string, secret: string): Promise<string> {
 // Touch unused type imports so the test file references them.
 const _typesProbe: SessionRecord | null = null;
 void _typesProbe;
+
+// ---------- nested dirty tracking (DeepSec audit) ----------
+
+test("session nested object mutations mark dirty and persist across requests", async () => {
+  const store = new MemorySessionStore();
+  const app = new App({ env: "development", logger: false });
+  app.use(
+    session({
+      secret: SECRET,
+      store,
+      cookieOptions: { secure: false },
+      cookieName: "sid",
+    }),
+  );
+  app.route({
+    method: "POST",
+    path: "/profile",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      if (!state.session.data.profile) {
+        state.session.data.profile = { name: "anon", roles: ["user"] };
+      }
+      (state.session.data.profile as { name: string }).name = "alice";
+      (state.session.data.profile as { roles: string[] }).roles.push("admin");
+      return {
+        status: 200 as const,
+        body: { profile: state.session.data.profile },
+      };
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/profile",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => ({
+      status: 200 as const,
+      body: { profile: state.session.data.profile ?? null },
+    }),
+  });
+
+  const first = await app.fetch(
+    new Request("http://x/profile", { method: "POST" }),
+  );
+  assert.equal(first.status, 200);
+  const setCookie = first.headers.get("set-cookie");
+  assert.ok(setCookie, "session cookie must be issued after nested write");
+  const cookie = setCookie.split(";")[0]!;
+
+  const second = await app.fetch(
+    new Request("http://x/profile", { headers: { cookie } }),
+  );
+  assert.equal(second.status, 200);
+  const body = (await second.json()) as { profile: { name: string; roles: string[] } };
+  assert.equal(body.profile.name, "alice");
+  assert.deepEqual(body.profile.roles, ["user", "admin"]);
+});
+
+test("session deep-clones on load so request nested data is not the store object", async () => {
+  const store = new MemorySessionStore();
+  const app = new App({ env: "development", logger: false });
+  app.use(
+    session({
+      secret: SECRET,
+      store,
+      cookieOptions: { secure: false },
+      cookieName: "sid2",
+      saveUninitialized: true,
+    }),
+  );
+  app.route({
+    method: "POST",
+    path: "/nest",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      state.session.data.bag = { n: 1 };
+      return { status: 200 as const, body: { ok: true } };
+    },
+  });
+  const res = await app.fetch(new Request("http://x/nest", { method: "POST" }));
+  assert.equal(res.status, 200);
+  const recs = [...(store as any).map.values()] as Array<{ data: any }>;
+  assert.equal(recs.length, 1);
+  const storeBagRef = recs[0]!.data.bag;
+  assert.equal(storeBagRef.n, 1);
+
+  const setCookie = res.headers.get("set-cookie");
+  assert.ok(setCookie);
+  const cookie = setCookie.split(";")[0]!;
+  let sawDistinctRef = false;
+  app.route({
+    method: "GET",
+    path: "/nest",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      // Request-scoped bag must be a deep clone, not the store's object.
+      sawDistinctRef = state.session.data.bag !== storeBagRef;
+      // Mutating the store's nested object must not change the request clone.
+      storeBagRef.n = 999;
+      return {
+        status: 200 as const,
+        body: { bag: state.session.data.bag, distinct: sawDistinctRef },
+      };
+    },
+  });
+  const again = await app.fetch(
+    new Request("http://x/nest", { headers: { cookie } }),
+  );
+  const body = (await again.json()) as { bag: { n: number }; distinct: boolean };
+  assert.equal(body.distinct, true);
+  assert.equal(body.bag.n, 1, "request clone must not see post-load store mutation");
+  assert.equal(storeBagRef.n, 999, "store object was mutated independently");
+});
+
+test("session nested reads return a stable proxy identity within a request", async () => {
+  const app = new App({ env: "development", logger: false });
+  app.use(
+    session({
+      secret: SECRET,
+      store: new MemorySessionStore(),
+      cookieOptions: { secure: false },
+      cookieName: "sid3",
+      saveUninitialized: true,
+    }),
+  );
+  let identityHeld = false;
+  let arrayIdentityHeld = false;
+  let dateMethodsWork = false;
+  app.route({
+    method: "POST",
+    path: "/identity",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      state.session.data.user = { name: "alice", roles: ["user"] };
+      // Reading the same nested object twice must yield the SAME proxy so
+      // object identity holds (regression: a fresh proxy per read broke `===`).
+      identityHeld = state.session.data.user === state.session.data.user;
+      const roles = (state.session.data.user as { roles: string[] }).roles;
+      arrayIdentityHeld =
+        roles === (state.session.data.user as { roles: string[] }).roles;
+      // Exotic objects are returned unwrapped, so their methods still work.
+      state.session.data.when = new Date(0);
+      const when = state.session.data.when as Date;
+      dateMethodsWork = when instanceof Date && when.getTime() === 0;
+      return {
+        status: 200 as const,
+        body: { identityHeld, arrayIdentityHeld, dateMethodsWork },
+      };
+    },
+  });
+  const res = await app.fetch(new Request("http://x/identity", { method: "POST" }));
+  const body = (await res.json()) as {
+    identityHeld: boolean;
+    arrayIdentityHeld: boolean;
+    dateMethodsWork: boolean;
+  };
+  assert.equal(body.identityHeld, true, "nested object proxy identity must be stable");
+  assert.equal(body.arrayIdentityHeld, true, "nested array proxy identity must be stable");
+  assert.equal(body.dateMethodsWork, true, "Date value must not be wrapped by the proxy");
+});
+
+test("session clone preserves Date values across a store round-trip (no JSON corruption)", async () => {
+  const store = new MemorySessionStore();
+  const app = new App({ env: "development", logger: false });
+  app.use(
+    session({
+      secret: SECRET,
+      store,
+      cookieOptions: { secure: false },
+      cookieName: "sid4",
+      saveUninitialized: true,
+    }),
+  );
+  app.route({
+    method: "POST",
+    path: "/date",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      state.session.data.lastSeen = new Date(1_700_000_000_000);
+      return { status: 200 as const, body: { ok: true } };
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/date",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      const v = state.session.data.lastSeen;
+      return {
+        status: 200 as const,
+        body: {
+          isDate: v instanceof Date,
+          ms: v instanceof Date ? v.getTime() : null,
+        },
+      };
+    },
+  });
+  const first = await app.fetch(new Request("http://x/date", { method: "POST" }));
+  const cookie = first.headers.get("set-cookie")!.split(";")[0]!;
+  const second = await app.fetch(new Request("http://x/date", { headers: { cookie } }));
+  const body = (await second.json()) as { isDate: boolean; ms: number | null };
+  assert.equal(body.isDate, true, "Date must survive the clone (JSON would stringify it)");
+  assert.equal(body.ms, 1_700_000_000_000);
+});

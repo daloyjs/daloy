@@ -2348,3 +2348,19 @@ test("verify-no-redos-patterns accepts the live src/ tree", async () => {
   );
 });
 
+
+test("assertTemporalClaims rejects token at exact exp (RFC 7519 boundary)", () => {
+  const now = 1_700_000_000;
+  assert.throws(
+    () => assertTemporalClaims({ exp: now }, { now, clockSkewSeconds: 0 }),
+    (err) => err instanceof TemporalClaimError && err.code === "token_expired",
+  );
+  // With skew, still valid until now reaches exp+skew.
+  assert.doesNotThrow(() =>
+    assertTemporalClaims({ exp: now }, { now: now + 4, clockSkewSeconds: 5 }),
+  );
+  assert.throws(
+    () => assertTemporalClaims({ exp: now }, { now: now + 5, clockSkewSeconds: 5 }),
+    (err) => err instanceof TemporalClaimError && err.code === "token_expired",
+  );
+});

@@ -234,7 +234,7 @@ test("safeRedirect: refuses fallback that isn't a same-origin path", () => {
         allowedOrigins: ["https://app.example.com"],
         fallback: "https://evil.com",
       }),
-    /fallback must be a same-origin path/,
+    /fallback must be a safe same-origin path/,
   );
 });
 
@@ -245,7 +245,7 @@ test("safeRedirect: refuses protocol-relative fallback", () => {
         allowedOrigins: ["https://app.example.com"],
         fallback: "//evil.com",
       }),
-    /fallback must be a same-origin path/,
+    /fallback must be a safe same-origin path/,
   );
 });
 
@@ -259,4 +259,15 @@ test("OpenRedirectBlockedError: carries reason and target for logging", () => {
     assert.equal(err.target, "//evil.com");
     assert.equal(err.name, "OpenRedirectBlockedError");
   }
+});
+
+test("safeRedirect rejects backslash fallback the same as a primary target", () => {
+  assert.throws(
+    () =>
+      safeRedirect("//evil.example", {
+        allowedPaths: ["/*"],
+        fallback: "/\\evil.example",
+      }),
+    /fallback must be a safe same-origin path/,
+  );
 });

@@ -90,6 +90,83 @@ For the forward-looking plan and the full thematic release log, see
   expose no peer socket; on those platforms client addresses continue to
   arrive via platform headers governed by `behindProxy` / `trustProxyHeaders`.
 
+### Security
+
+Hardening from a focused security-audit pass across logging, sessions, HTTP
+message signatures, mTLS header trust, MCP origin validation, compression
+memory use, and bot detection. Most entries are internal hardenings; the ones
+that adjust an observable default are called out with migration guidance
+inline — review them if you depend on the prior behavior.
+
+- **Request URLs are sanitized before they reach logs.** The per-request child
+  logger now binds a redacted URL (`sanitizeUrlForLog`) instead of the raw
+  `request.url`, keeping scheme / host / path but replacing the values of
+  sensitive query parameters — OAuth `code` / `state`, `access_token`, API
+  keys, session ids, and AWS SigV4 / GCS V4 presigned-URL signatures
+  (`X-Amz-Signature`, `X-Amz-Credential`, `X-Goog-Signature`, …) — with
+  `[REDACTED]`. Exported as `sanitizeUrlForLog` and `SENSITIVE_URL_QUERY_KEYS`.
+  The default structured-log redaction set (`DEFAULT_REDACT_KEYS`) intentionally
+  does **not** add generic names like `id`, `key`, or `state`: those are common
+  non-secret field names, and redacting them at every depth would corrupt
+  ordinary operational logs — query-string secrets are handled by the URL
+  sanitizer instead.
+- **HTTP message signatures bind the full request target by default.**
+  `verifyMessage`'s default `requiredComponents` is now
+  `["@method", "@target-uri"]` (was `["@method", "@path"]`), matching
+  `signMessage`'s default covered set so scheme, authority, path, **and query**
+  are all bound. A signature that only covers `@path` no longer satisfies a
+  default verify. _Migration:_ if you intentionally sign only the path, pass
+  `requiredComponents: ["@method", "@path"]` explicitly. Separately,
+  `@query-param` now refuses to sign a parameter that appears more than once (a
+  parameter-pollution differential) — cover `@query` or `@target-uri` for
+  multi-valued queries.
+- **mTLS structured identity headers require verification proof by default.**
+  When `clientCertAuth()` reads a certificate from structured proxy headers and
+  no verify header is configured, the certificate is now treated as
+  **unverified**, so the default `requireVerified: true` rejects it (`403`).
+  This closes an identity-only spoofing gap where a proxy forwards subject / SAN
+  headers without proof the chain was validated. _Migration:_ if your terminator
+  only forwards identity and you trust it, configure the verify header (`verify`
+  + `verifySuccessValue`), or set `requireVerified: false` with a strict
+  `behindProxy` posture.
+- **Compression is bounded by response size.** `compression()` now leaves
+  responses larger than `maxCompressibleBytes` (default `1_048_576` = 1 MiB)
+  uncompressed instead of buffering an unbounded body into memory to compress
+  it — trading bandwidth on very large responses for memory safety. A
+  known-oversize body (via `Content-Length`) is skipped without buffering.
+  _Migration:_ raise `maxCompressibleBytes` if you need to compress larger
+  bodies and can afford the heap.
+- **`exp` expiry is exclusive.** `assertTemporalClaims` now rejects a token when
+  `now >= exp + skew` (was `now > exp + skew`), matching RFC 7519 §4.1.4
+  ("current time MUST be before the expiration time"): a token is invalid at its
+  exact expiration instant.
+- **Session dirty-tracking covers nested mutations, with stable identity and
+  lossless cloning.** Mutating a nested object or array under
+  `ctx.state.session.data` (e.g. `data.profile.roles.push(...)`) now marks the
+  session dirty and persists. Nested reads return a stable proxy so object
+  identity holds (`data.user === data.user`); exotic values like `Date` are
+  returned unwrapped so their methods keep working; and payloads are deep-cloned
+  with `structuredClone` (JSON round-trip fallback) so `Date` / `Map` / `Set` /
+  `BigInt` / `undefined` values survive load and store rather than being
+  silently corrupted or rejected.
+- **MCP Streamable HTTP rejects same-origin DNS rebinding.** A non-loopback
+  browser `Origin` must appear in the configured allowlist; the endpoint no
+  longer treats `Origin.host === Host` as sufficient (under DNS rebinding both
+  can be the attacker hostname resolving to the target IP). Loopback origins
+  stay allowed for local development. _Migration:_ public MCP endpoints serving
+  real browser clients must set `allowedOrigins`.
+- **Built-in observability routes only trust proxy client-IP headers under an
+  explicit trusted-proxy posture.** The `/healthz`, `/readyz`, `/metrics`, and
+  CSP-report rate-limit key falls back to a single shared `"global"` bucket
+  unless the app sets `trustProxy: true` or `behindProxy`; spoofable `X-Real-IP`
+  / `Fly-Client-IP` headers are ignored otherwise, so an attacker cannot rotate
+  identities to bypass the probe rate cap.
+- **`safeRedirect` fallbacks pass the same path-safety checks as primary
+  targets** (no protocol-relative, backslash-confusion, or control characters),
+  and `botGuard` resets stateful (`/g`, `/y`) user-agent regex `lastIndex`
+  between requests so an allowlist match cannot flip-flop, and bounds its
+  verification cache with write-recency eviction.
+
 ## [1.0.0-rc.4] - 2026-07-12
 
 ### Fixed

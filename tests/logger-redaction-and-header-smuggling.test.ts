@@ -6,6 +6,8 @@ import {
   createLogger,
   noopLogger,
   DEFAULT_REDACT_KEYS,
+  sanitizeUrlForLog,
+  SENSITIVE_URL_QUERY_KEYS,
   assertNoDuplicateSingletonHeaders,
   SMUGGLING_SINGLETON_HEADERS,
   verifyWebhookSignature,
@@ -893,4 +895,112 @@ test("App stays silent when env is omitted (no mismatch possible)", () => {
     if (prev === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = prev;
   }
+});
+
+// ---------- request URL sanitization for logs (DeepSec audit) ----------
+
+test("sanitizeUrlForLog redacts OAuth/code/token query values", () => {
+  const raw =
+    "https://app.example.com/callback?code=oauth-secret-code&state=xyz&q=books";
+  const safe = sanitizeUrlForLog(raw);
+  assert.match(safe, /\/callback/);
+  assert.match(safe, /q=books/);
+  assert.match(safe, /code=%5BREDACTED%5D|code=\[REDACTED\]/);
+  assert.doesNotMatch(safe, /oauth-secret-code/);
+  assert.ok(SENSITIVE_URL_QUERY_KEYS.includes("code"));
+});
+
+test("sanitizeUrlForLog strips query on malformed relative-ish input without crashing", () => {
+  assert.equal(sanitizeUrlForLog("/path?token=abc"), "/path");
+});
+
+test("App child logger binds a redacted url (not the raw request URL)", async () => {
+  const lines: string[] = [];
+  const log = createLogger({ level: "warn", write: (l) => lines.push(l) });
+  const app = new App({ env: "development", logger: log });
+  app.route({
+    method: "GET",
+    path: "/boom",
+    responses: { 200: { description: "ok" } },
+    handler: async () => {
+      throw new Error("boom");
+    },
+  });
+  await app.fetch(new Request("http://x/boom?access_token=super-secret-token&q=1"));
+  assert.ok(lines.length >= 1, "expected an error log line");
+  const joined = lines.join("\n");
+  assert.doesNotMatch(joined, /super-secret-token/);
+  assert.match(joined, /\/boom/);
+});
+
+test("sanitizeUrlForLog redacts AWS SigV4 presigned URL signature + credential", () => {
+  const raw =
+    "https://bucket.s3.amazonaws.com/report.csv" +
+    "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+    "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20260719%2Fus-east-1%2Fs3%2Faws4_request" +
+    "&X-Amz-Date=20260719T000000Z" +
+    "&X-Amz-Expires=900" +
+    "&X-Amz-SignedHeaders=host" +
+    "&X-Amz-Signature=deadbeefcafebabe1234567890abcdef1234567890abcdef1234567890abcdef";
+  const safe = sanitizeUrlForLog(raw);
+  // The signature and the credential (embeds the access-key id) must be gone.
+  assert.doesNotMatch(safe, /deadbeefcafebabe/);
+  assert.doesNotMatch(safe, /AKIAIOSFODNN7EXAMPLE/);
+  // Path is retained for operability.
+  assert.match(safe, /\/report\.csv/);
+});
+
+test("sanitizeUrlForLog redacts GCS V4 signed URL signature + credential", () => {
+  const raw =
+    "https://storage.googleapis.com/bucket/object.txt" +
+    "?X-Goog-Algorithm=GOOG4-RSA-SHA256" +
+    "&X-Goog-Credential=svc%40proj.iam.gserviceaccount.com%2F20260719%2Fauto%2Fstorage%2Fgoog4_request" +
+    "&X-Goog-Date=20260719T000000Z" +
+    "&X-Goog-Expires=900" +
+    "&X-Goog-SignedHeaders=host" +
+    "&X-Goog-Signature=0123456789abcdeffedcba98765432100123456789abcdeffedcba9876543210";
+  const safe = sanitizeUrlForLog(raw);
+  assert.doesNotMatch(safe, /0123456789abcdef/);
+  assert.doesNotMatch(safe, /svc%40proj|svc@proj/);
+  assert.match(safe, /\/bucket\/object\.txt/);
+});
+
+// Regression: the DeepSec wave over-broadened DEFAULT_REDACT_KEYS with generic
+// query names (`id`, `key`, `state`, …). Those are common, non-secret
+// STRUCTURED field names; redacting them at every depth corrupts normal logs.
+// URL-query redaction is handled separately by sanitizeUrlForLog.
+test("DEFAULT_REDACT_KEYS does not redact common non-secret structured fields", () => {
+  for (const k of ["id", "key", "state", "code", "session", "sid", "sig", "signature", "auth"]) {
+    assert.ok(
+      !DEFAULT_REDACT_KEYS.includes(k),
+      `${k} should NOT be a global structured redact key (over-redaction risk)`,
+    );
+  }
+});
+
+test("createLogger keeps a benign id/state/key field visible in the record", () => {
+  const lines: string[] = [];
+  const log = createLogger({ level: "info", write: (l) => lines.push(l) });
+  log.info({ id: "order-42", state: "shipped", key: "sort-key-7", msg: "ok" });
+  const obj = JSON.parse(lines[0]!) as Record<string, unknown>;
+  assert.equal(obj.id, "order-42");
+  assert.equal(obj.state, "shipped");
+  assert.equal(obj.key, "sort-key-7");
+});
+
+test("sanitizeUrlForLog returns a query-less URL verbatim (hot-path fast case)", () => {
+  const raw = "https://api.example.com/v1/orders/12345/items";
+  // No query, no fragment, no userinfo → returned unchanged without parsing.
+  assert.equal(sanitizeUrlForLog(raw), raw);
+  // Relative paths take the same fast path.
+  assert.equal(sanitizeUrlForLog("/healthz"), "/healthz");
+});
+
+test("sanitizeUrlForLog strips userinfo credentials even without a query string", () => {
+  // The `@` guard must route this through the parse path so basic-auth
+  // credentials in the authority never survive into a log line.
+  const safe = sanitizeUrlForLog("https://user:s3cr3t@api.example.com/data");
+  assert.doesNotMatch(safe, /s3cr3t/);
+  assert.doesNotMatch(safe, /user:/);
+  assert.match(safe, /\/data/);
 });

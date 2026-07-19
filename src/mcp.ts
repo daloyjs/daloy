@@ -933,12 +933,18 @@ const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /**
  * Streamable HTTP DNS-rebinding defense: decide whether a browser `Origin`
- * may talk to this MCP endpoint. Same-origin and loopback origins are always
- * allowed; anything else must be explicitly allowlisted.
+ * may talk to this MCP endpoint.
+ *
+ * Loopback origins (`localhost` / `127.0.0.1` / `[::1]` / `*.localhost`) are
+ * allowed for local development. Every non-loopback origin must appear in
+ * the configured allowlist. We deliberately do **not** treat
+ * `Origin.host === request Host` as sufficient: under DNS rebinding both
+ * can be the attacker hostname resolving to the target IP, which would
+ * silently bypass an implicit same-origin check.
  */
 function isAllowedOrigin(
   origin: string,
-  request: Request,
+  _request: Request,
   allowlist: ReadonlySet<string>
 ): boolean {
   const normalized = origin.toLowerCase();
@@ -952,11 +958,7 @@ function isAllowedOrigin(
   }
   const hostname = parsed.hostname;
   if (LOOPBACK_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost")) return true;
-  try {
-    return parsed.host === new URL(request.url).host;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /**

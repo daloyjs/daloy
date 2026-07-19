@@ -377,7 +377,13 @@ export type {
 } from "./middleware.js";
 export type { BearerAuthOptions, BearerAuthVerifyHook } from "./middleware.js";
 
-export { createLogger, noopLogger, DEFAULT_REDACT_KEYS } from "./logger.js";
+export {
+  createLogger,
+  noopLogger,
+  DEFAULT_REDACT_KEYS,
+  SENSITIVE_URL_QUERY_KEYS,
+  sanitizeUrlForLog,
+} from "./logger.js";
 export type { Logger, LogLevel, ConsoleLoggerOptions, LoggerRedactionOptions } from "./logger.js";
 
 export type {

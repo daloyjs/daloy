@@ -129,7 +129,9 @@ export function assertTemporalClaims(
     if (!isFiniteNumber(claims.exp)) {
       throw new TemporalClaimError("invalid_exp", "payload.exp is not a finite number.");
     }
-    if (now > claims.exp + skew) {
+    // RFC 7519 §4.1.4: current time must be *before* exp. At the exact
+    // expiration second (after skew) the token is no longer valid.
+    if (now >= claims.exp + skew) {
       throw new TemporalClaimError("token_expired", "token has expired (exp).");
     }
   }

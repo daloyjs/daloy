@@ -201,6 +201,26 @@ app.post(
   }),
 );`}
       />
+      <div className="my-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+        <p className="font-semibold">
+          Structured headers need a verification header
+        </p>
+        <p className="mt-2">
+          When you use <code>format: &quot;structured&quot;</code> without a{" "}
+          <code>verify</code> header, the middleware has no proof the terminator
+          actually validated the certificate chain — the subject / issuer / SAN
+          headers alone could be spoofed by anything that reaches the app
+          directly. It therefore treats such a certificate as{" "}
+          <strong>unverified</strong>, and the default{" "}
+          <code>requireVerified: true</code> rejects the request with{" "}
+          <code>403</code>. Configure the <code>verify</code> header (as above)
+          so the identity carries a validation result. Only if your proxy
+          genuinely cannot forward one, and the app is reachable{" "}
+          <em>exclusively</em> through it, set{" "}
+          <code>requireVerified: false</code> to accept identity-only headers —
+          keep a strict <code>behindProxy</code> posture if you do.
+        </p>
+      </div>
 
       <h2 id="allow-lists-and-checks">Allow-lists &amp; checks</h2>
       <ul>

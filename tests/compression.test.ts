@@ -708,3 +708,26 @@ test("compression: small high-entropy body that grows under gzip is skipped", as
     assert.equal(enc, null);
   }
 });
+
+test("compression: skips bodies larger than maxCompressibleBytes without hanging", async () => {
+  _resetCompressionRuntimeProbeForTests();
+  const app = new App({ env: "development" });
+  app.use(compression({ minimumSize: 16, maxCompressibleBytes: 64 }));
+  app.route({
+    method: "GET",
+    path: "/big",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({
+      status: 200 as const,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+      body: "A".repeat(200),
+    }),
+  });
+  const res = await app.fetch(
+    new Request("http://x/big", { headers: { "accept-encoding": "gzip" } }),
+  );
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-encoding"), null, "oversize body must not be compressed");
+  const text = await res.text();
+  assert.equal(text.length, 200);
+});

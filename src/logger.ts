@@ -96,6 +96,17 @@ export const DEFAULT_REDACT_KEYS: readonly string[] = Object.freeze([
   "refresh_token",
   "id_token",
   "client_secret",
+  // A structured field literally named `private_key` is always a secret and
+  // has a negligible false-positive rate as a log-field name (mirrors the
+  // existing `client_secret`). The broader OAuth/session query-string names
+  // (`code`, `state`, `id`, `key`, `sid`, `session`, `signature`, `sig`,
+  // `auth`, …) are DELIBERATELY NOT here: those are extremely common,
+  // non-secret structured field names (record ids, sort keys, UI state) and
+  // redacting them at every depth would corrupt normal operational logs.
+  // Secrets that ride in a *URL query string* are handled instead by
+  // {@link sanitizeUrlForLog} / {@link SENSITIVE_URL_QUERY_KEYS}, which only
+  // applies to the `url` field where the query context makes them sensitive.
+  "private_key",
   // AI / LLM provider credential headers and body fields. Added in response
   // to the LiteLLM 2026 "AI blast radius" incident class (Snyk 2026,
   // CVE-2026-42208 + CVE-2026-33634) — an AI gateway that brokers prompts
@@ -357,3 +368,136 @@ export const noopLogger: Logger = {
     return noopLogger;
   },
 };
+
+/**
+ * Query parameter names whose values are redacted when a request URL is
+ * bound into a log record. Case-insensitive. Covers OAuth redirect params,
+ * API keys in query strings, signed-URL tokens, session identifiers, and the
+ * exact-named parameters of AWS SigV4 / GCS V4 presigned URLs (the `x-amz-*`
+ * and `x-goog-*` families are additionally matched by prefix — see
+ * {@link SENSITIVE_URL_QUERY_KEY_PREFIXES}).
+ *
+ * @since 1.0.0
+ */
+export const SENSITIVE_URL_QUERY_KEYS: readonly string[] = Object.freeze([
+  "authorization",
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "token",
+  "api_key",
+  "apikey",
+  "api-key",
+  "key",
+  "password",
+  "passwd",
+  "secret",
+  "client_secret",
+  "code",
+  "state",
+  "session_state",
+  "session",
+  "sid",
+  "signature",
+  "sig",
+  "auth",
+  "private_key",
+  "x-api-key",
+  // AWS SigV4 presigned URL parameters. `X-Amz-Signature` is the secret; the
+  // credential (embeds the access-key id) and session token are equally
+  // sensitive. Also covered by the `x-amz-` prefix below.
+  "x-amz-signature",
+  "x-amz-credential",
+  "x-amz-security-token",
+  // Google Cloud Storage V4 signed URL parameters. Also covered by `x-goog-`.
+  "x-goog-signature",
+  "x-goog-credential",
+  "googleaccessid",
+]);
+
+/**
+ * Case-insensitive query-key prefixes whose values are always redacted in a
+ * logged URL. Covers the full AWS SigV4 (`X-Amz-*`) and GCS V4 (`X-Goog-*`)
+ * presigned-URL parameter families so a signature never leaks even if a
+ * provider adds a new signed parameter name. Redacting the non-secret members
+ * of the bundle (`X-Amz-Date`, `X-Amz-Expires`, …) is harmless in a log line.
+ *
+ * @since 1.0.0
+ */
+export const SENSITIVE_URL_QUERY_KEY_PREFIXES: readonly string[] = Object.freeze([
+  "x-amz-",
+  "x-goog-",
+]);
+
+const SENSITIVE_URL_QUERY_KEY_SET = new Set(
+  SENSITIVE_URL_QUERY_KEYS.map((k) => k.toLowerCase()),
+);
+
+/**
+ * Whether a URL query-parameter name is treated as secret-bearing when a
+ * request URL is bound into a log record. True when the lower-cased name is in
+ * {@link SENSITIVE_URL_QUERY_KEYS} or starts with a
+ * {@link SENSITIVE_URL_QUERY_KEY_PREFIXES} entry.
+ *
+ * @param lowerKey - Already-lower-cased query-parameter name.
+ * @returns `true` if the value should be redacted.
+ */
+function isSensitiveUrlQueryKey(lowerKey: string): boolean {
+  if (SENSITIVE_URL_QUERY_KEY_SET.has(lowerKey)) return true;
+  for (const prefix of SENSITIVE_URL_QUERY_KEY_PREFIXES) {
+    if (lowerKey.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+/**
+ * Produce a log-safe form of a request URL.
+ *
+ * Keeps scheme, host, and path for operability. Redacts values of
+ * {@link SENSITIVE_URL_QUERY_KEYS} / {@link SENSITIVE_URL_QUERY_KEY_PREFIXES}
+ * (and JWT-like / credential-like query values) so OAuth `?code=`,
+ * `?access_token=`, and presigned-URL signatures (`?X-Amz-Signature=`,
+ * `?X-Goog-Signature=`) never land in durable error logs under the field name
+ * `url` (which the structured redactor does not rename-match).
+ *
+ * Malformed URLs fall back to the path-only prefix before `?` / `#`.
+ *
+ * This runs once per request on the logging path, so it fast-paths the common
+ * case: a URL with no query, no fragment, and no userinfo (`@`) delimiter is
+ * already log-safe and is returned verbatim without the WHATWG URL parse (about
+ * an order of magnitude cheaper). The `@` guard preserves userinfo stripping
+ * for the rare inputs that carry credentials in the authority — `request.url`
+ * itself never does, but this is a public utility.
+ *
+ * @param url - Absolute or relative request URL (typically `request.url`).
+ * @returns A string safe to attach as a logger binding.
+ * @since 1.0.0
+ */
+export function sanitizeUrlForLog(url: string): string {
+  if (
+    url.indexOf("?") === -1 &&
+    url.indexOf("#") === -1 &&
+    url.indexOf("@") === -1
+  ) {
+    return url;
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.search === "" && parsed.hash === "") {
+      return `${parsed.origin}${parsed.pathname}`;
+    }
+    const safe = new URL(parsed.origin + parsed.pathname);
+    for (const [key, value] of parsed.searchParams) {
+      const lower = key.toLowerCase();
+      const sensitiveKey = isSensitiveUrlQueryKey(lower);
+      const sensitiveValue =
+        JWT_LIKE_RE.test(value) || CREDENTIAL_LIKE_RE.test(value);
+      CREDENTIAL_LIKE_RE.lastIndex = 0;
+      safe.searchParams.append(key, sensitiveKey || sensitiveValue ? "[REDACTED]" : value);
+    }
+    return safe.toString();
+  } catch {
+    const cut = url.search(/[?#]/);
+    return cut === -1 ? url : url.slice(0, cut);
+  }
+}

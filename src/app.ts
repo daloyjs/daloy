@@ -30,7 +30,7 @@ import {
   timingSafeEqual,
   isForbiddenObjectKey,
 } from "./security.js";
-import { createLogger, noopLogger, type Logger } from "./logger.js";
+import { createLogger, noopLogger, sanitizeUrlForLog, type Logger } from "./logger.js";
 import type {
   BaseContext,
   HttpMethod,
@@ -3016,6 +3016,7 @@ export class App<
     this._coldPathHooksCache = undefined;
 
     const buckets = rateLimitConfig ? new Map<string, { count: number; resetMs: number }>() : null;
+    const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.route({
       method: "GET",
@@ -3027,7 +3028,7 @@ export class App<
       acknowledgeNoResponseBodySchema: true,
       handler: async ({ request }: BaseContext<any, any>) => {
         if (buckets && rateLimitConfig) {
-          const key = healthRouteKey(request);
+          const key = healthRouteKey(request, trustProxyHeaders);
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
@@ -3156,6 +3157,7 @@ export class App<
     }
 
     const buckets = rateLimitConfig ? new Map<string, { count: number; resetMs: number }>() : null;
+    const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.route({
       method: "GET",
@@ -3167,7 +3169,7 @@ export class App<
       acknowledgeNoResponseBodySchema: true,
       handler: async ({ request }: BaseContext<any, any>) => {
         if (buckets && rateLimitConfig) {
-          const key = healthRouteKey(request);
+          const key = healthRouteKey(request, trustProxyHeaders);
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
@@ -3236,6 +3238,7 @@ export class App<
     const rateLimitConfig =
       opts.rateLimit === false ? null : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
     const buckets = rateLimitConfig ? new Map<string, { count: number; resetMs: number }>() : null;
+    const trustProxyHeaders = appTrustsProxyHeaders(this.options);
     const log = this.log;
     // Only log report bodies when explicitly enabled. In
     // production this is opt-in; in development the body is included by
@@ -3250,7 +3253,7 @@ export class App<
       summary: "CSP / Reporting API violation receiver",
       handler: async ({ request }: BaseContext<any, any>) => {
         if (buckets && rateLimitConfig) {
-          const key = healthRouteKey(request);
+          const key = healthRouteKey(request, trustProxyHeaders);
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
@@ -3286,7 +3289,7 @@ export class App<
         if (parsed === undefined) {
           throw new BadRequestError("Invalid JSON report body");
         }
-        const ip = healthRouteKey(request);
+        const ip = healthRouteKey(request, trustProxyHeaders);
         const userAgent = request.headers.get("user-agent");
         try {
           if (opts.onReport) {
@@ -3782,7 +3785,11 @@ export class App<
         : baseLog.child({
             requestId,
             method: request.method,
-            url: request.url,
+            // Never bind the raw request URL: query strings commonly carry
+            // OAuth codes, API keys, and signed-URL tokens. sanitizeUrlForLog
+            // keeps origin+path and redacts sensitive query values so 4xx/5xx
+            // lines cannot become a credential sink under the field name `url`.
+            url: sanitizeUrlForLog(request.url),
           });
     const stripFingerprint = this.options.stripServerHeaders !== false;
     let ctx: BaseContext<any, any> | undefined;
@@ -4385,13 +4392,32 @@ function joinPath(a: string, b: string): string {
   return joined === "" ? "/" : joined;
 }
 
-function healthRouteKey(request: Request): string {
-  // The probe rate limit deliberately does NOT honour `X-Forwarded-For` —
-  // health probes typically arrive directly from a sidecar / orchestrator,
-  // so even apps that trust forwarded headers should not let an attacker
-  // bypass the per-IP cap by spoofing the header. Fall back to a constant
-  // key when no proxy header is available (single shared bucket).
+/**
+ * Rate-limit / attribution key for built-in observability routes
+ * (`/healthz`, `/readyz`, `/metrics`, CSP report).
+ *
+ * Secure default: a single shared `"global"` bucket. Spoofable platform
+ * headers (`X-Real-IP`, `Fly-Client-IP`) are only read when the app has an
+ * explicit trusted-proxy posture (`trustProxy: true` or `behindProxy` set).
+ * `X-Forwarded-For` is never used here — probes and scrapers often hit the
+ * process directly, and a free-form XFF chain would let an attacker rotate
+ * identities to bypass the cap.
+ *
+ * @param request - Inbound request.
+ * @param trustProxyHeaders - When true, platform client-IP headers may be used.
+ * @returns A stable string key for the in-memory rate-limit map.
+ */
+function healthRouteKey(request: Request, trustProxyHeaders: boolean): string {
+  if (!trustProxyHeaders) return "global";
   return request.headers.get("x-real-ip") ?? request.headers.get("fly-client-ip") ?? "global";
+}
+
+/** True when the app declared a trusted reverse-proxy posture. */
+function appTrustsProxyHeaders(options: {
+  trustProxy?: boolean;
+  behindProxy?: unknown;
+}): boolean {
+  return options.trustProxy === true || options.behindProxy !== undefined;
 }
 
 function corsOriginAllowsFromHooks(layers: Hooks[]): CorsOriginAllow[] {

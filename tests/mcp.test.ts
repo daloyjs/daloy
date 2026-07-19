@@ -797,19 +797,20 @@ test("createMcpHandler rejects cross-site Origins with 403 on every HTTP method"
   assert.equal(optionsRes.status, 403);
 });
 
-test("createMcpHandler allows missing, same-origin, and loopback Origins", async () => {
+test("createMcpHandler allows missing and loopback Origins; rejects implicit same-origin", async () => {
   const handler = createTestHandler();
 
   const noOrigin = await rpc(handler, { jsonrpc: "2.0", id: 1, method: "ping" });
   assert.equal(noOrigin.res.status, 200);
 
-  // ENDPOINT is http://test.local/mcp, so http://test.local is same-origin.
+  // DNS-rebinding defense: Origin matching the request Host is NOT enough.
+  // Non-loopback origins must be explicitly allowlisted.
   const sameOrigin = await rpc(
     handler,
     { jsonrpc: "2.0", id: 2, method: "ping" },
     { origin: "http://test.local" }
   );
-  assert.equal(sameOrigin.res.status, 200);
+  assert.equal(sameOrigin.res.status, 403, "implicit same-origin must not bypass the allowlist");
 
   for (const origin of [
     "http://localhost:5173",

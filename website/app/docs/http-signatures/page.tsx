@@ -67,8 +67,21 @@ export default function Page() {
         </li>
         <li>
           A configurable <code>requiredComponents</code> set must be covered
-          (default <code>[&quot;@method&quot;, &quot;@path&quot;]</code>), so a
-          peer cannot sign an empty or irrelevant component set.
+          (default <code>[&quot;@method&quot;, &quot;@target-uri&quot;]</code>), so a
+          peer cannot sign an empty or irrelevant component set. The default
+          binds scheme, authority, path, <strong>and query</strong>; a
+          path-only signature (<code>@path</code>) no longer satisfies a default
+          verify, so an attacker cannot swap the query string under a signature
+          that left it unbound. Pass{" "}
+          <code>requiredComponents: [&quot;@method&quot;, &quot;@path&quot;]</code>{" "}
+          explicitly if you deliberately sign only the path.
+        </li>
+        <li>
+          <code>@query-param</code> refuses to sign a parameter that appears
+          more than once. Signing only the first value while an app or
+          intermediary reads the last value (or the full array) is a classic
+          HTTP parameter-pollution differential — cover <code>@query</code> or{" "}
+          <code>@target-uri</code> instead when multiple values are legitimate.
         </li>
         <li>
           Raw HMAC keys must be at least 32 bytes (RFC 7518 §3.2). SHA-1 and{" "}
@@ -167,7 +180,9 @@ app.use(
       keyid && KEYS[keyid]
         ? { alg: "hmac-sha256", key: KEYS[keyid] }
         : undefined,
-    requiredComponents: ["@method", "@path", "@authority"],
+    // Default is ["@method", "@target-uri"] (binds path + query). Tighten further
+    // when you need authority or specific headers covered.
+    requiredComponents: ["@method", "@target-uri", "@authority"],
   }),
 );
 
@@ -202,7 +217,8 @@ const req = new Request("https://billing.internal/internal/charge", {
 });
 
 const signed = await signRequest(req, {
-  components: ["@method", "@authority", "@path", "content-type"],
+  // Default is ["@method", "@target-uri"]; add content-type / authority as needed.
+  components: ["@method", "@target-uri", "@authority", "content-type"],
   alg: "hmac-sha256",
   key: secret,
   keyid: "svc-a",

@@ -210,8 +210,13 @@ function matchesUserAgent(
   for (const pattern of patterns) {
     if (typeof pattern === "string") {
       if (pattern && lower.includes(pattern.toLowerCase())) return true;
-    } else if (pattern.test(ua)) {
-      return true;
+    } else {
+      // Reset lastIndex so caller-supplied /g or /y regexes cannot flip-flop
+      // between match and miss across requests (intermittent allowlist bypass).
+      pattern.lastIndex = 0;
+      const hit = pattern.test(ua);
+      pattern.lastIndex = 0;
+      if (hit) return true;
     }
   }
   return false;
@@ -382,9 +387,23 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
   };
   const writeCache = (key: string, verified: boolean): void => {
     const now = Date.now();
+    // Move this key to the newest insertion slot on every (re)write. Eviction
+    // below is therefore FIFO over WRITE-recency (Map preserves insertion
+    // order), not true LRU: cache *reads* on the verification path do not
+    // reorder entries, so a frequently-read-but-never-rewritten key can still
+    // be evicted. That is intentional — reordering on read would add a Map
+    // delete+set to the hot lookup path for no security benefit.
+    if (cache.has(key)) cache.delete(key);
     cache.set(key, { verified, expiresMs: now + cacheTtlMs });
     if (cache.size > cacheMax) {
       for (const [k, v] of cache) if (v.expiresMs <= now) cache.delete(k);
+    }
+    // Still over the cap after pruning expired entries: evict the
+    // oldest-written live keys (front of insertion order) until within cacheMax.
+    while (cache.size > cacheMax) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) break;
+      cache.delete(oldest);
     }
   };
 
@@ -410,7 +429,12 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
         return undefined;
       }
 
-      const rule = verifiedBots.find((r) => r.userAgent.test(ua));
+      const rule = verifiedBots.find((r) => {
+        r.userAgent.lastIndex = 0;
+        const hit = r.userAgent.test(ua);
+        r.userAgent.lastIndex = 0;
+        return hit;
+      });
       if (!rule) return undefined;
 
       const ip = resolveIp(ctx);

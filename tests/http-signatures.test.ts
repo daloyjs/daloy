@@ -68,6 +68,7 @@ test("signMessage + verifyMessage HMAC roundtrip succeeds", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => ({ alg: "hmac-sha256", key: HMAC_SECRET }),
     now: fixedNow(created + 10),
   });
@@ -139,6 +140,7 @@ test("ed25519 sign + verify roundtrip", async () => {
       signature: sig.signature,
     },
     algorithms: ["ed25519"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => ({ alg: "ed25519", key: publicKey }),
     now: fixedNow(created + 1),
   });
@@ -166,6 +168,7 @@ test("ecdsa-p256-sha256 sign + verify roundtrip", async () => {
       signature: sig.signature,
     },
     algorithms: ["ecdsa-p256-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => publicKey,
     now: fixedNow(created + 1),
   });
@@ -222,6 +225,7 @@ test("tampered method is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created),
   });
@@ -248,6 +252,7 @@ test("wrong HMAC key is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => new Uint8Array(32).fill(9),
     now: fixedNow(created),
   });
@@ -276,6 +281,7 @@ test("stale created is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created + DEFAULT_MAX_SIGNATURE_AGE_SECONDS + 5),
   });
@@ -302,6 +308,7 @@ test("created in the future is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created - 600),
   });
@@ -329,6 +336,7 @@ test("expired signature is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     maxAgeSeconds: Infinity,
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created + 200),
@@ -359,6 +367,7 @@ test("missing created is rejected by default", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
   });
   assert.equal(result.valid, false);
@@ -385,6 +394,7 @@ test("replay nonce is rejected when isReplay reports a hit", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
     isReplay: (nonce) => nonce === "abc123",
     now: fixedNow(created),
@@ -412,6 +422,7 @@ test("isReplay requires a nonce", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
     isReplay: () => false,
     now: fixedNow(created),
@@ -441,6 +452,7 @@ test("algorithm not in allowlist is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["ed25519"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created),
   });
@@ -467,6 +479,7 @@ test("pinned key alg mismatching declared alg is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256", "ed25519"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => ({ alg: "ed25519", key: HMAC_SECRET }),
     now: fixedNow(created),
   });
@@ -477,6 +490,8 @@ test("pinned key alg mismatching declared alg is rejected", async () => {
 test("empty algorithms allowlist throws", async () => {
   await assert.rejects(
     verifyMessage({
+    requiredComponents: ["@method", "@path"],
+
       method: "GET",
       url: "https://api.example.com/x",
       headers: {},
@@ -536,6 +551,7 @@ test("unknown key (resolveKey undefined) is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => undefined,
     now: fixedNow(created),
   });
@@ -549,6 +565,7 @@ test("missing Signature / Signature-Input headers are rejected", async () => {
     url: "https://api.example.com/x",
     headers: {},
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
   });
   assert.equal(r1.valid, false);
@@ -559,6 +576,7 @@ test("missing Signature / Signature-Input headers are rejected", async () => {
     url: "https://api.example.com/x",
     headers: { "signature-input": 'sig1=("@method");created=1' },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
   });
   assert.equal(r2.valid, false);
@@ -574,6 +592,7 @@ test("malformed Signature-Input is rejected", async () => {
       signature: "sig1=:AAAA:",
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
   });
   assert.equal(result.valid, false);
@@ -619,6 +638,7 @@ test("ambiguous label without explicit selection is rejected", async () => {
       signature: "a=:AAAA:, b=:BBBB:",
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
   });
   assert.equal(result.valid, false);
@@ -645,6 +665,7 @@ test("required tag mismatch is rejected", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     requiredTag: "payments",
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created),
@@ -715,10 +736,10 @@ function makeApp(opts: Parameters<typeof httpSignatureAuth>[0]): App {
 test("httpSignatureAuth accepts a valid signature and stamps state", async () => {
   const created = Math.floor(Date.now() / 1000);
   const url = "http://localhost/secure";
+  // Default sign covers @method + @target-uri; default verify requires the same.
   const sig = await signMessage({
     method: "GET",
     url,
-    components: ["@method", "@path"],
     alg: "hmac-sha256",
     key: HMAC_SECRET,
     keyid: "svc-a",
@@ -865,6 +886,7 @@ test("rsa-pss-sha512 sign + verify roundtrip", async () => {
       signature: sig.signature,
     },
     algorithms: ["rsa-pss-sha512"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => pair.publicKey,
     now: fixedNow(created),
   });
@@ -900,6 +922,7 @@ test("rsa-v1_5-sha256 sign + verify roundtrip", async () => {
       signature: sig.signature,
     },
     algorithms: ["rsa-v1_5-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => pair.publicKey,
     now: fixedNow(created),
   });
@@ -975,6 +998,7 @@ test("verifyMessage refuses an undersized (1024-bit) RSA verify key", async () =
       signature: sig.signature,
     },
     algorithms: ["rsa-v1_5-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => weak.publicKey,
     now: fixedNow(created),
   });
@@ -1006,6 +1030,7 @@ test("ecdsa-p384-sha384 sign + verify roundtrip", async () => {
       signature: sig.signature,
     },
     algorithms: ["ecdsa-p384-sha384"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => pair.publicKey,
     now: fixedNow(created),
   });
@@ -1033,6 +1058,7 @@ test("ed25519 JWK key material round-trips", async () => {
       signature: sig.signature,
     },
     algorithms: ["ed25519"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => ({ alg: "ed25519", key: pubJwk }),
     now: fixedNow(created),
   });
@@ -1220,6 +1246,7 @@ test("includeAlg: false omits alg; verify uses the pinned key alg", async () => 
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created),
   });
@@ -1234,6 +1261,7 @@ test("includeAlg: false omits alg; verify uses the pinned key alg", async () => 
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => ({ alg: "hmac-sha256", key: HMAC_SECRET }),
     now: fixedNow(created),
   });
@@ -1261,6 +1289,7 @@ test("explicit label selection picks the right signature", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     label: "proxy",
     resolveKey: () => HMAC_SECRET,
     now: fixedNow(created),
@@ -1275,6 +1304,7 @@ test("oversized signature headers are rejected", async () => {
     url: "https://api.example.com/x",
     headers: { "signature-input": big, signature: "sig1=:AA:" },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     resolveKey: () => HMAC_SECRET,
   });
   assert.equal(result.valid, false);
@@ -1300,6 +1330,7 @@ test("invalid key material for verify is reported as invalid_key", async () => {
       signature: sig.signature,
     },
     algorithms: ["hmac-sha256"],
+    requiredComponents: ["@method", "@path"],
     // Too-short HMAC secret → importKey throws → invalid_key.
     resolveKey: () => new Uint8Array(8),
     now: fixedNow(created),
@@ -1320,4 +1351,78 @@ test("verifyContentDigest accepts a multi-member header", async () => {
   const d256 = await contentDigest(body, { algorithm: "sha-256" });
   const d512 = await contentDigest(body, { algorithm: "sha-512" });
   assert.equal(await verifyContentDigest(`${d256}, ${d512}`, body), true);
+});
+
+// ---------- secure-default alignment (DeepSec audit) ----------
+
+test("default signMessage + verifyMessage round-trip (both use @method + @target-uri)", async () => {
+  const created = 1_700_100_000;
+  const url = "https://api.example.com/pay?amount=50&tenant=acme";
+  const sig = await signMessage({
+    method: "POST",
+    url,
+    alg: "hmac-sha256",
+    key: HMAC_SECRET,
+    keyid: "svc-default",
+    created,
+    now: fixedNow(created),
+  });
+  assert.match(sig.signatureBase, /"@target-uri": /);
+  const result = await verifyMessage({
+    method: "POST",
+    url,
+    headers: {
+      "signature-input": sig.signatureInput,
+      signature: sig.signature,
+    },
+    algorithms: ["hmac-sha256"],
+    resolveKey: () => HMAC_SECRET,
+    now: fixedNow(created + 1),
+  });
+  assert.equal(result.valid, true);
+});
+
+test("default verify rejects a signature that only covers @path (query unbound)", async () => {
+  const created = 1_700_100_100;
+  const sig = await signMessage({
+    method: "GET",
+    url: "https://api.example.com/items?id=1",
+    components: ["@method", "@path"],
+    alg: "hmac-sha256",
+    key: HMAC_SECRET,
+    created,
+    now: fixedNow(created),
+  });
+  // Same path, different query — path-only signature would still "look" valid
+  // under the old default; the new default requires @target-uri.
+  const result = await verifyMessage({
+    method: "GET",
+    url: "https://api.example.com/items?id=999",
+    headers: {
+      "signature-input": sig.signatureInput,
+      signature: sig.signature,
+    },
+    algorithms: ["hmac-sha256"],
+    resolveKey: () => HMAC_SECRET,
+    now: fixedNow(created + 1),
+  });
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.equal(result.reason, "missing_required_component");
+});
+
+test("@query-param rejects duplicate parameter values (parameter pollution)", async () => {
+  const created = 1_700_100_200;
+  await assert.rejects(
+    () =>
+      signMessage({
+        method: "GET",
+        url: "https://api.example.com/search?q=safe&q=evil",
+        components: ['@query-param;name="q"'],
+        alg: "hmac-sha256",
+        key: HMAC_SECRET,
+        created,
+        now: fixedNow(created),
+      }),
+    /appears 2 times|duplicate query parameters/i,
+  );
 });

@@ -42,6 +42,15 @@ export interface CompressionOptions {
    */
   minimumSize?: number;
   /**
+   * Maximum response body size (in bytes) the middleware will buffer for
+   * compression. Larger (or unknown-and-growing) bodies are left uncompressed
+   * so a large GET cannot force unbounded heap growth. Default: `1_048_576`
+   * (1 MiB). Must be a positive integer.
+   *
+   * @since 1.0.0
+   */
+  maxCompressibleBytes?: number;
+  /**
    * Allowed encodings, in caller-preferred order. Defaults to
    * `["br", "gzip", "deflate"]` — the middleware will pick the
    * highest-quality encoding the client supports AND the runtime supports
@@ -283,6 +292,51 @@ function normalizeOptionTokens(
   return Object.freeze(normalized);
 }
 
+/**
+ * Read a response body up to `maxBytes`. Returns `null` if the stream
+ * exceeds the cap (body is cancelled; caller should leave the response
+ * uncompressed). Returns an empty buffer when there is no body.
+ *
+ * @param res - Response whose body will be consumed (pass a clone).
+ * @param maxBytes - Inclusive upper bound on buffered size.
+ */
+async function readBodyUpTo(res: Response, maxBytes: number): Promise<Uint8Array | null> {
+  if (!res.body) return new Uint8Array(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    try {
+      await reader.cancel();
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+  if (chunks.length === 0) return new Uint8Array(0);
+  if (chunks.length === 1) return chunks[0]!;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
 async function compressBytes(
   bytes: Uint8Array,
   encoding: CompressionEncoding
@@ -377,6 +431,23 @@ export function compression(opts: CompressionOptions = {}): Hooks {
   ) {
     throw new TypeError("compression(): `minimumSize` must be a finite non-negative integer.");
   }
+  const maxCompressibleBytes =
+    opts.maxCompressibleBytes === undefined ? 1_048_576 : opts.maxCompressibleBytes;
+  if (
+    !Number.isFinite(maxCompressibleBytes) ||
+    !Number.isInteger(maxCompressibleBytes) ||
+    maxCompressibleBytes <= 0 ||
+    maxCompressibleBytes > 2 ** 31 - 1
+  ) {
+    throw new TypeError(
+      "compression(): `maxCompressibleBytes` must be a positive integer <= 2**31-1.",
+    );
+  }
+  if (minimumSize > maxCompressibleBytes) {
+    throw new TypeError(
+      "compression(): `minimumSize` must not exceed `maxCompressibleBytes`.",
+    );
+  }
   const serverPreferred: readonly CompressionEncoding[] =
     opts.encodings && opts.encodings.length > 0
       ? Object.freeze([...opts.encodings])
@@ -416,7 +487,16 @@ export function compression(opts: CompressionOptions = {}): Hooks {
       const chosen = pickEncoding(accept, serverPreferred, runtimeSupported);
       if (!chosen) return undefined;
 
-      const original = new Uint8Array(await res.clone().arrayBuffer());
+      // Fast-path skip when Content-Length already exceeds the compress cap
+      // (avoids buffering a known-huge body just to discard it).
+      const declaredLength = res.headers.get("content-length");
+      if (declaredLength !== null) {
+        const n = Number(declaredLength);
+        if (Number.isFinite(n) && n > maxCompressibleBytes) return undefined;
+      }
+
+      const original = await readBodyUpTo(res.clone(), maxCompressibleBytes);
+      if (original === null) return undefined; // exceeded cap while streaming
       if (original.byteLength < minimumSize) return undefined;
       const compressed = await compressBytes(original, chosen);
       if (compressed.byteLength >= original.byteLength) {

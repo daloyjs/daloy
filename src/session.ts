@@ -53,7 +53,13 @@ export const SESSION_SECRETS_MARKER: unique symbol = Symbol.for("daloyjs.session
 
 /** A persisted session entry as stored by a {@link SessionStore}. */
 export interface SessionRecord {
-  /** Arbitrary serializable session payload. Mutating this object marks the session dirty. */
+  /**
+   * Arbitrary JSON-serializable session payload. Mutating this object (including
+   * nested properties and array elements via the proxy on
+   * `ctx.state.session.data`) marks the session dirty so it is persisted on
+   * the response. Prefer plain objects/arrays/primitives; non-cloneable
+   * values (functions, DOM nodes) are not supported.
+   */
   data: Record<string, unknown>;
   /** Absolute expiration as ms since epoch. */
   expiresAt: number;
@@ -129,7 +135,12 @@ export interface SessionOptions {
 export type SessionContext = {
   /** Current session id. Refreshed by `regenerate()`. */
   readonly id: string;
-  /** Session payload. Mutating this object marks the session dirty. */
+  /**
+   * Session payload. Top-level and nested mutations (including array element
+   * writes) mark the session dirty so {@link SessionStore.set} runs on the
+   * response. Prefer `set`/`delete` for top-level keys when you do not need
+   * nested objects.
+   */
   readonly data: Record<string, unknown>;
   /** Read a single payload key. */
   get<T = unknown>(key: string): T | undefined;
@@ -171,6 +182,12 @@ interface SessionInternal {
   regenerated: boolean;
   /** Whether the active session was newly created this request. */
   created: boolean;
+  /**
+   * The raw (un-proxied) session data object wrapped by the dirty-tracking
+   * proxy. `structuredClone` rejects a Proxy, so the persist path clones this
+   * plain object rather than `ctx.state.session.data`.
+   */
+  rawData: Record<string, unknown>;
 }
 
 interface Signer {
@@ -260,25 +277,112 @@ function markDirty(internal: SessionInternal): void {
   internal.dirty = true;
 }
 
+/**
+ * Deep-clone a session payload so store load/store never shares nested object
+ * references with the live request-scoped data.
+ *
+ * Prefers {@link structuredClone} (available on every supported runtime:
+ * Node >= 17, Deno, Bun, Workers, Vercel edge). Unlike a JSON round-trip it
+ * preserves `Date`, `Map`, `Set`, typed arrays, `BigInt`, and `undefined`
+ * property values, and it handles cyclic graphs — so a session that legitimately
+ * holds those values is neither silently corrupted (JSON stringifies a `Date`
+ * to a string and drops `undefined`) nor rejected (JSON throws on `BigInt` or a
+ * cycle). Falls back to the JSON round-trip only for the rare value
+ * `structuredClone` cannot copy (e.g. a function), which is unsupported in a
+ * session payload anyway.
+ *
+ * @param value - Session data tree (a plain object).
+ * @returns An independent deep copy.
+ */
+function cloneSessionData(value: Record<string, unknown>): Record<string, unknown> {
+  if (typeof structuredClone === "function") {
+    try {
+      return structuredClone(value) as Record<string, unknown>;
+    } catch {
+      // structuredClone throws on non-cloneable values (functions, symbols);
+      // fall through to the JSON round-trip for best-effort compatibility.
+    }
+  }
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+/**
+ * Whether a value should be wrapped by the deep dirty-tracking proxy: only
+ * plain objects and arrays. Exotic objects (`Date`, `Map`, `Set`, `RegExp`,
+ * typed arrays, class instances) are returned unwrapped so methods that rely
+ * on an internal slot as `this` (e.g. `Date.prototype.getTime`) keep working —
+ * a proxy would break them. Reassigning such a value on its parent is still
+ * dirty-tracked; only in-place internal mutation of the exotic value is not.
+ *
+ * @param value - Candidate nested value.
+ * @returns `true` for plain objects / arrays.
+ */
+function isProxyableContainer(value: unknown): value is Record<string, unknown> | unknown[] {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return true;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Recursive proxy that marks the session dirty on any nested set/delete,
+ * including array element assignment. Nested plain objects and arrays returned
+ * from `get` are re-wrapped so mutations deep in the tree are observed.
+ *
+ * Proxies are memoized per underlying target in `cache` (a {@link WeakMap}), so
+ * reading the same nested object twice yields the *same* proxy and object
+ * identity is preserved (`data.user === data.user`). The cache is scoped to a
+ * single session context (one request), so it never leaks across requests and
+ * its keys are collected with their targets.
+ *
+ * @param target - Underlying plain object/array held by the session.
+ * @param onDirty - Invoked on every successful mutation.
+ * @param cache - Per-context target→proxy memo table.
+ * @returns A proxy with the same surface as `target`.
+ */
+function createDeepDirtyProxy<T extends object>(
+  target: T,
+  onDirty: () => void,
+  cache: WeakMap<object, object>
+): T {
+  const existing = cache.get(target);
+  if (existing) return existing as T;
+  const proxy = new Proxy(target, {
+    get(t, prop, receiver) {
+      const value = Reflect.get(t, prop, receiver);
+      if (isProxyableContainer(value)) {
+        return createDeepDirtyProxy(value, onDirty, cache);
+      }
+      return value;
+    },
+    set(t, prop, value, receiver) {
+      const ok = Reflect.set(t, prop, value, receiver);
+      if (ok) onDirty();
+      return ok;
+    },
+    deleteProperty(t, prop) {
+      const had = Reflect.has(t, prop);
+      const ok = Reflect.deleteProperty(t, prop);
+      if (ok && had) onDirty();
+      return ok;
+    },
+  }) as T;
+  cache.set(target, proxy);
+  return proxy;
+}
+
 function makeSessionContext(
   id: string,
   data: Record<string, unknown>,
   internal: SessionInternal,
   regenerate: (keepData: boolean) => Promise<string>
 ): SessionContext {
-  const proxy = new Proxy(data, {
-    set(target, key, value) {
-      target[key as string] = value;
-      markDirty(internal);
-      return true;
-    },
-    deleteProperty(target, key) {
-      const had = key in target;
-      delete target[key as string];
-      if (had) markDirty(internal);
-      return true;
-    },
-  });
+  const onDirty = (): void => {
+    markDirty(internal);
+  };
+  // Per-request memo table so nested reads return a stable proxy identity.
+  const proxyCache = new WeakMap<object, object>();
+  const proxy = createDeepDirtyProxy(data, onDirty, proxyCache);
   let currentId = id;
   return {
     get id() {
@@ -441,6 +545,7 @@ export function session(opts: SessionOptions): Hooks {
         destroyed: false,
         regenerated: false,
         created: false,
+        rawData: {},
       };
 
       const raw = readRequestCookie(ctx.request.headers.get("cookie"), cookieName);
@@ -459,7 +564,9 @@ export function session(opts: SessionOptions): Hooks {
               const rec = await store.get(candidateId);
               if (rec && rec.expiresAt > Date.now()) {
                 id = candidateId;
-                data = rec.data ? { ...rec.data } : {};
+                // Deep-clone so nested mutations cannot mutate the store's
+                // retained object graph without going through dirty tracking.
+                data = rec.data ? cloneSessionData(rec.data) : {};
               }
               break;
             }
@@ -497,6 +604,9 @@ export function session(opts: SessionOptions): Hooks {
         return next;
       };
 
+      // Retain the raw object so onSend can deep-clone it directly.
+      // `regenerate` mutates this same reference, so it stays authoritative.
+      internal.rawData = data;
       const sessionCtx = makeSessionContext(id, data, internal, regenerate);
       const state = ctx.state as Record<string, unknown>;
       state[STATE_KEY] = sessionCtx;
@@ -520,8 +630,9 @@ export function session(opts: SessionOptions): Hooks {
         return undefined;
       }
 
-      const sessionCtx = state[STATE_KEY] as SessionContext;
-      const data = sessionCtx.data;
+      // Clone the raw (un-proxied) data: structuredClone rejects a Proxy, and
+      // the proxy writes through to this object so it holds every mutation.
+      const data = internal.rawData;
       const sid = internal.activeId!;
       const expiresAt = Date.now() + internal.ttlMs;
 
@@ -532,10 +643,12 @@ export function session(opts: SessionOptions): Hooks {
       const mustPersist = internal.dirty || internal.created || internal.regenerated;
 
       if (mustPersist) {
-        await store.set(sid, { data: { ...data }, expiresAt });
+        // Deep-clone so nested mutations persist as an independent tree and
+        // never share references with the store.
+        await store.set(sid, { data: cloneSessionData(data), expiresAt });
       } else if (internal.rolling) {
         if (store.touch) await store.touch(sid, expiresAt);
-        else await store.set(sid, { data: { ...data }, expiresAt });
+        else await store.set(sid, { data: cloneSessionData(data), expiresAt });
       }
 
       if (internal.regenerated && internal.originalId && internal.originalId !== sid) {
