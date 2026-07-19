@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
@@ -35,6 +36,13 @@ export default function Page() {
         and <em>&quot;did this change break my published API?&quot;</em> The
         first is solved with a route-level deprecation lifecycle; the second
         with an OpenAPI diff you can run in CI.
+      </p>
+      <p>
+        If you are deciding how to run <code>/api/v1</code> and{" "}
+        <code>/api/v2</code> side by side before retiring the older contract,
+        start with the{" "}
+        <Link href={"/docs/api-versioning" as Route}>API versioning guide</Link>
+        .
       </p>
 
       <FlowDiagram

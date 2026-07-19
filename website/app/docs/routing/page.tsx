@@ -1,3 +1,6 @@
+import type { Route } from "next";
+import Link from "next/link";
+
 import { CodeBlock } from "../../../components/code-block";
 import { FlowDiagram } from "../../../components/diagram";
 
@@ -262,7 +265,11 @@ export const app = new App().registerRoutes([
         Groups merge prefixes, tags, hooks, and auth defaults into the routes
         registered inside the callback. The child app is encapsulated:
         middleware added inside a group does not leak to routes outside that
-        group. Grouped routes are visible to runtime routing and OpenAPI.
+        group. Grouped routes are visible to runtime routing and OpenAPI. For
+        parallel <code>/api/v1</code> and <code>/api/v2</code> contracts,
+        migration policy, and separately generated SDKs, read the{" "}
+        <Link href={"/docs/api-versioning" as Route}>API versioning guide</Link>
+        .
       </p>
 
       <h2 id="route-options">Route options</h2>

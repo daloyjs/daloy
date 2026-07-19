@@ -59,6 +59,7 @@ export const docsNav: DocsNavSection[] = [
     title: "OpenAPI & typed clients",
     items: [
       { title: "OpenAPI generation", href: "/docs/openapi" },
+      { title: "API versioning", href: "/docs/api-versioning" as Route },
       { title: "Typed clients (Hey API)", href: "/docs/typed-client" },
       {
         title: "API lifecycle & breaking changes",
