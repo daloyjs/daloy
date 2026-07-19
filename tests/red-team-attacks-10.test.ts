@@ -7,10 +7,9 @@
  *
  *   Campaign A — WAF EVASION & THE CONTRACT BACKSTOP
  *     Multi-encoding / obfuscation attacks against the signature WAF. Proves
- *     what the conservative high-confidence signatures catch, documents the
- *     evasions they cannot (double-encoding, comment-split keywords), and
- *     shows the typed schema contract is the wall the attacker cannot encode
- *     their way around.
+ *     bounded multi-decode + comment-strip catch classic double-encoding and
+ *     SQL block-comment keyword splits, and shows the typed schema contract is
+ *     still the wall for residual / novel evasions signatures cannot cover.
  *
  *   Campaign B — JWT ALGORITHM MATRIX
  *     A full sweep of forged-header attacks against the JWT verifier:
@@ -86,17 +85,15 @@ test("[waf-evasion/baseline] classic + mixed-case + comment-spanning injection s
   assert.equal((await app.request("/search?q=hello%20world")).status, 200);
 });
 
-test("[waf-evasion/limitation] double-encoding and comment-split keywords slip the conservative signatures (documented)", async () => {
+test("[waf-evasion] double-encoding and comment-split keywords are blocked by multi-decode + comment strip", async () => {
   const app = wafApp();
-  // The WAF decodes ONCE. A doubly-encoded payload survives that single pass
-  // still-encoded, so no signature matches — the documented limitation.
-  const doubleEncoded = "%2527%2520OR%25201%253D1"; // decodes once to "%27%20OR%201%3D1"
-  // `OR` glued to a comment defeats the `\bOR\b\s+` whitespace anchor.
+  // Bounded multi-decode (max 2) turns %2527… into ' OR 1=1. Comment stripping
+  // turns 1/**/OR/**/1=1 into 1 OR 1=1. Both must score and block.
+  const doubleEncoded = "%2527%2520OR%25201%253D1";
   const commentSplit = "1/**/OR/**/1=1";
   for (const q of [doubleEncoded, commentSplit]) {
     const res = await app.request(`/search?q=${q}`);
-    assert.notEqual(res.status, 403, `signature WAF does not catch this evasion (by design): ${q}`);
-    assert.equal(res.status, 200, "it reaches the free-text handler — a string field accepts any string");
+    assert.equal(res.status, 403, `payload should be blocked: ${q}`);
   }
 });
 

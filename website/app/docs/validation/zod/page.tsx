@@ -99,6 +99,22 @@ export default function Page() {
         </li>
       </ul>
 
+      <h2 id="bound-numeric-fields">Bound numeric fields (money and qty)</h2>
+      <p>
+        Prefer domain-bounded numbers over bare <code>z.number()</code>. Money
+        and quantities need a finite range so refund-fraud amounts,{" "}
+        <code>1e308</code> overflows, and negative balances die at the schema
+        boundary instead of in the ledger:
+      </p>
+      <CodeBlock
+        code={`const Money = z.number().finite().positive().max(1_000_000);
+const Qty = z.coerce.number().int().positive().max(10_000);
+
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR"]) })
+  .strict();`}
+      />
+
       <h2 id="a-complete-route">A complete route</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
@@ -106,7 +122,7 @@ import { z } from "zod";
 
 const CreateOrder = z.object({
   sku: z.string().min(1),
-  qty: z.coerce.number().int().positive(),
+  qty: z.coerce.number().int().positive().max(10_000),
 });
 
 const Order = z.object({

@@ -91,16 +91,16 @@ async function wafEvasion() {
   for (const [kind, raw] of payloads) {
     const r = await http("GET", `/search?q=${encodeURIComponent(raw)}`);
     const blocked = r.status === 403;
-    // The framework's WAF is intentionally conservative; these evasions are a
-    // documented limitation. The typed contract (Zod schema) is the backstop.
-    const knownLimitation = ["double-encoded SQLi", "SQLi with block comment", "XSS encoded"].includes(kind);
+    // Double-encoding, SQL comment splits, and re-encoded XSS are now covered
+    // by bounded multi-decode + comment-strip inspection variants. Anything
+    // that still returns 200 is a residual signature gap (schema backstop).
     record({
       category: cat,
       title: `${kind} bypass attempt`,
       severity: "high",
       attack: `GET /search?q=${raw.slice(0, 80)}`,
-      observed: `status ${r.status}${blocked ? "" : " — WAF did not block; schema backstop rejected as 422/200 echo"}`,
-      verdict: blocked ? "DEFENDED" : knownLimitation ? "INFO" : "LIKELY-VULNERABLE",
+      observed: `status ${r.status}${blocked ? "" : " — WAF did not block; schema backstop still applies"}`,
+      verdict: blocked ? "DEFENDED" : "LIKELY-VULNERABLE",
     });
   }
 
@@ -168,16 +168,16 @@ async function ssrfBypass() {
     }
   }
 
-  // DNS-rebinding TOCTOU: the docs admit the residual window. We can't easily
-  // demonstrate real rebinding without controlling a DNS server, but we can
-  // confirm pinDns is NOT enabled (the target uses default fetchGuard()).
+  // DNS-rebinding: pinDns now defaults to true on Node when fetchGuard() is
+  // called with no custom fetch (as target.ts does). https: still has the
+  // residual TOCTOU window; operator egress remains recommended.
   record({
     category: cat,
-    title: "fetchGuard pinDns not enabled (DNS-rebinding residual caveat)",
-    severity: "high",
-    attack: "Inspect target.ts source for fetchGuard() options",
-    observed: "fetchGuard() is called with defaults; pinDns is false (documented TOCTOU caveat)",
-    verdict: "INFO",
+    title: "fetchGuard pinDns defaults on (Node http: rebinding closed)",
+    severity: "info",
+    attack: "Inspect target.ts: fetchGuard() with no options on Node",
+    observed: "fetchGuard() uses defaults; pinDns auto-enables on Node for http: (https: residual remains)",
+    verdict: "DEFENDED",
   });
 }
 

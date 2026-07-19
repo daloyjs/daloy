@@ -54,13 +54,14 @@
  * a `127.0.0.1` / `169.254.169.254` at connect time, slipping past the
  * library-level check. To close the window:
  *
- *  0. **Built-in, `http:` only** (recommended for cloud-metadata defense):
- *     set {@link FetchGuardOptions.pinDns} `: true`. On Node, `http:`
- *     requests are then dispatched through `node:http` with the socket
- *     pinned to the validated IP (and the original `Host` header
- *     preserved), so there is no connect-time re-resolution to rebind.
- *     `https:` is not pinned by this knob — see its docs — so the items
- *     below still matter for TLS upstreams.
+ *  0. **Built-in, `http:` only** (default on Node):
+ *     {@link FetchGuardOptions.pinDns} defaults to `true` on Node-like
+ *     runtimes (and `false` elsewhere). On Node, `http:` requests are
+ *     then dispatched through `node:http` with the socket pinned to the
+ *     validated IP (and the original `Host` header preserved), so there
+ *     is no connect-time re-resolution to rebind. Set `pinDns: false` to
+ *     opt out. `https:` is not pinned by this knob — see its docs — so
+ *     the items below still matter for TLS upstreams.
  *  1. **Operator-side** (recommended): block egress to RFC1918 /
  *     loopback / link-local at the VPC / firewall layer. This neutralises
  *     the rebinding even if the application is naïve.
@@ -208,14 +209,20 @@ export interface FetchGuardOptions {
    * by connecting the socket to the exact IP that was validated, instead of
    * letting the underlying client re-resolve the hostname at connect time.
    *
-   * When `true` (default `false`), a request to a hostname that resolves to a
-   * validated address is dispatched through Node's built-in `node:http` with
-   * the connection pinned to that address and the original `Host` header
-   * preserved — so virtual-host routing still works while an attacker's
-   * TTL=0 rebinding to `127.0.0.1` / `169.254.169.254` can no longer take
-   * effect between validation and connect.
+   * When `true`, a request to a hostname that resolves to a validated address
+   * is dispatched through Node's built-in `node:http` with the connection
+   * pinned to that address and the original `Host` header preserved — so
+   * virtual-host routing still works while an attacker's TTL=0 rebinding to
+   * `127.0.0.1` / `169.254.169.254` can no longer take effect between
+   * validation and connect.
    *
-   * **Scope and caveats** (read before enabling):
+   * **Default:** `true` on Node-like runtimes (`process.versions.node` is a
+   * non-empty string), `false` elsewhere (Workers / edge sandboxes without
+   * `node:http`). Pass `pinDns: false` to opt out on Node, or `pinDns: true`
+   * on a non-Node runtime only if you can tolerate the loud error when the
+   * pin path cannot load `node:http`.
+   *
+   * **Scope and caveats** (read before changing the default):
    *
    * - **`http:` only.** `https:` is intentionally NOT pinned here: pinning a
    *   TLS connection to an IP while keeping hostname-based SNI / certificate
@@ -224,20 +231,38 @@ export interface FetchGuardOptions {
    *   the documented TOCTOU caveat. The prime rebinding target — cloud
    *   metadata at `http://169.254.169.254` — is `http:`, so this still closes
    *   the highest-value vector.
-   * - **Node only.** It uses `node:http`; on runtimes without it (Workers,
-   *   some edge sandboxes) an `http:` pinned dispatch throws a clear error so
-   *   the misconfiguration is loud rather than a silent no-op.
+   * - **Node only for the pin path.** It uses `node:http`; when `pinDns` is
+   *   explicitly `true` on a runtime without it, an `http:` pinned dispatch
+   *   throws a clear error so the misconfiguration is loud rather than a
+   *   silent no-op.
    * - **Bypasses `options.fetch`** for the pinned `http:` path (it must own the
    *   socket), and negotiates no response compression (`Accept-Encoding:
    *   identity`) so body semantics match a plain `fetch`.
    *
    * Requests to a literal-IP host or an `allowHosts` entry are never pinned
    * (the former already connects to an exact IP; the latter is an explicit
-   * operator trust). Default `false`.
+   * operator trust).
    *
    * @since 0.44.0
    */
   pinDns?: boolean;
+}
+
+/**
+ * Whether this runtime looks like Node (or a Node-compatible host such as Bun)
+ * where `node:http` DNS pinning is available.
+ *
+ * Used as the default for {@link FetchGuardOptions.pinDns} so Node apps get
+ * rebinding defense without an opt-in, while Workers / pure edge runtimes keep
+ * the non-pinning path.
+ */
+function defaultPinDnsEnabled(): boolean {
+  return (
+    typeof process !== "undefined" &&
+    process.versions != null &&
+    typeof process.versions.node === "string" &&
+    process.versions.node.length > 0
+  );
 }
 
 // Always-on deny matchers. No option flips these.
@@ -317,7 +342,12 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     throw new Error("fetchGuard(): no global fetch available; pass options.fetch.");
   }
   const resolveFn = options.resolve ?? createDefaultResolver();
-  const pinDns = options.pinDns === true;
+  // Secure default on Node when using the built-in fetch: pin http: sockets
+  // to the validated IP. A custom `options.fetch` owns its own socket / DNS
+  // policy, so pinDns stays off unless the caller opts in. Non-Node runtimes
+  // default off (no node:http). Opt out on Node with `pinDns: false`.
+  const pinDns =
+    options.pinDns ?? (options.fetch === undefined && defaultPinDnsEnabled());
 
   for (const c of ALWAYS_DENY) hardDenyMatchers.push(compileCidrMatcher(c));
   for (const c of options.denyAddresses ?? []) hardDenyMatchers.push(compileCidrMatcher(c));

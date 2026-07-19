@@ -623,9 +623,18 @@ export class TooManyRequestsError extends HttpError {
 
 /**
  * `408 Request Timeout` — thrown when a handler exceeds
- * {@link AppOptions.requestTimeoutMs}. The framework aborts the in-flight
- * handler when this fires (handlers should respect the `AbortSignal` on
- * `ctx.request.signal` to clean up).
+ * {@link AppOptions.requestTimeoutMs}.
+ *
+ * When the timeout fires the framework aborts `ctx.request.signal` (with a
+ * `TimeoutError` reason) so a handler that forwarded that signal to downstream
+ * I/O — `fetch`, a DB driver — sees those calls reject and can unwind. It does
+ * **not** forcibly terminate the handler: single-threaded JS cannot preempt
+ * running code, so CPU-bound or non-cooperative work continues in the
+ * background until it observes the aborted signal or finishes. Forward
+ * `ctx.request.signal` into every cancellable downstream call to get the
+ * benefit. (Signal firing is wired on the Node adapter and any runtime whose
+ * request shim honors the abort hook; direct `app.fetch()` callers still get
+ * the `408` but no signal abort.)
  *
  * @param ms - The configured timeout that was exceeded.
  * @since 0.1.0

@@ -422,7 +422,38 @@ test("fetchGuard: numeric-host normalization is not over-broad — a real public
 // resolver, so the hostnames below intentionally do NOT exist in real DNS —
 // a successful response therefore proves the socket connected to the validated
 // IP (127.0.0.1) rather than re-resolving the hostname at connect time.
+//
+// Default on Node (when options.fetch is omitted) is pinDns: true.
 // ---------------------------------------------------------------------------
+
+test("fetchGuard() defaults pinDns to true on Node when no custom fetch is supplied", async () => {
+  const { server, port } = await startEchoServer();
+  try {
+    // No pinDns option and no custom fetch — Node default must pin.
+    const guard = fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const res = await guard(`http://pin-default-test.invalid:${port}/`);
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { host: string };
+    assert.equal(body.host, `pin-default-test.invalid:${port}`);
+  } finally {
+    server.close();
+  }
+});
+
+test("fetchGuard({ fetch }) does not auto-enable pinDns (custom fetch owns the socket)", async () => {
+  const calls: string[] = [];
+  const guard = fetchGuard({
+    resolve: async () => ["93.184.216.34"],
+    fetch: (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      calls.push(url);
+      return new Response("ok");
+    }) as typeof fetch,
+  });
+  await guard("http://example.com/");
+  assert.equal(calls.length, 1, "custom fetch is used when pinDns is not forced on");
+  assert.match(calls[0]!, /example\.com/);
+});
 
 async function startEchoServer() {
   const received: Array<{ host?: string; method?: string; url?: string; body: string }> = [];

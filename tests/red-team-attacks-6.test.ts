@@ -153,8 +153,8 @@ test("[multipart/dos] AppOptions.multipart.maxFileBytes rejects an oversized upl
 });
 
 // ===========================================================================
-// 4. WAF — single-encoded payloads are caught; double-encoding is a documented
-//    signature-WAF limitation (defense-in-depth, not the primary control).
+// 4. WAF — single- and double-encoded payloads are caught via bounded
+//    multi-decode inspection variants (max 2 percent-decode passes).
 // ===========================================================================
 
 function wafApp() {
@@ -172,16 +172,18 @@ function wafApp() {
 
 test("[waf] single-percent-encoded SQLi/XSS in the query is decoded and blocked (403)", async () => {
   const app = wafApp();
-  // encodeURIComponent yields single-encoding; the WAF decodes once and matches.
+  // encodeURIComponent yields single-encoding; the WAF decodes and matches.
   assert.equal((await app.request(`/q?x=${encodeURIComponent("' OR 1=1")}`)).status, 403);
   assert.equal((await app.request(`/q?x=${encodeURIComponent("<script>alert(1)</script>")}`)).status, 403);
 });
 
-test("[waf] DOCUMENTED LIMITATION: a double-encoded payload is not decoded twice", async () => {
+test("[waf] double-encoded SQLi/XSS payloads are blocked after the second decode pass", async () => {
   const app = wafApp();
-  // %253Cscript%253E decodes ONCE to %3Cscript%3E — not a literal <script>.
-  // A signature WAF intentionally does not recursively decode (false-positive
-  // risk); this is defense-in-depth, so the app must never double-decode input.
-  const res = await app.request("/q?x=%253Cscript%253E%2553alert%2528%2529");
-  assert.equal(res.status, 200, "double-encoded payloads pass the WAF — rely on schemas/escaping, not the WAF alone");
+  // %2527 → %27 → '  (two percent-decode passes). Triple-encoded remains a
+  // residual signature-WAF gap; schemas stay the primary contract wall.
+  assert.equal((await app.request("/q?x=%2527%2520OR%25201%253D1")).status, 403);
+  assert.equal(
+    (await app.request("/q?x=%253Cscript%253Ealert%25281%2529%253C%252Fscript%253E")).status,
+    403,
+  );
 });

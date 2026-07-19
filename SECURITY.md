@@ -322,7 +322,7 @@ The in-scope classes above are not merely asserted by unit tests — they are co
 | 9    | Doyensec live-service pass — framework fingerprinting, account enumeration, id entropy, session puzzling, XXE impossibility, log injection, clickjacking/HSTS, Host-header injection, CORS preflight disclosure | [`red-team-attacks-9.test.ts`](tests/red-team-attacks-9.test.ts)   |
 | 10   | Deep-dive campaigns — WAF multi-encoding evasion + the typed-contract backstop, JWT algorithm matrix, constant-time comparison timing analysis                                                                  | [`red-team-attacks-10.test.ts`](tests/red-team-attacks-10.test.ts) |
 
-Waves 9–10 also record the framework's honest limitations rather than papering over them: the conservative signature WAF is evadable by double-encoding and comment-split keywords (the typed schema contract is the real backstop — see § Out of scope, "Insecure handler code"), and the XXE / SOAP / WSDL family is **structurally inapplicable** because the framework speaks JSON only and rejects every non-JSON content type with `415`, leaving no XML parser to attack.
+Waves 9–10 also record the framework's honest limitations rather than papering over them: the signature WAF uses bounded multi-decode (max two percent-decode passes) plus SQL block-comment stripping so classic double-encoding and `/**/` keyword splits are blocked, but triple-or-deeper encoding and novel signature evasions remain a residual gap (the typed schema contract is still the real backstop — see § Out of scope, "Insecure handler code"). The XXE / SOAP / WSDL family is **structurally inapplicable** because the framework speaks JSON only and rejects every non-JSON content type with `415`, leaving no XML parser to attack.
 
 ### Live black-box engagement (over-the-wire, not in-process)
 
@@ -369,8 +369,10 @@ returning an undeclared status code (caught by the response-contract guard,
 OWASP API9) and trusting `X-Forwarded-For` in production without declaring a
 proxy (refused by default; the IP-based middleware fail _closed_ rather than
 trust a spoofable header). Documented residual limitations (the DNS-rebinding
-TOCTOU window in `fetchGuard`, requiring an operator egress firewall or a pinned
-dispatcher) are spelled out at their source rather than hidden.
+TOCTOU window on `https:` and non-Node runtimes in `fetchGuard`; Node defaults
+`pinDns: true` for `http:` when no custom `fetch` is supplied; still prefer an
+operator egress firewall for defense-in-depth) are spelled out at their source
+rather than hidden.
 
 ### Out of scope (the framework will NOT defend)
 

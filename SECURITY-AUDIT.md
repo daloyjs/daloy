@@ -93,7 +93,7 @@ the existing defenses sound; they are now regression-locked in
 | R-4 | `timingSafeEqual` is not a hardware constant-time primitive (compares UTF-16 code units)               | Low      | Framework | Documented in TSDoc; for raw bytes use `crypto.timingSafeEqual`                                             |
 | R-5 | In-memory rate-limit / autoBan / idempotency / response-cache stores are single-process                | Low      | Operator  | Documented; Redis adapters provided for multi-instance deployments                                         |
 | R-6 | `trustProxyHeaders` / `behindProxy` misconfiguration affects IP-based controls (rate/geo/autoBan/bot)  | Low      | Operator  | Fails **closed** by default (`trustProxy: false`); `daloy doctor` flags an unset proxy config in production |
-| R-7 | `waf()` is a signature engine: it decodes input once, so multiply-encoded payloads evade it | Low | Framework/Developer | By design (recursive decoding causes false positives). WAF is defense-in-depth; rely on schemas + output escaping. Documented + locked in wave 6 |
+| R-7 | `waf()` is a signature engine: bounded multi-decode (max 2) + comment strip block classic double-encoding / `/**/` splits; triple+ encoding and novel evasions remain | Low | Framework/Developer | Residual by design (unbounded recursive decoding causes false positives). WAF is defense-in-depth; rely on schemas + output escaping. Updated in multi-decode hardening |
 
 ---
 
@@ -106,7 +106,7 @@ The adversarial suite (`pnpm test:red-team`, gated in CI) contains **127 attacks
 - **Wave 3** (`red-team-attacks-3.test.ts`): bot-guard spoofed-crawler, geo-block allow/deny, IP-reputation denylist, auto-ban strike escalation, auto-ban shared-bucket footgun refusal.
 - **Wave 4** (`red-team-attacks-4.test.ts`): nested/array response over-exposure (independent verification of F-1), JWT header key-injection (`jwk`/`jku`/`x5u`/`kid`), uppercase `NONE` bypass attempt, HTTP method-override smuggling, path-confusion `except()` fail-closed, WAF ReDoS bound.
 - **Wave 5** (`red-team-attacks-5.test.ts`): cross-tenant cached-response disclosure — idempotency replay isolation (F-2) and response-cache Authorization bypass (F-3), including the same-principal/public happy paths and the explicit opt-in path.
-- **Wave 6** (`red-team-attacks-6.test.ts`): defense verification — session fixation/forgery + `regenerate()` rotation, `__Host-` cookie scoping, BREACH-aware compression skips, multipart per-file cap, WAF single-encoding catch + the documented double-encoding limitation.
+- **Wave 6** (`red-team-attacks-6.test.ts`): defense verification — session fixation/forgery + `regenerate()` rotation, `__Host-` cookie scoping, BREACH-aware compression skips, multipart per-file cap, WAF single- and double-encoding catch (bounded multi-decode).
 - **Wave 7** (`red-team-attacks-7.test.ts`): three-front offensive simulation — (R) production docs/OpenAPI hidden, error-response leak-free, forged-JWT privilege-escalation rejected; (C) request-timeout slowloris cutoff, deep-nest stack-bomb rejected fast, wide-JSON hash-flood bounded; (N) prototype-gadget pollutes nothing, no dynamic code-execution primitive on the public surface.
 
 ---

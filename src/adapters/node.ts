@@ -17,6 +17,7 @@ import {
   DALOY_RAW_STREAM,
   DALOY_REQUEST_RAW_BODY,
   DALOY_LIGHT_RESPONSE_OK,
+  DALOY_REQUEST_ABORT,
 } from "../app.js";
 import { BadRequestError } from "../errors.js";
 import {
@@ -472,9 +473,11 @@ function writeAdapterError(res: ServerResponse, e: unknown): void {
  * - `instanceof Request` holds (prototype chain is re-rooted onto
  *   `Request.prototype`), and every WHATWG method/getter is overridden here,
  *   so nothing hits undici's brand-checked prototype accessors.
- * - `signal` is an inert per-instance `AbortSignal`. This matches the real
- *   adapter behaviour today: the Node adapter never wires socket aborts into
- *   the request signal, so the signal never fires in either implementation.
+ * - `signal` is a lazily-created per-instance `AbortSignal`. The framework
+ *   aborts it (via the {@link DALOY_REQUEST_ABORT} hook) when the request
+ *   exceeds `requestTimeoutMs`, so a handler that forwards `ctx.request.signal`
+ *   to downstream `fetch`/DB calls sees them cancel on timeout. It is still NOT
+ *   wired to client socket-disconnect — that teardown never fires the signal.
  * - Passing this object directly to `fetch()` is not supported (undici
  *   brand-checks its input) — forward with `request.clone()` instead, which
  *   returns a real `Request`. This mirrors @hono/node-server's shim.
@@ -493,7 +496,7 @@ class LightRequest {
   #headers: Headers;
   #bodyBytes: Uint8Array | undefined;
   #real: Request | undefined;
-  #signal: AbortSignal | undefined;
+  #controller: AbortController | undefined;
 
   constructor(url: string, method: string, headers: Headers, bodyBytes: Uint8Array | undefined) {
     this.#url = url;
@@ -524,10 +527,23 @@ class LightRequest {
     return this.#headers;
   }
   get signal(): AbortSignal {
-    // Inert, lazily created: the Node adapter has never wired socket
-    // teardown into the request signal, so a never-firing signal is
-    // behaviourally identical to the one a real `Request` would carry.
-    return (this.#signal ??= new AbortController().signal);
+    // Lazily created so only handlers that actually read `signal` pay for the
+    // controller. The framework aborts it via the DALOY_REQUEST_ABORT hook
+    // below when the request exceeds `requestTimeoutMs`; client
+    // socket-disconnect is not wired into it.
+    return (this.#controller ??= new AbortController()).signal;
+  }
+
+  /**
+   * Framework abort hook ({@link DALOY_REQUEST_ABORT}). Invoked by the core on
+   * request timeout so `ctx.request.signal` fires for cooperative teardown.
+   * A no-op when no handler ever read `signal` — there is no controller to
+   * abort and nothing observing it.
+   *
+   * @param reason - Abort reason surfaced on `signal.reason` (a `TimeoutError`).
+   */
+  [DALOY_REQUEST_ABORT](reason: unknown): void {
+    this.#controller?.abort(reason);
   }
   get body(): ReadableStream<Uint8Array> | null {
     return this.#materialize().body;

@@ -223,12 +223,45 @@ app.post(
 });`}
       />
 
+      <h2 id="dns-pinning-pinDns">DNS pinning (<code>pinDns</code>)</h2>
+      <p>
+        On Node-like runtimes, <code>fetchGuard()</code> defaults{" "}
+        <code>pinDns: true</code> when you do not supply a custom{" "}
+        <code>fetch</code>. For <code>http:</code> requests the socket is then
+        opened through <code>node:http</code> against the exact IP that passed
+        validation, while the original <code>Host</code> header is preserved.
+        That closes the classic DNS-rebinding (TOCTOU) window for the highest
+        value target: cloud metadata at{" "}
+        <code>http://169.254.169.254</code>.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`// Default on Node: pinDns is on (http: only).
+const safeFetch = fetchGuard();
+
+// Opt out if you need the underlying fetch to own DNS (rare).
+const unpinned = fetchGuard({ pinDns: false });
+
+// Custom fetch owns its socket path: pinDns stays off unless you set it.
+const custom = fetchGuard({
+  fetch: myInstrumentedFetch,
+  pinDns: true, // only if you also want the node:http pin path for http:
+});`}
+      />
+      <p>
+        <code>https:</code> is intentionally not pinned by this knob (TLS SNI /
+        certificate validation needs the hostname path). Pass{" "}
+        <code>pinDns: false</code> on Workers and other edge runtimes only if
+        you had forced it on; the default is already off when{" "}
+        <code>process.versions.node</code> is absent.
+      </p>
+
       <h2 id="residual-risk-dns-rebinding-toctou">Residual risk: DNS rebinding (TOCTOU)</h2>
       <p>
-        The guard resolves the hostname once and validates every returned
-        address, but between that resolution and the underlying TCP connect, an
-        attacker who controls the authoritative DNS (TTL=0) could change the
-        answer. We close this at two layers, both opt-in:
+        After <code>pinDns</code>, the remaining residual is mainly{" "}
+        <code>https:</code> rebinding and non-Node runtimes without a pin path.
+        Close those with operator egress controls, and optionally a custom
+        undici dispatcher for TLS upstreams:
       </p>
       <ol>
         <li>
@@ -240,11 +273,11 @@ app.post(
           host. This neutralises rebinding even if the app is naive.
         </li>
         <li>
-          <strong>Caller-side, Node-only.</strong> Daloy ships zero runtime
-          dependencies, so we do not bundle <code>undici</code>. If you install
-          it yourself, you can pin the socket to the IP you validated by
-          plumbing a custom dispatcher through the existing <code>fetch</code>{" "}
-          option:
+          <strong>Caller-side, Node-only, for <code>https:</code>.</strong>{" "}
+          Daloy ships zero runtime dependencies, so we do not bundle{" "}
+          <code>undici</code>. If you install it yourself, you can pin the
+          TLS socket to the IP you validated by plumbing a custom dispatcher
+          through the existing <code>fetch</code> option:
           <CodeBlock
             language="ts"
             code={`import { fetchGuard } from "@daloyjs/core";
@@ -252,6 +285,7 @@ import { Agent, fetch as undiciFetch } from "undici";
 import * as dns from "node:dns/promises";
 
 const safeFetch = fetchGuard({
+  // pinDns stays off when a custom fetch is supplied unless you force it.
   fetch: async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input.url);
     const { address, family } = await dns.lookup(url.hostname, { verbatim: true });

@@ -171,6 +171,37 @@ test("`+`-encoded spaces cannot evade the query scan (URLSearchParams parity)", 
   assert.equal(res.status, 403);
 });
 
+test("double-encoded SQLi in the query is blocked (bounded multi-decode)", async () => {
+  const app = queryApp();
+  // %2527%2520OR%25201%253D1 → %27%20OR%201%3D1 → ' OR 1=1
+  const res = await app.fetch(new Request("http://x/search?q=%2527%2520OR%25201%253D1"));
+  assert.equal(res.status, 403);
+});
+
+test("SQL block-comment keyword split is blocked after comment stripping", async () => {
+  const app = queryApp();
+  const res = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("1/**/OR/**/1=1")),
+  );
+  assert.equal(res.status, 403);
+});
+
+test("double-encoded XSS event-handler payload is blocked", async () => {
+  const app = queryApp();
+  // encodeURIComponent of already-encoded XSS → double encoding on the wire.
+  const single = encodeURIComponent('<img src=x onerror=alert(1)>');
+  const double = encodeURIComponent(single);
+  const res = await app.fetch(new Request("http://x/search?q=" + double));
+  assert.equal(res.status, 403);
+});
+
+test("benign double-encoded plain text is NOT a false positive", async () => {
+  const app = queryApp();
+  // "hello" double-encoded still decodes to a non-injection string.
+  const res = await app.fetch(new Request("http://x/search?q=%2568%2565%256C%256C%256F"));
+  assert.equal(res.status, 200);
+});
+
 // ---------- broadened inline-event-handler coverage ----------
 
 for (const handler of [

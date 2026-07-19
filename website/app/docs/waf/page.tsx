@@ -236,9 +236,16 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
           never parsed). Add a schema to bring their inputs under coverage.
         </li>
         <li>
-          A WAF-lite is best-effort signature matching: determined attackers can
-          craft evasions. Treat it as depth, and keep an edge WAF on your
-          roadmap for high-risk surfaces.
+          Inspection uses bounded multi-decode (at most two percent-decode
+          passes), <code>+</code>→space normalization, and SQL block-comment
+          stripping so classic double-encoding and <code>/**/</code> keyword
+          splits still score. Triple-or-deeper encoding remains a residual
+          signature gap: keep schemas and parameterized queries as the primary
+          wall, and keep an edge WAF on your roadmap for high-risk surfaces.
+        </li>
+        <li>
+          A WAF-lite is still best-effort signature matching. Treat it as depth,
+          not a substitute for typed contracts or output encoding.
         </li>
       </ul>
     </>

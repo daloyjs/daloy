@@ -335,6 +335,82 @@ function safeDecode(value: string): string {
   }
 }
 
+/**
+ * Maximum percent-decode passes applied when expanding inspection variants.
+ *
+ * One pass matches what most HTTP stacks hand the handler. A second pass
+ * catches classic double-encoding WAF evasions (`%2527` → `%27` → `'`). A
+ * third is omitted on purpose: deeper recursive decoding inflates false
+ * positives on legitimately percent-bearing text and is not how frameworks
+ * deliver query/path values.
+ */
+const MAX_DECODE_PASSES = 2;
+
+/**
+ * Expand a single inbound string into the variants the WAF should scan.
+ *
+ * Includes the raw value, up to {@link MAX_DECODE_PASSES} percent-decodes,
+ * a `+`→space form (URLSearchParams parity), and a SQL-comment-stripped
+ * form so comment-split keywords (e.g. OR wrapped in block comments) score
+ * the same as the whitespace-separated form.
+ *
+ * Scanning variants is pure defense-in-depth: the handler still receives
+ * whatever the framework's single-decode path produced. Each variant is
+ * truncated to `maxValueLength` and deduplicated so hostile inputs cannot
+ * explode the scan set.
+ *
+ * @param value - Raw or already-decoded string from path/query/header/body.
+ * @param maxValueLength - Cap applied to every variant before scanning.
+ * @returns Deduplicated inspection variants in stable insertion order.
+ */
+function inspectionVariants(value: string, maxValueLength: number): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (v: string): void => {
+    const truncated = v.length > maxValueLength ? v.slice(0, maxValueLength) : v;
+    if (!seen.has(truncated)) {
+      seen.add(truncated);
+      out.push(truncated);
+    }
+  };
+
+  let current = value;
+  push(current);
+  for (let i = 0; i < MAX_DECODE_PASSES; i++) {
+    const decoded = safeDecode(current);
+    if (decoded === current) break;
+    push(decoded);
+    current = decoded;
+  }
+
+  // Snapshot before secondary transforms so we only expand the decode chain.
+  const decodedChain = out.slice();
+  for (const v of decodedChain) {
+    if (v.includes("+")) push(v.replace(/\+/g, " "));
+    if (v.includes("/*")) push(v.replace(/\/\*[\s\S]*?\*\//g, " "));
+  }
+  return out;
+}
+
+/**
+ * Scan every inspection variant of `value` for the active rule set.
+ *
+ * @see inspectionVariants
+ */
+function scanValueVariants(
+  value: string,
+  location: WafInspectionLocation,
+  rules: readonly ResolvedRule[],
+  scored: Map<WafRuleId, WafMatch>,
+  maxValueLength: number,
+): void {
+  for (const variant of inspectionVariants(value, maxValueLength)) {
+    scanValue(variant, location, rules, scored);
+    // Early exit once every rule has already fired — no further variants needed.
+    if (scored.size === rules.length) return;
+  }
+}
+
 
 /**
  * Collect up to `maxNodes` string values from a parsed body value (object /
@@ -460,37 +536,30 @@ export function waf(opts: WafOptions = {}): Hooks {
       const url = new URL(ctx.request.url);
 
       if (inspectPath) {
-        scanValue(safeDecode(url.pathname), "path", rules, scored);
+        // Path is scanned across raw + up to two decode passes so double-
+        // encoded traversal / injection tokens in path segments still score.
+        scanValueVariants(url.pathname, "path", rules, scored, maxValueLength);
       }
 
       if (inspectQuery && url.search.length > 1) {
-        // Scan both the raw query string and a best-effort decoded form so an
-        // encoded payload (`%27%20OR%201=1`) is caught after normalization.
-        // This is a SINGLE decode on purpose: the framework's request path also
-        // decodes the query exactly once, so the WAF sees the same bytes the
-        // handler will. Recursive decoding is deliberately avoided — it would
-        // false-positive on values that legitimately contain percent-encoded
-        // text, and a double-encoded payload stays inert (`%3Cscript%3E`) all
-        // the way to the handler. See red-team-attacks-6 "DOCUMENTED LIMITATION".
+        // Scan the raw query, bounded multi-decode variants, and each
+        // URLSearchParams key/value. Multi-decode (max 2) closes classic
+        // double-encoding WAF evasions (`%2527` → `%27` → `'`) without open-
+        // ended recursive decoding. URLSearchParams also turns `+` into
+        // space; inspectionVariants covers that form so `1+OR+1=1` scores
+        // the same as `1 OR 1=1` (parser-differential defense).
         const raw = url.search.slice(1);
-        scanValue(raw, "query", rules, scored);
-        const decoded = safeDecode(raw);
-        if (decoded !== raw) scanValue(decoded, "query", rules, scored);
-        // Additionally inspect each key/value the way the app's OWN query parser
-        // (`URLSearchParams`) decodes them: notably `+` becomes a space, which a
-        // plain `decodeURIComponent` does NOT do. Without this, `1+OR+1=1` slipped
-        // past the WAF while the handler still received `1 OR 1=1` (a parser
-        // differential — the WAF must inspect the bytes the app actually parses).
+        scanValueVariants(raw, "query", rules, scored, maxValueLength);
         for (const [k, v] of url.searchParams) {
-          scanValue(k, "query", rules, scored);
-          scanValue(v, "query", rules, scored);
+          scanValueVariants(k, "query", rules, scored, maxValueLength);
+          scanValueVariants(v, "query", rules, scored, maxValueLength);
         }
       }
 
       if (headerAllowlist.length > 0) {
         for (const name of headerAllowlist) {
           const value = ctx.request.headers.get(name);
-          if (value) scanValue(value, "header", rules, scored);
+          if (value) scanValueVariants(value, "header", rules, scored, maxValueLength);
         }
       }
 
@@ -511,17 +580,12 @@ export function waf(opts: WafOptions = {}): Hooks {
           });
         }
         if (typeof ctx.body === "string") {
-          scanValue(
-            ctx.body.length > maxValueLength
-              ? ctx.body.slice(0, maxValueLength)
-              : ctx.body,
-            "body",
-            rules,
-            scored,
-          );
+          scanValueVariants(ctx.body, "body", rules, scored, maxValueLength);
         } else if (typeof ctx.body === "object") {
           const strings = collectBodyStrings(ctx.body, maxBodyNodes, maxValueLength);
-          for (const value of strings) scanValue(value, "body", rules, scored);
+          for (const value of strings) {
+            scanValueVariants(value, "body", rules, scored, maxValueLength);
+          }
         }
       }
 

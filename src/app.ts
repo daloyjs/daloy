@@ -279,7 +279,12 @@ export interface AppOptions {
   /** Reject requests whose Content-Type isn't in this allowlist (when a body schema is declared). */
   allowedContentTypes?: string[];
 
-  /** Per-request timeout in ms (handler + hooks). Default: 30000. Set 0 to disable. */
+  /**
+   * Per-request timeout in ms (handler + hooks). Default: 30000. Set 0 to
+   * disable. On timeout the framework aborts `ctx.request.signal` (cooperative
+   * cancellation of downstream I/O) and responds `408`; see
+   * {@link RequestTimeoutError}. It does not forcibly stop CPU-bound work.
+   */
   requestTimeoutMs?: number;
 
   /**
@@ -1091,6 +1096,24 @@ export const DALOY_RAW_BODY = Symbol.for("daloyjs.response.rawBody");
  * so first-party adapters can opt in; not part of the userland API surface.
  */
 export const DALOY_REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
+
+/**
+ * Internal Symbol an adapter sets (on its request shim) to expose the request's
+ * abort hook: a `(reason: unknown) => void` that aborts the `AbortController`
+ * backing `request.signal`. The core invokes it when a request exceeds
+ * {@link AppOptions.requestTimeoutMs} so a handler that forwarded
+ * `ctx.request.signal` to downstream I/O (`fetch`, a DB driver) sees those
+ * calls cancel — cooperative teardown, since single-threaded JS cannot preempt
+ * a running handler.
+ *
+ * The hook is invoked as a method on the request (`this` stays bound to the
+ * shim) so it can reach the shim's private controller. Absent on runtimes
+ * whose `Request.signal` is managed by the platform (Bun / Deno / Workers) and
+ * on direct `app.fetch()` callers, where {@link abortRequest} is a safe no-op
+ * and the timeout still resolves as a `408`. Module-public so first-party
+ * adapters can opt in; not part of the userland API surface.
+ */
+export const DALOY_REQUEST_ABORT: unique symbol = Symbol.for("daloyjs.request.abort");
 
 /**
  * Internal Symbol set by handlers/serializers to attach a raw stream
@@ -5479,12 +5502,50 @@ function runHandler(
   if (requestTimeoutMs === 0 || !isPromiseLike(result)) {
     return result;
   }
-  return withTimeout(result, requestTimeoutMs);
+  return withTimeout(result, requestTimeoutMs, ctx.request);
 }
 
-function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
+/**
+ * Fire an adapter's request abort hook (see {@link DALOY_REQUEST_ABORT}) if the
+ * request shim exposes one. Called as a method so `this` stays bound to the
+ * request. A no-op when the hook is absent (platform-managed `Request.signal`
+ * or a direct `app.fetch()` caller), so the caller must not depend on the
+ * signal actually firing.
+ *
+ * @param request - The in-flight request whose signal should be aborted.
+ * @param reason - Abort reason surfaced on `request.signal.reason`.
+ */
+function abortRequest(request: Request, reason: unknown): void {
+  const hooked = request as unknown as {
+    [DALOY_REQUEST_ABORT]?: (reason: unknown) => void;
+  };
+  hooked[DALOY_REQUEST_ABORT]?.(reason);
+}
+
+/**
+ * Race a handler promise against the per-request timeout.
+ *
+ * On timeout the request's {@link DALOY_REQUEST_ABORT} hook is fired first —
+ * aborting `request.signal` with a `TimeoutError` `DOMException` (the same
+ * reason shape as `AbortSignal.timeout()`) so cooperative downstream I/O the
+ * handler forwarded the signal to unwinds — and then the returned promise
+ * rejects with a {@link RequestTimeoutError} so the client receives a `408`.
+ * The handler promise itself keeps a rejection handler attached, so a late
+ * settle (including the `AbortError` from the work it just cancelled) never
+ * surfaces as an unhandled rejection.
+ *
+ * @typeParam T - The handler's resolved value type.
+ * @param p - The handler (or hook chain) promise to bound.
+ * @param ms - Timeout in milliseconds; assumed non-zero by the caller.
+ * @param request - The in-flight request, used to fire the abort hook.
+ * @returns A promise that settles with the handler result or a 408 timeout.
+ */
+function withTimeout<T>(p: PromiseLike<T>, ms: number, request: Request): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new RequestTimeoutError(ms)), ms);
+    const t = setTimeout(() => {
+      abortRequest(request, new DOMException(`Request exceeded ${ms}ms`, "TimeoutError"));
+      reject(new RequestTimeoutError(ms));
+    }, ms);
     p.then(
       (v) => {
         clearTimeout(t);

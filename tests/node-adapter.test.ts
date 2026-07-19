@@ -821,3 +821,80 @@ test("node adapter: malformed Host on WebSocket upgrade returns 400 and does not
     await handle.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// requestTimeoutMs must fire ctx.request.signal so handlers can unwind
+// downstream I/O. Exercised over the wire (LightRequest path) because the
+// in-process app.request() path carries a plain Request with no abort hook.
+// ---------------------------------------------------------------------------
+
+test("node adapter: requestTimeoutMs aborts ctx.request.signal with a TimeoutError reason", async () => {
+  const app = new App({ logger: false, requestTimeoutMs: 30 });
+  let sawAbort = false;
+  let abortReason: string | undefined;
+  app.route({
+    method: "GET",
+    path: "/slow-abort",
+    operationId: "slowAbort",
+    responses: { 200: { description: "ok" }, 408: { description: "timeout" } },
+    handler: async ({ request }) => {
+      request.signal.addEventListener("abort", () => {
+        sawAbort = true;
+        abortReason = (request.signal.reason as { name?: string } | undefined)?.name;
+      });
+      // Outlasts the 30ms timeout; the handler keeps running after the 408.
+      await new Promise((r) => setTimeout(r, 200));
+      return { status: 200 as const, body: { ok: true } };
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/abort-probe",
+    operationId: "abortProbe",
+    responses: { 200: { description: "ok" } },
+    handler: async () => ({ status: 200 as const, body: { sawAbort, abortReason } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/slow-abort`);
+    assert.equal(res.status, 408);
+    await res.text();
+    // The abort fires at ~30ms; wait past that (but under the handler's 200ms
+    // sleep) before probing the flag the background handler set.
+    await new Promise((r) => setTimeout(r, 120));
+    const probe = (await (
+      await fetch(`http://127.0.0.1:${port}/abort-probe`)
+    ).json()) as { sawAbort: boolean; abortReason?: string };
+    assert.equal(probe.sawAbort, true, "ctx.request.signal must fire on timeout");
+    assert.equal(probe.abortReason, "TimeoutError");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: a handler finishing before requestTimeoutMs leaves the signal un-aborted", async () => {
+  const app = new App({ logger: false, requestTimeoutMs: 200 });
+  // Seeded true so a passing assertion proves the handler actively observed a
+  // non-aborted signal rather than the flag simply never being written.
+  let abortedWhenDone = true;
+  app.route({
+    method: "GET",
+    path: "/fast-noabort",
+    operationId: "fastNoAbort",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }) => {
+      const signal = request.signal; // materialize the controller
+      await new Promise((r) => setTimeout(r, 5));
+      abortedWhenDone = signal.aborted;
+      return { status: 200 as const, body: { ok: true } };
+    },
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/fast-noabort`);
+    assert.equal(res.status, 200);
+    assert.equal(abortedWhenDone, false, "signal must not fire when the handler finishes in time");
+  } finally {
+    await handle.close();
+  }
+});

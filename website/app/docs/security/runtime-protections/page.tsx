@@ -201,8 +201,9 @@ export default function Page() {
           <tr>
             <td>Hung handlers / slow-loris</td>
             <td>
-              <code>requestTimeoutMs</code> aborts handlers (default 30s); the
-              Node adapter sets socket-level timeouts.
+              <code>requestTimeoutMs</code> (default 30s) returns{" "}
+              <code>408</code> and fires <code>ctx.request.signal</code> for
+              cooperative teardown; the Node adapter sets socket-level timeouts.
             </td>
           </tr>
           <tr>

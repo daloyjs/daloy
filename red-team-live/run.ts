@@ -261,7 +261,22 @@ async function injection() {
       severity: "high",
       attack: `GET /search?q=${raw}`,
       observed: `status ${r.status}`,
-      verdict: r.status === 403 ? "DEFENDED" : r.status === 200 ? "INFO" : "DEFENDED",
+      verdict: r.status === 403 ? "DEFENDED" : "VULNERABLE",
+    });
+  }
+  // Double-encoded + comment-split evasions must also block (bounded multi-decode).
+  for (const [kind, raw] of [
+    ["SQLi-double-encoded", "%2527%2520OR%25201%253D1"],
+    ["SQLi-comment-split", "1/**/OR/**/1=1"],
+  ] as const) {
+    const r = await http("GET", `/search?q=${raw}`);
+    record({
+      category: cat,
+      title: `${kind} via /search query`,
+      severity: "high",
+      attack: `GET /search?q=${raw}`,
+      observed: `status ${r.status}`,
+      verdict: r.status === 403 ? "DEFENDED" : "VULNERABLE",
     });
   }
   // NoSQL operator injection in a JSON body.

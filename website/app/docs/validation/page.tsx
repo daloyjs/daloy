@@ -89,6 +89,39 @@ export default function Page() {
         and <code>prototype</code> before validation.
       </p>
 
+      <h2 id="bound-numeric-fields">Bound numeric fields (money, qty, IDs)</h2>
+      <p>
+        Bare <code>z.number()</code> accepts <code>1e308</code>,{" "}
+        <code>-Infinity</code> after coercion mistakes, and other values that
+        are fine for IEEE floats but disastrous for money, inventory, or
+        pagination. Always put domain bounds on numeric request fields:
+      </p>
+      <CodeBlock
+        code={`import { z } from "zod";
+
+// Money: finite, positive, capped at a business ceiling.
+const Money = z.number().finite().positive().max(1_000_000);
+
+// Quantities: integers in a sane range.
+const Qty = z.number().int().positive().max(10_000);
+
+// Prefer coerce only when the value arrives as a string (query / form).
+const Page = z.coerce.number().int().min(1).max(1000);
+
+// Strict bodies reject mass-assignment extras.
+const CreatePayment = z
+  .object({ amount: Money, currency: z.enum(["USD", "EUR", "NOK"]) })
+  .strict();`}
+      />
+      <p>
+        Zod 4 already rejects <code>NaN</code> / non-finite numbers for{" "}
+        <code>z.number()</code> in many cases, but a ceiling (
+        <code>.max()</code>) and sign constraint (
+        <code>.positive()</code> / <code>.nonnegative()</code>) are still your
+        refund-fraud and overflow backstop. Pair this with response schemas so
+        sensitive fields never leak outbound.
+      </p>
+
       <h2 id="end-to-end-example">End-to-end example</h2>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
@@ -96,7 +129,7 @@ import { z } from "zod";
 
 const CreateLineItem = z.object({
   sku: z.string().min(1),
-  qty: z.coerce.number().int().positive(),
+  qty: z.coerce.number().int().positive().max(10_000),
 });
 
 const LineItem = z.object({
