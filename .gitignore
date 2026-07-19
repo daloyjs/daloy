@@ -51,3 +51,5 @@ write-ups
 
 .idea/
 build-out
+
+.deepsec

@@ -16,6 +16,7 @@ import { z } from "zod";
 
 import { App } from "../../src/app.js";
 import { createClient } from "../../src/client.js";
+import { defineRoute } from "../../src/types.js";
 import { getBookRoute } from "./fixtures/get-book.route.js";
 import { listBooksRoute } from "./fixtures/list-books.route.js";
 
@@ -188,3 +189,90 @@ async function endToEndProbes() {
 }
 
 void endToEndProbes;
+
+// Independently exported route contracts preserve required query and header
+// schemas through registerRoutes(), not only operation ids and path params.
+const getInventoryRoute = defineRoute({
+  method: "GET",
+  path: "/inventory/:sku",
+  operationId: "getInventory",
+  request: {
+    params: z.object({ sku: z.string() }),
+    query: z.object({ includeReserved: z.boolean() }),
+    headers: z.object({ "x-tenant-id": z.string() }),
+  },
+  responses: {
+    200: {
+      description: "inventory",
+      body: z.object({ sku: z.string(), available: z.number().int() }),
+    },
+  },
+  handler: ({ params }) => ({
+    status: 200,
+    body: { sku: params.sku, available: 1 },
+  }),
+});
+
+const modularInventoryApp = new App({ logger: false }).registerRoutes([getInventoryRoute] as const);
+const modularInventoryClient = createClient(modularInventoryApp, {
+  baseUrl: "http://localhost",
+});
+type ModularInventoryInput = Parameters<(typeof modularInventoryClient)["getInventory"]>[0];
+type _ModularQueryIsPrecise = Expect<
+  Equal<ModularInventoryInput["query"], { includeReserved: boolean }>
+>;
+type _ModularHeadersArePrecise = Expect<
+  Equal<ModularInventoryInput["headers"], { "x-tenant-id": string }>
+>;
+
+void modularInventoryClient.getInventory({
+  params: { sku: "book-1" },
+  query: { includeReserved: false },
+  headers: { "x-tenant-id": "tenant-1" },
+});
+
+// @ts-expect-error - a required query schema cannot be omitted.
+void modularInventoryClient.getInventory({
+  params: { sku: "book-1" },
+  headers: { "x-tenant-id": "tenant-1" },
+});
+
+// @ts-expect-error - a required header schema cannot be omitted.
+void modularInventoryClient.getInventory({
+  params: { sku: "book-1" },
+  query: { includeReserved: false },
+});
+
+void modularInventoryClient.getInventory({
+  params: { sku: "book-1" },
+  // @ts-expect-error - query values retain the schema's inferred types.
+  query: { includeReserved: "false" },
+  headers: { "x-tenant-id": "tenant-1" },
+});
+
+void modularInventoryClient.getInventory({
+  params: { sku: "book-1" },
+  query: { includeReserved: false },
+  // @ts-expect-error - declared header values retain their inferred types.
+  headers: { "x-tenant-id": 123 },
+});
+
+const optionalFiltersApp = new App({ logger: false }).get(
+  "/inventory",
+  {
+    request: {
+      query: z.object({ limit: z.number().int().optional() }),
+      headers: z.object({ "x-trace-id": z.string().optional() }),
+    },
+    responses: {
+      200: { body: z.object({ ok: z.boolean() }) },
+    },
+  },
+  () => ({ status: 200, body: { ok: true } })
+);
+const optionalFiltersClient = createClient(optionalFiltersApp, {
+  baseUrl: "http://localhost",
+});
+
+// Schemas that accept an empty object do not force callers to write empty bags.
+void optionalFiltersClient.getInventory();

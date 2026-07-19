@@ -26,7 +26,9 @@ export type RoutesOf<A extends App> = A["routes"][number];
 /**
  * Typed client surface generated from an `App`. The result is a record keyed
  * by each route's `operationId` whose values are async methods inferred from
- * the route's request and response schemas.
+ * the route's request and response schemas. Required query and header fields
+ * remain required on the client input, while schemas that accept an empty
+ * object keep their corresponding client field optional.
  *
  * The per-method types are recovered from the `App`'s accumulated route tuple,
  * built by chained registrations or `app.registerRoutes([...])`. If the result
@@ -48,12 +50,26 @@ type ClientInput<P extends string, Req extends RequestSchemas | undefined> = ([
   ParamsOf<P>,
 ] extends [never]
   ? { params?: Record<string, never> }
-  : { params: InferRequest<Req, P>["params"] }) & {
-  query?: Partial<InferRequest<Req, P>["query"]>;
-  headers?: Record<string, string>;
-} & (Req extends { body: infer _B }
-    ? { body: InferRequest<Req, P>["body"] }
-    : { body?: undefined });
+  : { params: InferRequest<Req, P>["params"] }) &
+  ClientQueryInput<P, Req> &
+  ClientHeadersInput<P, Req> &
+  (Req extends { body: infer _B } ? { body: InferRequest<Req, P>["body"] } : { body?: undefined });
+
+type ClientQueryInput<P extends string, Req extends RequestSchemas | undefined> = Req extends {
+  query: infer _Query;
+}
+  ? {} extends NonNullable<InferRequest<Req, P>["query"]>
+    ? { query?: NonNullable<InferRequest<Req, P>["query"]> }
+    : { query: NonNullable<InferRequest<Req, P>["query"]> }
+  : { query?: Record<string, string | string[] | number | boolean | undefined> };
+
+type ClientHeadersInput<P extends string, Req extends RequestSchemas | undefined> = Req extends {
+  headers: infer _Headers;
+}
+  ? {} extends NonNullable<InferRequest<Req, P>["headers"]>
+    ? { headers?: NonNullable<InferRequest<Req, P>["headers"]> }
+    : { headers: NonNullable<InferRequest<Req, P>["headers"]> }
+  : { headers?: Record<string, string> };
 
 type ClientOutput<Res extends ResponsesMap> = HandlerReturn<Res>;
 
@@ -80,6 +96,9 @@ export interface InProcessClientOptions {
  * `operationId`. Parameters and response types are inferred from the same
  * route definitions registered on `app`, so the client and server cannot
  * drift apart at the type level.
+ * Required `params`, `query`, `headers`, and `body` inputs are preserved from
+ * the route contract; query or header schemas that accept an empty object keep
+ * those top-level fields optional.
  *
  * The returned object is a plain `Record<operationId, (input) => Promise<...>>`
  * — each call serializes `params`/`query`/`headers`/`body` and dispatches
