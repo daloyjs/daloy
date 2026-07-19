@@ -22,6 +22,7 @@ import {
   startServer,
   killServer,
   waitForHealthy,
+  httpRequest,
   stats,
   fmt,
   parityTiers,
@@ -68,8 +69,20 @@ function mintToken() {
 const AUTH = `Bearer ${mintToken()}`;
 
 const SCENARIOS = [
-  { id: "static", title: "GET /static", method: "GET", path: "/static" },
-  { id: "dynamic", title: "GET /users/:id", method: "GET", path: "/users/42" },
+  {
+    id: "static",
+    title: "GET /static",
+    method: "GET",
+    path: "/static",
+    expect: (body) => JSON.parse(body).ok === true,
+  },
+  {
+    id: "dynamic",
+    title: "GET /users/:id",
+    method: "GET",
+    path: "/users/42",
+    expect: (body) => JSON.parse(body).id === "42",
+  },
   {
     id: "echo",
     title: "POST /echo",
@@ -77,6 +90,7 @@ const SCENARIOS = [
     path: "/echo",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name: "alice" }),
+    expect: (body) => JSON.parse(body).name === "alice",
   },
 ];
 
@@ -102,11 +116,33 @@ function runAutocannon(sc, duration) {
   });
 }
 
+/** Verifies a secured endpoint before its throughput samples are collected. */
+async function preflight(sc) {
+  const response = await httpRequest(`http://127.0.0.1:${PORT}${sc.path}`, {
+    method: sc.method,
+    headers: { ...(sc.headers ?? {}), authorization: AUTH },
+    body: sc.body,
+  });
+  if (response.status !== 200) {
+    throw new Error(`preflight ${sc.id}: status ${response.status} (expected 200)`);
+  }
+  let valid = false;
+  try {
+    valid = sc.expect(response.body);
+  } catch {
+    /* valid stays false */
+  }
+  if (!valid) {
+    throw new Error(`preflight ${sc.id}: body did not match. Got: ${response.body.slice(0, 200)}`);
+  }
+}
+
 async function benchOne(fw) {
   console.error(section(fw.name, "secured stack"));
   const child = await startServer(fw.file, { port: PORT });
   await waitForHealthy(PORT, "/static", { headers: { authorization: AUTH } });
   try {
+    for (const sc of SCENARIOS) await preflight(sc);
     const out = {};
     for (const sc of SCENARIOS) {
       await runAutocannon(sc, WARMUP);
