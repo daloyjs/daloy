@@ -14,6 +14,7 @@ import type { App } from "./app.js";
 import type {
   HandlerReturn,
   InferRequest,
+  ParamsOf,
   RequestSchemas,
   ResponsesMap,
   RouteDefinition,
@@ -38,16 +39,21 @@ export type ClientFor<A extends App> = {
 
 type ClientMethod<R> =
   R extends RouteDefinition<infer P, infer _M, infer Req, infer Res>
-    ? (input: ClientInput<P, Req>) => Promise<ClientOutput<Res>>
+    ? {} extends ClientInput<P, Req>
+      ? (input?: ClientInput<P, Req>) => Promise<ClientOutput<Res>>
+      : (input: ClientInput<P, Req>) => Promise<ClientOutput<Res>>
     : never;
 
-type ClientInput<P extends string, Req extends RequestSchemas | undefined> = {
-  params: InferRequest<Req, P>["params"];
+type ClientInput<P extends string, Req extends RequestSchemas | undefined> = ([
+  ParamsOf<P>,
+] extends [never]
+  ? { params?: Record<string, never> }
+  : { params: InferRequest<Req, P>["params"] }) & {
   query?: Partial<InferRequest<Req, P>["query"]>;
   headers?: Record<string, string>;
 } & (Req extends { body: infer _B }
-  ? { body: InferRequest<Req, P>["body"] }
-  : { body?: undefined });
+    ? { body: InferRequest<Req, P>["body"] }
+    : { body?: undefined });
 
 type ClientOutput<Res extends ResponsesMap> = HandlerReturn<Res>;
 
@@ -81,6 +87,8 @@ export interface InProcessClientOptions {
  *
  * For non-TypeScript consumers, run `pnpm gen` to emit a fully-typed SDK
  * from the OpenAPI document instead.
+ * Routes without path parameters omit the `params` input, and routes with no
+ * required request inputs may be called without an argument.
  *
  * @remarks
  * The method signatures are inferred from the `App`'s accumulated route tuple.
@@ -157,6 +165,8 @@ export function createClient<A extends App>(app: A, opts: ClientOptions): Client
  *
  * Requests still traverse the complete validation, middleware, security, and
  * serialization pipeline through {@link "./app.js".App.fetch}.
+ * Routes without path parameters omit the `params` input, and routes with no
+ * required request inputs may be called without an argument.
  *
  * @param app - App whose registered route tuple drives the client surface.
  * @param opts - Optional synthetic origin and default request headers.

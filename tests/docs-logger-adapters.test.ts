@@ -626,7 +626,7 @@ test("deno adapter wires signal-based shutdown and TLS options", async () => {
     await handle.shutdown();
     signalListeners[0]!.fn(); // after shutdown this is a no-op, but still must not throw
     assert.equal(shutdownCalls, 1);
-    assert.equal(sig.aborted, true);
+    assert.equal(sig.aborted, false);
     assert.deepEqual(removedSignalListeners.map((x) => x.sig).sort(), ["SIGINT", "SIGTERM"]);
   } finally {
     if (prev === undefined) delete (globalThis as { Deno?: unknown }).Deno;

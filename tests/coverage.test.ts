@@ -1319,20 +1319,24 @@ test("deno adapter delegates fetch and shuts down when stopped", async () => {
 
     await handle.shutdown();
     assert.equal(captured.shutdownCalled, true);
+    assert.equal((captured.opts.signal as AbortSignal).aborted, false);
   } finally {
     delete (globalThis as any).Deno;
   }
 });
 
 test("deno adapter falls back gracefully when the runtime omits shutdown()", async () => {
+  let signal: AbortSignal | undefined;
   (globalThis as any).Deno = {
-    serve(_opts: any, _handler: any) {
+    serve(opts: any, _handler: any) {
+      signal = opts.signal;
       return {}; // no shutdown method
     },
   };
   try {
     const handle = serveDeno(new App({ logger: false }));
     await handle.shutdown();
+    assert.equal(signal?.aborted, true);
   } finally {
     delete (globalThis as any).Deno;
   }

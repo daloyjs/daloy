@@ -113,13 +113,13 @@ export function serve(app: App, opts: DenoServeOptions = {}): DenoServerHandle {
     }
     // Drain app-level hooks first (while the HTTP server can still respond),
     // then ask Deno to stop gracefully — `server.shutdown()` stops accepting
-    // new connections and lets in-flight requests finish. Aborting the listen
-    // signal happens last, purely as a safety net for runtimes that lack
-    // `HttpServer.shutdown()`. Doing it the other way around (aborting first)
-    // tears the listener down before in-flight requests can complete.
+    // new connections and lets in-flight requests finish. Abort only as a
+    // fallback for runtimes that lack `HttpServer.shutdown()`: Deno 2.9 closes
+    // the listener resource inside shutdown(), so aborting the same signal
+    // afterwards throws BadResource.
     await app.shutdown(opts.shutdownTimeoutMs ?? 10_000);
-    await server.shutdown?.();
-    controller.abort();
+    if (server.shutdown) await server.shutdown();
+    else controller.abort();
   };
 
   return { shutdown };

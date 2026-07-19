@@ -77,6 +77,12 @@ async function probes() {
 
   // @ts-expect-error - `createBook` requires a typed body.
   await client.createBook({ body: { title: 123 } });
+
+  // A body-only route does not invent a required `params: {}` property.
+  await client.createBook({ body: { title: "Dune" } });
+
+  // @ts-expect-error - routes without path parameters do not accept fake params.
+  await client.createBook({ params: { id: "not-in-the-path" }, body: { title: "Dune" } });
 }
 
 void probes;
@@ -111,6 +117,12 @@ const shorthandClient = createClient(shorthandApp, { baseUrl: "http://localhost"
 type _ShorthandOperationIdsAreInferred = Expect<
   Equal<keyof typeof shorthandClient, "getRoot" | "postBookItemsByItemId">
 >;
+
+// A route with no required request inputs is callable without an argument.
+void shorthandClient.getRoot();
+
+// @ts-expect-error - path parameters remain required when the path declares them.
+void shorthandClient.postBookItemsByItemId({ body: { title: "Dune" } });
 
 // @ts-expect-error - method shorthands never silently opt out of response contracts.
 new App({ logger: false }).get("/unsafe", () => Response.json({ secret: true }));
