@@ -66,7 +66,7 @@ DaloyJS exists to be the framework you'd build if you took the best ideas from e
 | **Portable supply-chain hardening** for the apps you build | [pnpm](https://pnpm.io/motivation) defaults + a zero-runtime-dep core | Hardened `.npmrc`, source-verified lockfiles, zero runtime deps, CycloneDX + SPDX SBOM, and npm provenance attestations.                                                                                  |
 
 ```
-framework test suite passing · ≥90% line + function coverage / ≥90% branch coverage · typechecks on TypeScript 7 with `strict: true`
+framework test suite passing · ≥90% line + function coverage / ≥92% branch coverage · typechecks on TypeScript 7 with `strict: true`
 runs on Node, Bun, Deno, Cloudflare, Vercel
 ~12.3M static-route ops/sec · ~1.5M dynamic-route ops/sec on M-class CPU
 ```
@@ -576,7 +576,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 DaloyJS is at **`1.0.0-rc.5`**, a security-hardening release candidate. Because the framework has no external users yet, this RC makes a few intentional changes (see the [CHANGELOG](CHANGELOG.md)) to get the secure-by-default posture right before the stable release rather than deferring them; the generated OpenAPI contract is unchanged. From `1.0.0` stable onward, the API follows SemVer with deprecations getting at least one minor cycle. The framework is already in use for production trials.
 
-**Release quality bar.** Every release ships with **≥90% line + function coverage and ≥90% branch coverage**, strict TypeScript, OpenSSF Scorecard, CodeQL + Opengrep dual SAST, zizmor workflow linting, and npm provenance. Coverage was relaxed from a former 100% gate so complex security work isn't blocked chasing throwaway tests for unreachable defensive branches or tsx source-map phantoms; see [AGENTS.md](AGENTS.md) for the policy.
+**Release quality bar.** Every release ships with **≥90% line + function coverage** (`pnpm coverage`) **and ≥92% branch coverage** (`pnpm coverage:branches` on compiled JS), strict TypeScript, OpenSSF Scorecard, CodeQL + Opengrep dual SAST, zizmor workflow linting, and npm provenance. Coverage was relaxed from a former 100% gate so complex security work isn't blocked chasing throwaway tests for unreachable defensive branches or tsx source-map phantoms; see [AGENTS.md](AGENTS.md) for the policy.
 
 ### Routing, validation, and docs
 

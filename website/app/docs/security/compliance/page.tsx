@@ -133,11 +133,17 @@ export default function Page() {
             <td>Authorization at the route boundary</td>
             <td>
               Per-route middleware composition; <code>ipRestriction()</code> for
-              admin slices; auth-slice pattern for internal endpoints.
+              admin slices; auth-slice pattern for internal endpoints. Object-
+              level checks (BOLA / IDOR) stay in the application&apos;s ownership
+              rules; the framework carries the authenticated principal into the
+              handler so those checks can run against the record being touched.
             </td>
             <td>
               <a href="/docs/security/admin-panels">Secure admin panels</a>,{" "}
-              <a href="/docs/security/auth-slice">Auth slice</a>
+              <a href="/docs/security/auth-slice">Auth slice</a>,{" "}
+              <a href="/docs/security/resource-authorization">
+                Resource authorization
+              </a>
             </td>
           </tr>
           <tr>
@@ -183,7 +189,11 @@ export default function Page() {
             <td>SSRF / outbound network controls</td>
             <td>
               <code>fetchGuard()</code> blocks private IPs, link-local,
-              metadata-service ranges, and DNS rebinding.
+              metadata-service ranges, non-http(s) schemes, and credentials in
+              the URL (<code>credentials-in-url</code>). On Node,{" "}
+              <code>pinDns</code> defaults to <code>true</code> for{" "}
+              <code>http:</code> so the validated IP is pinned for the socket
+              (reduces DNS-rebinding TOCTOU on that path).
             </td>
             <td>
               <a href="/docs/security/fetch-guard">SSRF guard (fetchGuard)</a>
@@ -205,12 +215,17 @@ export default function Page() {
           <tr>
             <td>Audit logging &amp; PII handling</td>
             <td>
-              Structured logger with request-id correlation and default key
+              Structured logger with request-id correlation; default key
               redaction (<code>DEFAULT_REDACT_KEYS</code>) for known secret/PII
-              keys; opt-in redaction for application-specific fields.
+              keys; JWT-like and opaque-token value scrubbing;{" "}
+              <code>sanitizeUrlForLog</code> (
+              <code>SENSITIVE_URL_QUERY_KEYS</code>) strips secret-bearing query
+              params and userinfo from request URLs bound into log records;
+              opt-in redaction for application-specific fields.
             </td>
             <td>
-              <a href="/docs/tracing">Tracing &amp; logs</a>
+              <a href="/docs/logging">Logging</a>,{" "}
+              <a href="/docs/tracing">Tracing</a>
             </td>
           </tr>
           <tr>
@@ -478,10 +493,12 @@ export default function Page() {
           <strong>Logging PII responsibly.</strong> The logger&apos;s default
           redaction (<code>DEFAULT_REDACT_KEYS</code> via{" "}
           <code>createLogger({"{ redact }"})</code>) already masks well-known
-          secret keys (passwords, tokens, API keys). Extend the redaction list
-          for
-          application-specific PII fields and never log raw request bodies on
-          routes that process personal data.
+          secret keys (passwords, tokens, API keys). Request URLs written by
+          the framework go through <code>sanitizeUrlForLog</code> so OAuth
+          codes, access tokens, and signed-URL signatures in query strings do
+          not land in durable logs under the field name <code>url</code>.
+          Extend the redaction list for application-specific PII fields and
+          never log raw request bodies on routes that process personal data.
         </li>
       </ul>
 
@@ -1250,11 +1267,15 @@ export default function Page() {
               programme; testing of ICT tools and systems
             </td>
             <td>
-              The repo itself runs <code>pnpm typecheck</code>,{" "}
-              <code>pnpm test</code>, and <code>pnpm coverage</code> (90% line /
-              90% function / 90% branch floor) on every change; the{" "}
-              <code>verify:parity-audits</code>,{" "}
-              <code>verify:runtime-parity-audits</code>,
+              CI runs on Node 24 (<code>node-version: 24</code> in{" "}
+              <code>ci.yml</code> / <code>release.yml</code>; package{" "}
+              <code>engines.node</code> is <code>^24 || &gt;=26</code>). Every
+              change runs <code>pnpm typecheck</code>, <code>pnpm test</code>,{" "}
+              <code>pnpm coverage</code> (90% lines / 90% functions on the tsx
+              run), and <code>pnpm coverage:branches</code> (92% branches on
+              compiled JS). Multi-runtime adapters are guarded by{" "}
+              <code>verify:runtime-parity-audits</code> (not a Bun/Deno test
+              matrix on every PR). The <code>verify:parity-audits</code>,{" "}
               <code>verify:routing-hardening-audits</code>, and{" "}
               <code>verify:governance-audits</code> gates are reproducible by
               any downstream resilience-testing programme. Bench harnesses under{" "}

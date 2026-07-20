@@ -482,12 +482,12 @@ export default function BlogPostPage() {
             </li>
             <li>
               We do not chase 100% line coverage on every defensive branch. The
-              repo runs <code>pnpm coverage</code> with a 90% line / 90%
-              function / 90% branch floor, and the README is clear that writing
-              throwaway tests for unreachable <code>catch</code> blocks is not
-              worth blocking a release on. Security gates that cannot be
-              unit-tested (signal handlers, OS-level shutdown races) are
-              documented instead.
+              repo runs <code>pnpm coverage</code> (90% lines / 90% functions)
+              and <code>pnpm coverage:branches</code> (92% branches on compiled
+              JS), and the README is clear that writing throwaway tests for
+              unreachable <code>catch</code> blocks is not worth blocking a
+              release on. Security gates that cannot be unit-tested (signal
+              handlers, OS-level shutdown races) are documented instead.
             </li>
             <li>
               We do not stop you from disabling a guard in your own app. The

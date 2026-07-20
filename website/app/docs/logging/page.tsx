@@ -187,6 +187,28 @@ const raw = createLogger({ redact: false });`}
         these exact keys are the ones most commonly observed leaking secrets
         into log aggregators in real-world incidents.
       </p>
+      <p>
+        Request URLs are a separate path: the structured redactor matches field{" "}
+        <em>names</em>, so a secret sitting in a query string under the field{" "}
+        <code>url</code> would not be renamed-matched. The framework therefore
+        runs request URLs through <code>sanitizeUrlForLog</code> before they
+        land in the per-request log record. That helper redacts values for keys
+        in <code>SENSITIVE_URL_QUERY_KEYS</code> (and known prefixes), JWT-like
+        query values, opaque credential-shaped values, and userinfo in the URL
+        authority, so OAuth <code>?code=</code>,{" "}
+        <code>?access_token=</code>, and signed-URL signatures do not persist
+        under <code>url</code>. Export it from <code>@daloyjs/core</code> when
+        you bind URLs into your own log calls.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`import { sanitizeUrlForLog } from "@daloyjs/core";
+
+log.info(
+  { url: sanitizeUrlForLog(request.url) },
+  "outbound callback",
+);`}
+      />
 
       <h2 id="bring-your-own-logger-pino-winston">Bring your own logger (pino, winston)</h2>
       <p>
