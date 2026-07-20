@@ -46,10 +46,10 @@ export default function Page() {
         algorithm allowlists, <code>timingSafeEqual</code> credential checks,
         prototype-pollution-safe parsers, <code>fetchGuard()</code> SSRF
         defaults, schema strictness, RFC 9457 problem+json with prod-mode
-        redaction, apply just as much to a service running behind a service
-        mesh as to one facing the public internet. A compromised neighbour, an
-        SSRF in another pod, or a leaked internal token will exercise those
-        guards identically.
+        redaction, apply just as much to a service running behind a service mesh
+        as to one facing the public internet. A compromised neighbour, an SSRF
+        in another pod, or a leaked internal token will exercise those guards
+        identically.
       </p>
       <p>
         A small subset of defaults, however, only make sense at a{" "}
@@ -60,7 +60,8 @@ export default function Page() {
         app layer adds noise without adding safety.
       </p>
       <p>
-        For these deployments, use <code>{`preset: "internal-service"`}</code>.
+        For these deployments, use <code>{`preset: "internal-service"`}</code>
+        {". "}
         It turns off the topology-dependent guards and keeps everything else on.
       </p>
 
@@ -137,36 +138,40 @@ const app = new App({
         <li>
           <strong>
             <code>secureHeaders</code> auto-install
-          </strong>{" "}
-, HSTS, CSP, X-Frame-Options, COOP / CORP. No browser to read them.
+          </strong>
+          {", "}HSTS, CSP, X-Frame-Options, COOP / CORP. No browser to read
+          them.
         </li>
         <li>
           <strong>
             <code>corsCrossOriginGuard</code>
-          </strong>{" "}
-, rejects state-changing requests carrying a cross-origin{" "}
+          </strong>
+          {", "}rejects state-changing requests carrying a cross-origin{" "}
           <code>Origin</code> header. Service-to-service callers do not send{" "}
           <code>Origin</code>.
         </li>
         <li>
           <strong>
             <code>csrf</code> boot guard
-          </strong>{" "}
-, refuses to start when <code>session()</code> is registered alongside
-          a state-changing route without <code>csrf()</code>. Internal callers
-          authenticate with bearer tokens or mTLS, not cookies.
+          </strong>
+          {", "}refuses to start when <code>session()</code> is registered
+          alongside a state-changing route without <code>csrf()</code>
+          {". "}Internal callers authenticate with bearer tokens or mTLS, not
+          cookies.
         </li>
         <li>
           <strong>
             unconfigured <code>X-Forwarded-*</code> guard
-          </strong>{" "}
-, the first-request 500 when <code>trustProxy</code> /{" "}
+          </strong>
+          {", "}the first-request 500 when <code>trustProxy</code> /{" "}
           <code>behindProxy</code> is unset. The mesh terminates TLS and the
           immediate peer inside the mesh <em>is</em> the caller.
         </li>
       </ul>
 
-      <h2 id="what-the-preset-keeps-on-non-negotiable">What the preset KEEPS on (non-negotiable)</h2>
+      <h2 id="what-the-preset-keeps-on-non-negotiable">
+        What the preset KEEPS on (non-negotiable)
+      </h2>
       <p>
         Everything that protects the service itself from malformed input,
         confused dependencies, compromised callers, or operational mistakes
@@ -207,7 +212,9 @@ const app = new App({
         </li>
       </ul>
 
-      <h2 id="the-threat-model-behind-the-preset">The threat model behind the preset</h2>
+      <h2 id="the-threat-model-behind-the-preset">
+        The threat model behind the preset
+      </h2>
       <p>
         &quot;Behind a firewall&quot; is a weaker guarantee than it used to be.
         Internal services are still reachable through SSRF from a compromised
@@ -225,9 +232,8 @@ const app = new App({
           do not remove the guards, name the topology once, audit which guards
           stayed on, and keep everything else
         </strong>
-        . That is closer to the <code>config.force_ssl</code> /{" "}
-        <code>SECURE_*</code>{" "}
-        settings shape used by Rails and Django than to a
+        {". "}That is closer to the <code>config.force_ssl</code> /{" "}
+        <code>SECURE_*</code> settings shape used by Rails and Django than to a
         master &quot;disable everything&quot; switch.
       </p>
 
@@ -269,7 +275,9 @@ const app = new App({
 }`}
       />
 
-      <h2 id="introspecting-the-live-posture">Introspecting the live posture</h2>
+      <h2 id="introspecting-the-live-posture">
+        Introspecting the live posture
+      </h2>
       <p>
         <code>app.getSecurityPosture()</code> returns a frozen snapshot of the
         resolved security configuration, useful for an internal{" "}
@@ -302,19 +310,19 @@ const app = new App({
       <p>
         A back-office tool, HR portal, or admin dashboard that only employees
         can reach, behind a VPN, firewall, or corporate proxy, is{" "}
-        <em>browser-facing</em>, not service-to-service. The firewall stops
-        outsiders from connecting to the server directly; it does nothing about
-        what an employee&apos;s browser can be tricked into sending. That
-        browser sits inside the perimeter and carries the corporate session
-        cookie:
+        <em>browser-facing</em>
+        {", "}not service-to-service. The firewall stops outsiders from
+        connecting to the server directly; it does nothing about what an
+        employee&apos;s browser can be tricked into sending. That browser sits
+        inside the perimeter and carries the corporate session cookie:
       </p>
       <ul>
         <li>
           <strong>CSRF is the textbook intranet attack.</strong> An employee
           visits a malicious public site on a lunch break; that site fires a{" "}
-          <code>POST</code> at <code>https://intranet.corp/transfer</code>. The
-          browser is inside the network and attaches the session cookie, so the
-          request lands. The firewall never sees anything wrong.
+          <code>POST</code> at <code>https://intranet.corp/transfer</code>
+          {". "}The browser is inside the network and attaches the session
+          cookie, so the request lands. The firewall never sees anything wrong.
         </li>
         <li>
           <strong>DNS rebinding and clickjacking</strong> cross the perimeter
@@ -324,10 +332,12 @@ const app = new App({
       </ul>
       <p>
         So the right posture for an employee-only browser app is the{" "}
-        <strong>default posture</strong>, exactly what you get with no preset.
-        A hypothetical <code>&quot;intranet-app&quot;</code> preset would flip
-        nothing off; naming one would only imply a relaxation that must not
-        happen. What distinguishes the intranet topology is <em>additive</em>,
+        <strong>default posture</strong>
+        {", "}exactly what you get with no preset. A hypothetical{" "}
+        <code>&quot;intranet-app&quot;</code> preset would flip nothing off;
+        naming one would only imply a relaxation that must not happen. What
+        distinguishes the intranet topology is <em>additive</em>
+        {", "}
         not subtractive:
       </p>
       <CodeBlock
@@ -345,9 +355,7 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
 app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: ["https://intranet.corp"] }));
 app.use(loginThrottle()); // employees mistype passwords too`}
       />
-      <p>
-        The three topologies side by side:
-      </p>
+      <p>The three topologies side by side:</p>
       <table>
         <thead>
           <tr>
@@ -366,9 +374,12 @@ app.use(loginThrottle()); // employees mistype passwords too`}
             <td>Employee-only internal app</td>
             <td>Browsers on the corporate network</td>
             <td>
-              Default (no preset) + <code>ipRestriction()</code>,{" "}
-              <code>session()</code> + <code>csrf()</code>,{" "}
-              <code>behindProxy</code>, <code>loginThrottle()</code>
+              Default (no preset) + <code>ipRestriction()</code>
+              {", "}
+              <code>session()</code> + <code>csrf()</code>
+              {", "}
+              <code>behindProxy</code>
+              {", "}<code>loginThrottle()</code>
             </td>
           </tr>
           <tr>
@@ -395,8 +406,10 @@ app.use(loginThrottle()); // employees mistype passwords too`}
         </li>
         <li>
           You only need to disable a single guard. Prefer the per-knob option (
-          <code>secureHeaders: false</code>,{" "}
-          <code>corsCrossOriginGuard: false</code>,{" "}
+          <code>secureHeaders: false</code>
+          {", "}
+          <code>corsCrossOriginGuard: false</code>
+          {", "}
           <code>csrf: &quot;off&quot;</code>) so the rest of the posture stays
           explicit at the call site.
         </li>
@@ -405,21 +418,22 @@ app.use(loginThrottle()); // employees mistype passwords too`}
       <h2 id="related">Related</h2>
       <ul>
         <li>
-          <a href="/docs/security/secure-defaults">Secure-by-default</a>: the
-          full list of defaults the framework ships.
+          <a href="/docs/security/secure-defaults">Secure-by-default</a>
+          {": "}the full list of defaults the framework ships.
         </li>
         <li>
           <a href="/docs/security/secure-defaults-enforcement">
             <code>secureDefaults</code> enforcement
-          </a>{" "}
-, the wholesale escape hatch (refuses-to-boot in production without
-          explicit acknowledgement). Prefer the topology preset where possible.
+          </a>
+          {", "}the wholesale escape hatch (refuses-to-boot in production
+          without explicit acknowledgement). Prefer the topology preset where
+          possible.
         </li>
         <li>
           <a href="/docs/security/fetch-guard">
             <code>fetchGuard()</code> SSRF defaults
-          </a>{" "}
-, still active under the preset.
+          </a>
+          {", "}still active under the preset.
         </li>
       </ul>
     </>

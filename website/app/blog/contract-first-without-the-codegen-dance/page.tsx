@@ -455,8 +455,9 @@ export default function BlogPostPage() {
             <p>
               The OpenAPI document is not a separate file you maintain. It is a
               pure function of the routes you registered. Call{" "}
-              <code>generateOpenAPI(app, ...)</code>, get a fully-formed RFC 3.1
-              document back, write it wherever you want it.
+              <code>generateOpenAPI(app, ...)</code>
+              {", "}get a fully-formed RFC 3.1 document back, write it wherever
+              you want it.
             </p>
 
             <EditorFrame
@@ -514,9 +515,9 @@ export default function BlogPostPage() {
               narrowed to the <code>Book</code> shape, not the union of every
               declared response, the actual <code>200</code> one. Second, the{" "}
               <code>@ts-expect-error</code> comment in the
-              <code>404</code> branch <em>passes</em>: trying to read{" "}
-              <code>title</code> from a <code>Problem</code> is a compile error,
-              by construction.
+              <code>404</code> branch <em>passes</em>
+              {": "}trying to read <code>title</code> from a{" "}
+              <code>Problem</code> is a compile error, by construction.
             </p>
           </ProjectionStep>
 
@@ -529,10 +530,11 @@ export default function BlogPostPage() {
             <p>
               <code>runContractTests(app, opts)</code> walks every registered
               route and checks the boring rules that turn into 3am bugs: every
-              route has a unique <code>operationId</code>, every route declares
-              at least one response, declared <code>examples</code> validate
-              against their declared schema, and safe methods don&apos;t carry
-              request bodies unless you explicitly allow it.
+              route has a unique <code>operationId</code>
+              {", "}every route declares at least one response, declared{" "}
+              <code>examples</code> validate against their declared schema, and
+              safe methods don&apos;t carry request bodies unless you explicitly
+              allow it.
             </p>
 
             <EditorFrame
@@ -627,10 +629,11 @@ export default function BlogPostPage() {
             calling a typed SDK that was generated from a Zod schema on the
             other side of the monorepo. <code>data.title</code> is a{" "}
             <code>string</code>. <code>data.publishedYear</code> is a{" "}
-            <code>number | undefined</code>. If the backend renames{" "}
-            <code>title</code> to <code>name</code>, this file refuses to
-            compile, and the frontend developer finds out before the PR even
-            opens, not after the user complains.
+            <code>number | undefined</code>
+            {". "}If the backend renames <code>title</code> to{" "}
+            <code>name</code>
+            {", "}this file refuses to compile, and the frontend developer
+            finds out before the PR even opens, not after the user complains.
           </p>
 
           <h2>The diff that doesn&apos;t exist</h2>
@@ -650,12 +653,12 @@ export default function BlogPostPage() {
 
           <p>
             The diff in the route file is two lines. The diff in your{" "}
-            <code>openapi.yaml</code>, your client types, your contract tests,
-            your frontend imports, and your &quot;types package&quot; is{" "}
-            <em>zero lines</em>, because those files don&apos;t exist as
-            separate truths anymore. You commit the route change, you run{" "}
-            <code>pnpm gen</code>, the SDK regenerates. That&apos;s it.
-            That&apos;s the post.
+            <code>openapi.yaml</code>
+            {", "}your client types, your contract tests, your frontend
+            imports, and your &quot;types package&quot; is <em>zero lines</em>
+            {", "}because those files don&apos;t exist as separate truths
+            anymore. You commit the route change, you run <code>pnpm gen</code>
+            {", "}the SDK regenerates. That&apos;s it. That&apos;s the post.
           </p>
 
           <h2>The four-step checklist for new projects</h2>
@@ -707,12 +710,13 @@ export default function BlogPostPage() {
 
           <p>
             If you want to go deeper, the{" "}
-            <Link href="/docs/typed-client">typed client docs</Link>, the{" "}
-            <Link href="/docs/openapi">OpenAPI docs</Link>, and the{" "}
-            <Link href="/docs/testing">testing docs</Link> each cover one of
-            these three projections in detail. Or run{" "}
-            <code>pnpm create daloy@latest</code>, point <code>pnpm gen</code>{" "}
-            at it, and watch the dance turn into a single key press.
+            <Link href="/docs/typed-client">typed client docs</Link>
+            {", "}the <Link href="/docs/openapi">OpenAPI docs</Link>
+            {", "}and the <Link href="/docs/testing">testing docs</Link> each
+            cover one of these three projections in detail. Or run{" "}
+            <code>pnpm create daloy@latest</code>
+            {", "}point <code>pnpm gen</code> at it, and watch the dance turn
+            into a single key press.
           </p>
 
           <p>

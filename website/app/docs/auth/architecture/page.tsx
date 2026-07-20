@@ -32,7 +32,8 @@ export default function Page() {
       </h1>
       <p>
         This is the page to read before you wire up login. DaloyJS (like Hono,
-        Express, Fastify, or ASP.NET Core) is a <strong>web framework</strong>.
+        Express, Fastify, or ASP.NET Core) is a <strong>web framework</strong>
+        {". "}
         It is excellent at <em>verifying</em> and <em>enforcing</em> identity on
         each request, but it deliberately does <strong>not</strong> ship a login
         UI, a user database, or an OAuth2 authorization server. Those belong to
@@ -167,12 +168,12 @@ export default function Page() {
         gives you everything you need to build the{" "}
         <strong>Client / Relying Party</strong> (the back-end-for-frontend, or
         BFF). What it does not do is play the{" "}
-        <strong>Authorization Server</strong>: it will not render a login page,
-        store passwords, run a consent screen, expose a{" "}
-        <code>/.well-known/openid-configuration</code> discovery document, or
-        issue access and refresh tokens to third-party clients. That is the
-        IdP&apos;s job, and reimplementing it is exactly the kind of
-        security-critical work you should not take on yourself.
+        <strong>Authorization Server</strong>
+        {": "}it will not render a login page, store passwords, run a consent
+        screen, expose a <code>/.well-known/openid-configuration</code>{" "}
+        discovery document, or issue access and refresh tokens to third-party
+        clients. That is the IdP&apos;s job, and reimplementing it is exactly
+        the kind of security-critical work you should not take on yourself.
       </p>
 
       <h2 id="dotnet-comparison">
@@ -184,10 +185,11 @@ export default function Page() {
         is a whole platform: a runtime (the CLR), a large standard library, and
         an ecosystem of first-party frameworks. <strong>DaloyJS</strong> is a
         single web framework that runs on JavaScript runtimes. The closest .NET
-        analog to DaloyJS is <strong>ASP.NET Core</strong>, not &quot;.NET&quot;
-        as a whole. And the identity pieces that ship in the .NET ecosystem
-        (Duende IdentityServer, OpenIddict, ASP.NET Core Identity) have no
-        built-in DaloyJS equivalent on purpose, you bring an external IdP.
+        analog to DaloyJS is <strong>ASP.NET Core</strong>
+        {", "}not &quot;.NET&quot; as a whole. And the identity pieces that
+        ship in the .NET ecosystem (Duende IdentityServer, OpenIddict, ASP.NET
+        Core Identity) have no built-in DaloyJS equivalent on purpose, you bring
+        an external IdP.
       </p>
       <table>
         <thead>
@@ -257,10 +259,14 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <Link href="/docs/auth/auth0">Auth0</Link>,{" "}
-          <Link href="/docs/auth/okta">Okta</Link>,{" "}
-          <Link href="/docs/auth/clerk">Clerk</Link>,{" "}
-          <Link href="/docs/auth/entra-id">Microsoft Entra ID</Link>,{" "}
+          <Link href="/docs/auth/auth0">Auth0</Link>
+          {", "}
+          <Link href="/docs/auth/okta">Okta</Link>
+          {", "}
+          <Link href="/docs/auth/clerk">Clerk</Link>
+          {", "}
+          <Link href="/docs/auth/entra-id">Microsoft Entra ID</Link>
+          {", "}
           <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>
         </li>
         <li>
@@ -277,27 +283,27 @@ export default function Page() {
           <a href="https://www.keycloak.org" target="_blank" rel="noreferrer">
             Keycloak
           </a>
-          ,{" "}
+          {", "}
           <a href="https://zitadel.com" target="_blank" rel="noreferrer">
             Zitadel
           </a>
-          ,{" "}
+          {", "}
           <a href="https://www.ory.sh" target="_blank" rel="noreferrer">
             Ory (Hydra + Kratos)
           </a>
-          ,{" "}
+          {", "}
           <a href="https://goauthentik.io" target="_blank" rel="noreferrer">
             Authentik
           </a>
-          ,{" "}
+          {", "}
           <a href="https://logto.io" target="_blank" rel="noreferrer">
             Logto
           </a>
-          ,{" "}
+          {", "}
           <a href="https://supertokens.com" target="_blank" rel="noreferrer">
             SuperTokens
           </a>
-          ,{" "}
+          {", "}
           <a href="https://dexidp.io" target="_blank" rel="noreferrer">
             Dex
           </a>
@@ -360,16 +366,21 @@ app.get(
         The <code>jwk()</code> middleware enforces an asymmetric-only algorithm
         allowlist (it refuses <code>HS*</code> to block the classic
         confused-deputy attack), checks <code>issuer</code> and{" "}
-        <code>audience</code>, caches the JWKS, and sends{" "}
-        <code>Cache-Control: no-store</code> on its <code>401</code> challenges.
-        See <Link href="/docs/security/auth-slice">the auth slice</Link> for the
+        <code>audience</code>
+        {", "}caches the JWKS, and sends <code>Cache-Control: no-store</code>{" "}
+        on its <code>401</code> challenges. See{" "}
+        <Link href="/docs/security/auth-slice">the auth slice</Link> for the
         full behavior, and the per-provider guides for{" "}
-        <Link href="/docs/auth/auth0">Auth0</Link>,{" "}
-        <Link href="/docs/auth/okta">Okta</Link>,{" "}
-        <Link href="/docs/auth/entra-id">Entra ID</Link>,{" "}
-        <Link href="/docs/auth/aws-cognito">Cognito</Link>,{" "}
-        <Link href="/docs/auth/clerk">Clerk</Link>, and{" "}
-        <Link href="/docs/auth/better-auth">Better Auth</Link>.
+        <Link href="/docs/auth/auth0">Auth0</Link>
+        {", "}
+        <Link href="/docs/auth/okta">Okta</Link>
+        {", "}
+        <Link href="/docs/auth/entra-id">Entra ID</Link>
+        {", "}
+        <Link href="/docs/auth/aws-cognito">Cognito</Link>
+        {", "}
+        <Link href="/docs/auth/clerk">Clerk</Link>
+        {", "}and <Link href="/docs/auth/better-auth">Better Auth</Link>.
       </p>
 
       <h2 id="bff">
@@ -552,9 +563,10 @@ app.use(csrf());
       <ul>
         <li>
           <strong>Default to a resource server.</strong> Verify JWTs with{" "}
-          <code>jwk()</code>, pin an asymmetric algorithm allowlist, enforce{" "}
-          <code>issuer</code> + <code>audience</code>, and gate routes with{" "}
-          <code>requireScopes()</code>.
+          <code>jwk()</code>
+          {", "}pin an asymmetric algorithm allowlist, enforce{" "}
+          <code>issuer</code> + <code>audience</code>
+          {", "}and gate routes with <code>requireScopes()</code>.
         </li>
         <li>
           <strong>Use the BFF pattern for browser logins.</strong> Run
@@ -578,7 +590,7 @@ app.use(csrf());
           <Link href="/docs/security/internal-service-preset">
             internal-service preset
           </Link>
-          .
+          {"."}
         </li>
       </ul>
 

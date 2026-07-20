@@ -479,7 +479,7 @@ export default function BlogPostPage() {
               okay, but what would session management look like if you
               didn&apos;t have to remember anything
             </em>
-            ?
+            {"?"}
           </p>
 
           <p>
@@ -487,8 +487,8 @@ export default function BlogPostPage() {
             defaults, multi-secret rotation built in, a{" "}
             <code>regenerate()</code> that does the fixation-safe dance for you,
             a <code>MemorySessionStore</code> for tests, and a three-method{" "}
-            <code>SessionStore</code> interface so Redis, Workers KV,
-            Postgres, any of them, is twenty lines.
+            <code>SessionStore</code> interface so Redis, Workers KV, Postgres,
+            any of them, is twenty lines.
           </p>
 
           <h2>The smallest useful setup</h2>
@@ -524,11 +524,16 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            The API is intentionally boring: <code>get</code>, <code>set</code>,{" "}
-            <code>delete</code>, <code>destroy</code>, <code>regenerate</code>.
+            The API is intentionally boring: <code>get</code>
+            {", "}<code>set</code>
+            {", "}
+            <code>delete</code>
+            {", "}<code>destroy</code>
+            {", "}<code>regenerate</code>
+            {". "}
             The interesting part is what the middleware does between your
-            handler returning and the response going out, if you wrote
-            anything, it persists to the store and re-issues the cookie; if you
+            handler returning and the response going out, if you wrote anything,
+            it persists to the store and re-issues the cookie; if you
             didn&apos;t, <code>saveUninitialized: false</code> means no cookie
             at all, which keeps your privacy banner&apos;s job small.
           </p>
@@ -574,7 +579,7 @@ export default function BlogPostPage() {
               <em>verify</em> incoming cookies (timing-safe).
             </li>
             <li>
-              Each secret must be a non-empty string of at least 16 characters, 
+              Each secret must be a non-empty string of at least 16 characters,
               the middleware throws at construction if not.
             </li>
           </ul>
@@ -621,23 +626,24 @@ export default function BlogPostPage() {
           <p>
             I&apos;ve seen this bug in production three times in my career, and
             zero of those times was the team intentionally not calling an
-            equivalent of <code>regenerate</code>. They all forgot. So{" "}
-            <code>regenerate()</code> is a single method that is impossible to
-            use wrong, and the docs and the type hint both nudge you to call it
-            on privilege change. I am genuinely a little proud of how small this
-            API turned out.
+            equivalent of <code>regenerate</code>
+            {". "}They all forgot. So <code>regenerate()</code> is a single
+            method that is impossible to use wrong, and the docs and the type
+            hint both nudge you to call it on privilege change. I am genuinely a
+            little proud of how small this API turned out.
           </p>
 
           <h2>MemorySessionStore: fast tests, never production</h2>
 
           <p>
-            The default store is <code>MemorySessionStore</code>. It&apos;s a{" "}
-            <code>Map</code> with TTL handling and two test helpers (
-            <code>clear()</code>, <code>size()</code>) on top. It is{" "}
-            <em>fantastic</em> for tests because it&apos;s synchronous, has no
-            network, and is observable. It is <em>not</em> for production
-            because the moment you have two processes (or your serverless
-            platform scales horizontally), sessions stop being sticky.
+            The default store is <code>MemorySessionStore</code>
+            {". "}It&apos;s a <code>Map</code> with TTL handling and two test
+            helpers (<code>clear()</code>
+            {", "}<code>size()</code>) on top. It is <em>fantastic</em> for
+            tests because it&apos;s synchronous, has no network, and is
+            observable. It is <em>not</em> for production because the moment you
+            have two processes (or your serverless platform scales
+            horizontally), sessions stop being sticky.
           </p>
 
           <EditorFrame
@@ -665,12 +671,13 @@ export default function BlogPostPage() {
 
           <p>
             Sync or async. <code>touch()</code> is a perf hint for{" "}
-            <code>rolling: true</code>: if your backend has a cheap &quot;just
-            extend the TTL&quot; operation (like Redis <code>EXPIRE</code>),
-            implement it; if not, omit it and the middleware will fall back to{" "}
-            <code>set()</code>. That&apos;s the whole contract. No transactions,
-            no advisory locks, no cooperation with the cookie layer, that all
-            stays inside the middleware.
+            <code>rolling: true</code>
+            {": "}if your backend has a cheap &quot;just extend the TTL&quot;
+            operation (like Redis <code>EXPIRE</code>), implement it; if not,
+            omit it and the middleware will fall back to <code>set()</code>
+            {". "}That&apos;s the whole contract. No transactions, no advisory
+            locks, no cooperation with the cookie layer, that all stays inside
+            the middleware.
           </p>
 
           <h2>A Redis store in twenty lines</h2>
@@ -679,9 +686,9 @@ export default function BlogPostPage() {
             This is the one I reach for the most. Pairs naturally with the{" "}
             <Link href="/blog/the-flow-i-wished-i-had">
               rest of the toolkit
-            </Link>{" "}
-, particularly the Redis-backed rate limiter, which can share the
-            same connection pool.
+            </Link>
+            {", "}particularly the Redis-backed rate limiter, which can share
+            the same connection pool.
           </p>
 
           <EditorFrame
@@ -736,7 +743,7 @@ export default function BlogPostPage() {
             session secret, they can mint any session id they want, that&apos;s
             why the secret lives in a real secrets manager and gets rotated. If
             an attacker gets a user&apos;s cookie via TLS-stripping on a
-            misconfigured subdomain, the signature won&apos;t save you, 
+            misconfigured subdomain, the signature won&apos;t save you,
             that&apos;s why <code>__Host-</code> + <code>Secure</code> are
             non-negotiable defaults. And if your store backend goes down, your
             users log out, that&apos;s why we picked an interface that supports
@@ -755,8 +762,8 @@ export default function BlogPostPage() {
           <p>
             The reference for <code>session()</code> options, including all
             cookie defaults and the full <code>SessionContext</code> surface, is
-            in the <Link href="/docs/security/session">session docs</Link>. If
-            you&apos;re also wiring Redis for rate limiting, the{" "}
+            in the <Link href="/docs/security/session">session docs</Link>
+            {". "}If you&apos;re also wiring Redis for rate limiting, the{" "}
             <Link href="/docs/security/rate-limit-redis">
               rate-limit Redis docs
             </Link>{" "}
@@ -768,7 +775,8 @@ export default function BlogPostPage() {
           <p>
             Thanks for reading. Now go check your <code>SESSION_SECRET</code> is
             at least 32 bytes. I will wait. (If it is the word{" "}
-            <code>secret</code>, I will not judge, but I will worry.)
+            <code>secret</code>
+            {", "}I will not judge, but I will worry.)
           </p>
 
           <p>Devlin</p>

@@ -25,10 +25,14 @@ export default function Page() {
       <h1>Installation</h1>
       <p>
         DaloyJS targets <strong>Node.js ≥ 24.0.0 (active LTS)</strong> and is
-        distributed on the public npm registry as <code>@daloyjs/core</code>.
-        The package has <strong>no peer dependencies</strong>, so{" "}
-        <code>npm</code>, <code>yarn</code>, <code>pnpm</code>, and{" "}
-        <code>bun</code> can all install it directly. We <em>recommend</em>{" "}
+        distributed on the public npm registry as <code>@daloyjs/core</code>
+        {". "}
+        The package has <strong>no peer dependencies</strong>
+        {", "}so <code>npm</code>
+        {", "}<code>yarn</code>
+        {", "}<code>pnpm</code>
+        {", "}and <code>bun</code> can all install it directly. We{" "}
+        <em>recommend</em>{" "}
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">
           pnpm
         </a>{" "}
@@ -71,9 +75,12 @@ export default function Page() {
         caption="Either scaffold a hardened project in one command or add the dependency-free package to an existing one, then drop in the hardened .npmrc and verify the import resolves."
       />
 
-      <h2 id="fastest-path-scaffold-a-project">Fastest path: scaffold a project</h2>
+      <h2 id="fastest-path-scaffold-a-project">
+        Fastest path: scaffold a project
+      </h2>
       <p>
-        Use the official generator, it sets up a hardened <code>.npmrc</code>,
+        Use the official generator, it sets up a hardened <code>.npmrc</code>
+        {", "}
         strict TypeScript, and a working route in one command.
       </p>
       <p>
@@ -93,7 +100,7 @@ export default function Page() {
         >
           @daloyjs/core on npm
         </a>
-        .
+        {"."}
       </p>
       <CodeBlock
         language="bash"
@@ -108,7 +115,9 @@ bun  create daloy           my-api`}
         templates and flags.
       </p>
 
-      <h2 id="or-install-into-an-existing-project">Or install into an existing project</h2>
+      <h2 id="or-install-into-an-existing-project">
+        Or install into an existing project
+      </h2>
 
       <h3 id="prerequisites">Prerequisites</h3>
       <ul>
@@ -117,10 +126,11 @@ bun  create daloy           my-api`}
         </li>
         <li>
           A package manager. Any of these works, pnpm 11.x or newer is
-          recommended for supply-chain hardening, but <code>npm</code>,{" "}
-          <code>yarn</code>, and <code>bun</code> install{" "}
-          <code>@daloyjs/core</code> cleanly because the package has no peer
-          dependencies.
+          recommended for supply-chain hardening, but <code>npm</code>
+          {", "}
+          <code>yarn</code>
+          {", "}and <code>bun</code> install <code>@daloyjs/core</code> cleanly
+          because the package has no peer dependencies.
         </li>
       </ul>
       <p>
@@ -132,7 +142,7 @@ bun  create daloy           my-api`}
         >
           Corepack
         </a>
-        :
+        {": "}
       </p>
       <CodeBlock
         language="bash"
@@ -164,7 +174,7 @@ bun  add -d     typescript @hey-api/openapi-ts prettier`}
         >
           @daloyjs/core
         </a>
-        .
+        {"."}
       </p>
 
       <h2 id="hardened-npmrc">
@@ -190,13 +200,14 @@ ignore-scripts=true`}
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">
           pnpm motivation guide
         </a>
-        .
+        {"."}
       </p>
 
       <h2 id="verify">Verify</h2>
       <p>
         Run this from the project root after installing, it works the same under
-        pnpm, npm, yarn, or bun because it shells straight to <code>node</code>:
+        pnpm, npm, yarn, or bun because it shells straight to <code>node</code>
+        {": "}
       </p>
       <CodeBlock
         language="bash"

@@ -30,12 +30,13 @@ export default function Page() {
       <h1>Database hosting &amp; serverless data providers</h1>
       <p>
         DaloyJS doesn&apos;t ship a database. It runs on Node, Bun, Deno,
-        Cloudflare Workers, AWS Lambda, Deno Deploy, and Fastly Compute,
-        so the right database depends on which{" "}
+        Cloudflare Workers, AWS Lambda, Deno Deploy, and Fastly Compute, so the
+        right database depends on which{" "}
         <Link href="/docs/adapters">adapter</Link> you target.
       </p>
       <p>
-        The pages in this section cover <strong>where your data lives</strong>:
+        The pages in this section cover <strong>where your data lives</strong>
+        {": "}
         managed hosts and their drivers, separately from{" "}
         <strong>how you query it</strong> (see{" "}
         <Link href="/docs/orm">ORMs</Link> and{" "}
@@ -43,14 +44,17 @@ export default function Page() {
         Drizzle or Prisma rather than replacing them.
       </p>
 
-      <h2 id="why-this-matters-on-edge-runtimes">Why this matters on edge runtimes</h2>
+      <h2 id="why-this-matters-on-edge-runtimes">
+        Why this matters on edge runtimes
+      </h2>
       <p>
-        Cloudflare Workers don&apos;t expose raw TCP sockets, so the
-        classic <code>pg</code> or <code>mysql2</code> drivers will not connect
+        Cloudflare Workers don&apos;t expose raw TCP sockets, so the classic{" "}
+        <code>pg</code> or <code>mysql2</code> drivers will not connect
         directly. The providers below solve that by offering an{" "}
-        <strong>HTTP / WebSocket driver</strong>, an{" "}
-        <strong>HTTP data API</strong>, or a runtime-native binding. Pick a host
-        whose driver matches the runtime you ship to.
+        <strong>HTTP / WebSocket driver</strong>
+        {", "}an <strong>HTTP data API</strong>
+        {", "}or a runtime-native binding. Pick a host whose driver matches the
+        runtime you ship to.
       </p>
 
       <LayerStack
@@ -86,37 +90,39 @@ export default function Page() {
       <h2 id="supported-providers">Supported providers</h2>
       <ul>
         <li>
-          <Link href="/docs/databases/neon">Neon</Link>: serverless Postgres
-          with branching, scale-to-zero, and an HTTP/WebSocket driver (
-          <code>@neondatabase/serverless</code>).
+          <Link href="/docs/databases/neon">Neon</Link>
+          {": "}serverless Postgres with branching, scale-to-zero, and an
+          HTTP/WebSocket driver (<code>@neondatabase/serverless</code>).
         </li>
         <li>
-          <Link href="/docs/databases/planetscale">PlanetScale</Link>: managed
-          MySQL with Vitess, branching, deploy requests, and an HTTP driver (
-          <code>@planetscale/database</code>).
+          <Link href="/docs/databases/planetscale">PlanetScale</Link>
+          {": "}managed MySQL with Vitess, branching, deploy requests, and an
+          HTTP driver (<code>@planetscale/database</code>).
         </li>
         <li>
-          <Link href="/docs/orm/supabase">Supabase</Link>: hosted Postgres plus
-          auth, storage, and realtime via the fetch-based{" "}
-          <code>@supabase/supabase-js</code>.
+          <Link href="/docs/orm/supabase">Supabase</Link>
+          {": "}hosted Postgres plus auth, storage, and realtime via the
+          fetch-based <code>@supabase/supabase-js</code>.
         </li>
         <li>
-          <Link href="/docs/databases/turso">Turso</Link>: distributed libSQL
-          (SQLite fork) via <code>@libsql/client</code>; works over HTTP for
-          edge runtimes.
+          <Link href="/docs/databases/turso">Turso</Link>
+          {": "}distributed libSQL (SQLite fork) via{" "}
+          <code>@libsql/client</code>; works over HTTP for edge runtimes.
         </li>
         <li>
-          <Link href={"/docs/databases/duckdb" as Route}>DuckDB</Link>:
-          embedded OLAP SQL engine for analytics, local files, Parquet, and ad
-          hoc reporting inside Node.js services.
+          <Link href={"/docs/databases/duckdb" as Route}>DuckDB</Link>
+          {": "}embedded OLAP SQL engine for analytics, local files, Parquet,
+          and ad hoc reporting inside Node.js services.
         </li>
         <li>
-          <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>:
+          <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>
+          {": "}
           SQLite-compatible database bundled with Workers, accessed through a
           runtime binding (no network driver).
         </li>
         <li>
-          <Link href="/docs/databases/aurora-dsql">AWS Aurora DSQL</Link>:
+          <Link href="/docs/databases/aurora-dsql">AWS Aurora DSQL</Link>
+          {": "}
           distributed PostgreSQL on AWS, ideal for the{" "}
           <Link href="/docs/adapters">Lambda adapter</Link>.
         </li>
@@ -197,26 +203,30 @@ export default function Page() {
       <h2 id="choosing-one">Choosing one</h2>
       <ul>
         <li>
-          <strong>You target Cloudflare Workers exclusively</strong>: D1
-          (built-in) or Neon / PlanetScale / Turso over HTTP.
+          <strong>You target Cloudflare Workers exclusively</strong>
+          {": "}D1 (built-in) or Neon / PlanetScale / Turso over HTTP.
         </li>
         <li>
-          <strong>You want MySQL with database branching</strong>: PlanetScale.
+          <strong>You want MySQL with database branching</strong>
+          {": "}PlanetScale.
         </li>
         <li>
-          <strong>You want auth + storage + realtime in one package</strong>:
+          <strong>You want auth + storage + realtime in one package</strong>
+          {": "}
           Supabase.
         </li>
         <li>
-          <strong>You&apos;re all-in on AWS with the Lambda adapter</strong>:
+          <strong>You&apos;re all-in on AWS with the Lambda adapter</strong>
+          {": "}
           Aurora DSQL or RDS Postgres via standard <code>pg</code>.
         </li>
         <li>
-          <strong>You need SQLite-style data close to users</strong>: Turso or
-          D1.
+          <strong>You need SQLite-style data close to users</strong>
+          {": "}Turso or D1.
         </li>
         <li>
-          <strong>You need embedded analytics over files or local data</strong>:
+          <strong>You need embedded analytics over files or local data</strong>
+          {": "}
           DuckDB on Node.js or Lambda.
         </li>
       </ul>

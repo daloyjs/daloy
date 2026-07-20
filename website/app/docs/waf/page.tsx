@@ -29,22 +29,24 @@ export default function Page() {
     <>
       <h1>WAF-lite signature/anomaly inspection</h1>
       <p>
-        A full Web Application Firewall belongs at your <strong>edge</strong>:
-        a CDN, reverse proxy, or ModSecurity with the OWASP Core Rule Set.
-        DaloyJS does not try to replace that. But plenty of teams ship without
-        an edge WAF, and for them <code>waf()</code> is a first-party,{" "}
+        A full Web Application Firewall belongs at your <strong>edge</strong>
+        {": "}a CDN, reverse proxy, or ModSecurity with the OWASP Core Rule
+        Set. DaloyJS does not try to replace that. But plenty of teams ship
+        without an edge WAF, and for them <code>waf()</code> is a first-party,{" "}
         <strong>opt-in defense-in-depth</strong> layer: it wires the
         framework&apos;s high-confidence injection signatures into a single,
         scored inbound-inspection pass you can turn on with one line.
       </p>
       <p>
-        <code>waf()</code> inspects the decoded
-        URL path, the raw and decoded query string, an optional header
-        allowlist, and the validated request body for four rule categories:{" "}
-        <strong>SQLi</strong>, <strong>XSS</strong>, <strong>NoSQLi</strong>{" "}
-        (Mongo-style operator injection), and <strong>command injection</strong>
-        . Each rule that fires contributes an <em>anomaly score</em>; when the
-        total reaches the threshold, the request is rejected with a generic{" "}
+        <code>waf()</code> inspects the decoded URL path, the raw and decoded
+        query string, an optional header allowlist, and the validated request
+        body for four rule categories: <strong>SQLi</strong>
+        {", "}
+        <strong>XSS</strong>
+        {", "}<strong>NoSQLi</strong> (Mongo-style operator injection), and{" "}
+        <strong>command injection</strong>
+        {". "}Each rule that fires contributes an <em>anomaly score</em>; when
+        the total reaches the threshold, the request is rejected with a generic{" "}
         <code>403</code> (block mode) or merely reported (log mode).
       </p>
 
@@ -93,11 +95,14 @@ app.use(waf());`}
       />
       <p>
         The middleware runs in the <code>beforeHandle</code> phase, so it sees
-        the validated context: <code>query</code>, <code>params</code>,{" "}
-        <code>headers</code>, and the schema-parsed <code>body</code>. Because
-        body inspection reads <code>ctx.body</code>, it composes with the
-        framework&apos;s schema-first contract: routes that declare a body
-        schema are body-inspected automatically.
+        the validated context: <code>query</code>
+        {", "}<code>params</code>
+        {", "}
+        <code>headers</code>
+        {", "}and the schema-parsed <code>body</code>
+        {". "}Because body inspection reads <code>ctx.body</code>
+        {", "}it composes with the framework&apos;s schema-first contract:
+        routes that declare a body schema are body-inspected automatically.
       </p>
 
       <h2 id="tune-in-log-mode-first">Tune in log mode first</h2>
@@ -121,50 +126,65 @@ app.use(waf());`}
         <code>onMatch</code> fires once per <em>actionable</em> detection (score
         at or above the threshold) in both modes, immediately before any{" "}
         <code>403</code> is thrown. Each entry in <code>event.matches</code>{" "}
-        carries the <code>ruleId</code>, the <code>score</code> it contributed,
-        the <code>location</code> it matched (<code>path</code>,{" "}
-        <code>query</code>, <code>header</code>, or <code>body</code>), and a
-        short, control-character-stripped <code>sample</code> for your logs.
+        carries the <code>ruleId</code>
+        {", "}the <code>score</code> it contributed, the <code>location</code>{" "}
+        it matched (<code>path</code>
+        {", "}
+        <code>query</code>
+        {", "}<code>header</code>
+        {", "}or <code>body</code>), and a short, control-character-stripped{" "}
+        <code>sample</code> for your logs.
       </p>
 
       <h2 id="the-rules">The rules</h2>
       <ul>
         <li>
-          <strong>sqli</strong>: <code>UNION SELECT</code>, boolean tautologies
-          (<code>OR 1=1</code>), stacked statements (<code>; DROP TABLE</code>),
-          time-based probes (<code>SLEEP()</code>, <code>WAITFOR DELAY</code>),{" "}
-          <code>INFORMATION_SCHEMA</code>, <code>xp_cmdshell</code>, and file
-          primitives.
+          <strong>sqli</strong>
+          {": "}<code>UNION SELECT</code>
+          {", "}boolean tautologies (<code>OR 1=1</code>), stacked statements (
+          <code>; DROP TABLE</code>), time-based probes (<code>SLEEP()</code>
+          {", "}<code>WAITFOR DELAY</code>), <code>INFORMATION_SCHEMA</code>
+          {", "}<code>xp_cmdshell</code>
+          {", "}and file primitives.
         </li>
         <li>
-          <strong>xss</strong>: <code>&lt;script&gt;</code> tags,{" "}
-          <code>javascript:</code> URIs, inline event handlers (
-          <code>onerror=</code>, <code>onload=</code>), and{" "}
-          <code>document.cookie</code> exfiltration.
+          <strong>xss</strong>
+          {": "}<code>&lt;script&gt;</code> tags, <code>javascript:</code>{" "}
+          URIs, inline event handlers (<code>onerror=</code>
+          {", "}<code>onload=</code>), and <code>document.cookie</code>{" "}
+          exfiltration.
         </li>
         <li>
-          <strong>nosqli</strong>: Mongo operator strings (<code>$ne</code>,{" "}
-          <code>$where</code>, …) <em>and</em> a structural check that rejects a
-          parsed body containing any <code>$</code>-prefixed key, so{" "}
+          <strong>nosqli</strong>
+          {": "}Mongo operator strings (<code>$ne</code>
+          {", "}
+          <code>$where</code>
+          {", "} …) <em>and</em> a structural check that rejects a parsed body
+          containing any <code>$</code>-prefixed key, so{" "}
           <code>{`{"password": {"$ne": null}}`}</code> is caught even when no
           string value matches.
         </li>
         <li>
-          <strong>cmdi</strong>: shell metacharacters chaining into binaries (
-          <code>; rm</code>, <code>| nc</code>, <code>&amp;&amp; curl</code>),
-          command substitution (<code>$(...)</code>, backticks), and sensitive
-          path access (<code>/etc/passwd</code>).
+          <strong>cmdi</strong>
+          {": "}shell metacharacters chaining into binaries (<code>; rm</code>
+          {", "}<code>| nc</code>
+          {", "}<code>&amp;&amp; curl</code>), command substitution (
+          <code>$(...)</code>
+          {", "}backticks), and sensitive path access (<code>/etc/passwd</code>
+          ).
         </li>
       </ul>
 
-      <h2 id="scoring-and-the-block-threshold">Scoring and the block threshold</h2>
+      <h2 id="scoring-and-the-block-threshold">
+        Scoring and the block threshold
+      </h2>
       <p>
         Each rule contributes its score <strong>once per request</strong>
         (deduplicated across all inspected locations). The default score is{" "}
         <code>5</code> and the default <code>blockThreshold</code> is{" "}
-        <code>5</code>, so any single high-confidence signature trips the guard.
-        Raise the threshold to require multiple independent categories before
-        acting:
+        <code>5</code>
+        {", "}so any single high-confidence signature trips the guard. Raise
+        the threshold to require multiple independent categories before acting:
       </p>
       <CodeBlock
         language="ts"
@@ -195,7 +215,9 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
       <p>
         Path, query, and body are inspected by default. Header inspection is{" "}
         <strong>opt-in</strong> and requires an explicit allowlist, because
-        common headers (<code>User-Agent</code>, <code>Cookie</code>,{" "}
+        common headers (<code>User-Agent</code>
+        {", "}<code>Cookie</code>
+        {", "}
         <code>Referer</code>) carry punctuation that can trip signatures.
       </p>
       <CodeBlock

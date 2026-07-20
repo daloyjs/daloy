@@ -30,13 +30,18 @@ export default function Page() {
     <>
       <h1>Multitenancy</h1>
       <p>
-        DaloyJS ships <code>tenancy()</code>, a <strong>dependency-free</strong>
-        , secure-by-default <code>Hooks</code> bundle that resolves the calling
-        tenant <em>once</em> per request, validates and normalizes it, and
-        exposes it on <code>ctx.state.tenant</code>. It is the single source of
-        truth for &ldquo;who is this request for&rdquo; so the per-tenant
-        isolation knobs already on the framework (<code>rateLimit</code>,{" "}
-        <code>concurrencyLimit</code>, <code>idempotency</code>,{" "}
+        DaloyJS ships <code>tenancy()</code>
+        {", "}a <strong>dependency-free</strong>
+        {", "}secure-by-default <code>Hooks</code> bundle that resolves the
+        calling tenant <em>once</em> per request, validates and normalizes it,
+        and exposes it on <code>ctx.state.tenant</code>
+        {". "}It is the single source of truth for &ldquo;who is this request
+        for&rdquo; so the per-tenant isolation knobs already on the framework (
+        <code>rateLimit</code>
+        {", "}
+        <code>concurrencyLimit</code>
+        {", "}<code>idempotency</code>
+        {", "}
         <code>responseCache</code>) can all key off the same resolved value via{" "}
         <code>tenantScope()</code>.
       </p>
@@ -110,10 +115,11 @@ app.get(
 
       <h2 id="resolving-the-tenant">Resolving the tenant</h2>
       <p>
-        Pass one resolver to <code>resolve</code>, or an array tried in order
-        until one returns a non-empty value (e.g. prefer a verified JWT claim,
-        fall back to the subdomain). A resolver is just a{" "}
-        <code>(ctx) =&gt; string | undefined</code>, so you can write your own.
+        Pass one resolver to <code>resolve</code>
+        {", "}or an array tried in order until one returns a non-empty value
+        (e.g. prefer a verified JWT claim, fall back to the subdomain). A
+        resolver is just a <code>(ctx) =&gt; string | undefined</code>
+        {", "}so you can write your own.
       </p>
 
       <BranchDiagram
@@ -177,10 +183,11 @@ app.get(
                 <code>acme.example.com</code> → <code>acme</code>
               </td>
               <td>
-                PSL-aware via <code>subdomains()</code>. A <code>Host</code> not
-                under <code>baseDomain</code> resolves to <em>unresolved</em>{" "}
-                (host-spoof safe), never a <code>500</code>. Recommended for
-                production.
+                PSL-aware via <code>subdomains()</code>
+                {". "}A <code>Host</code> not under <code>baseDomain</code>{" "}
+                resolves to <em>unresolved</em> (host-spoof safe), never a{" "}
+                <code>500</code>
+                {". "}Recommended for production.
               </td>
             </tr>
             <tr>
@@ -383,12 +390,13 @@ responseCache({
       />
       <p>
         <strong>Ordering matters.</strong> <code>tenancy()</code> resolves in{" "}
-        <code>beforeHandle</code>, and so do these consumers. Register{" "}
-        <code>tenancy()</code> first, as a global hook (
-        <code>new App({`{ hooks: tenancy(...) }`}</code>) or the first{" "}
-        <code>app.use(...)</code>, so the tenant is populated before any{" "}
-        <code>keyGenerator</code> / <code>scope</code> callback runs. If a
-        limiter runs first, its key falls back to <code>tenant:unknown</code>.
+        <code>beforeHandle</code>
+        {", "}and so do these consumers. Register <code>tenancy()</code> first,
+        as a global hook (<code>new App({`{ hooks: tenancy(...) }`}</code>) or
+        the first <code>app.use(...)</code>
+        {", "}so the tenant is populated before any <code>keyGenerator</code> /{" "}
+        <code>scope</code> callback runs. If a limiter runs first, its key falls
+        back to <code>tenant:unknown</code>.
       </p>
 
       <h2 id="database-isolation-is-yours-to-wire">
@@ -422,9 +430,10 @@ await db.query("SET app.current_tenant = $1", [ctx.state.tenant]);
       />
       <p>
         Either way, the value reaching your database was already validated and
-        normalized by <code>tenancy()</code>, so a spoofed header or a{" "}
-        <code>Host</code> outside your <code>baseDomain</code> can never become
-        a query parameter or an RLS session variable. The{" "}
+        normalized by <code>tenancy()</code>
+        {", "}so a spoofed header or a <code>Host</code> outside your{" "}
+        <code>baseDomain</code> can never become a query parameter or an RLS
+        session variable. The{" "}
         <Link href={"/docs/security/resource-authorization" as Route}>
           resource authorization guide
         </Link>{" "}
@@ -460,16 +469,19 @@ declare module "@daloyjs/core" {
       <ul>
         <li>
           <strong>Refuse-unresolved by default.</strong> With{" "}
-          <code>require: true</code>, a request whose tenant cannot be resolved
-          is rejected rather than silently served as a default tenant, the
-          failure mode that leaks one tenant&apos;s data to another.
+          <code>require: true</code>
+          {", "}a request whose tenant cannot be resolved is rejected rather
+          than silently served as a default tenant, the failure mode that leaks
+          one tenant&apos;s data to another.
         </li>
         <li>
           <strong>Format-validated ids.</strong> Resolved ids are normalized to
           a conservative tenant-id grammar before they are stored or used as a
-          key. A spoofable header value cannot smuggle newlines, <code>:</code>,{" "}
-          <code>/</code>, or <code>*</code> into rate-limit keys, cache keys, or
-          log lines (key/log injection, cache poisoning).
+          key. A spoofable header value cannot smuggle newlines, <code>:</code>
+          {", "}
+          <code>/</code>
+          {", "}or <code>*</code> into rate-limit keys, cache keys, or log
+          lines (key/log injection, cache poisoning).
         </li>
         <li>
           <strong>No enumeration.</strong> A resolved-but-unknown tenant is{" "}

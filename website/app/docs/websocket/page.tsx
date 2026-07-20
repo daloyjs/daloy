@@ -30,9 +30,10 @@ export default function Page() {
         DaloyJS ships runtime-agnostic WebSocket primitives in{" "}
         <code>src/websocket.ts</code> (re-exported from{" "}
         <code>@daloyjs/core/websocket</code>) plus adapter wiring for{" "}
-        <code>@daloyjs/core/node</code> and <code>@daloyjs/core/bun</code>. Both
-        adapters accept the <strong>same handler shape</strong>: the Bun-style
-        <code> open</code> / <code>message</code> / <code>close</code> /{" "}
+        <code>@daloyjs/core/node</code> and <code>@daloyjs/core/bun</code>
+        {". "}Both adapters accept the <strong>same handler shape</strong>
+        {": "}the Bun-style
+        <code>open</code> / <code>message</code> / <code>close</code> /{" "}
         <code>drain</code> / <code>error</code> callbacks, so the same{" "}
         <code>app.ws(path, handler)</code> registration works on either runtime
         without changes.
@@ -45,20 +46,21 @@ export default function Page() {
       </p>
       <p>
         <code>app.ws()</code> also normalizes safe runtime defaults:{" "}
-        <code>closeOnBackpressureLimit: true</code>, a 1
-        MiB <code>backpressureLimit</code>,{" "}
-        <code>perMessageDeflate: false</code>, a non-zero{" "}
-        <code>idleTimeout</code>, and a 1 MiB <code>maxPayloadLength</code>.
-        Production apps running with <code>secureDefaults</code> refuse{" "}
+        <code>closeOnBackpressureLimit: true</code>
+        {", "}a 1 MiB <code>backpressureLimit</code>
+        {", "}<code>perMessageDeflate: false</code>
+        {", "}a non-zero <code>idleTimeout</code>
+        {", "}and a 1 MiB <code>maxPayloadLength</code>
+        {". "}Production apps running with <code>secureDefaults</code> refuse{" "}
         <code>perMessageDeflate: true</code>.
       </p>
       <p>
         Production routes also require an Origin policy with{" "}
         <code>allowedOrigins</code> or an explicit{" "}
-        <code>acknowledgeCrossOriginUpgrade: true</code>. This closes the
-        Cross-Site WebSocket Hijacking pattern behind Storybook&apos;s
-        CVE-2026-27148: browsers attach cookies to WS handshakes, even when
-        another site opened the socket.
+        <code>acknowledgeCrossOriginUpgrade: true</code>
+        {". "}This closes the Cross-Site WebSocket Hijacking pattern behind
+        Storybook&apos;s CVE-2026-27148: browsers attach cookies to WS
+        handshakes, even when another site opened the socket.
       </p>
 
       <h2 id="quick-start">Quick start</h2>
@@ -124,45 +126,54 @@ app.ws("/chat/:room", chatHandler);`}
       </p>
       <ul>
         <li>
-          <code>conn.readyState</code>: one of{" "}
+          <code>conn.readyState</code>
+          {": "}one of{" "}
           <code>WS_READY_STATE.CONNECTING / OPEN / CLOSING / CLOSED</code>.
         </li>
         <li>
-          <code>conn.send(data, options?)</code>: send a text frame for{" "}
-          <code>string</code>, or a binary frame for <code>Uint8Array</code> /{" "}
-          <code>ArrayBuffer</code>. Pass <code>{`{ binary: true }`}</code> to
-          force binary framing of a string.
+          <code>conn.send(data, options?)</code>
+          {": "}send a text frame for <code>string</code>
+          {", "}or a binary frame for <code>Uint8Array</code> /{" "}
+          <code>ArrayBuffer</code>
+          {". "}Pass <code>{`{ binary: true }`}</code> to force binary framing
+          of a string.
         </li>
         <li>
-          <code>conn.ping(data?)</code> / <code>conn.pong(data?)</code>: 
-          control frames; payload must be ≤ 125 bytes per RFC 6455.
+          <code>conn.ping(data?)</code> / <code>conn.pong(data?)</code>
+          {": "}control frames; payload must be ≤ 125 bytes per RFC 6455.
         </li>
         <li>
-          <code>conn.close(code?, reason?)</code>: graceful close (sends a
-          CLOSE frame, fires your <code>close</code> handler, then closes the
-          underlying socket).
+          <code>conn.close(code?, reason?)</code>
+          {": "}graceful close (sends a CLOSE frame, fires your{" "}
+          <code>close</code> handler, then closes the underlying socket).
         </li>
         <li>
-          <code>conn.terminate()</code>: immediate transport-level close, no
-          CLOSE frame.
+          <code>conn.terminate()</code>
+          {": "}immediate transport-level close, no CLOSE frame.
         </li>
         <li>
-          <code>conn.bufferedAmount</code>, <code>conn.protocol</code>,{" "}
-          <code>conn.extensions</code>, <code>conn.binaryType</code>.
+          <code>conn.bufferedAmount</code>
+          {", "}<code>conn.protocol</code>
+          {", "}
+          <code>conn.extensions</code>
+          {", "}<code>conn.binaryType</code>.
         </li>
         <li>
-          <code>conn.data</code>: opaque per-connection slot for your app
-          state.
+          <code>conn.data</code>
+          {": "}opaque per-connection slot for your app state.
         </li>
       </ul>
 
-      <h2 id="protocol-negotiation-and-upgrade-hook">Protocol negotiation & upgrade hook</h2>
+      <h2 id="protocol-negotiation-and-upgrade-hook">
+        Protocol negotiation & upgrade hook
+      </h2>
       <p>
         Optional <code>beforeUpgrade(req, ctx)</code> runs after the path match
         and Origin policy, but before the 101 response. Return a{" "}
         <code>Response</code> to reject (handy for auth or rate-limiting), or
         return a <code>string</code> to pick a subprotocol from{" "}
-        <code>Sec-WebSocket-Protocol</code>:
+        <code>Sec-WebSocket-Protocol</code>
+        {": "}
       </p>
 
       <SequenceDiagram
@@ -305,12 +316,15 @@ app.ws("/session", {
         language="ts"
       />
 
-      <h2 id="payload-and-backpressure-limits">Payload and backpressure limits</h2>
+      <h2 id="payload-and-backpressure-limits">
+        Payload and backpressure limits
+      </h2>
       <p>
         Override safe defaults per route when a connection needs tighter bounds.{" "}
-        <code>idleTimeout</code>, <code>backpressureLimit</code>, and{" "}
-        <code>maxPayloadLength</code> must be positive integers. If your
-        WebSocket handler declares a body schema with a maximum size, Daloy
+        <code>idleTimeout</code>
+        {", "}<code>backpressureLimit</code>
+        {", "}and <code>maxPayloadLength</code> must be positive integers. If
+        your WebSocket handler declares a body schema with a maximum size, Daloy
         refuses a larger <code>maxPayloadLength</code> at registration time.
       </p>
       <CodeBlock
@@ -339,7 +353,8 @@ app.ws("/session", {
       <h2 id="custom-adapters">Custom adapters</h2>
       <p>
         If you target a runtime other than Node or Bun, import the primitives
-        directly from <code>@daloyjs/core/websocket</code>:
+        directly from <code>@daloyjs/core/websocket</code>
+        {": "}
       </p>
       <CodeBlock
         code={`import {
@@ -358,9 +373,11 @@ app.ws("/session", {
         <code>FrameSink</code> is a streaming RFC 6455 parser: feed it bytes via{" "}
         <code>sink.push(chunk)</code> and it dispatches <code>onMessage</code>{" "}
         (with reassembled payload + <code>isBinary</code> flag),{" "}
-        <code>onPing</code>, <code>onPong</code>, <code>onClose</code>, and{" "}
-        <code>onProtocolError</code>. UTF-8 validation on text frames is handled
-        for you.
+        <code>onPing</code>
+        {", "}<code>onPong</code>
+        {", "}<code>onClose</code>
+        {", "}and <code>onProtocolError</code>
+        {". "}UTF-8 validation on text frames is handled for you.
       </p>
     </>
   );

@@ -74,10 +74,13 @@ export default function Page() {
         caption="On success you get a typed config object. On failure defineConfig() aggregates every issue into one ConfigValidationError and exits before the server binds a port."
       />
 
-      <h2 id="quick-start-from-the-environment">Quick start (from the environment)</h2>
+      <h2 id="quick-start-from-the-environment">
+        Quick start (from the environment)
+      </h2>
       <p>
         By default <code>defineConfig()</code> reads from{" "}
-        <code>process.env</code>. The result is fully typed from your schema.
+        <code>process.env</code>
+        {". "}The result is fully typed from your schema.
       </p>
       <CodeBlock
         code={`import { z } from "zod";
@@ -133,9 +136,10 @@ serve(app, { port: config.PORT });`}
         <code>custom</code> source with an async resolver.
       </p>
       <p>
-        File sources read through <code>node:fs/promises</code>. On edge
-        runtimes, prefer <code>env</code>, <code>object</code>, or{" "}
-        <code>custom</code> sources supplied by the platform.
+        File sources read through <code>node:fs/promises</code>
+        {". "}On edge runtimes, prefer <code>env</code>
+        {", "}<code>object</code>
+        {", "}or <code>custom</code> sources supplied by the platform.
       </p>
       <CodeBlock
         language="ts"
@@ -191,12 +195,15 @@ await defineConfig({
 });`}
       />
 
-      <h2 id="transforming-before-validation">Transforming before validation</h2>
+      <h2 id="transforming-before-validation">
+        Transforming before validation
+      </h2>
       <p>
         Use <code>transform</code> to coerce or rename raw values before they
         hit the schema, for example mapping <code>FOO_BAR</code> to{" "}
-        <code>fooBar</code>, or normalizing string flags. It receives the raw
-        source object and returns the object handed to the validator.
+        <code>fooBar</code>
+        {", "}or normalizing string flags. It receives the raw source object
+        and returns the object handed to the validator.
       </p>
       <CodeBlock
         language="ts"
@@ -209,7 +216,9 @@ await defineConfig({
 });`}
       />
 
-      <h2 id="handling-the-error-programmatically">Handling the error programmatically</h2>
+      <h2 id="handling-the-error-programmatically">
+        Handling the error programmatically
+      </h2>
       <p>
         On failure, <code>defineConfig()</code> throws a{" "}
         <code>ConfigValidationError</code> whose <code>issues</code> array holds

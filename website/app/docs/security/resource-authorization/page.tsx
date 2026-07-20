@@ -30,17 +30,17 @@ export default function Page() {
       <p>
         Authentication proves who called the API. Scopes and roles decide which
         operations that identity may attempt. Resource authorization decides
-        whether the caller may act on <em>this particular record</em>. A valid
-        token with a valid <code>projects:read</code> scope must not let Alice
-        read Bob&apos;s project by changing an ID in the URL.
+        whether the caller may act on <em>this particular record</em>
+        {". "}A valid token with a valid <code>projects:read</code> scope must
+        not let Alice read Bob&apos;s project by changing an ID in the URL.
       </p>
       <p>
         OWASP calls this{" "}
-        <strong>Broken Object Level Authorization (BOLA)</strong>. It is also
-        commonly called an Insecure Direct Object Reference (IDOR). DaloyJS can
-        verify identity, validate identifiers, enforce scopes, and carry a typed
-        principal into the handler. Your application must still connect that
-        principal to its own ownership rules.
+        <strong>Broken Object Level Authorization (BOLA)</strong>
+        {". "}It is also commonly called an Insecure Direct Object Reference
+        (IDOR). DaloyJS can verify identity, validate identifiers, enforce
+        scopes, and carry a typed principal into the handler. Your application
+        must still connect that principal to its own ownership rules.
       </p>
 
       <FlowDiagram
@@ -350,8 +350,9 @@ const ProjectResponse = z
       <h2 id="administrator-access">Make administrator bypasses explicit</h2>
       <p>
         Do not hide an administrator bypass inside a repository method named{" "}
-        <code>findProject()</code>. Give it an explicit policy name, require a
-        separate permission, and write an audit event:
+        <code>findProject()</code>
+        {". "}Give it an explicit policy name, require a separate permission,
+        and write an audit event:
       </p>
       <CodeBlock
         language="ts"
@@ -470,8 +471,8 @@ return projects.findForOwner(params.id, principal.userId, principal.tenantId);`}
         <Link href="/docs/security/owasp-api-top-10">
           OWASP API Top 10 mapping
         </Link>
-        , <Link href="/docs/auth">authentication overview</Link>, and{" "}
-        <Link href="/docs/testing">testing guide</Link>.
+        {", "}<Link href="/docs/auth">authentication overview</Link>
+        {", "}and <Link href="/docs/testing">testing guide</Link>.
       </p>
     </>
   );

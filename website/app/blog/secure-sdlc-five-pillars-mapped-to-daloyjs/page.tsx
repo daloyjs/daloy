@@ -260,27 +260,28 @@ export default function BlogPostPage() {
 
           <p>
             The piece is a fine high-level checklist for CTOs and engineering
-            leaders. It groups everything a Secure SDLC needs into five pillars
-            ,{" "}
+            leaders. It groups everything a Secure SDLC needs into five pillars,{" "}
             <strong>
               Visibility, Early Feedback, Developer Adoption, Consistency,
             </strong>{" "}
-            and <strong>Actionability</strong>: and argues, correctly, that
-            &quot;framework alone cannot guarantee security&quot;: culture,
-            tools, and consistent processes have to line up. Fair. But a
-            framework can absolutely make the right process the path of least
-            resistance, and that&apos;s exactly what DaloyJS is built to do.
+            and <strong>Actionability</strong>
+            {": "}and argues, correctly, that &quot;framework alone cannot
+            guarantee security&quot;: culture, tools, and consistent processes
+            have to line up. Fair. But a framework can absolutely make the right
+            process the path of least resistance, and that&apos;s exactly what
+            DaloyJS is built to do.
           </p>
 
           <p>
             Below is the honest per-pillar mapping of what an app built on
             DaloyJS, and scaffolded with{" "}
-            <code>pnpm create daloy@latest --with-ci</code>: already gives you
-            on day one, what you still configure yourself, and the few items no
-            framework can own. The TL;DR: if you ship the scaffold, you get
-            four-and-a-half of the five pillars wired into a brand-new repo
-            before the first commit. The half you still drive is the cultural
-            piece, but the tools don&apos;t fight you on it.
+            <code>pnpm create daloy@latest --with-ci</code>
+            {": "}already gives you on day one, what you still configure
+            yourself, and the few items no framework can own. The TL;DR: if you
+            ship the scaffold, you get four-and-a-half of the five pillars wired
+            into a brand-new repo before the first commit. The half you still
+            drive is the cultural piece, but the tools don&apos;t fight you on
+            it.
           </p>
 
           <h2>Pillar 1: Visibility</h2>
@@ -296,8 +297,8 @@ export default function BlogPostPage() {
           <p>
             The &quot;can you immediately tell whether a new CVE affects
             you?&quot; question is the whole point of the SBOM. Daloy&apos;s
-            <code> verify:sbom</code> gate fails the build if the SBOM is
-            missing or stale, there is no &quot;we&apos;ll generate one for the
+            <code>verify:sbom</code> gate fails the build if the SBOM is missing
+            or stale, there is no &quot;we&apos;ll generate one for the
             audit&quot; mode. Every release carries one. Every scaffolded
             project gets the same workflow.
           </p>
@@ -342,18 +343,19 @@ export default function BlogPostPage() {
             >
               Ultimate SAST Guide
             </a>
-            : different engines catch different bug classes. Running both is the
-            recommended layered posture, and the scaffolder gives you both with
-            neither sitting in your supply chain as a third-party action,
-            Opengrep&apos;s binary is downloaded from a pinned release and
-            verified by its sigstore cosign signature before it runs.
+            {": "}different engines catch different bug classes. Running both
+            is the recommended layered posture, and the scaffolder gives you
+            both with neither sitting in your supply chain as a third-party
+            action, Opengrep&apos;s binary is downloaded from a pinned release
+            and verified by its sigstore cosign signature before it runs.
           </p>
 
           <p>
             The DAST half (Pillar 1 + 2 both touch this) is in{" "}
-            <code>dast.yml</code>: a weekly OWASP ZAP baseline against the
-            booted app, with HIGH-risk findings blocking and MEDIUM / LOW / INFO
-            surfaced for triage. See Aikido&apos;s{" "}
+            <code>dast.yml</code>
+            {": "}a weekly OWASP ZAP baseline against the booted app, with
+            HIGH-risk findings blocking and MEDIUM / LOW / INFO surfaced for
+            triage. See Aikido&apos;s{" "}
             <a
               href="https://www.aikido.dev/blog/sast-vs-dast-what-you-need-to-now"
               target="_blank"
@@ -387,8 +389,8 @@ export default function BlogPostPage() {
             agent already loads into its context window,{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
               the AGENTS.md scaffold pattern
-            </Link>{" "}
-            , and to make the secure default the{" "}
+            </Link>
+            {", "}and to make the secure default the{" "}
             <em>shortest line of code you can type</em>.
           </p>
 
@@ -402,13 +404,15 @@ export default function BlogPostPage() {
 
           <p>
             The reason this works is the audit framing. Daloy&apos;s
-            <code> verify:parity-audits</code>,{" "}
-            <code>verify:runtime-parity-audits</code>, and{" "}
-            <code>verify:routing-hardening-audits</code> are not documentation,
-            they are scripts in <code>scripts/</code> that fail the build if a
-            defense exists in one path but not another. The framework cannot
-            ship a release where the JWT algorithm allowlist is enforced on Node
-            but not on Workers, because the parity gate would catch it.
+            <code>verify:parity-audits</code>
+            {", "}
+            <code>verify:runtime-parity-audits</code>
+            {", "}and <code>verify:routing-hardening-audits</code> are not
+            documentation, they are scripts in <code>scripts/</code> that fail
+            the build if a defense exists in one path but not another. The
+            framework cannot ship a release where the JWT algorithm allowlist is
+            enforced on Node but not on Workers, because the parity gate would
+            catch it.
           </p>
 
           <p>
@@ -522,34 +526,40 @@ export default function BlogPostPage() {
 
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
-            <Link href="/blog/secure-by-default">Secure by Default</Link>,{" "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
+            {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               Supply-chain hardening for TypeScript libraries
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe Coding Security
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
               Cloud Security Architecture, Mapped
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/owasp-top-10-agentic-applications-mapped-to-daloyjs">
               OWASP Top 10 for Agentic Applications, Mapped
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
               Scaffolding a production-ready DaloyJS app in 60 seconds
             </Link>
-            . Relevant docs: <Link href="/docs/security">/docs/security</Link>,{" "}
-            <Link href="/docs/security/supply-chain">supply chain</Link>,{" "}
-            <Link href="/docs/security/compliance">compliance</Link>,{" "}
+            {". "}Relevant docs:{" "}
+            <Link href="/docs/security">/docs/security</Link>
+            {", "}
+            <Link href="/docs/security/supply-chain">supply chain</Link>
+            {", "}
+            <Link href="/docs/security/compliance">compliance</Link>
+            {", "}
             <Link href="/docs/security/runtime-protections">
               runtime protections
             </Link>
-            , <Link href="/docs/security/secure-defaults">secure defaults</Link>
-            .
+            {", "}
+            <Link href="/docs/security/secure-defaults">secure defaults</Link>
+            {"."}
           </p>
         </div>
       </article>

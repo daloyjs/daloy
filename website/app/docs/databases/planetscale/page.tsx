@@ -30,9 +30,9 @@ export default function Page() {
         </a>{" "}
         is a managed MySQL host built around Vitess, branching, deploy requests,
         and a fetch-based HTTP driver. Because{" "}
-        <code>@planetscale/database</code> uses plain <code>fetch</code>, it
-        runs on every runtime DaloyJS supports, including Cloudflare Workers and
-        Vercel. If you are using PlanetScale Postgres, follow the{" "}
+        <code>@planetscale/database</code> uses plain <code>fetch</code>
+        {", "}it runs on every runtime DaloyJS supports, including Cloudflare
+        Workers and Vercel. If you are using PlanetScale Postgres, follow the{" "}
         <Link href="/docs/databases/neon">Neon</Link> driver pattern instead.
       </p>
 
@@ -60,15 +60,18 @@ export default function Page() {
         ]}
       />
 
-      <h2 id="1-provision-and-grab-credentials">1. Provision and grab credentials</h2>
+      <h2 id="1-provision-and-grab-credentials">
+        1. Provision and grab credentials
+      </h2>
       <p>
         Create a database at{" "}
         <a href="https://app.planetscale.com" target="_blank" rel="noreferrer">
           app.planetscale.com
         </a>
-        , generate a password, and copy the host plus credentials. Set them as{" "}
-        <code>DATABASE_HOST</code>, <code>DATABASE_USERNAME</code>, and{" "}
-        <code>DATABASE_PASSWORD</code>.
+        {", "}generate a password, and copy the host plus credentials. Set them
+        as <code>DATABASE_HOST</code>
+        {", "}<code>DATABASE_USERNAME</code>
+        {", "}and <code>DATABASE_PASSWORD</code>.
       </p>
 
       <h2 id="2-install">2. Install</h2>
@@ -151,9 +154,10 @@ app.get(
       <h2 id="cloudflare-workers">Cloudflare Workers</h2>
       <p>
         Construct the connection inside the worker handler so it picks up the
-        binding from <code>env</code>, then call <code>app.fetch(req)</code>. If
-        your app does not need worker bindings, you can export the standard{" "}
-        <Link href="/docs/adapters">Cloudflare adapter</Link>
+        binding from <code>env</code>
+        {", "}then call <code>app.fetch(req)</code>
+        {". "}If your app does not need worker bindings, you can export the
+        standard <Link href="/docs/adapters">Cloudflare adapter</Link>
         directly.
       </p>
       <CodeBlock
@@ -223,18 +227,23 @@ export const prisma = new PrismaClient({ adapter });`}
         <code>{`{ fetch: undiciFetch }`}</code> as a second option.
       </p>
 
-      <h2 id="branching-and-deploy-requests">Branching &amp; deploy requests</h2>
+      <h2 id="branching-and-deploy-requests">
+        Branching &amp; deploy requests
+      </h2>
       <p>
         PlanetScale&apos;s schema workflow uses branches and deploy requests
-        rather than ad-hoc <code>ALTER TABLE</code>. Pair this with your CI: run
-        migrations against a development branch, open a deploy request, and
-        merge to <code>main</code>. The same Daloy app code works against any
-        branch, just swap the host.
+        rather than ad-hoc <code>ALTER TABLE</code>
+        {". "}Pair this with your CI: run migrations against a development
+        branch, open a deploy request, and merge to <code>main</code>
+        {". "}The same Daloy app code works against any branch, just swap the
+        host.
       </p>
 
       <p>
-        See also <Link href="/docs/databases/neon">Neon</Link>,{" "}
-        <Link href="/docs/orm/supabase">Supabase</Link>, and the{" "}
+        See also <Link href="/docs/databases/neon">Neon</Link>
+        {", "}
+        <Link href="/docs/orm/supabase">Supabase</Link>
+        {", "}and the{" "}
         <Link href="/docs/databases">database hosting overview</Link>.
       </p>
     </>

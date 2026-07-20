@@ -75,11 +75,14 @@ cd my-api
 pnpm vercel dev`}
       />
 
-      <h2 id="1-vercel-node-js-functions-standalone-api">Vercel Node.js Functions (standalone API)</h2>
+      <h2 id="1-vercel-node-js-functions-standalone-api">
+        Vercel Node.js Functions (standalone API)
+      </h2>
       <p>
         For a standalone DaloyJS REST API on the Node.js runtime, use a single
-        function at <code>api/index.ts</code>. Vercel Node.js Functions expect a
-        default export with a <code>fetch</code> method.
+        function at <code>api/index.ts</code>
+        {". "}Vercel Node.js Functions expect a default export with a{" "}
+        <code>fetch</code> method.
       </p>
       <CodeBlock
         language="ts"
@@ -91,12 +94,13 @@ import { app } from "../src/server.ts";
 export default toFetchHandler(app);`}
       />
       <p>
-        Vercel maps <code>api/index.ts</code> to <code>/api</code>, but a
-        DaloyJS app registers its routes at the <strong>root</strong> (
-        <code>/healthz</code>, <code>/docs</code>, …). Add a{" "}
-        <strong>rewrite</strong> so every path reaches the function and DaloyJS
-        owns routing at the site root, without it the deployed root domain
-        returns a Vercel 404:
+        Vercel maps <code>api/index.ts</code> to <code>/api</code>
+        {", "}but a DaloyJS app registers its routes at the{" "}
+        <strong>root</strong> (<code>/healthz</code>
+        {", "}<code>/docs</code>
+        {", "} …). Add a <strong>rewrite</strong> so every path reaches the
+        function and DaloyJS owns routing at the site root, without it the
+        deployed root domain returns a Vercel 404:
       </p>
       <CodeBlock
         language="json"
@@ -172,8 +176,8 @@ pnpm vercel env add SESSION_SECRET production`}
       <ul>
         <li>
           Standalone Vercel Node functions want a <strong>default</strong>{" "}
-          export with <code>&#123; fetch &#125;</code>. Use{" "}
-          <code>toFetchHandler</code>.
+          export with <code>&#123; fetch &#125;</code>
+          {". "}Use <code>toFetchHandler</code>.
         </li>
         <li>
           Without the <code>/(.*)</code> → <code>/api</code> rewrite, Vercel

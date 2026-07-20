@@ -100,10 +100,10 @@ export default function Page() {
       <h1>Adapters &amp; runtimes</h1>
       <p>
         DaloyJS is a REST API backend framework. The core only ever sees{" "}
-        <code>Request &rarr; Response</code>. Runtime-specific concerns, 
-        sockets, signals, edge handlers, Lambda event shapes, live in
-        thin adapters at the edge. Choose the adapter for the place you want to
-        deploy your API.
+        <code>Request &rarr; Response</code>
+        {". "}Runtime-specific concerns, sockets, signals, edge handlers,
+        Lambda event shapes, live in thin adapters at the edge. Choose the
+        adapter for the place you want to deploy your API.
       </p>
 
       <BranchDiagram
@@ -114,7 +114,11 @@ export default function Page() {
           detail: "Request → Response",
         }}
         branches={[
-          { eyebrow: "runtime", label: "Node.js", detail: "@daloyjs/core/node" },
+          {
+            eyebrow: "runtime",
+            label: "Node.js",
+            detail: "@daloyjs/core/node",
+          },
           { eyebrow: "runtime", label: "Bun", detail: "@daloyjs/core/bun" },
           { eyebrow: "runtime", label: "Deno", detail: "@daloyjs/core/deno" },
           {
@@ -141,7 +145,9 @@ export default function Page() {
       <h3 id="runtimes-you-own-the-process">Runtimes (you own the process)</h3>
       <Grid items={RUNTIMES} />
 
-      <h3 id="edge-and-serverless-platform-owns-the-process">Edge &amp; serverless (platform owns the process)</h3>
+      <h3 id="edge-and-serverless-platform-owns-the-process">
+        Edge &amp; serverless (platform owns the process)
+      </h3>
       <Grid items={EDGE} />
 
       <h2 id="roll-your-own">Roll your own</h2>
@@ -149,7 +155,7 @@ export default function Page() {
         If your runtime exposes the web-standard <code>Request / Response</code>{" "}
         contract and isn&apos;t listed above, you don&apos;t need an adapter at
         all, pass the incoming request straight to <code>app.fetch</code>
-        :
+        {": "}
       </p>
       <CodeBlock
         language="ts"
@@ -164,12 +170,12 @@ export default {
       <h2 id="see-also">See also</h2>
       <ul>
         <li>
-          <Link href="/docs/deployment">Deployment</Link>: Docker,
-          reverse proxies, health checks, and Node platform guides (Fly.io,
-          Render, Railway, Heroku).
+          <Link href="/docs/deployment">Deployment</Link>
+          {": "}Docker, reverse proxies, health checks, and Node platform
+          guides (Fly.io, Render, Railway, Heroku).
         </li>
         <li>
-          <Link href="/docs/scaffolder">Scaffolder</Link>: {" "}
+          <Link href="/docs/scaffolder">Scaffolder</Link>:{" "}
           <code>pnpm create daloy</code> ships runtime-specific templates.
         </li>
       </ul>

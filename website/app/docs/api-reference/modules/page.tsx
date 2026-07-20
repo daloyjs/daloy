@@ -424,7 +424,7 @@ normalizeEntryArg(entry: string): string;`}
         <Link href={"/docs/api-reference/adapters" as Route}>
           runtime adapters
         </Link>
-        .
+        {"."}
       </p>
     </>
   );

@@ -46,9 +46,10 @@ export default function Page() {
         <strong>body</strong>.
       </p>
       <p>
-        It is <strong>built-in and dependency-free</strong>, built on the
-        Web-standard <code>Request</code>/<code>Response</code>, so it runs
-        unchanged on Node, Bun, Deno, and Cloudflare Workers.
+        It is <strong>built-in and dependency-free</strong>
+        {", "}built on the Web-standard <code>Request</code>/
+        <code>Response</code>
+        {", "}so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
       </p>
 
       <UseCaseGuide
@@ -99,12 +100,14 @@ app.get(
         language="ts"
       />
       <p>
-        Each response the cache handles carries an <code>X-Cache</code> marker
-        (<code>HIT</code>, <code>MISS</code>, or <code>STALE</code>), plus an{" "}
-        <code>Age</code> header on a hit, so caches and clients can observe the
-        outcome. A request that bypasses the cache entirely (a non-GET/HEAD
-        method, an <code>Authorization</code> header, or a request{" "}
-        <code>Cache-Control: no-store</code>) passes through unmarked.
+        Each response the cache handles carries an <code>X-Cache</code> marker (
+        <code>HIT</code>
+        {", "}<code>MISS</code>
+        {", "}or <code>STALE</code>), plus an <code>Age</code> header on a hit,
+        so caches and clients can observe the outcome. A request that bypasses
+        the cache entirely (a non-GET/HEAD method, an <code>Authorization</code>{" "}
+        header, or a request <code>Cache-Control: no-store</code>) passes
+        through unmarked.
       </p>
 
       <h2 id="how-it-works">How it works</h2>
@@ -142,8 +145,9 @@ app.get(
 
       <ul>
         <li>
-          <strong>Fresh hit</strong>: the stored response is served and the
-          handler does <em>not</em> run (<code>X-Cache: HIT</code>).
+          <strong>Fresh hit</strong>
+          {": "}the stored response is served and the handler does <em>not</em>{" "}
+          run (<code>X-Cache: HIT</code>).
         </li>
         <li>
           <strong>Stale hit within the SWR window</strong> (requires{" "}
@@ -152,8 +156,9 @@ app.get(
           refresh repopulates the cache.
         </li>
         <li>
-          <strong>Miss</strong>: the handler runs and a cacheable response is
-          stored (<code>X-Cache: MISS</code>).
+          <strong>Miss</strong>
+          {": "}the handler runs and a cacheable response is stored (
+          <code>X-Cache: MISS</code>).
         </li>
       </ul>
 
@@ -162,13 +167,14 @@ app.get(
         Freshness is derived from the response&rsquo;s own{" "}
         <code>Cache-Control</code> when present (<code>s-maxage</code> wins over{" "}
         <code>max-age</code>), falling back to the configured{" "}
-        <code>ttlSeconds</code>. Responses are <strong>never</strong> cached
-        when they:
+        <code>ttlSeconds</code>
+        {". "}Responses are <strong>never</strong> cached when they:
       </p>
       <ul>
         <li>
-          carry <code>Cache-Control: no-store</code>, <code>private</code>, or{" "}
-          <code>no-cache</code>;
+          carry <code>Cache-Control: no-store</code>
+          {", "}<code>private</code>
+          {", "}or <code>no-cache</code>;
         </li>
         <li>
           include a <code>Set-Cookie</code> header (per-user / credentialed
@@ -253,9 +259,10 @@ app.use(
         The default <code>MemoryResponseCacheStore</code> is process-local,
         perfect for tests and single-instance deployments. For a multi-instance
         or serverless fleet, supply a shared backend by implementing{" "}
-        <code>ResponseCacheStore</code>. The contract mirrors{" "}
-        <code>SessionStore</code> and the rate-limit store; entries whose{" "}
-        <code>staleUntil</code> is in the past should be treated as missing.
+        <code>ResponseCacheStore</code>
+        {". "}The contract mirrors <code>SessionStore</code> and the rate-limit
+        store; entries whose <code>staleUntil</code> is in the past should be
+        treated as missing.
       </p>
       <CodeBlock
         code={`import type { ResponseCacheStore, CachedResponse } from "@daloyjs/core";
@@ -300,7 +307,8 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
         </li>
         <li>
           Only <code>200 OK</code> is cached unless you widen{" "}
-          <code>cacheableStatus</code>, so error pages do not poison the cache.
+          <code>cacheableStatus</code>
+          {", "}so error pages do not poison the cache.
         </li>
         <li>
           Stored bodies are capped by <code>maxBodyBytes</code> to bound memory

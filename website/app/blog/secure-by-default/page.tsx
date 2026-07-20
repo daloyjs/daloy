@@ -388,9 +388,10 @@ export default function BlogPostPage() {
             <em>knew</em> that one&quot;. Most security incidents I&apos;ve had
             a hand in cleaning up were not exotic. They were not a 0-day in a
             cryptography library. They were a body limit that nobody set, a JSON
-            parser that happily accepted <code>__proto__</code>, a response
-            timeout that didn&apos;t exist, or a stack trace cheerfully being
-            shipped to an attacker as <code>application/json</code>.
+            parser that happily accepted <code>__proto__</code>
+            {", "}a response timeout that didn&apos;t exist, or a stack trace
+            cheerfully being shipped to an attacker as{" "}
+            <code>application/json</code>.
           </p>
 
           <p>
@@ -399,7 +400,7 @@ export default function BlogPostPage() {
             <strong>
               the boring, well-understood defenses must be on by default
             </strong>
-            . You should be able to type <code>new App()</code> with empty
+            {". "}You should be able to type <code>new App()</code> with empty
             arguments and already be in a place where most of the OWASP
             &quot;low effort, high impact&quot; checklist is satisfied before
             you write a single route.
@@ -493,9 +494,10 @@ export default function BlogPostPage() {
           <p>
             If the body is malformed JSON, you get a generic{" "}
             <code>400 Bad Request</code> with the message{" "}
-            <code>&quot;Invalid JSON&quot;</code>. You do not get a parser error
-            message that describes your internal parser&apos;s mood. We
-            don&apos;t give attackers free oracles.
+            <code>&quot;Invalid JSON&quot;</code>
+            {". "}You do not get a parser error message that describes your
+            internal parser&apos;s mood. We don&apos;t give attackers free
+            oracles.
           </p>
 
           <h3>3. CRLF and header sanitization</h3>
@@ -613,10 +615,9 @@ export default function BlogPostPage() {
 
           <p>
             The nonce is generated using WebCrypto on every request, so the same
-            code works on Node, Bun, Deno, and Workers without a
-            polyfill. The first time I turned this on in a real app I found four
-            scripts I didn&apos;t know were inline. That is what CSP is{" "}
-            <em>for</em>.
+            code works on Node, Bun, Deno, and Workers without a polyfill. The
+            first time I turned this on in a real app I found four scripts I
+            didn&apos;t know were inline. That is what CSP is <em>for</em>.
           </p>
 
           <h3>csrf(): double-submit and Fetch-Metadata, together</h3>
@@ -647,10 +648,11 @@ export default function BlogPostPage() {
 
           <p>
             The cookie name uses the <code>__Host-</code> prefix on purpose. It
-            forces <code>Secure</code>, no <code>Domain=</code>, and{" "}
-            <code>Path=/</code>: three rules that the browser enforces for you
-            instead of trusting you to remember. We like making the browser do
-            our job.
+            forces <code>Secure</code>
+            {", "}no <code>Domain=</code>
+            {", "}and <code>Path=/</code>
+            {": "}three rules that the browser enforces for you instead of
+            trusting you to remember. We like making the browser do our job.
           </p>
 
           <h3>basicAuth(): when you just need a wall in front of /admin</h3>
@@ -679,11 +681,11 @@ export default function BlogPostPage() {
           <p>
             The two important details are the order of operations and the
             comparison function. <strong>Always</strong> run both comparisons,
-            and <strong>always</strong> use <code>timingSafeEqual</code>: not
-            because someone is going to time-attack your admin panel from across
-            the planet, but because writing security code with <code>===</code>{" "}
-            is how you develop unfortunate habits that follow you into other
-            systems.
+            and <strong>always</strong> use <code>timingSafeEqual</code>
+            {": "}not because someone is going to time-attack your admin panel
+            from across the planet, but because writing security code with{" "}
+            <code>===</code> is how you develop unfortunate habits that follow
+            you into other systems.
           </p>
 
           <h3>

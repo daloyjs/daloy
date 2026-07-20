@@ -140,8 +140,8 @@ CMD ["dist/server.js"]`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          <code>idleTimeout</code> is in <strong>seconds</strong>, capped at
-          255. Pass <code>0</code> to disable.
+          <code>idleTimeout</code> is in <strong>seconds</strong>
+          {", "}capped at 255. Pass <code>0</code> to disable.
         </li>
         <li>
           Some npm packages with native bindings still need Node, test before

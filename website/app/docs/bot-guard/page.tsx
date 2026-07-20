@@ -27,10 +27,11 @@ export default function Page() {
     <>
       <h1>Bot / User-Agent management</h1>
       <p>
-        DaloyJS ships <code>botGuard()</code>,
-        the in-app equivalent of the bot rules Nginx, Cloudflare, and other WAFs
-        run at the edge, but inside the app where the framework already owns
-        request parsing and client-IP resolution. It does three opt-in jobs:
+        DaloyJS ships <code>botGuard()</code>
+        {", "}the in-app equivalent of the bot rules Nginx, Cloudflare, and
+        other WAFs run at the edge, but inside the app where the framework
+        already owns request parsing and client-IP resolution. It does three
+        opt-in jobs:
       </p>
       <ul>
         <li>
@@ -47,11 +48,11 @@ export default function Page() {
           (your own substrings or <code>RegExp</code>s).
         </li>
         <li>
-          <strong>Verify declared crawlers</strong>: when a request{" "}
-          <em>claims</em> to be Googlebot or Bingbot, confirm it via reverse-DNS
-          + forward-confirm (the method Google and Bing themselves document) so
-          a spoofed <code>User-Agent</code> can&apos;t impersonate a trusted
-          crawler.
+          <strong>Verify declared crawlers</strong>
+          {": "}when a request <em>claims</em> to be Googlebot or Bingbot,
+          confirm it via reverse-DNS + forward-confirm (the method Google and
+          Bing themselves document) so a spoofed <code>User-Agent</code>{" "}
+          can&apos;t impersonate a trusted crawler.
         </li>
       </ul>
       <p>
@@ -95,7 +96,8 @@ export default function Page() {
           },
           {
             label: "Claims a verified crawler?",
-            detail: "reverse-DNS + forward-confirm; spoofed / unverifiable -> 403",
+            detail:
+              "reverse-DNS + forward-confirm; spoofed / unverifiable -> 403",
             tone: "danger",
           },
           {
@@ -129,11 +131,14 @@ app.use(
         rejected with <code>403 Forbidden</code> RFC 9457 problem+json.
       </p>
 
-      <h2 id="blocking-empty-and-abusive-user-agents">Blocking empty &amp; abusive User-Agents</h2>
+      <h2 id="blocking-empty-and-abusive-user-agents">
+        Blocking empty &amp; abusive User-Agents
+      </h2>
       <p>
-        <code>blockEmptyUserAgent</code> defaults to <code>true</code>. A plain
-        string in <code>blockedUserAgents</code> matches case-insensitively as a
-        substring; a <code>RegExp</code> is tested as-is.
+        <code>blockEmptyUserAgent</code> defaults to <code>true</code>
+        {". "}A plain string in <code>blockedUserAgents</code> matches
+        case-insensitively as a substring; a <code>RegExp</code> is tested
+        as-is.
       </p>
       <CodeBlock
         language="ts"
@@ -195,20 +200,20 @@ app.use(
       <p>
         Because <code>verifiedBots</code> needs the client IP, the middleware{" "}
         <strong>refuses to construct</strong> unless you supply{" "}
-        <code>resolveIp</code> or set <code>trustProxyHeaders</code>. A request
-        that claims to be a crawler but can&apos;t be verified (no client IP,
-        or a DNS failure) is blocked by default (
-        <code>blockUnverifiableBots</code>, the secure-by-default posture). Set
-        it to <code>false</code> to fail open. Verification results are cached
-        per IP (default 1 h via <code>cacheTtlMs</code>) so DNS stays off the
-        hot path.
+        <code>resolveIp</code> or set <code>trustProxyHeaders</code>
+        {". "}A request that claims to be a crawler but can&apos;t be verified
+        (no client IP, or a DNS failure) is blocked by default (
+        <code>blockUnverifiableBots</code>
+        {", "}the secure-by-default posture). Set it to <code>false</code> to
+        fail open. Verification results are cached per IP (default 1 h via{" "}
+        <code>cacheTtlMs</code>) so DNS stays off the hot path.
       </p>
 
       <h2 id="monitor-mode-and-callbacks">Monitor mode &amp; callbacks</h2>
       <p>
-        Roll it out safely with <code>mode: &quot;log&quot;</code>: nothing is
-        blocked, but every match fires <code>onBlock</code> so you can measure
-        impact before enforcing.
+        Roll it out safely with <code>mode: &quot;log&quot;</code>
+        {": "}nothing is blocked, but every match fires <code>onBlock</code> so
+        you can measure impact before enforcing.
       </p>
       <CodeBlock
         language="ts"
@@ -227,17 +232,21 @@ app.use(
       />
       <p>
         The <code>reason</code> is one of{" "}
-        <code>&quot;empty-user-agent&quot;</code>,{" "}
-        <code>&quot;blocked-user-agent&quot;</code>,{" "}
-        <code>&quot;spoofed-bot&quot;</code>, or{" "}
-        <code>&quot;unverifiable-bot&quot;</code>.
+        <code>&quot;empty-user-agent&quot;</code>
+        {", "}
+        <code>&quot;blocked-user-agent&quot;</code>
+        {", "}
+        <code>&quot;spoofed-bot&quot;</code>
+        {", "}or <code>&quot;unverifiable-bot&quot;</code>.
       </p>
 
       <h2 id="custom-dns-resolver">Custom DNS resolver</h2>
       <p>
-        The default resolver lazily imports <code>node:dns/promises</code>. On a
-        runtime without it (Workers, Deno without <code>--allow-net</code>) or
-        in tests, supply your own <code>BotResolver</code>:
+        The default resolver lazily imports <code>node:dns/promises</code>
+        {". "}On a runtime without it (Workers, Deno without{" "}
+        <code>--allow-net</code>) or in tests, supply your own{" "}
+        <code>BotResolver</code>
+        {": "}
       </p>
       <CodeBlock
         language="ts"

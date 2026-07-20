@@ -427,20 +427,21 @@ export default function BlogPostPage() {
             Hi, Devlin. Ten years of fullstack, currently in Norway, currently
             wishing I could un-read the changelogs of three different npm worm
             campaigns. The 2025 and 2026 supply-chain news has been
-            <em> rough</em>: chalk/debug, node-ipc, Shai-Hulud, TanStack, and if
-            you maintain a TypeScript library that other people install, you
+            <em>rough</em>
+            {": "}chalk/debug, node-ipc, Shai-Hulud, TanStack, and if you
+            maintain a TypeScript library that other people install, you
             probably had the same thought I did:{" "}
             <em>
               this could&apos;ve been me, and I&apos;m not actually sure my
               defaults would&apos;ve saved me
             </em>
-            .
+            {"."}
           </p>
 
           <p>
             So this post is the maintainer-facing writeup of every supply-chain
             control we shipped for DaloyJS, plus the
-            <code> create-daloy --with-ci</code> flag that drops the app-safe
+            <code>create-daloy --with-ci</code> flag that drops the app-safe
             pieces into a brand-new user project. Nothing here is
             DaloyJS-specific, these are reusable defaults for pnpm-based
             TypeScript projects in 2026. Steal what you need.
@@ -451,22 +452,23 @@ export default function BlogPostPage() {
           <p>
             Every control below is a variant of the same trick: take a
             permissive default that the ecosystem ships, flip it to{" "}
-            <em>deny</em>, and add a small allowlist for the legitimate cases.
-            Lifecycle scripts go from &quot;run all of them silently&quot; to{" "}
+            <em>deny</em>
+            {", "}and add a small allowlist for the legitimate cases. Lifecycle
+            scripts go from &quot;run all of them silently&quot; to{" "}
             <em>
               none of them, except <code>esbuild</code>
             </em>
-            . GitHub Actions permissions go from <em>everything</em> to{" "}
+            {". "}GitHub Actions permissions go from <em>everything</em> to{" "}
             <em>
               nothing, except <code>contents: read</code> on these specific jobs
             </em>
-            . NPM tokens go from{" "}
+            {". "}NPM tokens go from{" "}
             <em>long-lived, attached to a human account</em> to{" "}
             <em>
               none, ever, the runner does an OIDC exchange at publish time
             </em>
-            . The pattern repeats. Once you internalize it, the config writes
-            itself.
+            {". "}The pattern repeats. Once you internalize it, the config
+            writes itself.
           </p>
 
           <h2>Layer 1: .npmrc, the gate everything passes through</h2>
@@ -501,7 +503,7 @@ export default function BlogPostPage() {
 
           <p>
             pnpm 11 added a set of workspace-level keys that complement
-            <code> .npmrc</code> and let you encode supply-chain intent at the
+            <code>.npmrc</code> and let you encode supply-chain intent at the
             workspace boundary, not the per-process boundary. We use all of
             them.
           </p>
@@ -536,8 +538,8 @@ export default function BlogPostPage() {
 
           <p>
             Most of the Actions security advice on the internet is some variant
-            of <em>be careful</em>, which is not advice. Three rules are
-            concrete:
+            of <em>be careful</em>
+            {", "}which is not advice. Three rules are concrete:
           </p>
 
           <ol>
@@ -545,24 +547,26 @@ export default function BlogPostPage() {
               <strong>
                 Top-level <code>permissions: &#123;&#125;</code>
               </strong>
-              . Every workflow starts with zero scopes. Each job opts in to the
-              minimum it needs. <code>id-token: write</code> in particular is
-              granted on the publish job only, it&apos;s the credential the
+              {". "}Every workflow starts with zero scopes. Each job opts in to
+              the minimum it needs. <code>id-token: write</code> in particular
+              is granted on the publish job only, it&apos;s the credential the
               TanStack attackers extracted in 2026-05.
             </li>
             <li>
-              <strong>SHA-pin every action</strong>. Not <code>@v4</code>, not{" "}
-              <code>@main</code>, the full 40-character commit SHA. The comment
-              after it (<code># v4</code>) is for humans. Dependabot keeps the
-              SHAs updated.
+              <strong>SHA-pin every action</strong>
+              {". "}Not <code>@v4</code>
+              {", "}not <code>@main</code>
+              {", "}the full 40-character commit SHA. The comment after it (
+              <code># v4</code>) is for humans. Dependabot keeps the SHAs
+              updated.
             </li>
             <li>
               <strong>
                 No <code>cache: pnpm</code> on the install step
               </strong>
-              . The GitHub Actions cache has been used as both an exfiltration
-              channel and a persistence channel. Cold installs in CI cost ~30s.
-              Pay them.
+              {". "}The GitHub Actions cache has been used as both an
+              exfiltration channel and a persistence channel. Cold installs in
+              CI cost ~30s. Pay them.
             </li>
           </ol>
 
@@ -585,11 +589,11 @@ export default function BlogPostPage() {
             You can write the most carefully locked-down workflow on earth and
             someone will paste a snippet from a blog post and re-introduce{" "}
             <code>contents: write</code> on a PR-triggered job. The fix is to{" "}
-            <em>lint your workflows</em>, the way you lint your code.{" "}
-            <code>zizmor</code> is the tool I&apos;ve been pleased with: it
-            catches missing permissions, unpinned actions, dangerous{" "}
-            <code>pull_request_target</code> usage, and a long list of paper-cut
-            security smells.
+            <em>lint your workflows</em>
+            {", "}the way you lint your code. <code>zizmor</code> is the tool
+            I&apos;ve been pleased with: it catches missing permissions,
+            unpinned actions, dangerous <code>pull_request_target</code> usage,
+            and a long list of paper-cut security smells.
           </p>
 
           <EditorFrame
@@ -674,8 +678,8 @@ export default function BlogPostPage() {
 
           <p>
             All of the above is reusable, and reusable should mean{" "}
-            <em>one command, you have it</em>. So we wired it into the
-            scaffolder:
+            <em>one command, you have it</em>
+            {". "}So we wired it into the scaffolder:
           </p>
 
           <EditorFrame
@@ -687,12 +691,13 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            <code>--with-ci</code> defaults to <em>yes</em>. The scaffolded
-            project starts with the application-safe posture this post
-            describes: the <code>.npmrc</code>, the{" "}
-            <code>pnpm-workspace.yaml</code> keys, every workflow SHA-pinned
-            with <code>permissions: &#123;&#125;</code>, CODEOWNERS, Dependabot,
-            SECURITY.md, and <code>verify-lockfile-sources.mjs</code> as a{" "}
+            <code>--with-ci</code> defaults to <em>yes</em>
+            {". "}The scaffolded project starts with the application-safe
+            posture this post describes: the <code>.npmrc</code>
+            {", "}the <code>pnpm-workspace.yaml</code> keys, every workflow
+            SHA-pinned with <code>permissions: &#123;&#125;</code>
+            {", "}CODEOWNERS, Dependabot, SECURITY.md, and{" "}
+            <code>verify-lockfile-sources.mjs</code> as a{" "}
             <code>pnpm verify:lockfile</code> script. You don&apos;t opt into
             security; you opt out of it (with <code>--no-ci</code>) if you
             insist. It does not generate an npm publish workflow, because a
@@ -746,8 +751,10 @@ export default function BlogPostPage() {
 
           <p>
             Every file in this post is open-source in the DaloyJS repo and comes
-            with comments that explain <em>why</em>, not just
-            <em> what</em>. The best place to start is <code>.npmrc</code> +{" "}
+            with comments that explain <em>why</em>
+            {", "}not just
+            <em>what</em>
+            {". "}The best place to start is <code>.npmrc</code> +{" "}
             <code>pnpm-workspace.yaml</code>; the next best place is to copy{" "}
             <code>.github/workflows/release.yml</code> and adapt the package
             name if you are publishing a library. For an app, run{" "}
@@ -760,7 +767,7 @@ export default function BlogPostPage() {
             <Link href="/docs/security/supply-chain">
               the supply-chain docs
             </Link>
-            , and the broader{" "}
+            {", "}and the broader{" "}
             <Link href="/docs/security">security overview</Link> shows how this
             slots in with sessions, CSRF, and CSP.
           </p>

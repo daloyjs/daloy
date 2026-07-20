@@ -27,18 +27,19 @@ export default function Page() {
     <>
       <h1>GeoIP / geo-blocking</h1>
       <p>
-        DaloyJS ships <code>geoBlock()</code>, a
-        country allow/deny middleware that maps the client IP to a country and
-        rejects (or logs) traffic from countries you don&apos;t serve. It is the
-        compliance/abuse counterpart to <code>ipRestriction()</code> and{" "}
-        <code>ipReputation()</code>.
+        DaloyJS ships <code>geoBlock()</code>
+        {", "}a country allow/deny middleware that maps the client IP to a
+        country and rejects (or logs) traffic from countries you don&apos;t
+        serve. It is the compliance/abuse counterpart to{" "}
+        <code>ipRestriction()</code> and <code>ipReputation()</code>.
       </p>
       <ul>
         <li>
-          <strong>No bundled database</strong>: Daloy ships no GeoIP data and
-          adds no runtime dependency. You supply the IP&nbsp;→&nbsp;country
-          mapping (a MaxMind reader, an <code>ip2location</code> reader, your
-          own table) <em>or</em> read a country header injected by your edge.
+          <strong>No bundled database</strong>
+          {": "}Daloy ships no GeoIP data and adds no runtime dependency. You
+          supply the IP&nbsp;→&nbsp;country mapping (a MaxMind reader, an{" "}
+          <code>ip2location</code> reader, your own table) <em>or</em> read a
+          country header injected by your edge.
         </li>
         <li>
           <strong>Two strategies, pick one</strong>:{" "}
@@ -47,16 +48,17 @@ export default function Page() {
           country.
         </li>
         <li>
-          <strong>Fail-closed allow-lists</strong>: when an <code>allow</code>{" "}
-          list is configured, an <em>unknown</em> country is rejected by default
-          (it&apos;s not on the list). Deny-only configurations fail open. Both
-          are overridable with <code>allowUnknownCountry</code>.
+          <strong>Fail-closed allow-lists</strong>
+          {": "}when an <code>allow</code> list is configured, an{" "}
+          <em>unknown</em> country is rejected by default (it&apos;s not on the
+          list). Deny-only configurations fail open. Both are overridable with{" "}
+          <code>allowUnknownCountry</code>.
         </li>
         <li>
-          <strong>Reuses trusted-proxy IP resolution</strong>: the same{" "}
-          <code>X-Forwarded-For</code> / <code>X-Real-IP</code> handling (off by
-          default, opt in with <code>trustProxyHeaders</code>) as the other
-          network guards.
+          <strong>Reuses trusted-proxy IP resolution</strong>
+          {": "}the same <code>X-Forwarded-For</code> / <code>X-Real-IP</code>{" "}
+          handling (off by default, opt in with <code>trustProxyHeaders</code>)
+          as the other network guards.
         </li>
       </ul>
 
@@ -107,7 +109,9 @@ export default function Page() {
         caption="Deny is evaluated first, then the allow-list gate. An unresolved country fails closed when an allow-list is configured and fails open for deny-only setups, both overridable with allowUnknownCountry. A blocked request returns 403 without echoing the country."
       />
 
-      <h2 id="strategy-1-bring-your-own-ip-country-lookup">Strategy 1: bring your own IP → country lookup</h2>
+      <h2 id="strategy-1-bring-your-own-ip-country-lookup">
+        Strategy 1: bring your own IP → country lookup
+      </h2>
       <p>
         Use any GeoIP reader as an operator dependency. Daloy resolves the
         client IP and hands it to <code>lookupCountry</code>; return an ISO
@@ -134,7 +138,9 @@ app.use(
 );`}
       />
 
-      <h2 id="strategy-2-read-an-edge-injected-country-header">Strategy 2: read an edge-injected country header</h2>
+      <h2 id="strategy-2-read-an-edge-injected-country-header">
+        Strategy 2: read an edge-injected country header
+      </h2>
       <p>
         If your app runs behind a CDN or platform that already geolocates the
         request, skip the IP lookup entirely and read the header. No proxy-trust
@@ -152,7 +158,9 @@ app.use(
 );`}
       />
 
-      <h2 id="deployment-platform-country-headers">Deployment-platform country headers</h2>
+      <h2 id="deployment-platform-country-headers">
+        Deployment-platform country headers
+      </h2>
       <p>
         Most edges expose the resolved country as a request header, which makes{" "}
         <code>resolveCountry</code> a one-liner. Common values:
@@ -176,23 +184,27 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         Bun / Deno deployment, or a VPS), use <strong>Strategy 1</strong> with a
         local MaxMind database and <code>trustProxyHeaders</code> matched to
         your proxy chain. Cloudflare&apos;s <code>CF-IPCountry</code> can also
-        be <code>XX</code> (unknown) or <code>T1</code> (Tor). Those are
-        treated as an unknown country unless you list them explicitly.
+        be <code>XX</code> (unknown) or <code>T1</code> (Tor). Those are treated
+        as an unknown country unless you list them explicitly.
       </p>
 
-      <h2 id="allow-list-vs-deny-list-semantics">Allow-list vs. deny-list semantics</h2>
+      <h2 id="allow-list-vs-deny-list-semantics">
+        Allow-list vs. deny-list semantics
+      </h2>
       <ul>
         <li>
-          <strong>deny</strong>: listed countries are always rejected; a deny
-          match wins over an allow match (least privilege).
+          <strong>deny</strong>
+          {": "}listed countries are always rejected; a deny match wins over an
+          allow match (least privilege).
         </li>
         <li>
-          <strong>allow</strong>: when non-empty, only listed countries pass;
-          everything else (including an unresolved country) is rejected.
+          <strong>allow</strong>
+          {": "}when non-empty, only listed countries pass; everything else
+          (including an unresolved country) is rejected.
         </li>
         <li>
-          <strong>both</strong>: deny is evaluated first, then the allow-list
-          gate.
+          <strong>both</strong>
+          {": "}deny is evaluated first, then the allow-list gate.
         </li>
       </ul>
       <p>
@@ -221,9 +233,9 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
 
       <h2 id="monitoring-before-enforcing">Monitoring before enforcing</h2>
       <p>
-        Roll out safely with <code>mode: &quot;log&quot;</code>: requests are
-        never blocked, but <code>onBlock</code> fires for every would-be block
-        so you can measure impact first.
+        Roll out safely with <code>mode: &quot;log&quot;</code>
+        {": "}requests are never blocked, but <code>onBlock</code> fires for
+        every would-be block so you can measure impact first.
       </p>
       <CodeBlock
         language="ts"
@@ -240,7 +252,9 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
 );`}
       />
 
-      <h2 id="reading-the-country-downstream">Reading the country downstream</h2>
+      <h2 id="reading-the-country-downstream">
+        Reading the country downstream
+      </h2>
       <p>
         For allowed requests, the resolved country is stamped on{" "}
         <code>ctx.state.geo</code> (rename with <code>stateKey</code>), so
@@ -263,9 +277,10 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
 
       <h2 id="rejection-response">Rejection response</h2>
       <p>
-        A blocked request throws <code>ForbiddenError</code>, rendered as RFC
-        9457 <code>application/problem+json</code> with HTTP <code>403</code>{" "}
-        and <code>Cache-Control: no-store</code>. The default message (
+        A blocked request throws <code>ForbiddenError</code>
+        {", "}rendered as RFC 9457 <code>application/problem+json</code> with
+        HTTP <code>403</code> and <code>Cache-Control: no-store</code>
+        {". "}The default message (
         <code>&quot;Access from your region is not permitted&quot;</code>) is
         configurable via <code>message</code> and deliberately does not echo the
         country or IP back to the client.

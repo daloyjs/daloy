@@ -136,10 +136,10 @@ export default function BlogPostPage() {
             <Link href="/blog/daloyjs-1-0-0-beta-is-here">
               the beta changed nothing on purpose
             </Link>
-            . Today I get to write the sequel, and the tone is different. We just
-            tagged the first release candidate. If the beta was me quietly hoping
-            the API was ready, the RC is me locking the door and putting the key
-            on the table.
+            {". "}Today I get to write the sequel, and the tone is different. We
+            just tagged the first release candidate. If the beta was me quietly
+            hoping the API was ready, the RC is me locking the door and putting
+            the key on the table.
           </p>
 
           <p>
@@ -147,29 +147,30 @@ export default function BlogPostPage() {
             to the stable release, only bug fixes and documentation land. No new
             middleware, no new adapter, no new helper. The public API you see in
             the release candidate is the public API you get at stable, minus
-            whatever bugs you help me find. That is the entire promise, and it is
-            the reason an RC feels heavier to tag than a beta.
+            whatever bugs you help me find. That is the entire promise, and it
+            is the reason an RC feels heavier to tag than a beta.
           </p>
 
           <h2>So the beta really was the freeze</h2>
 
           <p>
-            When I said nothing changed at <code>beta.0</code>, I meant the shape
-            was set. But betas <code>.1</code> through <code>.7</code> were not a
-            nap. They were the part of a release where you stop building and
-            start proving, and a few real things landed in that window that are
-            worth calling out before the door shuts.
+            When I said nothing changed at <code>beta.0</code>
+            {", "}I meant the shape was set. But betas <code>.1</code> through{" "}
+            <code>.7</code> were not a nap. They were the part of a release
+            where you stop building and start proving, and a few real things
+            landed in that window that are worth calling out before the door
+            shuts.
           </p>
 
           <p>
             The biggest one: DaloyJS grew a dependency-free{" "}
-            <Link href="/docs/mcp">Model Context Protocol server</Link>. If you
-            are building anything an AI client talks to, you can now expose
-            tools, resources, and prompts over MCP Streamable HTTP from the same
-            framework, with the same body limits, timeouts, auth middleware, and
-            problem+json errors as any other route. It validates{" "}
-            <code>Origin</code> against DNS rebinding by default, because that is
-            a spec requirement and also because leaving it off is exactly the
+            <Link href="/docs/mcp">Model Context Protocol server</Link>
+            {". "}If you are building anything an AI client talks to, you can
+            now expose tools, resources, and prompts over MCP Streamable HTTP
+            from the same framework, with the same body limits, timeouts, auth
+            middleware, and problem+json errors as any other route. It validates{" "}
+            <code>Origin</code> against DNS rebinding by default, because that
+            is a spec requirement and also because leaving it off is exactly the
             kind of quiet footgun this framework exists to remove.
           </p>
 
@@ -177,24 +178,27 @@ export default function BlogPostPage() {
 
           <p>
             The rest of the beta window was the unglamorous work I actually
-            respect most. The Node hot path got faster (lazy request and response
-            shims plus sync-first validation, which is a 21% bump on the
-            full-contract benchmark and 53% on the bare echo path, with zero
+            respect most. The Node hot path got faster (lazy request and
+            response shims plus sync-first validation, which is a 21% bump on
+            the full-contract benchmark and 53% on the bare echo path, with zero
             behavior change and every security check still in place). The{" "}
             <code>create-daloy</code> templates were brought into line with the
             security and contract guidance they ship with, so a freshly
-            scaffolded app actually follows the patterns the docs preach. And the
-            docs site itself got a navigation and hydration pass so reading it
-            stops fighting you.
+            scaffolded app actually follows the patterns the docs preach. And
+            the docs site itself got a navigation and hydration pass so reading
+            it stops fighting you.
           </p>
 
           <h2>Nothing to do if you are already on the beta</h2>
 
           <p>
             The release candidate is a straightforward upgrade from the beta.
-            Updating is a lockfile change and a good night&apos;s sleep. We moved
-            <code>@daloyjs/core</code>, <code>create-daloy</code>, and the JSR
-            package <code>@daloyjs/daloy</code> together, as always, and every
+            Updating is a lockfile change and a good night&apos;s sleep. We
+            moved
+            <code>@daloyjs/core</code>
+            {", "}<code>create-daloy</code>
+            {", "}and the JSR package <code>@daloyjs/daloy</code> together, as
+            always, and every
             <code>create-daloy</code> template points at the matching core
             package. A plain install gets you the RC, no dist-tag archaeology
             required:
@@ -216,13 +220,13 @@ export default function BlogPostPage() {
           <p>
             Three things. I want at least three production users on file, real
             services depending on this, not a to-do app I wrote to feel good. I
-            want the security disclosure process exercised at least once, because
-            a policy you have never run is a policy you do not actually have. And
-            I want migration guides from the frameworks people are actually
-            leaving. The{" "}
+            want the security disclosure process exercised at least once,
+            because a policy you have never run is a policy you do not actually
+            have. And I want migration guides from the frameworks people are
+            actually leaving. The{" "}
             <Link href="/docs/migrating/express">Express guide</Link> is up;
-            Fastify and Hono are the next writing I owe you, and the RC window is
-            when I pay that debt.
+            Fastify and Hono are the next writing I owe you, and the RC window
+            is when I pay that debt.
           </p>
 
           <h2>What I want from you</h2>
@@ -233,8 +237,8 @@ export default function BlogPostPage() {
             useful thing you can do in the next few weeks is build a real thing
             on the release candidate and find the corner I sanded wrong. Report
             the bug. Tell me the name that reads badly. Show me the adapter that
-            drifts from the docs. Once the stable release ships, that feedback costs a
-            deprecation cycle to act on. Right now it is free.
+            drifts from the docs. Once the stable release ships, that feedback
+            costs a deprecation cycle to act on. Right now it is free.
           </p>
 
           <p>
@@ -243,17 +247,17 @@ export default function BlogPostPage() {
               the case for using DaloyJS today
             </Link>{" "}
             and the defenses you inherit on your very first route in{" "}
-            <Link href="/blog/secure-by-default">Secure by Default</Link>. Then
-            run <code>pnpm create daloy@latest</code> and come tell me what
-            broke.
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
+            {". "}Then run <code>pnpm create daloy@latest</code> and come tell
+            me what broke.
           </p>
 
           <p>
             Tagging a release candidate is the moment a project stops being
             &quot;almost ready&quot; and becomes &quot;prove it.&quot; That is
-            the scary-in-a-good-way part, and I would rather be here nervous than
-            still adding features I would have to defend forever. Thanks for being
-            early. Let us go find the bugs.
+            the scary-in-a-good-way part, and I would rather be here nervous
+            than still adding features I would have to defend forever. Thanks
+            for being early. Let us go find the bugs.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

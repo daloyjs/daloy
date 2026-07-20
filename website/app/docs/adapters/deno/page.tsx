@@ -25,10 +25,11 @@ export default function Page() {
     <>
       <h1>Deno</h1>
       <p>
-        The Deno adapter wraps <code>Deno.serve</code>: the stable, modern entry
-        point that replaced the old <code>Deno.serveHttp</code>. Graceful
-        shutdown uses an <code>AbortController</code>, which is the pattern Deno
-        itself recommends.
+        The Deno adapter wraps <code>Deno.serve</code>
+        {": "}the stable, modern entry point that replaced the old{" "}
+        <code>Deno.serveHttp</code>
+        {". "}Graceful shutdown uses an <code>AbortController</code>
+        {", "}which is the pattern Deno itself recommends.
       </p>
 
       <LayerStack
@@ -85,9 +86,8 @@ deno task dev    # deno run --allow-net --allow-env --allow-read --watch`}
       <h2 id="install">Install</h2>
       <p>
         <code>@daloyjs/core</code> is published to npm. Deno can consume it
-        directly via the <code>npm:</code> specifier. This is the same
-        pattern used by the official <code>deno-basic</code> scaffolder
-        template.
+        directly via the <code>npm:</code> specifier. This is the same pattern
+        used by the official <code>deno-basic</code> scaffolder template.
       </p>
       <CodeBlock
         language="jsonc"
@@ -159,8 +159,9 @@ CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/server.ts"]`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Don&apos;t use <code>Deno.serveHttp</code>: it&apos;s deprecated. The
-          DaloyJS adapter uses <code>Deno.serve</code> exclusively.
+          Don&apos;t use <code>Deno.serveHttp</code>
+          {": "}it&apos;s deprecated. The DaloyJS adapter uses{" "}
+          <code>Deno.serve</code> exclusively.
         </li>
         <li>
           On Deno Deploy you don&apos;t get <code>SIGTERM</code>; the platform
@@ -179,7 +180,8 @@ CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/server.ts"]`}
           <Link href="/docs/adapters">Adapters overview</Link>
         </li>
         <li>
-          <Link href="/docs/adapters/netlify">Netlify Edge Functions</Link>:
+          <Link href="/docs/adapters/netlify">Netlify Edge Functions</Link>
+          {": "}
           also Deno-based.
         </li>
       </ul>

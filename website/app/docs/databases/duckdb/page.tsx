@@ -253,8 +253,11 @@ await state.duckdb.run("set lock_configuration = true");`}
       <ul>
         <li>
           If you need file reads, restrict the directories and never pass a user
-          supplied path directly into <code>read_csv</code>,{" "}
-          <code>read_parquet</code>, <code>COPY</code>, or <code>ATTACH</code>.
+          supplied path directly into <code>read_csv</code>
+          {", "}
+          <code>read_parquet</code>
+          {", "}<code>COPY</code>
+          {", "}or <code>ATTACH</code>.
         </li>
         <li>
           For user-authored SQL, run DuckDB out of process with OS/container
@@ -283,9 +286,10 @@ await state.duckdb.run("set lock_configuration = true");`}
         </li>
         <li>
           You deploy only to Cloudflare Workers. Use{" "}
-          <Link href="/docs/databases/turso">Turso</Link>,{" "}
-          <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>, or{" "}
-          <Link href="/docs/databases/neon">Neon</Link> instead.
+          <Link href="/docs/databases/turso">Turso</Link>
+          {", "}
+          <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>
+          {", "}or <Link href="/docs/databases/neon">Neon</Link> instead.
         </li>
         <li>
           You want row-level authorization enforced inside the database. Keep
@@ -296,8 +300,10 @@ await state.duckdb.run("set lock_configuration = true");`}
 
       <p>
         See also the{" "}
-        <Link href="/docs/databases">database hosting overview</Link>,{" "}
-        <Link href="/docs/adapters/node">Node adapter</Link>, and{" "}
+        <Link href="/docs/databases">database hosting overview</Link>
+        {", "}
+        <Link href="/docs/adapters/node">Node adapter</Link>
+        {", "}and{" "}
         <a
           href="https://duckdb.org/docs/lts/clients/node_neo/overview"
           target="_blank"
@@ -305,7 +311,7 @@ await state.duckdb.run("set lock_configuration = true");`}
         >
           DuckDB Node.js client docs
         </a>
-        .
+        {"."}
       </p>
     </>
   );

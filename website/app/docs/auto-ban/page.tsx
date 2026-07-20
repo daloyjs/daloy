@@ -28,8 +28,8 @@ export default function Page() {
     <>
       <h1>Adaptive auto-ban (fail2ban-style)</h1>
       <p>
-        DaloyJS ships <code>autoBan()</code>, a
-        reusable, escalating, decaying ban primitive. Where{" "}
+        DaloyJS ships <code>autoBan()</code>
+        {", "}a reusable, escalating, decaying ban primitive. Where{" "}
         <a href="/docs/security/websocket-login-throttle">
           <code>loginThrottle()</code>
         </a>{" "}
@@ -112,11 +112,11 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
       <p>
         <code>autoBan()</code> refuses to construct unless it can identify
         clients: pass a <code>keyGenerator</code> or set{" "}
-        <code>trustProxyHeaders: true</code>. This is deliberate: a shared{" "}
-        <code>&quot;global&quot;</code> bucket would let a single offender ban
-        every caller at once. A request the key generator cannot attribute
-        (returns <code>undefined</code>) is skipped: never counted, never
-        banned.
+        <code>trustProxyHeaders: true</code>
+        {". "}This is deliberate: a shared <code>&quot;global&quot;</code>{" "}
+        bucket would let a single offender ban every caller at once. A request
+        the key generator cannot attribute (returns <code>undefined</code>) is
+        skipped: never counted, never banned.
       </p>
       <CodeBlock
         language="ts"
@@ -128,12 +128,14 @@ app.use(
 );`}
       />
 
-      <h2 id="how-escalation-and-decay-work">How escalation &amp; decay work</h2>
+      <h2 id="how-escalation-and-decay-work">
+        How escalation &amp; decay work
+      </h2>
       <ul>
         <li>
-          Each watched response is a <strong>strike</strong>. Strikes accumulate
-          inside <code>windowMs</code> (default 10 min) and decay when the
-          window passes.
+          Each watched response is a <strong>strike</strong>
+          {". "}Strikes accumulate inside <code>windowMs</code> (default 10
+          min) and decay when the window passes.
         </li>
         <li>
           Reaching <code>maxStrikes</code> (default 5) issues a ban for{" "}
@@ -141,9 +143,11 @@ app.use(
         </li>
         <li>
           With <code>escalate: true</code> (default) each <em>repeat</em> ban
-          doubles (<code>banMs</code>, <code>2×</code>, <code>4×</code>, …),
-          capped at <code>maxBanMs</code> (default 24 h), for as long as the
-          record stays alive.
+          doubles (<code>banMs</code>
+          {", "}<code>2×</code>
+          {", "}<code>4×</code>
+          {", "} …), capped at <code>maxBanMs</code> (default 24 h), for as long
+          as the record stays alive.
         </li>
         <li>
           Once the client stops tripping statuses, the record expires and the
@@ -156,9 +160,9 @@ app.use(
         A banned request is rejected in <code>beforeHandle</code> before the
         handler runs. By default it returns <code>429 Too Many Requests</code>{" "}
         with a <code>Retry-After</code> header and{" "}
-        <code>Cache-Control: no-store</code>. Set <code>banStatus: 403</code>{" "}
-        for a <code>403 Forbidden</code> with your own <code>message</code>{" "}
-        instead.
+        <code>Cache-Control: no-store</code>
+        {". "}Set <code>banStatus: 403</code> for a <code>403 Forbidden</code>{" "}
+        with your own <code>message</code> instead.
       </p>
       <CodeBlock
         language="ts"
@@ -194,12 +198,15 @@ app.use(
 );`}
       />
 
-      <h2 id="pluggable-store-multi-instance">Pluggable store (multi-instance)</h2>
+      <h2 id="pluggable-store-multi-instance">
+        Pluggable store (multi-instance)
+      </h2>
       <p>
-        The default store is in-memory and <strong>single-process</strong>. For
-        a horizontally-scaled deployment, implement <code>AutoBanStore</code>{" "}
-        (mirroring the <code>rateLimit()</code> store contract) against Redis or
-        another shared backend so a ban applies across every instance:
+        The default store is in-memory and <strong>single-process</strong>
+        {". "}For a horizontally-scaled deployment, implement{" "}
+        <code>AutoBanStore</code> (mirroring the <code>rateLimit()</code> store
+        contract) against Redis or another shared backend so a ban applies
+        across every instance:
       </p>
       <CodeBlock
         language="ts"

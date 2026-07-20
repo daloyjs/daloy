@@ -27,8 +27,8 @@ export default function Page() {
         <a href="https://resend.com" target="_blank" rel="noreferrer">
           Resend
         </a>{" "}
-        is a developer-first email API with first-class TypeScript types, edge-runtime support,
-        and tight integration with{" "}
+        is a developer-first email API with first-class TypeScript types,
+        edge-runtime support, and tight integration with{" "}
         <a href="https://react.email" target="_blank" rel="noreferrer">
           React Email
         </a>{" "}
@@ -74,13 +74,19 @@ export default function Page() {
       <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
-          Sign up at <a href="https://resend.com" target="_blank" rel="noreferrer">resend.com</a>{" "}
-          and add a sending <strong>domain</strong> under <strong>Domains</strong>. Add the SPF,
-          DKIM, and DMARC DNS records Resend lists, then click <em>Verify</em>.
+          Sign up at{" "}
+          <a href="https://resend.com" target="_blank" rel="noreferrer">
+            resend.com
+          </a>{" "}
+          and add a sending <strong>domain</strong> under{" "}
+          <strong>Domains</strong>
+          {". "}Add the SPF, DKIM, and DMARC DNS records Resend lists, then
+          click <em>Verify</em>.
         </li>
         <li>
-          Create an <strong>API key</strong> under <strong>API Keys</strong>. Use a
-          &ldquo;Sending access&rdquo; key scoped to that domain.
+          Create an <strong>API key</strong> under <strong>API Keys</strong>
+          {". "}
+          Use a &ldquo;Sending access&rdquo; key scoped to that domain.
         </li>
       </ol>
 
@@ -135,9 +141,9 @@ declare module "@daloyjs/core" {
 }`}
       />
       <p>
-        Resend SDK methods return <code>{`{ data, error }`}</code> rather than throwing, handle
-        the <code>error</code> branch and surface it through the{" "}
-        <Link href="/docs/errors">DaloyJS error helpers</Link>.
+        Resend SDK methods return <code>{`{ data, error }`}</code> rather than
+        throwing, handle the <code>error</code> branch and surface it through
+        the <Link href="/docs/errors">DaloyJS error helpers</Link>.
       </p>
 
       <h2 id="5-use-it-in-a-route">5. Use it in a route</h2>
@@ -181,12 +187,10 @@ async function issueMagicLink(_email: string) {
 
       <h2 id="react-email-templates">React Email templates</h2>
       <p>
-        Resend reads the <code>react</code> field and renders it to HTML for you, so you can ship
-        type-safe email templates as React components:
+        Resend reads the <code>react</code> field and renders it to HTML for
+        you, so you can ship type-safe email templates as React components:
       </p>
-      <CodeBlock
-        code={`pnpm add @react-email/components react react-dom`}
-      />
+      <CodeBlock code={`pnpm add @react-email/components react react-dom`} />
       <CodeBlock
         code={`// emails/welcome.tsx
 import { Html, Button, Heading, Text } from "@react-email/components";
@@ -214,21 +218,24 @@ await resend.emails.send({
 
       <h2 id="batch-sending">Batch sending</h2>
       <p>
-        Use <code>resend.batch.send([...])</code> to enqueue up to 100 messages in a single API
-        call, handy for fan-out notifications without queueing infrastructure.
+        Use <code>resend.batch.send([...])</code> to enqueue up to 100 messages
+        in a single API call, handy for fan-out notifications without queueing
+        infrastructure.
       </p>
 
       <h2 id="runtimes">Runtimes</h2>
       <p>
-        The <code>resend</code> SDK uses the standard <code>fetch</code> API, so it runs on Node
-        18+, Bun, Deno, AWS Lambda, Vercel (Serverless and Edge), and Cloudflare Workers without
-        adapters. Pair it with the <Link href="/docs/adapters">edge adapters</Link> shipped by
-        DaloyJS.
+        The <code>resend</code> SDK uses the standard <code>fetch</code> API, so
+        it runs on Node 18+, Bun, Deno, AWS Lambda, Vercel (Serverless and
+        Edge), and Cloudflare Workers without adapters. Pair it with the{" "}
+        <Link href="/docs/adapters">edge adapters</Link> shipped by DaloyJS.
       </p>
 
       <p>
-        See also <Link href="/docs/email/postmark">Postmark</Link>,{" "}
-        <Link href="/docs/email/sendgrid">SendGrid</Link>, and the{" "}
+        See also <Link href="/docs/email/postmark">Postmark</Link>
+        {", "}
+        <Link href="/docs/email/sendgrid">SendGrid</Link>
+        {", "}and the{" "}
         <Link href="/docs/email">email integrations overview</Link>.
       </p>
     </>

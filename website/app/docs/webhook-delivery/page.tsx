@@ -30,50 +30,61 @@ export default function Page() {
       <p>
         DaloyJS already verifies <em>inbound</em> webhooks with{" "}
         <code>verifyWebhookSignature()</code> and signs payloads with{" "}
-        <code>signWebhookPayload()</code>.{" "}
-        <code>createWebhookSender()</code> closes the loop on the{" "}
-        <em>outbound</em> side: it delivers events to your subscribers with a{" "}
-        timestamped HMAC signature, bounded retries with exponential backoff,{" "}
-        <code>Retry-After</code> awareness, a per-attempt timeout, and{" "}
-        dead-letter semantics, all with{" "}
+        <code>signWebhookPayload()</code>. <code>createWebhookSender()</code>{" "}
+        closes the loop on the <em>outbound</em> side: it delivers events to
+        your subscribers with a timestamped HMAC signature, bounded retries with
+        exponential backoff, <code>Retry-After</code> awareness, a per-attempt
+        timeout, and dead-letter semantics, all with{" "}
         <strong>zero runtime dependencies</strong> and SSRF-safe transport by
         default.
       </p>
       <ul>
         <li>
-          <strong>Signed delivery</strong>: each request carries{" "}
-          <code>webhook-id</code>, <code>webhook-timestamp</code>, and{" "}
-          <code>webhook-signature</code> (<code>sha256=&hellip;</code>) computed
-          over <code>&quot;&lt;timestamp&gt;.&lt;body&gt;&quot;</code>, the same
-          convention <code>verifyWebhookSignature()</code> validates.
+          <strong>Signed delivery</strong>
+          {": "}each request carries <code>webhook-id</code>
+          {", "}<code>webhook-timestamp</code>
+          {", "}and <code>webhook-signature</code> (
+          <code>sha256=&hellip;</code>) computed over{" "}
+          <code>&quot;&lt;timestamp&gt;.&lt;body&gt;&quot;</code>
+          {", "}the same convention <code>verifyWebhookSignature()</code>{" "}
+          validates.
         </li>
         <li>
-          <strong>Retry with backoff</strong>: transient statuses (
-          <code>408/429/500/502/503/504</code>) and network errors are retried
-          with exponential backoff + jitter, honouring <code>Retry-After</code>.
+          <strong>Retry with backoff</strong>
+          {": "}transient statuses (<code>408/429/500/502/503/504</code>) and
+          network errors are retried with exponential backoff + jitter,
+          honouring <code>Retry-After</code>.
         </li>
         <li>
-          <strong>Dead-letter</strong>: events that exhaust their
-          attempts (or fail permanently) are handed to a{" "}
-          <code>WebhookDeadLetterSink</code> for later inspection or replay.
+          <strong>Dead-letter</strong>
+          {": "}events that exhaust their attempts (or fail permanently) are
+          handed to a <code>WebhookDeadLetterSink</code> for later inspection or
+          replay.
         </li>
         <li>
-          <strong>SSRF-safe by default</strong>: the transport defaults
-          to <code>fetchGuard()</code>, so a subscriber URL pointing at cloud
-          metadata or a private range is refused (and never retried).
+          <strong>SSRF-safe by default</strong>
+          {": "}the transport defaults to <code>fetchGuard()</code>
+          {", "}so a subscriber URL pointing at cloud metadata or a private
+          range is refused (and never retried).
         </li>
       </ul>
 
       <SequenceDiagram
         title="Delivery lifecycle"
-        participants={["createWebhookSender()", "fetchGuard()", "Subscriber", "Dead-letter sink"]}
+        participants={[
+          "createWebhookSender()",
+          "fetchGuard()",
+          "Subscriber",
+          "Dead-letter sink",
+        ]}
         steps={[
           {
             from: "createWebhookSender()",
             to: "Subscriber",
             kind: "request",
             label: "Signed POST (attempt 1)",
-            detail: "webhook-id, webhook-timestamp, webhook-signature=sha256=...",
+            detail:
+              "webhook-id, webhook-timestamp, webhook-signature=sha256=...",
           },
           {
             from: "Subscriber",
@@ -101,7 +112,8 @@ export default function Page() {
             to: "Dead-letter sink",
             kind: "note",
             label: "SSRF refusal or attempts exhausted",
-            detail: "SsrfBlockedError is permanent: never retried -> WebhookDeadLetterSink",
+            detail:
+              "SsrfBlockedError is permanent: never retried -> WebhookDeadLetterSink",
           },
         ]}
         caption="Each delivery is a signed POST. Transient failures are retried with exponential backoff and jitter while reusing the same signature. An SSRF refusal or an exhausted attempt budget is sent straight to the dead-letter sink for inspection or replay."
@@ -152,7 +164,9 @@ webhook-signature: sha256=9f8a...c2
         on every attempt, so receivers can safely dedupe on the id.
       </p>
 
-      <h2 id="verifying-on-the-receiving-end">Verifying on the receiving end</h2>
+      <h2 id="verifying-on-the-receiving-end">
+        Verifying on the receiving end
+      </h2>
       <p>
         A DaloyJS receiver verifies the delivery with the inbound helper, using
         the same secret and the <code>webhook-timestamp</code> header:
@@ -190,11 +204,12 @@ app.post(
       <p>
         Failed deliveries are retried up to <code>maxAttempts</code> (default{" "}
         <code>5</code>) with exponential backoff between{" "}
-        <code>retryDelayMs</code> and <code>maxRetryDelayMs</code>. A{" "}
-        <code>Retry-After</code> header on a <code>429</code>/<code>503</code>{" "}
-        takes precedence (capped at <code>maxRetryDelayMs</code>). Only
-        transient statuses and network/timeout errors are retried; a{" "}
-        <code>400</code> or any other non-retryable status fails immediately.
+        <code>retryDelayMs</code> and <code>maxRetryDelayMs</code>
+        {". "}A <code>Retry-After</code> header on a <code>429</code>/
+        <code>503</code> takes precedence (capped at{" "}
+        <code>maxRetryDelayMs</code>). Only transient statuses and
+        network/timeout errors are retried; a <code>400</code> or any other
+        non-retryable status fails immediately.
       </p>
       <CodeBlock
         language="ts"
@@ -216,11 +231,11 @@ app.post(
       <h2 id="dead-letter-semantics">Dead-letter semantics</h2>
       <p>
         When an event exhausts its attempts, or fails permanently (a{" "}
-        non-retryable status or an SSRF refusal), it is handed to the{" "}
-        configured <code>WebhookDeadLetterSink</code>. The built-in{" "}
-        <code>MemoryWebhookDeadLetterSink</code> is a bounded ring buffer; in
-        production, implement the one-method interface to persist to your queue
-        or table:
+        non-retryable status or an SSRF refusal), it is handed to the configured{" "}
+        <code>WebhookDeadLetterSink</code>
+        {". "}The built-in <code>MemoryWebhookDeadLetterSink</code> is a
+        bounded ring buffer; in production, implement the one-method interface
+        to persist to your queue or table:
       </p>
       <CodeBlock
         language="ts"
@@ -250,14 +265,15 @@ class TableDeadLetterSink implements WebhookDeadLetterSink {
 
       <h2 id="ssrf-posture">SSRF posture</h2>
       <p>
-        The transport defaults to <code>fetchGuard()</code>. A subscriber URL
-        that resolves to a cloud-metadata address or a private range is refused
-        with an <code>SsrfBlockedError</code>, which the sender treats as a{" "}
-        <em>permanent</em> failure: it is never retried and goes straight to the
-        dead-letter sink. To use a custom transport (for example, a{" "}
-        <code>resilientFetch()</code> wrapping <code>fetchGuard()</code>), pass{" "}
-        <code>fetch</code> explicitly, but never default it to the bare{" "}
-        global <code>fetch</code> for subscriber-controlled URLs.
+        The transport defaults to <code>fetchGuard()</code>
+        {". "}A subscriber URL that resolves to a cloud-metadata address or a
+        private range is refused with an <code>SsrfBlockedError</code>
+        {", "}which the sender treats as a <em>permanent</em> failure: it is
+        never retried and goes straight to the dead-letter sink. To use a custom
+        transport (for example, a <code>resilientFetch()</code> wrapping{" "}
+        <code>fetchGuard()</code>), pass <code>fetch</code> explicitly, but
+        never default it to the bare global <code>fetch</code> for
+        subscriber-controlled URLs.
       </p>
     </>
   );

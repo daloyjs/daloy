@@ -302,15 +302,17 @@ export default function HomePage() {
               tracing, edge-friendly sessions, a security-focused runtime by
               default, and a supply-chain-hardened release pipeline for the
               framework itself. One line on the <code>App</code> constructor,{" "}
-              <code>docs: true</code>: auto-mounts a Scalar API reference at{" "}
-              <code>/docs</code> and the live OpenAPI 3.1 spec at{" "}
-              <code>/openapi.json</code>, the same DX as FastAPI.
+              <code>docs: true</code>
+              {": "}auto-mounts a Scalar API reference at <code>/docs</code>{" "}
+              and the live OpenAPI 3.1 spec at <code>/openapi.json</code>
+              {", "}the same DX as FastAPI.
             </p>
             <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
               <span className="font-medium text-foreground">ᜇᜎᜓᜌ᜔</span> Daloy
               means <span className="text-foreground">flow</span> in Tagalog,
               pronounced{" "}
-              <span className="whitespace-nowrap text-foreground">da-loy</span>.{" "}
+              <span className="whitespace-nowrap text-foreground">da-loy</span>
+              {". "}
               <Link
                 href="/about-the-name"
                 className="underline underline-offset-4"
@@ -347,7 +349,9 @@ export default function HomePage() {
               className="float-up flex max-w-full items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
               style={{ animationDelay: "380ms" }}
             >
-              <code className="overflow-x-auto text-sm whitespace-nowrap">$ {CREATE_COMMAND}</code>
+              <code className="overflow-x-auto text-sm whitespace-nowrap">
+                $ {CREATE_COMMAND}
+              </code>
               <CodeCopyButton code={CREATE_COMMAND} />
             </div>
             <div className='flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'>
@@ -444,8 +448,8 @@ export default function HomePage() {
             </h2>
             <p className="max-w-3xl leading-8 text-muted-foreground">
               Scalar is the modern successor to Swagger UI: fast, clean,
-              dark-mode-native, with built-in try-it requests. In DaloyJS it
-              is the <em>default</em> docs UI, not a plugin:{" "}
+              dark-mode-native, with built-in try-it requests. In DaloyJS it is
+              the <em>default</em> docs UI, not a plugin:{" "}
               <code>docs: true</code> on the <code>App</code> constructor
               auto-mounts this page at <code>/docs</code> and the live OpenAPI
               3.1 spec at <code>/openapi.json</code>.
@@ -453,8 +457,8 @@ export default function HomePage() {
           </div>
           <ScalarPreview />
           <p className="mt-4 text-center text-sm leading-6 text-muted-foreground">
-            Generated from your route contracts, zero extra code. Prefer
-            Swagger UI or Redoc? Both are one config field away.{" "}
+            Generated from your route contracts, zero extra code. Prefer Swagger
+            UI or Redoc? Both are one config field away.{" "}
             <Link
               href="/docs/openapi"
               className="font-medium text-foreground underline underline-offset-4"

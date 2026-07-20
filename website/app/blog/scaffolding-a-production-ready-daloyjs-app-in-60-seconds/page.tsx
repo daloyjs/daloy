@@ -400,7 +400,7 @@ export default function BlogPostPage() {
               I have a running server with tests, types, OpenAPI, and a CI
               pipeline
             </em>
-            . When that first sixty seconds is awkward, the project never
+            {". "}When that first sixty seconds is awkward, the project never
             happens. When it feels good, you keep going.
           </p>
 
@@ -409,7 +409,7 @@ export default function BlogPostPage() {
             sixty seconds feel good for DaloyJS. This post is the grand tour:
             every template, every flag, the AGENTS.md drop-in for coding agents,
             and the cosmetic-but-important
-            <code> printStartupBanner()</code> that tells you the dev server is
+            <code>printStartupBanner()</code> that tells you the dev server is
             alive. Then, at the end, I&apos;ll hand you off to the
             contract-first post for the next sixty seconds, wiring up the typed
             client.
@@ -454,16 +454,18 @@ export default function BlogPostPage() {
 
           <p>
             One detail worth pointing out: when the package manager is{" "}
-            <code>pnpm</code>, <code>--install</code> defaults to <em>N</em>.
+            <code>pnpm</code>
+            {", "}<code>--install</code> defaults to <em>N</em>
+            {". "}
             That&apos;s on purpose. The scaffolded project ships a{" "}
             <code>.npmrc</code> with <code>minimum-release-age=1440</code> and a{" "}
             <code>pnpm-workspace.yaml</code> with{" "}
             <code>blockExoticSubdeps: true</code> and{" "}
-            <code>strictDepBuilds: true</code>. The first install needs to{" "}
-            <em>honor those</em>, not race past them. So we let you{" "}
-            <code>cd</code> in, look at the files, and run{" "}
-            <code>pnpm install</code> deliberately. Five seconds slower; way
-            fewer surprises.
+            <code>strictDepBuilds: true</code>
+            {". "}The first install needs to <em>honor those</em>
+            {", "}not race past them. So we let you <code>cd</code> in, look at
+            the files, and run <code>pnpm install</code> deliberately. Five
+            seconds slower; way fewer surprises.
           </p>
 
           <h2>The full flag surface</h2>
@@ -566,12 +568,12 @@ export default function BlogPostPage() {
           <p>
             <code>AGENTS.md</code> is short and opinionated, it&apos;s the
             two-page summary every agent should read first. The real meat is in{" "}
-            <code>.agents/skills/daloyjs-best-practices/SKILL.md</code>, which
-            is the full ~600-line workflow doc: how to add a route, schema
-            conventions, the testing recipe, security defaults, deployment notes
-            per runtime. An agent that follows it produces code that looks like
-            the rest of the codebase, which is the only kind of agent output
-            that ages well.
+            <code>.agents/skills/daloyjs-best-practices/SKILL.md</code>
+            {", "}which is the full ~600-line workflow doc: how to add a route,
+            schema conventions, the testing recipe, security defaults,
+            deployment notes per runtime. An agent that follows it produces code
+            that looks like the rest of the codebase, which is the only kind of
+            agent output that ages well.
           </p>
 
           <EditorFrame
@@ -610,7 +612,8 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Auto-detects TTY + <code>NO_COLOR</code> + <code>FORCE_COLOR</code>,
+            Auto-detects TTY + <code>NO_COLOR</code> + <code>FORCE_COLOR</code>
+            {", "}
             falls back to ASCII glyphs in non-UTF-8 terminals, looks like a log
             line in CI. You can&apos;t see this kind of polish in a screenshot,
             but you feel it every morning.
@@ -654,13 +657,14 @@ export default function BlogPostPage() {
           <p>
             You now have a running server, a contract, security middleware, and
             a CI pipeline. The next sixty seconds is the typed-client handoff,
-            running <code>pnpm gen</code>, importing the SDK in your frontend,
-            getting compile-time errors when your route changes shape.
-            That&apos;s the entire subject of{" "}
+            running <code>pnpm gen</code>
+            {", "}importing the SDK in your frontend, getting compile-time
+            errors when your route changes shape. That&apos;s the entire subject
+            of{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
               Contract-First Without the Codegen Dance
             </Link>
-            . Read it next.
+            {". "}Read it next.
           </p>
 
           <p>

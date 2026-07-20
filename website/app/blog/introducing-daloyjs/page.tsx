@@ -292,8 +292,8 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            It&apos;s called <strong>DaloyJS</strong>. The pitch fits on one
-            line:
+            It&apos;s called <strong>DaloyJS</strong>
+            {". "}The pitch fits on one line:
           </p>
 
           <blockquote>
@@ -303,11 +303,14 @@ export default function BlogPostPage() {
           <p>
             Translated into engineering: a single{" "}
             <code>app.route(&#123;...&#125;)</code> call is the source of truth
-            for <em>validation</em>, <em>TypeScript types</em>,<em> OpenAPI</em>
-            , the <em>typed client</em>, and your <em>contract tests</em>. And
-            that same <code>app</code> runs on Node, Bun, Deno, Cloudflare
-            and Workers, the same file, no rewrites, no &quot;works on
-            my Node version&quot; magic.
+            for <em>validation</em>
+            {", "}<em>TypeScript types</em>
+            {", "}<em>OpenAPI</em>
+            {", "}the <em>typed client</em>
+            {", "}and your <em>contract tests</em>
+            {". "}And that same <code>app</code> runs on Node, Bun, Deno,
+            Cloudflare and Workers, the same file, no rewrites, no &quot;works
+            on my Node version&quot; magic.
           </p>
 
           <p>
@@ -321,10 +324,11 @@ export default function BlogPostPage() {
 
           <p>
             I&apos;m going to define a single route, start a server, hit{" "}
-            <code>/openapi.json</code>, and then call the same route through the
-            typed client, without a network in the middle, because the typed
-            client knows it&apos;s the same process. Four things, one source of
-            truth, no codegen step. Let&apos;s go.
+            <code>/openapi.json</code>
+            {", "}and then call the same route through the typed client,
+            without a network in the middle, because the typed client knows
+            it&apos;s the same process. Four things, one source of truth, no
+            codegen step. Let&apos;s go.
           </p>
 
           <h3>Step 1: Define the route</h3>
@@ -357,25 +361,27 @@ export default function BlogPostPage() {
               >
                 Standard Schema
               </a>
-              . I used Zod here, but you can swap in Valibot or ArkType without
-              changing the framework. The schema isn&apos;t a decoration,
-              it&apos;s the validator, the OpenAPI body, <em>and</em> the
-              TypeScript type of <code>params</code> inside <code>handler</code>
-              .
+              {". "}I used Zod here, but you can swap in Valibot or ArkType
+              without changing the framework. The schema isn&apos;t a
+              decoration, it&apos;s the validator, the OpenAPI body,{" "}
+              <em>and</em> the TypeScript type of <code>params</code> inside{" "}
+              <code>handler</code>
+              {"."}
             </li>
             <li>
               The handler&apos;s return type is a discriminated union of every
               status you declared. Forget to handle a status? The compiler will
               tell you. Try to return a body for <code>404</code> when you
               didn&apos;t declare one? Also a compile error. This is the part
-              that removes about a third of the bugs I&apos;ve shipped
-              in the last decade.
+              that removes about a third of the bugs I&apos;ve shipped in the
+              last decade.
             </li>
             <li>
               <code>bodyLimitBytes</code> and <code>requestTimeoutMs</code> are
               constructor arguments, not optional middlewares you forgot to
               register at 4pm on a Friday. Security defaults are on. You opt{" "}
-              <em>out</em>, not in.
+              <em>out</em>
+              {", "}not in.
             </li>
           </ul>
 
@@ -412,8 +418,9 @@ export default function BlogPostPage() {
             URL in a browser. Go ahead. The whole document is consistent with
             the route by construction, not by convention.{" "}
             <Link href="/docs">The docs</Link> explain how to customize{" "}
-            <code>info</code>, tags, servers, and security schemes, but the
-            default is: open your browser, see your API.
+            <code>info</code>
+            {", "}tags, servers, and security schemes, but the default is: open
+            your browser, see your API.
           </p>
 
           <h3>Step 4: Call it through the typed in-process client</h3>
@@ -422,10 +429,10 @@ export default function BlogPostPage() {
             Now for the part that, the first time I saw it work, made me say a
             word I will not type here because my mother reads this blog.
             We&apos;re going to call the route{" "}
-            <em>without going through HTTP</em>. Same app object, same
-            validation, same response shape, just no socket in the middle.
-            Perfect for tests, scripts, and anywhere you want speed without
-            spinning up a server.
+            <em>without going through HTTP</em>
+            {". "}Same app object, same validation, same response shape, just
+            no socket in the middle. Perfect for tests, scripts, and anywhere
+            you want speed without spinning up a server.
           </p>
 
           <EditorFrame
@@ -440,11 +447,11 @@ export default function BlogPostPage() {
             Read the comments carefully, that{" "}
             <code>if (ok.status === 200)</code> branch is a real discriminated
             union. Inside it, TypeScript narrows <code>ok.body</code> to{" "}
-            <code>&#123; id: string; title: string &#125;</code>. Outside of it,{" "}
-            <code>ok.body</code> doesn&apos;t exist as far as the compiler is
-            concerned. You get this without writing types, without a codegen
-            step, and without keeping a hand-written client in sync. It just
-            comes from the route.
+            <code>&#123; id: string; title: string &#125;</code>
+            {". "}Outside of it, <code>ok.body</code> doesn&apos;t exist as far
+            as the compiler is concerned. You get this without writing types,
+            without a codegen step, and without keeping a hand-written client in
+            sync. It just comes from the route.
           </p>
 
           <p>
@@ -513,10 +520,12 @@ export default function BlogPostPage() {
             Notice that the test imports the same <code>app</code> as the
             server. There is no mocked schema, no parallel type definition, no
             re-derived response shape. If someone changes the route&apos;s 200
-            body to remove <code>title</code>, this test fails to compile. Not
-            fails to run, fails to <em>compile</em>. That&apos;s the bug being
-            caught at the earliest possible moment in the lifecycle, which is
-            roughly nine months earlier than I usually catch them.
+            body to remove <code>title</code>
+            {", "}this test fails to compile. Not fails to run, fails to{" "}
+            <em>compile</em>
+            {". "}That&apos;s the bug being caught at the earliest possible
+            moment in the lifecycle, which is roughly nine months earlier than I
+            usually catch them.
           </p>
 
           <h2>What &quot;zero ceremony&quot; actually means</h2>
@@ -529,7 +538,9 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              <strong>No decorators</strong>, no <code>reflect-metadata</code>,
+              <strong>No decorators</strong>
+              {", "}no <code>reflect-metadata</code>
+              {", "}
               no &quot;please enable experimental TS flags&quot;. Routes are
               objects. Handlers are functions. If you can read JavaScript, you
               can read this.
@@ -547,9 +558,12 @@ export default function BlogPostPage() {
               <strong>No security checklist to remember.</strong> Body limits,
               request timeouts, prototype-pollution-safe JSON parsing,
               path-traversal rejection, and 5xx redaction in production are
-              defaults. <code>secureHeaders()</code>, <code>rateLimit()</code>,{" "}
-              <code>requestId()</code>, CSRF, sessions, and tracing are
-              first-party, same repo, same release cadence, same test suite.
+              defaults. <code>secureHeaders()</code>
+              {", "}<code>rateLimit()</code>
+              {", "}
+              <code>requestId()</code>
+              {", "}CSRF, sessions, and tracing are first-party, same repo,
+              same release cadence, same test suite.
             </li>
             <li>
               <strong>No runtime lock-in.</strong> Same app, five adapters.
@@ -579,11 +593,13 @@ export default function BlogPostPage() {
           <CodeBlock language="bash" code={QUICKSTART} />
 
           <p>
-            Then open <Link href="/docs/getting-started">Getting started</Link>,
-            poke at <code>/openapi.json</code>, change one field in the route
-            and watch the typed client complain at you in red squiggles. If
-            something breaks, please tell me, the only way a framework earns the
-            right to exist is by surviving other people&apos;s real code.
+            Then open <Link href="/docs/getting-started">Getting started</Link>
+            {", "}
+            poke at <code>/openapi.json</code>
+            {", "}change one field in the route and watch the typed client
+            complain at you in red squiggles. If something breaks, please tell
+            me, the only way a framework earns the right to exist is by
+            surviving other people&apos;s real code.
           </p>
 
           <h2>The honest part</h2>

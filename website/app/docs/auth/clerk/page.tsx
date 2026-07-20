@@ -45,7 +45,7 @@ export default function Page() {
         >
           <code>authenticateRequest()</code>
         </a>
-        , which takes a standard <code>Request</code> and returns an{" "}
+        {", "}which takes a standard <code>Request</code> and returns an{" "}
         <code>Auth</code> object, a perfect fit for DaloyJS&apos;s Web-standard
         handlers.
       </p>
@@ -101,8 +101,10 @@ export default function Page() {
           >
             Clerk dashboard
           </a>
-          . From <strong>API Keys</strong>, copy the{" "}
-          <strong>Publishable Key</strong> and <strong>Secret Key</strong>.
+          {". "}From <strong>API Keys</strong>
+          {", "}copy the <strong>Publishable Key</strong> and{" "}
+          <strong>Secret Key</strong>
+          {". "}
           Optionally copy the <strong>JWT Public Key (PEM)</strong> for
           networkless verification.
         </li>
@@ -248,9 +250,13 @@ app.get(
       </h2>
       <p>
         Clerk&apos;s <code>Auth</code> object includes the active{" "}
-        <code>orgId</code>, <code>orgSlug</code>, <code>orgRole</code> (e.g.{" "}
-        <code>org:admin</code>), and <code>orgPermissions</code>. Add a thin
-        helper to require a role on top of <code>requireClerkAuth</code>:
+        <code>orgId</code>
+        {", "}<code>orgSlug</code>
+        {", "}<code>orgRole</code> (e.g. <code>org:admin</code>), and{" "}
+        <code>orgPermissions</code>
+        {". "}Add a thin helper to require a role on top of{" "}
+        <code>requireClerkAuth</code>
+        {": "}
       </p>
       <CodeBlock
         code={`import { every, ForbiddenError, type Hooks } from "@daloyjs/core";
@@ -277,8 +283,10 @@ hooks: every(
         Machine-to-machine authentication
       </h2>
       <p>
-        Set <code>acceptsToken</code> to <code>&quot;m2m_token&quot;</code>,{" "}
-        <code>&quot;oauth_token&quot;</code>, or an array like{" "}
+        Set <code>acceptsToken</code> to <code>&quot;m2m_token&quot;</code>
+        {", "}
+        <code>&quot;oauth_token&quot;</code>
+        {", "}or an array like{" "}
         <code>[&quot;session_token&quot;, &quot;m2m_token&quot;]</code> to
         accept multiple token kinds. The returned <code>tokenType</code> lets
         you branch your business logic per caller type.
@@ -302,9 +310,11 @@ hooks: every(
       </p>
 
       <p>
-        See also <Link href="/docs/auth/auth0">Auth0</Link>,{" "}
-        <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>, and the{" "}
-        <Link href="/docs/auth">auth integrations overview</Link>.
+        See also <Link href="/docs/auth/auth0">Auth0</Link>
+        {", "}
+        <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>
+        {", "}and the <Link href="/docs/auth">auth integrations overview</Link>
+        {"."}
       </p>
     </>
   );

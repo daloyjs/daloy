@@ -222,7 +222,7 @@ const PSL_PUBLIC_SUFFIXES: ReadonlySet<string>;`}
         <Link href={"/docs/api-reference/security" as Route}>
           security &amp; auth helpers
         </Link>
-        .
+        {"."}
       </p>
     </>
   );

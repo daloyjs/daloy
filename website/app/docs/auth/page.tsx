@@ -43,7 +43,7 @@ export default function Page() {
         <Link href={"/docs/auth/architecture" as Route}>
           Auth architecture: where DaloyJS fits in OAuth2 &amp; OpenID Connect
         </Link>
-        . It explains why DaloyJS is a <strong>resource server</strong> (it
+        {". "}It explains why DaloyJS is a <strong>resource server</strong> (it
         verifies tokens, it does not issue them), how that compares to .NET and
         Duende IdentityServer, whether you actually need Auth0/Okta/Clerk or can
         self-host an open-source IdP, and the two architectures we recommend.
@@ -52,41 +52,47 @@ export default function Page() {
       <h2 id="supported-providers">Supported providers</h2>
       <ul>
         <li>
-          <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>: pay-as-you-go
-          user pools with hosted sign-in. Use <code>aws-jwt-verify</code> to
-          verify access and ID tokens with zero runtime dependencies; runs on
-          Node, edge, and Lambda.
+          <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>
+          {": "}pay-as-you-go user pools with hosted sign-in. Use{" "}
+          <code>aws-jwt-verify</code> to verify access and ID tokens with zero
+          runtime dependencies; runs on Node, edge, and Lambda.
         </li>
         <li>
-          <Link href="/docs/auth/entra-id">Microsoft Entra ID (MSAL)</Link>:
+          <Link href="/docs/auth/entra-id">Microsoft Entra ID (MSAL)</Link>
+          {": "}
           enterprise SSO for Microsoft 365 / Azure AD users. Verify tokens with
           the OIDC JWKS using <code>jose</code>; acquire downstream tokens with{" "}
           <code>@azure/msal-node</code> when needed.
         </li>
         <li>
-          <Link href="/docs/auth/auth0">Auth0</Link>: developer-friendly IdP
-          with universal login, MFA, and rich rule engine. Verify access tokens
-          with <code>jose</code> against your tenant&apos;s issuer URL.
+          <Link href="/docs/auth/auth0">Auth0</Link>
+          {": "}developer-friendly IdP with universal login, MFA, and rich rule
+          engine. Verify access tokens with <code>jose</code> against your
+          tenant&apos;s issuer URL.
         </li>
         <li>
-          <Link href="/docs/auth/okta">Okta</Link>: workforce identity with
-          custom authorization servers and granular policies. Use the official{" "}
-          <code>@okta/jwt-verifier</code> for access and ID tokens.
+          <Link href="/docs/auth/okta">Okta</Link>
+          {": "}workforce identity with custom authorization servers and
+          granular policies. Use the official <code>@okta/jwt-verifier</code>{" "}
+          for access and ID tokens.
         </li>
         <li>
-          <Link href="/docs/auth/clerk">Clerk</Link>: modern, embeddable
-          authentication with user, organization, and billing primitives. Use{" "}
-          <code>@clerk/backend</code> <code>authenticateRequest()</code> to
-          authenticate any <code>Request</code>.
+          <Link href="/docs/auth/clerk">Clerk</Link>
+          {": "}modern, embeddable authentication with user, organization, and
+          billing primitives. Use <code>@clerk/backend</code>{" "}
+          <code>authenticateRequest()</code> to authenticate any{" "}
+          <code>Request</code>.
         </li>
         <li>
-          <Link href={"/docs/auth/loginradius" as Route}>LoginRadius</Link>:
+          <Link href={"/docs/auth/loginradius" as Route}>LoginRadius</Link>
+          {": "}
           customer identity, social login, registration, and profile APIs. Use{" "}
           <code>loginradius-sdk</code> to validate LoginRadius access tokens and
           load profiles from a Node-style DaloyJS runtime.
         </li>
         <li>
-          <Link href={"/docs/auth/better-auth" as Route}>Better Auth</Link>:
+          <Link href={"/docs/auth/better-auth" as Route}>Better Auth</Link>
+          {": "}
           self-hosted authentication for email/password, OAuth, sessions, and
           plugins. Mount its standard <code>Request → Response</code> handler
           under DaloyJS and guard API routes with{" "}

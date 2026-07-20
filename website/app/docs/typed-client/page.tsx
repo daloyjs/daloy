@@ -53,18 +53,21 @@ if (r.status === 200) {
       />
 
       <p>
-        The client is keyed by <code>operationId</code>, returns a discriminated
-        union of <code>{`{status, body, headers}`}</code>, and infers everything
-        from the route definition itself. No build step.
+        The client is keyed by <code>operationId</code>
+        {", "}returns a discriminated union of{" "}
+        <code>{`{status, body, headers}`}</code>
+        {", "}and infers everything from the route definition itself. No build
+        step.
       </p>
 
       <div role="note">
         <p>
           <strong>Compose route tuples instead of widening the App.</strong>{" "}
           Export route files with <code>defineRoute()</code> and register a
-          literal tuple with <code>app.registerRoutes([...])</code>. Chained{" "}
-          <code>route()</code> calls also work. Two things deliberately erase
-          inference and collapse the client to a loose surface:
+          literal tuple with <code>app.registerRoutes([...])</code>
+          {". "}Chained <code>route()</code> calls also work. Two things
+          deliberately erase inference and collapse the client to a loose
+          surface:
         </p>
         <ul>
           <li>
@@ -102,7 +105,7 @@ if (r.status === 200) {
         >
           @hey-api/openapi-ts
         </a>
-        .
+        {"."}
       </p>
 
       <FlowDiagram
@@ -212,7 +215,8 @@ else if (data) console.log(data.title);`}
         differences.
       </p>
       <p>
-        First, in DaloyJS the <strong>route definition is the contract</strong>,
+        First, in DaloyJS the <strong>route definition is the contract</strong>
+        {", "}
         there is no separate contract object to keep in sync. The in-process{" "}
         <code>createClient</code> shown above gives the same zero-codegen,
         shared-types experience for same-repo TypeScript callers.
@@ -246,10 +250,12 @@ else if (data) console.log(data.title);`}
           <tr>
             <td>Zero-codegen typed client</td>
             <td>
-              Yes (<code>initClient</code>, TypeScript only)
+              Yes (<code>initClient</code>
+              {", "}TypeScript only)
             </td>
             <td>
-              Yes (<code>createClient</code>, TypeScript only)
+              Yes (<code>createClient</code>
+              {", "}TypeScript only)
             </td>
           </tr>
           <tr>

@@ -32,11 +32,13 @@ export default function Page() {
     <>
       <h1>Where to use DaloyJS</h1>
       <p>
-        DaloyJS is a <strong>contract-first TypeScript web framework</strong>.
+        DaloyJS is a <strong>contract-first TypeScript web framework</strong>
+        {". "}
         It takes an HTTP <code>Request</code> and returns a{" "}
-        <code>Response</code>, with validation, OpenAPI, security, and a typed
-        client all wired in. That description fits a lot of jobs, and a few it
-        doesn&apos;t. This page is the beginner&apos;s map.
+        <code>Response</code>
+        {", "}with validation, OpenAPI, security, and a typed client all wired
+        in. That description fits a lot of jobs, and a few it doesn&apos;t. This
+        page is the beginner&apos;s map.
       </p>
 
       <p>
@@ -45,11 +47,11 @@ export default function Page() {
           DaloyJS is excellent at the &quot;your code answers an HTTP
           request&quot; role
         </strong>
-        : API server, microservice, BFF, webhook receiver, WebSocket server, MCP
-        server. It is <strong>not</strong> a router that proxies traffic to
-        other services, a load balancer, or a page-rendering UI framework. For
-        those, pair it with something purpose-built and let DaloyJS be the smart
-        endpoint behind them.
+        {": "}API server, microservice, BFF, webhook receiver, WebSocket
+        server, MCP server. It is <strong>not</strong> a router that proxies
+        traffic to other services, a load balancer, or a page-rendering UI
+        framework. For those, pair it with something purpose-built and let
+        DaloyJS be the smart endpoint behind them.
       </p>
 
       <h2 id="the-quick-verdict">The quick verdict</h2>
@@ -178,86 +180,97 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>API server</strong>: a process that exposes endpoints (like
+          <strong>API server</strong>
+          {": "}a process that exposes endpoints (like
           <code>GET /books/:id</code>) over HTTP and returns structured data
           (usually JSON). The thing your mobile app, web app, or another service
           talks to.
         </li>
         <li>
-          <strong>Web server</strong>: historically, a process that serves HTML
-          pages, images, and static files to a browser. NGINX and Apache are web
-          servers. An API server is a specialized web server.
+          <strong>Web server</strong>
+          {": "}historically, a process that serves HTML pages, images, and
+          static files to a browser. NGINX and Apache are web servers. An API
+          server is a specialized web server.
         </li>
         <li>
-          <strong>Microservice</strong>: one small service that does one thing
-          (orders, payments, search) and talks to others over the network.
-          &quot;Microservice architecture&quot; just means you have many of them
-          instead of one big app.
+          <strong>Microservice</strong>
+          {": "}one small service that does one thing (orders, payments,
+          search) and talks to others over the network. &quot;Microservice
+          architecture&quot; just means you have many of them instead of one big
+          app.
         </li>
         <li>
-          <strong>Service-to-service (S2S)</strong>: when two of your own
-          backend services call each other directly, with no human in the loop.
-          Usually authenticated with a shared secret or mTLS, not a user cookie.
+          <strong>Service-to-service (S2S)</strong>
+          {": "}when two of your own backend services call each other directly,
+          with no human in the loop. Usually authenticated with a shared secret
+          or mTLS, not a user cookie.
         </li>
         <li>
-          <strong>Backend-for-Frontend (BFF)</strong>: a thin server that sits
-          between a specific frontend (your web app, your iOS app) and your
-          internal APIs. It composes upstream calls, holds the session, and
-          returns exactly the shape the UI needs.
+          <strong>Backend-for-Frontend (BFF)</strong>
+          {": "}a thin server that sits between a specific frontend (your web
+          app, your iOS app) and your internal APIs. It composes upstream calls,
+          holds the session, and returns exactly the shape the UI needs.
         </li>
         <li>
-          <strong>API gateway</strong>: a process at the edge of your network
-          that takes <em>all</em> incoming traffic and routes it to the right
-          internal service. It usually handles auth, rate limiting, request
-          translation, retries, and observability for many services at once.
+          <strong>API gateway</strong>
+          {": "}a process at the edge of your network that takes <em>all</em>{" "}
+          incoming traffic and routes it to the right internal service. It
+          usually handles auth, rate limiting, request translation, retries, and
+          observability for many services at once.
         </li>
         <li>
-          <strong>Load balancer</strong>: a network-level box that takes one
-          stream of requests and spreads them across many identical copies of
-          your service. It cares about TCP connections and health checks, not
-          your routes or schemas.
+          <strong>Load balancer</strong>
+          {": "}a network-level box that takes one stream of requests and
+          spreads them across many identical copies of your service. It cares
+          about TCP connections and health checks, not your routes or schemas.
         </li>
         <li>
-          <strong>Server-side renderer (SSR)</strong>: a process that turns
-          components (React, Vue, Svelte) into HTML on the server, then ships
-          that HTML to the browser. Next.js, Remix, and Astro are SSR
-          frameworks.
+          <strong>Server-side renderer (SSR)</strong>
+          {": "}a process that turns components (React, Vue, Svelte) into HTML
+          on the server, then ships that HTML to the browser. Next.js, Remix,
+          and Astro are SSR frameworks.
         </li>
         <li>
-          <strong>Webhook receiver</strong>: an endpoint that other systems
-          (Stripe, GitHub, Shopify) call to notify your app of events. Usually
-          signed with HMAC so you can verify the sender.
+          <strong>Webhook receiver</strong>
+          {": "}an endpoint that other systems (Stripe, GitHub, Shopify) call
+          to notify your app of events. Usually signed with HMAC so you can
+          verify the sender.
         </li>
         <li>
-          <strong>WebSocket server</strong>: a long-lived, bidirectional
-          connection over TCP. Used for chat, live dashboards, multiplayer,
-          collaborative editing.
+          <strong>WebSocket server</strong>
+          {": "}a long-lived, bidirectional connection over TCP. Used for chat,
+          live dashboards, multiplayer, collaborative editing.
         </li>
         <li>
-          <strong>MCP server</strong>: Model Context Protocol. A standardized
-          way for AI assistants to call tools and read resources. Transports are
-          stdio or Streamable HTTP, with optional SSE for streaming server
-          messages.
+          <strong>MCP server</strong>
+          {": "}Model Context Protocol. A standardized way for AI assistants to
+          call tools and read resources. Transports are stdio or Streamable
+          HTTP, with optional SSE for streaming server messages.
         </li>
         <li>
-          <strong>gRPC</strong>: a binary RPC protocol from Google, defined with{" "}
+          <strong>gRPC</strong>
+          {": "}a binary RPC protocol from Google, defined with{" "}
           <code>.proto</code> files and running over HTTP/2 with Protobuf
           encoding. Great for fast, typed S2S inside a cluster.
         </li>
         <li>
-          <strong>GraphQL</strong>: a query language where the client picks the
-          shape of the response from a single endpoint (usually
+          <strong>GraphQL</strong>
+          {": "}a query language where the client picks the shape of the
+          response from a single endpoint (usually
           <code>POST /graphql</code>).
         </li>
         <li>
-          <strong>SOAP</strong>: an older XML-based RPC protocol with WSDL
-          contracts. Still common in banking, government, and legacy enterprise.
+          <strong>SOAP</strong>
+          {": "}an older XML-based RPC protocol with WSDL contracts. Still
+          common in banking, government, and legacy enterprise.
         </li>
       </ul>
 
       <h2 id="role-by-role">Role by role</h2>
 
-      <h3 id="1-api-server-the-home-position">1. API server: the home position</h3>
+      <h3 id="1-api-server-the-home-position">
+        1. API server: the home position
+      </h3>
       <p>
         This is what DaloyJS was designed for. You declare a route once, get
         validation, OpenAPI docs, a typed in-process client, and an
@@ -287,10 +300,12 @@ serve(app, { port: 3000 });`}
         <Link href="/docs/routing">Routing</Link>.
       </p>
 
-      <h3 id="2-web-server-html-and-static-files">2. Web server (HTML and static files)</h3>
+      <h3 id="2-web-server-html-and-static-files">
+        2. Web server (HTML and static files)
+      </h3>
       <p>
-        DaloyJS can return any <code>Response</code>, so you <em>can</em> serve
-        HTML or files from it. But:
+        DaloyJS can return any <code>Response</code>
+        {", "}so you <em>can</em> serve HTML or files from it. But:
       </p>
       <ul>
         <li>There&apos;s no file-system routing for pages.</li>
@@ -299,8 +314,9 @@ serve(app, { port: 3000 });`}
       </ul>
       <p>
         The only HTML DaloyJS ships out of the box is the Scalar / Swagger docs
-        page at <code>/docs</code>. For real web content, put a CDN, a static
-        host, or Next.js in front and let DaloyJS be the JSON layer.
+        page at <code>/docs</code>
+        {". "}For real web content, put a CDN, a static host, or Next.js in
+        front and let DaloyJS be the JSON layer.
       </p>
 
       <h3 id="3-microservice-one-of-many">3. Microservice (one of many)</h3>
@@ -327,7 +343,9 @@ const app = new App({
         (you don&apos;t need a fleet of services to start).
       </p>
 
-      <h3 id="4-backend-for-frontend-bff-the-sweet-spot">4. Backend-for-Frontend (BFF): the sweet spot</h3>
+      <h3 id="4-backend-for-frontend-bff-the-sweet-spot">
+        4. Backend-for-Frontend (BFF): the sweet spot
+      </h3>
       <p>
         BFF is arguably where DaloyJS is at its best. The combination you want
         is all first-party:
@@ -342,7 +360,7 @@ const app = new App({
           <Link href="/docs/security/fetch-guard">
             <code>fetchGuard()</code>
           </Link>
-          : blocks SSRF, private CIDRs, and cloud-metadata IPs by default.
+          {": "}blocks SSRF, private CIDRs, and cloud-metadata IPs by default.
         </li>
         <li>
           <strong>Session edge</strong> via{" "}
@@ -360,8 +378,8 @@ const app = new App({
           plus <code>compression()</code> with BREACH-aware guards.
         </li>
         <li>
-          <strong>Edge runtimes</strong>: deploy on Cloudflare, Vercel, Fastly
-          Compute, or Lambda.
+          <strong>Edge runtimes</strong>
+          {": "}deploy on Cloudflare, Vercel, Fastly Compute, or Lambda.
         </li>
       </ul>
       <p>
@@ -377,16 +395,25 @@ const app = new App({
       <p>DaloyJS gives you almost everything an API gateway does:</p>
       <ul>
         <li>
-          AuthN/Z: <code>bearerAuth</code>, <code>basicAuth</code>,{" "}
-          <code>jwt</code>, <code>jwk</code>, <code>requireScopes</code>
+          AuthN/Z: <code>bearerAuth</code>
+          {", "}<code>basicAuth</code>
+          {", "}
+          <code>jwt</code>
+          {", "}<code>jwk</code>
+          {", "}<code>requireScopes</code>
         </li>
         <li>
           Traffic: <code>rateLimit</code> (with Redis store),{" "}
-          <code>loadShedding</code>, <code>ipRestriction</code>
+          <code>loadShedding</code>
+          {", "}<code>ipRestriction</code>
         </li>
         <li>
-          Edge: <code>secureHeaders</code>, <code>cors</code>, <code>csrf</code>
-          , <code>compression</code>, <code>etag</code>, <code>requestId</code>
+          Edge: <code>secureHeaders</code>
+          {", "}<code>cors</code>
+          {", "}<code>csrf</code>
+          {", "}<code>compression</code>
+          {", "}<code>etag</code>
+          {", "}<code>requestId</code>
         </li>
         <li>
           Egress: <code>fetchGuard</code> (SSRF defaults)
@@ -426,12 +453,14 @@ const app = new App({
         <code>X-Forwarded-*</code> headers when the LB terminates TLS.
       </p>
 
-      <h3 id="7-server-side-renderer-ssr-no">7. Server-side renderer (SSR): no</h3>
+      <h3 id="7-server-side-renderer-ssr-no">
+        7. Server-side renderer (SSR): no
+      </h3>
       <p>
         There is no JSX, React, Vue, or Svelte renderer in DaloyJS. No
-        <code>renderToString</code>, no hydration, no file-system page router,
-        no React Server Components. The framework deliberately stays in the
-        REST/WS layer.
+        <code>renderToString</code>
+        {", "}no hydration, no file-system page router, no React Server
+        Components. The framework deliberately stays in the REST/WS layer.
       </p>
       <p>
         <strong>Recommended pattern:</strong> Next.js / Remix / Astro for SSR,
@@ -444,7 +473,8 @@ const app = new App({
       <p>Webhooks are just HTTP POSTs with a signature header. DaloyJS has:</p>
       <ul>
         <li>
-          <code>verifyWebhookSignature</code> / <code>signWebhookPayload</code>:
+          <code>verifyWebhookSignature</code> / <code>signWebhookPayload</code>
+          {": "}
           zero-knob HMAC helpers
         </li>
         <li>
@@ -458,14 +488,21 @@ const app = new App({
         <li>RFC 9457 error responses that webhook senders can parse</li>
       </ul>
 
-      <h3 id="9-websocket-server-excellent-with-cswsh-guard">9. WebSocket server: excellent, with CSWSH guard</h3>
+      <h3 id="9-websocket-server-excellent-with-cswsh-guard">
+        9. WebSocket server: excellent, with CSWSH guard
+      </h3>
       <p>
         First-party WebSocket primitives run on the Node and Bun adapters with a
-        Bun-style handler shape (<code>open</code>, <code>message</code>,{" "}
-        <code>close</code>, <code>drain</code>, <code>error</code>).
+        Bun-style handler shape (<code>open</code>
+        {", "}<code>message</code>
+        {", "}
+        <code>close</code>
+        {", "}<code>drain</code>
+        {", "}<code>error</code>).
       </p>
       <p>
-        Under <code>secureDefaults</code>, the framework{" "}
+        Under <code>secureDefaults</code>
+        {", "}the framework{" "}
         <strong>refuses to register a WebSocket route</strong> unless you
         provide either a pre-upgrade authorization hook or explicitly opt out,{" "}
         <strong>and</strong> either an Origin allowlist or an explicit
@@ -476,7 +513,9 @@ const app = new App({
         See <Link href="/docs/websocket">WebSocket primitives</Link>.
       </p>
 
-      <h3 id="10-mcp-server-http-transport-strong">10. MCP server (HTTP transport): strong</h3>
+      <h3 id="10-mcp-server-http-transport-strong">
+        10. MCP server (HTTP transport): strong
+      </h3>
       <p>
         The Model Context Protocol is JSON-RPC 2.0, transported over either
         stdio or Streamable HTTP. Streamable HTTP uses POST and GET requests,
@@ -509,13 +548,16 @@ const app = new App({
       <p>
         gRPC needs HTTP/2 with Protobuf framing and trailers. DaloyJS is a REST
         framework around web-standard <code>Request</code> /{" "}
-        <code>Response</code>. It does not implement Protobuf framing, trailers,
-        or generated service stubs. For gRPC, use <code>@grpc/grpc-js</code> or
-        Connect. You can run a DaloyJS REST gateway in front of a gRPC backend
-        if you want the external surface to be JSON.
+        <code>Response</code>
+        {". "}It does not implement Protobuf framing, trailers, or generated
+        service stubs. For gRPC, use <code>@grpc/grpc-js</code> or Connect. You
+        can run a DaloyJS REST gateway in front of a gRPC backend if you want
+        the external surface to be JSON.
       </p>
 
-      <h3 id="12-graphql-server-possible-not-the-framework-and-apos-s-shape">12. GraphQL server: possible, not the framework&apos;s shape</h3>
+      <h3 id="12-graphql-server-possible-not-the-framework-and-apos-s-shape">
+        12. GraphQL server: possible, not the framework&apos;s shape
+      </h3>
       <p>
         DaloyJS is contract-first REST: one route, one schema, one OpenAPI
         operation. GraphQL is one route, one schema, many shapes. They&apos;re
@@ -539,7 +581,9 @@ const app = new App({
         translate to a clean DaloyJS REST API behind.
       </p>
 
-      <h2 id="cheat-sheet-pick-the-right-tool">Cheat sheet: pick the right tool</h2>
+      <h2 id="cheat-sheet-pick-the-right-tool">
+        Cheat sheet: pick the right tool
+      </h2>
       <div className="not-prose my-6 overflow-x-auto rounded-md border border-border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">

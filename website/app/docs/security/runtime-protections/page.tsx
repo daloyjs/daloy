@@ -77,11 +77,7 @@ export default function Page() {
             title: "CI / CD hardening",
             detail: "GitHub Actions bundle only; translate elsewhere",
             tone: "muted",
-            items: [
-              "SHA-pinned actions",
-              "harden-runner",
-              "permissions: {}",
-            ],
+            items: ["SHA-pinned actions", "harden-runner", "permissions: {}"],
           },
         ]}
         caption="Only the top layer travels everywhere. It is baked into the framework and runs on every request no matter where you host the repo. The lower two layers depend on keeping the pnpm scaffold and the generated GitHub workflows."
@@ -130,7 +126,9 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2 id="backend-footguns-the-framework-handles-by-default">Backend footguns the framework handles by default</h2>
+      <h2 id="backend-footguns-the-framework-handles-by-default">
+        Backend footguns the framework handles by default
+      </h2>
       <p>
         Every row below describes behavior that is on by default in a fresh
         DaloyJS app. You do not need to install a plugin, deploy on a specific
@@ -177,9 +175,11 @@ export default function Page() {
           <tr>
             <td>Prototype pollution via JSON bodies</td>
             <td>
-              <code>safeJsonParse</code> strips <code>__proto__</code>,{" "}
-              <code>constructor</code>, and <code>prototype</code> keys before
-              the value reaches your handler.
+              <code>safeJsonParse</code> strips <code>__proto__</code>
+              {", "}
+              <code>constructor</code>
+              {", "}and <code>prototype</code> keys before the value reaches
+              your handler.
             </td>
           </tr>
           <tr>
@@ -214,32 +214,35 @@ export default function Page() {
               <code>431 Request Header Fields Too Large</code> when a request
               exceeds the cap (e.g. via <code>app.fetch()</code> or runtimes
               without a native cap). The Node adapter also sets the native{" "}
-              <code>server.maxHeadersCount</code> to the same value, so on Node a
-              header-count flood is dropped at the HTTP parser as a{" "}
+              <code>server.maxHeadersCount</code> to the same value, so on Node
+              a header-count flood is dropped at the HTTP parser as a{" "}
               <code>400</code>-class client error before it ever becomes a
-              request. Either way it is defence-in-depth, apply the vendor HTTP/2
-              fix at any proxy that terminates HTTP/2.
+              request. Either way it is defence-in-depth, apply the vendor
+              HTTP/2 fix at any proxy that terminates HTTP/2.
             </td>
           </tr>
           <tr>
             <td>Bad reverse-proxy assumptions</td>
             <td>
               <code>X-Forwarded-*</code> headers are never trusted by default.{" "}
-              <strong>In production</strong>, a request carrying one while{" "}
-              <code>trustProxy</code> / <code>behindProxy</code> is unconfigured
-              is refused with a <code>500</code> (and a clear log line) so a
-              spoofed source IP can&apos;t reach the rate limiter or audit log.
-              Dev and CI relax this so you can test forwarded headers locally.
-              Opt in via <code>behindProxy</code> (or{" "}
-              <code>trustProxy: false</code> to ignore the headers).
+              <strong>In production</strong>
+              {", "}a request carrying one while <code>trustProxy</code> /{" "}
+              <code>behindProxy</code> is unconfigured is refused with a{" "}
+              <code>500</code> (and a clear log line) so a spoofed source IP
+              can&apos;t reach the rate limiter or audit log. Dev and CI relax
+              this so you can test forwarded headers locally. Opt in via{" "}
+              <code>behindProxy</code> (or <code>trustProxy: false</code> to
+              ignore the headers).
             </td>
           </tr>
           <tr>
             <td>Auth response caching</td>
             <td>
-              <code>401</code>, <code>403</code>, and <code>429</code>{" "}
-              automatically set <code>Cache-Control: no-store</code> so proxies
-              and CDNs cannot reuse them.
+              <code>401</code>
+              {", "}<code>403</code>
+              {", "}and <code>429</code> automatically set{" "}
+              <code>Cache-Control: no-store</code> so proxies and CDNs cannot
+              reuse them.
             </td>
           </tr>
           <tr>
@@ -266,9 +269,11 @@ export default function Page() {
           <tr>
             <td>Unsafe compression cases (BREACH)</td>
             <td>
-              <code>compression()</code> skips <code>Set-Cookie</code>,{" "}
-              <code>Authorization</code>, session / CSRF cookie responses, and
-              already-encoded content; downgrades strong ETags per RFC 9110.
+              <code>compression()</code> skips <code>Set-Cookie</code>
+              {", "}
+              <code>Authorization</code>
+              {", "}session / CSRF cookie responses, and already-encoded
+              content; downgrades strong ETags per RFC 9110.
             </td>
           </tr>
           <tr>
@@ -326,11 +331,13 @@ export default function Page() {
         </li>
         <li>
           <strong>CI / CD hardening</strong> (pinned actions,{" "}
-          <code>harden-runner</code>, top-level <code>permissions: {"{}"}</code>
-          , CODEOWNERS, Dependabot, CodeQL / Scorecard / zizmor) applies when
-          you use the <code>create-daloy --with-ci</code> GitHub Actions bundle.
-          On GitLab, Bitbucket, Azure DevOps, Jenkins, or on-prem runners you
-          have to translate those rules into your CI&apos;s own configuration.
+          <code>harden-runner</code>
+          {", "}top-level <code>permissions: {"{}"}</code>
+          {", "}CODEOWNERS, Dependabot, CodeQL / Scorecard / zizmor) applies
+          when you use the <code>create-daloy --with-ci</code> GitHub Actions
+          bundle. On GitLab, Bitbucket, Azure DevOps, Jenkins, or on-prem
+          runners you have to translate those rules into your CI&apos;s own
+          configuration.
         </li>
         <li>
           <strong>
@@ -342,13 +349,15 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2 id="what-the-generated-github-actions-bundle-actually-does">What the generated GitHub Actions bundle actually does</h2>
+      <h2 id="what-the-generated-github-actions-bundle-actually-does">
+        What the generated GitHub Actions bundle actually does
+      </h2>
       <p>
         If you scaffold with <code>create-daloy --with-ci</code> and{" "}
-        <strong>keep the generated workflows</strong>, the YAML itself encodes
-        these protections. They apply equally to public repos, private repos,
-        and private organizations, being private is not a substitute for any of
-        them:
+        <strong>keep the generated workflows</strong>
+        {", "}the YAML itself encodes these protections. They apply equally to
+        public repos, private repos, and private organizations, being private is
+        not a substitute for any of them:
       </p>
       <ul>
         <li>
@@ -385,10 +394,10 @@ export default function Page() {
         </li>
       </ul>
       <p>
-        This is <strong>generated GitHub CI hardening</strong>, not
-        &ldquo;default supply-chain protection everywhere&rdquo;. If you delete
-        the workflows, rewrite them, or use a different CI host, DaloyJS cannot
-        give you these guarantees automatically.
+        This is <strong>generated GitHub CI hardening</strong>
+        {", "}not &ldquo;default supply-chain protection everywhere&rdquo;. If
+        you delete the workflows, rewrite them, or use a different CI host,
+        DaloyJS cannot give you these guarantees automatically.
       </p>
 
       <h2 id="the-honest-matrix">The honest matrix</h2>
@@ -412,7 +421,7 @@ export default function Page() {
             <td>
               Runtime guardrails + pnpm install-time hardening (if pnpm) +{" "}
               <strong>full generated GitHub Actions starter protections</strong>
-              .
+              {"."}
             </td>
           </tr>
           <tr>
@@ -460,8 +469,10 @@ export default function Page() {
       </table>
 
       <p>
-        See <a href="/docs/security/secure-defaults">Secure-by-default</a>,{" "}
-        <a href="/docs/security/boot-guards">Boot guards</a>, and{" "}
+        See <a href="/docs/security/secure-defaults">Secure-by-default</a>
+        {", "}
+        <a href="/docs/security/boot-guards">Boot guards</a>
+        {", "}and{" "}
         <a href="/docs/security/supply-chain">Supply-chain security</a> for the
         full surface of each layer.
       </p>

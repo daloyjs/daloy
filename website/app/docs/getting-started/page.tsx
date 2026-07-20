@@ -123,9 +123,9 @@ console.log(\`listening on http://localhost:\${port}\`);`}
         Prefer the colorized startup panel you get from{" "}
         <code>create-daloy</code> templates? Swap the plain{" "}
         <code>console.log</code> for <code>printStartupBanner()</code> from{" "}
-        <code>@daloyjs/core/banner</code>: it renders a TTY-aware,
-        ASCII-fallback boxed banner with your app name, URL, and any extra links
-        (API docs, health check, etc.):
+        <code>@daloyjs/core/banner</code>
+        {": "}it renders a TTY-aware, ASCII-fallback boxed banner with your app
+        name, URL, and any extra links (API docs, health check, etc.):
       </p>
       <CodeBlock
         code={`import { printStartupBanner } from "@daloyjs/core/banner";
@@ -155,9 +155,11 @@ curl http://localhost:3000/greet/world
 
       <p>
         Don&apos;t want to spin up a real server? Every <code>App</code> exposes{" "}
-        <code>app.request(input, init?)</code>, an in-process test client that
-        takes a URL or <code>Request</code> and returns a <code>Response</code>{" "}
-        , no network stack, no port, no second terminal. It&apos;s the same
+        <code>app.request(input, init?)</code>
+        {", "}an in-process test client that takes a URL or{" "}
+        <code>Request</code> and returns a <code>Response</code>
+        {", "}
+        no network stack, no port, no second terminal. It&apos;s the same
         entrypoint the typed client and{" "}
         <Link href="/docs/testing">testing guide</Link> use:
       </p>
@@ -191,11 +193,13 @@ console.log(res.status, await res.json());
       </p>
 
       <p>
-        Set <code>openapi.info</code> (or the top-level <code>title</code>,{" "}
-        <code>version</code>, and <code>description</code>) for a real service.
-        If omitted, DaloyJS uses the portable <code>DaloyJS API</code> /{" "}
-        <code>0.0.0</code> fallback. The core never reads a host manifest, so
-        the same docs bundle works on Node, Bun, Deno, Workers, and Vercel.
+        Set <code>openapi.info</code> (or the top-level <code>title</code>
+        {", "}
+        <code>version</code>
+        {", "}and <code>description</code>) for a real service. If omitted,
+        DaloyJS uses the portable <code>DaloyJS API</code> / <code>0.0.0</code>{" "}
+        fallback. The core never reads a host manifest, so the same docs bundle
+        works on Node, Bun, Deno, Workers, and Vercel.
       </p>
 
       <p>
@@ -239,13 +243,13 @@ const app = createApp({
 
       <p>
         Want a custom path? Use the object form:{" "}
-        <code>{`docs: { ui: "swagger", path: "/reference" }`}</code>. Want it
-        only in development? Use <code>{`docs: "auto"`}</code>: it skips the
-        mount when <code>production: true</code>. Need full control? Set{" "}
-        <code>docs: false</code> and mount your own routes with{" "}
-        <code>generateOpenAPI()</code> and{" "}
-        <code>swaggerUiHtml() / scalarHtml()</code>: see the{" "}
-        <Link href="/docs/openapi">OpenAPI guide</Link>.
+        <code>{`docs: { ui: "swagger", path: "/reference" }`}</code>
+        {". "}Want it only in development? Use <code>{`docs: "auto"`}</code>
+        {": "}it skips the mount when <code>production: true</code>
+        {". "}Need full control? Set <code>docs: false</code> and mount your
+        own routes with <code>generateOpenAPI()</code> and{" "}
+        <code>swaggerUiHtml() / scalarHtml()</code>
+        {": "}see the <Link href="/docs/openapi">OpenAPI guide</Link>.
       </p>
 
       <p>
@@ -278,9 +282,9 @@ console.log(r.status, r.body);`}
       <p>
         The client&apos;s methods are inferred from the app&apos;s route tuple.
         Chain registrations or compose exported <code>defineRoute()</code>{" "}
-        contracts with <code>registerRoutes([...])</code>. Avoid widening the
-        result to a bare <code>App</code> annotation, which deliberately erases
-        that tuple.
+        contracts with <code>registerRoutes([...])</code>
+        {". "}Avoid widening the result to a bare <code>App</code> annotation,
+        which deliberately erases that tuple.
       </p>
 
       <h2 id="5-generate-a-hey-api-sdk">5. Generate a Hey API SDK</h2>

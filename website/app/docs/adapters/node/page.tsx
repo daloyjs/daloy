@@ -83,8 +83,9 @@ pnpm dev    # hot-reload via daloy dev`}
 
       <h2 id="install">Install</h2>
       <p>
-        Requires <strong>Node.js 24 LTS or Node.js 26+</strong>. The adapter
-        ships with <code>@daloyjs/core</code>; no extra dependency.
+        Requires <strong>Node.js 24 LTS or Node.js 26+</strong>
+        {". "}The adapter ships with <code>@daloyjs/core</code>; no extra
+        dependency.
       </p>
       <CodeBlock language="bash" code={`pnpm add @daloyjs/core`} />
 
@@ -117,27 +118,31 @@ await close();`}
       </h2>
       <ul>
         <li>
-          <code>requestTimeout</code>, <code>headersTimeout</code>, and{" "}
-          <code>keepAliveTimeout</code> set to safe production values. Both
-          request timeouts derive from <code>connectionTimeoutMs</code>, and the
-          adapter also lowers Node&apos;s connection-check interval to a
-          fraction of that value so a slowloris (a client that stalls or
-          trickles its request headers to hold a socket open) is reaped close to
-          the deadline with a <code>408</code>, instead of surviving until
-          Node&apos;s default 30&nbsp;second sweep. Set{" "}
-          <code>connectionTimeoutMs: 0</code> to disable the timeouts entirely.
+          <code>requestTimeout</code>
+          {", "}<code>headersTimeout</code>
+          {", "}and <code>keepAliveTimeout</code> set to safe production
+          values. Both request timeouts derive from{" "}
+          <code>connectionTimeoutMs</code>
+          {", "}and the adapter also lowers Node&apos;s connection-check
+          interval to a fraction of that value so a slowloris (a client that
+          stalls or trickles its request headers to hold a socket open) is
+          reaped close to the deadline with a <code>408</code>
+          {", "}instead of surviving until Node&apos;s default 30&nbsp;second
+          sweep. Set <code>connectionTimeoutMs: 0</code> to disable the timeouts
+          entirely.
         </li>
         <li>
           SIGTERM / SIGINT handlers that call <code>server.close()</code>{" "}
           followed by <code>server.closeAllConnections()</code> after{" "}
-          <code>shutdownTimeoutMs</code>: the pattern that became stable in Node
-          18.2 and is recommended on supported Node versions.
+          <code>shutdownTimeoutMs</code>
+          {": "}the pattern that became stable in Node 18.2 and is recommended
+          on supported Node versions.
         </li>
         <li>
-          When <code>trustProxy: true</code>, the adapter reads{" "}
-          <code>x-forwarded-proto</code> and <code>x-forwarded-host</code> when
-          constructing the request URL. Leave it off unless TLS is terminated at
-          a known proxy you control.
+          When <code>trustProxy: true</code>
+          {", "}the adapter reads <code>x-forwarded-proto</code> and{" "}
+          <code>x-forwarded-host</code> when constructing the request URL. Leave
+          it off unless TLS is terminated at a known proxy you control.
         </li>
       </ul>
 
@@ -162,21 +167,23 @@ await close();`}
         Steady-state throughput is only half the story. Once a Node process is
         pushed <em>past</em> saturation, the multi-second part of the tail
         latency no longer lives in your handler, it lives in the{" "}
-        <strong>accept queue</strong>, where overflow connections sit waiting
-        for the event loop to get to them. A connection sweep makes this
-        visible: at high concurrency an unbounded server&apos;s p99.9 can{" "}
-        <em>cliff</em> from tens of milliseconds into the multi-second range,
-        even though median throughput still looks healthy.
+        <strong>accept queue</strong>
+        {", "}where overflow connections sit waiting for the event loop to get
+        to them. A connection sweep makes this visible: at high concurrency an
+        unbounded server&apos;s p99.9 can <em>cliff</em> from tens of
+        milliseconds into the multi-second range, even though median throughput
+        still looks healthy.
       </p>
       <p>
         The cheapest fix that actually works is{" "}
         <strong>connection-layer admission control</strong>:{" "}
         <code>maxConnections</code> forwards to Node&apos;s{" "}
-        <code>server.maxConnections</code>, so once the cap is reached the
-        server refuses additional sockets <strong>at accept time</strong>{" "}
-        instead of queuing them into the event loop. Admitted traffic stays
-        fast; overflow is rejected fast. It is <strong>off by default</strong>{" "}
-        and sits off the request hot path, so it adds no per-request cost.
+        <code>server.maxConnections</code>
+        {", "}so once the cap is reached the server refuses additional sockets{" "}
+        <strong>at accept time</strong> instead of queuing them into the event
+        loop. Admitted traffic stays fast; overflow is rejected fast. It is{" "}
+        <strong>off by default</strong> and sits off the request hot path, so it
+        adds no per-request cost.
       </p>
       <CodeBlock
         language="ts"

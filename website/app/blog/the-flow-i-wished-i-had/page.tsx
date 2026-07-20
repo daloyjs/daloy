@@ -236,7 +236,8 @@ export default function BlogPostPage() {
             runtime contract, OpenTelemetry semantic conventions, pnpm with
             proper supply-chain controls. The pieces exist. They just
             weren&apos;t assembled in one place with one opinion. So we did
-            that. And we called it <Link href="/about-the-name">Daloy</Link>,
+            that. And we called it <Link href="/about-the-name">Daloy</Link>
+            {", "}
             which means <em>flow</em> in Tagalog, because everything flows from
             one contract.
           </p>
@@ -257,7 +258,7 @@ export default function BlogPostPage() {
             Look at all those places where truth can hide. The schema knows what
             a valid request looks like. The handler knows what statuses it
             returns. The YAML file knows what the
-            <em> world </em> is told it returns. The generated client knows what
+            <em>world</em> is told it returns. The generated client knows what
             the YAML said two sprints ago. None of them are checked against each
             other. The compiler is happily humming along, oblivious, like me
             eating lunch while my deploy is failing in another tab.
@@ -288,8 +289,8 @@ export default function BlogPostPage() {
               >
                 Standard Schema
               </a>
-              , so you can bring Zod, Valibot, ArkType, whatever you want. I
-              used Zod here because Zod is what I have muscle memory for. Use
+              {", "}so you can bring Zod, Valibot, ArkType, whatever you want.
+              I used Zod here because Zod is what I have muscle memory for. Use
               what makes you happy.
             </li>
             <li>
@@ -299,12 +300,15 @@ export default function BlogPostPage() {
             </li>
             <li>
               <code>bodyLimitBytes</code> and <code>requestTimeoutMs</code> are
-              arguments to <code>App</code>, not optional middleware you forgot
-              to add. The core enforces them. If a 5xx happens in production,
-              the body is redacted by default, not leaked.
+              arguments to <code>App</code>
+              {", "}not optional middleware you forgot to add. The core
+              enforces them. If a 5xx happens in production, the body is
+              redacted by default, not leaked.
             </li>
             <li>
-              <code>secureHeaders()</code>, <code>rateLimit()</code>,{" "}
+              <code>secureHeaders()</code>
+              {", "}<code>rateLimit()</code>
+              {", "}
               <code>requestId()</code> are first-party. They live in the same
               repo, they get the same tests, they ship on the same release
               cadence. No more &quot;oh that package is unmaintained since
@@ -326,10 +330,10 @@ export default function BlogPostPage() {
           <p>
             That <code>if (result.status === 200)</code> branch is a real
             discriminated union. TypeScript will yell at you, in red, in your
-            editor, before you even reach for <code>git commit</code>, if you
-            try to read <code>result.body.title</code> from the 404 branch. This
-            is the part where I quietly celebrate and pretend it was always this
-            simple.
+            editor, before you even reach for <code>git commit</code>
+            {", "}if you try to read <code>result.body.title</code> from the
+            404 branch. This is the part where I quietly celebrate and pretend
+            it was always this simple.
           </p>
 
           <h2>Runtime portability without the PowerPoint slides</h2>
@@ -346,8 +350,9 @@ export default function BlogPostPage() {
             The core only ever sees <code>Request</code> in,{" "}
             <code>Response</code> out. Adapters live at the edges where the
             runtime quirks live. That means when your CFO discovers Cloudflare
-            Workers next quarter, your team changes <em>one import</em>, not the
-            shape of your application. Beautiful. Boring. Both, simultaneously.
+            Workers next quarter, your team changes <em>one import</em>
+            {", "}not the shape of your application. Beautiful. Boring. Both,
+            simultaneously.
           </p>
 
           <h2>What we&apos;re actually solving, in plain words</h2>
@@ -396,10 +401,11 @@ export default function BlogPostPage() {
               or whatever your team already loves.
             </li>
             <li>
-              It is not <em>finished</em>. Software never is. But it&apos;s 320
-              of 320 tests passing, 100% line and function coverage, strict
-              TypeScript 6, and shipping. That is, in my experience, much better
-              than &quot;done&quot;.
+              It is not <em>finished</em>
+              {". "}Software never is. But it&apos;s 320 of 320 tests passing,
+              100% line and function coverage, strict TypeScript 6, and
+              shipping. That is, in my experience, much better than
+              &quot;done&quot;.
             </li>
           </ul>
 
@@ -409,11 +415,10 @@ export default function BlogPostPage() {
             Ten years in, the bugs that still wake me up are not the clever
             ones. They&apos;re the dumb ones. A status code that the docs lied
             about. A payload field that turned into <code>null</code> without
-            anyone noticing. A
-            middleware that &quot;everyone uses&quot; that wasn&apos;t wired up
-            in the prod build. A deploy that worked in Node 20 and exploded in a
-            Worker because someone reached for <code>process.env</code> like it
-            was 2015.
+            anyone noticing. A middleware that &quot;everyone uses&quot; that
+            wasn&apos;t wired up in the prod build. A deploy that worked in Node
+            20 and exploded in a Worker because someone reached for{" "}
+            <code>process.env</code> like it was 2015.
           </p>
 
           <p>
@@ -442,7 +447,8 @@ pnpm dev`}
           />
 
           <p>
-            Then read <Link href="/docs/getting-started">Getting started</Link>,
+            Then read <Link href="/docs/getting-started">Getting started</Link>
+            {", "}
             poke at the generated OpenAPI, and let me know what breaks.
             Especially let me know what breaks. A framework only earns the right
             to exist by surviving other people&apos;s real code.

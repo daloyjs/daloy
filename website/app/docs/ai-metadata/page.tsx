@@ -28,10 +28,10 @@ export default function Page() {
       <h1>AI-friendly route metadata</h1>
       <p>
         Pass an optional <code>meta</code> field on any <code>route()</code>{" "}
-        call to attach <strong>structured usage examples</strong>, extra
-        descriptive copy, or free-form <code>x-*</code> extensions. Daloy
-        validates every example against your route&rsquo;s Standard Schema at
-        build time and emits the same payload into OpenAPI (
+        call to attach <strong>structured usage examples</strong>
+        {", "}extra descriptive copy, or free-form <code>x-*</code> extensions.
+        Daloy validates every example against your route&rsquo;s Standard Schema
+        at build time and emits the same payload into OpenAPI (
         <code>examples</code> on the request body, <code>examples</code> on the
         matching response, <code>x-daloy-examples</code> on the operation) and
         into the <code>daloy inspect --ai</code> dump that codegen agents and
@@ -124,20 +124,23 @@ app.post(
       <h2 id="shape-of-a-meta-block">Shape of a meta block</h2>
       <ul>
         <li>
-          <code>summary</code> / <code>description</code> / <code>tags</code>: 
+          <code>summary</code> / <code>description</code> / <code>tags</code>
+          {": "}
           augment the route-level fields of the same name. Route-level values
           win when both are set; tags are de-duplicated and concatenated.
         </li>
         <li>
-          <code>examples</code>: record of named{" "}
+          <code>examples</code>
+          {": "}record of named{" "}
           <code>{`{ summary?, description?, request?: { params?, query?, headers?, body? }, response?: { status, body?, headers? } }`}</code>{" "}
           pairs. Every field is optional individually; pass only the parts you
           want documented.
         </li>
         <li>
-          <code>extensions</code>: free-form bag emitted onto the OpenAPI
-          Operation Object. Keys without an <code>x-</code> prefix are prefixed
-          automatically for spec compliance.
+          <code>extensions</code>
+          {": "}free-form bag emitted onto the OpenAPI Operation Object. Keys
+          without an <code>x-</code> prefix are prefixed automatically for spec
+          compliance.
         </li>
       </ul>
 
@@ -261,12 +264,12 @@ pnpm daloy inspect --ai --tag Books`}
       <h2 id="yaml-output">YAML output</h2>
       <p>
         Both <code>--ai</code> and <code>--openapi</code> accept{" "}
-        <code>--yaml</code> (shorthand) or <code>--format yaml</code>. The
-        emitter is a tiny built-in YAML 1.2 serializer with no runtime
-        dependencies. Because YAML drops braces, commas, and most quotes, the
-        dump is typically <strong>about 30% smaller</strong> than the equivalent
-        pretty-printed JSON, a meaningful saving when the file becomes part of
-        an LLM system prompt.
+        <code>--yaml</code> (shorthand) or <code>--format yaml</code>
+        {". "}The emitter is a tiny built-in YAML 1.2 serializer with no
+        runtime dependencies. Because YAML drops braces, commas, and most
+        quotes, the dump is typically <strong>about 30% smaller</strong> than
+        the equivalent pretty-printed JSON, a meaningful saving when the file
+        becomes part of an LLM system prompt.
       </p>
       <CodeBlock
         language="yaml"
@@ -334,7 +337,7 @@ routes:
           me a fetch call that hits the books endpoint”.
         </li>
         <li>
-          A custom code generator (Python client, Go SDK, Postman collection), 
+          A custom code generator (Python client, Go SDK, Postman collection),
           every field is plain JSON.
         </li>
       </ul>

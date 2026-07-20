@@ -49,31 +49,32 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Hosted IdPs</strong>: Auth0, Okta, Azure AD / Entra ID, AWS
-          Cognito, Google Identity, Clerk, WorkOS, Supabase Auth, Logto, Stytch,
-          Kinde. Anything that publishes a standard{" "}
-          <code>/.well-known/jwks.json</code> works with <code>jwk()</code> out
-          of the box.
+          <strong>Hosted IdPs</strong>
+          {": "}Auth0, Okta, Azure AD / Entra ID, AWS Cognito, Google Identity,
+          Clerk, WorkOS, Supabase Auth, Logto, Stytch, Kinde. Anything that
+          publishes a standard <code>/.well-known/jwks.json</code> works with{" "}
+          <code>jwk()</code> out of the box.
         </li>
         <li>
-          <strong>Self-hosted IdPs</strong>: Keycloak, Ory Hydra, ZITADEL,
-          Authentik, Dex. Same JWKS contract, same one-line <code>jwk()</code>{" "}
-          setup.
+          <strong>Self-hosted IdPs</strong>
+          {": "}Keycloak, Ory Hydra, ZITADEL, Authentik, Dex. Same JWKS
+          contract, same one-line <code>jwk()</code> setup.
         </li>
         <li>
-          <strong>Your own sibling auth service</strong>: a separate DaloyJS app
-          using <code>createJwtSigner()</code> to mint tokens and exposing a
-          JWKS endpoint. The API service then validates those tokens with{" "}
-          <code>jwk()</code> exactly as it would for an external IdP.
+          <strong>Your own sibling auth service</strong>
+          {": "}a separate DaloyJS app using <code>createJwtSigner()</code> to
+          mint tokens and exposing a JWKS endpoint. The API service then
+          validates those tokens with <code>jwk()</code> exactly as it would for
+          an external IdP.
         </li>
       </ul>
       <p>Rough mapping of which middleware to reach for:</p>
       <ul>
         <li>
-          <strong>Browser app + external IdP (OIDC)</strong>: <code>jwk()</code>{" "}
-          on the API, <code>requireScopes()</code> per route,{" "}
-          <code>session()</code> only if you also need server-side session state
-          alongside the access token.
+          <strong>Browser app + external IdP (OIDC)</strong>
+          {": "}<code>jwk()</code> on the API, <code>requireScopes()</code> per
+          route, <code>session()</code> only if you also need server-side
+          session state alongside the access token.
         </li>
         <li>
           <strong>Service-to-service inside one tenant</strong>:{" "}
@@ -85,14 +86,15 @@ export default function Page() {
           relaxes browser-only headers for these endpoints.
         </li>
         <li>
-          <strong>Webhook receivers</strong>: neither <code>bearerAuth()</code>{" "}
-          nor <code>jwk()</code>; use the dedicated HMAC verifier (see the{" "}
+          <strong>Webhook receivers</strong>
+          {": "}neither <code>bearerAuth()</code> nor <code>jwk()</code>; use
+          the dedicated HMAC verifier (see the{" "}
           <a href="/docs/security">security overview</a>).
         </li>
         <li>
-          <strong>Admin tools / scripts</strong>: <code>basicAuth()</code>{" "}
-          behind <code>ipRestriction()</code>, or short-lived JWTs from your
-          IdP.
+          <strong>Admin tools / scripts</strong>
+          {": "}<code>basicAuth()</code> behind <code>ipRestriction()</code>
+          {", "}or short-lived JWTs from your IdP.
         </li>
       </ul>
       <p>
@@ -101,29 +103,34 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <code>jwk()</code>: asymmetric-only Bearer-token middleware backed by
-          a JWKS source. Refuses <code>HS*</code> at construction, requires a{" "}
+          <code>jwk()</code>
+          {": "}asymmetric-only Bearer-token middleware backed by a JWKS
+          source. Refuses <code>HS*</code> at construction, requires a{" "}
           <code>kid</code> header that matches a JWK in the set, and
           cross-checks JWT-header <code>alg</code> against the JWK&apos;s
           declared <code>alg</code> when both are present.
         </li>
         <li>
           <code>bearerAuth({"{ verify }"})</code> /{" "}
-          <code>jwk({"{ verify }"})</code>: per-request revalidation hook so
-          revocation lists, token-version counters, and &quot;user changed
-          password since this token was issued&quot; checks can invalidate
-          previously-issued credentials.
+          <code>jwk({"{ verify }"})</code>
+          {": "}per-request revalidation hook so revocation lists,
+          token-version counters, and &quot;user changed password since this
+          token was issued&quot; checks can invalidate previously-issued
+          credentials.
         </li>
         <li>
-          <code>basicAuth({"{ onAuthSuccess }"})</code>: typed-context callback
-          that fires after <code>ctx.state.user.username</code> is stamped, so
-          handlers do not re-parse the <code>Authorization</code> header.
+          <code>basicAuth({"{ onAuthSuccess }"})</code>
+          {": "}typed-context callback that fires after{" "}
+          <code>ctx.state.user.username</code> is stamped, so handlers do not
+          re-parse the <code>Authorization</code> header.
         </li>
         <li>
           <code>Cache-Control: no-store</code> on every first-party auth helper{" "}
-          <code>401</code> challenge (<code>bearerAuth()</code>,{" "}
-          <code>basicAuth()</code>, <code>jwk()</code>) so intermediaries never
-          cache an auth challenge, RFC 9111 §3.5 and audit alignment.
+          <code>401</code> challenge (<code>bearerAuth()</code>
+          {", "}
+          <code>basicAuth()</code>
+          {", "}<code>jwk()</code>) so intermediaries never cache an auth
+          challenge, RFC 9111 §3.5 and audit alignment.
         </li>
       </ul>
 
@@ -133,9 +140,11 @@ export default function Page() {
       <p>
         Drop-in Bearer-token middleware backed by a JWKS source. The algorithm
         allowlist is intentionally narrow: only <code>RS256</code> /{" "}
-        <code>RS384</code> / <code>RS512</code>, <code>PS256</code> /{" "}
-        <code>PS384</code> / <code>PS512</code>, <code>ES256</code> /{" "}
-        <code>ES384</code> / <code>ES512</code>, and <code>EdDSA</code>.
+        <code>RS384</code> / <code>RS512</code>
+        {", "}<code>PS256</code> / <code>PS384</code> / <code>PS512</code>
+        {", "}<code>ES256</code> / <code>ES384</code> / <code>ES512</code>
+        {", "}and <code>EdDSA</code>
+        {". "}
         Symmetric <code>HS*</code> algorithms are refused at construction, the
         classic confused-deputy &quot;HS256 verified with the JWKS public key as
         the HMAC secret&quot; attack cannot be configured. The middleware is
@@ -199,23 +208,26 @@ app.use(
         language="ts"
       />
       <p>
-        <code>jwks</code> accepts a static <code>JwkSet</code>, an{" "}
-        <code>https://</code> URL (with TTL caching and in-flight-promise dedup
-        so a thundering-herd of concurrent requests resolves into a single
-        fetch), or a custom resolver function. <code>http://</code> JWKS URLs
-        and non-finite / negative <code>fetchTtlSeconds</code> /{" "}
-        <code>maxStaleSeconds</code> are refused at construction. The middleware
-        stamps <code>ctx.state.user = {"{ sub, scopes, claims }"}</code>; the
-        scope normalizer reads <code>scope</code> (RFC 6749 space-separated
-        string), <code>scp</code> (Azure AD array), and <code>scopes</code>{" "}
-        (array) claims and dedupes the result.
+        <code>jwks</code> accepts a static <code>JwkSet</code>
+        {", "}an <code>https://</code> URL (with TTL caching and
+        in-flight-promise dedup so a thundering-herd of concurrent requests
+        resolves into a single fetch), or a custom resolver function.{" "}
+        <code>http://</code> JWKS URLs and non-finite / negative{" "}
+        <code>fetchTtlSeconds</code> / <code>maxStaleSeconds</code> are refused
+        at construction. The middleware stamps{" "}
+        <code>ctx.state.user = {"{ sub, scopes, claims }"}</code>; the scope
+        normalizer reads <code>scope</code> (RFC 6749 space-separated string),{" "}
+        <code>scp</code> (Azure AD array), and <code>scopes</code> (array)
+        claims and dedupes the result.
       </p>
       <p>
         When the JWKS source is a URL, a TTL-expiry refresh that fails (network
         error, non-2xx, or malformed body) does not take down every request: the
         last successfully fetched key set keeps serving for a bounded{" "}
-        <code>maxStaleSeconds</code> grace window (default <code>3600</code>,
-        set <code>0</code> to disable) on top of <code>fetchTtlSeconds</code>.
+        <code>maxStaleSeconds</code> grace window (default <code>3600</code>
+        {", "}
+        set <code>0</code> to disable) on top of <code>fetchTtlSeconds</code>
+        {". "}
         The very first fetch is never eligible for this fallback, so an
         unreachable IdP at boot still fails closed, and tokens are always
         cryptographically verified and <code>exp</code>-checked regardless.
@@ -228,14 +240,16 @@ app.use(
         Both <code>bearerAuth()</code> and <code>jwk()</code> accept an optional{" "}
         <code>verify</code> callback that runs after the static{" "}
         <code>validate</code> / signature check passes. Returning{" "}
-        <code>false</code> throws <code>ForbiddenError</code> (<code>403</code>,
+        <code>false</code> throws <code>ForbiddenError</code> (<code>403</code>
+        {", "}
         no <code>WWW-Authenticate</code> per RFC 6750); returning{" "}
         <code>true</code> or <code>undefined</code> accepts. Use it to consult a
         revocation list, a token-version counter, or any other per-request
         signal that a previously-issued token has been invalidated. These
-        callbacks run in <code>preBody</code>: raw route/header context is
-        available, but <code>ctx.body</code> is always <code>undefined</code> so
-        an unauthenticated upload can be rejected before it is consumed.
+        callbacks run in <code>preBody</code>
+        {": "}raw route/header context is available, but <code>ctx.body</code>{" "}
+        is always <code>undefined</code> so an unauthenticated upload can be
+        rejected before it is consumed.
       </p>
 
       <FlowDiagram
@@ -293,9 +307,9 @@ app.use(
         the typed <code>(credentials, ctx)</code> tuple. The previous idiomatic
         workaround was a separate <code>beforeHandle</code> that re-parsed the{" "}
         <code>Authorization</code> header in every handler; that is no longer
-        necessary. The callback runs in <code>preBody</code>, so move any logic
-        that requires a validated request body into a later{" "}
-        <code>beforeHandle</code>.
+        necessary. The callback runs in <code>preBody</code>
+        {", "}so move any logic that requires a validated request body into a
+        later <code>beforeHandle</code>.
       </p>
       <CodeBlock
         code={`import { basicAuth } from "@daloyjs/core";
@@ -323,8 +337,10 @@ app.use(
         CDN, a corporate proxy, or a service-worker cache could previously cache
         the challenge and serve it to a different user;
         <code>no-store</code> closes that fingerprinting and stale-challenge
-        risk. This applies uniformly to <code>bearerAuth()</code>,{" "}
-        <code>basicAuth()</code>, and the new <code>jwk()</code>.
+        risk. This applies uniformly to <code>bearerAuth()</code>
+        {", "}
+        <code>basicAuth()</code>
+        {", "}and the new <code>jwk()</code>.
       </p>
 
       <h2 id="related-auth-safeguards">Related auth safeguards</h2>
@@ -337,7 +353,7 @@ app.use(
         <a href="/docs/security/websocket-login-throttle">
           WebSocket and login safeguards
         </a>
-        .
+        {"."}
       </p>
     </>
   );

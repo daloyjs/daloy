@@ -403,13 +403,12 @@ export default function BlogPostPage() {
         <div className="docs-prose max-w-full">
           <p>
             Hi, Devlin again. I want to talk about a small feature with a
-            deceptively boring name: <code>docs.scalar</code>. It is one new
-            option on the App
-            constructor. It is also the difference between &quot;our docs page
-            looks like everyone else&apos;s docs page&quot; and &quot;our docs
-            page looks like the rest of our product, and the Try-It button is
-            off in prod, and the spec it&apos;s reading is still the live
-            one.&quot;
+            deceptively boring name: <code>docs.scalar</code>
+            {". "}It is one new option on the App constructor. It is also the
+            difference between &quot;our docs page looks like everyone
+            else&apos;s docs page&quot; and &quot;our docs page looks like the
+            rest of our product, and the Try-It button is off in prod, and the
+            spec it&apos;s reading is still the live one.&quot;
           </p>
 
           <p>
@@ -461,18 +460,18 @@ export default function BlogPostPage() {
             That&apos;s it. One option. <code>docs.scalar</code> takes any
             JSON-serialisable Scalar API reference configuration and forwards it
             into the page. Theme, layout, brand CSS, favicon, the Try-It toggle,
-            sidebar density, &quot;open the first tag by default&quot;:
-            all the knobs Scalar already supports.
+            sidebar density, &quot;open the first tag by default&quot;: all the
+            knobs Scalar already supports.
           </p>
 
           <h2>The options I actually reach for</h2>
 
           <p>
             There are about forty fields on{" "}
-            <code>ScalarReferenceConfiguration</code>. I&apos;m not going to
-            list all of them. The type ships with your IDE, and Scalar
-            keeps the canonical reference. But these are the ones I set in
-            almost every project, in roughly this order:
+            <code>ScalarReferenceConfiguration</code>
+            {". "}I&apos;m not going to list all of them. The type ships with
+            your IDE, and Scalar keeps the canonical reference. But these are
+            the ones I set in almost every project, in roughly this order:
           </p>
 
           <OptionCard name="theme" what="pick one of the twelve presets.">
@@ -487,7 +486,9 @@ export default function BlogPostPage() {
             what="a string of CSS that overrides Scalar tokens."
           >
             Keep it tiny. Two or three CSS variables (
-            <code>--scalar-color-1</code>, <code>--scalar-color-accent</code>,{" "}
+            <code>--scalar-color-1</code>
+            {", "}<code>--scalar-color-accent</code>
+            {", "}
             <code>--scalar-font</code>) and you&apos;ve matched your brand. The
             attribute is HTML-escaped for you, so quotes and angle brackets
             inside the CSS are safe.
@@ -507,8 +508,8 @@ export default function BlogPostPage() {
           >
             <code>&quot;modern&quot;</code> for public consumer-facing docs,{" "}
             <code>&quot;classic&quot;</code> for internal docs where engineers
-            want to skim a long page with <kbd>⌘F</kbd>. Pick by audience, not
-            by taste.
+            want to skim a long page with <kbd>⌘F</kbd>
+            {". "}Pick by audience, not by taste.
           </OptionCard>
           <OptionCard
             name="defaultOpenFirstTag"
@@ -556,21 +557,25 @@ export default function BlogPostPage() {
 
           <p>
             Two things to notice. First, the fields that would change which spec
-            the page reads (<code>content</code>, <code>sources</code>,{" "}
-            <code>spec</code>, <code>url</code>) are stripped at serialise time
-            and <code>url</code> is then re-set to whatever{" "}
-            <code>openapiPath</code> your App is serving. You literally cannot
-            ship a docs page that reads a stale or alternate spec. I know,
-            because I tried.
+            the page reads (<code>content</code>
+            {", "}<code>sources</code>
+            {", "}
+            <code>spec</code>
+            {", "}<code>url</code>) are stripped at serialise time and{" "}
+            <code>url</code> is then re-set to whatever <code>openapiPath</code>{" "}
+            your App is serving. You literally cannot ship a docs page that
+            reads a stale or alternate spec. I know, because I tried.
           </p>
 
           <p>
-            Second, the function-valued fields (<code>onBeforeRequest</code>,{" "}
-            <code>plugins</code>, <code>generateOperationSlug</code>, friends)
-            are typed as <code>never</code> in the public type. They can&apos;t
-            ride along inside a data attribute (functions don&apos;t
-            survive <code>JSON.stringify</code>), and pretending they can
-            would be a footgun with great UX and terrible debuggability.
+            Second, the function-valued fields (<code>onBeforeRequest</code>
+            {", "}
+            <code>plugins</code>
+            {", "}<code>generateOperationSlug</code>
+            {", "}friends) are typed as <code>never</code> in the public type.
+            They can&apos;t ride along inside a data attribute (functions
+            don&apos;t survive <code>JSON.stringify</code>), and pretending they
+            can would be a footgun with great UX and terrible debuggability.
             TypeScript stops you up front:
           </p>
 
@@ -597,9 +602,9 @@ export default function BlogPostPage() {
             <code>data-configuration</code> at boot, merges it with anything you
             set via other data attributes, and renders. The reason this looks
             suspiciously simple is because it <em>is</em> suspiciously simple.
-            The value of <code>docs.scalar</code> isn&apos;t in the
-            rendering, it&apos;s in the contract we hold around what can and
-            can&apos;t go in that JSON.
+            The value of <code>docs.scalar</code> isn&apos;t in the rendering,
+            it&apos;s in the contract we hold around what can and can&apos;t go
+            in that JSON.
           </p>
 
           <h2>The pattern I copy into every project: per-env config</h2>
@@ -627,9 +632,10 @@ export default function BlogPostPage() {
             About once a year I genuinely do want a Scalar plugin or a custom
             slug generator. Those are functions; they can&apos;t cross the JSON
             boundary. <code>docs.scalar</code> won&apos;t let me, and
-            that&apos;s correct. But Daloy doesn&apos;t leave me stuck:{" "}
-            the same generator that powers the auto-mount is exported as{" "}
-            <code>scalarHtml()</code>, and I can mount my own route:
+            that&apos;s correct. But Daloy doesn&apos;t leave me stuck: the same
+            generator that powers the auto-mount is exported as{" "}
+            <code>scalarHtml()</code>
+            {", "}and I can mount my own route:
           </p>
 
           <EditorFrame
@@ -647,7 +653,7 @@ export default function BlogPostPage() {
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
               CSP nonces via secureHeaders()
             </Link>
-            , the nonce flows through automatically. Pass{" "}
+            {", "}the nonce flows through automatically. Pass{" "}
             <code>ctx.state.cspNonce</code> into both calls and the script tag
             is allow-listed.
           </p>
@@ -673,8 +679,8 @@ export default function BlogPostPage() {
           <p>
             Notice the last assertion. That&apos;s the one that makes me sleep
             at night. It pins the fact that the page&apos;s configuration block
-            carries the live spec URL, the same one your typed client,
-            your contract tests, and your{" "}
+            carries the live spec URL, the same one your typed client, your
+            contract tests, and your{" "}
             <Link href="/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health">
               daloy inspect
             </Link>{" "}
@@ -696,21 +702,21 @@ export default function BlogPostPage() {
 
           <p>
             The honest reason this feature took the shape it did: I wanted
-            FastAPI-style ergonomics for the docs page (one option, in
-            the constructor, no second mental model) without the
-            FastAPI-style outcome where a year later someone has forked the
-            template and the docs are silently rendering last quarter&apos;s
-            spec. JSON-only forces the API to stay declarative. Force-setting{" "}
-            <code>url</code> means the prettiest <code>/docs</code> page in the
-            company physically cannot lie to your customers about what the API
-            does. Everything else is just themes.
+            FastAPI-style ergonomics for the docs page (one option, in the
+            constructor, no second mental model) without the FastAPI-style
+            outcome where a year later someone has forked the template and the
+            docs are silently rendering last quarter&apos;s spec. JSON-only
+            forces the API to stay declarative. Force-setting <code>url</code>{" "}
+            means the prettiest <code>/docs</code> page in the company
+            physically cannot lie to your customers about what the API does.
+            Everything else is just themes.
           </p>
 
           <p>
-            Install with <code>pnpm add @daloyjs/core</code>, or use{" "}
-            <code>pnpm create daloy@latest</code> for a fresh scaffold. Then add
-            five lines under <code>docs</code>, ship the brand
-            audit, and go do something more interesting.
+            Install with <code>pnpm add @daloyjs/core</code>
+            {", "}or use <code>pnpm create daloy@latest</code> for a fresh
+            scaffold. Then add five lines under <code>docs</code>
+            {", "}ship the brand audit, and go do something more interesting.
           </p>
 
           <p>

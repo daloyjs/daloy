@@ -27,11 +27,12 @@ export default function Page() {
       <p>
         DaloyJS ships first-class helpers for two streaming formats that are
         common in HTTP APIs: <strong>Server-Sent Events (SSE)</strong> and
-        <strong> newline-delimited JSON (NDJSON)</strong>. Both helpers wrap an
+        <strong>newline-delimited JSON (NDJSON)</strong>
+        {". "}Both helpers wrap an
         <code>AsyncIterable</code> in a backpressure-safe{" "}
-        <code>ReadableStream</code>: the underlying iterator is only advanced
-        when the consumer pulls the next chunk, so a slow client cannot cause
-        unbounded memory growth.
+        <code>ReadableStream</code>
+        {": "}the underlying iterator is only advanced when the consumer pulls
+        the next chunk, so a slow client cannot cause unbounded memory growth.
       </p>
       <p>
         They also honor an optional <code>AbortSignal</code> and call{" "}
@@ -103,10 +104,15 @@ import { sseStream } from "@daloyjs/core/streaming";`}
       <p>
         Yield either a string (sent as <code>data: …</code>) or an{" "}
         <code>SSEMessage</code> object with any combination of{" "}
-        <code>event</code>, <code>id</code>, <code>retry</code>,{" "}
-        <code>comment</code>, and <code>data</code>. Multi-line strings are
-        split into one <code>data:</code> line per source line, and CR/LF in
-        <code> event</code> / <code>id</code> values are sanitized.
+        <code>event</code>
+        {", "}<code>id</code>
+        {", "}<code>retry</code>
+        {", "}
+        <code>comment</code>
+        {", "}and <code>data</code>
+        {". "}Multi-line strings are split into one <code>data:</code> line per
+        source line, and CR/LF in
+        <code>event</code> / <code>id</code> values are sanitized.
       </p>
       <CodeBlock
         code={`import { sseStream } from "@daloyjs/core";
@@ -136,10 +142,12 @@ app.get(
       <p>
         Use <code>sseResponse(...)</code> when you want a fully-formed{" "}
         <code>Response</code> with the standard SSE headers (
-        <code>text/event-stream</code>,{" "}
-        <code>cache-control: no-cache, no-transform</code>,{" "}
-        <code>connection: keep-alive</code>, and{" "}
-        <code>x-accel-buffering: no</code>) already set:
+        <code>text/event-stream</code>
+        {", "}
+        <code>cache-control: no-cache, no-transform</code>
+        {", "}
+        <code>connection: keep-alive</code>
+        {", "}and <code>x-accel-buffering: no</code>) already set:
       </p>
       <CodeBlock
         code={`import { sseResponse } from "@daloyjs/core";
@@ -149,15 +157,18 @@ const res = sseResponse(async function* () {
 });`}
       />
       <p>
-        A handler may also <strong>return a raw <code>Response</code></strong>{" "}
+        A handler may also{" "}
+        <strong>
+          return a raw <code>Response</code>
+        </strong>{" "}
         directly, instead of the <code>{"{ status, body, headers }"}</code>{" "}
         shape. Because it bypasses response-schema validation, the route must
-        explicitly set <code>acknowledgeNoResponseBodySchema: true</code>. It is
-        still finalized like any other response: the
-        request id, <code>secureHeaders()</code>, CORS, your <code>onSend</code>{" "}
-        hooks, and fingerprint stripping all still apply. This is what lets you
-        forward a stream from a library such as the{" "}
-        <a href="/docs/ai-sdk">Vercel AI SDK</a> in one line:
+        explicitly set <code>acknowledgeNoResponseBodySchema: true</code>
+        {". "}It is still finalized like any other response: the request id,{" "}
+        <code>secureHeaders()</code>
+        {", "}CORS, your <code>onSend</code> hooks, and fingerprint stripping
+        all still apply. This is what lets you forward a stream from a library
+        such as the <a href="/docs/ai-sdk">Vercel AI SDK</a> in one line:
       </p>
       <CodeBlock
         code={`app.get(
@@ -182,11 +193,13 @@ const res = sseResponse(async function* () {
         closing the connection while no events are flowing.
       </p>
 
-      <h2 id="newline-delimited-json-ndjson">Newline-delimited JSON (NDJSON)</h2>
+      <h2 id="newline-delimited-json-ndjson">
+        Newline-delimited JSON (NDJSON)
+      </h2>
       <p>
         Yield any JSON-serializable value; each value is encoded with{" "}
         <code>JSON.stringify</code> and terminated with a single <code>\n</code>
-        . Strings are emitted as JSON strings, and values that cannot be
+        {". "}Strings are emitted as JSON strings, and values that cannot be
         represented as JSON throw instead of emitting invalid NDJSON.
       </p>
       <CodeBlock
@@ -221,10 +234,11 @@ app.get(
       <h2 id="backpressure-and-cancellation">Backpressure & cancellation</h2>
       <p>
         Both helpers use the <code>pull()</code> entry point of{" "}
-        <code>ReadableStream</code>: they call <code>iterator.next()</code>{" "}
-        exactly once per pull. The runtime decides when to pull: a slow client
-        on a Node socket pulls slowly, a fast Cloudflare consumer pulls quickly.
-        You never need to write throttling code.
+        <code>ReadableStream</code>
+        {": "}they call <code>iterator.next()</code> exactly once per pull. The
+        runtime decides when to pull: a slow client on a Node socket pulls
+        slowly, a fast Cloudflare consumer pulls quickly. You never need to
+        write throttling code.
       </p>
       <p>
         When the request is aborted (client disconnects, request timeout fires,
@@ -237,11 +251,12 @@ app.get(
       <h2 id="cross-runtime-compatibility">Cross-runtime compatibility</h2>
       <p>
         The helpers only depend on web-standard <code>ReadableStream</code> and{" "}
-        <code>TextEncoder</code>, so the same handler works identically on Node,
-        Bun, Deno, and Cloudflare Workers. The DaloyJS response
-        serializer recognizes a <code>ReadableStream</code> body when you set an
-        explicit non-JSON <code>content-type</code> and forwards it to the
-        runtime without buffering.
+        <code>TextEncoder</code>
+        {", "}so the same handler works identically on Node, Bun, Deno, and
+        Cloudflare Workers. The DaloyJS response serializer recognizes a{" "}
+        <code>ReadableStream</code> body when you set an explicit non-JSON{" "}
+        <code>content-type</code> and forwards it to the runtime without
+        buffering.
       </p>
 
       <h2 id="openapi">OpenAPI</h2>

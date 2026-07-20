@@ -34,10 +34,13 @@ export default function Page() {
         >
           Standard Schema
         </a>
-        , a tiny interface exposed by validators such as <strong>Zod</strong>,{" "}
-        <strong>Valibot</strong>, <strong>ArkType</strong>, and TypeBox via a
-        Standard Schema adapter. Pick the validator that fits your project; the
-        DaloyJS contract is the same.
+        {", "}a tiny interface exposed by validators such as{" "}
+        <strong>Zod</strong>
+        {", "}
+        <strong>Valibot</strong>
+        {", "}<strong>ArkType</strong>
+        {", "}and TypeBox via a Standard Schema adapter. Pick the validator
+        that fits your project; the DaloyJS contract is the same.
       </p>
 
       <BranchDiagram
@@ -64,34 +67,41 @@ export default function Page() {
       <p>For each route you can declare schemas for:</p>
       <ul>
         <li>
-          <code>request.params</code>: decoded path parameters. They start as
-          strings; coerce in your schema if you want numbers, UUIDs, or enums.
+          <code>request.params</code>
+          {": "}decoded path parameters. They start as strings; coerce in your
+          schema if you want numbers, UUIDs, or enums.
         </li>
         <li>
-          <code>request.query</code>: query string values. Repeated keys become
-          arrays before validation.
+          <code>request.query</code>
+          {": "}query string values. Repeated keys become arrays before
+          validation.
         </li>
         <li>
-          <code>request.headers</code>: request headers as lower-case names.
+          <code>request.headers</code>
+          {": "}request headers as lower-case names.
         </li>
         <li>
-          <code>request.body</code>: parsed request bodies. The body is only
-          read when a route declares a body schema.
+          <code>request.body</code>
+          {": "}parsed request bodies. The body is only read when a route
+          declares a body schema.
         </li>
         <li>
-          <code>responses[status].body</code>: typed and validated response
-          bodies.
+          <code>responses[status].body</code>
+          {": "}typed and validated response bodies.
         </li>
       </ul>
       <p>
         Query strings, form fields, and multipart fields drop prototype
-        pollution keys such as <code>__proto__</code>, <code>constructor</code>,
+        pollution keys such as <code>__proto__</code>
+        {", "}<code>constructor</code>
+        {", "}
         and <code>prototype</code> before validation.
       </p>
 
       <h2 id="bound-numeric-fields">Bound numeric fields (money, qty, IDs)</h2>
       <p>
-        Bare <code>z.number()</code> accepts <code>1e308</code>,{" "}
+        Bare <code>z.number()</code> accepts <code>1e308</code>
+        {", "}
         <code>-Infinity</code> after coercion mistakes, and other values that
         are fine for IEEE floats but disastrous for money, inventory, or
         pagination. Always put domain bounds on numeric request fields:
@@ -116,10 +126,10 @@ const CreatePayment = z
       <p>
         Zod 4 already rejects <code>NaN</code> / non-finite numbers for{" "}
         <code>z.number()</code> in many cases, but a ceiling (
-        <code>.max()</code>) and sign constraint (
-        <code>.positive()</code> / <code>.nonnegative()</code>) are still your
-        refund-fraud and overflow backstop. Pair this with response schemas so
-        sensitive fields never leak outbound.
+        <code>.max()</code>) and sign constraint (<code>.positive()</code> /{" "}
+        <code>.nonnegative()</code>) are still your refund-fraud and overflow
+        backstop. Pair this with response schemas so sensitive fields never leak
+        outbound.
       </p>
 
       <h2 id="end-to-end-example">End-to-end example</h2>
@@ -182,12 +192,14 @@ export const app = new App().post(
       <h2 id="pick-your-validator">Pick your validator</h2>
       <ul>
         <li>
-          <Link href="/docs/validation/zod">Zod</Link>: the default for most
-          teams. Chainable API, large ecosystem, easy to learn.
+          <Link href="/docs/validation/zod">Zod</Link>
+          {": "}the default for most teams. Chainable API, large ecosystem,
+          easy to learn.
         </li>
         <li>
-          <Link href="/docs/validation/valibot">Valibot</Link>: modular and
-          tree-shakeable. Great for edge runtimes and browser-shipped contracts.
+          <Link href="/docs/validation/valibot">Valibot</Link>
+          {": "}modular and tree-shakeable. Great for edge runtimes and
+          browser-shipped contracts.
         </li>
       </ul>
       <p>
@@ -222,9 +234,10 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
 // Wrap with your project's Standard Schema adapter before passing to DaloyJS.`}
       />
       <p>
-        Once a schema exposes <code>~standard</code>, DaloyJS infers handler
-        types, generates OpenAPI, and returns problem+json errors the same way
-        regardless of which validator produced it.
+        Once a schema exposes <code>~standard</code>
+        {", "}DaloyJS infers handler types, generates OpenAPI, and returns
+        problem+json errors the same way regardless of which validator produced
+        it.
       </p>
 
       <h2 id="errors">Errors</h2>
@@ -278,7 +291,8 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
 
       <h2 id="body-limits-and-content-types">Body limits and content types</h2>
       <p>
-        When a route declares <code>request.body</code>, DaloyJS also enforces:
+        When a route declares <code>request.body</code>
+        {", "}DaloyJS also enforces:
       </p>
       <ul>
         <li>
@@ -290,9 +304,10 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
           global <code>allowedContentTypes</code> if set → <strong>415</strong>.
         </li>
         <li>
-          Default accepted body types: <code>application/json</code>,{" "}
-          <code>application/x-www-form-urlencoded</code>, and{" "}
-          <code>multipart/form-data</code>.
+          Default accepted body types: <code>application/json</code>
+          {", "}
+          <code>application/x-www-form-urlencoded</code>
+          {", "}and <code>multipart/form-data</code>.
         </li>
         <li>
           Prototype-pollution-safe parsing for JSON, query strings, urlencoded
@@ -301,10 +316,10 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
       </ul>
       <p>
         JSON bodies parse to objects, urlencoded bodies parse through{" "}
-        <code>URLSearchParams</code>, and multipart bodies parse through the
-        platform <code>Request.formData()</code> API. If you opt a route into a
-        custom text media type, DaloyJS passes the decoded text into your body
-        schema.
+        <code>URLSearchParams</code>
+        {", "}and multipart bodies parse through the platform{" "}
+        <code>Request.formData()</code> API. If you opt a route into a custom
+        text media type, DaloyJS passes the decoded text into your body schema.
       </p>
       <CodeBlock
         code={`app.post(

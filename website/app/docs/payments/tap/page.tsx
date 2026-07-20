@@ -31,9 +31,10 @@ export default function Page() {
         is the default acquirer for the GCC and wider MENA region, it&apos;s how
         you accept <strong>KNET</strong> (Kuwait), <strong>Mada</strong>{" "}
         (Saudi), <strong>Benefit / BenefitPay</strong> (Bahrain),{" "}
-        <strong>STC Pay</strong>, plus cards, Apple Pay, Google Pay, and BNPL
-        methods like Tabby and Tamara. There&apos;s no first-party Node SDK; you
-        integrate against the{" "}
+        <strong>STC Pay</strong>
+        {", "}plus cards, Apple Pay, Google Pay, and BNPL methods like Tabby
+        and Tamara. There&apos;s no first-party Node SDK; you integrate against
+        the{" "}
         <a
           href="https://developers.tap.company/reference/api-endpoint"
           target="_blank"
@@ -49,15 +50,16 @@ export default function Page() {
         <li>
           <strong>Bearer auth, secret key in the backend only.</strong>{" "}
           <code>Authorization: Bearer sk_test_...</code> or{" "}
-          <code>sk_live_...</code>. Public keys (<code>pk_*</code>) are for the
-          frontend SDKs; never send a secret key from the browser.
+          <code>sk_live_...</code>
+          {". "}Public keys (<code>pk_*</code>) are for the frontend SDKs;
+          never send a secret key from the browser.
         </li>
         <li>
           <strong>It&apos;s a redirect flow.</strong> You create a charge, Tap
-          returns <code>transaction.url</code>, you redirect the customer. They
-          come back via your <code>redirect.url</code> with{" "}
-          <code>?tap_id=chg_xxx</code>: that&apos;s a UX hint, not proof of
-          payment.
+          returns <code>transaction.url</code>
+          {", "}you redirect the customer. They come back via your{" "}
+          <code>redirect.url</code> with <code>?tap_id=chg_xxx</code>
+          {": "}that&apos;s a UX hint, not proof of payment.
         </li>
         <li>
           <strong>
@@ -92,13 +94,13 @@ export default function Page() {
           <a href="https://os.tap.company/" target="_blank" rel="noreferrer">
             dashboard
           </a>
-          .
+          {"."}
         </li>
         <li>
           Accounts → Operators → MERCHANT to grab your{" "}
-          <strong>Merchant ID</strong>, plus{" "}
-          <strong>Test/Live Secret Keys</strong> (<code>sk_*</code>) and{" "}
-          <strong>Public Keys</strong> (<code>pk_*</code>).
+          <strong>Merchant ID</strong>
+          {", "}plus <strong>Test/Live Secret Keys</strong> (<code>sk_*</code>)
+          and <strong>Public Keys</strong> (<code>pk_*</code>).
         </li>
         <li>
           Enable the payment methods you need (KNET, Mada, Benefit, etc.), some
@@ -273,8 +275,8 @@ declare module "@daloyjs/core" {
         >
           their webhook docs
         </a>
-        . If they add a new field to the hash, every webhook will fail until you
-        update the function.
+        {". "}If they add a new field to the hash, every webhook will fail until
+        you update the function.
       </p>
 
       <h2 id="4-create-a-hosted-charge">4. Create a hosted charge</h2>
@@ -316,8 +318,11 @@ declare module "@daloyjs/core" {
       <p>
         The simplest integration: <code>source.id: &quot;src_all&quot;</code>{" "}
         gets you Tap&apos;s hosted checkout page with every method you&apos;ve
-        enabled. Use <code>src_card</code>, <code>src_kw.knet</code>,{" "}
-        <code>src_sa.mada</code>, etc. to pin a specific method.
+        enabled. Use <code>src_card</code>
+        {", "}<code>src_kw.knet</code>
+        {", "}
+        <code>src_sa.mada</code>
+        {", "}etc. to pin a specific method.
       </p>
       <CodeBlock
         code={`import { z } from "zod";
@@ -457,8 +462,8 @@ app.post(
       <p>
         For an auth-then-capture flow (useful for hotels, marketplaces, anything
         where the final amount is decided after the customer&apos;s session),
-        use <code>/v2/authorize</code> instead of <code>/v2/charges</code>, then{" "}
-        <code>POST /v2/authorize/{`{id}`}</code> with{" "}
+        use <code>/v2/authorize</code> instead of <code>/v2/charges</code>
+        {", "}then <code>POST /v2/authorize/{`{id}`}</code> with{" "}
         <code>{`{ status: "VOID" }`}</code> or a capture body. Not every method
         supports it , confirm with Tap support per scheme before relying on it.
       </p>
@@ -466,9 +471,9 @@ app.post(
       <h2 id="runtimes">Runtimes</h2>
       <p>
         Everything here is plain <code>fetch</code> and <code>node:crypto</code>
-        . Swap <code>createHmac</code> for <code>crypto.subtle</code> if
-        you&apos;re targeting Cloudflare Workers, Tap itself has no
-        runtime requirements beyond a TLS-capable HTTP client.
+        {". "}Swap <code>createHmac</code> for <code>crypto.subtle</code> if
+        you&apos;re targeting Cloudflare Workers, Tap itself has no runtime
+        requirements beyond a TLS-capable HTTP client.
       </p>
 
       <h2 id="errors">Errors</h2>
@@ -517,10 +522,12 @@ app.post(
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href={"/docs/payments/adyen" as Route}>Adyen guide</Link>,{" "}
-        <Link href={"/docs/payments/mollie" as Route}>Mollie guide</Link>, and{" "}
-        <Link href="/docs/errors">problem+json errors</Link>.
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href={"/docs/payments/adyen" as Route}>Adyen guide</Link>
+        {", "}
+        <Link href={"/docs/payments/mollie" as Route}>Mollie guide</Link>
+        {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>
   );

@@ -34,12 +34,12 @@ export default function Page() {
         >
           Standard Schema
         </a>
-        , so DaloyJS picks it up without any adapter.
+        {", "}so DaloyJS picks it up without any adapter.
       </p>
       <p>
         Prefer a more modular, tree-shakeable API? See{" "}
-        <a href="/docs/validation/valibot">Validation with Valibot</a>. Both
-        work the same way at the framework level.
+        <a href="/docs/validation/valibot">Validation with Valibot</a>
+        {". "}Both work the same way at the framework level.
       </p>
 
       <FlowDiagram
@@ -78,31 +78,36 @@ export default function Page() {
       <p>For each route you can declare schemas for:</p>
       <ul>
         <li>
-          <code>request.params</code>: decoded path parameters. They start as
-          strings, so use <code>z.coerce.number()</code>,{" "}
-          <code>z.uuid()</code>, or enums when you need stronger
-          shapes.
+          <code>request.params</code>
+          {": "}decoded path parameters. They start as strings, so use{" "}
+          <code>z.coerce.number()</code>
+          {", "}<code>z.uuid()</code>
+          {", "}
+          or enums when you need stronger shapes.
         </li>
         <li>
-          <code>request.query</code>: query string values. Repeated keys become
-          arrays before validation.
+          <code>request.query</code>
+          {": "}query string values. Repeated keys become arrays before
+          validation.
         </li>
         <li>
-          <code>request.headers</code>: request headers as lower-case names.
+          <code>request.headers</code>
+          {": "}request headers as lower-case names.
         </li>
         <li>
-          <code>request.body</code>: parsed request bodies. The body is only
-          read when declared.
+          <code>request.body</code>
+          {": "}parsed request bodies. The body is only read when declared.
         </li>
         <li>
-          <code>responses[status].body</code>: typed and validated responses.
+          <code>responses[status].body</code>
+          {": "}typed and validated responses.
         </li>
       </ul>
 
       <h2 id="bound-numeric-fields">Bound numeric fields (money and qty)</h2>
       <p>
-        Prefer domain-bounded numbers over bare <code>z.number()</code>. Money
-        and quantities need a finite range so refund-fraud amounts,{" "}
+        Prefer domain-bounded numbers over bare <code>z.number()</code>
+        {". "}Money and quantities need a finite range so refund-fraud amounts,{" "}
         <code>1e308</code> overflows, and negative balances die at the schema
         boundary instead of in the ledger:
       </p>
@@ -198,8 +203,8 @@ export const app = new App().post(
 
       <h2 id="body-limits-and-content-types">Body limits and content types</h2>
       <p>
-        When a route declares <code>request.body</code>, DaloyJS will also
-        enforce:
+        When a route declares <code>request.body</code>
+        {", "}DaloyJS will also enforce:
       </p>
       <ul>
         <li>
@@ -211,9 +216,10 @@ export const app = new App().post(
           global <code>allowedContentTypes</code> if set → <strong>415</strong>.
         </li>
         <li>
-          Default accepted body types: <code>application/json</code>,{" "}
-          <code>application/x-www-form-urlencoded</code>, and{" "}
-          <code>multipart/form-data</code>.
+          Default accepted body types: <code>application/json</code>
+          {", "}
+          <code>application/x-www-form-urlencoded</code>
+          {", "}and <code>multipart/form-data</code>.
         </li>
         <li>
           Prototype-pollution-safe parsing for JSON, query strings, urlencoded
@@ -222,10 +228,11 @@ export const app = new App().post(
       </ul>
       <p>
         JSON bodies validate as parsed JSON. Urlencoded bodies validate as an
-        object built from <code>URLSearchParams</code>. Multipart bodies
-        validate as an object built from <code>Request.formData()</code>. For a
-        custom text media type, opt in with <code>accepts</code> and validate a{" "}
-        <code>z.string()</code> body.
+        object built from <code>URLSearchParams</code>
+        {". "}Multipart bodies validate as an object built from{" "}
+        <code>Request.formData()</code>
+        {". "}For a custom text media type, opt in with <code>accepts</code>{" "}
+        and validate a <code>z.string()</code> body.
       </p>
       <CodeBlock
         code={`app.post(
@@ -279,11 +286,13 @@ app.get(
 
       <h2 id="type-inference">Type inference</h2>
       <p>
-        The handler context is fully typed: <code>body</code>,{" "}
-        <code>params</code>, <code>query</code>, and <code>headers</code> are
-        inferred from your schemas. The return value is also typed; TypeScript
-        reports an error if you return a status not declared in{" "}
-        <code>responses</code>.
+        The handler context is fully typed: <code>body</code>
+        {", "}
+        <code>params</code>
+        {", "}<code>query</code>
+        {", "}and <code>headers</code> are inferred from your schemas. The
+        return value is also typed; TypeScript reports an error if you return a
+        status not declared in <code>responses</code>.
       </p>
       <CodeBlock
         code={`import { z } from "zod";
@@ -300,20 +309,20 @@ export type Book = z.infer<typeof Book>;`}
       <h2 id="see-also">See also</h2>
       <ul>
         <li>
-          <a href="/docs/validation">Validation overview</a>: how validators
-          plug in via Standard Schema.
+          <a href="/docs/validation">Validation overview</a>
+          {": "}how validators plug in via Standard Schema.
         </li>
         <li>
-          <a href="/docs/validation/valibot">Validation with Valibot</a>: the
-          tree-shakeable alternative.
+          <a href="/docs/validation/valibot">Validation with Valibot</a>
+          {": "}the tree-shakeable alternative.
         </li>
         <li>
-          <a href="/docs/openapi">OpenAPI generation</a>: how schemas become a
-          spec.
+          <a href="/docs/openapi">OpenAPI generation</a>
+          {": "}how schemas become a spec.
         </li>
         <li>
-          <a href="/docs/errors">Errors &amp; problem+json</a>: the error
-          contract.
+          <a href="/docs/errors">Errors &amp; problem+json</a>
+          {": "}the error contract.
         </li>
       </ul>
     </>

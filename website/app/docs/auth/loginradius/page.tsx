@@ -86,8 +86,10 @@ export default function Page() {
       <h2 id="1-configure-loginradius">1. Configure LoginRadius</h2>
       <ol>
         <li>
-          In the LoginRadius Admin Console, copy your <strong>API Key</strong>,{" "}
-          <strong>API Secret</strong>, and <strong>Site Name</strong>.
+          In the LoginRadius Admin Console, copy your <strong>API Key</strong>
+          {", "}
+          <strong>API Secret</strong>
+          {", "}and <strong>Site Name</strong>.
         </li>
         <li>
           Configure your hosted login, social login, registration, and callback
@@ -272,11 +274,11 @@ export function requireLoginRadiusRole(role: string): Hooks {
       <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>loginradius-sdk</code> is a Node-style CommonJS SDK. Use it on the{" "}
-        <Link href="/docs/adapters/node">Node adapter</Link>, Bun when your
-        deployment supports CommonJS packages, Vercel Node functions, and AWS
-        Lambda. It is not a fit for Cloudflare Workers. For edge APIs, put
-        LoginRadius validation behind a small Node service or use direct HTTP
-        calls from a runtime that can safely keep server secrets.
+        <Link href="/docs/adapters/node">Node adapter</Link>
+        {", "}Bun when your deployment supports CommonJS packages, Vercel Node
+        functions, and AWS Lambda. It is not a fit for Cloudflare Workers. For
+        edge APIs, put LoginRadius validation behind a small Node service or use
+        direct HTTP calls from a runtime that can safely keep server secrets.
       </p>
 
       <h2 id="security-notes">Security notes</h2>
@@ -303,9 +305,10 @@ export function requireLoginRadiusRole(role: string): Hooks {
       </ul>
 
       <p>
-        See also the <Link href="/docs/auth">auth integrations overview</Link>,{" "}
-        <Link href="/docs/auth/auth0">Auth0</Link>, and{" "}
-        <Link href="/docs/auth/clerk">Clerk</Link>.
+        See also the <Link href="/docs/auth">auth integrations overview</Link>
+        {", "}
+        <Link href="/docs/auth/auth0">Auth0</Link>
+        {", "}and <Link href="/docs/auth/clerk">Clerk</Link>.
       </p>
     </>
   );

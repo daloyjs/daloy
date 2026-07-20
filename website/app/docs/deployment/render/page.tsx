@@ -84,8 +84,8 @@ serve(app, {
 
       <h2 id="render-yaml">render.yaml</h2>
       <p>
-        Use <code>runtime: node</code>. The older <code>env: node</code> field
-        is deprecated.
+        Use <code>runtime: node</code>
+        {". "}The older <code>env: node</code> field is deprecated.
       </p>
       <CodeBlock
         language="yaml"
@@ -121,8 +121,9 @@ serve(app, {
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Bind to <code>0.0.0.0</code>, not <code>localhost</code>, or Render
-          can&apos;t route traffic to the container.
+          Bind to <code>0.0.0.0</code>
+          {", "}not <code>localhost</code>
+          {", "}or Render can&apos;t route traffic to the container.
         </li>
         <li>
           <code>healthCheckPath</code> must return 2xx within the timeout. Use

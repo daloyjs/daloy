@@ -80,9 +80,9 @@ test("POST /books rejects unauthorized", async () => {
       <h2 id="typed-in-process-client">Typed in-process client</h2>
       <p>
         When the test should use operation ids and contract-derived inputs,
-        build a <code>createInProcessClient(app)</code>. It opens no socket but
-        still traverses routing, authentication, validation, hooks, and response
-        serialization.
+        build a <code>createInProcessClient(app)</code>
+        {". "}It opens no socket but still traverses routing, authentication,
+        validation, hooks, and response serialization.
       </p>
       <CodeBlock
         code={`import { createInProcessClient } from "@daloyjs/core/client";
@@ -102,10 +102,10 @@ test("getBook is typed end to end", async () => {
       <h2 id="mock-mode">Mock mode</h2>
       <p>
         For pure-contract testing (no DB, no side effects), enable{" "}
-        <code>mockMode</code>. DaloyJS returns the first declared response{" "}
-        <code>examples</code> entry for the first 2xx status without ever
-        invoking your handler. If no example is declared, the mocked body is{" "}
-        <code>null</code>.
+        <code>mockMode</code>
+        {". "}DaloyJS returns the first declared response <code>examples</code>{" "}
+        entry for the first 2xx status without ever invoking your handler. If no
+        example is declared, the mocked body is <code>null</code>.
       </p>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
@@ -200,8 +200,10 @@ console.log(\`\${report.checked} routes - all clean\`);`}
           don&apos;t match their schemas.
         </li>
         <li>
-          Body schemas declared on safe methods (<code>GET</code>,{" "}
-          <code>HEAD</code>, <code>DELETE</code>) as warnings.
+          Body schemas declared on safe methods (<code>GET</code>
+          {", "}
+          <code>HEAD</code>
+          {", "}<code>DELETE</code>) as warnings.
         </li>
         <li>
           Routes with no declared <code>responses</code>.
@@ -252,12 +254,13 @@ console.log(\`\${report.checked} routes - all clean\`);`}
       </p>
       <p>
         Every <code>create-daloy</code> template ships this hook under{" "}
-        <code>.githooks/pre-push</code>, wired to a <code>hooks:install</code>{" "}
-        script. Enabling it is one command per clone: it points{" "}
-        <code>core.hooksPath</code> at the committed hook, so the whole team
-        shares the same gate. The hook skips gracefully when tooling is missing
-        (it never blocks a push over an uninstalled dependency), and you can
-        always bypass it once with <code>git push --no-verify</code>.
+        <code>.githooks/pre-push</code>
+        {", "}wired to a <code>hooks:install</code> script. Enabling it is one
+        command per clone: it points <code>core.hooksPath</code> at the
+        committed hook, so the whole team shares the same gate. The hook skips
+        gracefully when tooling is missing (it never blocks a push over an
+        uninstalled dependency), and you can always bypass it once with{" "}
+        <code>git push --no-verify</code>.
       </p>
       <CodeBlock
         language="bash"

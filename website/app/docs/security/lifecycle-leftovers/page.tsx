@@ -31,42 +31,46 @@ export default function Page() {
       <h1>Runtime resilience and configuration</h1>
       <blockquote>
         <strong>Think of it like…</strong> the load-shedding switch in an
-        electrical grid. When the system is near overload, it sheds non-
-        critical loads (<code>503</code> + <code>Retry-After</code>) rather than
-        browning out everyone. Add a CSP violation hotline (
-        <code>cspReportRoute</code>), a clearer code for &quot;the customer hung
-        up&quot; (<code>499</code>), and a config validator that catches typos
-        in your env file before the first request lands.
+        electrical grid. When the system is near overload, it sheds non-critical
+        loads (<code>503</code> + <code>Retry-After</code>) rather than browning
+        out everyone. Add a CSP violation hotline (<code>cspReportRoute</code>),
+        a clearer code for &quot;the customer hung up&quot; (<code>499</code>),
+        and a config validator that catches typos in your env file before the
+        first request lands.
       </blockquote>
       <p>
         Daloy provides four production safeguards for overloaded processes,
         security reporting, aborted requests, and invalid configuration. Each
         one is additive and opt-in (or, in the case of{" "}
-        <code>disconnectStatusCode</code>, only changes the status code
-        recorded for already-aborted requests):
+        <code>disconnectStatusCode</code>
+        {", "}only changes the status code recorded for already-aborted
+        requests):
       </p>
       <ul>
         <li>
-          <code>loadShedding()</code>: first-party event-loop pressure monitor
-          that returns <code>503 Service Unavailable</code> +{" "}
-          <code>Retry-After</code> when the process is overloaded.
+          <code>loadShedding()</code>
+          {": "}first-party event-loop pressure monitor that returns{" "}
+          <code>503 Service Unavailable</code> + <code>Retry-After</code> when
+          the process is overloaded.
         </li>
         <li>
-          <code>app.cspReportRoute()</code>: rate-limited POST receiver for CSP
-          violation reports, plus{" "}
+          <code>app.cspReportRoute()</code>
+          {": "}rate-limited POST receiver for CSP violation reports, plus{" "}
           <code>secureHeaders({"{ reportingEndpoints, reportTo }"})</code>{" "}
           wiring so a single line registers the endpoint and threads it back
           into the CSP header.
         </li>
         <li>
           <code>disconnectStatusCode: 499</code> default, client-aborted
-          requests record <code>499</code> instead of a <code>5xx</code>, so
-          dashboards separate scraper aborts from real server failures.
+          requests record <code>499</code> instead of a <code>5xx</code>
+          {", "}so dashboards separate scraper aborts from real server
+          failures.
         </li>
         <li>
-          <code>defineConfig({"{ schema, source }"})</code>: boot-time typed
-          configuration validation through a Standard Schema (Zod / Valibot /
-          ArkType / TypeBox), with aggregated error reporting.
+          <code>defineConfig({"{ schema, source }"})</code>
+          {": "}boot-time typed configuration validation through a Standard
+          Schema (Zod / Valibot / ArkType / TypeBox), with aggregated error
+          reporting.
         </li>
       </ul>
 
@@ -75,13 +79,14 @@ export default function Page() {
       </h2>
       <p>
         Drop-in middleware that samples event-loop delay, event-loop
-        utilization, heap, and RSS through <code>node:perf_hooks</code>. When
-        any configured threshold is breached, every incoming request is
-        short-circuited with a structured <code>503 problem+json</code> carrying{" "}
-        <code>Retry-After</code>. The sampler is <code>unref()</code>&apos;d so
-        it never pins the event loop, and the whole module is a silent no-op on
-        runtimes without <code>node:perf_hooks</code> (Cloudflare Workers,
-        Vercel, Fastly Compute) so the same line is portable.
+        utilization, heap, and RSS through <code>node:perf_hooks</code>
+        {". "}When any configured threshold is breached, every incoming request
+        is short-circuited with a structured <code>503 problem+json</code>{" "}
+        carrying <code>Retry-After</code>
+        {". "}The sampler is <code>unref()</code>&apos;d so it never pins the
+        event loop, and the whole module is a silent no-op on runtimes without{" "}
+        <code>node:perf_hooks</code> (Cloudflare Workers, Vercel, Fastly
+        Compute) so the same line is portable.
       </p>
 
       <FlowDiagram
@@ -144,11 +149,10 @@ app.use(
       </h2>
       <p>
         Registers a rate-limited <code>POST</code> receiver for browser CSP
-        violation reports. Defaults: path <code>/__csp-report</code>, per-IP
-        rate limit <code>60</code> requests / <code>60s</code>, body cap{" "}
-        <code>8 KiB</code> (hard-capped at <code>64 KiB</code>), accepted content
-        types{" "}
-        <code>application/csp-report</code> and{" "}
+        violation reports. Defaults: path <code>/__csp-report</code>
+        {", "}per-IP rate limit <code>60</code> requests / <code>60s</code>
+        {", "}body cap <code>8 KiB</code> (hard-capped at <code>64 KiB</code>),
+        accepted content types <code>application/csp-report</code> and{" "}
         <code>application/reports+json</code>. <code>application/json</code> is
         refused with <code>415</code>.
       </p>
@@ -186,14 +190,16 @@ app.cspReportRoute({
         language="ts"
       />
       <p>
-        Bad content-types receive <code>415</code>, oversize payloads{" "}
-        <code>413</code>, malformed JSON <code>400</code>, and rate-limited
-        callers <code>429</code>. The default logger sink omits the parsed
-        report body in production unless <code>logCspReportBodies: true</code>{" "}
-        is set explicitly; CSP reports include violated URLs, and URLs are where
-        PII likes to hide when nobody is looking. Sink errors are caught and
-        logged at <code>error</code> through the pluggable redacted logger
-        without breaking the <code>204</code> response.
+        Bad content-types receive <code>415</code>
+        {", "}oversize payloads <code>413</code>
+        {", "}malformed JSON <code>400</code>
+        {", "}and rate-limited callers <code>429</code>
+        {". "}The default logger sink omits the parsed report body in
+        production unless <code>logCspReportBodies: true</code> is set
+        explicitly; CSP reports include violated URLs, and URLs are where PII
+        likes to hide when nobody is looking. Sink errors are caught and logged
+        at <code>error</code> through the pluggable redacted logger without
+        breaking the <code>204</code> response.
       </p>
 
       <h2 id="3-disconnectstatuscode-499-default">
@@ -223,8 +229,9 @@ const legacy = new App({ disconnectStatusCode: 0 });
       />
       <p>
         Cannot be silenced to a <code>2xx</code> or escalated to a{" "}
-        <code>5xx</code>: the value is pinned to the <code>[400, 499]</code>{" "}
-        range (or <code>0</code> to keep whatever status the handler produced).
+        <code>5xx</code>
+        {": "}the value is pinned to the <code>[400, 499]</code> range (or{" "}
+        <code>0</code> to keep whatever status the handler produced).
       </p>
 
       <h2 id="4-defineconfig">

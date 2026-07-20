@@ -93,12 +93,14 @@ export default function Page() {
       <ol>
         <li>
           In the Okta admin console, go to{" "}
-          <strong>Security → API → Authorization Servers</strong>. Use the
-          built-in <code>default</code> server or create a new Custom
-          Authorization Server (requires the API Access Management license).
+          <strong>Security → API → Authorization Servers</strong>
+          {". "}Use the built-in <code>default</code> server or create a new
+          Custom Authorization Server (requires the API Access Management
+          license).
         </li>
         <li>
-          Add <strong>scopes</strong> (e.g. <code>items:read</code>,{" "}
+          Add <strong>scopes</strong> (e.g. <code>items:read</code>
+          {", "}
           <code>items:write</code>) and an <strong>access policy</strong> that
           allows your client app to request them.
         </li>
@@ -238,8 +240,8 @@ app.get(
         <code>@okta/jwt-verifier</code> is a <strong>Node-only</strong> library
         (it imports Node modules transitively). For Node, Bun, and AWS Lambda it
         works out of the box; for{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link>, use{" "}
-        <code>jose</code>&apos;s <code>createRemoteJWKSet</code> +{" "}
+        <Link href="/docs/adapters">Cloudflare Workers</Link>
+        {", "}use <code>jose</code>&apos;s <code>createRemoteJWKSet</code> +{" "}
         <code>jwtVerify</code> against the same issuer (the{" "}
         <Link href="/docs/auth/auth0">Auth0</Link> page shows that exact
         pattern, only the issuer URL changes).
@@ -251,16 +253,19 @@ app.get(
       <p>
         Only tokens from a <strong>Custom Authorization Server</strong> are
         meant to be verified by your app, those issuers look like{" "}
-        <code>https://&#123;domain&#125;/oauth2/&#123;asId&#125;</code>. The Org
-        Authorization Server (<code>https://&#123;domain&#125;</code>) issues
-        opaque tokens that only Okta should consume; validate those via the{" "}
-        <code>/introspect</code> endpoint instead.
+        <code>https://&#123;domain&#125;/oauth2/&#123;asId&#125;</code>
+        {". "}The Org Authorization Server (
+        <code>https://&#123;domain&#125;</code>) issues opaque tokens that only
+        Okta should consume; validate those via the <code>/introspect</code>{" "}
+        endpoint instead.
       </p>
 
       <p>
-        See also <Link href="/docs/auth/auth0">Auth0</Link>,{" "}
-        <Link href="/docs/auth/clerk">Clerk</Link>, and the{" "}
-        <Link href="/docs/auth">auth integrations overview</Link>.
+        See also <Link href="/docs/auth/auth0">Auth0</Link>
+        {", "}
+        <Link href="/docs/auth/clerk">Clerk</Link>
+        {", "}and the <Link href="/docs/auth">auth integrations overview</Link>
+        {"."}
       </p>
     </>
   );

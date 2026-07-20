@@ -219,9 +219,11 @@ scalarHtml({
 
       <h2 id="low-level-helpers">Low-level helpers</h2>
       <p>
-        The same options flow through the <code>scalarHtml()</code>,{" "}
-        <code>swaggerUiHtml()</code>, and <code>redocHtml()</code> helpers (from
-        the <code>@daloyjs/core/docs</code> subpath) if you render the docs page
+        The same options flow through the <code>scalarHtml()</code>
+        {", "}
+        <code>swaggerUiHtml()</code>
+        {", "}and <code>redocHtml()</code> helpers (from the{" "}
+        <code>@daloyjs/core/docs</code> subpath) if you render the docs page
         yourself. Multiple digests are supported: separate them with whitespace,
         and the strongest one the browser understands wins. The{" "}
         <code>crossOrigin</code> field defaults to{" "}

@@ -250,11 +250,15 @@ pnpm typeorm migration:run -d src/db/data-source.ts`}
       </ul>
 
       <p>
-        Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
-        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/mikro-orm">MikroORM</Link>,{" "}
-        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
-        <Link href="/docs/odm">ODM overview</Link> if you need document models.
+        Compare with <Link href="/docs/orm/prisma">Prisma</Link>
+        {", "}
+        <Link href="/docs/orm/drizzle">Drizzle</Link>
+        {", "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>
+        {", "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>
+        {", "}or the <Link href="/docs/odm">ODM overview</Link> if you need
+        document models.
       </p>
     </>
   );

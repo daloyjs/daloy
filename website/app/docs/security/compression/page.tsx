@@ -67,12 +67,15 @@ app.use(compression());
 
       <h2 id="what-it-compresses">What it compresses</h2>
       <p>
-        The middleware negotiates <code>br</code>, <code>gzip</code>, and{" "}
-        <code>deflate</code> from the request <code>Accept-Encoding</code>
+        The middleware negotiates <code>br</code>
+        {", "}<code>gzip</code>
+        {", "}and <code>deflate</code> from the request{" "}
+        <code>Accept-Encoding</code>
         header and the runtime codecs available through{" "}
-        <code>CompressionStream</code>. Runtime support is probed once and
-        cached. If the platform has no supported codec, the middleware becomes a
-        silent no-op instead of breaking older runtimes.
+        <code>CompressionStream</code>
+        {". "}Runtime support is probed once and cached. If the platform has no
+        supported codec, the middleware becomes a silent no-op instead of
+        breaking older runtimes.
       </p>
       <p>
         The default <code>minimumSize</code> is <code>1024</code> bytes. Small
@@ -86,12 +89,12 @@ app.use(compression());
         Compressing a response means buffering its bytes in memory first. To
         keep a single large (or unknown-and-growing) response from forcing
         unbounded heap growth, the middleware only compresses bodies up to{" "}
-        <code>maxCompressibleBytes</code>, which defaults to{" "}
-        <code>1_048_576</code> (1&nbsp;MiB). Anything larger is sent{" "}
-        <strong>uncompressed</strong> rather than buffered. When a response
-        declares a <code>Content-Length</code> above the cap it is skipped
-        immediately, without buffering a single byte; streamed responses are
-        read up to the cap and released untouched if they exceed it.
+        <code>maxCompressibleBytes</code>
+        {", "}which defaults to <code>1_048_576</code> (1&nbsp;MiB). Anything
+        larger is sent <strong>uncompressed</strong> rather than buffered. When
+        a response declares a <code>Content-Length</code> above the cap it is
+        skipped immediately, without buffering a single byte; streamed responses
+        are read up to the cap and released untouched if they exceed it.
       </p>
       <p>
         This is a deliberate trade-off: it spends bandwidth and latency on very
@@ -111,23 +114,24 @@ app.use(compression());
       />
       <p>
         <code>maxCompressibleBytes</code> must be a positive integer no larger
-        than <code>2**31 - 1</code>, and must be greater than or equal to{" "}
-        <code>minimumSize</code>; violating either is refused at construction.
+        than <code>2**31 - 1</code>
+        {", "}and must be greater than or equal to <code>minimumSize</code>;
+        violating either is refused at construction.
       </p>
 
       <h2 id="application-vs-cdn-or-proxy">
         Application vs. CDN or reverse proxy
       </h2>
       <p>
-        A response only needs to be compressed once. Choose the layer closest
-        to the client that reliably supports the encodings and content types
-        you need:
+        A response only needs to be compressed once. Choose the layer closest to
+        the client that reliably supports the encodings and content types you
+        need:
       </p>
       <ul>
         <li>
           <strong>No CDN or reverse-proxy compression:</strong> register{" "}
-          <code>compression()</code> globally. Daloy&apos;s skip rules still decide
-          whether each individual response should be compressed.
+          <code>compression()</code> globally. Daloy&apos;s skip rules still
+          decide whether each individual response should be compressed.
         </li>
         <li>
           <strong>CDN or reverse proxy already compresses responses:</strong>{" "}
@@ -138,9 +142,9 @@ app.use(compression());
       <p>
         Do not assume every hosting platform enables compression automatically.
         Send a request with <code>Accept-Encoding: br, gzip</code> and check the
-        response for <code>Content-Encoding</code>. If some traffic can bypass
-        the CDN or proxy, decide whether those direct origin responses also need
-        application-level compression.
+        response for <code>Content-Encoding</code>
+        {". "}If some traffic can bypass the CDN or proxy, decide whether those
+        direct origin responses also need application-level compression.
       </p>
 
       <h2 id="security-skip-rules">Security skip rules</h2>
@@ -186,8 +190,8 @@ app.use(compression());
           Skips requests with <code>Authorization</code>.
         </li>
         <li>
-          Skips requests carrying session, CSRF, XSRF, <code>__Host-</code>, or{" "}
-          <code>__Secure-</code> cookies.
+          Skips requests carrying session, CSRF, XSRF, <code>__Host-</code>
+          {", "}or <code>__Secure-</code> cookies.
         </li>
         <li>
           Skips any response that already has <code>Content-Encoding</code>.
@@ -215,11 +219,12 @@ app.use(compression());
       </p>
       <p>
         If a compressed response already has a strong ETag such as{" "}
-        <code>&quot;abc&quot;</code>, Daloy downgrades it to{" "}
-        <code>W/&quot;abc&quot;</code>. The ETag was computed over the upstream
-        body, not the compressed wire bytes, so a weak validator is the honest
-        one, RFC 9110 §8.8.1 requires strong validators to be byte-equal to the
-        representation on the wire, and the wire bytes change per encoding.
+        <code>&quot;abc&quot;</code>
+        {", "}Daloy downgrades it to <code>W/&quot;abc&quot;</code>
+        {". "}The ETag was computed over the upstream body, not the compressed
+        wire bytes, so a weak validator is the honest one, RFC 9110 §8.8.1
+        requires strong validators to be byte-equal to the representation on the
+        wire, and the wire bytes change per encoding.
       </p>
 
       <h2 id="interaction-with-etag">
@@ -250,21 +255,25 @@ app.use(compression());
       </ul>
       <p>
         Either way, conditional <code>GET</code>s using{" "}
-        <code>If-None-Match</code> stay correct across <code>br</code>,{" "}
-        <code>gzip</code>, <code>deflate</code>, and <code>identity</code>{" "}
-        clients because the <code>Vary: Accept-Encoding</code> header forces
-        per-encoding cache keys. You don&apos;t have to manage the weak/strong
-        downgrade yourself, even if you set <code>ETag</code> manually from a
-        route handler, <code>compression()</code> performs the downgrade for you
-        on the way out.
+        <code>If-None-Match</code> stay correct across <code>br</code>
+        {", "}
+        <code>gzip</code>
+        {", "}<code>deflate</code>
+        {", "}and <code>identity</code> clients because the{" "}
+        <code>Vary: Accept-Encoding</code> header forces per-encoding cache
+        keys. You don&apos;t have to manage the weak/strong downgrade yourself,
+        even if you set <code>ETag</code> manually from a route handler,{" "}
+        <code>compression()</code> performs the downgrade for you on the way
+        out.
       </p>
 
       <h2 id="no-compression-level-knob">No compression level knob</h2>
       <p>
         <code>CompressionStream</code> uses the runtime default. Daloy refuses
         any <code>compressLevel</code> option at construction, including{" "}
-        <code>6</code>, because exposing the knob invites expensive level-9
-        compression for tiny byte savings under load.
+        <code>6</code>
+        {", "}because exposing the knob invites expensive level-9 compression
+        for tiny byte savings under load.
       </p>
 
       <CodeBlock
@@ -280,10 +289,11 @@ app.use(compression());
       <h2 id="ordering">Ordering</h2>
       <p>
         Register <code>compression()</code> after middleware that may add{" "}
-        <code>Set-Cookie</code>, <code>Content-Encoding</code>, or{" "}
-        <code>ETag</code> headers. Daloy runs <code>onSend</code> hooks in
-        registration order, so the compression hook should see the final
-        response headers before it decides whether to encode the body.
+        <code>Set-Cookie</code>
+        {", "}<code>Content-Encoding</code>
+        {", "}or <code>ETag</code> headers. Daloy runs <code>onSend</code>{" "}
+        hooks in registration order, so the compression hook should see the
+        final response headers before it decides whether to encode the body.
       </p>
     </>
   );

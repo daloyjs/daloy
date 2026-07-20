@@ -61,39 +61,43 @@ export default function Page() {
       <h2 id="supported-providers">Supported providers</h2>
       <ul>
         <li>
-          <Link href="/docs/email/aws-ses">AWS SES (SESv2)</Link>: pay-as-you-go
-          SMTP/HTTP at AWS scale via <code>@aws-sdk/client-sesv2</code>. Best
-          fit when you already run on AWS or need the cheapest per-message
-          price.
+          <Link href="/docs/email/aws-ses">AWS SES (SESv2)</Link>
+          {": "}pay-as-you-go SMTP/HTTP at AWS scale via{" "}
+          <code>@aws-sdk/client-sesv2</code>
+          {". "}Best fit when you already run on AWS or need the cheapest
+          per-message price.
         </li>
         <li>
-          <Link href="/docs/email/sendgrid">SendGrid</Link>: Twilio&apos;s
-          established sender via <code>@sendgrid/mail</code>. Good for
-          high-volume marketing plus transactional.
+          <Link href="/docs/email/sendgrid">SendGrid</Link>
+          {": "}Twilio&apos;s established sender via{" "}
+          <code>@sendgrid/mail</code>
+          {". "}Good for high-volume marketing plus transactional.
         </li>
         <li>
-          <Link href="/docs/email/resend">Resend</Link>: modern, developer-first
-          API via the <code>resend</code> SDK. Great DX, React Email templating,
-          edge-friendly.
+          <Link href="/docs/email/resend">Resend</Link>
+          {": "}modern, developer-first API via the <code>resend</code> SDK.
+          Great DX, React Email templating, edge-friendly.
         </li>
         <li>
-          <Link href="/docs/email/postmark">Postmark</Link>: transactional-first
-          delivery via the <code>postmark</code> SDK. Known for very high inbox
-          placement.
+          <Link href="/docs/email/postmark">Postmark</Link>
+          {": "}transactional-first delivery via the <code>postmark</code> SDK.
+          Known for very high inbox placement.
         </li>
         <li>
-          <Link href="/docs/email/mailgun">Mailgun</Link>: Sinch-backed sender
-          via <code>mailgun.js</code>. Strong validation, routing, and EU/US
-          regions.
+          <Link href="/docs/email/mailgun">Mailgun</Link>
+          {": "}Sinch-backed sender via <code>mailgun.js</code>
+          {". "}Strong validation, routing, and EU/US regions.
         </li>
         <li>
-          <Link href="/docs/email/mailtrap">Mailtrap</Link>: sandbox +
-          production sending via the <code>mailtrap</code> SDK. Switch between a
-          test inbox and live sending with a single flag.
+          <Link href="/docs/email/mailtrap">Mailtrap</Link>
+          {": "}sandbox + production sending via the <code>mailtrap</code> SDK.
+          Switch between a test inbox and live sending with a single flag.
         </li>
       </ul>
 
-      <h2 id="runtime-compatibility-at-a-glance">Runtime compatibility at a glance</h2>
+      <h2 id="runtime-compatibility-at-a-glance">
+        Runtime compatibility at a glance
+      </h2>
       <p>
         Most provider SDKs are HTTPS-based and work on every runtime DaloyJS
         targets, but a few depend on Node-only APIs (filesystem, TCP, AWS
@@ -157,9 +161,10 @@ export default function Page() {
       <p>
         Every guide in this section follows the same three steps: install the
         SDK, register a DaloyJS plugin that puts the client on{" "}
-        <code>app.state</code>, then call it inside a validated route handler.
-        The plugin shape is intentionally tiny so you can swap providers without
-        touching business logic:
+        <code>app.state</code>
+        {", "}then call it inside a validated route handler. The plugin shape
+        is intentionally tiny so you can swap providers without touching
+        business logic:
       </p>
 
       <FlowDiagram
@@ -236,13 +241,15 @@ declare module "@daloyjs/core" {
         </li>
         <li>
           <strong>Validate inputs and reject CRLF in header fields.</strong>{" "}
-          Treat <code>to</code>, <code>subject</code>, display names,{" "}
-          <code>reply_to</code>, and any custom header value as untrusted. Use{" "}
+          Treat <code>to</code>
+          {", "}<code>subject</code>
+          {", "}display names, <code>reply_to</code>
+          {", "}and any custom header value as untrusted. Use{" "}
           <Link href="/docs/validation">DaloyJS validation</Link> with{" "}
-          <code>z.email()</code> for addresses and reject{" "}
-          <code>\r</code> / <code>\n</code> in every other header-bound string.
-          This is the classic SMTP / email header injection vector (Snyk&apos;s
-          2022 write-up{" "}
+          <code>z.email()</code> for addresses and reject <code>\r</code> /{" "}
+          <code>\n</code> in every other header-bound string. This is the
+          classic SMTP / email header injection vector (Snyk&apos;s 2022
+          write-up{" "}
           <a
             href="https://snyk.io/blog/avoiding-smtp-injection/"
             target="_blank"
@@ -279,11 +286,13 @@ export const SendEmailBody = z
         <li>
           <strong>Prefer HTTPS provider SDKs over raw SMTP libraries.</strong>{" "}
           The six providers documented here all speak HTTPS+JSON, so the
-          CRLF-in-SMTP-command class of bug (<code>smtp-client</code>,{" "}
-          <code>smtp-channel</code>, <code>aiosmtplib</code>{" "}
-          <code>source_address</code>) doesn&apos;t reach the wire. If you must
-          use a raw SMTP client, validate every field, including hostname and
-          source address, with the schema above.
+          CRLF-in-SMTP-command class of bug (<code>smtp-client</code>
+          {", "}
+          <code>smtp-channel</code>
+          {", "}<code>aiosmtplib</code> <code>source_address</code>)
+          doesn&apos;t reach the wire. If you must use a raw SMTP client,
+          validate every field, including hostname and source address, with the
+          schema above.
         </li>
         <li>
           <strong>Rate-limit the send route.</strong> Use the built-in{" "}

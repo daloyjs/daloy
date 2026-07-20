@@ -28,7 +28,8 @@ export default function Page() {
           Amazon Simple Email Service
         </a>{" "}
         (SES) is AWS&apos;s pay-as-you-go transactional and bulk email service.
-        This guide uses <strong>SESv2</strong>: the current API, through the{" "}
+        This guide uses <strong>SESv2</strong>
+        {": "}the current API, through the{" "}
         <a
           href="https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/sesv2/"
           target="_blank"
@@ -36,8 +37,8 @@ export default function Page() {
         >
           AWS SDK for JavaScript v3
         </a>
-        . Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2) or
-        need very low per-message cost.
+        {". "}Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2)
+        or need very low per-message cost.
       </p>
 
       <SequenceDiagram
@@ -90,12 +91,13 @@ export default function Page() {
           production). Add the SPF, DKIM, and DMARC records SES shows you.
         </li>
         <li>
-          New accounts start in the SES <strong>sandbox</strong>: you can only
-          send to verified addresses. Request production access from{" "}
-          <strong>Account dashboard</strong> before launching.
+          New accounts start in the SES <strong>sandbox</strong>
+          {": "}you can only send to verified addresses. Request production
+          access from <strong>Account dashboard</strong> before launching.
         </li>
         <li>
-          Create an IAM principal that can call <code>ses:SendEmail</code>.
+          Create an IAM principal that can call <code>ses:SendEmail</code>
+          {". "}
           Prefer an <strong>execution role</strong> attached to your Lambda or
           container, avoid long-lived access keys.
         </li>
@@ -221,13 +223,15 @@ app.post(
       </p>
       <ul>
         <li>
-          <code>Content.Simple</code>: subject + text/HTML body (used above).
-          Also supports an <code>Attachments</code> array with base64{" "}
-          <code>RawContent</code>, <code>FileName</code>, and{" "}
-          <code>ContentType</code>.
+          <code>Content.Simple</code>
+          {": "}subject + text/HTML body (used above). Also supports an{" "}
+          <code>Attachments</code> array with base64 <code>RawContent</code>
+          {", "}<code>FileName</code>
+          {", "}and <code>ContentType</code>.
         </li>
         <li>
-          <code>Content.Raw.Data</code>: a fully MIME-encoded message (use{" "}
+          <code>Content.Raw.Data</code>
+          {": "}a fully MIME-encoded message (use{" "}
           <a
             href="https://nodemailer.com/extras/mailcomposer/"
             target="_blank"
@@ -239,9 +243,9 @@ app.post(
           attachments).
         </li>
         <li>
-          <code>Content.Template</code>: render an SES template by{" "}
-          <code>TemplateName</code> with a JSON <code>TemplateData</code>{" "}
-          payload. Create templates ahead of time with{" "}
+          <code>Content.Template</code>
+          {": "}render an SES template by <code>TemplateName</code> with a JSON{" "}
+          <code>TemplateData</code> payload. Create templates ahead of time with{" "}
           <code>CreateEmailTemplateCommand</code>.
         </li>
       </ul>
@@ -249,29 +253,33 @@ app.post(
       <h2 id="runtimes">Runtimes</h2>
       <ul>
         <li>
-          <strong>Node / Bun / Deno / AWS Lambda</strong>: works out of the box.
-          On Lambda, omit access keys and let the execution role supply
-          credentials.
+          <strong>Node / Bun / Deno / AWS Lambda</strong>
+          {": "}works out of the box. On Lambda, omit access keys and let the
+          execution role supply credentials.
         </li>
         <li>
-          <strong>Cloudflare Workers</strong>: the SDK can run there
-          but uses a Web Crypto signer; pin <code>@aws-sdk/client-sesv2</code> ≥
-          3.700 and pass <code>credentials</code> explicitly (the default
-          provider chain expects Node APIs).
+          <strong>Cloudflare Workers</strong>
+          {": "}the SDK can run there but uses a Web Crypto signer; pin{" "}
+          <code>@aws-sdk/client-sesv2</code> ≥ 3.700 and pass{" "}
+          <code>credentials</code> explicitly (the default provider chain
+          expects Node APIs).
         </li>
       </ul>
 
       <h2 id="observability">Observability</h2>
       <p>
         SES publishes <strong>delivery, bounce, and complaint</strong> events to
-        SNS, EventBridge, or Kinesis Firehose via a <em>configuration set</em>.
+        SNS, EventBridge, or Kinesis Firehose via a <em>configuration set</em>
+        {". "}
         Add <code>ConfigurationSetName</code> to{" "}
         <code>SendEmailCommandInput</code> to opt in.
       </p>
 
       <p>
-        See also <Link href="/docs/email/resend">Resend</Link>,{" "}
-        <Link href="/docs/email/sendgrid">SendGrid</Link>, and the{" "}
+        See also <Link href="/docs/email/resend">Resend</Link>
+        {", "}
+        <Link href="/docs/email/sendgrid">SendGrid</Link>
+        {", "}and the{" "}
         <Link href="/docs/email">email integrations overview</Link>.
       </p>
     </>

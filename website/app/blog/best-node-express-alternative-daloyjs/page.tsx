@@ -172,13 +172,13 @@ export default function BlogPostPage() {
             Express app is &quot;essentially a series of middleware function
             calls.&quot; That model is structurally ignorant of your API. The
             pipeline does not know what a route accepts or returns.{" "}
-            <code>req.body</code> is <code>any</code>. There is no contract
-            anywhere in the architecture, so there is nothing to validate
-            against, generate docs from, derive types from, or build a client
-            out of. Every one of those becomes a hand-maintained artifact, and
-            hand-maintained artifacts drift. Not because your team is
-            undisciplined, but because the architecture gave the contract no
-            canonical home.
+            <code>req.body</code> is <code>any</code>
+            {". "}There is no contract anywhere in the architecture, so there
+            is nothing to validate against, generate docs from, derive types
+            from, or build a client out of. Every one of those becomes a
+            hand-maintained artifact, and hand-maintained artifacts drift. Not
+            because your team is undisciplined, but because the architecture
+            gave the contract no canonical home.
           </p>
           <p>
             Contract-first inverts that. DaloyJS makes one route definition the
@@ -190,12 +190,13 @@ export default function BlogPostPage() {
           <p>
             That one object is the validation rule, the type source, the OpenAPI
             3.1 operation, and the input to the generated typed client (
-            <code>pnpm gen</code>, wrapping Hey API). The dependency arrow is
-            reversed: the docs depend on the route, mechanically, with no human
-            in the loop to forget. Rename a field and the spec, the client
-            types, and the frontend call site all move or refuse to compile.
-            This is the FastAPI insight, finally brought to TypeScript without
-            the decorator-metaprogramming circus.
+            <code>pnpm gen</code>
+            {", "}wrapping Hey API). The dependency arrow is reversed: the docs
+            depend on the route, mechanically, with no human in the loop to
+            forget. Rename a field and the spec, the client types, and the
+            frontend call site all move or refuse to compile. This is the
+            FastAPI insight, finally brought to TypeScript without the
+            decorator-metaprogramming circus.
           </p>
           <p>
             Fastify approximates this with JSON Schema and type providers.
@@ -218,11 +219,11 @@ export default function BlogPostPage() {
           </p>
           <p>
             Now be honest about how much of that each Express alternative gives
-            you <em>before you configure anything</em>. Express: almost none.
-            Fastify: some, the rest via plugins you must know to add. Hono and
-            Elysia: most of it opt-in. DaloyJS makes it the default, and the
-            project&apos;s contributor rules explicitly treat{" "}
-            <em>weakening a guard to make a test pass</em> as a bug.
+            you <em>before you configure anything</em>
+            {". "}Express: almost none. Fastify: some, the rest via plugins you
+            must know to add. Hono and Elysia: most of it opt-in. DaloyJS makes
+            it the default, and the project&apos;s contributor rules explicitly
+            treat <em>weakening a guard to make a test pass</em> as a bug.
           </p>
           <p>
             Why this matters in 2026 specifically: a large and growing share of
@@ -299,7 +300,7 @@ export default function BlogPostPage() {
             <Link href="/docs/migrating/express">
               complete Express to DaloyJS migration guide
             </Link>
-            . This post is the why. That guide is the how.
+            {". "}This post is the why. That guide is the how.
           </p>
 
           <p>Devlin</p>

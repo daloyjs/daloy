@@ -97,11 +97,11 @@ installFastlyListener(app);`}
 
       <h2 id="fastly-toml">fastly.toml</h2>
       <p>
-        Fastly Compute requires <code>manifest_version = 3</code>. The{" "}
-        <code>[scripts]</code> <code>build</code> command has to{" "}
-        <strong>bundle TypeScript to a single JS file first</strong>, then run{" "}
-        <code>js-compute-runtime</code> against that bundle, the runtime
-        only accepts JavaScript input.
+        Fastly Compute requires <code>manifest_version = 3</code>
+        {". "}The <code>[scripts]</code> <code>build</code> command has to{" "}
+        <strong>bundle TypeScript to a single JS file first</strong>
+        {", "}then run <code>js-compute-runtime</code> against that bundle, the
+        runtime only accepts JavaScript input.
       </p>
       <CodeBlock
         language="toml"
@@ -122,8 +122,8 @@ build = "esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile
       />
       <p>
         Declared backends, KV stores, config stores, and secrets live under the
-        same <code>[local_server.*]</code> /<code> [setup.*]</code> tables,
-        see the{" "}
+        same <code>[local_server.*]</code> /<code>[setup.*]</code> tables, see
+        the{" "}
         <a
           href="https://www.fastly.com/documentation/reference/compute/fastly-toml/"
           target="_blank"
@@ -146,14 +146,15 @@ pnpm fastly compute publish    # deploy`}
         <li>
           No <code>node:*</code> modules. Avoid the Node session store, the
           Redis rate-limit store, and multipart helpers that depend on{" "}
-          <code>node:stream</code>: use the fetch-based alternatives.
+          <code>node:stream</code>
+          {": "}use the fetch-based alternatives.
         </li>
         <li>
           Every outbound HTTP call your REST API makes (to a database API, auth
           service, or third-party endpoint) must be declared as a{" "}
-          <strong>backend</strong> in <code>fastly.toml</code>. Arbitrary{" "}
-          <code>fetch(&quot;https://...&quot;)</code> calls fail at runtime
-          without one.
+          <strong>backend</strong> in <code>fastly.toml</code>
+          {". "}Arbitrary <code>fetch(&quot;https://...&quot;)</code> calls
+          fail at runtime without one.
         </li>
         <li>
           KV stores, config stores, and secrets are also declared in{" "}
@@ -169,8 +170,8 @@ pnpm fastly compute publish    # deploy`}
         <li>
           <Link href="/docs/adapters/cloudflare-workers">
             Cloudflare Workers
-          </Link>{" "},
-          similar constraints, modules format.
+          </Link>
+          {", "}similar constraints, modules format.
         </li>
       </ul>
     </>

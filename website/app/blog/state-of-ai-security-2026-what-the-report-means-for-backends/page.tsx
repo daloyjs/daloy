@@ -200,12 +200,12 @@ function BarChart({
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      BAR_TONE[bar.tone ?? "default"],
+                      BAR_TONE[bar.tone ?? "default"]
                     )}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <span className="w-14 shrink-0 text-right font-mono text-sm font-medium tabular-nums text-foreground">
+                <span className="w-14 shrink-0 text-right font-mono text-sm font-medium text-foreground tabular-nums">
                   {bar.value}
                   {unit}
                 </span>
@@ -224,11 +224,7 @@ function BarChart({
 }
 
 /** Three big headline numbers in a responsive grid. */
-function StatGrid({
-  stats,
-}: {
-  stats: { value: string; label: string }[];
-}) {
+function StatGrid({ stats }: { stats: { value: string; label: string }[] }) {
   return (
     <div className="not-prose my-8 grid gap-4 sm:grid-cols-3">
       {stats.map((stat) => (
@@ -304,9 +300,9 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            The setup: Sapio Research surveyed 450 full-time professionals across
-            Europe and the US, split evenly into 150 developers, 150 security
-            leaders (CISOs or equivalent), and 150 application security
+            The setup: Sapio Research surveyed 450 full-time professionals
+            across Europe and the US, split evenly into 150 developers, 150
+            security leaders (CISOs or equivalent), and 150 application security
             engineers. So this is not a vendor asking its own happy customers
             whether they are happy. It is a cross-section of the people writing
             code, the people reviewing it, and the people who get the 2 a.m.
@@ -338,15 +334,16 @@ export default function BlogPostPage() {
               >
                 DaloyJS
               </a>
-              , so weigh the framework parts accordingly. If you have not run
-              into it yet: DaloyJS is a new, contract-first TypeScript backend
-              framework. You define a route once and get request and response
-              validation, live OpenAPI docs, a fully typed client, and security
-              guardrails that are <strong>on by default</strong>, with{" "}
-              <strong>zero runtime dependencies</strong>, running on Node, Bun,
-              Deno, Cloudflare, and Vercel. That is the lens I read this report
-              through. I will keep the data and the framework clearly separated,
-              so you can take the numbers and ignore me if you like.
+              {", "}so weigh the framework parts accordingly. If you have not
+              run into it yet: DaloyJS is a new, contract-first TypeScript
+              backend framework. You define a route once and get request and
+              response validation, live OpenAPI docs, a fully typed client, and
+              security guardrails that are <strong>on by default</strong>
+              {", "}with <strong>zero runtime dependencies</strong>
+              {", "}running on Node, Bun, Deno, Cloudflare, and Vercel. That is
+              the lens I read this report through. I will keep the data and the
+              framework clearly separated, so you can take the numbers and
+              ignore me if you like.
             </p>
           </div>
 
@@ -354,17 +351,29 @@ export default function BlogPostPage() {
 
           <p>
             Start with adoption. AI coding tools now write{" "}
-            <strong>24% of production code</strong> on average, 21% in Europe and
-            29% in the US. That is not autocomplete anymore. That is a junior
-            developer who never sleeps, never asks questions, and confidently
-            commits whatever pattern was most common in its training data.
+            <strong>24% of production code</strong> on average, 21% in Europe
+            and 29% in the US. That is not autocomplete anymore. That is a
+            junior developer who never sleeps, never asks questions, and
+            confidently commits whatever pattern was most common in its training
+            data.
           </p>
 
           <StatGrid
             stats={[
-              { value: "69%", label: "of orgs have found a vulnerability introduced by AI-generated code" },
-              { value: "1 in 5", label: "suffered a serious incident directly tied to AI-generated code" },
-              { value: "24%", label: "of production code is now written by AI tools" },
+              {
+                value: "69%",
+                label:
+                  "of orgs have found a vulnerability introduced by AI-generated code",
+              },
+              {
+                value: "1 in 5",
+                label:
+                  "suffered a serious incident directly tied to AI-generated code",
+              },
+              {
+                value: "24%",
+                label: "of production code is now written by AI tools",
+              },
             ]}
           />
 
@@ -405,8 +414,8 @@ export default function BlogPostPage() {
             assignment, so <code>role</code> and <code>isVerified</code> are
             fair game. And the response serializes the entire user record,
             <code>passwordHash</code> included. The demo works. The tests, if
-            there are any, probably pass. This is what &ldquo;the code runs&rdquo;
-            buys you now.
+            there are any, probably pass. This is what &ldquo;the code
+            runs&rdquo; buys you now.
           </p>
 
           <h2>The optimism gap is doing a lot of heavy lifting</h2>
@@ -414,9 +423,9 @@ export default function BlogPostPage() {
           <p>
             Here is where the report gets a little funny. Despite all of the
             above, <strong>96%</strong> of organizations believe AI will one day
-            write near-perfect secure code. The average timeline they give is 5.1
-            years. I admire the confidence. I do not share it, and neither, on
-            closer reading, do they.
+            write near-perfect secure code. The average timeline they give is
+            5.1 years. I admire the confidence. I do not share it, and neither,
+            on closer reading, do they.
           </p>
 
           <BarChart
@@ -436,9 +445,9 @@ export default function BlogPostPage() {
             Only <strong>21%</strong> think AI will get there without a human in
             the loop. The other 79%, as one of the report&apos;s quoted CISOs
             puts it, are &ldquo;the smart ones.&rdquo; Almost a third expect AI
-            to reduce bugs but still need people for secure design, architecture,
-            and the business logic that no model understands because it lives in
-            your head and a Slack thread from 2024.
+            to reduce bugs but still need people for secure design,
+            architecture, and the business logic that no model understands
+            because it lives in your head and a Slack thread from 2024.
           </p>
 
           <p>
@@ -447,8 +456,9 @@ export default function BlogPostPage() {
             agentic AI pentest tool. But they want proof: 60% want side-by-side
             results against a manual pentest before they trust it. Translation:
             everyone believes in the future and nobody is willing to bet
-            production on it yet. That is the correct posture, and it is the same
-            posture you should have toward the AI writing your endpoints today.
+            production on it yet. That is the correct posture, and it is the
+            same posture you should have toward the AI writing your endpoints
+            today.
           </p>
 
           <h2>Tool sprawl is an incident generator, not an incident fix</h2>
@@ -457,9 +467,10 @@ export default function BlogPostPage() {
             This is the section I would tattoo on the wall of every security org
             that responds to a scare by signing another contract. The data is
             blunt: teams that suffered an incident in the past year ran{" "}
-            <strong>more</strong> security tools (5.1 on average) than teams that
-            did not (4.2). And it runs both directions. More tools correlated
-            with more incidents, even after accounting for company size.
+            <strong>more</strong> security tools (5.1 on average) than teams
+            that did not (4.2). And it runs both directions. More tools
+            correlated with more incidents, even after accounting for company
+            size.
           </p>
 
           <BarChart
@@ -488,35 +499,50 @@ export default function BlogPostPage() {
             title="Material incident rate: split vs integrated AppSec + CloudSec"
             unit="%"
             bars={[
-              { label: "Separate AppSec / CloudSec tools", value: 31, tone: "danger" },
-              { label: "Integrated into one platform", value: 20, tone: "success" },
+              {
+                label: "Separate AppSec / CloudSec tools",
+                value: 31,
+                tone: "danger",
+              },
+              {
+                label: "Integrated into one platform",
+                value: 20,
+                tone: "success",
+              },
             ]}
             caption="Teams that split application and cloud security were 50% more likely to report an incident (31% vs 20%)."
           />
 
           <p>
             Remediation gets slower too. With a small stack, teams average a
-            little over 3 days to fix a critical vulnerability. For teams juggling
-            five or more vendor tools, that stretches to almost 8 days. Every
-            extra tool adds alerts and integration overhead, and the path to
-            &ldquo;actually fixed&rdquo; gets longer, not shorter.
+            little over 3 days to fix a critical vulnerability. For teams
+            juggling five or more vendor tools, that stretches to almost 8 days.
+            Every extra tool adds alerts and integration overhead, and the path
+            to &ldquo;actually fixed&rdquo; gets longer, not shorter.
           </p>
 
           <h2>The $20M tax nobody puts on a slide deck</h2>
 
           <p>
             The report does the math I usually avoid because it depresses me.
-            Engineers spend around 6 hours a week triaging security alerts. Based
-            on US Bureau of Labor Statistics salary data, that is roughly{" "}
-            <strong>$20,000 per developer per year</strong> in lost productivity.
-            And <strong>72%</strong> of that time goes to false positives.
+            Engineers spend around 6 hours a week triaging security alerts.
+            Based on US Bureau of Labor Statistics salary data, that is roughly{" "}
+            <strong>$20,000 per developer per year</strong> in lost
+            productivity. And <strong>72%</strong> of that time goes to false
+            positives.
           </p>
 
           <StatGrid
             stats={[
-              { value: "15%", label: "of engineering time lost to triaging alerts" },
+              {
+                value: "15%",
+                label: "of engineering time lost to triaging alerts",
+              },
               { value: "72%", label: "of that time wasted on false positives" },
-              { value: "~$20M", label: "annual cost for a 1,000-developer org" },
+              {
+                value: "~$20M",
+                label: "annual cost for a 1,000-developer org",
+              },
             ]}
           />
 
@@ -530,10 +556,10 @@ export default function BlogPostPage() {
 
           <p>
             For a 50-person engineering org that is about $1M a year. For 250,
-            about $5M. The point is not the precision, it is the category:
-            this is a real, recurring cost that scales with headcount, and most
-            of it is spent reading alerts that were never real. That is the
-            invoice tool sprawl sends you every year.
+            about $5M. The point is not the precision, it is the category: this
+            is a real, recurring cost that scales with headcount, and most of it
+            is spent reading alerts that were never real. That is the invoice
+            tool sprawl sends you every year.
           </p>
 
           <h2>False positives make good engineers do dumb things</h2>
@@ -542,11 +568,11 @@ export default function BlogPostPage() {
             Here is the human cost, which is worse than the dollar cost.{" "}
             <strong>65%</strong> of respondents admit that false positives have
             pushed them into risky behavior: bypassing security checks,
-            dismissing findings, or delaying fixes. In the US that climbs to 73%.
-            I have been the engineer who clicked &ldquo;dismiss&rdquo; on a wall
-            of yellow because I had a release to ship and the last forty alerts
-            were noise. The forty-first might not have been. That is how this
-            goes.
+            dismissing findings, or delaying fixes. In the US that climbs to
+            73%. I have been the engineer who clicked &ldquo;dismiss&rdquo; on a
+            wall of yellow because I had a release to ship and the last forty
+            alerts were noise. The forty-first might not have been. That is how
+            this goes.
           </p>
 
           <FlowDiagram
@@ -618,9 +644,9 @@ export default function BlogPostPage() {
             teams more likely to dismiss alerts or delay fixes (73% vs 61%), and
             heavier US reliance on AI-generated code (29% vs 21%). The US is
             further ahead on AI adoption and visibility, which is also why it
-            reports more AI-related vulnerabilities. Being out in front means you
-            see more of the problem. Europe just shifted more of the catching to
-            the left, before code ships.
+            reports more AI-related vulnerabilities. Being out in front means
+            you see more of the problem. Europe just shifted more of the
+            catching to the left, before code ships.
           </p>
 
           <h2>What actually moves the needle: automated gates and DevEx</h2>
@@ -633,49 +659,63 @@ export default function BlogPostPage() {
 
           <p>
             First, <strong>automated gates beat manual review</strong>. 56% of
-            teams use automated gates (PR checks, CI/CD), 46% still lean on manual
-            reviews, and 42% mainly rely on developers spotting issues
+            teams use automated gates (PR checks, CI/CD), 46% still lean on
+            manual reviews, and 42% mainly rely on developers spotting issues
             themselves. The report is direct that human review does not scale to
-            the volume and speed AI produces, and that automation is the stronger
-            guardrail. Where automated gates are in place, teams ship faster with
-            fewer missed issues.
+            the volume and speed AI produces, and that automation is the
+            stronger guardrail. Where automated gates are in place, teams ship
+            faster with fewer missed issues.
           </p>
 
           <p>
             Second, and this is the one I think most people miss,{" "}
-            <strong>tools built for both developers and security teams have the
-            lowest incident rates</strong>. Tools that serve only one audience
-            leave the other side fighting the tooling instead of the threat.
+            <strong>
+              tools built for both developers and security teams have the lowest
+              incident rates
+            </strong>
+            {". "}Tools that serve only one audience leave the other side
+            fighting the tooling instead of the threat.
           </p>
 
           <BarChart
             title="Material incident rate by who the tools are built for"
             unit="%"
             bars={[
-              { label: "Tools for both devs + security", value: 22, tone: "success" },
+              {
+                label: "Tools for both devs + security",
+                value: 22,
+                tone: "success",
+              },
               { label: "Tools built mainly for developers", value: 30 },
-              { label: "Tools built mainly for security", value: 33, tone: "danger" },
+              {
+                label: "Tools built mainly for security",
+                value: 33,
+                tone: "danger",
+              },
             ]}
             caption="Teams whose tools serve both sides also fix critical vulnerabilities within 24 hours far more often (59%) than developer-first setups (14%)."
           />
 
           <p>
             Read those two findings together and you get a design spec:{" "}
-            <em>automated, in-pipeline guardrails that developers and security
-            people can both live with, and that produce signal instead of
-            noise.</em> That is not a product pitch. It is a way of building. It
-            happens to be the way I build APIs now, so let me show you what it
-            looks like in practice rather than wave my hands.
+            <em>
+              automated, in-pipeline guardrails that developers and security
+              people can both live with, and that produce signal instead of
+              noise.
+            </em>{" "}
+            That is not a product pitch. It is a way of building. It happens to
+            be the way I build APIs now, so let me show you what it looks like
+            in practice rather than wave my hands.
           </p>
 
           <h2>What this looks like in a backend you ship</h2>
 
           <p>
             Go back to that insecure AI-generated handler. The fix is not
-            &ldquo;review harder.&rdquo; Review is the thing that does not scale.
-            The fix is to make the contract enforceable so the unsafe version
-            cannot exist. Here is the same endpoint where the route definition is
-            the guardrail:
+            &ldquo;review harder.&rdquo; Review is the thing that does not
+            scale. The fix is to make the contract enforceable so the unsafe
+            version cannot exist. Here is the same endpoint where the route
+            definition is the guardrail:
           </p>
 
           <CodeBlock language="ts" code={DALOY_HANDLER} />
@@ -688,8 +728,8 @@ export default function BlogPostPage() {
             quarter. An AI assistant can generate this just as quickly as the
             unsafe version. The difference is that the safe shape is the default
             shape, so the AI&apos;s confident-but-wrong instinct has nowhere to
-            land. That is what &ldquo;secure by default&rdquo; actually means: not
-            a checklist you remember, a baseline you cannot forget.
+            land. That is what &ldquo;secure by default&rdquo; actually means:
+            not a checklist you remember, a baseline you cannot forget.
           </p>
 
           <p>
@@ -703,11 +743,11 @@ export default function BlogPostPage() {
 
           <p>
             Each of these is a binary pass or fail with a named offender. There
-            is no &ldquo;14 findings, severity medium, please assess&rdquo; queue
-            that trains you to click dismiss. That is the difference between a
-            gate and a scanner: a gate tells you exactly what to fix and refuses
-            to let it through, a scanner gives you homework. The report is full of
-            teams drowning in homework.
+            is no &ldquo;14 findings, severity medium, please assess&rdquo;
+            queue that trains you to click dismiss. That is the difference
+            between a gate and a scanner: a gate tells you exactly what to fix
+            and refuses to let it through, a scanner gives you homework. The
+            report is full of teams drowning in homework.
           </p>
 
           <p>
@@ -740,7 +780,8 @@ export default function BlogPostPage() {
               <tbody>
                 {[
                   {
-                    found: "AI code skips input validation and mass-assigns fields",
+                    found:
+                      "AI code skips input validation and mass-assigns fields",
                     daloy:
                       "The request schema runs before the handler. .strict() rejects unknown keys with a 400, so role or isAdmin cannot be smuggled into a write.",
                   },
@@ -750,17 +791,20 @@ export default function BlogPostPage() {
                       "Response schemas are validated on the way out. A field you did not declare (like passwordHash) physically cannot leave the endpoint.",
                   },
                   {
-                    found: "Tool sprawl: separate dashboards for devs and security",
+                    found:
+                      "Tool sprawl: separate dashboards for devs and security",
                     daloy:
                       "One OpenAPI 3.1 contract is the single source for both audiences, and the typed client is generated from it. Nothing to reconcile across tools.",
                   },
                   {
-                    found: "False-positive fatigue (65% bypass or dismiss checks)",
+                    found:
+                      "False-positive fatigue (65% bypass or dismiss checks)",
                     daloy:
                       "The verify:* gates are binary pass/fail with a named offender. No 'severity: medium, 14 findings' queue to learn to ignore.",
                   },
                   {
-                    found: "Manual review does not scale to AI speed and volume",
+                    found:
+                      "Manual review does not scale to AI speed and volume",
                     daloy:
                       "Gates run in CI and fail closed. Body limits, secureHeaders, and prod-mode error redaction hold without a reviewer remembering them.",
                   },
@@ -799,8 +843,8 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              <strong>Treat AI-generated code as untrusted input.</strong> Put an
-              enforced contract in front of every side effect, validate the
+              <strong>Treat AI-generated code as untrusted input.</strong> Put
+              an enforced contract in front of every side effect, validate the
               request before the handler runs, and validate the response on the
               way out. The model is a fast, confident junior. Supervise it with
               code, not with hope.
@@ -813,13 +857,13 @@ export default function BlogPostPage() {
             </li>
             <li>
               <strong>Move your checks into the pipeline.</strong> Automated
-              gates in CI beat manual review at AI speed and volume. A check that
-              fails the build is worth ten that file a ticket.
+              gates in CI beat manual review at AI speed and volume. A check
+              that fails the build is worth ten that file a ticket.
             </li>
             <li>
               <strong>Measure the false-positive tax.</strong> Run the cost
-              snippet above with your real numbers. Once &ldquo;noise&rdquo; has a
-              dollar figure, consolidating tools stops being a nice-to-have.
+              snippet above with your real numbers. Once &ldquo;noise&rdquo; has
+              a dollar figure, consolidating tools stops being a nice-to-have.
             </li>
           </ul>
 
@@ -828,11 +872,12 @@ export default function BlogPostPage() {
             framework, mine included, fixes most of this. Secure design, the
             architecture decisions, the business logic, and the judgment calls
             still need humans. That is literally what the report&apos;s 79%
-            believe, and they are right. What a framework can do is make the safe
-            path the default path so your scarce human attention goes to the hard
-            problems instead of the ones a schema should have caught. That is a
-            smaller claim than &ldquo;we fix AI security,&rdquo; and it is also
-            the exact category the report shows hurting teams the most.
+            believe, and they are right. What a framework can do is make the
+            safe path the default path so your scarce human attention goes to
+            the hard problems instead of the ones a schema should have caught.
+            That is a smaller claim than &ldquo;we fix AI security,&rdquo; and
+            it is also the exact category the report shows hurting teams the
+            most.
           </p>
 
           <div className="not-prose my-8 rounded-xl border bg-muted/30 p-6">
@@ -867,21 +912,21 @@ export default function BlogPostPage() {
               >
                 docs
               </a>
-              . It is genuinely new, so kick the tires and tell me where it
+              {". "}It is genuinely new, so kick the tires and tell me where it
               breaks. I would rather hear it from you than read about it in next
               year&apos;s report.
             </p>
           </div>
 
           <p>
-            AI is going to keep writing more of our code. The report is clear-eyed
-            that this is not slowing down. The teams that do well will not be the
-            ones with the most tools or the most faith in the model. They will be
-            the ones who made the secure thing the easy thing, automated the
-            boring checks, and protected their engineers&apos; attention like the
-            expensive resource it is. That is not a 2026 trend. That is just good
-            engineering, and it is nice to finally have 450 teams worth of data
-            saying so.
+            AI is going to keep writing more of our code. The report is
+            clear-eyed that this is not slowing down. The teams that do well
+            will not be the ones with the most tools or the most faith in the
+            model. They will be the ones who made the secure thing the easy
+            thing, automated the boring checks, and protected their
+            engineers&apos; attention like the expensive resource it is. That is
+            not a 2026 trend. That is just good engineering, and it is nice to
+            finally have 450 teams worth of data saying so.
           </p>
 
           <p className="text-sm text-muted-foreground">

@@ -28,8 +28,8 @@ export default function Page() {
         <strong>Edge Functions</strong> (Deno-based, global) and{" "}
         <strong>Functions v2</strong> (Node, fetch-style). Both speak the
         web-standard <code>Request → Response</code> contract, so the DaloyJS
-        adapter is the same helper in both places. Only the file location
-        and the optional config export change.
+        adapter is the same helper in both places. Only the file location and
+        the optional config export change.
       </p>
 
       <BranchDiagram
@@ -73,8 +73,9 @@ export default function Page() {
       <h2 id="netlify-edge-functions-deno">Netlify Edge Functions (Deno)</h2>
       <p>
         Edge Functions run on a Deno-based runtime. Use{" "}
-        <code>toWebHandler</code>, the same helper as the Vercel adapter,
-        because the input/output shape is identical.
+        <code>toWebHandler</code>
+        {", "}the same helper as the Vercel adapter, because the input/output
+        shape is identical.
       </p>
       <CodeBlock
         language="ts"
@@ -90,13 +91,14 @@ export const config: Config = {
 };`}
       />
 
-      <h2 id="netlify-functions-v2-node-fetch-style">Netlify Functions v2 (Node, fetch-style)</h2>
+      <h2 id="netlify-functions-v2-node-fetch-style">
+        Netlify Functions v2 (Node, fetch-style)
+      </h2>
       <p>
         Functions v2 is GA and is the recommended way to write Node functions on
         Netlify. The old v1 lambda-style handler (
-        <code>exports.handler = (event, context) =&gt; ...</code>) is legacy.
-        It still works for compatibility but you should write new code
-        in v2.
+        <code>exports.handler = (event, context) =&gt; ...</code>) is legacy. It
+        still works for compatibility but you should write new code in v2.
       </p>
       <CodeBlock
         language="ts"
@@ -155,8 +157,8 @@ pnpm netlify deploy --build --prod`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Edge Functions don&apos;t expose <code>node:*</code>, the same
-          caveat as Vercel and Cloudflare Workers.
+          Edge Functions don&apos;t expose <code>node:*</code>
+          {", "}the same caveat as Vercel and Cloudflare Workers.
         </li>
         <li>
           Functions v2 returns a <code>Response</code> directly. Don&apos;t use

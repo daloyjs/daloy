@@ -37,10 +37,28 @@ export default function Page() {
         title="One request through Sequelize"
         caption="Zod validates the request, the handler queries a Sequelize model off state.db, then the response schema checks the body on the way out (call toJSON() so the plain object matches the schema)."
         steps={[
-          { eyebrow: "client", label: "HTTP request", detail: "GET /users/:id" },
-          { eyebrow: "zod", label: "Validated input", detail: "params.id is a uuid", tone: "accent" },
-          { eyebrow: "sequelize", label: "Model query", detail: "state.db.User.findByPk(id)" },
-          { eyebrow: "response", label: "Typed body", detail: "user.toJSON() | 404", tone: "success" },
+          {
+            eyebrow: "client",
+            label: "HTTP request",
+            detail: "GET /users/:id",
+          },
+          {
+            eyebrow: "zod",
+            label: "Validated input",
+            detail: "params.id is a uuid",
+            tone: "accent",
+          },
+          {
+            eyebrow: "sequelize",
+            label: "Model query",
+            detail: "state.db.User.findByPk(id)",
+          },
+          {
+            eyebrow: "response",
+            label: "Typed body",
+            detail: "user.toJSON() | 404",
+            tone: "success",
+          },
         ]}
       />
 
@@ -119,11 +137,12 @@ export const sequelizePlugin = {
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <p>
         Add the <code>declare module</code> block to the same module that
-        exports <code>db</code>, not to a separate <code>.d.ts</code> file.
-        Declaration files are exempt from type-checking when{" "}
-        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
-        import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        exports <code>db</code>
+        {", "}not to a separate <code>.d.ts</code> file. Declaration files are
+        exempt from type-checking when <code>skipLibCheck</code> is on (the
+        scaffolded default), so a broken import inside a <code>.d.ts</code>{" "}
+        fails silently and <code>state.db</code> quietly degrades to{" "}
+        <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/plugin.ts (same module as the plugin above)
@@ -213,18 +232,22 @@ pnpm sequelize-cli db:migrate`}
       <p>
         Sequelize depends on Node-oriented drivers, so it is best on the Node.js
         adapter. For edge runtimes, prefer{" "}
-        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/prisma">Prisma with Driver Adapters</Link>, or{" "}
-        <Link href="/docs/orm/supabase">Supabase</Link>.
+        <Link href="/docs/orm/drizzle">Drizzle</Link>
+        {", "}
+        <Link href="/docs/orm/prisma">Prisma with Driver Adapters</Link>
+        {", "}or <Link href="/docs/orm/supabase">Supabase</Link>.
       </p>
 
       <p>
-        Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
-        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/typeorm">TypeORM</Link>,{" "}
-        <Link href="/docs/orm/mikro-orm">MikroORM</Link>, or the{" "}
-        <Link href="/docs/odm">ODM overview</Link> if you are working with
-        document databases.
+        Compare with <Link href="/docs/orm/prisma">Prisma</Link>
+        {", "}
+        <Link href="/docs/orm/drizzle">Drizzle</Link>
+        {", "}
+        <Link href="/docs/orm/typeorm">TypeORM</Link>
+        {", "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>
+        {", "}or the <Link href="/docs/odm">ODM overview</Link> if you are
+        working with document databases.
       </p>
     </>
   );

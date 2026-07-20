@@ -603,16 +603,20 @@ export default function BlogPostPage() {
             OpenAPI types, and the typed client all read from it.
           </StepCard>
           <StepCard step={3} title="Add the three routes">
-            <code>GET /books</code>, <code>GET /books/:id</code>,{" "}
-            <code>POST /books</code>. Throw, don&apos;t return.
+            <code>GET /books</code>
+            {", "}<code>GET /books/:id</code>
+            {", "}
+            <code>POST /books</code>
+            {". "}Throw, don&apos;t return.
           </StepCard>
           <StepCard step={4} title="Watch validation errors arrive for free">
             The framework auto-emits RFC 9457 problem+json with a{" "}
             <code>errors</code> array. You wrote zero lines for this.
           </StepCard>
           <StepCard step={5} title="Mount docs and serve">
-            <code>/docs</code>, <code>/openapi.json</code>, and{" "}
-            <code>/openapi.yaml</code> come up automatically when{" "}
+            <code>/docs</code>
+            {", "}<code>/openapi.json</code>
+            {", "}and <code>/openapi.yaml</code> come up automatically when{" "}
             <code>docs: true</code>.
           </StepCard>
           <StepCard step={6} title="Generate the typed client">
@@ -636,9 +640,9 @@ export default function BlogPostPage() {
           <p>
             <code>--minimal</code> strips the example bookstore routes from the
             template so we can rebuild them ourselves, pedagogy over
-            convenience. (If you skip <code>--minimal</code>, the template gives
-            you a working <code>/books/:id</code> route out of the box. Both
-            paths are fine.)
+            convenience. (If you skip <code>--minimal</code>
+            {", "}the template gives you a working <code>/books/:id</code>{" "}
+            route out of the box. Both paths are fine.)
           </p>
 
           <EditorFrame
@@ -657,9 +661,9 @@ export default function BlogPostPage() {
             important habit in DaloyJS:{" "}
             <strong>
               the Zod schema is the source of truth for everything
-            </strong>{" "}
-            , validation, response shape, OpenAPI, and the generated TypeScript
-            types. Write it once.
+            </strong>
+            {", "}validation, response shape, OpenAPI, and the generated
+            TypeScript types. Write it once.
           </p>
 
           <EditorFrame
@@ -681,8 +685,8 @@ export default function BlogPostPage() {
           <h2>Step 3: Register the routes</h2>
 
           <p>
-            Three little functions, each calling <code>app.route(...)</code>. We
-            keep them on a single registration function so{" "}
+            Three little functions, each calling <code>app.route(...)</code>
+            {". "}We keep them on a single registration function so{" "}
             <code>build-app.ts</code> stays tidy.
           </p>
 
@@ -705,7 +709,8 @@ export default function BlogPostPage() {
           <p>
             That <code>z.coerce.number()</code> is the small kindness that fixes
             the <em>every framework on earth</em> bug of handlers receiving{" "}
-            <code>&quot;20&quot;</code> when they asked for <code>20</code>.
+            <code>&quot;20&quot;</code> when they asked for <code>20</code>
+            {". "}
             Schema-first means schema-once.
           </p>
 
@@ -747,7 +752,7 @@ export default function BlogPostPage() {
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
               Problem Details post
             </Link>
-            . For now, the punchline is: every wrong-shaped request your API
+            {". "}For now, the punchline is: every wrong-shaped request your API
             will ever see returns the same document shape. The frontend code
             that handles it is one helper, total.
           </p>
@@ -772,11 +777,12 @@ export default function BlogPostPage() {
 
           <p>
             Run <code>pnpm dev</code> and visit{" "}
-            <code>http://localhost:3000/docs</code>: Scalar renders your three
-            routes, complete with the Zod-derived schemas, the <code>422</code>{" "}
-            problem+json response, and a working <em>Try it</em> panel. You did
-            not write a single line of documentation; you wrote a schema and
-            three handlers, and the docs fell out the other side.
+            <code>http://localhost:3000/docs</code>
+            {": "}Scalar renders your three routes, complete with the
+            Zod-derived schemas, the <code>422</code> problem+json response, and
+            a working <em>Try it</em> panel. You did not write a single line of
+            documentation; you wrote a schema and three handlers, and the docs
+            fell out the other side.
           </p>
 
           <h2>Step 6: Generate the typed client</h2>
@@ -801,8 +807,8 @@ export default function BlogPostPage() {
             Now switch hats and pretend you&apos;re the frontend team. The
             generated SDK gives you typed function calls for every route, typed
             bodies, typed responses, and, crucially, a typed <code>error</code>{" "}
-            field shaped like <code>ProblemDetails</code>. Autocomplete owns the
-            rest.
+            field shaped like <code>ProblemDetails</code>
+            {". "}Autocomplete owns the rest.
           </p>
 
           <EditorFrame
@@ -818,8 +824,9 @@ export default function BlogPostPage() {
           <p>
             <code>app.request(url, init?)</code> is the same App your production
             server wraps, but called in-process. No port, no
-            <code> fetch</code>, no &quot;wait for the dev server to be
-            ready&quot;. Faster than your test runner&apos;s spinner.
+            <code>fetch</code>
+            {", "}no &quot;wait for the dev server to be ready&quot;. Faster
+            than your test runner&apos;s spinner.
           </p>
 
           <EditorFrame
@@ -898,8 +905,8 @@ export default function BlogPostPage() {
 
           <p>
             That&apos;s the tour. If you send this to a new hire and they get
-            stuck on step <em>n</em>, file an issue, I&apos;ll fix the post, not
-            the framework.
+            stuck on step <em>n</em>
+            {", "}file an issue, I&apos;ll fix the post, not the framework.
           </p>
 
           <p>Devlin</p>

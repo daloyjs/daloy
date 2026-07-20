@@ -25,9 +25,10 @@ export default function Page() {
     <>
       <h1>Fly.io</h1>
       <p>
-        Fly runs your container as one or more <strong>Machines</strong>. Use the{" "}
-        <Link href="/docs/adapters/node">Node adapter</Link>, ship a Dockerfile, and let{" "}
-        <code>auto_stop_machines</code> scale you to zero when idle.
+        Fly runs your container as one or more <strong>Machines</strong>
+        {". "}Use the <Link href="/docs/adapters/node">Node adapter</Link>
+        {", "}ship a Dockerfile, and let <code>auto_stop_machines</code> scale
+        you to zero when idle.
       </p>
 
       <FlowDiagram
@@ -59,13 +60,20 @@ export default function Page() {
 
       <h2 id="when-to-choose-fly">When to choose Fly</h2>
       <ul>
-        <li>You want multiple regions cheaply, with anycast routing for free.</li>
-        <li>You want a single image that also runs on ECS or Kubernetes elsewhere.</li>
+        <li>
+          You want multiple regions cheaply, with anycast routing for free.
+        </li>
+        <li>
+          You want a single image that also runs on ECS or Kubernetes elsewhere.
+        </li>
         <li>You want raw TCP without a serverless workaround.</li>
       </ul>
 
       <h2 id="server-entrypoint">Server entrypoint</h2>
-      <p>Use the Node adapter and bind to the Fly-provided <code>PORT</code>:</p>
+      <p>
+        Use the Node adapter and bind to the Fly-provided <code>PORT</code>
+        {": "}
+      </p>
       <CodeBlock
         language="ts"
         code={`// src/server.ts
@@ -80,9 +88,10 @@ serve(app, {
 
       <h2 id="fly-toml">fly.toml</h2>
       <p>
-        <code>auto_stop_machines</code> takes a <strong>string</strong>{" "}
-        (<code>&quot;off&quot;</code>, <code>&quot;stop&quot;</code>, or{" "}
-        <code>&quot;suspend&quot;</code>) and not a boolean.
+        <code>auto_stop_machines</code> takes a <strong>string</strong> (
+        <code>&quot;off&quot;</code>
+        {", "}<code>&quot;stop&quot;</code>
+        {", "}or <code>&quot;suspend&quot;</code>) and not a boolean.
       </p>
       <CodeBlock
         language="toml"
@@ -147,13 +156,14 @@ fly deploy`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Set <code>shutdownTimeoutMs</code> on the Node adapter to a value smaller than Fly&apos;s
-          grace period so in-flight requests drain before the machine is killed.
+          Set <code>shutdownTimeoutMs</code> on the Node adapter to a value
+          smaller than Fly&apos;s grace period so in-flight requests drain
+          before the machine is killed.
         </li>
         <li>
           Make sure <code>/healthz</code> is cheap. The{" "}
-          <Link href="/docs/security/lifecycle-health">lifecycle plugin</Link> ships a ready-made
-          one.
+          <Link href="/docs/security/lifecycle-health">lifecycle plugin</Link>{" "}
+          ships a ready-made one.
         </li>
       </ul>
 

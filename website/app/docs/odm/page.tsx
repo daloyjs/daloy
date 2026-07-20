@@ -102,16 +102,20 @@ export function databasePlugin(db: Database) {
       <h2 id="pick-your-odm">Pick your ODM</h2>
       <ul>
         <li>
-          <Link href="/docs/odm/mongoose">Mongoose</Link>: mature schemas,
-          middleware, validation, and session support for MongoDB.
+          <Link href="/docs/odm/mongoose">Mongoose</Link>
+          {": "}mature schemas, middleware, validation, and session support for
+          MongoDB.
         </li>
         <li>
-          <Link href="/docs/odm/ottoman">Ottoman</Link>: schema and model layer
-          for Couchbase buckets, scopes, and collections.
+          <Link href="/docs/odm/ottoman">Ottoman</Link>
+          {": "}schema and model layer for Couchbase buckets, scopes, and
+          collections.
         </li>
       </ul>
 
-      <h2 id="runtime-compatibility-cheat-sheet">Runtime compatibility cheat sheet</h2>
+      <h2 id="runtime-compatibility-cheat-sheet">
+        Runtime compatibility cheat sheet
+      </h2>
       <table>
         <thead>
           <tr>
@@ -153,9 +157,8 @@ export function databasePlugin(db: Database) {
         regular <code>.ts</code> file the compiler always checks), not in a
         separate <code>.d.ts</code> file: declaration files are exempt from
         type-checking when <code>skipLibCheck</code> is on (the scaffolded
-        default), so a broken import inside a <code>.d.ts</code> fails
-        silently and <code>state.db</code> quietly degrades to{" "}
-        <code>any</code>.
+        default), so a broken import inside a <code>.d.ts</code> fails silently
+        and <code>state.db</code> quietly degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/mongoose.ts (the module that exports db)

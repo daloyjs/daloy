@@ -125,8 +125,8 @@ export default function BlogPostPage() {
             And here is the part that feels like a punchline: the single most
             important line in this changelog is that nothing changed. No new
             middleware. No new adapter. No clever helper I will write three blog
-            posts about. If you were on the final preview release yesterday,
-            the beta is the exact same code with a braver version label.
+            posts about. If you were on the final preview release yesterday, the
+            beta is the exact same code with a braver version label.
           </p>
 
           <h2>So why bother tagging it?</h2>
@@ -151,8 +151,8 @@ export default function BlogPostPage() {
           <h2>Wait, nothing changed, really?</h2>
 
           <p>
-            Really. But that does not mean nothing happened. The work that earned
-            a stable release happened across the entire public preview:
+            Really. But that does not mean nothing happened. The work that
+            earned a stable release happened across the entire public preview:
             the secure-by-default request path, the contract-first route that
             generates OpenAPI plus a typed client, the multi-runtime adapters,
             the supply-chain hardening, the SSRF guard, the auth and rate-limit
@@ -170,36 +170,39 @@ export default function BlogPostPage() {
           <h2>How to get it</h2>
 
           <p>
-            We published the beta to the <code>latest</code> tag
-            on npm and to JSR, in lockstep across{" "}
-            <code>@daloyjs/core</code>, <code>create-daloy</code>, and{" "}
-            <code>@daloyjs/daloy</code>. So a plain install gets you the beta with
-            no special incantation:
+            We published the beta to the <code>latest</code> tag on npm and to
+            JSR, in lockstep across <code>@daloyjs/core</code>
+            {", "}
+            <code>create-daloy</code>
+            {", "}and <code>@daloyjs/daloy</code>
+            {". "}So a plain install gets you the beta with no special
+            incantation:
           </p>
 
           <CodeBlock language="bash" code={INSTALL} />
 
           <p>
-            Quick aside, because I almost did the clever thing here. The instinct
-            with a beta is to hide it behind a <code>beta</code> dist-tag so that
-            a normal <code>npm i</code> keeps handing people the last stable
-            release. That is the responsible move when you have users who did not
-            ask to be guinea pigs. We do not have that problem yet. We have the
-            opposite problem: zero users to surprise, and a lot of people to win
-            over. Parking the beta in a corner where nobody trips over it would
-            have been the cautious choice and also the useless one. So it goes to{" "}
-            <code>latest</code>. Come trip over it.
+            Quick aside, because I almost did the clever thing here. The
+            instinct with a beta is to hide it behind a <code>beta</code>{" "}
+            dist-tag so that a normal <code>npm i</code> keeps handing people
+            the last stable release. That is the responsible move when you have
+            users who did not ask to be guinea pigs. We do not have that problem
+            yet. We have the opposite problem: zero users to surprise, and a lot
+            of people to win over. Parking the beta in a corner where nobody
+            trips over it would have been the cautious choice and also the
+            useless one. So it goes to <code>latest</code>
+            {". "}Come trip over it.
           </p>
 
           <h2>What I actually want from you</h2>
 
           <p>
             A beta is not a victory lap, it is a request for evidence. The best
-            possible outcome for the next few weeks is that someone builds a real
-            thing on the beta and finds the rough edge I missed. File the bug.
-            Tell me the API name that reads wrong. Show me the adapter that
-            behaves differently than the docs claim. That is the entire point
-            of shipping a beta instead of just tagging a stable release and
+            possible outcome for the next few weeks is that someone builds a
+            real thing on the beta and finds the rough edge I missed. File the
+            bug. Tell me the API name that reads wrong. Show me the adapter that
+            behaves differently than the docs claim. That is the entire point of
+            shipping a beta instead of just tagging a stable release and
             praying.
           </p>
 
@@ -216,10 +219,10 @@ export default function BlogPostPage() {
 
           <p>
             One small, slightly emotional note to close on. Tagging a beta, even
-            a boring one, is the part of a project
-            where it stops being a thing I am tinkering with and starts being a
-            thing other people are allowed to depend on. That is terrifying in
-            the good way. Thanks for being early.
+            a boring one, is the part of a project where it stops being a thing
+            I am tinkering with and starts being a thing other people are
+            allowed to depend on. That is terrifying in the good way. Thanks for
+            being early.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

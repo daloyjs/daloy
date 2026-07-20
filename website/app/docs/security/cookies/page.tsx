@@ -26,9 +26,9 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> a tamper-evident envelope service.
         Every department that mails something out uses the same envelopes with
-        the same seals, so nobody invents their own flimsy version, and the
-        mail room refuses to accept two identical envelopes claiming to be the
-        same letter.
+        the same seals, so nobody invents their own flimsy version, and the mail
+        room refuses to accept two identical envelopes claiming to be the same
+        letter.
       </blockquote>
       <p>
         DaloyJS exposes the same low-level cookie helpers that{" "}
@@ -91,10 +91,12 @@ app.post(
       />
       <p>
         The <code>__Host-</code> prefix is the strongest anti-cookie-tossing
-        choice: the browser only accepts it when it is <code>Secure</code>, has{" "}
-        <code>Path=/</code>, and carries no <code>Domain</code>. The helper
-        enforces exactly those constraints, so a misconfiguration throws instead
-        of silently shipping a cookie the browser drops.
+        choice: the browser only accepts it when it is <code>Secure</code>
+        {", "}has <code>Path=/</code>
+        {", "}and carries no <code>Domain</code>
+        {". "}The helper enforces exactly those constraints, so a
+        misconfiguration throws instead of silently shipping a cookie the
+        browser drops.
       </p>
 
       <h2 id="reading-a-cookie">Reading a cookie</h2>
@@ -102,10 +104,11 @@ app.post(
         <code>readRequestCookie(header, name)</code> parses a single cookie out
         of the request <code>Cookie</code> header, returning <code>null</code>{" "}
         when it is absent. It also includes a{" "}
-        <strong>cookie-tossing defense</strong>: if the same name appears more
-        than once, it returns <code>null</code> rather than guessing which copy
-        is authentic, forcing a re-authentication instead of letting an
-        attacker-injected shadow cookie win.
+        <strong>cookie-tossing defense</strong>
+        {": "}if the same name appears more than once, it returns{" "}
+        <code>null</code> rather than guessing which copy is authentic, forcing
+        a re-authentication instead of letting an attacker-injected shadow
+        cookie win.
       </p>
       <FlowDiagram
         title="Cookie-tossing defense on read"
@@ -154,9 +157,9 @@ app.get(
       <h2 id="clearing-a-cookie">Clearing a cookie</h2>
       <p>
         <code>serializeClearCookie(name, attributes?)</code> emits a{" "}
-        <code>Set-Cookie</code> value with <code>Max-Age=0</code>, preserving
-        the original attributes so intermediaries match the cookie they are
-        meant to delete.
+        <code>Set-Cookie</code> value with <code>Max-Age=0</code>
+        {", "}preserving the original attributes so intermediaries match the
+        cookie they are meant to delete.
       </p>
       <CodeBlock
         language="ts"
@@ -169,7 +172,9 @@ return {
 };`}
       />
 
-      <h2 id="validating-attributes-up-front">Validating attributes up front</h2>
+      <h2 id="validating-attributes-up-front">
+        Validating attributes up front
+      </h2>
       <p>
         <code>assertCookieAttributes()</code> throws on the first RFC 6265bis or
         secure-default violation. <code>serializeCookie()</code> and{" "}
@@ -200,13 +205,15 @@ assertCookieAttributes({
         down.
       </p>
 
-      <h2 id="when-to-use-the-built-ins-instead">When to use the built-ins instead</h2>
+      <h2 id="when-to-use-the-built-ins-instead">
+        When to use the built-ins instead
+      </h2>
       <p>
-        For authenticated sessions reach for <code>session()</code>, and for
-        CSRF protection reach for <code>csrf()</code>. They already route
-        through these helpers with hardened defaults. Use the raw helpers for
-        everything else: preferences, feature flags, consent banners, and other
-        small bits of per-client state.
+        For authenticated sessions reach for <code>session()</code>
+        {", "}and for CSRF protection reach for <code>csrf()</code>
+        {". "}They already route through these helpers with hardened defaults.
+        Use the raw helpers for everything else: preferences, feature flags,
+        consent banners, and other small bits of per-client state.
       </p>
     </>
   );

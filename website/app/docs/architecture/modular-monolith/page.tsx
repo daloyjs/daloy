@@ -33,8 +33,8 @@ export default function Page() {
       </p>
       <p>
         DaloyJS is a great fit for this style because{" "}
-        <Link href="/docs/plugins">plugins are encapsulated</Link>, every route
-        is a typed contract, and the same{" "}
+        <Link href="/docs/plugins">plugins are encapsulated</Link>
+        {", "}every route is a typed contract, and the same{" "}
         <Link href="/docs/openapi">OpenAPI document</Link> +{" "}
         <Link href="/docs/typed-client">typed client</Link> you ship to
         consumers also lets your own modules call each other safely. When you
@@ -45,20 +45,22 @@ export default function Page() {
       <h2 id="mental-model">Mental model</h2>
       <ul>
         <li>
-          <strong>Module</strong>: one bounded context (e.g.{" "}
-          <code>catalog</code>, <code>orders</code>, <code>identity</code>).
-          Owns its routes, domain logic, persistence, and tests. Exposes only a
-          public surface.
+          <strong>Module</strong>
+          {": "}one bounded context (e.g. <code>catalog</code>
+          {", "}<code>orders</code>
+          {", "}<code>identity</code>). Owns its routes, domain logic,
+          persistence, and tests. Exposes only a public surface.
         </li>
         <li>
-          <strong>Shared kernel</strong>: cross-cutting infrastructure (db
-          client, logger, http hooks, config). Knows nothing about any specific
-          module.
+          <strong>Shared kernel</strong>
+          {": "}cross-cutting infrastructure (db client, logger, http hooks,
+          config). Knows nothing about any specific module.
         </li>
         <li>
-          <strong>Platform</strong>: wiring code: which modules to register, in
-          what order, with which prefixes. Builds the <code>App</code> and
-          exposes the typed client.
+          <strong>Platform</strong>
+          {": "}wiring code: which modules to register, in what order, with
+          which prefixes. Builds the <code>App</code> and exposes the typed
+          client.
         </li>
       </ul>
 
@@ -142,8 +144,9 @@ generated/                   # Hey API typed client output
       <h2 id="module-dependency-rules">Module dependency rules</h2>
       <p>
         The whole point of a modular monolith is that the rules are{" "}
-        <em>enforceable</em>, not just documented. There are only three rules
-        and a linter can keep you honest.
+        <em>enforceable</em>
+        {", "}not just documented. There are only three rules and a linter can
+        keep you honest.
       </p>
       <LayerStack
         title="Dependency direction"
@@ -285,9 +288,9 @@ export const app = base.registerRoutes([
         Public contracts: how modules talk
       </h2>
       <p>
-        Every module has a <code>contracts/public.ts</code>. It is the only file
-        other modules are allowed to import. Treat it like a public package
-        boundary inside your monorepo.
+        Every module has a <code>contracts/public.ts</code>
+        {". "}It is the only file other modules are allowed to import. Treat it
+        like a public package boundary inside your monorepo.
       </p>
       <CodeBlock
         code={`// src/modules/catalog/contracts/public.ts
@@ -316,7 +319,8 @@ export type Book = z.infer<typeof Book>;`}
       </h2>
       <p>
         When <code>orders</code> needs a book, it does <em>not</em> import{" "}
-        <code>BookRepo</code>. It calls catalog through the same{" "}
+        <code>BookRepo</code>
+        {". "}It calls catalog through the same{" "}
         <Link href="/docs/typed-client">typed client</Link> consumers use,
         pointed at the in-process app instead of HTTP.
       </p>
@@ -485,8 +489,8 @@ tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
             Putting domain logic in <code>shared/</code>.
           </strong>{" "}
           <code>shared/</code> is for plumbing only. If you need a helper that
-          knows about <code>Book</code>, it belongs inside{" "}
-          <code>modules/catalog</code>.
+          knows about <code>Book</code>
+          {", "}it belongs inside <code>modules/catalog</code>.
         </li>
         <li>
           <strong>
@@ -510,20 +514,20 @@ tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
       <h2 id="where-to-next">Where to next</h2>
       <ul>
         <li>
-          <Link href="/docs/plugins">Plugins & encapsulation</Link>: the
-          primitive every module is built on.
+          <Link href="/docs/plugins">Plugins & encapsulation</Link>
+          {": "}the primitive every module is built on.
         </li>
         <li>
-          <Link href="/docs/openapi">OpenAPI generation</Link>: the contract
-          that powers the typed client and contract tests.
+          <Link href="/docs/openapi">OpenAPI generation</Link>
+          {": "}the contract that powers the typed client and contract tests.
         </li>
         <li>
-          <Link href="/docs/typed-client">Typed clients</Link>: how cross-module
-          calls stay decoupled.
+          <Link href="/docs/typed-client">Typed clients</Link>
+          {": "}how cross-module calls stay decoupled.
         </li>
         <li>
-          <Link href="/docs/testing">Testing</Link>: pairing module-level tests
-          with contract-level guarantees.
+          <Link href="/docs/testing">Testing</Link>
+          {": "}pairing module-level tests with contract-level guarantees.
         </li>
       </ul>
     </>

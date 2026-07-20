@@ -210,16 +210,20 @@ export default function Page() {
         </li>
         <li>
           That maps directly to DaloyJS&apos;s own guardrails:{" "}
-          <code>verify:known-dep-names</code>,{" "}
-          <code>verify:no-lifecycle-scripts</code>,{" "}
-          <code>verify:no-registry-exfiltration</code>, hardened lockfile
-          checks, and the 24h release-age cooldown.
+          <code>verify:known-dep-names</code>
+          {", "}
+          <code>verify:no-lifecycle-scripts</code>
+          {", "}
+          <code>verify:no-registry-exfiltration</code>
+          {", "}hardened lockfile checks, and the 24h release-age cooldown.
         </li>
         <li>
           Socket Firewall Free currently supports JavaScript/TypeScript package
-          managers including <code>npm</code>, <code>yarn</code>, and{" "}
-          <code>pnpm</code>. It sits in front of installs and blocks confirmed
-          malware before the package reaches your filesystem.
+          managers including <code>npm</code>
+          {", "}<code>yarn</code>
+          {", "}and <code>pnpm</code>
+          {". "}It sits in front of installs and blocks confirmed malware
+          before the package reaches your filesystem.
         </li>
       </ul>
 
@@ -231,8 +235,10 @@ export default function Page() {
         </li>
         <li>
           Use Socket Firewall before local or CI installs that add or refresh
-          dependencies, especially <code>pnpm add</code>,{" "}
-          <code>pnpm install</code>, and template validation jobs.
+          dependencies, especially <code>pnpm add</code>
+          {", "}
+          <code>pnpm install</code>
+          {", "}and template validation jobs.
         </li>
         <li>
           Use the Socket CLI when you are not on GitHub, when you want a
@@ -291,13 +297,15 @@ export default function Page() {
           >
             <code>socket scan create --report</code>
           </a>
-          .
+          {"."}
         </li>
       </ol>
       <CodeBlock language="bash" code={socketFirewallExample} />
       <CodeBlock language="bash" code={socketCliExample} />
 
-      <h2 id="snyk-cve-sast-container-and-iac-scanning">Snyk: CVE, SAST, container, and IaC scanning</h2>
+      <h2 id="snyk-cve-sast-container-and-iac-scanning">
+        Snyk: CVE, SAST, container, and IaC scanning
+      </h2>
       <p>
         <a href="https://snyk.io/" target="_blank" rel="noreferrer noopener">
           Snyk
@@ -312,7 +320,7 @@ export default function Page() {
         >
           Snyk Open Source
         </a>
-        ,{" "}
+        {", "}
         <a
           href="https://docs.snyk.io/scan-with-snyk/snyk-code"
           target="_blank"
@@ -320,7 +328,7 @@ export default function Page() {
         >
           Snyk Code
         </a>
-        ,{" "}
+        {", "}
         <a
           href="https://docs.snyk.io/scan-with-snyk/snyk-container"
           target="_blank"
@@ -328,7 +336,7 @@ export default function Page() {
         >
           Snyk Container
         </a>
-        ,{" "}
+        {", "}
         <a
           href="https://docs.snyk.io/scan-with-snyk/snyk-iac"
           target="_blank"
@@ -336,7 +344,7 @@ export default function Page() {
         >
           Snyk IaC
         </a>
-        , and{" "}
+        {", "}and{" "}
         <a
           href="https://snyk.io/product/dast-api-web/"
           target="_blank"
@@ -344,7 +352,7 @@ export default function Page() {
         >
           Snyk API &amp; Web
         </a>
-        .
+        {"."}
       </p>
 
       <h3 id="why-use-it-2">Why use it</h3>
@@ -396,8 +404,8 @@ export default function Page() {
           >
             getting started guide
           </a>
-          , create or join the correct organization, and confirm your region and
-          token policy.
+          {", "}create or join the correct organization, and confirm your
+          region and token policy.
         </li>
         <li>
           Connect the{" "}
@@ -432,7 +440,9 @@ export default function Page() {
       </ol>
       <CodeBlock language="bash" code={snykCliExample} />
 
-      <h2 id="aikido-consolidated-appsec-workflow">Aikido: consolidated AppSec workflow</h2>
+      <h2 id="aikido-consolidated-appsec-workflow">
+        Aikido: consolidated AppSec workflow
+      </h2>
       <p>
         <a
           href="https://www.aikido.dev/"
@@ -458,7 +468,7 @@ export default function Page() {
         >
           PR and release gating
         </a>
-        ;{" "}
+        {"; "}
         <a
           href="https://help.aikido.dev/container-image-scanning/container-image-scanning-overview"
           target="_blank"
@@ -466,7 +476,7 @@ export default function Page() {
         >
           container image scanning
         </a>
-        ;{" "}
+        {"; "}
         <a
           href="https://help.aikido.dev/dast-surface-monitoring/dast-surface-monitoring-overview"
           target="_blank"
@@ -474,7 +484,7 @@ export default function Page() {
         >
           DAST / surface monitoring
         </a>
-        ; cloud scanning; AutoFix; and{" "}
+        {"; "}cloud scanning; AutoFix; and{" "}
         <a
           href="https://help.aikido.dev/zen-firewall/getting-started-with-zen-firewall"
           target="_blank"
@@ -538,8 +548,8 @@ export default function Page() {
           >
             Connect Your Source Code
           </a>
-          . Aikido supports GitHub, GitHub Enterprise, GitLab, Bitbucket, and
-          Azure DevOps paths in the current docs.
+          {". "}Aikido supports GitHub, GitHub Enterprise, GitLab, Bitbucket,
+          and Azure DevOps paths in the current docs.
         </li>
         <li>
           Enable PR gating from{" "}
@@ -550,7 +560,7 @@ export default function Page() {
           >
             PR Gating Overview
           </a>
-          . Start with visibility mode or a high severity threshold, then
+          {". "}Start with visibility mode or a high severity threshold, then
           require the check after triage rules are clear.
         </li>
         <li>
@@ -562,8 +572,8 @@ export default function Page() {
           >
             Local Code Scanning
           </a>
-          . Aikido recommends standard integrations for most teams because they
-          provide faster results and better coverage.
+          {". "}Aikido recommends standard integrations for most teams because
+          they provide faster results and better coverage.
         </li>
         <li>
           If you ship Docker images, connect the registry or run local image
@@ -634,7 +644,8 @@ export default function Page() {
       <h2 id="recommended-rollout">Recommended rollout</h2>
       <ol>
         <li>
-          Keep the DaloyJS defaults first: <code>ignore-scripts=true</code>,
+          Keep the DaloyJS defaults first: <code>ignore-scripts=true</code>
+          {", "}
           release-age cooldown, source-verified lockfiles, and the
           project&apos;s <code>verify:*</code> gates.
         </li>
@@ -666,17 +677,19 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          Keep <code>ignore-scripts=true</code>. Even excellent scanners can
-          miss day-zero payloads before a signal exists.
+          Keep <code>ignore-scripts=true</code>
+          {". "}Even excellent scanners can miss day-zero payloads before a
+          signal exists.
         </li>
         <li>
           Keep the 24h release-age cooldown. It gives the registry, vendors, and
           maintainers time to detect and yank bad versions.
         </li>
         <li>
-          Keep <code>fetchGuard</code>, schema <code>.strict()</code>, JWT
-          algorithm allowlists, timing-safe secret comparisons, secure headers,
-          rate limits, body limits, and request timeouts.
+          Keep <code>fetchGuard</code>
+          {", "}schema <code>.strict()</code>
+          {", "}JWT algorithm allowlists, timing-safe secret comparisons,
+          secure headers, rate limits, body limits, and request timeouts.
         </li>
         <li>
           Keep reviewing lockfile diffs. A scanner comment is a signal; it is
@@ -696,7 +709,7 @@ export default function Page() {
         >
           Socket pricing
         </a>
-        ,{" "}
+        {", "}
         <a
           href="https://snyk.io/plans/"
           target="_blank"
@@ -704,7 +717,7 @@ export default function Page() {
         >
           Snyk plans
         </a>
-        , and{" "}
+        {", "}and{" "}
         <a
           href="https://www.aikido.dev/pricing"
           target="_blank"
@@ -712,8 +725,8 @@ export default function Page() {
         >
           Aikido pricing
         </a>
-        . If a vendor renames a product module, update the wording here and keep
-        the old name out unless it is still present in the current docs.
+        {". "}If a vendor renames a product module, update the wording here and
+        keep the old name out unless it is still present in the current docs.
       </p>
 
       <h2 id="disclosure">Disclosure</h2>

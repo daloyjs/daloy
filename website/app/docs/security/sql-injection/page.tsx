@@ -47,12 +47,13 @@ export default function Page() {
         report shows it still accounts for ~7&ndash;10% of vulnerabilities found
         across open- and closed-source code. Daloy is an HTTP framework, not a
         database driver, so it can&apos;t parameterize your queries for you, but
-        it does ship the layers <em>before</em> the database that
-        make SQLi materially harder to introduce, and the patterns below close
-        the rest.
+        it does ship the layers <em>before</em> the database that make SQLi
+        materially harder to introduce, and the patterns below close the rest.
       </p>
 
-      <h2 id="what-daloy-already-does-for-you">What Daloy already does for you</h2>
+      <h2 id="what-daloy-already-does-for-you">
+        What Daloy already does for you
+      </h2>
       <p>
         These are core-enforced and require no opt-in. They don&apos;t replace
         parameterized queries, but they shrink the attack surface that reaches
@@ -69,20 +70,23 @@ export default function Page() {
           <tr>
             <td>Strict per-route schemas (Zod)</td>
             <td>
-              Routes declare <code>params</code>, <code>query</code>, and{" "}
-              <code>body</code> shapes. Inputs that don&apos;t match the schema
-              are rejected with <strong>422 problem+json</strong> before your
-              handler runs, so you almost never have to coerce raw strings into
-              query parameters yourself.
+              Routes declare <code>params</code>
+              {", "}<code>query</code>
+              {", "}and <code>body</code> shapes. Inputs that don&apos;t match
+              the schema are rejected with <strong>422 problem+json</strong>{" "}
+              before your handler runs, so you almost never have to coerce raw
+              strings into query parameters yourself.
             </td>
           </tr>
           <tr>
             <td>JSON parser hardening</td>
             <td>
-              <code>safeJsonParse</code> strips <code>__proto__</code>,{" "}
-              <code>constructor</code>, and <code>prototype</code> keys.
-              Prevents prototype pollution that NoSQL/SQL adapters can turn into
-              operator injection.
+              <code>safeJsonParse</code> strips <code>__proto__</code>
+              {", "}
+              <code>constructor</code>
+              {", "}and <code>prototype</code> keys. Prevents prototype
+              pollution that NoSQL/SQL adapters can turn into operator
+              injection.
             </td>
           </tr>
           <tr>
@@ -96,9 +100,9 @@ export default function Page() {
             <td>Structured logging redaction</td>
             <td>
               <code>redactRecord()</code> scrubs known credential-shaped fields
-              before they hit logs, helpful when post-incident triage
-              needs to share logs without re-leaking the very secrets the
-              injection grabbed.
+              before they hit logs, helpful when post-incident triage needs to
+              share logs without re-leaking the very secrets the injection
+              grabbed.
             </td>
           </tr>
           <tr>
@@ -113,13 +117,15 @@ export default function Page() {
         </tbody>
       </table>
       <p>
-        None of that <em>parameterizes your query</em>. That is on you and your
-        ORM. The next sections show what &ldquo;safe&rdquo; looks like for the
-        ORMs Daloy documents, and what the unsafe siblings look like so you can
-        grep for them in code review.
+        None of that <em>parameterizes your query</em>
+        {". "}That is on you and your ORM. The next sections show what
+        &ldquo;safe&rdquo; looks like for the ORMs Daloy documents, and what the
+        unsafe siblings look like so you can grep for them in code review.
       </p>
 
-      <h2 id="the-shape-of-a-safe-daloy-route">The shape of a safe Daloy route</h2>
+      <h2 id="the-shape-of-a-safe-daloy-route">
+        The shape of a safe Daloy route
+      </h2>
       <p>
         Validated input + parameterized query is the whole pattern.
         Aikido&apos;s report calls it out as defense #1 and #2; Daloy gives you
@@ -131,7 +137,7 @@ export default function Page() {
           {
             eyebrow: "ingress",
             label: "Request value",
-            detail: "id = \"foo' OR 1=1 --\"",
+            detail: 'id = "foo\' OR 1=1 --"',
           },
           {
             eyebrow: "spliced",
@@ -178,9 +184,10 @@ app.get(
       />
       <p>
         Notice what is <em>not</em> here: no template string with{" "}
-        <code>{"${params.id}"}</code>, no manual quoting, no &ldquo;just this
-        once we&apos;ll trust the input.&rdquo; If you find yourself writing
-        those in a Daloy handler, treat it as a bug.
+        <code>{"${params.id}"}</code>
+        {", "}no manual quoting, no &ldquo;just this once we&apos;ll trust the
+        input.&rdquo; If you find yourself writing those in a Daloy handler,
+        treat it as a bug.
       </p>
 
       <h2 id="safe-vs-unsafe-per-orm">Safe vs. unsafe per ORM</h2>
@@ -252,23 +259,33 @@ await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
         <code>where</code> is interpreted by Prisma itself. If a field is
         annotated as <code>string</code> in TypeScript but the runtime value is
         an object like <code>{`{ "not": "x" }`}</code> or{" "}
-        <code>{`{ "contains": "" }`}</code>, Prisma treats it as a filter
-        operator. An attacker who can submit raw JSON to a login or
-        password-reset endpoint can use that to bypass equality checks. The same
-        idea bites Mongoose, TypeORM <code>FindOptions</code>, and any builder
-        that accepts &ldquo;value or operator&rdquo; in the same slot.
+        <code>{`{ "contains": "" }`}</code>
+        {", "}Prisma treats it as a filter operator. An attacker who can submit
+        raw JSON to a login or password-reset endpoint can use that to bypass
+        equality checks. The same idea bites Mongoose, TypeORM{" "}
+        <code>FindOptions</code>
+        {", "}and any builder that accepts &ldquo;value or operator&rdquo; in
+        the same slot.
       </p>
       <p>
-        Daloy&apos;s contract-first routes neutralize this <em>by default</em>:
-        every <code>body</code>, <code>query</code>, and <code>params</code>{" "}
-        slot is validated against a Zod schema before your handler runs, and
-        Zod&apos;s primitive checks (<code>z.string()</code>,{" "}
-        <code>z.email()</code>, <code>z.number()</code>, &hellip;)
-        reject nested objects with a <strong>422 problem+json</strong>. The
-        vulnerability shows up when developers route around that, usually with{" "}
-        <code>z.any()</code>, <code>z.unknown()</code>, a pass-through{" "}
-        <code>z.record()</code>, or by reading <code>await req.json()</code>{" "}
-        directly and spreading it into <code>where</code>.
+        Daloy&apos;s contract-first routes neutralize this <em>by default</em>
+        {": "}
+        every <code>body</code>
+        {", "}<code>query</code>
+        {", "}and <code>params</code> slot is validated against a Zod schema
+        before your handler runs, and Zod&apos;s primitive checks (
+        <code>z.string()</code>
+        {", "}
+        <code>z.email()</code>
+        {", "}<code>z.number()</code>
+        {", "} &hellip;) reject nested objects with a{" "}
+        <strong>422 problem+json</strong>
+        {". "}The vulnerability shows up when developers route around that,
+        usually with <code>z.any()</code>
+        {", "}<code>z.unknown()</code>
+        {", "}a pass-through <code>z.record()</code>
+        {", "}or by reading <code>await req.json()</code> directly and
+        spreading it into <code>where</code>.
       </p>
       <CodeBlock
         code={`// DANGEROUS, \`email\` is typed as string but Zod accepts anything.
@@ -318,15 +335,18 @@ await state.db.user.findMany({ where });`}
       <p>Review-time rules:</p>
       <ul>
         <li>
-          Never use <code>z.any()</code>, <code>z.unknown()</code>, or
-          unconstrained <code>z.record()</code> for a field that is then read
-          out of a Prisma / Mongoose / TypeORM <code>where</code> clause.
-          Constrain each property with a primitive schema.
+          Never use <code>z.any()</code>
+          {", "}<code>z.unknown()</code>
+          {", "}or unconstrained <code>z.record()</code> for a field that is
+          then read out of a Prisma / Mongoose / TypeORM <code>where</code>{" "}
+          clause. Constrain each property with a primitive schema.
         </li>
         <li>
           Never spread <code>...body</code> or <code>...query</code> into{" "}
-          <code>where</code>, <code>data</code>, or <code>orderBy</code>. Map
-          fields one at a time after validation.
+          <code>where</code>
+          {", "}<code>data</code>
+          {", "}or <code>orderBy</code>
+          {". "}Map fields one at a time after validation.
         </li>
         <li>
           Treat a missing <code>request</code> schema on a route that touches
@@ -335,7 +355,9 @@ await state.db.user.findMany({ where });`}
         </li>
       </ul>
 
-      <h2 id="dynamic-sql-when-you-can-and-apos-t-parameterize">Dynamic SQL: when you can&apos;t parameterize</h2>
+      <h2 id="dynamic-sql-when-you-can-and-apos-t-parameterize">
+        Dynamic SQL: when you can&apos;t parameterize
+      </h2>
       <p>
         Bind parameters cover values, not identifiers. <code>ORDER BY</code>{" "}
         columns, table names, direction (<code>ASC</code>/<code>DESC</code>),
@@ -384,14 +406,16 @@ app.get(
           If you must accept a free-form identifier, validate it against a tight
           regex (<code>/^[a-zA-Z_][a-zA-Z0-9_]*$/</code>) <em>and</em> quote it
           with your driver&apos;s identifier-escape helper (
-          <code>pg-format</code>&apos;s <code>%I</code>, Knex&apos;s{" "}
-          <code>client.wrapIdentifier</code>, etc.). Never roll your own.
+          <code>pg-format</code>&apos;s <code>%I</code>
+          {", "}Knex&apos;s <code>client.wrapIdentifier</code>
+          {", "}etc.). Never roll your own.
         </li>
         <li>
-          For variable-arity <code>IN</code>, build the placeholder list from
-          the array length and bind the values:{" "}
-          <code>WHERE id IN ($1, $2, $3)</code>. Most ORMs do this for you when
-          you pass an array to <code>inArray()</code> / <code>in</code>.
+          For variable-arity <code>IN</code>
+          {", "}build the placeholder list from the array length and bind the
+          values: <code>WHERE id IN ($1, $2, $3)</code>
+          {". "}Most ORMs do this for you when you pass an array to{" "}
+          <code>inArray()</code> / <code>in</code>.
         </li>
         <li>
           For <code>LIKE</code> with user input, escape <code>%</code> and{" "}
@@ -400,7 +424,9 @@ app.get(
         </li>
       </ul>
 
-      <h2 id="things-to-grep-for-in-code-review">Things to grep for in code review</h2>
+      <h2 id="things-to-grep-for-in-code-review">
+        Things to grep for in code review
+      </h2>
       <p>
         Aikido&apos;s report says vulnerable organizations average ~30 separate
         SQLi sites. The fastest way to keep that number at zero is a periodic
@@ -425,7 +451,9 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
         clever as a SAST tool, but it&apos;s free and runs in 200 ms.
       </p>
 
-      <h2 id="defense-in-depth-runtime-firewalls">Defense in depth: runtime firewalls</h2>
+      <h2 id="defense-in-depth-runtime-firewalls">
+        Defense in depth: runtime firewalls
+      </h2>
       <p>
         Daloy intentionally does <strong>not</strong> ship a heuristic
         SQLi-detector middleware. Pattern-matching <code>&apos; OR 1=1 --</code>{" "}
@@ -439,7 +467,7 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
           <a href="https://www.aikido.dev/zen" target="_blank" rel="noreferrer">
             Aikido Zen
           </a>
-          : a Node/Bun-compatible in-app firewall that hooks the driver and
+          {": "}a Node/Bun-compatible in-app firewall that hooks the driver and
           blocks requests whose query structure was altered by user input.
         </li>
         <li>
@@ -461,7 +489,7 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
         >
           github.com/daloyjs/daloy/security/advisories/new
         </a>
-        . Don&apos;t open a public issue.
+        {". "}Don&apos;t open a public issue.
       </p>
     </>
   );

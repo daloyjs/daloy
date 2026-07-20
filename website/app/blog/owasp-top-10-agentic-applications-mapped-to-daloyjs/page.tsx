@@ -342,22 +342,22 @@ export default function BlogPostPage() {
             >
               Aikido&apos;s walkthrough of the OWASP Top 10 for Agentic
               Applications (2026)
-            </a>{" "}
-            , ASI01 through ASI10, released in December 2025 with input from
-            100+ practitioners. The question, again:{" "}
+            </a>
+            {", "}ASI01 through ASI10, released in December 2025 with input
+            from 100+ practitioners. The question, again:{" "}
             <em>are we doing anything about this?</em>
           </p>
 
           <p>
             Short version: DaloyJS is a web framework, not a model runtime, so
-            we own the <strong>tool surface</strong>: the HTTP routes that an AI
-            agent calls, the auth on them, the schema they accept, the blast
-            radius of what they do, and the supply chain they ship in. That
-            covers most of ASI02 through ASI09 directly. ASI01 (Agent Behavior
-            Hijacking) and ASI10 (Over-reliance) live upstream of any HTTP
-            framework, but even there, a typed contract surface, an auditable
-            request-ID trail, and a scaffolded <code>AGENTS.md</code> are the
-            substrate a defender needs.
+            we own the <strong>tool surface</strong>
+            {": "}the HTTP routes that an AI agent calls, the auth on them, the
+            schema they accept, the blast radius of what they do, and the supply
+            chain they ship in. That covers most of ASI02 through ASI09
+            directly. ASI01 (Agent Behavior Hijacking) and ASI10 (Over-reliance)
+            live upstream of any HTTP framework, but even there, a typed
+            contract surface, an auditable request-ID trail, and a scaffolded{" "}
+            <code>AGENTS.md</code> are the substrate a defender needs.
           </p>
 
           <p>
@@ -366,7 +366,7 @@ export default function BlogPostPage() {
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
               Cloud Security Architecture
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe Coding Security
             </Link>
@@ -502,8 +502,8 @@ export default function BlogPostPage() {
             <li>
               <strong>We don&apos;t make policy decisions for you.</strong>{" "}
               Which tools are destructive, which require human approval, what
-              the agent&apos;s wallet ceiling is, what the kill-switch triggers
-              , those are deployment policy. The framework gives you the
+              the agent&apos;s wallet ceiling is, what the kill-switch triggers,
+              those are deployment policy. The framework gives you the
               primitives (multi-App split, two-step routes, structured audit
               log) so the policy is cheap to write.
             </li>
@@ -527,8 +527,8 @@ export default function BlogPostPage() {
             surface. ASI02 through ASI09 map almost one-for-one to a DaloyJS
             primitive that already exists today. ASI01 and ASI10 are upstream
             concerns where the best a framework can do is give the defender a
-            typed audit trail and a scaffolded <code>AGENTS.md</code>: and we
-            ship both.
+            typed audit trail and a scaffolded <code>AGENTS.md</code>
+            {": "}and we ship both.
           </p>
 
           <p>
@@ -547,29 +547,34 @@ export default function BlogPostPage() {
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe Coding Security
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
               Cloud Security Architecture
             </Link>
-            , <Link href="/blog/secure-by-default">Secure by Default</Link>,{" "}
+            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+            {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               Supply-chain hardening for TypeScript libraries
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
               Designing for Coding Agents
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/ai-friendly-route-metadata-machine-readable-examples-for-codegen-agents">
               AI-friendly route metadata
             </Link>
-            . Relevant docs: <Link href="/docs/security">/docs/security</Link>,{" "}
-            <Link href="/docs/security/admin-panels">admin panels</Link>,{" "}
-            <Link href="/docs/security/fetch-guard">fetch guard</Link>,{" "}
+            {". "}Relevant docs:{" "}
+            <Link href="/docs/security">/docs/security</Link>
+            {", "}
+            <Link href="/docs/security/admin-panels">admin panels</Link>
+            {", "}
+            <Link href="/docs/security/fetch-guard">fetch guard</Link>
+            {", "}
             <Link href="/docs/security/runtime-protections">
               runtime protections
             </Link>
-            , <Link href="/docs/security/supply-chain">supply chain</Link>.
+            {", "}<Link href="/docs/security/supply-chain">supply chain</Link>.
           </p>
         </div>
       </article>

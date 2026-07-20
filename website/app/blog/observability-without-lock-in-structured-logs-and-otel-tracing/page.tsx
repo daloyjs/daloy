@@ -541,13 +541,13 @@ export default function BlogPostPage() {
             for structured JSON logs, <code>requestId()</code> for correlation,{" "}
             <code>timing()</code> for the free Server-Timing header, and{" "}
             <code>otelTracing()</code> for OpenTelemetry-shaped spans without a
-            hard dependency on <code>@opentelemetry/api</code>. Everything
-            composes through the same{" "}
+            hard dependency on <code>@opentelemetry/api</code>
+            {". "}Everything composes through the same{" "}
             <Link href="/blog/middleware-without-mystery-hooks-ordering-response-transformation">
               hooks lifecycle
             </Link>
-            , which is the only contract you need to understand to extend any of
-            it.
+            {", "}which is the only contract you need to understand to extend
+            any of it.
           </p>
 
           <h2>Why this post exists</h2>
@@ -627,9 +627,11 @@ export default function BlogPostPage() {
             <code>otelTracing()</code> is shaped like the{" "}
             <code>@opentelemetry/api</code> tracer, but the framework does not
             import it. The contract is two small interfaces in{" "}
-            <code>src/tracing.ts</code>: <code>TracingTracer</code> and{" "}
-            <code>TracingSpan</code>: and any object that fits them works. You
-            install the OTel SDK in <em>your</em> <code>package.json</code>,
+            <code>src/tracing.ts</code>
+            {": "}<code>TracingTracer</code> and <code>TracingSpan</code>
+            {": "}and any object that fits them works. You install the OTel SDK
+            in <em>your</em> <code>package.json</code>
+            {", "}
             configure it in <em>your</em> bootstrap, and pass the tracer in. The
             portability story survives.
           </p>
@@ -656,19 +658,24 @@ export default function BlogPostPage() {
             hook="onRequest"
             purpose="Start the SERVER span, stamp HTTP attributes."
           >
-            Uses OTel semantic conventions: <code>http.request.method</code>,{" "}
-            <code>url.path</code>, <code>url.scheme</code>,{" "}
-            <code>server.address</code>, <code>url.query</code>,{" "}
-            <code>user_agent.original</code>. Your dashboards work without
-            translation.
+            Uses OTel semantic conventions: <code>http.request.method</code>
+            {", "}
+            <code>url.path</code>
+            {", "}<code>url.scheme</code>
+            {", "}
+            <code>server.address</code>
+            {", "}<code>url.query</code>
+            {", "}
+            <code>user_agent.original</code>
+            {". "}Your dashboards work without translation.
           </HookCard>
           <HookCard
             hook="beforeHandle"
             purpose="Expose the span on ctx.state.otelSpan."
           >
             The <code>stateKey</code> is configurable. Default is{" "}
-            <code>otelSpan</code>. Handlers add events / child spans / custom
-            attributes here.
+            <code>otelSpan</code>
+            {". "}Handlers add events / child spans / custom attributes here.
           </HookCard>
           <HookCard hook="onError" purpose="recordException() + ERROR status.">
             Runs exactly once. The error is captured as a structured exception

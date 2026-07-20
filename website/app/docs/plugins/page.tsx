@@ -132,17 +132,18 @@ await app.ready();`}
       </p>
       <ul>
         <li>
-          <code>dependencies</code>: prerequisite plugin names that must already
-          be registered.
+          <code>dependencies</code>
+          {": "}prerequisite plugin names that must already be registered.
         </li>
         <li>
-          <code>seed</code>: a differentiator for mounting the same named plugin
-          more than once with different configuration.
+          <code>seed</code>
+          {": "}a differentiator for mounting the same named plugin more than
+          once with different configuration.
         </li>
         <li>
-          <code>stateful</code>: production guard for plugins that mutate shared
-          state. Anonymous stateful plugins are refused unless you give them a
-          name.
+          <code>stateful</code>
+          {": "}production guard for plugins that mutate shared state.
+          Anonymous stateful plugins are refused unless you give them a name.
         </li>
       </ul>
       <CodeBlock
@@ -172,10 +173,11 @@ app.register({ name: "metrics", seed: "public", register: publicMetrics });`}
       <h2 id="decorators">Decorators</h2>
       <p>
         Decorate the app to inject shared resources into every handler&apos;s{" "}
-        <code>state</code>. Decorations added at the root are visible inside
-        plugins. Decorations added inside a plugin stay scoped to that plugin
-        and never leak sideways to sibling plugins or back up to the root.
-        Reusing a key throws unless you pass <code>{`{ override: true }`}</code>
+        <code>state</code>
+        {". "}Decorations added at the root are visible inside plugins.
+        Decorations added inside a plugin stay scoped to that plugin and never
+        leak sideways to sibling plugins or back up to the root. Reusing a key
+        throws unless you pass <code>{`{ override: true }`}</code>
         deliberately.
       </p>
       <p>
@@ -278,21 +280,22 @@ app.register({ name: "observability", extensions });`}
       </p>
       <ul>
         <li>
-          <code>app.onPluginInstalled(listener)</code>: fires once per{" "}
-          <code>register()</code> call, after sync plugins return and after
-          async plugins resolve. The listener receives{" "}
-          <code>{`{ name?: string, prefix: string }`}</code>, where{" "}
-          <code>prefix</code> is the effective mounted prefix after nesting.
-          Awaiting <code>app.ready()</code> drains async plugins and async
-          listeners.
+          <code>app.onPluginInstalled(listener)</code>
+          {": "}fires once per <code>register()</code> call, after sync plugins
+          return and after async plugins resolve. The listener receives{" "}
+          <code>{`{ name?: string, prefix: string }`}</code>
+          {", "}where <code>prefix</code> is the effective mounted prefix after
+          nesting. Awaiting <code>app.ready()</code> drains async plugins and
+          async listeners.
         </li>
         <li>
-          <code>app.onShutdown(listener)</code>: fires at the start of{" "}
-          <code>app.shutdown(timeoutMs, reason)</code>, before in-flight
-          requests drain. Use this to flush metrics, publish a draining signal
-          to a load balancer, or close background pollers. For post-drain
-          cleanup such as database pools and file handles, keep using{" "}
-          <code>onClose()</code>.
+          <code>app.onShutdown(listener)</code>
+          {": "}fires at the start of{" "}
+          <code>app.shutdown(timeoutMs, reason)</code>
+          {", "}before in-flight requests drain. Use this to flush metrics,
+          publish a draining signal to a load balancer, or close background
+          pollers. For post-drain cleanup such as database pools and file
+          handles, keep using <code>onClose()</code>.
         </li>
       </ul>
       <CodeBlock

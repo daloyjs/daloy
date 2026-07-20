@@ -127,17 +127,22 @@ app.get(
           matches an entry in <code>allowedOrigins</code>.
         </li>
         <li>
-          <code>javascript:</code>, <code>data:</code>, <code>vbscript:</code>,
+          <code>javascript:</code>
+          {", "}<code>data:</code>
+          {", "}<code>vbscript:</code>
+          {", "}
           and <code>file:</code> schemes are always refused, even if you
           accidentally wrote one into the allowlist.
         </li>
         <li>
-          The default status is <code>303 See Other</code>, the
-          POST-redirect-GET-safe choice.
+          The default status is <code>303 See Other</code>
+          {", "}the POST-redirect-GET-safe choice.
         </li>
       </ul>
 
-      <h2 id="allowing-internal-paths-and-external-origins">Allowing internal paths and external origins</h2>
+      <h2 id="allowing-internal-paths-and-external-origins">
+        Allowing internal paths and external origins
+      </h2>
       <CodeBlock
         language="ts"
         code={`// Same-origin paths only (exact pathname match).
@@ -153,10 +158,10 @@ safeRedirect(next, {
 safeRedirect(next, { allowedPaths: ["/*"] });`}
       />
       <p>
-        Path matching is exact on <code>pathname</code>. Query strings and
-        fragments on the candidate are preserved in the final{" "}
-        <code>Location</code> but ignored when deciding whether the target is
-        allowed.
+        Path matching is exact on <code>pathname</code>
+        {". "}Query strings and fragments on the candidate are preserved in the
+        final <code>Location</code> but ignored when deciding whether the target
+        is allowed.
       </p>
 
       <h2 id="fallback-vs-throwing">Fallback vs. throwing</h2>
@@ -186,22 +191,34 @@ try {
 }`}
       />
       <p>
-        The <code>reason</code> is one of <code>empty-target</code>,{" "}
-        <code>invalid-control-characters</code>, <code>non-latin1-target</code>,{" "}
-        <code>protocol-relative</code>, <code>backslash-path</code>,{" "}
-        <code>path-not-allowed</code>, <code>origin-not-allowed</code>,{" "}
-        <code>scheme-not-allowed</code>, or <code>parse-failed</code>, useful for
-        metrics on which attack shape you are seeing. (<code>non-latin1-target</code>{" "}
-        covers same-origin paths carrying a code point above U+00FF, including
-        the Unicode slash homographs.)
+        The <code>reason</code> is one of <code>empty-target</code>
+        {", "}
+        <code>invalid-control-characters</code>
+        {", "}<code>non-latin1-target</code>
+        {", "}
+        <code>protocol-relative</code>
+        {", "}<code>backslash-path</code>
+        {", "}
+        <code>path-not-allowed</code>
+        {", "}<code>origin-not-allowed</code>
+        {", "}
+        <code>scheme-not-allowed</code>
+        {", "}or <code>parse-failed</code>
+        {", "}useful for metrics on which attack shape you are seeing. (
+        <code>non-latin1-target</code> covers same-origin paths carrying a code
+        point above U+00FF, including the Unicode slash homographs.)
       </p>
 
       <h2 id="choosing-a-status-code">Choosing a status code</h2>
       <p>
         Override the default <code>303</code> only when you genuinely need a
-        different redirect semantic. Accepted values are <code>301</code>,{" "}
-        <code>302</code>, <code>303</code>, <code>307</code>, and{" "}
-        <code>308</code>. You can also merge extra response headers; the{" "}
+        different redirect semantic. Accepted values are <code>301</code>
+        {", "}
+        <code>302</code>
+        {", "}<code>303</code>
+        {", "}<code>307</code>
+        {", "}and <code>308</code>
+        {". "}You can also merge extra response headers; the{" "}
         <code>Location</code> header is always overwritten with the validated
         target.
       </p>

@@ -228,15 +228,17 @@ app.post(
       <p>
         The <code>@sendgrid/mail</code> package is Node-oriented (it uses{" "}
         <code>@sendgrid/client</code> with Node&apos;s HTTPS module). For{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link>, call the v3 REST API directly
-        with <code>fetch</code> against{" "}
+        <Link href="/docs/adapters">Cloudflare Workers</Link>
+        {", "}call the v3 REST API directly with <code>fetch</code> against{" "}
         <code>https://api.sendgrid.com/v3/mail/send</code> using the same JSON
         body and a <code>Bearer</code> token.
       </p>
 
       <p>
-        See also <Link href="/docs/email/resend">Resend</Link>,{" "}
-        <Link href="/docs/email/postmark">Postmark</Link>, and the{" "}
+        See also <Link href="/docs/email/resend">Resend</Link>
+        {", "}
+        <Link href="/docs/email/postmark">Postmark</Link>
+        {", "}and the{" "}
         <Link href="/docs/email">email integrations overview</Link>.
       </p>
     </>

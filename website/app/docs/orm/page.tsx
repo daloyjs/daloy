@@ -156,24 +156,26 @@ app.get(
       <h2 id="pick-your-orm">Pick your ORM</h2>
       <ul>
         <li>
-          <Link href="/docs/orm/prisma">Prisma</Link>: schema-first, mature
-          migrations, great DX.
+          <Link href="/docs/orm/prisma">Prisma</Link>
+          {": "}schema-first, mature migrations, great DX.
         </li>
         <li>
-          <Link href="/docs/orm/drizzle">Drizzle ORM</Link>: TypeScript-first,
-          edge-friendly, SQL-like API.
+          <Link href="/docs/orm/drizzle">Drizzle ORM</Link>
+          {": "}TypeScript-first, edge-friendly, SQL-like API.
         </li>
         <li>
-          <Link href="/docs/orm/typeorm">TypeORM</Link>: decorator-based
-          entities for object-oriented teams.
+          <Link href="/docs/orm/typeorm">TypeORM</Link>
+          {": "}decorator-based entities for object-oriented teams.
         </li>
         <li>
-          <Link href="/docs/orm/mikro-orm">MikroORM</Link>: Data Mapper, Unit of
-          Work, and Identity Map with first-class TypeScript.
+          <Link href="/docs/orm/mikro-orm">MikroORM</Link>
+          {": "}Data Mapper, Unit of Work, and Identity Map with first-class
+          TypeScript.
         </li>
         <li>
-          <Link href="/docs/orm/sequelize">Sequelize</Link>: mature Active
-          Record style models with broad SQL dialect support.
+          <Link href="/docs/orm/sequelize">Sequelize</Link>
+          {": "}mature Active Record style models with broad SQL dialect
+          support.
         </li>
       </ul>
 
@@ -189,8 +191,9 @@ app.get(
 
       <ul>
         <li>
-          <Link href="/docs/orm/supabase">Supabase</Link>: platform client for
-          hosted Postgres + auth via <code>@supabase/supabase-js</code>.
+          <Link href="/docs/orm/supabase">Supabase</Link>
+          {": "}platform client for hosted Postgres + auth via{" "}
+          <code>@supabase/supabase-js</code>.
         </li>
       </ul>
 
@@ -271,7 +274,7 @@ app.get(
         >
           Driver Adapters
         </a>
-        . TypeORM, MikroORM, and Sequelize all lean on Node-centric runtime
+        {". "}TypeORM, MikroORM, and Sequelize all lean on Node-centric runtime
         assumptions and are best on the Node.js adapter.
       </p>
 

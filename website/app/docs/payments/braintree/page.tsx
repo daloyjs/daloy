@@ -50,7 +50,7 @@ export default function Page() {
         >
           server-side PayPal flow
         </a>
-        .
+        {"."}
       </p>
 
       <h2 id="pick-the-right-braintree-sdk">Pick the right Braintree SDK</h2>
@@ -63,16 +63,16 @@ export default function Page() {
           <strong>
             <code>braintree</code> (this guide)
           </strong>
-          : the long-standing Braintree server SDK. Uses the classic REST/XML
-          gateway with a polished promise-based API. Production-ready, actively
-          maintained, and what every Braintree docs example uses.
+          {": "}the long-standing Braintree server SDK. Uses the classic
+          REST/XML gateway with a polished promise-based API. Production-ready,
+          actively maintained, and what every Braintree docs example uses.
         </li>
         <li>
           <strong>
             <code>@braintree/graphql-client-node</code>
           </strong>
-          : a thin GraphQL client for the same gateway. Useful if you want to
-          write GraphQL queries directly, but you&apos;ll re-implement a lot
+          {": "}a thin GraphQL client for the same gateway. Useful if you want
+          to write GraphQL queries directly, but you&apos;ll re-implement a lot
           that the classic SDK gives you for free. Skip unless you have a
           reason.
         </li>
@@ -80,7 +80,7 @@ export default function Page() {
           <strong>
             <code>@paypal/paypal-server-sdk</code>
           </strong>
-          : the <em>PayPal REST</em> SDK (Checkout / Orders v2). Different
+          {": "}the <em>PayPal REST</em> SDK (Checkout / Orders v2). Different
           product, different account, different API. Don&apos;t install it for a
           Braintree integration.
         </li>
@@ -108,9 +108,9 @@ export default function Page() {
           from the sandbox control panel.
         </li>
         <li>
-          In <strong>Settings → Processing</strong>, link your sandbox PayPal
-          Business account so PayPal nonces flow through the same gateway as
-          cards.
+          In <strong>Settings → Processing</strong>
+          {", "}link your sandbox PayPal Business account so PayPal nonces flow
+          through the same gateway as cards.
         </li>
         <li>
           When you&apos;re ready, repeat with a production account and swap{" "}
@@ -355,10 +355,11 @@ app.post(
       <p>
         Braintree posts webhooks as{" "}
         <code>application/x-www-form-urlencoded</code> with two fields:{" "}
-        <code>bt_signature</code> and <code>bt_payload</code>. Pass them to{" "}
-        <code>webhookNotification.parse()</code>, which verifies the signature
-        and rejects tampered payloads with an <code>InvalidSignatureError</code>
-        . You don&apos;t hash anything yourself.
+        <code>bt_signature</code> and <code>bt_payload</code>
+        {". "}Pass them to <code>webhookNotification.parse()</code>
+        {", "}which verifies the signature and rejects tampered payloads with
+        an <code>InvalidSignatureError</code>
+        {". "}You don&apos;t hash anything yourself.
       </p>
       <CodeBlock
         code={`app.post(
@@ -402,12 +403,14 @@ app.post(
       <p>
         The SDK doesn&apos;t throw on declined transactions, it resolves with{" "}
         <code>result.success === false</code> and details under{" "}
-        <code>result.message</code>,{" "}
-        <code>result.transaction.processorResponseCode</code>, and{" "}
-        <code>result.errors.deepErrors()</code>. The plugin above turns the
-        unsuccessful result into a thrown error so it lands in your{" "}
-        <Link href="/docs/errors">problem+json</Link> mapper. For genuine
-        network failures the SDK throws an exception directly.
+        <code>result.message</code>
+        {", "}
+        <code>result.transaction.processorResponseCode</code>
+        {", "}and <code>result.errors.deepErrors()</code>
+        {". "}The plugin above turns the unsuccessful result into a thrown
+        error so it lands in your <Link href="/docs/errors">problem+json</Link>{" "}
+        mapper. For genuine network failures the SDK throws an exception
+        directly.
       </p>
 
       <h2 id="runtimes">Runtimes</h2>
@@ -439,16 +442,19 @@ app.post(
         >
           server SDK deprecation policy
         </a>
-        : major versions are supported for 3 years and you should pin a recent
-        major in
-        <code>package.json</code>. Stay current, old SDKs lose support for new
-        payment methods, new fields, and security patches.
+        {": "}major versions are supported for 3 years and you should pin a
+        recent major in
+        <code>package.json</code>
+        {". "}Stay current, old SDKs lose support for new payment methods, new
+        fields, and security patches.
       </p>
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href="/docs/errors">problem+json errors</Link>, and{" "}
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href="/docs/errors">problem+json errors</Link>
+        {", "}and{" "}
         <Link href="/docs/security">rate-limit + security hardening</Link>.
       </p>
     </>

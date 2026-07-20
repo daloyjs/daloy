@@ -557,9 +557,9 @@ export default function BlogPostPage() {
             description={
               <>
                 Fires before any context is built. You see the raw{" "}
-                <code>Request</code>. Use this for things that need the
-                untouched body or headers, TLS hints, conditional decode of the
-                raw byte stream.
+                <code>Request</code>
+                {". "}Use this for things that need the untouched body or
+                headers, TLS hints, conditional decode of the raw byte stream.
               </>
             }
           />
@@ -631,9 +631,11 @@ export default function BlogPostPage() {
                 Fires after the <code>Response</code> is built, on{" "}
                 <strong>every</strong> response (success, error, OPTIONS
                 preflight). This is the right place to stamp universal headers:{" "}
-                <code>X-Request-Id</code>, <code>Server-Timing</code>, security
-                headers. Mutate <code>res.headers</code> in place, or return a
-                brand-new <code>Response</code> to replace it entirely.
+                <code>X-Request-Id</code>
+                {", "}<code>Server-Timing</code>
+                {", "}security headers. Mutate <code>res.headers</code> in
+                place, or return a brand-new <code>Response</code> to replace it
+                entirely.
               </>
             }
           />
@@ -732,9 +734,12 @@ export default function BlogPostPage() {
           <p>
             Server-Timing on every response, including errors and preflights.
             Notice the pattern: stash the start time in <code>ctx.state</code>{" "}
-            from <code>beforeHandle</code>, read it from <code>onSend</code>.
+            from <code>beforeHandle</code>
+            {", "}read it from <code>onSend</code>
+            {". "}
             Mutate the response headers in place, no need to return a new{" "}
-            <code>Response</code>:
+            <code>Response</code>
+            {": "}
           </p>
 
           <EditorFrame
@@ -749,10 +754,10 @@ export default function BlogPostPage() {
 
           <p>
             Anything that you&apos;d call <em>observation</em> belongs in{" "}
-            <code>onResponse</code>. The framework guarantees you can&apos;t
-            accidentally break the request from here, which is exactly the
-            constraint you want around log lines that someone added at 3 a.m. on
-            a Friday.
+            <code>onResponse</code>
+            {". "}The framework guarantees you can&apos;t accidentally break
+            the request from here, which is exactly the constraint you want
+            around log lines that someone added at 3 a.m. on a Friday.
           </p>
 
           <EditorFrame
@@ -788,7 +793,8 @@ export default function BlogPostPage() {
           <p>
             For anything you&apos;d ship as a unit, a metrics endpoint plus its{" "}
             <code>onResponse</code> observer, a sessions store plus its{" "}
-            <code>beforeHandle</code> reader, use <code>app.register()</code>.
+            <code>beforeHandle</code> reader, use <code>app.register()</code>
+            {". "}
             Inside the plugin you get a child <code>App</code> whose hooks and
             routes are scoped to the mount point. The plugin can ship its own
             prefix, its own hooks, and its own auth defaults without leaking
@@ -826,13 +832,14 @@ export default function BlogPostPage() {
           <h2>Wrapping up</h2>
 
           <p>
-            Middleware in DaloyJS is one interface, <code>Hooks</code>, with six
-            method slots. Three scopes, composed in a fixed order. One
-            side-channel for errors. That is the whole machine. Once the mental
-            model clicks, you stop asking <em>where does this go</em> and start
-            asking <em>which scope</em>: which is a far more interesting
-            question, and one whose answer you can usually argue about in a
-            Slack thread without anyone getting hurt.
+            Middleware in DaloyJS is one interface, <code>Hooks</code>
+            {", "}with six method slots. Three scopes, composed in a fixed
+            order. One side-channel for errors. That is the whole machine. Once
+            the mental model clicks, you stop asking <em>where does this go</em>{" "}
+            and start asking <em>which scope</em>
+            {": "}which is a far more interesting question, and one whose
+            answer you can usually argue about in a Slack thread without anyone
+            getting hurt.
           </p>
 
           <p>

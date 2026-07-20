@@ -28,11 +28,11 @@ export default function Page() {
       <h1>Replit</h1>
       <p>
         Replit can run DaloyJS as a Node web server. Use the{" "}
-        <Link href="/docs/adapters/node">Node adapter</Link>, publish as a web
-        server, and make sure the process listens on <code>0.0.0.0</code> and
-        the platform-provided <code>PORT</code>. For APIs with variable traffic,
-        start with Autoscale. For always-on workloads or long-running background
-        work, use Reserved VM.
+        <Link href="/docs/adapters/node">Node adapter</Link>
+        {", "}publish as a web server, and make sure the process listens on{" "}
+        <code>0.0.0.0</code> and the platform-provided <code>PORT</code>
+        {". "}For APIs with variable traffic, start with Autoscale. For
+        always-on workloads or long-running background work, use Reserved VM.
       </p>
 
       <FlowDiagram
@@ -82,8 +82,8 @@ export default function Page() {
 
       <h2 id="1-check-node-and-pnpm">1. Check Node and pnpm</h2>
       <p>
-        DaloyJS requires <strong>Node.js 24 LTS or Node.js 26+</strong> and
-        pnpm 11 or newer. In Replit Shell, verify the runtime before publishing:
+        DaloyJS requires <strong>Node.js 24 LTS or Node.js 26+</strong> and pnpm
+        11 or newer. In Replit Shell, verify the runtime before publishing:
       </p>
       <CodeBlock
         language="bash"
@@ -173,7 +173,8 @@ run = ["sh", "-c", "pnpm start"]`}
           Set the run command to <code>pnpm start</code>.
         </li>
         <li>
-          Choose <strong>Web server</strong>, not Background worker.
+          Choose <strong>Web server</strong>
+          {", "}not Background worker.
         </li>
         <li>Add production Secrets for every required environment variable.</li>
       </ol>
@@ -181,9 +182,10 @@ run = ["sh", "-c", "pnpm start"]`}
       <h2 id="secrets">Secrets</h2>
       <p>
         Replit Secrets are exposed to the app as environment variables. Add
-        runtime values such as <code>NODE_ENV</code>, database URLs, auth
-        secrets, JWT keys, and webhook secrets through Replit Secrets or
-        published app secrets. Do not commit a <code>.env</code> file.
+        runtime values such as <code>NODE_ENV</code>
+        {", "}database URLs, auth secrets, JWT keys, and webhook secrets
+        through Replit Secrets or published app secrets. Do not commit a{" "}
+        <code>.env</code> file.
       </p>
       <CodeBlock
         language="bash"
@@ -202,9 +204,9 @@ TRUST_PROXY_HOPS=1`}
       <CodeBlock language="bash" code={`TRUST_PROXY_HOPS=1`} />
       <p>
         If you put Cloudflare or another proxy in front of Replit, count both
-        hops and use <code>TRUST_PROXY_HOPS=2</code>. See the{" "}
-        <Link href="/docs/deployment">deployment overview</Link> for the proxy
-        posture matrix.
+        hops and use <code>TRUST_PROXY_HOPS=2</code>
+        {". "}See the <Link href="/docs/deployment">deployment overview</Link>{" "}
+        for the proxy posture matrix.
       </p>
 
       <h2 id="replit-agent-guidance">Replit Agent guidance</h2>
@@ -234,8 +236,9 @@ TRUST_PROXY_HOPS=1`}
           published web server. Use <code>0.0.0.0</code>.
         </li>
         <li>
-          Do not hard-code <code>PORT=80</code>. Let Replit provide{" "}
-          <code>PORT</code> unless you have explicitly configured port mappings.
+          Do not hard-code <code>PORT=80</code>
+          {". "}Let Replit provide <code>PORT</code> unless you have explicitly
+          configured port mappings.
         </li>
         <li>
           Published app secrets are part of publishing setup. Check them when

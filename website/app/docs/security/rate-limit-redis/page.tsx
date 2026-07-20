@@ -92,28 +92,32 @@ export default function Page() {
         caption="Every replica increments the same Redis key, so switching doors does not reset the count. With the in-memory store each replica keeps its own counter and a client can get N times the limit."
       />
 
-      <h2 id="when-to-use-redis-and-when-not-to">When to use Redis (and when not to)</h2>
+      <h2 id="when-to-use-redis-and-when-not-to">
+        When to use Redis (and when not to)
+      </h2>
       <p>
         The Redis store is built for{" "}
-        <strong>long-lived multi-replica deployments</strong>: VPS, containers,
-        Kubernetes, Fly.io, Render, ECS, App Runner, Railway. Anywhere you run
-        more than one Node / Bun / Deno process and need a shared counter so a
-        client can&apos;t get <code>N&times;</code> the limit by load-balancing
-        across replicas.
+        <strong>long-lived multi-replica deployments</strong>
+        {": "}VPS, containers, Kubernetes, Fly.io, Render, ECS, App Runner,
+        Railway. Anywhere you run more than one Node / Bun / Deno process and
+        need a shared counter so a client can&apos;t get <code>N&times;</code>{" "}
+        the limit by load-balancing across replicas.
       </p>
       <p>
-        On <strong>edge runtimes</strong> (Cloudflare Workers, Fastly
-        Compute), prefer the platform&apos;s native primitive rather than
-        fronting Redis from every region:
+        On <strong>edge runtimes</strong> (Cloudflare Workers, Fastly Compute),
+        prefer the platform&apos;s native primitive rather than fronting Redis
+        from every region:
       </p>
       <ul>
         <li>
-          <strong>Cloudflare Workers</strong>: Durable Objects (strongly
-          consistent per-key), or KV / D1 for relaxed consistency.
+          <strong>Cloudflare Workers</strong>
+          {": "}Durable Objects (strongly consistent per-key), or KV / D1 for
+          relaxed consistency.
         </li>
         <li>
-          <strong>Fastly Compute</strong>: Edge Dictionaries for static quotas,
-          KV Store for dynamic counters.
+          <strong>Fastly Compute</strong>
+          {": "}Edge Dictionaries for static quotas, KV Store for dynamic
+          counters.
         </li>
       </ul>
       <p>
@@ -200,12 +204,12 @@ app.use(
 
       <h2 id="how-clients-are-keyed">How clients are keyed</h2>
       <p>
-        This is the part people get wrong. By default{" "}
-        <code>rateLimit()</code> derives a single shared key,{" "}
-        <code>global</code>, so <strong>every caller lands in one bucket</strong>{" "}
-        (the Redis key is <code>daloy:rl:global</code>). That is a deliberate
-        safe default: DaloyJS will not key off a spoofable client IP unless you
-        tell it to. To limit <em>per client</em> you have to opt in.
+        This is the part people get wrong. By default <code>rateLimit()</code>{" "}
+        derives a single shared key, <code>global</code>
+        {", "}so <strong>every caller lands in one bucket</strong> (the Redis
+        key is <code>daloy:rl:global</code>). That is a deliberate safe default:
+        DaloyJS will not key off a spoofable client IP unless you tell it to. To
+        limit <em>per client</em> you have to opt in.
       </p>
       <ul>
         <li>
@@ -213,12 +217,13 @@ app.use(
           <code>keyGenerator</code> that returns a stable id.
         </li>
         <li>
-          <strong>Per source IP</strong>: set{" "}
-          <code>trustProxyHeaders: true</code> <em>only</em> when you run behind
-          a trusted proxy or load balancer that <em>overwrites</em>{" "}
-          <code>X-Forwarded-For</code>. The key is then the first{" "}
-          <code>X-Forwarded-For</code> entry (or <code>X-Real-IP</code>), and
-          falls back to <code>global</code> when neither is present.
+          <strong>Per source IP</strong>
+          {": "}set <code>trustProxyHeaders: true</code> <em>only</em> when you
+          run behind a trusted proxy or load balancer that <em>overwrites</em>{" "}
+          <code>X-Forwarded-For</code>
+          {". "}The key is then the first <code>X-Forwarded-For</code> entry
+          (or <code>X-Real-IP</code>), and falls back to <code>global</code>{" "}
+          when neither is present.
         </li>
       </ul>
       <CodeBlock
@@ -250,10 +255,10 @@ app.use(
 
       <h2 id="failure-mode">Failure mode</h2>
       <p>
-        By default the store is <strong>fail-open</strong>: if Redis throws
-        (network blip, restart), the request is treated as if it were the only
-        one in the window. That keeps your API available during a Redis outage
-        at the cost of temporarily losing the limit.
+        By default the store is <strong>fail-open</strong>
+        {": "}if Redis throws (network blip, restart), the request is treated
+        as if it were the only one in the window. That keeps your API available
+        during a Redis outage at the cost of temporarily losing the limit.
       </p>
       <p>
         Pass <code>onError</code> to change the behavior: return{" "}
@@ -276,10 +281,11 @@ redisRateLimitStore({
         bare <code>new IORedis(url)</code> queues commands and retries while
         disconnected, so during an outage a request blocks for{" "}
         <em>tens of seconds</em> (until the client&apos;s retry budget, then the
-        app&apos;s <code>requestTimeoutMs</code>, give up) before it ever reaches{" "}
-        <code>onError</code>. That is neither fast-open nor fast-closed, just
-        slow, and it will exhaust your connections under load. Construct the
-        client to give up quickly:
+        app&apos;s <code>requestTimeoutMs</code>
+        {", "}give up) before it ever reaches <code>onError</code>
+        {". "}That is neither fast-open nor fast-closed, just slow, and it will
+        exhaust your connections under load. Construct the client to give up
+        quickly:
       </blockquote>
       <CodeBlock
         code={`// ioredis: fail fast so the store can fall back immediately

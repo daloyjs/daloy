@@ -109,13 +109,13 @@ export default function Page() {
           >
             Microsoft Entra admin center
           </a>
-          , go to{" "}
+          {", "}go to{" "}
           <strong>Entra ID → App registrations → New registration</strong> and
           register your API app.
         </li>
         <li>
-          Under <strong>Expose an API</strong>, set an{" "}
-          <strong>Application ID URI</strong> (e.g.{" "}
+          Under <strong>Expose an API</strong>
+          {", "}set an <strong>Application ID URI</strong> (e.g.{" "}
           <code>api://my-daloy-api</code>) and add one or more{" "}
           <strong>scopes</strong> (e.g. <code>access_as_user</code>).
         </li>
@@ -133,7 +133,7 @@ export default function Page() {
           <code>
             https://login.microsoftonline.com/&#123;tenantId&#125;/discovery/v2.0/keys
           </code>
-          .
+          {"."}
         </li>
       </ol>
 
@@ -209,7 +209,8 @@ declare module "@daloyjs/core" {
       />
       <p>
         <code>createRemoteJWKSet</code> caches keys in memory and refreshes on a
-        missing <code>kid</code>, so key rollover is handled automatically.
+        missing <code>kid</code>
+        {", "}so key rollover is handled automatically.
       </p>
 
       <h2 id="5-guard-a-route">5. Guard a route</h2>
@@ -242,8 +243,9 @@ app.get(
         <strong>App roles vs delegated scopes:</strong> app-only tokens
         (client-credentials flow) put granted roles in <code>roles</code> with
         no <code>scp</code> claim, while user-delegated tokens put granted
-        scopes in <code>scp</code>. Inspect both in <code>requireAuth</code> if
-        you support both shapes.
+        scopes in <code>scp</code>
+        {". "}Inspect both in <code>requireAuth</code> if you support both
+        shapes.
       </p>
 
       <h2 id="acquiring-downstream-tokens-with-msal-node">
@@ -252,7 +254,8 @@ app.get(
       <p>
         If your API needs to call Microsoft Graph or another protected service{" "}
         <em>on behalf of</em> the user, use MSAL Node&apos;s{" "}
-        <code>ConfidentialClientApplication</code>:
+        <code>ConfidentialClientApplication</code>
+        {": "}
       </p>
       <CodeBlock code={`pnpm add @azure/msal-node`} />
       <CodeBlock
@@ -286,8 +289,8 @@ console.log(result?.accessToken);`}
           <code>
             https://login.microsoftonline.com/&#123;tenantId&#125;/v2.0
           </code>
-          . Multi-tenant apps must validate the <code>tid</code> claim against
-          an allowlist rather than relying on the issuer alone.
+          {". "}Multi-tenant apps must validate the <code>tid</code> claim
+          against an allowlist rather than relying on the issuer alone.
         </li>
         <li>
           <strong>Don&apos;t validate tokens you don&apos;t own.</strong>{" "}
@@ -301,9 +304,11 @@ console.log(result?.accessToken);`}
       </ul>
 
       <p>
-        See also <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>,{" "}
-        <Link href="/docs/auth/auth0">Auth0</Link>, and the{" "}
-        <Link href="/docs/auth">auth integrations overview</Link>.
+        See also <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>
+        {", "}
+        <Link href="/docs/auth/auth0">Auth0</Link>
+        {", "}and the <Link href="/docs/auth">auth integrations overview</Link>
+        {"."}
       </p>
     </>
   );

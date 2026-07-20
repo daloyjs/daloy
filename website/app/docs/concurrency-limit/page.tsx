@@ -28,13 +28,13 @@ export default function Page() {
     <>
       <h1>Per-route / per-client concurrency limits</h1>
       <p>
-        DaloyJS ships{" "}
-        <code>concurrencyLimit()</code>: HAProxy <code>maxconn</code> +
-        request-queue parity, but inside the app where the framework already
-        owns routing and client identity. Where the Node adapter&apos;s{" "}
-        <code>maxConnections</code> caps <em>sockets</em> at accept time and{" "}
-        <code>loadShedding()</code> rejects traffic under <em>process</em>{" "}
-        pressure, <code>concurrencyLimit()</code> bounds the number of requests{" "}
+        DaloyJS ships <code>concurrencyLimit()</code>
+        {": "}HAProxy <code>maxconn</code> + request-queue parity, but inside
+        the app where the framework already owns routing and client identity.
+        Where the Node adapter&apos;s <code>maxConnections</code> caps{" "}
+        <em>sockets</em> at accept time and <code>loadShedding()</code> rejects
+        traffic under <em>process</em> pressure, <code>concurrencyLimit()</code>{" "}
+        bounds the number of requests{" "}
         <strong>in flight through a given surface</strong>.
       </p>
 
@@ -130,19 +130,21 @@ app.use(concurrencyLimit({
           the whole mount.
         </li>
         <li>
-          <code>&quot;route&quot;</code>: a separate budget per{" "}
-          <code>method + path</code>, so one hot endpoint can&apos;t starve the
-          others mounted under the same guard.
+          <code>&quot;route&quot;</code>
+          {": "}a separate budget per <code>method + path</code>
+          {", "}so one hot endpoint can&apos;t starve the others mounted under
+          the same guard.
         </li>
         <li>
-          <code>&quot;client&quot;</code>: a separate budget per client
-          identity (requires <code>trustProxyHeaders</code> or a{" "}
-          <code>keyGenerator</code>), so a heavy client can&apos;t consume
-          everyone else&apos;s slots.
+          <code>&quot;client&quot;</code>
+          {": "}a separate budget per client identity (requires{" "}
+          <code>trustProxyHeaders</code> or a <code>keyGenerator</code>), so a
+          heavy client can&apos;t consume everyone else&apos;s slots.
         </li>
         <li>
-          a <strong>function</strong>: return a custom bucket key, or{" "}
-          <code>undefined</code> to skip limiting for that request (fail-open).
+          a <strong>function</strong>
+          {": "}return a custom bucket key, or <code>undefined</code> to skip
+          limiting for that request (fail-open).
         </li>
       </ul>
       <CodeBlock
@@ -165,11 +167,13 @@ app.use(concurrencyLimit({
 
       <h2 id="no-queue-vs-queue">No queue vs. queue</h2>
       <p>
-        With the default <code>maxQueue: 0</code>, an overflowing request is
-        rejected <em>immediately</em> with <code>503</code>, useful when you
-        prefer fast failure over added latency. Set <code>maxQueue</code> to
-        absorb short bursts, and pair it with <code>queueTimeoutMs</code> to
-        bound tail latency so a waiting request doesn&apos;t hang indefinitely.
+        With the default <code>maxQueue: 0</code>
+        {", "}an overflowing request is rejected <em>immediately</em> with{" "}
+        <code>503</code>
+        {", "}useful when you prefer fast failure over added latency. Set{" "}
+        <code>maxQueue</code> to absorb short bursts, and pair it with{" "}
+        <code>queueTimeoutMs</code> to bound tail latency so a waiting request
+        doesn&apos;t hang indefinitely.
       </p>
       <CodeBlock
         language="ts"
@@ -215,7 +219,9 @@ app.use(concurrencyLimit({
 }));`}
       />
 
-      <h2 id="how-it-complements-the-rest-of-the-stack">How it complements the rest of the stack</h2>
+      <h2 id="how-it-complements-the-rest-of-the-stack">
+        How it complements the rest of the stack
+      </h2>
       <ul>
         <li>
           <strong>
@@ -228,8 +234,8 @@ app.use(concurrencyLimit({
           <strong>
             <code>loadShedding()</code>
           </strong>{" "}
-          sheds traffic when the <em>process</em> is under pressure
-          (event-loop delay, heap, RSS).
+          sheds traffic when the <em>process</em> is under pressure (event-loop
+          delay, heap, RSS).
         </li>
         <li>
           <strong>

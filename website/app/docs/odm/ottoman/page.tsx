@@ -83,8 +83,9 @@ export const db = { ottoman, User };`}
       <h2 id="3-create-an-ottoman-plugin">3. Create an Ottoman plugin</h2>
       <p>
         Connect once during app startup, build indexes with{" "}
-        <code>ottoman.start()</code>, decorate the app with the models you want
-        handlers to use, and close the connection on shutdown.
+        <code>ottoman.start()</code>
+        {", "}decorate the app with the models you want handlers to use, and
+        close the connection on shutdown.
       </p>
       <CodeBlock
         code={`// src/db/plugin.ts
@@ -114,11 +115,12 @@ export const ottomanPlugin = {
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <p>
         Add the <code>declare module</code> block to the same module that
-        exports <code>db</code>, not to a separate <code>.d.ts</code> file.
-        Declaration files are exempt from type-checking when{" "}
-        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
-        import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        exports <code>db</code>
+        {", "}not to a separate <code>.d.ts</code> file. Declaration files are
+        exempt from type-checking when <code>skipLibCheck</code> is on (the
+        scaffolded default), so a broken import inside a <code>.d.ts</code>{" "}
+        fails silently and <code>state.db</code> quietly degrades to{" "}
+        <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/ottoman.ts (the module that exports db)
@@ -212,10 +214,9 @@ serve(app, { port: 3000 });`}
       <h2 id="runtime-constraints">Runtime constraints</h2>
       <p>
         Ottoman depends on the Couchbase Node.js SDK, so it is a Node.js-first
-        ODM. It is not a fit for Cloudflare Workers. For
-        edge-compatible data access, use the{" "}
-        <Link href="/docs/orm">SQL ORM overview</Link> and choose a compatible
-        client.
+        ODM. It is not a fit for Cloudflare Workers. For edge-compatible data
+        access, use the <Link href="/docs/orm">SQL ORM overview</Link> and
+        choose a compatible client.
       </p>
 
       <p>

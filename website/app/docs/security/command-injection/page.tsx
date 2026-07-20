@@ -47,9 +47,11 @@ export default function Page() {
         thing&rdquo; remains a top source of RCE in Node services. The pattern
         is always the same: untrusted input ends up inside a string that gets
         handed to <code>/bin/sh -c</code> (or <code>cmd.exe /c</code> on
-        Windows), and a metacharacter like <code>;</code>, <code>|</code>,{" "}
-        <code>$()</code>, or a stray <code>&amp;</code> turns one command into
-        many.
+        Windows), and a metacharacter like <code>;</code>
+        {", "}<code>|</code>
+        {", "}
+        <code>$()</code>
+        {", "}or a stray <code>&amp;</code> turns one command into many.
       </p>
       <p>
         DaloyJS is an HTTP framework, not a shell, so the framework itself
@@ -59,7 +61,9 @@ export default function Page() {
         handlers you write don&apos;t reintroduce the bug.
       </p>
 
-      <h2 id="what-daloy-already-does-for-you">What Daloy already does for you</h2>
+      <h2 id="what-daloy-already-does-for-you">
+        What Daloy already does for you
+      </h2>
       <table>
         <thead>
           <tr>
@@ -82,23 +86,28 @@ export default function Page() {
                 <code>verify-no-remote-exec.ts</code>
               </a>
               ) refuses to merge any PR that imports{" "}
-              <code>node:child_process</code>, <code>node:vm</code>,{" "}
-              <code>eval</code>, <code>new Function</code>, or a remote dynamic{" "}
-              <code>import()</code> inside the runtime source. The framework
-              cannot accidentally shell out, and a compromised maintainer cannot
-              quietly add an <code>exec(&apos;curl ... | sh&apos;)</code> at
-              import time.
+              <code>node:child_process</code>
+              {", "}<code>node:vm</code>
+              {", "}
+              <code>eval</code>
+              {", "}<code>new Function</code>
+              {", "}or a remote dynamic <code>import()</code> inside the
+              runtime source. The framework cannot accidentally shell out, and a
+              compromised maintainer cannot quietly add an{" "}
+              <code>exec(&apos;curl ... | sh&apos;)</code> at import time.
             </td>
           </tr>
           <tr>
             <td>Strict per-route schemas (Zod)</td>
             <td>
-              Every route declares <code>params</code>, <code>query</code>, and{" "}
-              <code>body</code> shapes. If you constrain a field with{" "}
-              <code>z.enum([...])</code>, a tight regex, or{" "}
-              <code>z.uuid()</code>, attacker shell metacharacters
-              don&apos;t reach your handler in the first place; the request is
-              rejected with <strong>422 problem+json</strong>.
+              Every route declares <code>params</code>
+              {", "}<code>query</code>
+              {", "}and <code>body</code> shapes. If you constrain a field with{" "}
+              <code>z.enum([...])</code>
+              {", "}a tight regex, or <code>z.uuid()</code>
+              {", "}attacker shell metacharacters don&apos;t reach your handler
+              in the first place; the request is rejected with{" "}
+              <strong>422 problem+json</strong>.
             </td>
           </tr>
           <tr>
@@ -114,26 +123,30 @@ export default function Page() {
               CLI <code>spawn</code> uses fixed argv
             </td>
             <td>
-              When you run <code>daloy dev</code>, the framework spawns{" "}
-              <code>node</code> / <code>bun</code> / <code>deno</code> with a
-              hardcoded argv built by <code>buildDevCommand()</code>, never a
-              shell string. The <code>create-daloy</code> scaffolder
-              does the same for <code>git init</code> and{" "}
-              <code>&lt;pm&gt; install</code>: the command and arguments are
-              constants; only the working directory is derived from input, and{" "}
-              <code>cwd</code> is not shell-parsed.
+              When you run <code>daloy dev</code>
+              {", "}the framework spawns <code>node</code> / <code>bun</code> /{" "}
+              <code>deno</code> with a hardcoded argv built by{" "}
+              <code>buildDevCommand()</code>
+              {", "}never a shell string. The <code>create-daloy</code>{" "}
+              scaffolder does the same for <code>git init</code> and{" "}
+              <code>&lt;pm&gt; install</code>
+              {": "}the command and arguments are constants; only the working
+              directory is derived from input, and <code>cwd</code> is not
+              shell-parsed.
             </td>
           </tr>
         </tbody>
       </table>
       <p>
-        None of that <em>prevents your handler from shelling out unsafely</em>.
+        None of that <em>prevents your handler from shelling out unsafely</em>
+        {". "}
         That is on you. The rest of this page is the pattern to follow when you
         do need to invoke an external program from a Daloy route.
       </p>
 
       <h2 id="the-safe-shape-execfile-spawn-no-shell">
-        The safe shape: <code>execFile</code> / <code>spawn</code>, no shell
+        The safe shape: <code>execFile</code> / <code>spawn</code>
+        {", "}no shell
       </h2>
       <p>
         Two rules cover ~95% of the real-world Node CVEs in the Aikido write-up:
@@ -164,14 +177,16 @@ export default function Page() {
       <ol>
         <li>
           Use <code>execFile</code> or <code>spawn</code> with an{" "}
-          <em>array of arguments</em>. Never{" "}
-          <code>{"exec(`cmd ${userInput}`)"}</code> with a template string.
+          <em>array of arguments</em>
+          {". "}Never <code>{"exec(`cmd ${userInput}`)"}</code> with a template
+          string.
         </li>
         <li>
           Leave <code>shell: false</code> (the default). If you set{" "}
-          <code>shell: true</code>, every argument becomes shell-parsable and
-          you have to escape metacharacters yourself, which is exactly the bug
-          class you&apos;re trying to avoid.
+          <code>shell: true</code>
+          {", "}every argument becomes shell-parsable and you have to escape
+          metacharacters yourself, which is exactly the bug class you&apos;re
+          trying to avoid.
         </li>
       </ol>
       <CodeBlock
@@ -215,9 +230,11 @@ app.post(
       />
       <p>
         Even if <code>body.sourcePath</code> were{" "}
-        <code>{`"foo.mp4; rm -rf /"`}</code>, the regex would reject it at the
-        boundary; if you removed the regex, <code>execFile</code> would still
-        pass the whole string as a single argv element to <code>ffmpeg</code>,
+        <code>{`"foo.mp4; rm -rf /"`}</code>
+        {", "}the regex would reject it at the boundary; if you removed the
+        regex, <code>execFile</code> would still pass the whole string as a
+        single argv element to <code>ffmpeg</code>
+        {", "}
         which would simply fail to open a file by that name. No shell ever runs.
       </p>
 
@@ -252,14 +269,19 @@ git grep -nE 'require\\(["'\\\\'']child_process["'\\\\'']\\)|from\\s+["'\\\\'']n
         >
           <code>scripts/verify-no-remote-exec.ts</code>
         </a>{" "}
-        and run it from <code>pnpm test</code>. It refuses any import of{" "}
-        <code>child_process</code> / <code>vm</code>, any bare <code>eval</code>
-        , <code>new Function</code>, or remote dynamic <code>import()</code>. If
-        a handler genuinely needs to shell out, scope the allow-list to that one
-        file rather than turning the gate off for the whole repo.
+        and run it from <code>pnpm test</code>
+        {". "}It refuses any import of <code>child_process</code> /{" "}
+        <code>vm</code>
+        {", "}any bare <code>eval</code>
+        {", "}<code>new Function</code>
+        {", "}or remote dynamic <code>import()</code>
+        {". "}If a handler genuinely needs to shell out, scope the allow-list
+        to that one file rather than turning the gate off for the whole repo.
       </p>
 
-      <h2 id="windows-footgun-batbadbut-cve-2024-27980">Windows footgun: BatBadBut (CVE-2024-27980)</h2>
+      <h2 id="windows-footgun-batbadbut-cve-2024-27980">
+        Windows footgun: BatBadBut (CVE-2024-27980)
+      </h2>
       <p>
         Node.js 21.7.2+ ships the fix for{" "}
         <a
@@ -273,15 +295,17 @@ git grep -nE 'require\\(["'\\\\'']child_process["'\\\\'']\\)|from\\s+["'\\\\'']n
         <code>.cmd</code> file through <code>spawn</code> without{" "}
         <code>shell: true</code> used to be vulnerable to argv-to-cmd-line
         re-quoting injection. If you target older Node versions, either{" "}
-        <strong>upgrade Node</strong>, or set <code>shell: true</code> and
-        validate every argument against a strict allow-list before you spawn.
-        Daloy&apos;s engines field already requires a fixed Node version, so you
-        inherit the patched runtime by default, but you&apos;re still
-        responsible for argument validation if you opt into{" "}
-        <code>shell: true</code>.
+        <strong>upgrade Node</strong>
+        {", "}or set <code>shell: true</code> and validate every argument
+        against a strict allow-list before you spawn. Daloy&apos;s engines field
+        already requires a fixed Node version, so you inherit the patched
+        runtime by default, but you&apos;re still responsible for argument
+        validation if you opt into <code>shell: true</code>.
       </p>
 
-      <h2 id="when-you-really-do-need-a-shell">When you really do need a shell</h2>
+      <h2 id="when-you-really-do-need-a-shell">
+        When you really do need a shell
+      </h2>
       <p>
         Sometimes you genuinely need pipes, globs, or output redirection. The
         safe pattern is to write the script as a real file on disk (or check it
@@ -321,11 +345,12 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
         </li>
         <li>
           <strong>Audit your runtime dependencies.</strong> Most real-world
-          command-injection CVEs in 2024 were not in application code; they
-          were in transitive npm packages that wrapped{" "}
-          <code>child_process.exec()</code>. Use <code>pnpm audit</code> on a
-          schedule, and prefer the supply-chain hardened install path documented
-          in <a href="/docs/security/supply-chain">Supply-chain security</a>.
+          command-injection CVEs in 2024 were not in application code; they were
+          in transitive npm packages that wrapped{" "}
+          <code>child_process.exec()</code>
+          {". "}Use <code>pnpm audit</code> on a schedule, and prefer the
+          supply-chain hardened install path documented in{" "}
+          <a href="/docs/security/supply-chain">Supply-chain security</a>.
         </li>
         <li>
           <strong>Reach for a library when possible.</strong> <code>sharp</code>{" "}
@@ -348,7 +373,7 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
         >
           github.com/daloyjs/daloy/security/advisories/new
         </a>
-        . Don&apos;t open a public issue.
+        {". "}Don&apos;t open a public issue.
       </p>
     </>
   );

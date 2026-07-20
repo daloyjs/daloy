@@ -481,13 +481,14 @@ export default function BlogPostPage() {
             CSP nonces let inline scripts and styles run <em>only</em> if they
             carry a per-response random token that an XSS payload cannot guess.
             Trusted Types upgrades the browser&apos;s sink APIs (
-            <code>innerHTML</code>, <code>setTimeout</code> with strings,
-            <code> document.write</code>) so they refuse plain strings, anything
+            <code>innerHTML</code>
+            {", "}<code>setTimeout</code> with strings,
+            <code>document.write</code>) so they refuse plain strings, anything
             dangerous has to come from a named, registered policy. Together they
             shrink the XSS attack surface from &quot;anywhere in your
             bundle&quot; to &quot;the three lines in{" "}
             <code>trusted-types.ts</code> where you call
-            <code> createPolicy</code>&quot;.
+            <code>createPolicy</code>&quot;.
           </p>
 
           <h2>Step one: turn on the nonce</h2>
@@ -502,23 +503,25 @@ export default function BlogPostPage() {
 
           <p>
             Three things to notice. First, you pass the object form of{" "}
-            <code>contentSecurityPolicy</code>: that&apos;s what tells the
-            middleware to rebuild the CSP header per request instead of caching
-            a static string. Second, <code>nonce: true</code> is the entire
-            opt-in. The middleware generates a 128-bit base64url nonce using
-            WebCrypto, stashes it on <code>ctx.state.cspNonce</code>, and
-            appends <code>&apos;nonce-&lt;value&gt;&apos;</code> to your{" "}
-            <code>script-src</code> and friends.
+            <code>contentSecurityPolicy</code>
+            {": "}that&apos;s what tells the middleware to rebuild the CSP
+            header per request instead of caching a static string. Second,{" "}
+            <code>nonce: true</code> is the entire opt-in. The middleware
+            generates a 128-bit base64url nonce using WebCrypto, stashes it on{" "}
+            <code>ctx.state.cspNonce</code>
+            {", "}and appends <code>&apos;nonce-&lt;value&gt;&apos;</code> to
+            your <code>script-src</code> and friends.
           </p>
 
           <p>
             Third, and this is the one that bit me the first time: the nonce is
-            appended <em>only to directives you already declared</em>. If your
-            config has no <code>style-src</code>, the middleware will{" "}
-            <em>not</em> invent one for you. That&apos;s deliberate, secure
-            headers should never silently broaden your policy, but it means you
-            need to spell those directives out yourself if you want to use a
-            nonce on them. Which leads us to&hellip;
+            appended <em>only to directives you already declared</em>
+            {". "}If your config has no <code>style-src</code>
+            {", "}the middleware will <em>not</em> invent one for you.
+            That&apos;s deliberate, secure headers should never silently broaden
+            your policy, but it means you need to spell those directives out
+            yourself if you want to use a nonce on them. Which leads us
+            to&hellip;
           </p>
 
           <h2>Why the nonce now lands on four directives, not two</h2>
@@ -527,12 +530,13 @@ export default function BlogPostPage() {
             In older CSP guides you&apos;ll see &quot;just add the nonce to{" "}
             <code>script-src</code> and <code>style-src</code>&quot;. That was
             true in CSP 2. In CSP 3, the browser also consults
-            <code> script-src-elem</code> and <code>style-src-elem</code>{" "}
+            <code>script-src-elem</code> and <code>style-src-elem</code>{" "}
             specifically for <em>element-based</em> loads,{" "}
             <code>&lt;script src=...&gt;</code> and{" "}
-            <code>&lt;link rel=&quot;stylesheet&quot;&gt;</code>: and falls back
-            to the older directives if they aren&apos;t present. The wrinkle is
-            that if you declare both pairs and only nonce the non-
+            <code>&lt;link rel=&quot;stylesheet&quot;&gt;</code>
+            {": "}and falls back to the older directives if they aren&apos;t
+            present. The wrinkle is that if you declare both pairs and only
+            nonce the non-
             <code>-elem</code> ones, the browser uses the more specific
             directive and ignores the nonce.
           </p>
@@ -562,9 +566,9 @@ export default function BlogPostPage() {
           <p>
             The middleware does its job. Your handler reads{" "}
             <code>ctx.state.cspNonce</code> and attaches it to every inline{" "}
-            <code>&lt;script&gt;</code> and <code>&lt;style&gt;</code>. The
-            shape of the handler is the same whether you&apos;re using a
-            template engine or just template literals like this demo:
+            <code>&lt;script&gt;</code> and <code>&lt;style&gt;</code>
+            {". "}The shape of the handler is the same whether you&apos;re
+            using a template engine or just template literals like this demo:
           </p>
 
           <EditorFrame
@@ -576,8 +580,8 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            If you forget the nonce on a tag, that tag silently does not execute
-            , which is exactly what you want, but is also why you&apos;ll
+            If you forget the nonce on a tag, that tag silently does not
+            execute, which is exactly what you want, but is also why you&apos;ll
             briefly hate yourself the first time a footer analytics snippet
             stops working. Open the console, you&apos;ll see a clean CSP
             violation message naming the directive. Add the nonce, refresh,
@@ -639,9 +643,11 @@ export default function BlogPostPage() {
 
           <p>
             The CSP spec gives us a beautiful escape hatch, a parallel header
-            called <code>Content-Security-Policy-Report-Only</code>. The browser
-            evaluates it exactly like the enforced policy, but instead of
-            blocking violations it sends them to a <code>report-uri</code>.
+            called <code>Content-Security-Policy-Report-Only</code>
+            {". "}The browser evaluates it exactly like the enforced policy,
+            but instead of blocking violations it sends them to a{" "}
+            <code>report-uri</code>
+            {". "}
             DaloyJS doesn&apos;t ship a built-in toggle for this (yet), but
             it&apos;s a six-line custom hook on top of the existing middleware:
           </p>
@@ -731,18 +737,19 @@ export default function BlogPostPage() {
 
           <p>
             The full options surface for <code>secureHeaders()</code> is in the{" "}
-            <Link href="/docs/security">security docs</Link>, which also show
-            how this fits with CSRF, sessions, and the rest of the defenses. If
-            you want to see the actual generator, it&apos;s a small file: open{" "}
-            <code>src/middleware.ts</code> and search for{" "}
-            <code>buildCspHeader</code>: it&apos;s about thirty lines.
+            <Link href="/docs/security">security docs</Link>
+            {", "}which also show how this fits with CSRF, sessions, and the
+            rest of the defenses. If you want to see the actual generator,
+            it&apos;s a small file: open <code>src/middleware.ts</code> and
+            search for <code>buildCspHeader</code>
+            {": "}it&apos;s about thirty lines.
           </p>
 
           <p>
             Thanks for reading. Now go grep your codebase for{" "}
-            <code>.innerHTML =</code>. Whatever the number is, it&apos;s either
-            smaller than you fear or much, much larger. Both outcomes are useful
-            information.
+            <code>.innerHTML =</code>
+            {". "}Whatever the number is, it&apos;s either smaller than you
+            fear or much, much larger. Both outcomes are useful information.
           </p>
 
           <p>Devlin</p>

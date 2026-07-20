@@ -257,9 +257,11 @@ export default function BlogPostPage() {
 
           <p>
             I went down the list with our framework open in another window. The
-            honest result: <strong>nine out of ten are already covered</strong>{" "}
-, most of them by default, a couple with a single opt-in line. One, {" "}
-            <em>open redirects</em>: was a real gap. So I shipped the
+            honest result: <strong>nine out of ten are already covered</strong>
+            {", "}
+            most of them by default, a couple with a single opt-in line. One,{" "}
+            <em>open redirects</em>
+            {": "}was a real gap. So I shipped the
             <code>safeRedirect()</code> helper you will see below.
           </p>
 
@@ -293,7 +295,7 @@ export default function BlogPostPage() {
             comes out as the type you declared. A schema that expects{" "}
             <code>email: z.email()</code> will not let{" "}
             <code>email = &quot; OR 1=1 --&quot;</code> reach your handler
-            looking like a string. You still have to call the driver correctly, 
+            looking like a string. You still have to call the driver correctly,
             but you don&apos;t get to claim you concatenated a string
             &quot;because the type system told you to.&quot;
           </p>
@@ -331,7 +333,7 @@ export default function BlogPostPage() {
           <p>
             This is the one I&apos;m proudest of, because the most-quoted SSRF
             CVEs of the last five years, Capital One, Shopify, plenty of others
-, would have failed against a re-validating fetch wrapper.
+            , would have failed against a re-validating fetch wrapper.
             Daloy&apos;s does re-validate every hop. A 302 to 169.254.169.254 is
             just as dead as a direct one.
           </p>
@@ -433,10 +435,11 @@ return new Response(null, {
 
           <p>
             That puts a load-bearing security decision on the developer at the
-            <em> latest </em> moment in the stack. We have a verb for that:{" "}
-            <em>insecure default</em>. So I wrote the missing helper, and gave
-            it the only defaults that make sense, refuse on bad input, fallback
-            if you ask for one, no implicit allow-list:
+            <em>latest</em> moment in the stack. We have a verb for that:{" "}
+            <em>insecure default</em>
+            {". "}So I wrote the missing helper, and gave it the only defaults
+            that make sense, refuse on bad input, fallback if you ask for one,
+            no implicit allow-list:
           </p>
 
           <CodeBlock language="ts" code={SAFE_REDIRECT} />
@@ -444,8 +447,8 @@ return new Response(null, {
           <p>
             The helper is a small, self-contained module, no framework
             internals, no dependency on <code>App</code> or <code>Context</code>
-            . You can use it from a handler, from a hook, from a custom adapter,
-            even from a script. The validation rules are tested in{" "}
+            {". "}You can use it from a handler, from a hook, from a custom
+            adapter, even from a script. The validation rules are tested in{" "}
             <code>tests/safe-redirect.test.ts</code> and cover every bypass the
             article mentions plus a few it doesn&apos;t: backslash-prefixed
             paths, CR/LF response-splitting payloads, scheme spoofing,
@@ -482,19 +485,20 @@ return new Response(null, {
 
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
-            <Link href="/blog/secure-by-default">Secure by Default</Link>,{" "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
+            {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
               Cloud Security Architecture, Mapped to DaloyJS
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe Coding Security
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
               CSRF in 2026
             </Link>
-            . Or jump straight to{" "}
+            {". "}Or jump straight to{" "}
             <Link href="/docs/security/fetch-guard">
               /docs/security/fetch-guard
             </Link>{" "}
@@ -502,7 +506,7 @@ return new Response(null, {
             <Link href="/docs/security/owasp-api-top-10">
               /docs/security/owasp-api-top-10
             </Link>
-            .
+            {"."}
           </p>
         </div>
       </article>

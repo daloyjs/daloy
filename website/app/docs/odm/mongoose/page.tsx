@@ -27,9 +27,10 @@ export default function Page() {
         <a href="https://mongoosejs.com" target="_blank" rel="noreferrer">
           Mongoose
         </a>{" "}
-        is the default ODM choice for MongoDB teams who want schemas, model middleware, casting, validation,
-        and transactions through sessions. It fits naturally into DaloyJS when you register the connection once
-        and expose a small model surface on <code>state</code>.
+        is the default ODM choice for MongoDB teams who want schemas, model
+        middleware, casting, validation, and transactions through sessions. It
+        fits naturally into DaloyJS when you register the connection once and
+        expose a small model surface on <code>state</code>.
       </p>
 
       <FlowDiagram
@@ -38,9 +39,17 @@ export default function Page() {
         steps={[
           { label: "Install", detail: "pnpm add mongoose" },
           { label: "Schema & model", detail: "new Schema · model('User')" },
-          { label: "Plugin", detail: "connect · decorate('db') · onClose", tone: "accent" },
+          {
+            label: "Plugin",
+            detail: "connect · decorate('db') · onClose",
+            tone: "accent",
+          },
           { label: "Augment state", detail: "interface AppState { db }" },
-          { label: "Use in routes", detail: "state.db.User.findById()", tone: "success" },
+          {
+            label: "Use in routes",
+            detail: "state.db.User.findById()",
+            tone: "success",
+          },
         ]}
         caption="The connection happens once inside the plugin. After you augment AppState, handlers get a fully typed state.db model surface."
       />
@@ -92,11 +101,12 @@ export const mongoosePlugin = {
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <p>
         Add the <code>declare module</code> block to the same module that
-        exports <code>db</code>, not to a separate <code>.d.ts</code> file.
-        Declaration files are exempt from type-checking when{" "}
-        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
-        import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        exports <code>db</code>
+        {", "}not to a separate <code>.d.ts</code> file. Declaration files are
+        exempt from type-checking when <code>skipLibCheck</code> is on (the
+        scaffolded default), so a broken import inside a <code>.d.ts</code>{" "}
+        fails silently and <code>state.db</code> quietly degrades to{" "}
+        <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/mongoose.ts (the module that exports db)
@@ -157,8 +167,9 @@ serve(app, { port: 3000 });`}
 
       <h2 id="sessions-and-transactions">Sessions and transactions</h2>
       <p>
-        Use MongoDB sessions for multi-document transactions. Start the session inside the handler and thread it
-        through every model call in the unit of work.
+        Use MongoDB sessions for multi-document transactions. Start the session
+        inside the handler and thread it through every model call in the unit of
+        work.
       </p>
 
       <SequenceDiagram
@@ -217,8 +228,9 @@ serve(app, { port: 3000 });`}
 
       <h2 id="validation-and-errors">Validation and errors</h2>
       <p>
-        Keep transport validation in Zod and let Mongoose own document-level validation. Translate duplicate key
-        or cast failures into DaloyJS errors so they serialize as problem+json.
+        Keep transport validation in Zod and let Mongoose own document-level
+        validation. Translate duplicate key or cast failures into DaloyJS errors
+        so they serialize as problem+json.
       </p>
       <CodeBlock
         code={`import { HttpError } from "@daloyjs/core";
@@ -236,12 +248,15 @@ try {
 
       <h2 id="runtime-constraints">Runtime constraints</h2>
       <p>
-        Mongoose is a Node.js-first ODM because it depends on the MongoDB Node driver. For SQL databases or
-        edge runtimes, stay in the <Link href="/docs/orm">ORM section</Link> instead.
+        Mongoose is a Node.js-first ODM because it depends on the MongoDB Node
+        driver. For SQL databases or edge runtimes, stay in the{" "}
+        <Link href="/docs/orm">ORM section</Link> instead.
       </p>
 
       <p>
-        Compare with <Link href="/docs/odm/ottoman">Ottoman</Link> for Couchbase, <Link href="/docs/orm/prisma">Prisma</Link> for SQL, or return to the <Link href="/docs/odm">ODM overview</Link>.
+        Compare with <Link href="/docs/odm/ottoman">Ottoman</Link> for
+        Couchbase, <Link href="/docs/orm/prisma">Prisma</Link> for SQL, or
+        return to the <Link href="/docs/odm">ODM overview</Link>.
       </p>
     </>
   );

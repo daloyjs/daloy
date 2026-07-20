@@ -38,7 +38,7 @@ export default function Page() {
         >
           create-daloy on npm
         </a>
-        . The generated apps install the framework from{" "}
+        {". "}The generated apps install the framework from{" "}
         <a
           href="https://www.npmjs.com/package/@daloyjs/core"
           target="_blank"
@@ -46,7 +46,7 @@ export default function Page() {
         >
           @daloyjs/core on npm
         </a>
-        .
+        {"."}
       </p>
 
       <BranchDiagram
@@ -102,8 +102,9 @@ bun  create daloy           my-api`}
         dependencies, whether to initialize a git repository, and whether to add
         the GitHub security bundle. The dependency-install prompt defaults to{" "}
         <code>no</code> for pnpm projects so you can review the generated{" "}
-        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code> guardrails before
-        the first install; other package managers default to <code>yes</code>.
+        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code> guardrails
+        before the first install; other package managers default to{" "}
+        <code>yes</code>.
       </p>
 
       <FlowDiagram
@@ -133,53 +134,65 @@ bun  create daloy           my-api`}
       <h3 id="flags">Flags</h3>
       <ul>
         <li>
-          <code>--template &lt;name&gt;</code>: <code>node-basic</code>{" "}
-          (default), <code>vercel</code>, <code>cloudflare-worker</code>,{" "}
-          <code>bun-basic</code>, or <code>deno-basic</code>.
+          <code>--template &lt;name&gt;</code>
+          {": "}<code>node-basic</code> (default), <code>vercel</code>
+          {", "}<code>cloudflare-worker</code>
+          {", "}
+          <code>bun-basic</code>
+          {", "}or <code>deno-basic</code>.
         </li>
         <li>
-          <code>--package-manager &lt;pm&gt;</code>: <code>pnpm</code>{" "}
-          (default), <code>npm</code>, <code>yarn</code>, or <code>bun</code>.
+          <code>--package-manager &lt;pm&gt;</code>
+          {": "}<code>pnpm</code> (default), <code>npm</code>
+          {", "}<code>yarn</code>
+          {", "}or <code>bun</code>.
         </li>
         <li>
-          <code>--list-templates</code>: print available templates with
-          descriptions.
+          <code>--list-templates</code>
+          {": "}print available templates with descriptions.
         </li>
         <li>
-          <code>--install</code> / <code>--no-install</code>: install
-          dependencies after scaffolding. Defaults to <code>no</code> for pnpm
-          projects and <code>yes</code> for npm, Yarn, and Bun projects.
+          <code>--install</code> / <code>--no-install</code>
+          {": "}install dependencies after scaffolding. Defaults to{" "}
+          <code>no</code> for pnpm projects and <code>yes</code> for npm, Yarn,
+          and Bun projects.
         </li>
         <li>
-          <code>--git</code> / <code>--no-git</code>: initialize a git
-          repository.
+          <code>--git</code> / <code>--no-git</code>
+          {": "}initialize a git repository.
         </li>
         <li>
-          <code>--minimal</code>: strip the bookstore demo and the auto-mounted{" "}
+          <code>--minimal</code>
+          {": "}strip the bookstore demo and the auto-mounted{" "}
           <code>/docs</code> + <code>/openapi.json</code> API docs routes so the
           scaffold only ships the framework bootstrap and a health route. Useful
           when you want to start from the smallest possible app.
         </li>
         <li>
-          <code>--with-ci</code> / <code>--no-ci</code>: add hardened GitHub
-          Actions, Dependabot, CODEOWNERS, <code>SECURITY.md</code>, and
-          lockfile-source verification. Defaults to <code>yes</code>.
+          <code>--with-ci</code> / <code>--no-ci</code>
+          {": "}add hardened GitHub Actions, Dependabot, CODEOWNERS,{" "}
+          <code>SECURITY.md</code>
+          {", "}and lockfile-source verification. Defaults to <code>yes</code>.
         </li>
         <li>
-          <code>--with-deploy</code> / <code>--no-deploy</code>: add or skip the
-          manual-only starter <code>.github/workflows/deploy.yml</code>.
+          <code>--with-deploy</code> / <code>--no-deploy</code>
+          {": "}add or skip the manual-only starter{" "}
+          <code>.github/workflows/deploy.yml</code>
+          {". "}
           Defaults to the same value as <code>--with-ci</code>.
         </li>
         <li>
-          <code>--code-owner &lt;owner&gt;</code>: replace the CODEOWNERS
-          placeholder when <code>--with-ci</code> is used, for example{" "}
-          <code>@acme/security</code>.
+          <code>--code-owner &lt;owner&gt;</code>
+          {": "}replace the CODEOWNERS placeholder when <code>--with-ci</code>{" "}
+          is used, for example <code>@acme/security</code>.
         </li>
         <li>
-          <code>--force</code>: overwrite an existing non-empty directory.
+          <code>--force</code>
+          {": "}overwrite an existing non-empty directory.
         </li>
         <li>
-          <code>--yes</code>: accept all defaults; never prompt.
+          <code>--yes</code>
+          {": "}accept all defaults; never prompt.
         </li>
       </ul>
 
@@ -187,8 +200,9 @@ bun  create daloy           my-api`}
       <p>
         Before printing the completion summary, the CLI checks whether the
         runtime and package manager your selections actually need are on your{" "}
-        <code>PATH</code>. If something is missing, it prints an official
-        install link next to the next steps instead of leaving you to hit a{" "}
+        <code>PATH</code>
+        {". "}If something is missing, it prints an official install link next
+        to the next steps instead of leaving you to hit a{" "}
         <code>command not found</code> on your first command. For example,
         scaffolding the <code>bun-basic</code> template on a machine without Bun
         surfaces a{" "}
@@ -199,7 +213,9 @@ bun  create daloy           my-api`}
         <a href="https://pnpm.io/installation" target="_blank" rel="noreferrer">
           https://pnpm.io/installation
         </a>
-        . Node-flavored templates (<code>node-basic</code>, <code>vercel</code>,{" "}
+        {". "}Node-flavored templates (<code>node-basic</code>
+        {", "}<code>vercel</code>
+        {", "}
         <code>cloudflare-worker</code>) point at{" "}
         <a href="https://nodejs.org" target="_blank" rel="noreferrer">
           https://nodejs.org
@@ -211,20 +227,22 @@ bun  create daloy           my-api`}
         printed.
       </p>
       <p>
-        The CLI also checks <strong>versions</strong>, not just presence.{" "}
-        <code>npm create daloy</code> and <code>npx</code> will run the
-        scaffolder on an old Node.js because <code>engines</code> are only
-        advisory there, so the CLI verifies it itself: if you are on a Node.js
-        older than <strong>24</strong>, it stops before scaffolding with a clear
-        message, the <a href="https://nodejs.org" target="_blank" rel="noreferrer">
+        The CLI also checks <strong>versions</strong>
+        {", "}not just presence. <code>npm create daloy</code> and{" "}
+        <code>npx</code> will run the scaffolder on an old Node.js because{" "}
+        <code>engines</code> are only advisory there, so the CLI verifies it
+        itself: if you are on a Node.js older than <strong>24</strong>
+        {", "}it stops before scaffolding with a clear message, the{" "}
+        <a href="https://nodejs.org" target="_blank" rel="noreferrer">
           nodejs.org
         </a>{" "}
         link, and a nudge toward a version manager (nvm, fnm, Volta) rather than
         generating a project your runtime cannot run. And when you pick{" "}
-        <code>npm</code>, it detects an npm older than <strong>12</strong> up
-        front, tells you to run <code>npm install -g npm@latest</code>, and skips
-        the automatic install so you get a readable explanation instead of npm&apos;s
-        raw <code>EBADENGINE</code> error partway through.
+        <code>npm</code>
+        {", "}it detects an npm older than <strong>12</strong> up front, tells
+        you to run <code>npm install -g npm@latest</code>
+        {", "}and skips the automatic install so you get a readable explanation
+        instead of npm&apos;s raw <code>EBADENGINE</code> error partway through.
       </p>
 
       <h2 id="templates">Templates</h2>
@@ -238,9 +256,12 @@ bun  create daloy           my-api`}
       </h3>
       <p>
         A production-ready Node.js HTTP server using <code>@daloyjs/core</code>{" "}
-        with <code>secureHeaders</code>, <code>requestId</code>,{" "}
-        <code>rateLimit</code>, a hardened <code>.npmrc</code>, a sample{" "}
-        <code>GET /healthz</code> route, a contract-first{" "}
+        with <code>secureHeaders</code>
+        {", "}<code>requestId</code>
+        {", "}
+        <code>rateLimit</code>
+        {", "}a hardened <code>.npmrc</code>
+        {", "}a sample <code>GET /healthz</code> route, a contract-first{" "}
         <code>GET /books/:id</code> route with Zod validation, and Hey API
         codegen wired to <code>pnpm gen</code>.
       </p>
@@ -281,8 +302,8 @@ bun  create daloy           my-api`}
       <p>
         The Vercel template also ships <code>/docs</code> (Scalar API reference)
         and <code>/openapi.json</code>
-        wired to the same app, so the deployed Vercel URL serves API documentation
-        automatically.
+        wired to the same app, so the deployed Vercel URL serves API
+        documentation automatically.
       </p>
 
       <h3 id="bun-basic">
@@ -294,8 +315,8 @@ bun  create daloy           my-api`}
           Bun
         </a>{" "}
         runtime starter using
-        <code>@daloyjs/core/bun</code>. Ships <code>bun --hot</code> for instant
-        reloads,
+        <code>@daloyjs/core/bun</code>
+        {". "}Ships <code>bun --hot</code> for instant reloads,
         <code>bun test</code> for the test runner, the same starter security
         middleware as the Node template (<code>secureHeaders</code> /{" "}
         <code>requestId</code> / <code>rateLimit</code>), the bookstore demo
@@ -312,9 +333,10 @@ bun  create daloy           my-api`}
           Deno
         </a>{" "}
         runtime starter using
-        <code>@daloyjs/core/deno</code>. Ships a <code>deno.json</code> with{" "}
-        <code>deno task dev</code>, <code>deno task test</code>, and{" "}
-        <code>deno task gen:openapi</code> tasks, loads{" "}
+        <code>@daloyjs/core/deno</code>
+        {". "}Ships a <code>deno.json</code> with <code>deno task dev</code>
+        {", "}<code>deno task test</code>
+        {", "}and <code>deno task gen:openapi</code> tasks, loads{" "}
         <code>@daloyjs/core</code> and Zod via <code>npm:</code> import-map
         specifiers, and runs with the minimum permissions Deno requires (
         <code>--allow-net --allow-env --allow-read</code>). The CLI skips
@@ -348,27 +370,30 @@ bun  create daloy           my-api`}
         GitHub-side supply-chain guardrails as well as runtime defaults.
         Node-style templates get CI, a manual-only deploy starter, CodeQL,
         OpenSSF Scorecard, zizmor, Dependabot, CODEOWNERS,{" "}
-        <code>SECURITY.md</code>, and a lockfile-source verification script. The
-        Deno template gets the same governance and scanning files with a
-        Deno-native CI workflow. No template gets an npm publish workflow,
-        because <code>create-daloy</code> scaffolds REST API services rather
-        than reusable libraries.
+        <code>SECURITY.md</code>
+        {", "}and a lockfile-source verification script. The Deno template gets
+        the same governance and scanning files with a Deno-native CI workflow.
+        No template gets an npm publish workflow, because{" "}
+        <code>create-daloy</code> scaffolds REST API services rather than
+        reusable libraries.
       </p>
       <CodeBlock
         language="bash"
         code="pnpm create daloy@latest my-api --template node-basic --package-manager pnpm --with-ci --code-owner @acme/security"
       />
       <p>
-        The generated workflows use top-level <code>{"permissions: {}"}</code>,
-        pinned third-party actions, <code>harden-runner</code>,{" "}
-        <code>persist-credentials: false</code>, disabled install scripts, and
-        no package-manager cache. Replace the CODEOWNERS placeholder if you did
-        not pass <code>--code-owner</code>, then enable branch protection,
-        required status checks, secret scanning, and push protection in GitHub
-        settings. Use <code>--with-ci --no-deploy</code> when you want
-        governance without deployment scaffolding, or{" "}
-        <code>--with-deploy --no-ci</code> when you only want the deployment
-        starter.
+        The generated workflows use top-level <code>{"permissions: {}"}</code>
+        {", "}
+        pinned third-party actions, <code>harden-runner</code>
+        {", "}
+        <code>persist-credentials: false</code>
+        {", "}disabled install scripts, and no package-manager cache. Replace
+        the CODEOWNERS placeholder if you did not pass <code>--code-owner</code>
+        {", "}then enable branch protection, required status checks, secret
+        scanning, and push protection in GitHub settings. Use{" "}
+        <code>--with-ci --no-deploy</code> when you want governance without
+        deployment scaffolding, or <code>--with-deploy --no-ci</code> when you
+        only want the deployment starter.
       </p>
 
       <h2 id="editor-mcp-integration">Editor MCP integration</h2>
@@ -398,7 +423,9 @@ bun  create daloy           my-api`}
         depend on it at runtime.
       </p>
 
-      <h2 id="which-template-should-i-choose">Which template should I choose?</h2>
+      <h2 id="which-template-should-i-choose">
+        Which template should I choose?
+      </h2>
       <ul>
         <li>
           Choose <code>node-basic</code> for a traditional REST API on Node,
@@ -437,31 +464,35 @@ bun  create daloy           my-api`}
         scaffolder gives every project the same guardrail-first posture, the
         same TypeScript baseline, and the same scripts so an AI coding agent or
         a new teammate can navigate it without a tour. Node, Bun, and Deno
-        starters include <code>secureHeaders</code>, <code>requestId</code>, and{" "}
-        <code>rateLimit</code>; the edge starters include{" "}
+        starters include <code>secureHeaders</code>
+        {", "}<code>requestId</code>
+        {", "}and <code>rateLimit</code>; the edge starters include{" "}
         <code>secureHeaders</code> and <code>requestId</code> plus tighter body
         and timeout limits.
       </p>
       <p>
-        The CLI itself ships with <strong>zero runtime dependencies</strong>:
+        The CLI itself ships with <strong>zero runtime dependencies</strong>
+        {": "}
         only Node built-ins, so the supply-chain story stays clean. Templates
         are copied verbatim from the package&apos;s <code>templates/</code>{" "}
         directory and never run scripts during scaffolding. When you choose{" "}
-        <code>pnpm</code>, the generated app keeps the hardened{" "}
-        <code>.npmrc</code> and <code>pnpm-workspace.yaml</code>, and the CLI
-        adds a <code>pnpm &gt;= 11</code> floor to <code>engines</code> (pnpm
-        always enforces <code>engines.pnpm</code>) — older pnpm silently
-        ignores <code>minimumReleaseAge</code>, which would disable the 24h
-        supply-chain cooldown; the CLI also warns up front if the installed
-        pnpm is older. When you choose <code>npm</code>, the CLI adds an{" "}
-        <code>npm &gt;= 12</code> floor to <code>engines</code> and swaps in an
-        npm-native <code>.npmrc</code> with <code>engine-strict=true</code> so
-        that floor is a hard install-time failure rather than a warning; yarn
-        and bun scaffolds drop the pnpm-specific config so installs stay
-        warning-free. When you choose{" "}
-        <code>--with-ci</code>, it
-        also adds the GitHub-side security files that a company repo normally
-        has to assemble by hand.
+        <code>pnpm</code>
+        {", "}the generated app keeps the hardened <code>.npmrc</code> and{" "}
+        <code>pnpm-workspace.yaml</code>
+        {", "}and the CLI adds a <code>pnpm &gt;= 11</code> floor to{" "}
+        <code>engines</code> (pnpm always enforces <code>engines.pnpm</code>) —
+        older pnpm silently ignores <code>minimumReleaseAge</code>
+        {", "}which would disable the 24h supply-chain cooldown; the CLI also
+        warns up front if the installed pnpm is older. When you choose{" "}
+        <code>npm</code>
+        {", "}the CLI adds an <code>npm &gt;= 12</code> floor to{" "}
+        <code>engines</code> and swaps in an npm-native <code>.npmrc</code> with{" "}
+        <code>engine-strict=true</code> so that floor is a hard install-time
+        failure rather than a warning; yarn and bun scaffolds drop the
+        pnpm-specific config so installs stay warning-free. When you choose{" "}
+        <code>--with-ci</code>
+        {", "}it also adds the GitHub-side security files that a company repo
+        normally has to assemble by hand.
       </p>
 
       <h2 id="next">Next</h2>

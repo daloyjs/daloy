@@ -42,9 +42,10 @@ export default function Page() {
         client.
       </p>
       <p>
-        Everything is built on Web-standard <code>URL</code>, <code>btoa</code>{" "}
-        / <code>atob</code>, and <code>JSON</code>, so it runs unchanged on
-        Node, Bun, Deno, and Cloudflare Workers.
+        Everything is built on Web-standard <code>URL</code>
+        {", "}<code>btoa</code> / <code>atob</code>
+        {", "}and <code>JSON</code>
+        {", "}so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
       </p>
 
       <FlowDiagram
@@ -85,9 +86,10 @@ export default function Page() {
       <h2 id="quick-start">Quick start</h2>
       <p>
         Mount <code>paginationQuery()</code> as the route&apos;s{" "}
-        <code>request.query</code>. The handler receives a fully typed,
-        validated <code>{`{ limit, cursor }`}</code>; build the next cursor from
-        the last row and advertise it with a <code>Link</code> header.
+        <code>request.query</code>
+        {". "}The handler receives a fully typed, validated{" "}
+        <code>{`{ limit, cursor }`}</code>; build the next cursor from the last
+        row and advertise it with a <code>Link</code> header.
       </p>
       <CodeBlock
         code={`import {
@@ -153,7 +155,8 @@ const payload = decodeCursor<{ id: number; createdAt: string }>(cursor);
         invalid JSON are rejected, and any <code>__proto__</code> /{" "}
         <code>constructor</code> / <code>prototype</code> keys in the decoded
         graph are stripped (prototype-pollution defense). A tampered cursor
-        surfaces as a <code>400 Bad Request</code>, not a <code>500</code>.
+        surfaces as a <code>400 Bad Request</code>
+        {", "}not a <code>500</code>.
       </p>
       <CodeBlock
         code={`try {
@@ -167,10 +170,12 @@ const payload = decodeCursor<{ id: number; createdAt: string }>(cursor);
       <h2 id="rfc-8288-link-header">RFC 8288 Link header</h2>
       <p>
         <code>buildPageLinks()</code> clones the current request URL and swaps
-        its cursor query parameter to produce <code>next</code>,{" "}
-        <code>prev</code>, and <code>first</code> page URLs, preserving every
-        other query parameter (filters, <code>limit</code>, …), then serializes
-        them into a single <code>Link</code> header.
+        its cursor query parameter to produce <code>next</code>
+        {", "}
+        <code>prev</code>
+        {", "}and <code>first</code> page URLs, preserving every other query
+        parameter (filters, <code>limit</code>
+        {", "} …), then serializes them into a single <code>Link</code> header.
       </p>
       <CodeBlock
         code={`const { links, linkHeader, urls } = buildPageLinks({
@@ -220,8 +225,8 @@ set.headers.set("Link", linkHeader);
       <p>
         At runtime the same schema coerces <code>limit</code> from its string
         query value to an integer and rejects out-of-range or non-integer values
-        at the request boundary with a <code>422</code>. Customize the parameter
-        names and bounds:
+        at the request boundary with a <code>422</code>
+        {". "}Customize the parameter names and bounds:
       </p>
       <CodeBlock
         code={`paginationQuery({
@@ -237,10 +242,10 @@ set.headers.set("Link", linkHeader);
       <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
-          Cursors are <strong>opaque, not secret</strong>: they are encoded, not
-          encrypted or signed. Never trust a decoded cursor for authorization;
-          always re-scope the underlying query by the authenticated principal on
-          the server.
+          Cursors are <strong>opaque, not secret</strong>
+          {": "}they are encoded, not encrypted or signed. Never trust a
+          decoded cursor for authorization; always re-scope the underlying query
+          by the authenticated principal on the server.
         </li>
         <li>
           <code>decodeCursor()</code> caps input length, rejects malformed

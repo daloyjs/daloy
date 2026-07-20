@@ -53,10 +53,11 @@ export default function Page() {
         </li>
         <li>
           <strong>It&apos;s a redirect flow.</strong> You create a payment,
-          Mollie returns a <code>_links.checkout.href</code>, you redirect the
-          customer there. They come back to your <code>redirectUrl</code>{" "}
-          (browser) and your <code>webhookUrl</code> gets POSTed (server). The
-          redirect is a UX signal only, the webhook is the source of truth.
+          Mollie returns a <code>_links.checkout.href</code>
+          {", "}you redirect the customer there. They come back to your{" "}
+          <code>redirectUrl</code> (browser) and your <code>webhookUrl</code>{" "}
+          gets POSTed (server). The redirect is a UX signal only, the webhook is
+          the source of truth.
         </li>
         <li>
           <strong>Webhooks are signed now.</strong> Mollie sends{" "}
@@ -67,9 +68,9 @@ export default function Page() {
         </li>
         <li>
           <strong>Amounts are decimal strings.</strong> Unlike most providers,
-          Mollie wants <code>{`{ currency: "EUR", value: "10.00" }`}</code>: a
-          string with exactly two decimals for EUR. Pass <code>1000</code> as a
-          number and you&apos;ll get a 422.
+          Mollie wants <code>{`{ currency: "EUR", value: "10.00" }`}</code>
+          {": "}a string with exactly two decimals for EUR. Pass{" "}
+          <code>1000</code> as a number and you&apos;ll get a 422.
         </li>
         <li>
           <strong>Test vs live is the API key.</strong> Keys are prefixed{" "}
@@ -94,7 +95,8 @@ export default function Page() {
         </li>
         <li>
           In Developers → Webhooks, create a webhook subscription pointing at
-          your DaloyJS endpoint. Save the <strong>signing secret</strong>:
+          your DaloyJS endpoint. Save the <strong>signing secret</strong>
+          {": "}
           you&apos;ll only see it once.
         </li>
         <li>
@@ -330,10 +332,11 @@ app.post(
       />
       <p>
         Mollie&apos;s webhook payload is famously minimalist: a form-encoded
-        body of <code>id=tr_xxx</code>. You take that <code>id</code>, fetch the
-        full payment from the API, and react to its current status. Always 200
-        OK quickly, even on not-interesting events, Mollie retries non-200
-        responses.
+        body of <code>id=tr_xxx</code>
+        {". "}You take that <code>id</code>
+        {", "}fetch the full payment from the API, and react to its current
+        status. Always 200 OK quickly, even on not-interesting events, Mollie
+        retries non-200 responses.
       </p>
       <CodeBlock
         code={`import { readBodyLimited } from "@daloyjs/core";
@@ -376,7 +379,9 @@ app.post(
 );`}
       />
 
-      <h2 id="7-refunds-captures-and-cancellation">7. Refunds, captures, and cancellation</h2>
+      <h2 id="7-refunds-captures-and-cancellation">
+        7. Refunds, captures, and cancellation
+      </h2>
       <CodeBlock
         code={`// Full refund
 await state.mollie.raw.refunds.create({
@@ -416,8 +421,8 @@ for await (const page of pages) {
       <h2 id="runtimes">Runtimes</h2>
       <p>
         The SDK is built on the Fetch API and ships ESM + CJS, so it runs on
-        Node 18+, Cloudflare Workers, Bun, and Deno without adapters.
-        The webhook verifier is pure crypto using{" "}
+        Node 18+, Cloudflare Workers, Bun, and Deno without adapters. The
+        webhook verifier is pure crypto using{" "}
         <code>crypto.subtle.importKey</code> / <code>sign</code> under the hood
         and works in every modern runtime.
       </p>
@@ -426,7 +431,8 @@ for await (const page of pages) {
       <p>
         Mollie returns RFC-7807-shaped problem details. Catch{" "}
         <code>errors.ErrorResponse</code> and map it through{" "}
-        <Link href="/docs/errors">problem+json</Link>:
+        <Link href="/docs/errors">problem+json</Link>
+        {": "}
       </p>
       <CodeBlock
         code={`import * as errors from "mollie-api-typescript/models/errors";
@@ -474,9 +480,12 @@ try {
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href={"/docs/payments/adyen" as Route}>Adyen guide</Link>,{" "}
-        <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>,
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href={"/docs/payments/adyen" as Route}>Adyen guide</Link>
+        {", "}
+        <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>
+        {", "}
         and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>

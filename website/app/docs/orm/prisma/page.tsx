@@ -30,8 +30,8 @@ export default function Page() {
         </a>{" "}
         is a schema-first ORM with first-class migrations and a generated, fully
         typed client. It pairs well with DaloyJS&apos;s{" "}
-        <Link href="/docs/routing">contract-first routes</Link>: Zod validates
-        the wire, Prisma validates the database.
+        <Link href="/docs/routing">contract-first routes</Link>
+        {": "}Zod validates the wire, Prisma validates the database.
       </p>
 
       <FlowDiagram
@@ -112,9 +112,9 @@ export default defineConfig({
           <code>prisma-client</code>
         </a>{" "}
         generator writes the client to the configured output path. Connection
-        URLs live in <code>prisma.config.ts</code>, and application code imports{" "}
-        <code>PrismaClient</code> from the generated path instead of{" "}
-        <code>@prisma/client</code>.
+        URLs live in <code>prisma.config.ts</code>
+        {", "}and application code imports <code>PrismaClient</code> from the
+        generated path instead of <code>@prisma/client</code>.
       </p>
       <CodeBlock
         code={`pnpm prisma migrate dev --name init
@@ -178,7 +178,7 @@ declare module "@daloyjs/core" {
         <Link href={"/docs/security/resource-authorization" as Route}>
           resource authorization guide
         </Link>
-        .
+        {"."}
       </p>
       <CodeBlock
         code={`// src/server.ts
@@ -288,9 +288,9 @@ export const prisma = new PrismaClient({ adapter });`}
         Prisma always emits parameterized SQL, but the <em>filter object</em>{" "}
         you pass to <code>where</code> is interpreted by Prisma. If a field
         annotated as <code>string</code> arrives at runtime as an object like{" "}
-        <code>{`{ "not": "" }`}</code>, Prisma treats it as an operator and an
-        attacker can bypass equality checks, the
-        &ldquo;NoSQL-injection-in-Prisma&rdquo; pattern{" "}
+        <code>{`{ "not": "" }`}</code>
+        {", "}Prisma treats it as an operator and an attacker can bypass
+        equality checks, the &ldquo;NoSQL-injection-in-Prisma&rdquo; pattern{" "}
         <a
           href="https://www.aikido.dev/blog/prisma-and-postgresql-vulnerable-to-nosql-injection"
           target="_blank"
@@ -298,10 +298,16 @@ export const prisma = new PrismaClient({ adapter });`}
         >
           documented by Aikido
         </a>
-        . Daloy&apos;s contract-first routes neutralize this when you keep the
-        request body typed with primitive Zod schemas (<code>z.string()</code>,{" "}
-        <code>z.number()</code>, &hellip;) instead of <code>z.any()</code>,{" "}
-        <code>z.unknown()</code>, or a pass-through <code>z.record()</code>. See{" "}
+        {". "}Daloy&apos;s contract-first routes neutralize this when you keep
+        the request body typed with primitive Zod schemas (
+        <code>z.string()</code>
+        {", "}
+        <code>z.number()</code>
+        {", "} &hellip;) instead of <code>z.any()</code>
+        {", "}
+        <code>z.unknown()</code>
+        {", "}or a pass-through <code>z.record()</code>
+        {". "}See{" "}
         <Link href="/docs/security/sql-injection">
           Security &rarr; SQL injection
         </Link>{" "}
@@ -326,17 +332,23 @@ try {
       />
 
       <p>
-        Continue with <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/typeorm">TypeORM</Link>,{" "}
-        <Link href="/docs/orm/mikro-orm">MikroORM</Link>,{" "}
-        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
-        <Link href="/docs/odm">ODM overview</Link> for document databases.
+        Continue with <Link href="/docs/orm/drizzle">Drizzle</Link>
+        {", "}
+        <Link href="/docs/orm/typeorm">TypeORM</Link>
+        {", "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>
+        {", "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>
+        {", "}or the <Link href="/docs/odm">ODM overview</Link> for document
+        databases.
       </p>
       <p>
         For serverless or edge deployments, see the{" "}
-        <Link href="/docs/databases">database hosting overview</Link>: Prisma
-        supports <Link href="/docs/databases/neon">Neon</Link>,{" "}
-        <Link href="/docs/databases/planetscale">PlanetScale</Link>, and{" "}
+        <Link href="/docs/databases">database hosting overview</Link>
+        {": "}Prisma supports <Link href="/docs/databases/neon">Neon</Link>
+        {", "}
+        <Link href="/docs/databases/planetscale">PlanetScale</Link>
+        {", "}and{" "}
         <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link> through
         Driver Adapters.
       </p>

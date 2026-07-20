@@ -95,14 +95,16 @@ export default function Page() {
       <ol>
         <li>
           Create a user pool in the AWS console, then add an{" "}
-          <strong>app client</strong>. Note the <strong>User pool ID</strong>{" "}
-          (e.g. <code>us-east-1_AbCdEfGhI</code>) and the{" "}
+          <strong>app client</strong>
+          {". "}Note the <strong>User pool ID</strong> (e.g.{" "}
+          <code>us-east-1_AbCdEfGhI</code>) and the{" "}
           <strong>App client ID</strong>.
         </li>
         <li>
           Configure a <strong>resource server</strong> with custom scopes (e.g.{" "}
-          <code>my-api/read</code>, <code>my-api/write</code>) and authorize
-          them on the app client.
+          <code>my-api/read</code>
+          {", "}<code>my-api/write</code>) and authorize them on the app
+          client.
         </li>
         <li>
           Enable a hosted UI domain or use the OAuth 2.0 authorization-code flow
@@ -218,24 +220,28 @@ app.get(
       <ul>
         <li>
           <strong>Access tokens</strong> carry <code>scope</code>{" "}
-          (space-separated string) and <code>cognito:groups</code>: use them for
-          API authorization.
+          (space-separated string) and <code>cognito:groups</code>
+          {": "}use them for API authorization.
         </li>
         <li>
-          <strong>ID tokens</strong> carry user attributes (<code>email</code>,{" "}
+          <strong>ID tokens</strong> carry user attributes (<code>email</code>
+          {", "}
           <code>name</code>) and an <code>aud</code> claim. Verify them with{" "}
           <code>tokenUse: &quot;id&quot;</code> when your UI needs profile data.
         </li>
         <li>
-          Cognito signs with <strong>RS256</strong>. The library refuses{" "}
-          <code>alg: none</code> and symmetric algorithms by design.
+          Cognito signs with <strong>RS256</strong>
+          {". "}The library refuses <code>alg: none</code> and symmetric
+          algorithms by design.
         </li>
       </ul>
 
       <p>
-        See also <Link href="/docs/auth/entra-id">Entra ID</Link>,{" "}
-        <Link href="/docs/auth/auth0">Auth0</Link>, and the{" "}
-        <Link href="/docs/auth">auth integrations overview</Link>.
+        See also <Link href="/docs/auth/entra-id">Entra ID</Link>
+        {", "}
+        <Link href="/docs/auth/auth0">Auth0</Link>
+        {", "}and the <Link href="/docs/auth">auth integrations overview</Link>
+        {"."}
       </p>
     </>
   );

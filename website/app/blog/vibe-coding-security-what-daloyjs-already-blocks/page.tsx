@@ -381,7 +381,7 @@ export default function BlogPostPage() {
             <Link href="/docs/security/runtime-protections">
               /docs/security/runtime-protections
             </Link>
-            .
+            {"."}
           </p>
 
           <h2>Risk 3: Hardcoded secrets and AI-generated supply-chain rot</h2>
@@ -399,13 +399,13 @@ export default function BlogPostPage() {
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               &quot;Supply-chain hardening for TypeScript libraries&quot;
             </Link>
-            . The shorter version: attackers do not need a 0-day if they can
-            ship a malicious <code>postinstall</code>, and AI agents do not
-            inspect <code>scripts</code> blocks before running{" "}
-            <code>npm install</code>. The gate that says &quot;no lifecycle
-            scripts at all&quot; is the one that stops the next{" "}
-            <code>chalk-style</code> compromise from reaching a vibe-coded
-            project.
+            {". "}The shorter version: attackers do not need a 0-day if they can
+            ship a malicious <code>postinstall</code>
+            {", "}and AI agents do not inspect <code>scripts</code> blocks
+            before running <code>npm install</code>
+            {". "}The gate that says &quot;no lifecycle scripts at all&quot; is
+            the one that stops the next <code>chalk-style</code> compromise from
+            reaching a vibe-coded project.
           </p>
 
           <h2>Risk 4, Unlocked admin routes (the &quot;Tea app&quot; story)</h2>
@@ -423,7 +423,7 @@ export default function BlogPostPage() {
             <Link href="/docs/security/admin-panels">
               /docs/security/admin-panels
             </Link>
-            . If the &quot;Tea app&quot; team had read it, they&apos;d have
+            {". "}If the &quot;Tea app&quot; team had read it, they&apos;d have
             shipped an internal-only deploy and the breach would not have
             happened. I am not claiming the framework would have <em>forced</em>{" "}
             them to, policy is policy, but the path of least resistance in
@@ -465,7 +465,7 @@ export default function BlogPostPage() {
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
               &quot;Designing for Coding Agents&quot;
             </Link>
-            . The point of scaffolding AGENTS.md is exactly the
+            {". "}The point of scaffolding AGENTS.md is exactly the
             &quot;PromptBOM&quot; idea the Aikido post pitches at the end, give
             the agent provenance and rules <em>before</em> it generates, not
             after.
@@ -488,7 +488,7 @@ export default function BlogPostPage() {
             <li>
               We do not stop you from <code>rm -rf</code> your production
               database from inside a handler. If you give the agent
-              <code> DATABASE_URL </code> with destructive privileges, the
+              <code>DATABASE_URL</code> with destructive privileges, the
               framework cannot save you. Use a read-replica for the agent. Use
               least-privilege DB roles.
             </li>
@@ -502,8 +502,12 @@ export default function BlogPostPage() {
             <li>
               We do not enforce authentication on every route. We can&apos;t,
               some routes are deliberately public. What we give you is{" "}
-              <code>jwt()</code>, <code>basicAuth()</code>,{" "}
-              <code>bearerAuth()</code>, <code>session()</code>, and an{" "}
+              <code>jwt()</code>
+              {", "}<code>basicAuth()</code>
+              {", "}
+              <code>bearerAuth()</code>
+              {", "}<code>session()</code>
+              {", "}and an{" "}
               <Link href="/docs/security/auth-slice">auth-slice pattern</Link>{" "}
               so the choice is visible per route.
             </li>
@@ -550,26 +554,32 @@ export default function BlogPostPage() {
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
               Cloud Security Architecture, Mapped
             </Link>
-            , <Link href="/blog/secure-by-default">Secure by Default</Link>,{" "}
+            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+            {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               Supply-chain hardening for TypeScript libraries
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
               Designing for Coding Agents
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
               Scaffolding a production-ready DaloyJS app in 60 seconds
             </Link>
-            . Relevant docs: <Link href="/docs/security">/docs/security</Link>,{" "}
-            <Link href="/docs/security/admin-panels">admin panels</Link>,{" "}
-            <Link href="/docs/security/sql-injection">SQL injection</Link>,{" "}
-            <Link href="/docs/security/fetch-guard">fetch guard</Link>,{" "}
+            {". "}Relevant docs:{" "}
+            <Link href="/docs/security">/docs/security</Link>
+            {", "}
+            <Link href="/docs/security/admin-panels">admin panels</Link>
+            {", "}
+            <Link href="/docs/security/sql-injection">SQL injection</Link>
+            {", "}
+            <Link href="/docs/security/fetch-guard">fetch guard</Link>
+            {", "}
             <Link href="/docs/security/runtime-protections">
               runtime protections
             </Link>
-            , <Link href="/docs/security/supply-chain">supply chain</Link>.
+            {", "}<Link href="/docs/security/supply-chain">supply chain</Link>.
           </p>
         </div>
       </article>

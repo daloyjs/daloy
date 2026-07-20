@@ -28,8 +28,8 @@ export default function Page() {
           Drizzle ORM
         </a>{" "}
         is a lightweight, TypeScript-native ORM with a SQL-like API. It runs
-        everywhere DaloyJS does, including Cloudflare Workers, and
-        infers result types directly from your schema.
+        everywhere DaloyJS does, including Cloudflare Workers, and infers result
+        types directly from your schema.
       </p>
 
       <FlowDiagram
@@ -121,11 +121,12 @@ export const drizzlePlugin = {
       <h2 id="4-augment-app-state-types">4. Augment app state types</h2>
       <p>
         Add the <code>declare module</code> block to the same module that
-        exports <code>db</code>, not to a separate <code>.d.ts</code> file.
-        Declaration files are exempt from type-checking when{" "}
-        <code>skipLibCheck</code> is on (the scaffolded default), so a broken
-        import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        exports <code>db</code>
+        {", "}not to a separate <code>.d.ts</code> file. Declaration files are
+        exempt from type-checking when <code>skipLibCheck</code> is on (the
+        scaffolded default), so a broken import inside a <code>.d.ts</code>{" "}
+        fails silently and <code>state.db</code> quietly degrades to{" "}
+        <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/drizzle.ts (same module as the plugin above)
@@ -238,19 +239,25 @@ export default {
       />
 
       <p>
-        Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
-        <Link href="/docs/orm/typeorm">TypeORM</Link>,{" "}
-        <Link href="/docs/orm/mikro-orm">MikroORM</Link>,{" "}
-        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
-        <Link href="/docs/odm">ODM overview</Link> if you are working with
-        document databases.
+        Compare with <Link href="/docs/orm/prisma">Prisma</Link>
+        {", "}
+        <Link href="/docs/orm/typeorm">TypeORM</Link>
+        {", "}
+        <Link href="/docs/orm/mikro-orm">MikroORM</Link>
+        {", "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>
+        {", "}or the <Link href="/docs/odm">ODM overview</Link> if you are
+        working with document databases.
       </p>
       <p>
         Drizzle pairs cleanly with every host in the{" "}
-        <Link href="/docs/databases">database hosting overview</Link>, including{" "}
-        <Link href="/docs/databases/neon">Neon</Link>,{" "}
-        <Link href="/docs/databases/planetscale">PlanetScale</Link>,{" "}
-        <Link href="/docs/databases/turso">Turso</Link>, and{" "}
+        <Link href="/docs/databases">database hosting overview</Link>
+        {", "}including <Link href="/docs/databases/neon">Neon</Link>
+        {", "}
+        <Link href="/docs/databases/planetscale">PlanetScale</Link>
+        {", "}
+        <Link href="/docs/databases/turso">Turso</Link>
+        {", "}and{" "}
         <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>.
       </p>
     </>

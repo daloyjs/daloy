@@ -31,18 +31,20 @@ export default function Page() {
       </p>
 
       <h2 id="every-run-a-whole-stack-in-order">
-        <code>every()</code>: run a whole stack in order
+        <code>every()</code>
+        {": "}run a whole stack in order
       </h2>
       <p>
         <code>every(...layers)</code> merges several <code>Hooks</code> bundles
         into one that runs each layer in registration order. It is equivalent to
         calling <code>app.use(...)</code> for each bundle, but lets you name and
         reuse a curated stack. All lifecycle phases compose:
-        <code> onRequest</code> and <code>onResponse</code> run in order,{" "}
-        <code>preBody</code>, <code>beforeHandle</code>, and{" "}
-        <code>onError</code> stop on the first <code>Response</code>, and{" "}
-        <code>afterHandle</code> plus <code>onSend</code> thread the value
-        through each layer.
+        <code>onRequest</code> and <code>onResponse</code> run in order,{" "}
+        <code>preBody</code>
+        {", "}<code>beforeHandle</code>
+        {", "}and <code>onError</code> stop on the first <code>Response</code>
+        {", "}and <code>afterHandle</code> plus <code>onSend</code> thread the
+        value through each layer.
       </p>
 
       <FlowDiagram
@@ -93,16 +95,18 @@ app.use(adminStack);`}
       />
 
       <h2 id="some-accept-any-one-proof-of-identity">
-        <code>some()</code>: accept any one proof of identity
+        <code>some()</code>
+        {": "}accept any one proof of identity
       </h2>
       <p>
         <code>some(...layers)</code> runs each bundle&apos;s auth gate in order
         and accepts the request as soon as one bundle passes without throwing or
-        returning a <code>Response</code>. When every candidate uses{" "}
-        <code>preBody</code>, selection happens before body I/O. Mixed stacks
-        defer candidate selection to <code>beforeHandle</code> for
-        compatibility. Use it for routes that accept more than one credential
-        style, such as a bearer token or a signed session cookie.
+        returning a <code>Response</code>
+        {". "}When every candidate uses <code>preBody</code>
+        {", "}selection happens before body I/O. Mixed stacks defer candidate
+        selection to <code>beforeHandle</code> for compatibility. Use it for
+        routes that accept more than one credential style, such as a bearer
+        token or a signed session cookie.
       </p>
 
       <BranchDiagram
@@ -168,7 +172,8 @@ app.use(
         <li>
           The first bundle that resolves without throwing or returning a{" "}
           <code>Response</code> wins. Its context mutations, including headers
-          and <code>ctx.state</code>, are preserved.
+          and <code>ctx.state</code>
+          {", "}are preserved.
         </li>
         <li>
           A bundle that returns a <code>Response</code> is treated as a denial,
@@ -182,19 +187,24 @@ app.use(
         </li>
         <li>
           Only the <code>preBody</code>/<code>beforeHandle</code> selection
-          strategy changes. <code>afterHandle</code>, <code>onSend</code>,{" "}
-          <code>onResponse</code>, and <code>onError</code> from every bundle
-          still compose normally.
+          strategy changes. <code>afterHandle</code>
+          {", "}<code>onSend</code>
+          {", "}
+          <code>onResponse</code>
+          {", "}and <code>onError</code> from every bundle still compose
+          normally.
         </li>
       </ul>
 
       <h2 id="except-apply-everywhere-but-a-few-paths">
-        <code>except()</code>: apply everywhere but a few paths
+        <code>except()</code>
+        {": "}apply everywhere but a few paths
       </h2>
       <p>
         <code>except(when, hooks)</code> runs a bundle on every request except
-        those matching <code>when</code>. The canonical use is applying auth
-        everywhere except health checks, OpenAPI JSON, and docs assets.
+        those matching <code>when</code>
+        {". "}The canonical use is applying auth everywhere except health
+        checks, OpenAPI JSON, and docs assets.
       </p>
       <CodeBlock
         language="ts"
@@ -232,11 +242,13 @@ app.use(
       </p>
       <p>
         The wrapped bundle&apos;s <code>preBody</code> and{" "}
-        <code>beforeHandle</code> gates are skipped. Its <code>onRequest</code>,{" "}
-        <code>afterHandle</code>, <code>onSend</code>, and{" "}
-        <code>onResponse</code> phases still run. Wrap each bundle with{" "}
-        <code>except()</code> individually if you need to gate different phases
-        with different rules.
+        <code>beforeHandle</code> gates are skipped. Its <code>onRequest</code>
+        {", "}
+        <code>afterHandle</code>
+        {", "}<code>onSend</code>
+        {", "}and <code>onResponse</code> phases still run. Wrap each bundle
+        with <code>except()</code> individually if you need to gate different
+        phases with different rules.
       </p>
 
       <h2 id="composing-the-three">Composing the three</h2>

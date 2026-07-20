@@ -524,8 +524,9 @@ export default function BlogPostPage() {
             The hard-and-fast rules every editor (human or otherwise) must know
             before changing a line: package manager, runtime, load-bearing files
             and middleware, the seven core rules, and a link to{" "}
-            <code>SKILL.md</code>. Pinned to the repo root because every modern
-            coding agent auto-discovers it there.
+            <code>SKILL.md</code>
+            {". "}Pinned to the repo root because every modern coding agent
+            auto-discovers it there.
           </TierCard>
           <TierCard
             tier=".agents/skills/.../SKILL.md"

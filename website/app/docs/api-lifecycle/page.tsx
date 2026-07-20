@@ -42,7 +42,7 @@ export default function Page() {
         <code>/api/v2</code> side by side before retiring the older contract,
         start with the{" "}
         <Link href={"/docs/api-versioning" as Route}>API versioning guide</Link>
-        .
+        {"."}
       </p>
 
       <FlowDiagram
@@ -52,7 +52,11 @@ export default function Page() {
           { label: "Active", detail: "no extra headers", tone: "success" },
           { label: "deprecated: true", detail: "Deprecation: true header" },
           { label: "sunset: <date>", detail: "Sunset: <IMF-fixdate> header" },
-          { label: "Removed", detail: "route deleted after the sunset", tone: "danger" },
+          {
+            label: "Removed",
+            detail: "route deleted after the sunset",
+            tone: "danger",
+          },
         ]}
       />
 
@@ -81,9 +85,9 @@ export default function Page() {
       <p>
         Add a <code>sunset</code> date to announce <em>when</em> the route will
         be removed. It accepts an ISO-8601 string, any string{" "}
-        <code>new Date(...)</code> can parse, or a <code>Date</code>. A route
-        with a <code>sunset</code> is implicitly deprecated, so you don&apos;t
-        need to set both.
+        <code>new Date(...)</code> can parse, or a <code>Date</code>
+        {". "}A route with a <code>sunset</code> is implicitly deprecated, so
+        you don&apos;t need to set both.
       </p>
       <CodeBlock
         code={`app.get(
@@ -101,13 +105,13 @@ export default function Page() {
       />
       <p>
         The RFC 8594 <code>Sunset</code> value is normalized to an IMF-fixdate
-        (HTTP date) once, at route registration time, so
-        a typo fails fast instead of silently shipping a malformed header. The
-        OpenAPI operation also carries the normalized value as an{" "}
-        <code>x-sunset</code> vendor extension. If your handler sets its own{" "}
-        <code>Deprecation</code> or <code>Sunset</code> header, the framework
-        never overwrites it. That lets teams emit a date-valued RFC 9745{" "}
-        <code>Deprecation</code> header when they need that stricter form.
+        (HTTP date) once, at route registration time, so a typo fails fast
+        instead of silently shipping a malformed header. The OpenAPI operation
+        also carries the normalized value as an <code>x-sunset</code> vendor
+        extension. If your handler sets its own <code>Deprecation</code> or{" "}
+        <code>Sunset</code> header, the framework never overwrites it. That lets
+        teams emit a date-valued RFC 9745 <code>Deprecation</code> header when
+        they need that stricter form.
       </p>
 
       <h2 id="detecting-breaking-changes">Detecting breaking changes</h2>
@@ -185,7 +189,11 @@ daloy diff --json openapi.published.json openapi.json`}
         steps={[
           { label: "pnpm gen", detail: "regenerate generated/openapi.json" },
           { label: "baseline", detail: "generated/openapi.baseline.json" },
-          { label: "diffOpenAPI", detail: "classify every change", tone: "accent" },
+          {
+            label: "diffOpenAPI",
+            detail: "classify every change",
+            tone: "accent",
+          },
           { label: "breaking?", detail: "fail CI ⟋ pass build" },
         ]}
       />

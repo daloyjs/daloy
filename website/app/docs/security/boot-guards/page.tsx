@@ -52,12 +52,12 @@ export default function Page() {
         <code>
           app({"{"} env: &quot;production&quot; {"}"})
         </code>
-        , then{" "}
+        {", "}then{" "}
         <code>
           app({"{"} production: true {"}"})
         </code>
-        , then <code>NODE_ENV === &quot;production&quot;</code>) so dev and CI
-        workflows keep working with sample secrets and ad-hoc headers. The
+        {", "}then <code>NODE_ENV === &quot;production&quot;</code>) so dev and
+        CI workflows keep working with sample secrets and ad-hoc headers. The
         single master escape hatch{" "}
         <code>
           app({"{"} secureDefaults: false {"}"})
@@ -96,17 +96,23 @@ export default function Page() {
         caption="In production each guard turns a common misconfiguration into a refuse-to-boot or first-request 500 instead of a silent vulnerability under load. Dev and CI keep working with sample secrets."
       />
 
-      <h2 id="1-weak-session-secret-refuse-to-boot">1. Weak session secret refuse-to-boot</h2>
+      <h2 id="1-weak-session-secret-refuse-to-boot">
+        1. Weak session secret refuse-to-boot
+      </h2>
       <p>
         <code>
           app.use(session({"{"} secret {"}"}))
         </code>{" "}
         now refuses to register in production when the secret is shorter than 32
         UTF-8 bytes, matches a well-known placeholder (
-        <code>&quot;changeme&quot;</code>,{" "}
-        <code>&quot;your-jwt-secret&quot;</code>,{" "}
-        <code>&quot;it-is-very-secret&quot;</code>, …), or is a single repeated
-        character (<code>&quot;a&quot;.repeat(64)</code>,{" "}
+        <code>&quot;changeme&quot;</code>
+        {", "}
+        <code>&quot;your-jwt-secret&quot;</code>
+        {", "}
+        <code>&quot;it-is-very-secret&quot;</code>
+        {", "} …), or is a single repeated character (
+        <code>&quot;a&quot;.repeat(64)</code>
+        {", "}
         <code>&quot;0&quot;.repeat(64)</code>). The check runs synchronously
         inside <code>app.use(...)</code> so the process exits during startup,
         not on first request.
@@ -169,12 +175,15 @@ app.use(cors({ origin: (o) => o.endsWith(".example.com") }));`}
         <code>csrf()</code>
       </h2>
       <p>
-        When any route accepts <code>POST</code>, <code>PUT</code>,{" "}
-        <code>PATCH</code>, or <code>DELETE</code> AND a <code>session()</code>{" "}
-        hook is installed, a <code>csrf()</code> hook must also be installed.
-        The check runs on first request (because route registration order is
-        unknown until then) and the boot error is cached so every subsequent
-        request rethrows the same failure until you fix the wiring.
+        When any route accepts <code>POST</code>
+        {", "}<code>PUT</code>
+        {", "}
+        <code>PATCH</code>
+        {", "}or <code>DELETE</code> AND a <code>session()</code> hook is
+        installed, a <code>csrf()</code> hook must also be installed. The check
+        runs on first request (because route registration order is unknown until
+        then) and the boot error is cached so every subsequent request rethrows
+        the same failure until you fix the wiring.
       </p>
       <CodeBlock
         code={`import { App, session, csrf } from "@daloyjs/core";
@@ -194,7 +203,7 @@ app.post("/items", {
         <code>
           app({"{"} csrf: &quot;off&quot; {"}"})
         </code>
-        :
+        {": "}
       </p>
       <CodeBlock
         code={`const app = new App({ env: "production", csrf: "off" });
@@ -211,21 +220,26 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
         <code>
           app({"{"} trustProxy {"}"})
         </code>{" "}
-        is not set and a request arrives carrying <code>X-Forwarded-For</code>,{" "}
-        <code>X-Forwarded-Host</code>, <code>X-Forwarded-Proto</code>,{" "}
-        <code>X-Forwarded-Port</code>, or <code>X-Real-IP</code>, Daloy refuses
-        to dispatch the request and returns a structured{" "}
-        <code>500 problem+json</code>. The rate limiter, audit log, and
-        request-id propagation would otherwise honour the attacker-supplied IP.
+        is not set and a request arrives carrying <code>X-Forwarded-For</code>
+        {", "}
+        <code>X-Forwarded-Host</code>
+        {", "}<code>X-Forwarded-Proto</code>
+        {", "}
+        <code>X-Forwarded-Port</code>
+        {", "}or <code>X-Real-IP</code>
+        {", "}Daloy refuses to dispatch the request and returns a structured{" "}
+        <code>500 problem+json</code>
+        {". "}The rate limiter, audit log, and request-id propagation would
+        otherwise honour the attacker-supplied IP.
       </p>
       <p>
         The same refusal now covers the platform-specific client-IP headers{" "}
         <code>cf-connecting-ip</code> (Cloudflare), <code>fly-client-ip</code>{" "}
-        (Fly.io), and <code>true-client-ip</code>. They are exactly as spoofable
-        as <code>X-Forwarded-*</code> when the app is not actually running behind
-        that platform&apos;s proxy, so an unconfigured app refuses them too
-        rather than letting a client forge its source IP through a vendor header
-        the operator never opted into.
+        (Fly.io), and <code>true-client-ip</code>
+        {". "}They are exactly as spoofable as <code>X-Forwarded-*</code> when
+        the app is not actually running behind that platform&apos;s proxy, so an
+        unconfigured app refuses them too rather than letting a client forge its
+        source IP through a vendor header the operator never opted into.
       </p>
       <CodeBlock
         code={`// Pick exactly one in production:
@@ -249,20 +263,26 @@ const app = new App({ env: "production", secureDefaults: false });`}
         5. Route <code>auth:</code> declared but not enforced (shadow security)
       </h2>
       <p>
-        A route can declare <code>auth: {"{"} scheme, ... {"}"}</code> so the
-        generated OpenAPI document advertises it as protected. Previously that
-        declaration was documentation only: if no authentication hook actually
-        ran, the route accepted unauthenticated requests while claiming to be
-        protected, a &ldquo;shadow security&rdquo; footgun. Now, in production
-        with <code>secureDefaults</code> on, the App refuses to boot when a route
-        declares <code>auth:</code> but no authentication hook is present in its
-        effective hook chain.
+        A route can declare{" "}
+        <code>
+          auth: {"{"} scheme, ... {"}"}
+        </code>{" "}
+        so the generated OpenAPI document advertises it as protected. Previously
+        that declaration was documentation only: if no authentication hook
+        actually ran, the route accepted unauthenticated requests while claiming
+        to be protected, a &ldquo;shadow security&rdquo; footgun. Now, in
+        production with <code>secureDefaults</code> on, the App refuses to boot
+        when a route declares <code>auth:</code> but no authentication hook is
+        present in its effective hook chain.
       </p>
       <p>
-        The built-in auth middlewares (<code>bearerAuth</code>,{" "}
-        <code>basicAuth</code>, <code>jwk</code>, <code>httpSignatureAuth</code>,{" "}
-        <code>clientCertAuth</code>) satisfy the guard automatically. For a
-        custom auth hook, or when authentication is actually enforced by an
+        The built-in auth middlewares (<code>bearerAuth</code>
+        {", "}
+        <code>basicAuth</code>
+        {", "}<code>jwk</code>
+        {", "}<code>httpSignatureAuth</code>
+        {", "}<code>clientCertAuth</code>) satisfy the guard automatically. For
+        a custom auth hook, or when authentication is actually enforced by an
         upstream gateway, wrap the hook with the exported{" "}
         <code>markAuthHook()</code> so the guard can see it.
       </p>
@@ -301,7 +321,7 @@ app.get(
         <code>
           app({"{"} secureDefaults: false {"}"})
         </code>
-        .
+        {"."}
       </p>
 
       <h2 id="6-unauthenticated-mcp-endpoint">
@@ -311,9 +331,9 @@ app.get(
         MCP tools are model-controlled and side-effecting, so an unauthenticated
         MCP endpoint is a high-impact default. In production with{" "}
         <code>secureDefaults</code> on, the App refuses to boot when an{" "}
-        <code>mcpRoutes()</code> <code>POST</code> endpoint has no authentication
-        hook in its effective chain. Cover it with an auth middleware, or opt in
-        to a genuinely public server with the new{" "}
+        <code>mcpRoutes()</code> <code>POST</code> endpoint has no
+        authentication hook in its effective chain. Cover it with an auth
+        middleware, or opt in to a genuinely public server with the new{" "}
         <code>
           mcpRoutes(path, handler, {"{"} public: true {"}"})
         </code>{" "}
@@ -363,7 +383,8 @@ for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
         </li>
         <li>
           Add <code>app.use(csrf(...))</code> next to{" "}
-          <code>app.use(session(...))</code>, or pass{" "}
+          <code>app.use(session(...))</code>
+          {", "}or pass{" "}
           <code>
             app({"{"} csrf: &quot;off&quot; {"}"})
           </code>{" "}
@@ -371,14 +392,17 @@ for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
         </li>
         <li>
           Pick a <code>trustProxy</code> posture explicitly for every production
-          app. If you relied on <code>cf-connecting-ip</code>,{" "}
-          <code>fly-client-ip</code>, or <code>true-client-ip</code>, set{" "}
-          <code>trustProxy: true</code> now that those headers are refused too.
+          app. If you relied on <code>cf-connecting-ip</code>
+          {", "}
+          <code>fly-client-ip</code>
+          {", "}or <code>true-client-ip</code>
+          {", "}set <code>trustProxy: true</code> now that those headers are
+          refused too.
         </li>
         <li>
-          For every route that declares <code>auth:</code>, confirm a built-in
-          auth middleware covers it, or wrap your custom hook with{" "}
-          <code>markAuthHook(...)</code>.
+          For every route that declares <code>auth:</code>
+          {", "}confirm a built-in auth middleware covers it, or wrap your
+          custom hook with <code>markAuthHook(...)</code>.
         </li>
         <li>
           Add an auth middleware in front of every <code>mcpRoutes()</code>{" "}

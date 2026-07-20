@@ -66,7 +66,9 @@ export default function Page() {
         caption="You write the route once. Validation, the OpenAPI spec, the interactive docs, and the typed client are all derived from it, so they can never drift out of sync."
       />
 
-      <h2 id="one-line-auto-mount-docs-openapi-json-openapi-yaml">One line: auto-mount /docs, /openapi.json, /openapi.yaml</h2>
+      <h2 id="one-line-auto-mount-docs-openapi-json-openapi-yaml">
+        One line: auto-mount /docs, /openapi.json, /openapi.yaml
+      </h2>
       <p>
         FastAPI-style. Pass <code>docs: true</code> to the <code>App</code>{" "}
         constructor and DaloyJS registers <code>GET /openapi.json</code> +{" "}
@@ -88,9 +90,9 @@ const app = new App({
 
       <p>
         Use <code>docs: &quot;auto&quot;</code> to mount only when{" "}
-        <code>production: false</code>, or leave it off (the default) and mount
-        manually with the helpers below. Customize paths, UI, and tags via the
-        object form:
+        <code>production: false</code>
+        {", "}or leave it off (the default) and mount manually with the helpers
+        below. Customize paths, UI, and tags via the object form:
       </p>
       <CodeBlock
         code={`new App({
@@ -111,16 +113,19 @@ const app = new App({
 });`}
       />
 
-      <h2 id="pick-a-ui-scalar-swagger-ui-or-redoc">Pick a UI: Scalar, Swagger UI, or Redoc</h2>
+      <h2 id="pick-a-ui-scalar-swagger-ui-or-redoc">
+        Pick a UI: Scalar, Swagger UI, or Redoc
+      </h2>
       <p>
         Set <code>ui</code> to <code>&quot;scalar&quot;</code> (default),{" "}
-        <code>&quot;swagger&quot;</code>, or <code>&quot;redoc&quot;</code>. All
-        three render the same live spec, mount on the same paths, and ship the
-        same strict CSP and CDN-hosted assets, so switching is a one-word
-        change. Scalar and Swagger UI include a developer request console for
-        protected routes. Redoc is a read-only reference UI: it displays
-        security requirements, but it does not ship a built-in <em>Try it</em>{" "}
-        console.
+        <code>&quot;swagger&quot;</code>
+        {", "}or <code>&quot;redoc&quot;</code>
+        {". "}All three render the same live spec, mount on the same paths, and
+        ship the same strict CSP and CDN-hosted assets, so switching is a
+        one-word change. Scalar and Swagger UI include a developer request
+        console for protected routes. Redoc is a read-only reference UI: it
+        displays security requirements, but it does not ship a built-in{" "}
+        <em>Try it</em> console.
       </p>
       <CodeBlock
         code={`new App({
@@ -160,10 +165,11 @@ const app = new App({
       />
       <p>
         If your docs need a visible login entry point, add{" "}
-        <code>docs.auth</code>. The same button is rendered for Scalar, Swagger
-        UI, and Redoc. Point it at a local login form, Better Auth route, Clerk
-        sign-in URL, or an OIDC authorization URL from Auth0, Okta, Microsoft
-        Entra ID, Cognito, Keycloak, or another provider:
+        <code>docs.auth</code>
+        {". "}The same button is rendered for Scalar, Swagger UI, and Redoc.
+        Point it at a local login form, Better Auth route, Clerk sign-in URL, or
+        an OIDC authorization URL from Auth0, Okta, Microsoft Entra ID, Cognito,
+        Keycloak, or another provider:
       </p>
       <CodeBlock
         code={`new App({
@@ -194,14 +200,14 @@ const app = new App({
       />
       <p>
         The <code>redoc</code> object is forwarded verbatim to{" "}
-        <code>Redoc.init(specUrl, configuration, element)</code>. Because Redoc
-        builds its search index in a <code>blob:</code> Web Worker, the
-        auto-mounted <code>/docs</code> route automatically widens that
-        page&apos;s CSP with <code>worker-src &apos;self&apos; blob:</code> for{" "}
-        <code>ui: &quot;redoc&quot;</code> only. Scalar and Swagger UI keep the
-        tighter policy. The <code>scalar</code> option is ignored unless{" "}
-        <code>ui</code> is <code>&quot;scalar&quot;</code>, and likewise for{" "}
-        <code>swagger</code> and <code>redoc</code>.
+        <code>Redoc.init(specUrl, configuration, element)</code>
+        {". "}Because Redoc builds its search index in a <code>blob:</code> Web
+        Worker, the auto-mounted <code>/docs</code> route automatically widens
+        that page&apos;s CSP with <code>worker-src &apos;self&apos; blob:</code>{" "}
+        for <code>ui: &quot;redoc&quot;</code> only. Scalar and Swagger UI keep
+        the tighter policy. The <code>scalar</code> option is ignored unless{" "}
+        <code>ui</code> is <code>&quot;scalar&quot;</code>
+        {", "}and likewise for <code>swagger</code> and <code>redoc</code>.
       </p>
 
       <p>
@@ -211,7 +217,9 @@ const app = new App({
         client visibility without copying the docs HTML.
       </p>
 
-      <h2 id="advanced-generate-the-spec-manually">Advanced: generate the spec manually</h2>
+      <h2 id="advanced-generate-the-spec-manually">
+        Advanced: generate the spec manually
+      </h2>
       <p>
         Need the raw spec object (for codegen, contract tests, or a custom
         route)? Call <code>generateOpenAPI(app, options)</code> directly:
@@ -228,7 +236,9 @@ const doc = generateOpenAPI(app, {
 console.log(JSON.stringify(doc, null, 2));`}
       />
 
-      <h2 id="advanced-serve-docs-from-your-own-route">Advanced: serve docs from your own route</h2>
+      <h2 id="advanced-serve-docs-from-your-own-route">
+        Advanced: serve docs from your own route
+      </h2>
       <CodeBlock
         code={`import { swaggerUiHtml, scalarHtml, redocHtml, htmlResponse } from "@daloyjs/core/docs";
 
@@ -251,13 +261,14 @@ app.get(
       />
 
       <p>
-        <code>swaggerUiHtml</code>, <code>scalarHtml</code>, and{" "}
-        <code>redocHtml</code> all return self-contained HTML pages that load
-        their assets from jsDelivr with a strict CSP allowing only that origin.
-        When you hand-roll the route with <code>redocHtml</code>, pass{" "}
-        <code>allowBlobWorkers: true</code> to <code>htmlResponse</code> (or{" "}
-        <code>docsContentSecurityPolicy</code>) so Redoc&apos;s{" "}
-        <code>blob:</code> search worker is allowed by the CSP:
+        <code>swaggerUiHtml</code>
+        {", "}<code>scalarHtml</code>
+        {", "}and <code>redocHtml</code> all return self-contained HTML pages
+        that load their assets from jsDelivr with a strict CSP allowing only
+        that origin. When you hand-roll the route with <code>redocHtml</code>
+        {", "}pass <code>allowBlobWorkers: true</code> to{" "}
+        <code>htmlResponse</code> (or <code>docsContentSecurityPolicy</code>) so
+        Redoc&apos;s <code>blob:</code> search worker is allowed by the CSP:
       </p>
       <CodeBlock
         code={`import { redocHtml, htmlResponse } from "@daloyjs/core/docs";
@@ -270,7 +281,8 @@ const res = htmlResponse(
 
       <p>
         If you want to test your docs UX against a much larger contract, see the{" "}
-        <Link href="/docs/tutorials/fake-rest-api">large fake REST demo</Link>.
+        <Link href="/docs/tutorials/fake-rest-api">large fake REST demo</Link>
+        {". "}
         It is a better benchmark than a toy CRUD sample when you need to
         validate search, grouping, and render performance.
       </p>
@@ -318,15 +330,18 @@ console.log(\`wrote \${out}\`);`}
           Reusable <code>components.schemas.Problem</code> for RFC 9457 errors.
         </li>
         <li>
-          <code>tags</code>, <code>summary</code>, <code>description</code>, and
-          per-status <code>description</code>.
+          <code>tags</code>
+          {", "}<code>summary</code>
+          {", "}<code>description</code>
+          {", "}and per-status <code>description</code>.
         </li>
       </ul>
 
       <h2 id="webhooks">Webhooks</h2>
       <p>
-        OpenAPI 3.1 lets a producer publish <strong>top-level webhooks</strong>{" "}
-        , operations a consumer is expected to implement. Pass{" "}
+        OpenAPI 3.1 lets a producer publish <strong>top-level webhooks</strong>
+        {", "}
+        operations a consumer is expected to implement. Pass{" "}
         <code>webhooks</code> to <code>generateOpenAPI</code>
         and DaloyJS emits them under the document&apos;s top-level{" "}
         <code>webhooks</code> map.
@@ -396,16 +411,17 @@ const doc = generateOpenAPI(app, {
       </p>
       <ul>
         <li>
-          <code>discriminator(propertyName, mapping?)</code>: the bare spec
-          builder. Use it when you already have a hand-rolled JSON Schema and
-          just want to attach the field cleanly.
+          <code>discriminator(propertyName, mapping?)</code>
+          {": "}the bare spec builder. Use it when you already have a
+          hand-rolled JSON Schema and just want to attach the field cleanly.
         </li>
         <li>
-          <code>discriminatedUnion(propertyName, variants, opts?)</code>: a
-          Standard-Schema- compatible wrapper that <em>both</em> validates at
-          runtime (dispatching on the discriminator value) <em>and</em> exposes{" "}
-          <code>.toJSONSchema()</code> so the OpenAPI generator emits{" "}
-          <code>{`{ oneOf, discriminator }`}</code> automatically.
+          <code>discriminatedUnion(propertyName, variants, opts?)</code>
+          {": "}a Standard-Schema- compatible wrapper that <em>both</em>{" "}
+          validates at runtime (dispatching on the discriminator value){" "}
+          <em>and</em> exposes <code>.toJSONSchema()</code> so the OpenAPI
+          generator emits <code>{`{ oneOf, discriminator }`}</code>{" "}
+          automatically.
         </li>
       </ul>
       <CodeBlock

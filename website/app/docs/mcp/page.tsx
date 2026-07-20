@@ -332,7 +332,9 @@ export default function Page() {
       <h2 id="create-an-mcp-server">Create an MCP server</h2>
       <p>
         Use <code>createMcpHandler()</code> for the MCP protocol layer and{" "}
-        <code>mcpRoutes()</code> to mount <code>POST</code>, <code>GET</code>,
+        <code>mcpRoutes()</code> to mount <code>POST</code>
+        {", "}<code>GET</code>
+        {", "}
         and <code>OPTIONS</code> on a DaloyJS app. The <code>POST</code> route
         is the actual MCP transport. <code>GET</code> returns a JSON hint
         instead of opening a server-initiated SSE stream, and{" "}
@@ -366,9 +368,10 @@ export default function Page() {
       <p>
         Use <code>POST /mcp</code> only with an MCP-compatible client or with a
         JSON-RPC request. If you see <code>202 Accepted</code> with an empty
-        body while testing <code>/mcp</code>, that means the MCP request did not
-        ask for a JSON-RPC response. Add an <code>id</code> and call the tool
-        through <code>tools/call</code>:
+        body while testing <code>/mcp</code>
+        {", "}that means the MCP request did not ask for a JSON-RPC response.
+        Add an <code>id</code> and call the tool through <code>tools/call</code>
+        {": "}
       </p>
       <CodeBlock code={MCP_SEARCH_CALL} language="json" />
       <p>
@@ -379,11 +382,18 @@ export default function Page() {
       <h2 id="what-core-supports">What core supports</h2>
       <ul>
         <li>
-          <code>initialize</code>, <code>ping</code>, <code>tools/list</code>,{" "}
-          <code>tools/call</code>, <code>resources/list</code>,{" "}
-          <code>resources/templates/list</code>, <code>resources/read</code>{" "}
-          (including template-matched URIs), <code>prompts/list</code>, and{" "}
-          <code>prompts/get</code> with required-argument enforcement.
+          <code>initialize</code>
+          {", "}<code>ping</code>
+          {", "}<code>tools/list</code>
+          {", "}
+          <code>tools/call</code>
+          {", "}<code>resources/list</code>
+          {", "}
+          <code>resources/templates/list</code>
+          {", "}<code>resources/read</code> (including template-matched URIs),{" "}
+          <code>prompts/list</code>
+          {", "}and <code>prompts/get</code> with required-argument
+          enforcement.
         </li>
         <li>
           Protocol-version negotiation, <code>MCP-Protocol-Version</code>{" "}
@@ -396,22 +406,26 @@ export default function Page() {
           matching the REST body parsers.
         </li>
         <li>
-          <strong>Server-side <code>tools/call</code> argument validation</strong>
-          {" "}against each tool&apos;s <code>inputSchema</code> before the
-          handler runs (see below).
+          <strong>
+            Server-side <code>tools/call</code> argument validation
+          </strong>{" "}
+          against each tool&apos;s <code>inputSchema</code> before the handler
+          runs (see below).
         </li>
         <li>
-          Built-in <code>Origin</code> validation against DNS rebinding, with
-          an <code>allowedOrigins</code> allowlist for browser-based clients.
+          Built-in <code>Origin</code> validation against DNS rebinding, with an{" "}
+          <code>allowedOrigins</code> allowlist for browser-based clients.
         </li>
         <li>
-          MCP 2025-11-25 metadata: server <code>description</code>,{" "}
-          <code>websiteUrl</code>, and <code>icons</code>; tool{" "}
-          <code>outputSchema</code>, <code>annotations</code> (read-only,
-          destructive, idempotent, open-world hints), and <code>icons</code>;
-          icons on resources, templates, and prompts. Tool results that return
-          only <code>structuredContent</code> get a serialized text block
-          backfilled for older clients.
+          MCP 2025-11-25 metadata: server <code>description</code>
+          {", "}
+          <code>websiteUrl</code>
+          {", "}and <code>icons</code>; tool <code>outputSchema</code>
+          {", "}<code>annotations</code> (read-only, destructive, idempotent,
+          open-world hints), and <code>icons</code>; icons on resources,
+          templates, and prompts. Tool results that return only{" "}
+          <code>structuredContent</code> get a serialized text block backfilled
+          for older clients.
         </li>
         <li>
           Dependency-free TypeScript types for tools, resources, resource
@@ -420,7 +434,9 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2 id="origin-validation-dns-rebinding">Origin validation (DNS rebinding)</h2>
+      <h2 id="origin-validation-dns-rebinding">
+        Origin validation (DNS rebinding)
+      </h2>
       <p>
         The MCP Streamable HTTP spec requires servers to validate the{" "}
         <code>Origin</code> header so a malicious web page cannot use DNS
@@ -428,7 +444,8 @@ export default function Page() {
         does this on every request. Non-browser clients that send no{" "}
         <code>Origin</code> header work unchanged; browser clients must be
         loopback or explicitly allowlisted, and everything else receives{" "}
-        <code>403</code>. A same-origin <code>Origin</code> is deliberately{" "}
+        <code>403</code>
+        {". "}A same-origin <code>Origin</code> is deliberately{" "}
         <strong>not</strong> treated as sufficient on its own: under DNS
         rebinding the attacker&apos;s hostname resolves to your host, so{" "}
         <code>Origin.host</code> can equal the request <code>Host</code> — the{" "}
@@ -439,47 +456,56 @@ export default function Page() {
 
       <h2 id="input-schema-enforcement">Input schema enforcement</h2>
       <blockquote>
-        <strong>Breaking change.</strong> A tool&apos;s{" "}
-        <code>inputSchema</code> used to be documentation only. It is now
-        enforced server-side: <code>tools/call</code> arguments that violate the
-        schema are rejected before your handler runs. Handlers that previously
-        received malformed arguments (and coped) will now see those calls fail
-        with <code>-32602</code> instead.
+        <strong>Breaking change.</strong> A tool&apos;s <code>inputSchema</code>{" "}
+        used to be documentation only. It is now enforced server-side:{" "}
+        <code>tools/call</code> arguments that violate the schema are rejected
+        before your handler runs. Handlers that previously received malformed
+        arguments (and coped) will now see those calls fail with{" "}
+        <code>-32602</code> instead.
       </blockquote>
       <p>
-        On every <code>tools/call</code>, DaloyJS validates{" "}
-        <code>params.arguments</code> against the tool&apos;s{" "}
-        <code>inputSchema</code> <strong>before</strong> the handler runs. A
-        violation returns a JSON-RPC <code>-32602</code> (Invalid params) error
-        and the handler never executes, so a tool no longer has to defend
-        against the shapes its schema already forbids.
+        On every <code>tools/call</code>
+        {", "}DaloyJS validates <code>params.arguments</code> against the
+        tool&apos;s <code>inputSchema</code> <strong>before</strong> the handler
+        runs. A violation returns a JSON-RPC <code>-32602</code> (Invalid
+        params) error and the handler never executes, so a tool no longer has to
+        defend against the shapes its schema already forbids.
       </p>
       <CodeBlock code={INPUT_INVALID} language="json" />
       <p>
         The enforced subset is deliberately small and dependency-free, but
         covers the security-relevant keywords: <code>type</code> (including{" "}
-        <code>integer</code>), <code>required</code>, <code>properties</code>,{" "}
+        <code>integer</code>), <code>required</code>
+        {", "}<code>properties</code>
+        {", "}
         <code>additionalProperties</code> (including{" "}
-        <code>additionalProperties: false</code>), <code>enum</code>,{" "}
-        <code>const</code>, and basic bounds (<code>minLength</code> /{" "}
-        <code>maxLength</code>, <code>minimum</code> / <code>maximum</code>,{" "}
+        <code>additionalProperties: false</code>), <code>enum</code>
+        {", "}
+        <code>const</code>
+        {", "}and basic bounds (<code>minLength</code> / <code>maxLength</code>
+        {", "}<code>minimum</code> / <code>maximum</code>
+        {", "}
         <code>minItems</code> / <code>maxItems</code>). It recurses into nested{" "}
-        <code>properties</code>, <code>items</code>, and object-form{" "}
-        <code>additionalProperties</code>.
+        <code>properties</code>
+        {", "}<code>items</code>
+        {", "}and object-form <code>additionalProperties</code>.
       </p>
       <p>
         These keywords are advertised to clients but{" "}
-        <strong>not enforced</strong>, so your handler must still check them:{" "}
-        <code>pattern</code>, <code>format</code>, <code>$ref</code>, and{" "}
-        <code>anyOf</code> / <code>oneOf</code> / <code>allOf</code>.{" "}
+        <strong>not enforced</strong>
+        {", "}so your handler must still check them: <code>pattern</code>
+        {", "}<code>format</code>
+        {", "}<code>$ref</code>
+        {", "}and <code>anyOf</code> / <code>oneOf</code> / <code>allOf</code>
+        {". "}
         <code>pattern</code> is skipped on purpose so a developer-authored regex
         can never become a ReDoS sink against attacker-controlled input.
       </p>
       <p>
         The same validator is exported as{" "}
-        <code>validateMcpInput(schema, value)</code>, which returns an array of
-        error strings (empty when valid). Use it to pre-validate arguments in
-        tests or in your own tooling:
+        <code>validateMcpInput(schema, value)</code>
+        {", "}which returns an array of error strings (empty when valid). Use
+        it to pre-validate arguments in tests or in your own tooling:
       </p>
       <CodeBlock code={VALIDATE_HELPER} />
 
@@ -487,13 +513,13 @@ export default function Page() {
       <p>
         Concrete resources cover fixed documents; resource templates cover
         families of them. A template advertises an RFC 6570 style URI pattern
-        through <code>resources/templates/list</code>, and{" "}
-        <code>resources/read</code> matches non-listed URIs against your
-        templates, passing the extracted variables to your <code>read</code>{" "}
-        handler. Only simple <code>{"{name}"}</code> variables are supported,
-        and each matches a single URI segment; operator expressions like{" "}
-        <code>{"{+path}"}</code> are rejected at construction so the server
-        never advertises a pattern it cannot serve.
+        through <code>resources/templates/list</code>
+        {", "}and <code>resources/read</code> matches non-listed URIs against
+        your templates, passing the extracted variables to your{" "}
+        <code>read</code> handler. Only simple <code>{"{name}"}</code> variables
+        are supported, and each matches a single URI segment; operator
+        expressions like <code>{"{+path}"}</code> are rejected at construction
+        so the server never advertises a pattern it cannot serve.
       </p>
       <CodeBlock code={TEMPLATES} />
 
@@ -510,7 +536,8 @@ export default function Page() {
       <p>
         Throw <code>McpToolError</code> when the model can fix the call, for
         example missing arguments or a domain object that does not exist. The
-        client receives an MCP tool result with <code>isError: true</code>.
+        client receives an MCP tool result with <code>isError: true</code>
+        {". "}
         Unexpected errors become JSON-RPC internal errors and are redacted in
         production.
       </p>
@@ -525,18 +552,19 @@ export default function Page() {
         stripping cannot run there (see the{" "}
         <a href="/docs/security/owasp-api-top-10#api3">API3 mapping</a>). MCP
         responses are opaque JSON-RPC envelopes produced by{" "}
-        <code>createMcpHandler()</code>, so the routes from{" "}
-        <code>mcpRoutes()</code> ship with an envelope schema attached: they do
-        not trip the warning, and the JSON-RPC envelope shows up in your
-        generated OpenAPI document. Framework-mounted routes such as{" "}
-        <code>/openapi.json</code> and <code>/docs</code> acknowledge
+        <code>createMcpHandler()</code>
+        {", "}so the routes from <code>mcpRoutes()</code> ship with an envelope
+        schema attached: they do not trip the warning, and the JSON-RPC envelope
+        shows up in your generated OpenAPI document. Framework-mounted routes
+        such as <code>/openapi.json</code> and <code>/docs</code> acknowledge
         themselves, so the warning only ever names routes you wrote.
       </p>
       <p>
-        If you mount the MCP handler on a hand-rolled route instead (for
-        example to add extra <code>beforeHandle</code> hooks), declare that the
-        opaque body is intentional with{" "}
-        <code>acknowledgeNoResponseBodySchema: true</code>:
+        If you mount the MCP handler on a hand-rolled route instead (for example
+        to add extra <code>beforeHandle</code> hooks), declare that the opaque
+        body is intentional with{" "}
+        <code>acknowledgeNoResponseBodySchema: true</code>
+        {": "}
       </p>
       <CodeBlock code={ACKNOWLEDGE} />
 
@@ -554,7 +582,7 @@ export default function Page() {
           <code>
             mcpRoutes(path, handler, {"{"} public: true {"}"})
           </code>
-          .
+          {"."}
         </li>
         <li>
           Leave the built-in <code>Origin</code> validation alone and prefer
@@ -565,10 +593,10 @@ export default function Page() {
           The advertised <code>inputSchema</code> is now{" "}
           <a href="#input-schema-enforcement">enforced server-side</a> for its
           supported subset, but it is still not a substitute for full
-          validation: check anything expressed only through{" "}
-          <code>pattern</code>, <code>format</code>, or{" "}
-          <code>anyOf</code>/<code>oneOf</code>/<code>allOf</code> inside the
-          handler.
+          validation: check anything expressed only through <code>pattern</code>
+          {", "}<code>format</code>
+          {", "}or <code>anyOf</code>/<code>oneOf</code>/<code>allOf</code>{" "}
+          inside the handler.
         </li>
         <li>
           Keep tool descriptions precise. A vague tool is easier for a model to

@@ -38,8 +38,8 @@ export default function Page() {
         >
           <code>express-oauth2-jwt-bearer</code>
         </a>
-        , which is Express-only. DaloyJS isn&apos;t Express, so we use the same
-        primitive, JWT verification against Auth0&apos;s JWKS, through{" "}
+        {", "}which is Express-only. DaloyJS isn&apos;t Express, so we use the
+        same primitive, JWT verification against Auth0&apos;s JWKS, through{" "}
         <a
           href="https://github.com/panva/jose"
           target="_blank"
@@ -47,8 +47,8 @@ export default function Page() {
         >
           <code>jose</code>
         </a>
-        . That keeps the same security guarantees while running on every runtime
-        DaloyJS targets, including the edge.
+        {". "}That keeps the same security guarantees while running on every
+        runtime DaloyJS targets, including the edge.
       </p>
 
       <SequenceDiagram
@@ -102,13 +102,14 @@ export default function Page() {
       <ol>
         <li>
           In the Auth0 dashboard, go to{" "}
-          <strong>Applications → APIs → Create API</strong>. Pick an{" "}
-          <strong>identifier</strong> (e.g.{" "}
+          <strong>Applications → APIs → Create API</strong>
+          {". "}Pick an <strong>identifier</strong> (e.g.{" "}
           <code>https://api.acme.example.com</code>), this becomes the{" "}
           <code>aud</code> claim on issued tokens.
         </li>
         <li>
-          Define <strong>permissions</strong> (e.g. <code>read:items</code>,{" "}
+          Define <strong>permissions</strong> (e.g. <code>read:items</code>
+          {", "}
           <code>write:items</code>) and enable <strong>RBAC</strong> +{" "}
           <em>Add Permissions in the Access Token</em> if you want them in{" "}
           <code>permissions</code>.
@@ -210,10 +211,11 @@ app.get(
 
       <h2 id="permissions-rbac">Permissions (RBAC)</h2>
       <p>
-        If you enabled <em>Add Permissions in the Access Token</em>, the JWT
-        carries a <code>permissions</code> array. Tighten the overview&apos;s{" "}
-        <code>requireAuth</code> to check <code>principal.permissions</code>{" "}
-        when you want to enforce role assignments rather than OAuth 2.0 scopes:
+        If you enabled <em>Add Permissions in the Access Token</em>
+        {", "}the JWT carries a <code>permissions</code> array. Tighten the
+        overview&apos;s <code>requireAuth</code> to check{" "}
+        <code>principal.permissions</code> when you want to enforce role
+        assignments rather than OAuth 2.0 scopes:
       </p>
       <CodeBlock
         code={`import { ForbiddenError, type Hooks } from "@daloyjs/core";
@@ -244,9 +246,9 @@ export function requirePermission(...perms: string[]): Hooks {
         >
           Action on the Login flow
         </a>
-        . Namespace them (e.g. <code>https://acme.example.com/tenant</code>) per
-        Auth0&apos;s rules, that prevents collisions with standard claims and is
-        required for non-reserved claims to be included.
+        {". "}Namespace them (e.g. <code>https://acme.example.com/tenant</code>)
+        per Auth0&apos;s rules, that prevents collisions with standard claims
+        and is required for non-reserved claims to be included.
       </p>
 
       <h2 id="runtimes">Runtimes</h2>
@@ -260,8 +262,9 @@ export function requirePermission(...perms: string[]): Hooks {
       <ul>
         <li>
           The <code>iss</code> claim Auth0 issues includes a{" "}
-          <strong>trailing slash</strong>. Mismatching it (with or without the
-          slash) is a common cause of validation failures.
+          <strong>trailing slash</strong>
+          {". "}Mismatching it (with or without the slash) is a common cause of
+          validation failures.
         </li>
         <li>
           Set a non-empty <strong>audience</strong> on the API, without it Auth0
@@ -274,9 +277,11 @@ export function requirePermission(...perms: string[]): Hooks {
       </ul>
 
       <p>
-        See also <Link href="/docs/auth/okta">Okta</Link>,{" "}
-        <Link href="/docs/auth/clerk">Clerk</Link>, and the{" "}
-        <Link href="/docs/auth">auth integrations overview</Link>.
+        See also <Link href="/docs/auth/okta">Okta</Link>
+        {", "}
+        <Link href="/docs/auth/clerk">Clerk</Link>
+        {", "}and the <Link href="/docs/auth">auth integrations overview</Link>
+        {"."}
       </p>
     </>
   );

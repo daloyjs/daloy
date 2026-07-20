@@ -636,15 +636,16 @@ export default function BlogPostPage() {
             event="onShutdown"
             fires="when app.shutdown() begins, BEFORE drain"
           >
-            Receives <code>{`{ reason?, timeoutMs }`}</code>. The right place to
-            push metrics, deregister from service discovery, and flush span
-            buffers, everything that needs the network to still work.
+            Receives <code>{`{ reason?, timeoutMs }`}</code>
+            {". "}The right place to push metrics, deregister from service
+            discovery, and flush span buffers, everything that needs the network
+            to still work.
           </EventCard>
           <EventCard event="onClose" fires="AFTER in-flight requests drain">
             Use for releasing resources you paid for at boot:{" "}
-            <code>pool.end()</code>, redis disconnect, queue consumer stop.
-            Errors are caught and logged so one bad cleanup doesn&apos;t take
-            down the rest.
+            <code>pool.end()</code>
+            {", "}redis disconnect, queue consumer stop. Errors are caught and
+            logged so one bad cleanup doesn&apos;t take down the rest.
           </EventCard>
           <EventCard
             event="await app.ready()"
@@ -750,12 +751,14 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Note carefully: <code>routes/users.ts</code>,{" "}
-            <code>routes/orders.ts</code>, <code>routes/admin.ts</code> have{" "}
-            <em>zero</em> imports from <code>platform/*</code>. The metrics show
-            up, the registration happens, the policy fires, all without a single
-            line in the route files knowing any of that exists. That is the
-            entire point.
+            Note carefully: <code>routes/users.ts</code>
+            {", "}
+            <code>routes/orders.ts</code>
+            {", "}<code>routes/admin.ts</code> have <em>zero</em> imports from{" "}
+            <code>platform/*</code>
+            {". "}The metrics show up, the registration happens, the policy
+            fires, all without a single line in the route files knowing any of
+            that exists. That is the entire point.
           </p>
 
           <h2>What the logs say</h2>
@@ -796,8 +799,10 @@ export default function BlogPostPage() {
             is&hellip; depressing. The fix is structural, not motivational. Give
             the platform team a place to put their concerns. Make that place
             inert from the perspective of application code. DaloyJS does that
-            with two callbacks (<code>onPluginInstalled</code>,{" "}
-            <code>onShutdown</code>), two cleanup hooks (<code>onClose</code>,{" "}
+            with two callbacks (<code>onPluginInstalled</code>
+            {", "}
+            <code>onShutdown</code>), two cleanup hooks (<code>onClose</code>
+            {", "}
             <code>app.ready()</code>), and a Fastify-shaped{" "}
             <code>register()</code> that scopes everything.
           </p>

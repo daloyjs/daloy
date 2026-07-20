@@ -478,9 +478,10 @@ export default function BlogPostPage() {
             nursing a particular kind of opinion you only earn by watching an
             in-memory rate limiter fail in production exactly once. Spoiler: the
             limiter doesn&apos;t look broken in the metrics. The metrics look{" "}
-            <em>fine</em>. The login endpoint is on fire, the SREs are confused,
-            and somebody in the postmortem says the sentence everyone is
-            thinking: <em>oh, it only works on a single instance.</em>
+            <em>fine</em>
+            {". "}The login endpoint is on fire, the SREs are confused, and
+            somebody in the postmortem says the sentence everyone is thinking:{" "}
+            <em>oh, it only works on a single instance.</em>
           </p>
 
           <p>
@@ -514,10 +515,11 @@ export default function BlogPostPage() {
 
           <p>
             The arithmetic is brutal: with N replicas and a uniform load
-            balancer, the effective limit is <code>max × N</code>. The{" "}
-            <em>variance</em> of that limit is worse: as your autoscaler scales
-            up under attack, the gates open wider, not narrower. This is fine on
-            a laptop. It is a security boundary failure in production.
+            balancer, the effective limit is <code>max × N</code>
+            {". "}The <em>variance</em> of that limit is worse: as your
+            autoscaler scales up under attack, the gates open wider, not
+            narrower. This is fine on a laptop. It is a security boundary
+            failure in production.
           </p>
 
           <h2>The fix is one import</h2>
@@ -532,11 +534,11 @@ export default function BlogPostPage() {
 
           <p>
             That&apos;s the whole change. Same <code>rateLimit()</code>{" "}
-            middleware, same <code>windowMs</code> and <code>max</code>, just a
-            different store. Every replica now reads and writes the same
-            counter. The interesting bits are <em>inside</em> the store, and
-            interesting in the &quot;fewer than 15 lines of Lua&quot; sense,
-            which is the way I like my interesting bits.
+            middleware, same <code>windowMs</code> and <code>max</code>
+            {", "}just a different store. Every replica now reads and writes
+            the same counter. The interesting bits are <em>inside</em> the
+            store, and interesting in the &quot;fewer than 15 lines of Lua&quot;
+            sense, which is the way I like my interesting bits.
           </p>
 
           <h2>The atomic Lua script, in full</h2>
@@ -709,7 +711,8 @@ export default function BlogPostPage() {
             Two things make a production-grade rate limiter: an atomic counter
             that all your replicas share, and a deliberate choice about what
             happens when the counter is unreachable. DaloyJS ships the first as
-            a 15-line Lua script in <code>@daloyjs/core/rate-limit-redis</code>,
+            a 15-line Lua script in <code>@daloyjs/core/rate-limit-redis</code>
+            {", "}
             and exposes the second as a single <code>onError</code> callback.
             That&apos;s the whole API. The rest is operational discipline,
             multiple keys, namespaced prefixes, aggressive timeouts, and the

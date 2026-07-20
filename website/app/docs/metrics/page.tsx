@@ -32,12 +32,13 @@ export default function Page() {
       <p>
         Metrics are the third observability pillar alongside the structured{" "}
         <strong>logger</strong> and the OpenTelemetry-compatible{" "}
-        <strong>tracer</strong>. DaloyJS ships a{" "}
-        <strong>dependency-free</strong> Prometheus / OpenMetrics stack: a
-        metrics registry (counters, gauges, histograms), RED (Rate / Errors /
-        Duration) instrumentation for every route, and an opt-in,{" "}
-        <strong>auth-guarded</strong> <code>/metrics</code> scrape route that
-        inherits the same hardened posture as <code>app.healthcheck()</code>.
+        <strong>tracer</strong>
+        {". "}DaloyJS ships a <strong>dependency-free</strong> Prometheus /
+        OpenMetrics stack: a metrics registry (counters, gauges, histograms),
+        RED (Rate / Errors / Duration) instrumentation for every route, and an
+        opt-in, <strong>auth-guarded</strong> <code>/metrics</code> scrape route
+        that inherits the same hardened posture as{" "}
+        <code>app.healthcheck()</code>.
       </p>
       <p>
         Everything is built on Web-standard primitives (plus optional{" "}
@@ -124,21 +125,23 @@ app.get(
       <p>Out of the box, the scrape route exposes:</p>
       <ul>
         <li>
-          <code>daloy_http_requests_total{`{method,route,status}`}</code>: a
-          request counter (rate; the error rate is the subset with a{" "}
+          <code>daloy_http_requests_total{`{method,route,status}`}</code>
+          {": "}a request counter (rate; the error rate is the subset with a{" "}
           <code>4xx</code>/<code>5xx</code> status).
         </li>
         <li>
-          <code>daloy_http_request_duration_seconds{`{method,route}`}</code>: a
-          latency histogram with conventional Prometheus buckets.
+          <code>daloy_http_request_duration_seconds{`{method,route}`}</code>
+          {": "}a latency histogram with conventional Prometheus buckets.
         </li>
         <li>
-          <code>daloy_http_requests_in_flight</code>: a gauge of
-          concurrently-handled requests.
+          <code>daloy_http_requests_in_flight</code>
+          {": "}a gauge of concurrently-handled requests.
         </li>
         <li>
-          process gauges (<code>daloy_process_resident_memory_bytes</code>,{" "}
-          <code>daloy_process_heap_used_bytes</code>,{" "}
+          process gauges (<code>daloy_process_resident_memory_bytes</code>
+          {", "}
+          <code>daloy_process_heap_used_bytes</code>
+          {", "}
           <code>daloy_process_uptime_seconds</code>) collected at scrape time on
           Node-like runtimes.
         </li>
@@ -181,10 +184,11 @@ app.get(
               </td>
               <td>-</td>
               <td>
-                Require <code>Authorization: Bearer &lt;token&gt;</code>,
-                compared via <code>timingSafeEqual</code>. Required in
-                production unless <code>acknowledgeUnauthenticated</code> is
-                set.
+                Require <code>Authorization: Bearer &lt;token&gt;</code>
+                {", "}
+                compared via <code>timingSafeEqual</code>
+                {". "}Required in production unless{" "}
+                <code>acknowledgeUnauthenticated</code> is set.
               </td>
             </tr>
             <tr>
@@ -303,9 +307,10 @@ app.get(
         High-cardinality labels are the classic way to melt a Prometheus server.
         By default the <code>route</code> label uses the request pathname,
         capped at <code>maxRouteCardinality</code> (100) distinct values before
-        further paths collapse to <code>&lt;other&gt;</code>. For templated
-        routes, supply a resolver that returns the route{" "}
-        <strong>template</strong>:
+        further paths collapse to <code>&lt;other&gt;</code>
+        {". "}For templated routes, supply a resolver that returns the route{" "}
+        <strong>template</strong>
+        {": "}
       </p>
       <CodeBlock
         code={`app.metrics({
@@ -388,7 +393,9 @@ app.get(
         language="ts"
       />
 
-      <h2 id="grafana-prometheus-integration">Grafana + Prometheus integration</h2>
+      <h2 id="grafana-prometheus-integration">
+        Grafana + Prometheus integration
+      </h2>
       <p>
         The repository ships a ready-to-use Docker Compose stack under{" "}
         <code>examples/observability/</code> that spins up Prometheus and
@@ -396,8 +403,8 @@ app.get(
       </p>
       <h3 id="1-start-the-app">1. Start the app</h3>
       <p>
-        Run any DaloyJS server that calls <code>app.metrics()</code>. The
-        example in the repo uses port 3001:
+        Run any DaloyJS server that calls <code>app.metrics()</code>
+        {". "}The example in the repo uses port 3001:
       </p>
       <CodeBlock
         code={`node --import tsx examples/metrics-demo.ts
@@ -405,7 +412,9 @@ app.get(
 # Prometheus scrape target: http://localhost:3001/metrics`}
         language="sh"
       />
-      <h3 id="2-start-the-observability-stack">2. Start the observability stack</h3>
+      <h3 id="2-start-the-observability-stack">
+        2. Start the observability stack
+      </h3>
       <CodeBlock
         code={`docker compose -f examples/observability/docker-compose.yml up`}
         language="sh"
@@ -413,7 +422,8 @@ app.get(
       <p>This brings up:</p>
       <ul>
         <li>
-          <strong>Prometheus</strong> at <code>http://localhost:9090</code>,
+          <strong>Prometheus</strong> at <code>http://localhost:9090</code>
+          {", "}
           pre-configured to scrape{" "}
           <code>host.docker.internal:3001/metrics</code> every 10 seconds.
         </li>
@@ -425,8 +435,8 @@ app.get(
       </ul>
       <h3 id="3-open-the-dashboard">3. Open the dashboard</h3>
       <p>
-        Navigate to <code>http://localhost:3000/d/daloy-http-metrics</code>. The
-        dashboard ships nine panels out of the box:
+        Navigate to <code>http://localhost:3000/d/daloy-http-metrics</code>
+        {". "}The dashboard ships nine panels out of the box:
       </p>
       <ul>
         <li>Request rate by route</li>
@@ -496,12 +506,14 @@ daloy_http_requests_in_flight`}
       <p>
         A <code>/metrics</code> endpoint leaks internal route names, latency
         distributions, request volume, and process memory, so it ships with the
-        same hardened defaults as <code>app.healthcheck()</code>:
+        same hardened defaults as <code>app.healthcheck()</code>
+        {": "}
       </p>
       <ul>
         <li>
           <strong>Bearer token</strong> (<code>opts.token</code>) compared with{" "}
-          <code>timingSafeEqual</code>. Missing token is a <code>401</code> with{" "}
+          <code>timingSafeEqual</code>
+          {". "}Missing token is a <code>401</code> with{" "}
           <code>WWW-Authenticate</code>; wrong token is a <code>403</code>.
         </li>
         <li>
@@ -511,22 +523,24 @@ daloy_http_requests_in_flight`}
           <code>rateLimit: false</code> to disable.
         </li>
         <li>
-          <strong>Refuse-to-boot</strong>: an unauthenticated scrape endpoint in
-          production throws at registration unless you set a token or explicitly
-          pass <code>acknowledgeUnauthenticated: true</code>.
+          <strong>Refuse-to-boot</strong>
+          {": "}an unauthenticated scrape endpoint in production throws at
+          registration unless you set a token or explicitly pass{" "}
+          <code>acknowledgeUnauthenticated: true</code>.
         </li>
         <li>
-          <strong>Cardinality cap</strong>: every metric is bounded by{" "}
-          <code>maxSeries</code> (default 5000); overflowing label combinations
-          are dropped and counted in{" "}
-          <code>daloy_metrics_series_dropped_total</code>, a memory-exhaustion
-          defense.
+          <strong>Cardinality cap</strong>
+          {": "}every metric is bounded by <code>maxSeries</code> (default
+          5000); overflowing label combinations are dropped and counted in{" "}
+          <code>daloy_metrics_series_dropped_total</code>
+          {", "}a memory-exhaustion defense.
         </li>
         <li>
-          <strong>Exposition-injection defense</strong>: metric and label names
-          are validated against the Prometheus grammar at definition time, and
-          label values escape <code>\\</code>, <code>&quot;</code>, and newlines
-          so a hostile value cannot forge extra samples.
+          <strong>Exposition-injection defense</strong>
+          {": "}metric and label names are validated against the Prometheus
+          grammar at definition time, and label values escape <code>\\</code>
+          {", "}<code>&quot;</code>
+          {", "}and newlines so a hostile value cannot forge extra samples.
         </li>
       </ul>
       <p>

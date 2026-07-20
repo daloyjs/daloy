@@ -41,10 +41,12 @@ export default function Page() {
         <code>
           app({"{"} secureDefaults: false {"}"})
         </code>
-        .
+        {"."}
       </p>
 
-      <h2 id="1-connection-draining-shutdown">1. Connection-draining shutdown</h2>
+      <h2 id="1-connection-draining-shutdown">
+        1. Connection-draining shutdown
+      </h2>
 
       <FlowDiagram
         title="Draining in-flight requests on shutdown"
@@ -82,10 +84,10 @@ export default function Page() {
         <code>app.close()</code>) flips a drain flag synchronously. Every
         subsequent request returns a structured{" "}
         <code>503 application/problem+json</code> with{" "}
-        <code>retry-after: 5</code> and <code>connection: close</code>. Any
-        in-flight response that finishes during the drain window also gains{" "}
-        <code>connection: close</code> so HTTP/1.1 load balancers stop reusing
-        the keep-alive socket.
+        <code>retry-after: 5</code> and <code>connection: close</code>
+        {". "}Any in-flight response that finishes during the drain window also
+        gains <code>connection: close</code> so HTTP/1.1 load balancers stop
+        reusing the keep-alive socket.
       </p>
       <CodeBlock
         code={`const app = new App({ env: "production" });
@@ -109,7 +111,9 @@ await app.close(10_000, "SIGTERM");
         <code>app._registerIdleConnectionCloseHook(hook)</code>.
       </p>
 
-      <h2 id="2-crash-on-unhandled-rejection-in-production">2. Crash on unhandled rejection in production</h2>
+      <h2 id="2-crash-on-unhandled-rejection-in-production">
+        2. Crash on unhandled rejection in production
+      </h2>
       <p>
         The new{" "}
         <code>
@@ -118,9 +122,10 @@ await app.close(10_000, "SIGTERM");
         option installs process-wide listeners for{" "}
         <code>unhandledRejection</code> and <code>uncaughtException</code> that
         log <code>fatal</code> through the pluggable logger and call{" "}
-        <code>process.exit(1)</code>. The framework deliberately avoids the
-        &quot;swallow and keep running&quot; anti-pattern, a crashed process is
-        easier to reason about than a zombie one. Defaults:
+        <code>process.exit(1)</code>
+        {". "}The framework deliberately avoids the &quot;swallow and keep
+        running&quot; anti-pattern, a crashed process is easier to reason about
+        than a zombie one. Defaults:
       </p>
       <ul>
         <li>
@@ -129,11 +134,12 @@ await app.close(10_000, "SIGTERM");
           <code>NODE_ENV === &quot;production&quot;</code>), skip elsewhere.
         </li>
         <li>
-          <code>true</code>: install even in development (useful for staging /
-          CI).
+          <code>true</code>
+          {": "}install even in development (useful for staging / CI).
         </li>
         <li>
-          <code>false</code>: never install, even in production.
+          <code>false</code>
+          {": "}never install, even in production.
         </li>
       </ul>
       <p>
@@ -148,12 +154,12 @@ await app.close(10_000, "SIGTERM");
       </h2>
       <p>
         Opt-in route registration with sensible defaults: paths{" "}
-        <code>/healthz</code> and <code>/readyz</code>, per-IP fixed-window rate
-        limit (60 requests / 60 s, in-memory), optional bearer-token auth
-        compared via <code>timingSafeEqual</code>. Readiness returns{" "}
-        <code>503</code> with <code>retry-after: 5</code> while draining{" "}
-        <strong>or</strong> while any plugin is still pending in{" "}
-        <code>register()</code>.
+        <code>/healthz</code> and <code>/readyz</code>
+        {", "}per-IP fixed-window rate limit (60 requests / 60 s, in-memory),
+        optional bearer-token auth compared via <code>timingSafeEqual</code>
+        {". "}Readiness returns <code>503</code> with{" "}
+        <code>retry-after: 5</code> while draining <strong>or</strong> while any
+        plugin is still pending in <code>register()</code>.
       </p>
       <CodeBlock
         code={`const app = new App({ env: "production" });
@@ -179,8 +185,9 @@ app.readinesscheck({
         Pass <code>rateLimit: false</code> to disable the per-IP cap entirely
         (sidecar-only probes that arrive directly from the orchestrator). The
         limiter deliberately does <strong>not</strong> honour{" "}
-        <code>X-Forwarded-For</code>: probes typically arrive from a sidecar so
-        spoofing the header should not bypass the cap.
+        <code>X-Forwarded-For</code>
+        {": "}probes typically arrive from a sidecar so spoofing the header
+        should not bypass the cap.
       </p>
 
       <h2 id="opt-out">Opt-out</h2>
@@ -189,12 +196,12 @@ app.readinesscheck({
         <code>
           new App({"{"} secureDefaults: false {"}"})
         </code>
-        , or just the crash handlers with{" "}
+        {", "}or just the crash handlers with{" "}
         <code>
           new App({"{"} crashOnUnhandledRejection: false {"}"})
         </code>
-        . Health and readiness routes are opt-in, no auto-registration happens,
-        the framework only flips behaviour when you call{" "}
+        {". "}Health and readiness routes are opt-in, no auto-registration
+        happens, the framework only flips behaviour when you call{" "}
         <code>app.healthcheck()</code> / <code>app.readinesscheck()</code>{" "}
         explicitly.
       </p>

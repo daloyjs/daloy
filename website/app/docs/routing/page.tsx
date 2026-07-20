@@ -34,8 +34,8 @@ export default function Page() {
       <p>
         Method shorthands reduce ceremony without removing the contract. DaloyJS
         derives a stable operation id from the method and path, such as{" "}
-        <code>getRoot</code> or <code>postBookItemsByItemId</code>. An explicit{" "}
-        <code>operationId</code> still wins.
+        <code>getRoot</code> or <code>postBookItemsByItemId</code>
+        {". "}An explicit <code>operationId</code> still wins.
       </p>
       <CodeBlock
         code={`const app = new App()
@@ -57,9 +57,10 @@ export default function Page() {
       />
       <p>
         Shorthands keep the same validation, OpenAPI, security, and typed-client
-        behavior as <code>route()</code>. There is no two-argument form that
-        silently skips a response contract. For an intentionally opaque body,
-        pass <code>acknowledgeNoResponseBodySchema: true</code> explicitly.
+        behavior as <code>route()</code>
+        {". "}There is no two-argument form that silently skips a response
+        contract. For an intentionally opaque body, pass{" "}
+        <code>acknowledgeNoResponseBodySchema: true</code> explicitly.
         Successful raw responses returned by <code>preBody</code> or{" "}
         <code>beforeHandle</code> require the same acknowledgement; ordinary{" "}
         <code>4xx</code>/<code>5xx</code> hook denials do not. Response
@@ -133,10 +134,11 @@ export const app = new App().route({
 
       <h2 id="multi-file-type-inference">Multi-file type inference</h2>
       <p>
-        Export each route with <code>defineRoute()</code>, then compose the
-        imported contracts through <code>registerRoutes()</code>. The literal
-        tuple survives file and module boundaries, so the no-codegen client
-        retains every operation id and schema.
+        Export each route with <code>defineRoute()</code>
+        {", "}then compose the imported contracts through{" "}
+        <code>registerRoutes()</code>
+        {". "}The literal tuple survives file and module boundaries, so the
+        no-codegen client retains every operation id and schema.
       </p>
       <CodeBlock
         code={`// routes/list-books.ts
@@ -174,11 +176,18 @@ export const app = new App().registerRoutes([
 
       <h2 id="http-methods">HTTP methods</h2>
       <p>
-        Supported methods include <code>GET</code>, <code>POST</code>,{" "}
-        <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>,{" "}
-        <code>HEAD</code>, and <code>OPTIONS</code>. Custom methods such as{" "}
-        <code>TRACE</code>, <code>CONNECT</code>, and WebDAV verbs are rejected
-        at registration.
+        Supported methods include <code>GET</code>
+        {", "}<code>POST</code>
+        {", "}
+        <code>PUT</code>
+        {", "}<code>PATCH</code>
+        {", "}<code>DELETE</code>
+        {", "}
+        <code>HEAD</code>
+        {", "}and <code>OPTIONS</code>
+        {". "}Custom methods such as <code>TRACE</code>
+        {", "}<code>CONNECT</code>
+        {", "}and WebDAV verbs are rejected at registration.
       </p>
       <p>
         <code>HEAD</code> falls back to the matching <code>GET</code> route when
@@ -188,9 +197,14 @@ export const app = new App().registerRoutes([
         <code>OPTIONS</code> route is registered.
       </p>
       <p>
-        Shorthand methods are available for <code>GET</code>, <code>POST</code>,{" "}
-        <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>, and{" "}
-        <code>HEAD</code>. Register an explicit <code>OPTIONS</code> route with{" "}
+        Shorthand methods are available for <code>GET</code>
+        {", "}<code>POST</code>
+        {", "}
+        <code>PUT</code>
+        {", "}<code>PATCH</code>
+        {", "}<code>DELETE</code>
+        {", "}and <code>HEAD</code>
+        {". "}Register an explicit <code>OPTIONS</code> route with{" "}
         <code>route()</code>; otherwise DaloyJS supplies automatic preflight
         handling.
       </p>
@@ -217,8 +231,8 @@ export const app = new App().registerRoutes([
         Path values are decoded before validation. If you omit a{" "}
         <code>request.params</code> schema, <code>ctx.params</code> is inferred
         from the path as raw strings. Conflicting parameter names at the same
-        trie position, such as <code>/a/:x</code> and <code>/a/:y</code>, throw
-        at registration.
+        trie position, such as <code>/a/:x</code> and <code>/a/:y</code>
+        {", "}throw at registration.
       </p>
 
       <h3 id="wildcard-captures">Wildcard captures</h3>
@@ -242,8 +256,9 @@ export const app = new App().registerRoutes([
       />
       <p>
         Path traversal segments (<code>..</code>), empty segments{" "}
-        <code>{"//"}</code>, and malformed percent escapes miss cleanly before
-        your handler sees them.
+        <code>{"//"}</code>
+        {", "}and malformed percent escapes miss cleanly before your handler
+        sees them.
       </p>
 
       <h2 id="groups">Groups</h2>
@@ -269,38 +284,48 @@ export const app = new App().registerRoutes([
         parallel <code>/api/v1</code> and <code>/api/v2</code> contracts,
         migration policy, and separately generated SDKs, read the{" "}
         <Link href={"/docs/api-versioning" as Route}>API versioning guide</Link>
-        .
+        {"."}
       </p>
 
       <h2 id="route-options">Route options</h2>
       <ul>
         <li>
-          <code>request</code>: schemas for <code>params</code>,{" "}
-          <code>query</code>, <code>headers</code>, and <code>body</code>.
+          <code>request</code>
+          {": "}schemas for <code>params</code>
+          {", "}
+          <code>query</code>
+          {", "}<code>headers</code>
+          {", "}and <code>body</code>.
         </li>
         <li>
-          <code>responses</code>: declared status codes and optional response
-          body/header schemas.
+          <code>responses</code>
+          {": "}declared status codes and optional response body/header
+          schemas.
         </li>
         <li>
-          <code>accepts</code>: per-route <code>Content-Type</code> allowlist
-          for routes with request body schemas.
+          <code>accepts</code>
+          {": "}per-route <code>Content-Type</code> allowlist for routes with
+          request body schemas.
         </li>
         <li>
-          <code>auth</code>: OpenAPI security requirement for the route; pair it
-          with an auth hook such as <code>bearerAuth()</code>.
+          <code>auth</code>
+          {": "}OpenAPI security requirement for the route; pair it with an
+          auth hook such as <code>bearerAuth()</code>.
         </li>
         <li>
-          <code>internal</code>: hides a route from public adapters while still
-          allowing in-process <code>app.inject()</code> calls.
+          <code>internal</code>
+          {": "}hides a route from public adapters while still allowing
+          in-process <code>app.inject()</code> calls.
         </li>
         <li>
-          <code>deprecated</code> and <code>sunset</code>: mark an endpoint as
-          deprecated and emit the matching response headers.
+          <code>deprecated</code> and <code>sunset</code>
+          {": "}mark an endpoint as deprecated and emit the matching response
+          headers.
         </li>
         <li>
-          <code>callbacks</code> and <code>meta</code>: add OpenAPI callbacks,
-          examples, and AI-friendly route metadata.
+          <code>callbacks</code> and <code>meta</code>
+          {": "}add OpenAPI callbacks, examples, and AI-friendly route
+          metadata.
         </li>
       </ul>
 
@@ -308,31 +333,39 @@ export const app = new App().registerRoutes([
       <p>Hooks attach behavior at fixed lifecycle points:</p>
       <ul>
         <li>
-          <code>onRequest</code>: earliest, before parsing.
+          <code>onRequest</code>
+          {": "}earliest, before parsing.
         </li>
         <li>
-          <code>preBody</code>: after route matching, before schema validation
-          or body I/O. Built-in header/JWT/basic/mTLS auth runs here.
+          <code>preBody</code>
+          {": "}after route matching, before schema validation or body I/O.
+          Built-in header/JWT/basic/mTLS auth runs here.
         </li>
         <li>
-          <code>beforeHandle</code>: after validation, before your handler.
-          Return a <code>Response</code> to short-circuit.
+          <code>beforeHandle</code>
+          {": "}after validation, before your handler. Return a{" "}
+          <code>Response</code> to short-circuit.
         </li>
         <li>
-          <code>afterHandle</code>: wrap or transform the handler result before
-          response serialization.
+          <code>afterHandle</code>
+          {": "}wrap or transform the handler result before response
+          serialization.
         </li>
         <li>
-          <code>onError</code>: observe or replace the error response.
+          <code>onError</code>
+          {": "}observe or replace the error response.
         </li>
         <li>
-          <code>onSend</code>: mutate outgoing headers in place or return a new{" "}
-          <code>Response</code>. Runs on success, error, and{" "}
-          <code>OPTIONS</code> preflight paths.
+          <code>onSend</code>
+          {": "}mutate outgoing headers in place or return a new{" "}
+          <code>Response</code>
+          {". "}Runs on success, error, and <code>OPTIONS</code> preflight
+          paths.
         </li>
         <li>
-          <code>onResponse</code>: final observer. Use it for logging and
-          metrics, not response mutation.
+          <code>onResponse</code>
+          {": "}final observer. Use it for logging and metrics, not response
+          mutation.
         </li>
       </ul>
       <FlowDiagram
@@ -422,9 +455,9 @@ app.route({
       />
       <p>
         <code>onSend</code> runs <em>after</em> response validation and after
-        request-scoped headers, including <code>x-request-id</code>, have been
-        merged. It runs <em>before</em> <code>onResponse</code>, which remains
-        the right place for logging and metrics.
+        request-scoped headers, including <code>x-request-id</code>
+        {", "}have been merged. It runs <em>before</em> <code>onResponse</code>
+        {", "}which remains the right place for logging and metrics.
       </p>
 
       <h2 id="405-method-not-allowed">405 Method Not Allowed</h2>

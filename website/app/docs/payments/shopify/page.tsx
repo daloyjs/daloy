@@ -42,7 +42,9 @@ export default function Page() {
         body.
       </p>
 
-      <h2 id="rest-is-deprecated-prefer-graphql">REST is deprecated: prefer GraphQL</h2>
+      <h2 id="rest-is-deprecated-prefer-graphql">
+        REST is deprecated: prefer GraphQL
+      </h2>
       <p>
         Shopify{" "}
         <a
@@ -60,8 +62,10 @@ export default function Page() {
         >
           GraphQL Admin API
         </a>
-        . The REST resources on <code>shopify-api-node</code> (
-        <code>shopify.product.list</code>, <code>shopify.order.create</code>,
+        {". "}The REST resources on <code>shopify-api-node</code> (
+        <code>shopify.product.list</code>
+        {", "}<code>shopify.order.create</code>
+        {", "}
         &hellip;) still work against older API versions, but you should write
         new code against the SDK&apos;s <code>shopify.graphql()</code> method.
         Every example below uses GraphQL.
@@ -85,7 +89,8 @@ export default function Page() {
       <ol>
         <li>
           In the Shopify admin, open{" "}
-          <strong>Settings → Apps and sales channels → Develop apps</strong>,
+          <strong>Settings → Apps and sales channels → Develop apps</strong>
+          {", "}
           then create a custom app. The legacy &ldquo;private apps&rdquo; flow
           (API key + password) was removed back in January 2022, don&apos;t use
           the <code>apiKey</code> / <code>password</code> options on the SDK.
@@ -100,8 +105,9 @@ export default function Page() {
             Admin API access scopes
           </a>{" "}
           your integration actually needs (for example{" "}
-          <code>read_products</code>, <code>write_orders</code>). Stay minimal,
-          you can always grant more later.
+          <code>read_products</code>
+          {", "}<code>write_orders</code>). Stay minimal, you can always grant
+          more later.
         </li>
         <li>
           Install the app on the store. Copy the{" "}
@@ -404,8 +410,8 @@ app.post(
         >
           calculated cost &amp; leaky-bucket model
         </a>
-        . Use the <code>maxRetries</code> option (above) so the SDK respects the
-        throttled-cost information that comes back on 429 responses.{" "}
+        {". "}Use the <code>maxRetries</code> option (above) so the SDK respects
+        the throttled-cost information that comes back on 429 responses.{" "}
         <code>autoLimit</code> only works for the REST API and only inside a
         single Node process, skip it for GraphQL or multi-instance deployments
         and rely on retries instead.
@@ -421,11 +427,13 @@ app.post(
         >
           got v11
         </a>
-        , which depends on Node&apos;s HTTPS module. It runs fine on Node, Bun,
-        AWS Lambda, and any long-running container, but it is{" "}
+        {", "}which depends on Node&apos;s HTTPS module. It runs fine on Node,
+        Bun, AWS Lambda, and any long-running container, but it is{" "}
         <strong>not</strong> drop-in compatible with{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link>. On those runtimes, call the
-        Admin GraphQL endpoint directly with <code>fetch</code>:
+        <Link href="/docs/adapters">Cloudflare Workers</Link>
+        {". "}On those runtimes, call the Admin GraphQL endpoint directly with{" "}
+        <code>fetch</code>
+        {": "}
       </p>
       <CodeBlock
         code={`// edge-friendly fallback
@@ -461,12 +469,14 @@ const res = await fetch(
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href="/docs/errors">problem+json errors</Link>, and{" "}
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href="/docs/errors">problem+json errors</Link>
+        {", "}and{" "}
         <Link href="/docs/security/rate-limit-redis">
           distributed rate-limit store
         </Link>
-        .
+        {"."}
       </p>
     </>
   );

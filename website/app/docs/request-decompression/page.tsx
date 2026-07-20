@@ -29,22 +29,22 @@ export default function Page() {
       <h1>Inbound request-decompression bomb guard</h1>
       <p>
         DaloyJS core deliberately does <strong>not</strong> decompress request
-        bodies. It is <em>safe by omission</em>. A{" "}
-        <code>Content-Encoding: gzip</code> request body is read as-is, and a
-        schema parse simply fails on the compressed bytes. The moment you
+        bodies. It is <em>safe by omission</em>
+        {". "}A <code>Content-Encoding: gzip</code> request body is read as-is,
+        and a schema parse simply fails on the compressed bytes. The moment you
         inflate attacker-supplied bytes, though, you inherit the classic{" "}
         <strong>decompression bomb</strong> (a.k.a. &quot;zip bomb&quot;): a few
         kilobytes of crafted gzip can expand to gigabytes and blow straight past{" "}
-        <code>bodyLimitBytes</code>, which only ever sees the small compressed
-        payload.
+        <code>bodyLimitBytes</code>
+        {", "}which only ever sees the small compressed payload.
       </p>
       <p>
-        DaloyJS ships{" "}
-        <code>requestDecompression()</code>, the opt-in middleware that adds
-        request decompression <strong>with the bomb guard baked in</strong>. It
-        inflates the body with two independent caps enforced <em>during</em>{" "}
-        inflation, so a bomb is aborted long before it is fully materialised in
-        memory.
+        DaloyJS ships <code>requestDecompression()</code>
+        {", "}the opt-in middleware that adds request decompression{" "}
+        <strong>with the bomb guard baked in</strong>
+        {". "}It inflates the body with two independent caps enforced{" "}
+        <em>during</em> inflation, so a bomb is aborted long before it is fully
+        materialised in memory.
       </p>
 
       <FlowDiagram
@@ -118,9 +118,9 @@ app.use(requestDecompression({
         </li>
         <li>
           <code>maxRatio</code> (default <code>100</code>): the inflated size
-          may never exceed <code>compressedBytes * maxRatio</code>, catching
-          small-but-explosive payloads that would stay under the absolute cap in
-          isolation.
+          may never exceed <code>compressedBytes * maxRatio</code>
+          {", "}catching small-but-explosive payloads that would stay under the
+          absolute cap in isolation.
         </li>
       </ul>
       <p>
@@ -140,14 +140,15 @@ app.use(requestDecompression({
 
       <h2 id="supported-encodings">Supported encodings</h2>
       <p>
-        Built on the web-standard <code>DecompressionStream</code>, so the same
-        line works on Node, Bun, Deno, and Cloudflare Workers. Only{" "}
-        <code>gzip</code> and <code>deflate</code> are accepted (the encodings{" "}
-        <code>DecompressionStream</code> implements consistently across
-        runtimes).
-        <strong> Brotli is intentionally excluded</strong>: it is not part of
-        the Compression Streams spec and is unavailable on most runtimes.
-        Restrict the allowlist with <code>encodings</code>:
+        Built on the web-standard <code>DecompressionStream</code>
+        {", "}so the same line works on Node, Bun, Deno, and Cloudflare
+        Workers. Only <code>gzip</code> and <code>deflate</code> are accepted
+        (the encodings <code>DecompressionStream</code> implements consistently
+        across runtimes).
+        <strong>Brotli is intentionally excluded</strong>
+        {": "}it is not part of the Compression Streams spec and is unavailable
+        on most runtimes. Restrict the allowlist with <code>encodings</code>
+        {": "}
       </p>
       <CodeBlock
         language="ts"
@@ -160,19 +161,22 @@ app.use(requestDecompression({
       <h2 id="error-responses">Error responses</h2>
       <ul>
         <li>
-          <code>413</code>: a decompression bomb tripped either cap, or the
-          compressed upload exceeded <code>maxCompressedBytes</code>.
+          <code>413</code>
+          {": "}a decompression bomb tripped either cap, or the compressed
+          upload exceeded <code>maxCompressedBytes</code>.
         </li>
         <li>
-          <code>415</code>: an unknown, non-allowlisted, runtime-unsupported,
-          or <strong>layered</strong> (<code>gzip, gzip</code>) encoding.
-          Layered encodings are a classic nested-bomb vector and are refused
-          rather than inflated recursively. The response carries an{" "}
+          <code>415</code>
+          {": "}an unknown, non-allowlisted, runtime-unsupported, or{" "}
+          <strong>layered</strong> (<code>gzip, gzip</code>) encoding. Layered
+          encodings are a classic nested-bomb vector and are refused rather than
+          inflated recursively. The response carries an{" "}
           <code>Accept-Encoding</code> header listing the allowed encodings.
         </li>
         <li>
-          <code>400</code>: a malformed / truncated compressed stream. Refusing
-          (rather than treating a malformed body as empty) prevents
+          <code>400</code>
+          {": "}a malformed / truncated compressed stream. Refusing (rather
+          than treating a malformed body as empty) prevents
           request-smuggling-style desync with any downstream parser.
         </li>
       </ul>
@@ -187,9 +191,10 @@ app.use(requestDecompression({
       <p>
         Pass <code>onBomb</code> to record rejected bombs (it fires before the{" "}
         <code>413</code> is thrown). It receives the structured{" "}
-        <code>DecompressionBombInfo</code>: the encoding, compressed size,
-        inflated bytes produced before the abort, and which cap tripped (
-        <code>&quot;absolute&quot;</code> or <code>&quot;ratio&quot;</code>):
+        <code>DecompressionBombInfo</code>
+        {": "}the encoding, compressed size, inflated bytes produced before the
+        abort, and which cap tripped (<code>&quot;absolute&quot;</code> or{" "}
+        <code>&quot;ratio&quot;</code>):
       </p>
       <CodeBlock
         language="ts"

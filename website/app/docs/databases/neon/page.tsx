@@ -31,8 +31,8 @@ export default function Page() {
         </a>{" "}
         is a serverless Postgres host with database branching, scale-to-zero,
         and an HTTP/WebSocket driver that runs in <em>every</em> runtime DaloyJS
-        targets, including Cloudflare Workers where raw TCP
-        isn&apos;t available.
+        targets, including Cloudflare Workers where raw TCP isn&apos;t
+        available.
       </p>
 
       <BranchDiagram
@@ -93,7 +93,9 @@ export const neonPlugin = {
 };`}
       />
 
-      <h2 id="4-pooled-websocket-client-node">4. Pooled WebSocket client (Node)</h2>
+      <h2 id="4-pooled-websocket-client-node">
+        4. Pooled WebSocket client (Node)
+      </h2>
       <CodeBlock
         code={`// src/db/neon-pool.ts
 import { Pool } from "@neondatabase/serverless";
@@ -169,8 +171,9 @@ app.get(
       <h2 id="cloudflare-workers">Cloudflare Workers</h2>
       <p>
         Use the HTTP <code>neon()</code> client and pass the connection string
-        from the worker environment instead of <code>process.env</code>. Because
-        this example reads <code>env</code>, wrap the Worker
+        from the worker environment instead of <code>process.env</code>
+        {". "}Because this example reads <code>env</code>
+        {", "}wrap the Worker
         <code>fetch</code> handler and call <code>app.fetch(req)</code> after
         decorating state:
       </p>
@@ -221,22 +224,27 @@ export const prisma = new PrismaClient({ adapter });`}
       />
       <p>
         Use Neon&apos;s <strong>pooled</strong> connection string (host ends in{" "}
-        <code>-pooler</code>) for <code>DATABASE_URL</code>, and a separate{" "}
-        <code>DIRECT_URL</code> for Prisma CLI commands like{" "}
-        <code>prisma migrate</code> and <code>prisma db pull</code>.
+        <code>-pooler</code>) for <code>DATABASE_URL</code>
+        {", "}and a separate <code>DIRECT_URL</code> for Prisma CLI commands
+        like <code>prisma migrate</code> and <code>prisma db pull</code>.
       </p>
 
-      <h2 id="branching-for-preview-environments">Branching for preview environments</h2>
+      <h2 id="branching-for-preview-environments">
+        Branching for preview environments
+      </h2>
       <p>
         Pair Neon&apos;s branching with Vercel preview deployments or GitHub PR
         previews. Create a branch per PR and pass its connection string to the
-        deployment&apos;s <code>DATABASE_URL</code>. This is a natural fit for
-        the <Link href="/docs/adapters">Vercel adapter</Link>.
+        deployment&apos;s <code>DATABASE_URL</code>
+        {". "}This is a natural fit for the{" "}
+        <Link href="/docs/adapters">Vercel adapter</Link>.
       </p>
 
       <p>
-        See also <Link href="/docs/databases/planetscale">PlanetScale</Link>,{" "}
-        <Link href="/docs/orm/supabase">Supabase</Link>, and the{" "}
+        See also <Link href="/docs/databases/planetscale">PlanetScale</Link>
+        {", "}
+        <Link href="/docs/orm/supabase">Supabase</Link>
+        {", "}and the{" "}
         <Link href="/docs/databases">database hosting overview</Link>.
       </p>
     </>

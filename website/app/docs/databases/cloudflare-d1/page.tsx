@@ -31,9 +31,10 @@ export default function Page() {
         >
           Cloudflare D1
         </a>{" "}
-        is a serverless SQLite-compatible database built into Cloudflare Workers. You access it through a
-        Worker binding (no network driver, no auth token, no TCP), making it the lowest-friction
-        database for the <Link href="/docs/adapters">Cloudflare adapter</Link>.
+        is a serverless SQLite-compatible database built into Cloudflare
+        Workers. You access it through a Worker binding (no network driver, no
+        auth token, no TCP), making it the lowest-friction database for the{" "}
+        <Link href="/docs/adapters">Cloudflare adapter</Link>.
       </p>
 
       <h2 id="1-provision-via-wrangler">1. Provision via Wrangler</h2>
@@ -41,7 +42,10 @@ export default function Page() {
         code={`pnpm add -D wrangler
 pnpm dlx wrangler d1 create my-app-db`}
       />
-      <p>Add the returned binding to your <code>wrangler.toml</code>:</p>
+      <p>
+        Add the returned binding to your <code>wrangler.toml</code>
+        {": "}
+      </p>
       <CodeBlock
         code={`[[d1_databases]]
 binding = "DB"
@@ -51,9 +55,9 @@ database_id = "<id-from-create>"`}
 
       <h2 id="2-type-the-binding">2. Type the binding</h2>
       <p>
-        Use a regular <code>.ts</code> module (not a <code>.d.ts</code>, which{" "}
-        <code>skipLibCheck</code> would silently skip) so the import below
-        resolves and the shape stays type-checked:
+        Use a regular <code>.ts</code> module (not a <code>.d.ts</code>
+        {", "}which <code>skipLibCheck</code> would silently skip) so the
+        import below resolves and the shape stays type-checked:
       </p>
       <CodeBlock
         code={`// src/types/env.ts
@@ -62,10 +66,14 @@ export interface Env {
 }`}
       />
 
-      <h2 id="3-decorate-the-app-per-request">3. Decorate the app per-request</h2>
+      <h2 id="3-decorate-the-app-per-request">
+        3. Decorate the app per-request
+      </h2>
       <p>
-        D1 bindings live on <code>env</code>, not <code>process.env</code>, so decorate inside the
-        Worker&apos;s <code>fetch</code> handler and call <code>app.fetch(req)</code> directly:
+        D1 bindings live on <code>env</code>
+        {", "}not <code>process.env</code>
+        {", "}so decorate inside the Worker&apos;s <code>fetch</code> handler
+        and call <code>app.fetch(req)</code> directly:
       </p>
 
       <FlowDiagram
@@ -132,11 +140,10 @@ export default {
       <h2 id="4-augment-app-state">4. Augment app state</h2>
       <p>
         Add the <code>declare module</code> block to the Worker module itself,
-        not to a separate <code>.d.ts</code> file. Declaration files are
-        exempt from type-checking when <code>skipLibCheck</code> is on (the
-        scaffolded default), so a mistake inside a <code>.d.ts</code> fails
-        silently and <code>state.db</code> quietly degrades to{" "}
-        <code>any</code>.
+        not to a separate <code>.d.ts</code> file. Declaration files are exempt
+        from type-checking when <code>skipLibCheck</code> is on (the scaffolded
+        default), so a mistake inside a <code>.d.ts</code> fails silently and{" "}
+        <code>state.db</code> quietly degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/index.ts (same module as the Worker above)
@@ -166,16 +173,27 @@ export const createDb = (env: Env) => drizzle(env.DB);`}
 
       <h2 id="with-prisma">With Prisma</h2>
       <p>
-        Prisma supports D1 via the <a href="https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1" target="_blank" rel="noreferrer">D1 Driver Adapter</a>.
-        Construct the adapter inside the Worker handler since it needs the runtime binding.
+        Prisma supports D1 via the{" "}
+        <a
+          href="https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1"
+          target="_blank"
+          rel="noreferrer"
+        >
+          D1 Driver Adapter
+        </a>
+        {". "}Construct the adapter inside the Worker handler since it needs the
+        runtime binding.
       </p>
 
       <h2 id="limitations-to-know">Limitations to know</h2>
       <ul>
-        <li>D1 only runs in Cloudflare Workers, no Node.js, Lambda, or Edge runtime support.</li>
         <li>
-          Local development uses <code>wrangler dev</code> with a local SQLite file; behavior is close
-          but not identical to production.
+          D1 only runs in Cloudflare Workers, no Node.js, Lambda, or Edge
+          runtime support.
+        </li>
+        <li>
+          Local development uses <code>wrangler dev</code> with a local SQLite
+          file; behavior is close but not identical to production.
         </li>
         <li>
           For multi-runtime portability, prefer{" "}
@@ -184,8 +202,10 @@ export const createDb = (env: Env) => drizzle(env.DB);`}
       </ul>
 
       <p>
-        See also <Link href="/docs/databases/turso">Turso</Link>,{" "}
-        <Link href="/docs/databases/neon">Neon</Link>, and the{" "}
+        See also <Link href="/docs/databases/turso">Turso</Link>
+        {", "}
+        <Link href="/docs/databases/neon">Neon</Link>
+        {", "}and the{" "}
         <Link href="/docs/databases">database hosting overview</Link>.
       </p>
     </>

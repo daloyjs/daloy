@@ -74,10 +74,11 @@ export default function Page() {
       <p>
         Every <code>new App()</code> instance ships <code>secureHeaders()</code>{" "}
         with the same sensible defaults the middleware has always had: HSTS,{" "}
-        <code>X-Frame-Options: DENY</code>,{" "}
-        <code>X-Content-Type-Options: nosniff</code>, a strict{" "}
-        <code>Referrer-Policy</code>, and a baseline CSP. No code change
-        required.
+        <code>X-Frame-Options: DENY</code>
+        {", "}
+        <code>X-Content-Type-Options: nosniff</code>
+        {", "}a strict <code>Referrer-Policy</code>
+        {", "}and a baseline CSP. No code change required.
       </p>
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
@@ -107,7 +108,8 @@ app.use(
 
       <p>
         Want the headers configured at construction time instead? Pass a{" "}
-        <code>secureHeaders</code> object to <code>new App()</code>:
+        <code>secureHeaders</code> object to <code>new App()</code>
+        {": "}
       </p>
       <CodeBlock
         code={`const app = new App({
@@ -130,10 +132,11 @@ app.use(
         different origin than the request URL are now rejected with{" "}
         <code>403 problem+json</code> unless the matched route has a{" "}
         <code>cors()</code> policy that allows that origin. Read-only methods (
-        <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>), same-origin
-        requests, and requests without an <code>Origin</code> header (or with{" "}
-        <code>Origin: null</code> from a sandboxed iframe) pass through
-        unchanged.
+        <code>GET</code>
+        {", "}<code>HEAD</code>
+        {", "}<code>OPTIONS</code>), same-origin requests, and requests without
+        an <code>Origin</code> header (or with <code>Origin: null</code> from a
+        sandboxed iframe) pass through unchanged.
       </p>
 
       <FlowDiagram
@@ -177,8 +180,8 @@ app.use(cors({ origin: ["https://app.example.com"] }));
       />
 
       <p>
-        Per-route opt-in works too, register the <code>cors()</code> hook on
-        the specific routes that need it via{" "}
+        Per-route opt-in works too, register the <code>cors()</code> hook on the
+        specific routes that need it via{" "}
         <code>route({"{ hooks: cors({...}) }"})</code>.
       </p>
 
@@ -197,13 +200,14 @@ app.use(cors({ origin: ["https://app.example.com"] }));
       <p>
         New <code>route({"{ accepts: [...] }"})</code> field overrides the
         global <code>allowedContentTypes</code> allowlist for a single route.
-        The default allowlist already covers <code>application/json</code>,{" "}
-        <code>application/x-www-form-urlencoded</code>, and{" "}
-        <code>multipart/form-data</code>, so use <code>accepts</code> to{" "}
-        <em>restrict</em> a route to a subset (the example below accepts only
-        form-encoded and rejects JSON with <code>415</code>) or to accept a type
-        outside that set (e.g. <code>application/xml</code>) without touching the
-        global allowlist.
+        The default allowlist already covers <code>application/json</code>
+        {", "}
+        <code>application/x-www-form-urlencoded</code>
+        {", "}and <code>multipart/form-data</code>
+        {", "}so use <code>accepts</code> to <em>restrict</em> a route to a
+        subset (the example below accepts only form-encoded and rejects JSON
+        with <code>415</code>) or to accept a type outside that set (e.g.{" "}
+        <code>application/xml</code>) without touching the global allowlist.
       </p>
       <CodeBlock
         code={`app.post(
@@ -228,7 +232,8 @@ app.use(cors({ origin: ["https://app.example.com"] }));
       <p>
         This is intentionally one-shot: there is no per-feature granular master
         flag because the per-feature opt-outs already exist (
-        <code>secureHeaders: false</code>,{" "}
+        <code>secureHeaders: false</code>
+        {", "}
         <code>corsCrossOriginGuard: false</code>). Use{" "}
         <code>secureDefaults: false</code> as a time-boxed migration hatch, not
         a permanent posture.
@@ -275,7 +280,8 @@ export function myCustomHeaders() {
           <code>PATCH</code> / <code>DELETE</code> tests / integrations.
           Register <code>cors()</code> (recommended) or pass{" "}
           <code>corsCrossOriginGuard: false</code> (if you handle cross-origin
-          admission via <code>csrf({"{ strategy: 'fetch-metadata' }"})</code>,
+          admission via <code>csrf({"{ strategy: 'fetch-metadata' }"})</code>
+          {", "}
           for example).
         </li>
         <li>

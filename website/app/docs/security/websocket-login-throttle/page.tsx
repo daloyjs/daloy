@@ -52,7 +52,12 @@ export default function Page() {
       </p>
       <SequenceDiagram
         title="One bucket, two transports"
-        participants={["Attacker", "loginThrottle()", "wsRateLimit()", "Shared bucket"]}
+        participants={[
+          "Attacker",
+          "loginThrottle()",
+          "wsRateLimit()",
+          "Shared bucket",
+        ]}
         steps={[
           {
             from: "Attacker",
@@ -179,12 +184,15 @@ app.post(
         language="ts"
       />
 
-      <h2 id="4-upload-mime-and-magic-byte-guards">4. Upload MIME and magic-byte guards</h2>
+      <h2 id="4-upload-mime-and-magic-byte-guards">
+        4. Upload MIME and magic-byte guards
+      </h2>
       <p>
         <code>fileField()</code> already enforced <code>maxBytes</code> and MIME
         allowlists. Add <code>magicBytes: true</code> to derive known signatures
-        from <code>accept</code>, or pass custom signatures for private formats.
-        The OpenAPI generator emits <code>x-magic-bytes</code> alongside
+        from <code>accept</code>
+        {", "}or pass custom signatures for private formats. The OpenAPI
+        generator emits <code>x-magic-bytes</code> alongside
         <code>x-accept</code> and <code>x-max-bytes</code>.
       </p>
       <CodeBlock
@@ -240,7 +248,8 @@ app.post(
         <code>app.ws()</code> now normalizes safe runtime defaults for Node and
         Bun: close on excessive outbound backpressure, a 1 MiB backpressure
         limit, compression off by default, a non-zero idle timeout, and a 1 MiB
-        inbound payload cap. In production under <code>secureDefaults</code>,
+        inbound payload cap. In production under <code>secureDefaults</code>
+        {", "}
         <code>perMessageDeflate: true</code> is refused. Daloy also refuses a
         <code>maxPayloadLength</code> larger than a route body schema&apos;s
         declared maximum when the schema exposes one.

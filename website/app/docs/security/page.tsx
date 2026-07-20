@@ -71,7 +71,9 @@ export default function Page() {
         caption="The dangerous things are blocked in the core without any setup. The deployment-specific things (CSP, CORS origins, session secrets, CSRF rollout) stay explicit middleware you opt into."
       />
 
-      <h2 id="plain-english-analogies-for-every-protection">Plain-English analogies for every protection</h2>
+      <h2 id="plain-english-analogies-for-every-protection">
+        Plain-English analogies for every protection
+      </h2>
       <p>
         If the terminology in this page feels abstract, this table maps every
         major protection to an everyday analogy. Skim it once and the rest of
@@ -120,8 +122,8 @@ export default function Page() {
           <tr>
             <td>Request timeout</td>
             <td>
-              A taxi with a hard limit on the meter: at 30 seconds the ride
-              ends whether you arrived or not, so a passenger who fell asleep
+              A taxi with a hard limit on the meter: at 30 seconds the ride ends
+              whether you arrived or not, so a passenger who fell asleep
               can&apos;t hold the cab forever.
             </td>
           </tr>
@@ -161,8 +163,8 @@ export default function Page() {
             <td>cors (explicit allowlist)</td>
             <td>
               A guest list at the door. &quot;Let everyone in, VIP wristbands
-              included&quot; is not a guest list at all, so the guard refuses
-              to enforce that combination (no <code>*</code> origin with
+              included&quot; is not a guest list at all, so the guard refuses to
+              enforce that combination (no <code>*</code> origin with
               credentials).
             </td>
           </tr>
@@ -181,7 +183,8 @@ export default function Page() {
             <td>
               The doorman just asks &quot;did you come in through my front
               door?&quot; The browser answers truthfully via{" "}
-              <code>Sec-Fetch-Site</code>: no ticket needed.
+              <code>Sec-Fetch-Site</code>
+              {": "}no ticket needed.
             </td>
           </tr>
           <tr>
@@ -228,8 +231,8 @@ export default function Page() {
           <tr>
             <td>bearerAuth / basicAuth</td>
             <td>
-              An ID badge swiped at the door. <code>timingSafeEqual</code>{" "}
-              means the guard reads the whole badge before deciding, so even an
+              An ID badge swiped at the door. <code>timingSafeEqual</code> means
+              the guard reads the whole badge before deciding, so even an
               attacker timing the response can&apos;t tell which digit was
               wrong.
             </td>
@@ -261,8 +264,8 @@ export default function Page() {
           <tr>
             <td>rotateSession</td>
             <td>
-              Re-issuing a new keycard the moment you log in or get promoted,
-              so anyone holding the old one loses access on the spot.
+              Re-issuing a new keycard the moment you log in or get promoted, so
+              anyone holding the old one loses access on the spot.
             </td>
           </tr>
           <tr>
@@ -311,7 +314,9 @@ export default function Page() {
             </td>
           </tr>
           <tr>
-            <td>WebSocket CSWSH (cross-site WebSocket hijacking) refuse-to-boot</td>
+            <td>
+              WebSocket CSWSH (cross-site WebSocket hijacking) refuse-to-boot
+            </td>
             <td>
               A doorman who refuses to open the back fire-exit unless they can
               confirm who you are <em>and</em> which street you walked in from.
@@ -425,8 +430,10 @@ export default function Page() {
           <tr>
             <td>Prototype pollution</td>
             <td>
-              <code>safeJsonParse</code> strips <code>__proto__</code>,{" "}
-              <code>constructor</code>, <code>prototype</code> via reviver.
+              <code>safeJsonParse</code> strips <code>__proto__</code>
+              {", "}
+              <code>constructor</code>
+              {", "}<code>prototype</code> via reviver.
             </td>
           </tr>
           <tr>
@@ -476,7 +483,9 @@ export default function Page() {
         </tbody>
       </table>
 
-      <h2 id="first-party-security-middleware">First-party security middleware</h2>
+      <h2 id="first-party-security-middleware">
+        First-party security middleware
+      </h2>
       <p>
         These are part of DaloyJS and documented together, but they stay
         explicit because CSP, CORS, rate-limit keys, session secrets, and CSRF
@@ -518,14 +527,16 @@ app.use(timing());              // Server-Timing header for observability`}
 
       <p>
         The official starters wire these in for you: Node, Bun, and Deno enable{" "}
-        <code>secureHeaders()</code>, <code>requestId()</code>, and{" "}
-        <code>rateLimit()</code>; Cloudflare Worker and Vercel enable{" "}
-        <code>secureHeaders()</code> and{" "}
-        <code>requestId()</code> plus tighter edge-friendly body and timeout
-        limits.
+        <code>secureHeaders()</code>
+        {", "}<code>requestId()</code>
+        {", "}and <code>rateLimit()</code>; Cloudflare Worker and Vercel enable{" "}
+        <code>secureHeaders()</code> and <code>requestId()</code> plus tighter
+        edge-friendly body and timeout limits.
       </p>
 
-      <h2 id="recommended-by-deployment-target">Recommended by deployment target</h2>
+      <h2 id="recommended-by-deployment-target">
+        Recommended by deployment target
+      </h2>
       <p>
         Start with the middleware below unless you have a concrete reason not
         to. The point is not to hide policy behind a boolean flag; it is to make
@@ -542,9 +553,11 @@ app.use(timing());              // Server-Timing header for observability`}
           <tr>
             <td>Node / Bun / Deno API</td>
             <td>
-              <code>requestId()</code>, <code>secureHeaders()</code>,{" "}
-              <code>rateLimit()</code>, and <code>cors()</code> when the API is
-              cross-origin.
+              <code>requestId()</code>
+              {", "}<code>secureHeaders()</code>
+              {", "}
+              <code>rateLimit()</code>
+              {", "}and <code>cors()</code> when the API is cross-origin.
             </td>
           </tr>
           <tr>
@@ -596,8 +609,8 @@ app.use(timing());              // Server-Timing header for observability`}
       </p>
       <ul>
         <li>
-          <strong>Double-submit cookie</strong> (default): sets a token
-          cookie on safe requests, requires the same value on the{" "}
+          <strong>Double-submit cookie</strong> (default): sets a token cookie
+          on safe requests, requires the same value on the{" "}
           <code>x-csrf-token</code> header for unsafe methods, and rejects
           mismatches with a timing-safe <strong>403</strong>.
         </li>
@@ -646,12 +659,18 @@ cross-origin-resource-policy: same-origin`}
         disable old browser XSS filters.
       </p>
 
-      <h3 id="csp-with-per-request-nonces-and-trusted-types">CSP with per-request nonces &amp; Trusted Types</h3>
+      <h3 id="csp-with-per-request-nonces-and-trusted-types">
+        CSP with per-request nonces &amp; Trusted Types
+      </h3>
       <p>
         <code>secureHeaders()</code> can build the CSP from a directive map and
         inject a fresh <strong>per-request nonce</strong> into{" "}
-        <code>script-src</code>, <code>script-src-elem</code>,{" "}
-        <code>style-src</code>, and <code>style-src-elem</code>, plus emit{" "}
+        <code>script-src</code>
+        {", "}<code>script-src-elem</code>
+        {", "}
+        <code>style-src</code>
+        {", "}and <code>style-src-elem</code>
+        {", "}plus emit{" "}
         <code>require-trusted-types-for &apos;script&apos;</code> for runtime
         DOM XSS hardening. The nonce is exposed at{" "}
         <code>ctx.state.cspNonce</code> so handlers can render it into{" "}
@@ -692,13 +711,13 @@ app.get(
       />
       <p>
         Do <strong>not</strong> render this page with{" "}
-        <code>htmlResponse()</code> from <code>@daloyjs/core/docs</code>: that
-        helper ships its own Content-Security-Policy (tuned for the Swagger /
-        Scalar docs UIs, with <code>&apos;unsafe-inline&apos;</code>) and would
-        override the strict nonce CSP above, so the nonce would no longer be the
-        thing gating inline scripts. Keep <code>htmlResponse()</code> for your
-        API-docs route, and return your own <code>Response</code> body for
-        nonce-protected pages.
+        <code>htmlResponse()</code> from <code>@daloyjs/core/docs</code>
+        {": "}that helper ships its own Content-Security-Policy (tuned for the
+        Swagger / Scalar docs UIs, with <code>&apos;unsafe-inline&apos;</code>)
+        and would override the strict nonce CSP above, so the nonce would no
+        longer be the thing gating inline scripts. Keep{" "}
+        <code>htmlResponse()</code> for your API-docs route, and return your own{" "}
+        <code>Response</code> body for nonce-protected pages.
       </p>
 
       <h2 id="auth">Auth</h2>
@@ -735,8 +754,8 @@ app.use(basicAuth({
         caps) shrinks the surface that reaches your repository layer. See{" "}
         <a href="/docs/security/sql-injection">SQL injection</a> for the safe
         vs. unsafe patterns per ORM (Prisma, Drizzle, Kysely, raw drivers), an
-        allowlisting recipe for dynamic <code>ORDER BY</code>, and the grep
-        rules the maintainers use to catch regressions.
+        allowlisting recipe for dynamic <code>ORDER BY</code>
+        {", "}and the grep rules the maintainers use to catch regressions.
       </p>
 
       <h2 id="command-injection">Command injection</h2>
@@ -755,10 +774,11 @@ app.use(basicAuth({
         Building an admin or customer-success surface on top of DaloyJS? See{" "}
         <a href="/docs/security/admin-panels">Secure admin panels</a> for the
         recommended pattern: <code>internal: true</code> routes,{" "}
-        <code>ipRestriction()</code>, strict CSP with per-request nonces,
-        per-admin authentication, login-throttle <code>rateLimit()</code>{" "}
-        groups, and structured audit logging, mapped one-to-one to
-        Aikido&apos;s public &quot;secure admin panel&quot; checklist.
+        <code>ipRestriction()</code>
+        {", "}strict CSP with per-request nonces, per-admin authentication,
+        login-throttle <code>rateLimit()</code> groups, and structured audit
+        logging, mapped one-to-one to Aikido&apos;s public &quot;secure admin
+        panel&quot; checklist.
       </p>
 
       <h2 id="supply-chain">Supply-chain</h2>
@@ -775,52 +795,52 @@ app.use(basicAuth({
       </p>
       <ul>
         <li>
-          <strong>Strict isolation</strong>: packages cannot reach phantom
-          dependencies.
+          <strong>Strict isolation</strong>
+          {": "}packages cannot reach phantom dependencies.
         </li>
         <li>
-          <strong>Content-addressable store</strong>: every byte is hashed and
-          verified.
+          <strong>Content-addressable store</strong>
+          {": "}every byte is hashed and verified.
         </li>
         <li>
           <strong>Frozen lockfile in CI</strong> with{" "}
-          <code>--ignore-scripts</code>: reproducible installs without
-          transitive lifecycle execution.
+          <code>--ignore-scripts</code>
+          {": "}reproducible installs without transitive lifecycle execution.
         </li>
         <li>
           <strong>
             <code>verify-store-integrity</code>
-          </strong>{" "}
-          , corruption-detecting reads.
+          </strong>
+          {", "}corruption-detecting reads.
         </li>
         <li>
           <strong>
             <code>strict-peer-dependencies</code>
-          </strong>{" "}
-          , no silent peer mismatches.
+          </strong>
+          {", "}no silent peer mismatches.
         </li>
         <li>
           <strong>
             <code>minimum-release-age=1440</code>
-          </strong>{" "}
-          , wait 24h before installing fresh releases.
+          </strong>
+          {", "}wait 24h before installing fresh releases.
         </li>
         <li>
           <strong>
             <code>ignore-scripts=true</code>
           </strong>{" "}
-          with explicit <code>pnpm.onlyBuiltDependencies</code>: reviewed
-          allowlist for native install scripts.
+          with explicit <code>pnpm.onlyBuiltDependencies</code>
+          {": "}reviewed allowlist for native install scripts.
         </li>
         <li>
-          <strong>SHA-pinned GitHub Actions</strong>: the optional generated
-          GitHub workflows pin third-party actions to immutable commits, not
-          mutable tags.
+          <strong>SHA-pinned GitHub Actions</strong>
+          {": "}the optional generated GitHub workflows pin third-party actions
+          to immutable commits, not mutable tags.
         </li>
         <li>
-          <strong>Protected DaloyJS npm publishing</strong>: the
-          framework&apos;s own packages use a tag-only release workflow,
-          protected environment approval, OIDC trusted publishing, and{" "}
+          <strong>Protected DaloyJS npm publishing</strong>
+          {": "}the framework&apos;s own packages use a tag-only release
+          workflow, protected environment approval, OIDC trusted publishing, and{" "}
           <code>--provenance</code>.
         </li>
       </ul>
@@ -831,7 +851,9 @@ app.use(basicAuth({
         private GitLab, Bitbucket, Azure DevOps, or on-prem installation.
       </p>
 
-      <h2 id="trusted-proxies-and-rate-limiting">Trusted proxies and rate limiting</h2>
+      <h2 id="trusted-proxies-and-rate-limiting">
+        Trusted proxies and rate limiting
+      </h2>
       <p>
         DaloyJS no longer trusts <code>X-Forwarded-For</code> or{" "}
         <code>X-Real-IP</code> by default when deriving a rate-limit key. Those
@@ -845,9 +867,10 @@ app.use(basicAuth({
         <a href="/docs/security/websocket-login-throttle">
           <code>loginThrottle()</code>
         </a>{" "}
-        across <code>/login</code>, OTP, and password-reset routes, and{" "}
-        <code>wsRateLimit()</code> on related WebSocket upgrades. Both helpers
-        can spend from the same <code>groupId</code> bucket.
+        across <code>/login</code>
+        {", "}OTP, and password-reset routes, and <code>wsRateLimit()</code> on
+        related WebSocket upgrades. Both helpers can spend from the same{" "}
+        <code>groupId</code> bucket.
       </p>
 
       <h2 id="self-hosted-docs-assets">Self-hosted docs assets</h2>
@@ -892,11 +915,13 @@ provenance=true`}
 
       <p>
         For the full CI/CD and maintainer playbook, read{" "}
-        <a href="/docs/security/supply-chain">Supply-chain security</a>. Run{" "}
-        <code>pnpm audit --prod</code> in CI and before release.
+        <a href="/docs/security/supply-chain">Supply-chain security</a>
+        {". "}Run <code>pnpm audit --prod</code> in CI and before release.
       </p>
 
-      <h2 id="owasp-api-security-top-10-mapping">OWASP API Security Top 10 mapping</h2>
+      <h2 id="owasp-api-security-top-10-mapping">
+        OWASP API Security Top 10 mapping
+      </h2>
       <p>
         For a per-item walkthrough of how Daloy addresses every entry in the{" "}
         <a
@@ -906,8 +931,8 @@ provenance=true`}
         >
           OWASP API Security Top 10 (2023)
         </a>{" "}
-        plus the cross-cutting best practices (encryption, validation,
-        rate limiting, logging, inventory, third-party API safety), read{" "}
+        plus the cross-cutting best practices (encryption, validation, rate
+        limiting, logging, inventory, third-party API safety), read{" "}
         <a href="/docs/security/owasp-api-top-10">OWASP API Top 10 mapping</a>.
       </p>
 

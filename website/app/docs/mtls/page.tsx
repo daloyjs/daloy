@@ -28,25 +28,28 @@ export default function Page() {
     <>
       <h1>mTLS / client-certificate auth</h1>
       <p>
-        DaloyJS ships{" "}
-        <code>clientCertAuth()</code>, a middleware that authenticates a
-        request by its <strong>TLS client certificate</strong>, the standard
-        answer to &ldquo;prove this internal call came from a trusted
-        peer&rdquo; in zero-trust / service-to-service deployments. It is
-        dependency-free and runtime-portable, with two certificate sources:
+        DaloyJS ships <code>clientCertAuth()</code>
+        {", "}a middleware that authenticates a request by its{" "}
+        <strong>TLS client certificate</strong>
+        {", "}
+        the standard answer to &ldquo;prove this internal call came from a
+        trusted peer&rdquo; in zero-trust / service-to-service deployments. It
+        is dependency-free and runtime-portable, with two certificate sources:
       </p>
       <ul>
         <li>
-          <strong>Native TLS</strong>: when the runtime terminates TLS itself,
-          the Node adapter reads the peer certificate off the socket and
-          attaches it to the request (lazily, so plain requests pay nothing).
+          <strong>Native TLS</strong>
+          {": "}when the runtime terminates TLS itself, the Node adapter reads
+          the peer certificate off the socket and attaches it to the request
+          (lazily, so plain requests pay nothing).
         </li>
         <li>
-          <strong>Forwarded by a trusted proxy</strong>: when TLS is terminated
-          upstream (Envoy, nginx, HAProxy, Traefik, a cloud load balancer), the
-          middleware parses the verified identity the proxy forwards in request
-          headers (Envoy <code>X-Forwarded-Client-Cert</code> or operator-named
-          structured headers).
+          <strong>Forwarded by a trusted proxy</strong>
+          {": "}when TLS is terminated upstream (Envoy, nginx, HAProxy,
+          Traefik, a cloud load balancer), the middleware parses the verified
+          identity the proxy forwards in request headers (Envoy{" "}
+          <code>X-Forwarded-Client-Cert</code> or operator-named structured
+          headers).
         </li>
       </ul>
 
@@ -59,20 +62,23 @@ export default function Page() {
             to: "TLS terminator",
             kind: "request",
             label: "TLS handshake presents client certificate",
-            detail: "native socket, or forwarded by a trusted proxy (XFCC / structured headers)",
+            detail:
+              "native socket, or forwarded by a trusted proxy (XFCC / structured headers)",
           },
           {
             from: "TLS terminator",
             to: "clientCertAuth()",
             kind: "request",
-            label: "Normalized ClientCertificate (subject, issuer, fingerprint, SANs, verified)",
+            label:
+              "Normalized ClientCertificate (subject, issuer, fingerprint, SANs, verified)",
             detail: "read lazily; plain requests pay nothing",
           },
           {
             from: "clientCertAuth()",
             to: "Peer",
             kind: "note",
-            label: "No certificate -> 401; unverified / allow-list miss / expired -> 403",
+            label:
+              "No certificate -> 401; unverified / allow-list miss / expired -> 403",
             detail: "403 never echoes which check failed",
           },
           {
@@ -80,7 +86,8 @@ export default function Page() {
             to: "Handler",
             kind: "response",
             label: "Verified + allow-listed -> proceed",
-            detail: "ctx.state.clientCertificate stamped for downstream + audit",
+            detail:
+              "ctx.state.clientCertificate stamped for downstream + audit",
           },
         ]}
         caption="The TLS layer verifies the chain; clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook in preBody. Anything that fails is rejected before request-body I/O or the handler."
@@ -145,8 +152,8 @@ app.post(
         the Node adapter normalizes it (subject, issuer, fingerprint, SANs,
         validity window, and whether the chain was <em>verified</em>) and
         attaches it to the request. The read is deferred behind a lazy thunk, so
-        only routes actually guarded by <code>clientCertAuth()</code> pay for it,
-        and plain HTTP requests pay nothing. Run your Node server with{" "}
+        only routes actually guarded by <code>clientCertAuth()</code> pay for
+        it, and plain HTTP requests pay nothing. Run your Node server with{" "}
         <code>requestCert: true</code> and a configured CA so the runtime
         verifies the chain.
       </p>
@@ -161,7 +168,9 @@ app.post(
 );`}
       />
 
-      <h2 id="behind-a-tls-terminating-proxy">Behind a TLS-terminating proxy</h2>
+      <h2 id="behind-a-tls-terminating-proxy">
+        Behind a TLS-terminating proxy
+      </h2>
       <p>
         When a proxy terminates TLS, it forwards the verified client identity in
         request headers. Because those headers are spoofable by anything that
@@ -169,7 +178,9 @@ app.post(
         when the app is <em>exclusively</em> reachable through the terminating
         proxy.
       </p>
-      <h3 id="envoy-x-forwarded-client-cert">Envoy (X-Forwarded-Client-Cert)</h3>
+      <h3 id="envoy-x-forwarded-client-cert">
+        Envoy (X-Forwarded-Client-Cert)
+      </h3>
       <CodeBlock
         language="ts"
         code={`app.use(
@@ -179,7 +190,9 @@ app.post(
   }),
 );`}
       />
-      <h3 id="nginx-haproxy-traefik-structured-headers">nginx / HAProxy / Traefik (structured headers)</h3>
+      <h3 id="nginx-haproxy-traefik-structured-headers">
+        nginx / HAProxy / Traefik (structured headers)
+      </h3>
       <p>
         For proxies that forward parsed fields in separate headers, name each
         header. The <code>verify</code> header lets the middleware require the
@@ -211,14 +224,15 @@ app.post(
           actually validated the certificate chain — the subject / issuer / SAN
           headers alone could be spoofed by anything that reaches the app
           directly. It therefore treats such a certificate as{" "}
-          <strong>unverified</strong>, and the default{" "}
-          <code>requireVerified: true</code> rejects the request with{" "}
-          <code>403</code>. Configure the <code>verify</code> header (as above)
-          so the identity carries a validation result. Only if your proxy
-          genuinely cannot forward one, and the app is reachable{" "}
-          <em>exclusively</em> through it, set{" "}
-          <code>requireVerified: false</code> to accept identity-only headers —
-          keep a strict <code>behindProxy</code> posture if you do.
+          <strong>unverified</strong>
+          {", "}and the default <code>requireVerified: true</code> rejects the
+          request with <code>403</code>
+          {". "}Configure the <code>verify</code> header (as above) so the
+          identity carries a validation result. Only if your proxy genuinely
+          cannot forward one, and the app is reachable <em>exclusively</em>{" "}
+          through it, set <code>requireVerified: false</code> to accept
+          identity-only headers — keep a strict <code>behindProxy</code> posture
+          if you do.
         </p>
       </div>
 
@@ -229,18 +243,20 @@ app.post(
           certificate the TLS terminator did not verify.
         </li>
         <li>
-          <code>allowSubjectCNs</code> / <code>allowIssuerCNs</code>: exact CN
-          match.
+          <code>allowSubjectCNs</code> / <code>allowIssuerCNs</code>
+          {": "}exact CN match.
         </li>
         <li>
-          <code>allowFingerprints</code>: SHA-256 fingerprint match in{" "}
-          <strong>constant time</strong> (colons/spaces and case are ignored, so
-          a value copied from <code>openssl</code> works as-is).
+          <code>allowFingerprints</code>
+          {": "}SHA-256 fingerprint match in <strong>constant time</strong>{" "}
+          (colons/spaces and case are ignored, so a value copied from{" "}
+          <code>openssl</code> works as-is).
         </li>
         <li>
-          <code>allowSANs</code>: at least one Subject Alternative Name must
-          match (as <code>TYPE:value</code> like{" "}
-          <code>URI:spiffe://acme/svc-a</code>, or as a bare value).
+          <code>allowSANs</code>
+          {": "}at least one Subject Alternative Name must match (as{" "}
+          <code>TYPE:value</code> like <code>URI:spiffe://acme/svc-a</code>
+          {", "}or as a bare value).
         </li>
         <li>
           <code>checkValidity</code> (default <code>true</code>): reject
@@ -248,8 +264,9 @@ app.post(
           when known (belt-and-braces for header-forwarded certs).
         </li>
         <li>
-          <code>verify(cert, ctx)</code>: a custom async hook run last;
-          returning <code>false</code> rejects with <code>403</code>.
+          <code>verify(cert, ctx)</code>
+          {": "}a custom async hook run last; returning <code>false</code>{" "}
+          rejects with <code>403</code>.
         </li>
       </ul>
 

@@ -123,8 +123,9 @@ export default function Page() {
       <h2 id="node-platforms">Node platforms</h2>
       <p>
         These providers all run the{" "}
-        <Link href="/docs/adapters/node">Node adapter</Link>. What changes is
-        the platform config, health checks, and rollout mechanics.
+        <Link href="/docs/adapters/node">Node adapter</Link>
+        {". "}What changes is the platform config, health checks, and rollout
+        mechanics.
       </p>
       <Grid items={NODE_PLATFORMS} />
 
@@ -143,8 +144,9 @@ export default function Page() {
           balancer&apos;s idle timeout.
         </li>
         <li>
-          Mount <code>secureHeaders()</code>, <code>requestId()</code>, and{" "}
-          <code>rateLimit()</code> globally.
+          Mount <code>secureHeaders()</code>
+          {", "}<code>requestId()</code>
+          {", "}and <code>rateLimit()</code> globally.
         </li>
         <li>
           Wire your structured logger and propagate <code>request-id</code> to
@@ -188,11 +190,14 @@ EXPOSE 3000
 CMD ["dist/server.js"]`}
       />
 
-      <h3 id="signed-images-sbom-attestation">Signed images + SBOM attestation</h3>
+      <h3 id="signed-images-sbom-attestation">
+        Signed images + SBOM attestation
+      </h3>
       <p>
         <code>create-daloy --with-ci</code> ships a <code>deploy.yml</code>{" "}
         that, after every successful push to GHCR, resolves the immutable{" "}
-        <code>@sha256:&lt;digest&gt;</code>, signs the image with{" "}
+        <code>@sha256:&lt;digest&gt;</code>
+        {", "}signs the image with{" "}
         <a
           href="https://docs.sigstore.dev/cosign/signing/signing_with_blobs/"
           target="_blank"
@@ -204,8 +209,8 @@ CMD ["dist/server.js"]`}
         the image, and uploads it as a Cosign attestation (
         <code>--type spdxjson</code>). The job grants{" "}
         <code>id-token: write</code> alongside <code>packages: write</code>; the
-        top-level workflow keeps <code>permissions: {`{}`}</code>. This closes
-        the Aikido{" "}
+        top-level workflow keeps <code>permissions: {`{}`}</code>
+        {". "}This closes the Aikido{" "}
         <a
           href="https://www.aikido.dev/blog/container-security-best-practices"
           target="_blank"
@@ -255,14 +260,15 @@ await app.shutdown(15_000);`}
       <ul>
         <li>
           Set <code>behindProxy: {"{ hops: N }"}</code> on{" "}
-          <code>new App({"{ ... }"})</code>, where <code>N</code> is the number
-          of trusted proxy hops in front of the app (a single edge proxy is{" "}
-          <code>1</code>; Cloudflare in front of one PaaS edge is <code>2</code>
+          <code>new App({"{ ... }"})</code>
+          {", "}where <code>N</code> is the number of trusted proxy hops in
+          front of the app (a single edge proxy is <code>1</code>; Cloudflare in
+          front of one PaaS edge is <code>2</code>
           ). In production an <strong>unconfigured</strong> posture makes
           DaloyJS return <code>500</code> on the first request carrying an{" "}
           <code>X-Forwarded-*</code> header, so a misconfigured chain cannot
-          feed spoofable client IPs to <code>rateLimit()</code>, request-id
-          propagation, or audit logs. Use{" "}
+          feed spoofable client IPs to <code>rateLimit()</code>
+          {", "}request-id propagation, or audit logs. Use{" "}
           <code>behindProxy: &quot;none&quot;</code> when the app faces the
           public internet directly.
         </li>
@@ -286,9 +292,9 @@ await app.shutdown(15_000);`}
       <p>
         DaloyJS can run on Vercel Functions, Cloudflare Workers, Netlify
         Functions, AWS Lambda, Fastly Compute, and Deno Deploy because the core
-        is Web-standard <code>Request → Response</code>. Use these targets when
-        you want per-request billing or a managed edge/serverless runtime
-        instead of a long-lived Node process.
+        is Web-standard <code>Request → Response</code>
+        {". "}Use these targets when you want per-request billing or a managed
+        edge/serverless runtime instead of a long-lived Node process.
       </p>
       <p>
         For a standalone Vercel REST API, create a single{" "}
@@ -308,11 +314,13 @@ export default toFetchHandler(app);
 // { "rewrites": [{ "source": "/(.*)", "destination": "/api" }] }`}
       />
       <p>
-        See <Link href="/docs/adapters/vercel">Vercel</Link>,{" "}
+        See <Link href="/docs/adapters/vercel">Vercel</Link>
+        {", "}
         <Link href="/docs/adapters/cloudflare-workers">Cloudflare Workers</Link>
-        , <Link href="/docs/adapters/netlify">Netlify</Link>,{" "}
-        <Link href="/docs/adapters/aws-lambda">AWS Lambda</Link>, and{" "}
-        <Link href="/docs/adapters/fastly">Fastly Compute</Link> for
+        {", "}<Link href="/docs/adapters/netlify">Netlify</Link>
+        {", "}
+        <Link href="/docs/adapters/aws-lambda">AWS Lambda</Link>
+        {", "}and <Link href="/docs/adapters/fastly">Fastly Compute</Link> for
         platform-specific entry files.
       </p>
     </>

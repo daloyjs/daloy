@@ -231,17 +231,23 @@ app.use({
 });`}
       />
 
-      <h2 id="realtime-storage-and-edge-functions">Realtime, storage, and edge functions</h2>
+      <h2 id="realtime-storage-and-edge-functions">
+        Realtime, storage, and edge functions
+      </h2>
       <p>
-        The same <code>supabase</code> client exposes <code>storage</code>,{" "}
-        <code>functions</code>, and <code>realtime</code>. Use them inside
-        handlers exactly the same way, DaloyJS doesn&apos;t care.
+        The same <code>supabase</code> client exposes <code>storage</code>
+        {", "}
+        <code>functions</code>
+        {", "}and <code>realtime</code>
+        {". "}Use them inside handlers exactly the same way, DaloyJS
+        doesn&apos;t care.
       </p>
 
       <h2 id="mapping-supabase-errors">Mapping Supabase errors</h2>
       <p>
         Translate <code>PostgrestError</code> codes into typed framework errors
-        so they serialize as <Link href="/docs/errors">problem+json</Link>:
+        so they serialize as <Link href="/docs/errors">problem+json</Link>
+        {": "}
       </p>
       <CodeBlock
         code={`import { HttpError } from "@daloyjs/core";
@@ -253,19 +259,25 @@ if (error) throw new HttpError(500, { title: error.message });`}
       />
 
       <p>
-        Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
-        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
-        <Link href="/docs/odm">ODM overview</Link> if you are on a document
-        database.
+        Compare with <Link href="/docs/orm/prisma">Prisma</Link>
+        {", "}
+        <Link href="/docs/orm/drizzle">Drizzle</Link>
+        {", "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>
+        {", "}or the <Link href="/docs/odm">ODM overview</Link> if you are on a
+        document database.
       </p>
       <p>
         For other managed Postgres / MySQL hosts,{" "}
-        <Link href="/docs/databases/neon">Neon</Link>,{" "}
-        <Link href="/docs/databases/planetscale">PlanetScale</Link>,{" "}
-        <Link href="/docs/databases/turso">Turso</Link>,{" "}
-        <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>, and{" "}
-        <Link href="/docs/databases/aurora-dsql">Aurora DSQL</Link>: see the{" "}
+        <Link href="/docs/databases/neon">Neon</Link>
+        {", "}
+        <Link href="/docs/databases/planetscale">PlanetScale</Link>
+        {", "}
+        <Link href="/docs/databases/turso">Turso</Link>
+        {", "}
+        <Link href="/docs/databases/cloudflare-d1">Cloudflare D1</Link>
+        {", "}and <Link href="/docs/databases/aurora-dsql">Aurora DSQL</Link>
+        {": "}see the{" "}
         <Link href="/docs/databases">database hosting overview</Link>.
       </p>
     </>

@@ -240,13 +240,16 @@ await fetch("/transfer", {
         The <code>__Host-</code> prefix
       </h2>
       <p>
-        The default cookie name is prefixed with <code>__Host-</code>. Browsers
-        refuse to set such a cookie unless it is also <code>Secure</code>, has{" "}
-        <code>Path=/</code>, and has no <code>Domain</code> attribute. The
-        middleware enforces those constraints at construction time, so you
-        cannot ship a misconfigured prefix to production. To use a non-prefixed
-        cookie (for example during local HTTP development), pass an explicit{" "}
-        <code>cookieName</code>:
+        The default cookie name is prefixed with <code>__Host-</code>
+        {". "}Browsers refuse to set such a cookie unless it is also{" "}
+        <code>Secure</code>
+        {", "}has <code>Path=/</code>
+        {", "}and has no <code>Domain</code> attribute. The middleware enforces
+        those constraints at construction time, so you cannot ship a
+        misconfigured prefix to production. To use a non-prefixed cookie (for
+        example during local HTTP development), pass an explicit{" "}
+        <code>cookieName</code>
+        {": "}
       </p>
       <CodeBlock
         code={`app.use(csrf({
@@ -258,11 +261,14 @@ await fetch("/transfer", {
 }));`}
       />
 
-      <h2 id="custom-header-names-and-methods">Custom header names and methods</h2>
+      <h2 id="custom-header-names-and-methods">
+        Custom header names and methods
+      </h2>
       <p>
         Some clients (Angular, Axios) read <code>XSRF-TOKEN</code> and reflect
-        it as <code>X-XSRF-TOKEN</code>. To match that convention, override both
-        names and the safe-method list:
+        it as <code>X-XSRF-TOKEN</code>
+        {". "}To match that convention, override both names and the safe-method
+        list:
       </p>
       <CodeBlock
         code={`app.use(csrf({
@@ -301,17 +307,19 @@ await fetch("/transfer", {
         </li>
       </ul>
 
-      <h2 id="fetch-metadata-strategy-tokenless-recommended-for-new-apps">Fetch-Metadata strategy (tokenless, recommended for new apps)</h2>
+      <h2 id="fetch-metadata-strategy-tokenless-recommended-for-new-apps">
+        Fetch-Metadata strategy (tokenless, recommended for new apps)
+      </h2>
       <p>
         The <code>csrf()</code> middleware also implements the modern{" "}
         <strong>Fetch Metadata</strong>
         strategy. Modern browsers send a <code>Sec-Fetch-Site</code> header on
         every request that tells the server whether the request originated from
         the <em>same</em> origin, a <em>cross</em>-site context, or no navigable
-        context at all (<code>none</code>, such as bookmarks or direct
-        address-bar typing). That single header is enough to defeat the classic
-        CSRF attack model without any cookie round-trip and without coupling
-        your HTML rendering to a token.
+        context at all (<code>none</code>
+        {", "}such as bookmarks or direct address-bar typing). That single
+        header is enough to defeat the classic CSRF attack model without any
+        cookie round-trip and without coupling your HTML rendering to a token.
       </p>
       <FlowDiagram
         title="Fetch-Metadata decision"
@@ -365,16 +373,17 @@ await fetch("/transfer", {
         </li>
       </ul>
       <p>
-        For defense in depth, pass <code>strategy: &quot;both&quot;</code>.
-        Mutating requests must then pass <em>both</em> the
-        Fetch-Metadata check <em>and</em> the double-submit cookie check.
+        For defense in depth, pass <code>strategy: &quot;both&quot;</code>
+        {". "}
+        Mutating requests must then pass <em>both</em> the Fetch-Metadata check{" "}
+        <em>and</em> the double-submit cookie check.
       </p>
       <p>
-        Non-browser clients usually do not send <code>Sec-Fetch-Site</code>. If
-        they need to call protected mutating routes, give them an explicit{" "}
-        <code>Origin</code> that matches <code>allowedOrigins</code>, or use
-        route-level middleware so browser and machine clients can follow
-        different CSRF policies.
+        Non-browser clients usually do not send <code>Sec-Fetch-Site</code>
+        {". "}If they need to call protected mutating routes, give them an
+        explicit <code>Origin</code> that matches <code>allowedOrigins</code>
+        {", "}or use route-level middleware so browser and machine clients can
+        follow different CSRF policies.
       </p>
     </>
   );

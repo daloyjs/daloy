@@ -80,8 +80,8 @@ export default function Page() {
       <ol>
         <li>
           Add and verify your sending domain under{" "}
-          <strong>Sending → Domains → Add new domain</strong>. Add the SPF/DKIM
-          TXT records and the MX records Mailgun lists.
+          <strong>Sending → Domains → Add new domain</strong>
+          {". "}Add the SPF/DKIM TXT records and the MX records Mailgun lists.
         </li>
         <li>
           Choose your <strong>region</strong>:{" "}
@@ -218,14 +218,14 @@ app.post(
       <h2 id="runtimes">Runtimes</h2>
       <ul>
         <li>
-          <strong>Node / Bun / AWS Lambda</strong>: works with the configuration
-          above.
+          <strong>Node / Bun / AWS Lambda</strong>
+          {": "}works with the configuration above.
         </li>
         <li>
-          <strong>Cloudflare Workers</strong>: pass{" "}
-          <code>useFetch: true</code> so the SDK uses the platform&apos;s native{" "}
-          <code>fetch</code> instead of <code>request</code> (which depends on
-          Node&apos;s HTTP module):
+          <strong>Cloudflare Workers</strong>
+          {": "}pass <code>useFetch: true</code> so the SDK uses the
+          platform&apos;s native <code>fetch</code> instead of{" "}
+          <code>request</code> (which depends on Node&apos;s HTTP module):
           <CodeBlock
             code={`const mg = mailgun.client({
   username: "api",
@@ -249,8 +249,10 @@ app.post(
       </p>
 
       <p>
-        See also <Link href="/docs/email/aws-ses">AWS SES</Link>,{" "}
-        <Link href="/docs/email/resend">Resend</Link>, and the{" "}
+        See also <Link href="/docs/email/aws-ses">AWS SES</Link>
+        {", "}
+        <Link href="/docs/email/resend">Resend</Link>
+        {", "}and the{" "}
         <Link href="/docs/email">email integrations overview</Link>.
       </p>
     </>

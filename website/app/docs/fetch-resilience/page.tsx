@@ -31,31 +31,32 @@ export default function Page() {
       </h1>
       <p>
         <code>fetchGuard()</code> answers{" "}
-        <em>&ldquo;is this outbound address safe?&rdquo;</em>: it blocks the
-        SSRF chain to cloud metadata and internal ranges.{" "}
+        <em>&ldquo;is this outbound address safe?&rdquo;</em>
+        {": "}it blocks the SSRF chain to cloud metadata and internal ranges.{" "}
         <code>resilientFetch()</code> answers the operational other half:{" "}
         <em>
           &ldquo;is this upstream healthy, and how do we behave when it is
           not?&rdquo;
         </em>{" "}
-        DaloyJS ships a{" "}
-        <strong>dependency-free</strong> resilience layer with three classic
-        guards:
+        DaloyJS ships a <strong>dependency-free</strong> resilience layer with
+        three classic guards:
       </p>
       <ul>
         <li>
-          <strong>Per-call timeout</strong>: an{" "}
-          <code>AbortController</code> aborts any attempt that stalls, so a hung
-          upstream can never exhaust your event loop. Surfaces as{" "}
+          <strong>Per-call timeout</strong>
+          {": "}an <code>AbortController</code> aborts any attempt that stalls,
+          so a hung upstream can never exhaust your event loop. Surfaces as{" "}
           <code>FetchTimeoutError</code>.
         </li>
         <li>
-          <strong>Retry-with-backoff</strong>: bounded retries with
-          exponential backoff and full jitter, scoped to idempotent methods and
-          transient statuses, honouring <code>Retry-After</code>.
+          <strong>Retry-with-backoff</strong>
+          {": "}bounded retries with exponential backoff and full jitter,
+          scoped to idempotent methods and transient statuses, honouring{" "}
+          <code>Retry-After</code>.
         </li>
         <li>
-          <strong>Circuit breaker</strong>: a three-state machine (
+          <strong>Circuit breaker</strong>
+          {": "}a three-state machine (
           <code>closed &rarr; open &rarr; half-open</code>) that fails fast when
           an upstream is clearly down, then probes for recovery.
         </li>
@@ -71,12 +72,35 @@ export default function Page() {
         numbered
         caption="Each call flows through the circuit breaker, then the SSRF floor, then a timed attempt that retries only transient failures with jittered backoff. An SsrfBlockedError or a caller-initiated abort is terminal, it is never retried and never trips the breaker."
         steps={[
-          { label: "safeFetch(url)", detail: "drop-in for global fetch", tone: "accent" },
-          { label: "Circuit breaker", eyebrow: "fail fast", detail: "open? throw CircuitOpenError" },
-          { label: "fetchGuard()", eyebrow: "SSRF floor", detail: "refusal is terminal", tone: "muted" },
-          { label: "Attempt + timeout", detail: "AbortController, FetchTimeoutError" },
-          { label: "Retry on transient", detail: "idempotent + 408/429/5xx, backoff + jitter" },
-          { label: "Response", detail: "a success closes the circuit", tone: "success" },
+          {
+            label: "safeFetch(url)",
+            detail: "drop-in for global fetch",
+            tone: "accent",
+          },
+          {
+            label: "Circuit breaker",
+            eyebrow: "fail fast",
+            detail: "open? throw CircuitOpenError",
+          },
+          {
+            label: "fetchGuard()",
+            eyebrow: "SSRF floor",
+            detail: "refusal is terminal",
+            tone: "muted",
+          },
+          {
+            label: "Attempt + timeout",
+            detail: "AbortController, FetchTimeoutError",
+          },
+          {
+            label: "Retry on transient",
+            detail: "idempotent + 408/429/5xx, backoff + jitter",
+          },
+          {
+            label: "Response",
+            detail: "a success closes the circuit",
+            tone: "success",
+          },
         ]}
       />
 
@@ -101,17 +125,18 @@ const res = await safeFetch("https://api.example.com/things");`}
       />
       <p>
         The returned function has the exact call signature of the global{" "}
-        <code>fetch</code>, so it is a drop-in replacement anywhere you already
-        call <code>fetch</code>.
+        <code>fetch</code>
+        {", "}so it is a drop-in replacement anywhere you already call{" "}
+        <code>fetch</code>.
       </p>
 
       <h2 id="per-call-timeout">Per-call timeout</h2>
       <p>
-        Each attempt (including every retry) gets a fresh{" "}
-        <code>timeoutMs</code> budget (default <code>10_000</code>). A timeout
-        aborts the in-flight request and throws <code>FetchTimeoutError</code>.
-        A timeout combines with any caller-supplied <code>signal</code>: a
-        caller-initiated abort surfaces as the caller&rsquo;s own{" "}
+        Each attempt (including every retry) gets a fresh <code>timeoutMs</code>{" "}
+        budget (default <code>10_000</code>). A timeout aborts the in-flight
+        request and throws <code>FetchTimeoutError</code>
+        {". "}A timeout combines with any caller-supplied <code>signal</code>
+        {": "}a caller-initiated abort surfaces as the caller&rsquo;s own{" "}
         <code>AbortError</code> and is <strong>never</strong> retried or counted
         as an upstream failure.
       </p>
@@ -133,15 +158,23 @@ try {
       <h2 id="retry-with-backoff">Retry-with-backoff</h2>
       <p>
         Retries only fire for <strong>idempotent</strong> methods (
-        <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>,{" "}
-        <code>PUT</code>, <code>DELETE</code>) and a conservative set of
-        transient statuses (<code>408</code>, <code>429</code>, <code>500</code>
-        , <code>502</code>, <code>503</code>, <code>504</code>), plus network
-        errors and timeouts. Non-idempotent <code>POST</code> /{" "}
-        <code>PATCH</code> calls are never retried unless you opt in via{" "}
-        <code>retryableMethods</code>. Backoff is exponential with full jitter
-        to avoid a thundering-herd retry storm, and a <code>Retry-After</code>{" "}
-        response header is honoured (capped by <code>maxRetryDelayMs</code>).
+        <code>GET</code>
+        {", "}<code>HEAD</code>
+        {", "}<code>OPTIONS</code>
+        {", "}
+        <code>PUT</code>
+        {", "}<code>DELETE</code>) and a conservative set of transient statuses
+        (<code>408</code>
+        {", "}<code>429</code>
+        {", "}<code>500</code>
+        {", "}<code>502</code>
+        {", "}<code>503</code>
+        {", "}<code>504</code>), plus network errors and timeouts.
+        Non-idempotent <code>POST</code> / <code>PATCH</code> calls are never
+        retried unless you opt in via <code>retryableMethods</code>
+        {". "}Backoff is exponential with full jitter to avoid a
+        thundering-herd retry storm, and a <code>Retry-After</code> response
+        header is honoured (capped by <code>maxRetryDelayMs</code>).
       </p>
       <CodeBlock
         code={`const client = resilientFetch({
@@ -174,7 +207,8 @@ try {
       <h2 id="circuit-breaker">Circuit breaker</h2>
       <p>
         After <code>failureThreshold</code> consecutive failures the breaker
-        trips <strong>open</strong>: every subsequent call fails fast with{" "}
+        trips <strong>open</strong>
+        {": "}every subsequent call fails fast with{" "}
         <code>CircuitOpenError</code> (no network round-trip) until{" "}
         <code>resetTimeoutMs</code> elapses. The breaker then enters{" "}
         <strong>half-open</strong> and admits a limited number of trial
@@ -235,7 +269,7 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
         <li>
           <strong>SSRF protection is preserved.</strong>{" "}
           <code>resilientFetch()</code> never replaces <code>fetchGuard()</code>
-          , it wraps it. An <code>SsrfBlockedError</code> is a terminal
+          {", "}it wraps it. An <code>SsrfBlockedError</code> is a terminal
           refusal: it bubbles unchanged, is never retried, and never trips the
           circuit breaker.
         </li>
@@ -251,8 +285,8 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
         </li>
         <li>
           <strong>Zero runtime dependencies.</strong> Built entirely on
-          Web-standard <code>AbortController</code> / <code>fetch</code>, so it
-          runs unchanged on Node, Bun, Deno, and Cloudflare Workers
+          Web-standard <code>AbortController</code> / <code>fetch</code>
+          {", "}so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers
           Edge.
         </li>
       </ul>

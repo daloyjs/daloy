@@ -41,7 +41,7 @@ export default function Page() {
         the Web-standard boundary: Better Auth exposes{" "}
         <code>auth.handler(request)</code>
         and DaloyJS gives every route and hook the original <code>Request</code>
-        .
+        {"."}
       </p>
 
       <SequenceDiagram
@@ -129,15 +129,16 @@ BETTER_AUTH_SECRET=replace-with-at-least-32-random-bytes`}
 
       <h2 id="4-mount-better-auth-routes">4. Mount Better Auth routes</h2>
       <p>
-        Better Auth owns all routes below <code>/api/auth/*</code>. Return the
-        raw <code>Response</code> from a <code>preBody</code> hook so cookies,
-        redirects, status codes, and multiple <code>Set-Cookie</code> headers
-        are preserved exactly. <code>preBody</code> runs after routing but
-        before any body I/O, which is the right place to delegate to another
-        web-standard <code>Request → Response</code> handler. Because Better
-        Auth owns the successful response body, cookies, and redirects, both
-        routes explicitly set <code>acknowledgeNoResponseBodySchema: true</code>
-        .
+        Better Auth owns all routes below <code>/api/auth/*</code>
+        {". "}Return the raw <code>Response</code> from a <code>preBody</code>{" "}
+        hook so cookies, redirects, status codes, and multiple{" "}
+        <code>Set-Cookie</code> headers are preserved exactly.{" "}
+        <code>preBody</code> runs after routing but before any body I/O, which
+        is the right place to delegate to another web-standard{" "}
+        <code>Request → Response</code> handler. Because Better Auth owns the
+        successful response body, cookies, and redirects, both routes explicitly
+        set <code>acknowledgeNoResponseBodySchema: true</code>
+        {"."}
       </p>
       <CodeBlock
         code={`// src/routes/auth.ts
@@ -383,7 +384,8 @@ await authClient.signIn.email({
       </ul>
 
       <p>
-        See also the <Link href="/docs/auth">auth integrations overview</Link>,{" "}
+        See also the <Link href="/docs/auth">auth integrations overview</Link>
+        {", "}
         <a
           href="https://better-auth.com/docs/installation"
           target="_blank"
@@ -391,7 +393,7 @@ await authClient.signIn.email({
         >
           Better Auth installation
         </a>
-        ,{" "}
+        {", "}
         <a
           href="https://better-auth.com/docs/basic-usage"
           target="_blank"
@@ -399,7 +401,7 @@ await authClient.signIn.email({
         >
           Better Auth basic usage
         </a>
-        , and the framework integration docs for{" "}
+        {", "}and the framework integration docs for{" "}
         <a
           href="https://better-auth.com/docs/integrations/hono"
           target="_blank"
@@ -407,7 +409,7 @@ await authClient.signIn.email({
         >
           Hono
         </a>
-        ,{" "}
+        {", "}
         <a
           href="https://better-auth.com/docs/integrations/elysia"
           target="_blank"
@@ -415,7 +417,7 @@ await authClient.signIn.email({
         >
           Elysia
         </a>
-        , and{" "}
+        {", "}and{" "}
         <a
           href="https://better-auth.com/docs/integrations/fastify"
           target="_blank"
@@ -423,7 +425,7 @@ await authClient.signIn.email({
         >
           Fastify
         </a>
-        .
+        {"."}
       </p>
     </>
   );

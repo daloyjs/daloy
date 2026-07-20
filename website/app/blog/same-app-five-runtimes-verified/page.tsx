@@ -8,8 +8,7 @@ import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const POST = {
   slug: "same-app-five-runtimes-verified",
-  title:
-    "The Same App on Node, Bun, Deno, and Cloudflare Workers, Verified",
+  title: "The Same App on Node, Bun, Deno, and Cloudflare Workers, Verified",
   description:
     "One Bookstore app, five entry files, five deployments. The Node serve(), the Bun handle.url, the Deno onListen, the Workers ctx.waitUntil, and Vercel's toWebHandler / toRouteHandlers / toFetchHandler, with receipts.",
   date: "2026-05-22",
@@ -418,13 +417,12 @@ export default function BlogPostPage() {
             Hi, I&apos;m Devlin. Ten years of fullstack work. I have personally
             been in a meeting where someone said &quot;our framework runs
             anywhere&quot; and then listed, in a much smaller font, five things
-            it does not run
-            on. So when DaloyJS says{" "}
+            it does not run on. So when DaloyJS says{" "}
             <em>
               the same app runs on Node, Bun, Deno, Cloudflare Workers, and
               Vercel
             </em>
-            , I owe you receipts, not slides. This post is the receipts.
+            {", "}I owe you receipts, not slides. This post is the receipts.
           </p>
 
           <p>
@@ -432,18 +430,22 @@ export default function BlogPostPage() {
             across every runtime, and five entry files, one per platform. For
             each runtime we&apos;ll look at the adapter, the platform-specific
             options it handles for you (graceful shutdown, idle timeouts,{" "}
-            <code>ctx.waitUntil</code>, the three Vercel shapes), and the sharp
-            edges that are <em>not</em> the adapter&apos;s fault but absolutely
-            will bite you if you ignore them.
+            <code>ctx.waitUntil</code>
+            {", "}the three Vercel shapes), and the sharp edges that are{" "}
+            <em>not</em> the adapter&apos;s fault but absolutely will bite you
+            if you ignore them.
           </p>
 
           <h2>The shared app: note what&apos;s missing</h2>
 
           <p>
             Before the adapters, look at what the application file does{" "}
-            <em>not</em> import. No <code>http</code>, no <code>node:fs</code>,
-            no <code>Deno.serve</code>, no <code>addEventListener</code>. The
-            shared code only ever sees <code>Request</code> in,{" "}
+            <em>not</em> import. No <code>http</code>
+            {", "}no <code>node:fs</code>
+            {", "}
+            no <code>Deno.serve</code>
+            {", "}no <code>addEventListener</code>
+            {". "}The shared code only ever sees <code>Request</code> in,{" "}
             <code>Response</code> out. That&apos;s the whole reason this works.
           </p>
 
@@ -490,12 +492,12 @@ export default function BlogPostPage() {
 
           <p>
             <code>serve()</code> returns a small handle,{" "}
-            <code>{`{ server, port, close }`}</code>: so your tests can{" "}
-            <code>await handle.close()</code> without doing the SIGTERM dance
-            themselves. The auto-wired signals are what make Node deploys feel
-            grown-up: hit <code>Ctrl-C</code> twice in dev and you get the same
-            drain behavior as production, not a half-finished response and a
-            stranded client.
+            <code>{`{ server, port, close }`}</code>
+            {": "}so your tests can <code>await handle.close()</code> without
+            doing the SIGTERM dance themselves. The auto-wired signals are what
+            make Node deploys feel grown-up: hit <code>Ctrl-C</code> twice in
+            dev and you get the same drain behavior as production, not a
+            half-finished response and a stranded client.
           </p>
 
           <h2>2. Bun: the fast one with a friendly handle</h2>
@@ -525,10 +527,11 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            The thing I love most here is <code>handle.url</code>. Bun
-            computes the scheme and port for you, so &quot;what URL do I
-            actually log on boot&quot; stops being a paragraph of conditionals.
-            One field, you&apos;re done. Small luxury, big quality-of-life.
+            The thing I love most here is <code>handle.url</code>
+            {". "}Bun computes the scheme and port for you, so &quot;what URL
+            do I actually log on boot&quot; stops being a paragraph of
+            conditionals. One field, you&apos;re done. Small luxury, big
+            quality-of-life.
           </p>
 
           <h2>3. Deno: permissions are not a chore, they&apos;re a feature</h2>
@@ -597,11 +600,11 @@ export default function BlogPostPage() {
             <code>ctx.waitUntil</code> is the Cloudflare detail that most
             frameworks make awkward. The pattern you want is &quot;respond to
             the user immediately, finish the analytics write in the
-            background&quot;. If you skip <code>waitUntil</code>, the Worker
-            isolate may be killed the instant the response is sent, and your
-            background promise dies with it. The middleware above does it the
-            right way: the response goes out, the analytics write keeps the
-            isolate alive just long enough to land.
+            background&quot;. If you skip <code>waitUntil</code>
+            {", "}the Worker isolate may be killed the instant the response is
+            sent, and your background promise dies with it. The middleware above
+            does it the right way: the response goes out, the analytics write
+            keeps the isolate alive just long enough to land.
           </p>
 
           <h2>5. Vercel: same app, three shapes</h2>
@@ -642,9 +645,10 @@ export default function BlogPostPage() {
 
           <p>
             All three of those files import the same <code>app</code> from{" "}
-            <code>src/app.ts</code>. The only thing that changes is the
-            adapter&apos;s shape. Pick the one that matches your deployment
-            target and move on with your life.
+            <code>src/app.ts</code>
+            {". "}The only thing that changes is the adapter&apos;s shape. Pick
+            the one that matches your deployment target and move on with your
+            life.
           </p>
 
           <h2>The receipts</h2>
@@ -659,9 +663,10 @@ export default function BlogPostPage() {
           <p>
             The last command is the one I care about most: SHA-256 the{" "}
             <code>/openapi.json</code> from all five deployments, sort unique,
-            count lines, and you get exactly <code>1</code>. The contract the
-            outside world sees is identical, byte-for-byte, regardless of which
-            runtime is serving it. That is the entire point.
+            count lines, and you get exactly <code>1</code>
+            {". "}The contract the outside world sees is identical,
+            byte-for-byte, regardless of which runtime is serving it. That is
+            the entire point.
           </p>
 
           <h2>The one rule that makes this work: read env the native way</h2>
@@ -683,13 +688,14 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Yes, Bun polyfills <code>process.env</code>. Yes, Vercel tolerates
-            it for build-time bundling. The reason this rule still matters is
-            that the moment your shared <code>app.ts</code> reads from a
-            globally-mutable environment, your tests need to mock that global,
-            and your Workers deployment needs you to remember which env vars get
-            bundled when. Just hoist the reading. Future-you will apologize to
-            current-you over an expensive Norwegian coffee.
+            Yes, Bun polyfills <code>process.env</code>
+            {". "}Yes, Vercel tolerates it for build-time bundling. The reason
+            this rule still matters is that the moment your shared{" "}
+            <code>app.ts</code> reads from a globally-mutable environment, your
+            tests need to mock that global, and your Workers deployment needs
+            you to remember which env vars get bundled when. Just hoist the
+            reading. Future-you will apologize to current-you over an expensive
+            Norwegian coffee.
           </p>
 
           <h2>The adapters at a glance</h2>
@@ -761,9 +767,9 @@ export default function BlogPostPage() {
 
           <p>
             Runtime portability is not magic, and it&apos;s not free. It works
-            because the shared application file is disciplined about two things
-            , it never imports a runtime, and it never reads global state that
-            is shaped differently per runtime. The adapter at the edge does the
+            because the shared application file is disciplined about two things,
+            it never imports a runtime, and it never reads global state that is
+            shaped differently per runtime. The adapter at the edge does the
             platform-shaped work, and the application in the middle does the
             application-shaped work. As long as you respect that boundary, the
             framework holds up its end.
@@ -780,10 +786,10 @@ export default function BlogPostPage() {
 
           <p>
             Want to skip ahead and try it? <code>pnpm create daloy@latest</code>{" "}
-            ships templates for Node, Bun, Deno, and Cloudflare Workers
-            Edge out of the box. Pick one, deploy it, then point a different
-            adapter at the same <code>src/app.ts</code> the next morning. The
-            scaffolding has done the boring parts for you.
+            ships templates for Node, Bun, Deno, and Cloudflare Workers Edge out
+            of the box. Pick one, deploy it, then point a different adapter at
+            the same <code>src/app.ts</code> the next morning. The scaffolding
+            has done the boring parts for you.
           </p>
 
           <p>

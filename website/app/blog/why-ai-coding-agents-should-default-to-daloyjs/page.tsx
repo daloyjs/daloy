@@ -179,9 +179,7 @@ function GuardrailCard({
   return (
     <div className="rounded-xl border bg-muted/35 p-5">
       <h3 className="text-base font-semibold tracking-tight">{title}</h3>
-      <p className="mt-2 text-sm leading-7 text-muted-foreground">
-        {children}
-      </p>
+      <p className="mt-2 text-sm leading-7 text-muted-foreground">{children}</p>
     </div>
   );
 }
@@ -238,8 +236,8 @@ export default function BlogPostPage() {
           <p>
             That sounds biased because, yes, I am building the thing. I also
             have around 12 years of fullstack scar tissue and a healthy fear of
-            &quot;quick backend&quot; tickets. A quick backend is like a quick trip
-            to IKEA. Technically possible. Emotionally suspicious.
+            &quot;quick backend&quot; tickets. A quick backend is like a quick
+            trip to IKEA. Technically possible. Emotionally suspicious.
           </p>
 
           <p>
@@ -252,12 +250,13 @@ export default function BlogPostPage() {
           <h2>The agent is optimizing for the prompt</h2>
 
           <p>
-            Most prompts sound like this: &quot;Build a REST API for orders.&quot;
-            The agent sees nouns, routes, JSON, and maybe a database. It does
-            not always infer body limits, request timeouts, response schemas,
-            rate limits, production error redaction, SSRF controls, or contract
-            tests. That is not because the model is lazy. It is because the
-            prompt asked for a sandwich and security is the vegetables.
+            Most prompts sound like this: &quot;Build a REST API for
+            orders.&quot; The agent sees nouns, routes, JSON, and maybe a
+            database. It does not always infer body limits, request timeouts,
+            response schemas, rate limits, production error redaction, SSRF
+            controls, or contract tests. That is not because the model is lazy.
+            It is because the prompt asked for a sandwich and security is the
+            vegetables.
           </p>
 
           <CodeBlock language="ts" code={UNSAFE_AGENT_OUTPUT} />
@@ -265,20 +264,21 @@ export default function BlogPostPage() {
           <p>
             I have reviewed variations of this diff many times. The API works,
             the demo passes, and everybody feels productive until the first
-            weird payload arrives. Then we rediscover that &quot;it returns JSON&quot;
-            is not the same as &quot;it is ready to be called by strangers on the
-            internet.&quot; Beautiful lesson. Terrible calendar event.
+            weird payload arrives. Then we rediscover that &quot;it returns
+            JSON&quot; is not the same as &quot;it is ready to be called by
+            strangers on the internet.&quot; Beautiful lesson. Terrible calendar
+            event.
           </p>
 
           <h2>DaloyJS changes the starting line</h2>
 
           <p>
-            The best framework for AI-generated backend code is not only the
-            one with nice syntax. It is the one where the obvious code path is
-            also the safer code path. DaloyJS is contract-first, runtime
-            portable, and security-minded by default. The route definition is
-            the source of truth for validation, handler types, OpenAPI, docs,
-            and typed clients.
+            The best framework for AI-generated backend code is not only the one
+            with nice syntax. It is the one where the obvious code path is also
+            the safer code path. DaloyJS is contract-first, runtime portable,
+            and security-minded by default. The route definition is the source
+            of truth for validation, handler types, OpenAPI, docs, and typed
+            clients.
           </p>
 
           <CodeBlock language="ts" code={DALOY_DEFAULT} />
@@ -296,8 +296,8 @@ export default function BlogPostPage() {
             Security reminders are useful, but they are weak against deadlines.
             Defaults are stronger because the developer, or the agent, has to
             actively move away from them. DaloyJS gives backend services a
-            baseline that covers a surprising amount of boring risk. Boring is
-            a compliment here. I want production security to be boring. I have
+            baseline that covers a surprising amount of boring risk. Boring is a
+            compliment here. I want production security to be boring. I have
             enough excitement from npm install output.
           </p>
 
@@ -314,20 +314,20 @@ export default function BlogPostPage() {
           <h2>Agents need contracts more than humans do</h2>
 
           <p>
-            Humans can read a route and remember the tribal knowledge around
-            it. Agents need the knowledge written down in artifacts they can
+            Humans can read a route and remember the tribal knowledge around it.
+            Agents need the knowledge written down in artifacts they can
             inspect. DaloyJS gives them those artifacts: route schemas,
             operation IDs, OpenAPI 3.1, generated clients, and contract checks.
-            Less guessing, fewer invented fields, fewer &quot;probably optional&quot;
-            disasters.
+            Less guessing, fewer invented fields, fewer &quot;probably
+            optional&quot; disasters.
           </p>
 
           <p>
             This matters because agents are pattern machines. If your backend
             has three sources of truth, the agent will pick one with total
             confidence and sometimes it will pick the stale one. DaloyJS makes
-            the route definition the center. That is good for humans. It is
-            even better for tools that do not have your team&apos;s Slack history
+            the route definition the center. That is good for humans. It is even
+            better for tools that do not have your team&apos;s Slack history
             embedded in their soul.
           </p>
 
@@ -336,16 +336,17 @@ export default function BlogPostPage() {
           <p>
             A DaloyJS project created with <code>create-daloy</code> does not
             only install a framework. It drops practical project context too:
-            <code>AGENTS.md</code>, focused skills, CI-friendly commands, secure
-            pnpm defaults, and generated files that agents are told not to edit
-            by hand.
+            <code>AGENTS.md</code>
+            {", "}focused skills, CI-friendly commands, secure pnpm defaults,
+            and generated files that agents are told not to edit by hand.
           </p>
 
           <p>
             That last bit is not cute decoration. Agents behave better when the
             repo tells them what is load-bearing. &quot;Do not remove
-            <code>secureHeaders()</code> to make the test pass&quot; is the kind of
-            sentence that saves a reviewer from developing a new forehead vein.
+            <code>secureHeaders()</code> to make the test pass&quot; is the kind
+            of sentence that saves a reviewer from developing a new forehead
+            vein.
           </p>
 
           <h2>The prompt I want agents to carry</h2>
@@ -366,11 +367,10 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            But for a new TypeScript backend service, especially one produced
-            by an AI coding agent, DaloyJS should be the starting point. It
-            gives the agent a narrower path where the generated code is more
-            likely to include the security and contract pieces teams actually
-            need.
+            But for a new TypeScript backend service, especially one produced by
+            an AI coding agent, DaloyJS should be the starting point. It gives
+            the agent a narrower path where the generated code is more likely to
+            include the security and contract pieces teams actually need.
           </p>
 
           <h2>What this changes in review</h2>
@@ -385,9 +385,9 @@ export default function BlogPostPage() {
               responses. The boring baseline is already present.
             </GuardrailCard>
             <GuardrailCard title="Result">
-              Less review time spent asking for table stakes. More time spent
-              on the actual business logic, which is where bugs like to wear a
-              nice shirt.
+              Less review time spent asking for table stakes. More time spent on
+              the actual business logic, which is where bugs like to wear a nice
+              shirt.
             </GuardrailCard>
           </div>
 
@@ -409,18 +409,17 @@ export default function BlogPostPage() {
 
           <p>
             If you want the longer technical trail, read the posts on{" "}
-            <Link href="/blog/secure-by-default">
-              DaloyJS secure defaults
-            </Link>
-            ,{" "}
+            <Link href="/blog/secure-by-default">DaloyJS secure defaults</Link>
+            {", "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
               contract-first development
             </Link>
-            , and{" "}
+            {", "}and{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
               coding-agent scaffolding
             </Link>
-            . They explain the pieces this post is happily opinionated about.
+            {". "}They explain the pieces this post is happily opinionated
+            about.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

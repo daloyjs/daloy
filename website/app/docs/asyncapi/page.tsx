@@ -31,14 +31,16 @@ export default function Page() {
         The same contract-first story extends to your real-time surfaces: the{" "}
         <code>@daloyjs/core/asyncapi</code> module emits a standards-compliant{" "}
         <strong>AsyncAPI 3.0</strong> document for the WebSocket routes you
-        register with <code>app.ws()</code>. It is{" "}
-        <strong>built-in and dependency-free</strong>, the same posture as the
-        OpenAPI generator, so it adds nothing to your runtime footprint.
+        register with <code>app.ws()</code>
+        {". "}It is <strong>built-in and dependency-free</strong>
+        {", "}the same posture as the OpenAPI generator, so it adds nothing to
+        your runtime footprint.
       </p>
       <p>
         Each <code>app.ws()</code> route becomes one AsyncAPI{" "}
         <strong>channel</strong> (the socket address plus any path parameters)
-        and one or more <strong>operations</strong>:
+        and one or more <strong>operations</strong>
+        {": "}
       </p>
       <ul>
         <li>
@@ -119,14 +121,18 @@ writeFileSync("./generated/asyncapi.json", JSON.stringify(doc, null, 2));`}
       </p>
       <ul>
         <li>
-          <code>GET /asyncapi</code>: an <strong>interactive UI</strong> that
-          renders the official AsyncAPI React component, loaded from a CDN via a{" "}
+          <code>GET /asyncapi</code>
+          {": "}an <strong>interactive UI</strong> that renders the official
+          AsyncAPI React component, loaded from a CDN via a{" "}
           <code>&lt;script&gt;</code> tag exactly like the OpenAPI viewers (no
           build step, no extra runtime dependency).
         </li>
         <li>
-          <code>GET /asyncapi.json</code> and <code>GET /asyncapi.yaml</code>:
-          the AsyncAPI 3.0 document, generated lazily so <code>app.ws()</code>{" "}
+          <code>GET /asyncapi.json</code> and <code>GET /asyncapi.yaml</code>
+          {": "}
+          the AsyncAPI 3.0 document, generated lazily so <code>
+            app.ws()
+          </code>{" "}
           routes registered afterwards are included.
         </li>
       </ul>
@@ -168,12 +174,13 @@ printStartupBanner({
         The UI page ships the same hardened response as the OpenAPI docs: a
         strict Content-Security-Policy that only allows the CDN asset origin
         (jsDelivr by default) plus <code>connect-src &apos;self&apos;</code> so
-        the component can fetch the served spec, <code>nosniff</code>, and{" "}
-        <code>no-referrer</code>. Pin Subresource Integrity hashes or point at
-        self-hosted assets via the <code>assets</code> option (
-        <code>asyncapiScriptUrl</code> / <code>asyncapiScriptIntegrity</code> /{" "}
-        <code>asyncapiStyleUrl</code> / <code>asyncapiStyleIntegrity</code>) for
-        supply-chain hardening, exactly as with the OpenAPI docs UIs. Use{" "}
+        the component can fetch the served spec, <code>nosniff</code>
+        {", "}and <code>no-referrer</code>
+        {". "}Pin Subresource Integrity hashes or point at self-hosted assets
+        via the <code>assets</code> option (<code>asyncapiScriptUrl</code> /{" "}
+        <code>asyncapiScriptIntegrity</code> / <code>asyncapiStyleUrl</code> /{" "}
+        <code>asyncapiStyleIntegrity</code>) for supply-chain hardening, exactly
+        as with the OpenAPI docs UIs. Use{" "}
         <code>asyncapi: &quot;auto&quot;</code> to mount everywhere except
         production.
       </p>
@@ -181,36 +188,40 @@ printStartupBanner({
         The WebSocket route itself keeps the normal production guardrails. If
         you run with secure defaults in production, each <code>app.ws()</code>{" "}
         route still needs an <code>allowedOrigins</code> policy or an explicit{" "}
-        <code>acknowledgeCrossOriginUpgrade: true</code>. AsyncAPI generation is
-        descriptive; it never relaxes Cross-Site WebSocket Hijacking defenses.
+        <code>acknowledgeCrossOriginUpgrade: true</code>
+        {". "}AsyncAPI generation is descriptive; it never relaxes Cross-Site
+        WebSocket Hijacking defenses.
       </p>
 
       <h2 id="describing-the-messages">Describing the messages</h2>
       <p>
         WebSocket handlers accept an optional <code>meta</code> block that
-        mirrors the HTTP route <code>meta</code>. It is purely descriptive (it
-        never changes the RFC 6455 handshake or runtime behavior), and the
-        AsyncAPI generator reads it to fill in summaries, tags, and message
-        payloads.
+        mirrors the HTTP route <code>meta</code>
+        {". "}It is purely descriptive (it never changes the RFC 6455 handshake
+        or runtime behavior), and the AsyncAPI generator reads it to fill in
+        summaries, tags, and message payloads.
       </p>
       <ul>
         <li>
-          <code>summary</code> / <code>description</code> / <code>tags</code>:
+          <code>summary</code> / <code>description</code> / <code>tags</code>
+          {": "}
           surfaced on the generated channel and operations.
         </li>
         <li>
-          <code>receive</code>: a Standard Schema describing messages the server
-          receives from clients. Falls back to the handler&apos;s{" "}
-          <code>request.body</code> schema (the same schema used for
-          payload-size checks).
+          <code>receive</code>
+          {": "}a Standard Schema describing messages the server receives from
+          clients. Falls back to the handler&apos;s <code>request.body</code>{" "}
+          schema (the same schema used for payload-size checks).
         </li>
         <li>
-          <code>send</code>: a Standard Schema describing messages the server
-          sends to clients. Adds a <code>send</code> operation when present.
+          <code>send</code>
+          {": "}a Standard Schema describing messages the server sends to
+          clients. Adds a <code>send</code> operation when present.
         </li>
         <li>
-          <code>operationId</code>: overrides the channel key that is otherwise
-          derived from the path.
+          <code>operationId</code>
+          {": "}overrides the channel key that is otherwise derived from the
+          path.
         </li>
       </ul>
       <CodeBlock
@@ -294,8 +305,9 @@ const yaml = asyncapiToYAML(generateAsyncAPI(app, {
       <h2 id="cli">CLI</h2>
       <p>
         The <code>daloy inspect</code> command can print the AsyncAPI document
-        for any app it can load, mirroring <code>--openapi</code>. Use{" "}
-        <code>--format yaml</code> (or <code>--yaml</code>) for YAML output.
+        for any app it can load, mirroring <code>--openapi</code>
+        {". "}Use <code>--format yaml</code> (or <code>--yaml</code>) for YAML
+        output.
       </p>
       <CodeBlock
         language="bash"

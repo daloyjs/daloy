@@ -31,10 +31,11 @@ export default function Page() {
       <p>
         DaloyJS supports URL-based API versioning with ordinary route prefixes.
         Put a stable major version in the public path, such as{" "}
-        <code>/api/v1/books</code>, and mount that version with{" "}
-        <code>app.group()</code> or a prefixed plugin. The resulting paths are
-        normal DaloyJS routes: request and response validation, OpenAPI,
-        generated clients, hooks, auth, and rate limits all continue to work.
+        <code>/api/v1/books</code>
+        {", "}and mount that version with <code>app.group()</code> or a
+        prefixed plugin. The resulting paths are normal DaloyJS routes: request
+        and response validation, OpenAPI, generated clients, hooks, auth, and
+        rate limits all continue to work.
       </p>
       <p>
         Use a new major path only for a breaking contract. Additive endpoints
@@ -174,11 +175,11 @@ app.register(apiV2, {
 await app.ready();`}
       />
       <p>
-        Each plugin registers resource paths such as <code>/books</code>. The
-        prefix supplied by the application produces <code>/api/v1/books</code>{" "}
-        and <code>/api/v2/books</code>. Plugins also encapsulate hooks and
-        decorations, so a compatibility adapter or limit added to v1 does not
-        leak into v2.
+        Each plugin registers resource paths such as <code>/books</code>
+        {". "}The prefix supplied by the application produces{" "}
+        <code>/api/v1/books</code> and <code>/api/v2/books</code>
+        {". "}Plugins also encapsulate hooks and decorations, so a
+        compatibility adapter or limit added to v1 does not leak into v2.
       </p>
 
       <h2 id="when-to-create-a-new-version">
@@ -331,8 +332,8 @@ const v1Spec = generateOpenAPI(v1Contract, {
         <li>Ship v2 while v1 remains available.</li>
         <li>Publish migration examples and a concrete retirement date.</li>
         <li>
-          Mark v1 routes with <code>sunset</code>, which also marks them
-          deprecated.
+          Mark v1 routes with <code>sunset</code>
+          {", "}which also marks them deprecated.
         </li>
         <li>Track usage by version and contact active consumers.</li>
         <li>Remove v1 after the date and the promised support window.</li>
@@ -378,20 +379,23 @@ const v1Spec = generateOpenAPI(v1Contract, {
         <strong>Security:</strong> a group&apos;s <code>auth</code> option
         documents the OpenAPI security requirement; it does not verify a
         credential by itself. Install an enforcement hook such as{" "}
-        <code>jwk()</code>, <code>bearerAuth()</code>, or a reviewed custom
-        API-key hook. Key limits by a stable authenticated customer ID, not by
-        the raw secret, and use a shared store when more than one instance
-        serves traffic.
+        <code>jwk()</code>
+        {", "}<code>bearerAuth()</code>
+        {", "}or a reviewed custom API-key hook. Key limits by a stable
+        authenticated customer ID, not by the raw secret, and use a shared store
+        when more than one instance serves traffic.
       </blockquote>
       <p>
         For the enforcement pieces, continue with{" "}
-        <Link href="/docs/auth/architecture">OAuth2/OIDC architecture</Link>,{" "}
-        <Link href="/docs/security/auth-slice">JWT and auth safeguards</Link>,
+        <Link href="/docs/auth/architecture">OAuth2/OIDC architecture</Link>
+        {", "}
+        <Link href="/docs/security/auth-slice">JWT and auth safeguards</Link>
+        {", "}
         and the{" "}
         <Link href="/docs/security/rate-limit-redis">
           Redis rate-limit store
         </Link>
-        .
+        {"."}
       </p>
 
       <h2 id="supported-versioning-styles">Supported versioning styles</h2>

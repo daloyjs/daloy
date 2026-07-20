@@ -30,7 +30,10 @@ export default function Page() {
       <p>
         Network retries are a fact of life on serverless platforms, behind load
         balancers, and on flaky mobile connections. For unsafe methods (
-        <code>POST</code>, <code>PUT</code>, <code>PATCH</code>,{" "}
+        <code>POST</code>
+        {", "}<code>PUT</code>
+        {", "}<code>PATCH</code>
+        {", "}
         <code>DELETE</code>) a blind retry can charge a card twice or create a
         duplicate order. The <code>idempotency()</code> middleware gives those
         requests an exactly-once guarantee: the client sends a unique{" "}
@@ -39,9 +42,10 @@ export default function Page() {
         replayed.
       </p>
       <p>
-        It is <strong>built-in and dependency-free</strong>, built on Web Crypto
-        and the Web-standard <code>Request</code>/<code>Response</code>, so it
-        runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
+        It is <strong>built-in and dependency-free</strong>
+        {", "}built on Web Crypto and the Web-standard <code>Request</code>/
+        <code>Response</code>
+        {", "}so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
         The behavior mirrors the IETF <em>Idempotency-Key HTTP Header Field</em>{" "}
         draft and the conventions used by major payment processors.
       </p>
@@ -145,9 +149,9 @@ app.post(
 
       <ul>
         <li>
-          <strong>First request</strong>: the handler runs normally; the final
-          response is captured and persisted under the key for{" "}
-          <code>ttlSeconds</code>.
+          <strong>First request</strong>
+          {": "}the handler runs normally; the final response is captured and
+          persisted under the key for <code>ttlSeconds</code>.
         </li>
         <li>
           <strong>Identical retry</strong> (same key, same fingerprint, original
@@ -156,14 +160,14 @@ app.post(
           <em>not</em> run again.
         </li>
         <li>
-          <strong>Retry while the first is still in flight</strong>: a{" "}
-          <code>409 Conflict</code> is returned (with{" "}
+          <strong>Retry while the first is still in flight</strong>
+          {": "}a <code>409 Conflict</code> is returned (with{" "}
           <code>Cache-Control: no-store</code>) so the client backs off instead
           of racing.
         </li>
         <li>
-          <strong>Same key, different body</strong>: a{" "}
-          <code>422 Unprocessable Content</code> is returned. A key is
+          <strong>Same key, different body</strong>
+          {": "}a <code>422 Unprocessable Content</code> is returned. A key is
           permanently bound to the first payload it was used with.
         </li>
       </ul>
@@ -209,13 +213,13 @@ app.post(
         The default <code>MemoryIdempotencyStore</code> is process-local,
         perfect for tests and single-instance deployments. For a multi-instance
         or serverless fleet, supply a shared backend by implementing{" "}
-        <code>IdempotencyStore</code>. The contract mirrors{" "}
-        <code>SessionStore</code> and the rate-limit store: the one rule is that{" "}
-        <code>reserve()</code> must be atomic (&ldquo;set if absent&rdquo;), the
-        exact <code>SET key value NX</code> semantics of Redis, so two
-        concurrent requests cannot both win the reservation. The{" "}
-        <code>key</code> passed to your store is already namespaced by{" "}
-        <code>groupId</code> and <code>scope</code>.
+        <code>IdempotencyStore</code>
+        {". "}The contract mirrors <code>SessionStore</code> and the rate-limit
+        store: the one rule is that <code>reserve()</code> must be atomic
+        (&ldquo;set if absent&rdquo;), the exact <code>SET key value NX</code>{" "}
+        semantics of Redis, so two concurrent requests cannot both win the
+        reservation. The <code>key</code> passed to your store is already
+        namespaced by <code>groupId</code> and <code>scope</code>.
       </p>
       <CodeBlock
         code={`import type { IdempotencyStore, IdempotencyRecord } from "@daloyjs/core";
@@ -275,9 +279,9 @@ async function createChargeWithRetries(amount: number) {
           <code>400 Bad Request</code> before any store lookup.
         </li>
         <li>
-          Conflict and reuse responses (<code>409</code>, <code>422</code>)
-          carry <code>Cache-Control: no-store</code> so a shared cache cannot
-          mask them.
+          Conflict and reuse responses (<code>409</code>
+          {", "}<code>422</code>) carry <code>Cache-Control: no-store</code> so
+          a shared cache cannot mask them.
         </li>
         <li>
           Server errors are never cached, so a transient <code>5xx</code> does
@@ -294,14 +298,15 @@ async function createChargeWithRetries(amount: number) {
           client&apos;s stored response. The store key is namespaced by the
           caller, defaulting to the <code>Authorization</code> header so the
           common bearer- / API-key case is isolated automatically. For
-          cookie-based sessions, pass a stable identity via <code>scope</code>,
+          cookie-based sessions, pass a stable identity via <code>scope</code>
+          {", "}
           e.g.{" "}
           <code>
             scope: (ctx) =&gt; (ctx.state.session as {"{ id?: string }"} |
             undefined)?.id
           </code>
-          . Unauthenticated requests (no <code>Authorization</code>, no{" "}
-          <code>scope</code>) still dedupe by key alone.
+          {". "}Unauthenticated requests (no <code>Authorization</code>
+          {", "}no <code>scope</code>) still dedupe by key alone.
         </li>
       </ul>
     </>

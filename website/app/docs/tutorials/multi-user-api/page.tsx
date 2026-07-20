@@ -165,7 +165,8 @@ declare module "@daloyjs/core" {
       <p>
         In production, the verifier validates a JWT or session and maps the
         external <code>(issuer, subject)</code> pair to an immutable internal
-        <code>userId</code>. Do not use email as the ownership key.
+        <code>userId</code>
+        {". "}Do not use email as the ownership key.
       </p>
       <p>
         For this tutorial, use deterministic test identities. These tokens are
@@ -219,7 +220,8 @@ export const demoVerifier: TokenVerifier = {
         3. Make the repository owner-scoped
       </h2>
       <p>
-        This interface has no ordinary request-path <code>findById()</code>.
+        This interface has no ordinary request-path <code>findById()</code>
+        {". "}
         Every operation that touches an existing project requires the trusted
         owner ID:
       </p>
@@ -324,8 +326,8 @@ export function createMemoryProjectRepository(): ProjectRepository {
       <h2 id="4-build-routes">4. Build routes that cannot choose an owner</h2>
       <p>
         Request schemas expose only ordinary editable properties. Ownership
-        comes from <code>state.principal</code>, and response schemas omit the
-        internal ownership key:
+        comes from <code>state.principal</code>
+        {", "}and response schemas omit the internal ownership key:
       </p>
       <CodeBlock
         language="ts"
@@ -535,9 +537,9 @@ const { port } = serve(app, { port: 3000 });
 console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
-        Alice can read <code>alice-1</code>. Changing only the path to{" "}
-        <code>bob-1</code> must not turn a valid Alice token into access to
-        Bob&apos;s project:
+        Alice can read <code>alice-1</code>
+        {". "}Changing only the path to <code>bob-1</code> must not turn a
+        valid Alice token into access to Bob&apos;s project:
       </p>
       <CodeBlock
         language="bash"
@@ -687,10 +689,11 @@ pnpm test`}
         <Link href={"/docs/security/resource-authorization" as Route}>
           resource authorization guide
         </Link>
-        , then connect the same boundary to{" "}
-        <Link href="/docs/auth">your authentication provider</Link>,{" "}
-        <Link href="/docs/orm">your ORM</Link>, and{" "}
-        <Link href="/docs/multitenancy">your tenancy model</Link>.
+        {", "}then connect the same boundary to{" "}
+        <Link href="/docs/auth">your authentication provider</Link>
+        {", "}
+        <Link href="/docs/orm">your ORM</Link>
+        {", "}and <Link href="/docs/multitenancy">your tenancy model</Link>.
       </p>
     </>
   );

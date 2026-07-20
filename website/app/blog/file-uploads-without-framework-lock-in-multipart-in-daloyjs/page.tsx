@@ -460,9 +460,9 @@ export default function BlogPostPage() {
           <p>
             Hi, Devlin. Ten years of fullstack, currently in Norway, currently
             nursing a strong opinion that file uploads should not be the part of
-            your codebase that decides which runtime you can deploy to. And yet
-            , for most of my career, it has been. A multer-shaped object here, a
-            busboy stream there, a<code> /tmp/uploads</code> directory
+            your codebase that decides which runtime you can deploy to. And yet,
+            for most of my career, it has been. A multer-shaped object here, a
+            busboy stream there, a <code>/tmp/uploads</code> directory
             we&apos;re not allowed to talk about in serverless. You know the
             script.
           </p>
@@ -470,12 +470,12 @@ export default function BlogPostPage() {
           <p>
             DaloyJS treats uploads the way the modern web platform does: you get
             back a <code>File</code> (which is a <code>Blob</code> with a{" "}
-            <code>name</code>), which is the same shape on Node, Bun, Deno,
-            and Cloudflare Workers. Two helpers,{" "}
-            <code>fileField()</code> and <code>multipartObject()</code>: give
-            you per-file size caps, MIME allowlists, filename predicates, strict
-            field validation, and OpenAPI binary schemas, without ever stepping
-            outside the standard. This post is the tour.
+            <code>name</code>), which is the same shape on Node, Bun, Deno, and
+            Cloudflare Workers. Two helpers, <code>fileField()</code> and{" "}
+            <code>multipartObject()</code>
+            {": "}give you per-file size caps, MIME allowlists, filename
+            predicates, strict field validation, and OpenAPI binary schemas,
+            without ever stepping outside the standard. This post is the tour.
           </p>
 
           <h2>The pain you&apos;re here to fix</h2>
@@ -503,8 +503,8 @@ export default function BlogPostPage() {
             disk (you have no disk on Workers), the shape <code>req.file</code>{" "}
             is a multer thing rather than a Web File, and the validation rules
             are scattered across a config object, a <code>fileFilter</code>{" "}
-            callback, and a downstream <code>try/catch</code>. The DaloyJS
-            version collapses all of it into one schema:
+            callback, and a downstream <code>try/catch</code>
+            {". "}The DaloyJS version collapses all of it into one schema:
           </p>
 
           <h2>The two helpers, doing everything</h2>
@@ -520,12 +520,13 @@ export default function BlogPostPage() {
           <p>Worth pointing at three things in that snippet:</p>
 
           <CheckCard badge="1" title="File fields and form fields coexist">
-            <code>fileField()</code> validates uploads; <code>z.string()</code>,{" "}
-            <code>z.coerce.boolean()</code>, and anything else
-            Standard-Schema-shaped validate text fields. One{" "}
-            <code>multipartObject({})</code> wraps both. You don&apos;t split
-            your validation between &quot;the upload library&quot; and &quot;the
-            validation library&quot;.
+            <code>fileField()</code> validates uploads; <code>z.string()</code>
+            {", "}
+            <code>z.coerce.boolean()</code>
+            {", "}and anything else Standard-Schema-shaped validate text
+            fields. One <code>multipartObject({})</code> wraps both. You
+            don&apos;t split your validation between &quot;the upload
+            library&quot; and &quot;the validation library&quot;.
           </CheckCard>
           <CheckCard badge="2" title="strict: true rejects unknown fields">
             Extra form fields are usually either a misconfigured frontend
@@ -534,7 +535,8 @@ export default function BlogPostPage() {
             shape as every other validation error in the app.
           </CheckCard>
           <CheckCard badge="3" title="body.file is a real Web File">
-            <code>body.file</code> is a <code>Blob &amp; {`{ name? }`}</code>,
+            <code>body.file</code> is a <code>Blob &amp; {`{ name? }`}</code>
+            {", "}
             which is the standard interop type. <code>file.stream()</code> is a{" "}
             <code>ReadableStream</code>. <code>file.arrayBuffer()</code> and{" "}
             <code>file.text()</code> work too if you really must. Same code path
@@ -560,7 +562,7 @@ export default function BlogPostPage() {
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
               RFC 9457 errors post
             </Link>
-            .
+            {"."}
           </p>
 
           <h2>fileField(): every option, in one screen</h2>
@@ -587,10 +589,11 @@ export default function BlogPostPage() {
 
           <p>
             This is the bit that pays for the abstraction. Because{" "}
-            <code>body.file</code> is a Web <code>Blob</code>, you get{" "}
-            <code>file.stream()</code> for free, a <code>ReadableStream</code>{" "}
-            with the exact same shape on Node, Bun, Deno, and Workers
-            Edge. Four ways to use it, same handler code on all of them:
+            <code>body.file</code> is a Web <code>Blob</code>
+            {", "}you get <code>file.stream()</code> for free, a{" "}
+            <code>ReadableStream</code> with the exact same shape on Node, Bun,
+            Deno, and Workers Edge. Four ways to use it, same handler code on
+            all of them:
           </p>
 
           <EditorFrame
@@ -606,9 +609,10 @@ export default function BlogPostPage() {
             everything else in this stack, see the{" "}
             <Link href="/blog/same-app-five-runtimes-verified">
               five-runtimes verification post
-            </Link>{" "}
-            , but it&apos;s especially noticeable here because uploads are the
-            one feature most Node frameworks accidentally pin you to Node for.
+            </Link>
+            {", "}but it&apos;s especially noticeable here because uploads are
+            the one feature most Node frameworks accidentally pin you to Node
+            for.
           </p>
 
           <h2>The OpenAPI shape this emits</h2>

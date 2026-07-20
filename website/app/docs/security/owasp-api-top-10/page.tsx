@@ -55,11 +55,11 @@ export default function Page() {
         API safety).
       </p>
       <p>
-        Daloy&apos;s posture is <strong>secure-by-default</strong>: dangerous
-        choices are refused at construction or boot, the rest is one documented
-        call away. Items marked <em>your responsibility</em> are the ones no
-        framework can decide for you (business-logic authorization, data
-        sensitivity classification, threat modelling).
+        Daloy&apos;s posture is <strong>secure-by-default</strong>
+        {": "}dangerous choices are refused at construction or boot, the rest
+        is one documented call away. Items marked <em>your responsibility</em>{" "}
+        are the ones no framework can decide for you (business-logic
+        authorization, data sensitivity classification, threat modelling).
       </p>
 
       <LayerStack
@@ -114,7 +114,8 @@ export default function Page() {
         <tbody>
           <tr>
             <td>
-              <strong>API1: Broken Object Level Authorization (BOLA)</strong>.
+              <strong>API1: Broken Object Level Authorization (BOLA)</strong>
+              {". "}
               Attacker swaps an <code>id</code> in the URL to read someone
               else&apos;s record.
             </td>
@@ -146,7 +147,7 @@ export default function Page() {
               <code>
                 bearerAuth({"{"} verify {"}"})
               </code>
-              ; <code>basicAuth()</code> with UTF-8 credential decoding and
+              {"; "}<code>basicAuth()</code> with UTF-8 credential decoding and
               construction-time validation; <code>passwordHash</code> /{" "}
               <code>passwordVerify</code> at <code>@daloyjs/core/hashing</code>;{" "}
               <code>session()</code> with <code>__Host-</code> cookie +
@@ -154,8 +155,9 @@ export default function Page() {
               <code>wsRateLimit()</code>; <code>rotateSession()</code>;{" "}
               <code>Cache-Control: no-store</code> baked into{" "}
               <code>UnauthorizedError</code> / <code>ForbiddenError</code> /{" "}
-              <code>TooManyRequestsError</code>. Refuse-to-boot on weak session
-              secrets and short HS-JWT keys.
+              <code>TooManyRequestsError</code>
+              {". "}Refuse-to-boot on weak session secrets and short HS-JWT
+              keys.
             </td>
             <td>
               Pick the right identity provider (see{" "}
@@ -173,10 +175,10 @@ export default function Page() {
               <em>and</em> <code>responses</code> schemas (Zod / Valibot /
               ArkType / TypeBox). Only fields you declare in the response schema
               are emitted. Undeclared fields a handler returns (a stray{" "}
-              <code>passwordHash</code>, a spread ORM row) are stripped at
-              serialization, not just flagged. Only fields you declare in the
-              request schema reach your handler. Surfaced in OpenAPI so
-              reviewers can audit every payload.
+              <code>passwordHash</code>
+              {", "}a spread ORM row) are stripped at serialization, not just
+              flagged. Only fields you declare in the request schema reach your
+              handler. Surfaced in OpenAPI so reviewers can audit every payload.
             </td>
             <td>
               Author response schemas that omit internal fields. Don&apos;t
@@ -186,15 +188,18 @@ export default function Page() {
               <code>audit.response.bodySchema</code> (and a dev-mode boot
               warning) for any success response that has none. For routes that
               intentionally return an opaque or framework-controlled body (a raw{" "}
-              <code>Response</code>, HTML, a proxied payload), set{" "}
+              <code>Response</code>
+              {", "}HTML, a proxied payload), set{" "}
               <code>acknowledgeNoResponseBodySchema: true</code> on the route to
               record that intent and silence the finding. Successful raw{" "}
               <code>preBody</code>/<code>beforeHandle</code> short-circuits
               require the same acknowledgement; error denials do not.
-              Framework-mounted routes (<code>/openapi.json</code>,{" "}
-              <code>/docs</code>, <code>/asyncapi</code>, health, metrics)
-              acknowledge themselves — the warning only ever names routes you
-              wrote.
+              Framework-mounted routes (<code>/openapi.json</code>
+              {", "}
+              <code>/docs</code>
+              {", "}<code>/asyncapi</code>
+              {", "}health, metrics) acknowledge themselves — the warning only
+              ever names routes you wrote.
             </td>
           </tr>
           <tr>
@@ -228,9 +233,10 @@ export default function Page() {
               <code>combine</code> (<code>every</code> / <code>some</code> /{" "}
               <code>except</code>) so admin actions are explicit, not implicit;{" "}
               <code>internal: true</code> route flag (<code>404</code> via{" "}
-              <code>app.fetch</code>, dispatched only via{" "}
-              <code>app.inject</code>); namespace-protected decorators prevent
-              accidental privilege bleed across plugins.
+              <code>app.fetch</code>
+              {", "}dispatched only via <code>app.inject</code>);
+              namespace-protected decorators prevent accidental privilege bleed
+              across plugins.
             </td>
             <td>
               Define your scope/role catalog and apply{" "}
@@ -266,11 +272,13 @@ export default function Page() {
               <code>fetchGuard()</code> wraps the global <code>fetch</code> and
               refuses requests to loopback, RFC1918, link-local (including every
               documented cloud metadata IP: AWS / Azure / DigitalOcean{" "}
-              <code>169.254.169.254</code>, Oracle <code>192.0.0.192</code>,
+              <code>169.254.169.254</code>
+              {", "}Oracle <code>192.0.0.192</code>
+              {", "}
               Alibaba <code>100.100.100.200</code>), and IPv6 unique-local.
               Throws <code>SsrfBlockedError</code> with a reason code so
-              handlers can surface a clean <code>422</code>. See{" "}
-              <a href="/docs/security/fetch-guard">SSRF guard</a>.
+              handlers can surface a clean <code>422</code>
+              {". "}See <a href="/docs/security/fetch-guard">SSRF guard</a>.
             </td>
             <td>
               Use the guarded fetch returned by <code>fetchGuard()</code> (e.g.{" "}
@@ -300,7 +308,9 @@ export default function Page() {
               <code>
                 cors({"{"} origin: &quot;*&quot;{"}"})
               </code>
-              , weak session secrets, unconfigured <code>X-Forwarded-*</code>,
+              {", "}weak session secrets, unconfigured{" "}
+              <code>X-Forwarded-*</code>
+              {", "}
               missing <code>csrf()</code> alongside <code>session()</code> with
               state-changing routes, and unauthenticated health endpoints
               without explicit acknowledgement. Run <code>daloy doctor</code>{" "}
@@ -401,11 +411,14 @@ export default function Page() {
           <tr>
             <td>Rate limiting and throttling</td>
             <td>
-              <code>rateLimit()</code>,{" "}
+              <code>rateLimit()</code>
+              {", "}
               <code>
                 rateLimit({"{"} groupId {"}"})
               </code>
-              , <code>loginThrottle()</code>, <code>wsRateLimit()</code>,{" "}
+              {", "}<code>loginThrottle()</code>
+              {", "}<code>wsRateLimit()</code>
+              {", "}
               <code>@daloyjs/core/rate-limit-redis</code>.
             </td>
           </tr>
@@ -413,9 +426,13 @@ export default function Page() {
             <td>Logging without leaks</td>
             <td>
               Structured pluggable logger with default redaction of common
-              secret keys (<code>authorization</code>, <code>password</code>,{" "}
-              <code>token</code>, <code>cookie</code>, ...); request-id
-              propagation; <code>requestId()</code> trust-default audit.
+              secret keys (<code>authorization</code>
+              {", "}<code>password</code>
+              {", "}
+              <code>token</code>
+              {", "}<code>cookie</code>
+              {", "} ...); request-id propagation; <code>requestId()</code>{" "}
+              trust-default audit.
             </td>
           </tr>
           <tr>
@@ -441,10 +458,11 @@ export default function Page() {
           <tr>
             <td>Supply-chain hardening</td>
             <td>
-              <code>ignore-scripts=true</code>,{" "}
-              <code>minimum-release-age=1440</code>, SHA-pinned actions, CodeQL
-              + Opengrep, OpenSSF Scorecard, npm trusted publishing with
-              provenance, SBOM. See{" "}
+              <code>ignore-scripts=true</code>
+              {", "}
+              <code>minimum-release-age=1440</code>
+              {", "}SHA-pinned actions, CodeQL + Opengrep, OpenSSF Scorecard,
+              npm trusted publishing with provenance, SBOM. See{" "}
               <a href="/docs/security/supply-chain">Supply-chain security</a>.
             </td>
           </tr>
@@ -488,23 +506,25 @@ export default function Page() {
       <h2 id="verify-your-posture">Verify your posture</h2>
       <ul>
         <li>
-          <code>daloy doctor</code>: deployment-config posture checks.
+          <code>daloy doctor</code>
+          {": "}deployment-config posture checks.
         </li>
         <li>
-          <code>daloy doctor --audit-defaults</code>: live secure-by-default
-          audit.
+          <code>daloy doctor --audit-defaults</code>
+          {": "}live secure-by-default audit.
         </li>
         <li>
-          <code>pnpm verify:parity-audits</code>: static gates that fail CI if a
-          secure default is regressed.
+          <code>pnpm verify:parity-audits</code>
+          {": "}static gates that fail CI if a secure default is regressed.
         </li>
         <li>
-          <code>pnpm verify:governance-audits</code>: release-workflow rotation
-          and governance floor.
+          <code>pnpm verify:governance-audits</code>
+          {": "}release-workflow rotation and governance floor.
         </li>
         <li>
-          <code>daloy inspect</code>: route inventory, dead routes, missing{" "}
-          <code>operationId</code>s.
+          <code>daloy inspect</code>
+          {": "}route inventory, dead routes, missing <code>operationId</code>
+          s.
         </li>
       </ul>
 
@@ -517,7 +537,7 @@ export default function Page() {
         >
           github.com/daloyjs/daloy/security/advisories/new
         </a>
-        .
+        {"."}
       </p>
     </>
   );

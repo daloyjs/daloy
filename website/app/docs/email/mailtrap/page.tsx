@@ -65,7 +65,8 @@ export default function Page() {
           scoped to the sandbox.
         </li>
         <li>
-          For production, open <strong>Email Sending → Sending Domains</strong>,
+          For production, open <strong>Email Sending → Sending Domains</strong>
+          {", "}
           verify a domain via SPF/DKIM/DMARC records, then create an API token
           with <em>Email Sending</em> permissions.
         </li>
@@ -180,7 +181,8 @@ app.post(
       <p>
         Mailtrap exposes a separate <strong>Bulk Sending</strong> stream
         optimised for marketing volume. Toggle it on the same client by setting{" "}
-        <code>bulk: true</code> instead of <code>sandbox: true</code>:
+        <code>bulk: true</code> instead of <code>sandbox: true</code>
+        {": "}
       </p>
       <CodeBlock
         code={`const bulkClient = new MailtrapClient({
@@ -191,9 +193,11 @@ app.post(
 
       <h2 id="templates">Templates</h2>
       <p>
-        Create a template in <strong>Email Sending → Email Templates</strong>,
+        Create a template in <strong>Email Sending → Email Templates</strong>
+        {", "}
         then send it by UUID and provide variables instead of{" "}
-        <code>subject</code>/<code>text</code>/<code>html</code>:
+        <code>subject</code>/<code>text</code>/<code>html</code>
+        {": "}
       </p>
       <CodeBlock
         code={`await client.send({
@@ -207,8 +211,8 @@ app.post(
       <h2 id="runtimes">Runtimes</h2>
       <p>
         The <code>mailtrap</code> SDK targets Node (uses Node&apos;s HTTPS
-        module). For <Link href="/docs/adapters">Cloudflare Workers</Link>, call the REST API directly
-        with <code>fetch</code>:{" "}
+        module). For <Link href="/docs/adapters">Cloudflare Workers</Link>
+        {", "}call the REST API directly with <code>fetch</code>:{" "}
         <code>POST https://send.api.mailtrap.io/api/send</code> (production) or{" "}
         <code>
           POST https://sandbox.api.mailtrap.io/api/send/{`{inbox_id}`}
@@ -217,8 +221,10 @@ app.post(
       </p>
 
       <p>
-        See also <Link href="/docs/email/resend">Resend</Link>,{" "}
-        <Link href="/docs/email/postmark">Postmark</Link>, and the{" "}
+        See also <Link href="/docs/email/resend">Resend</Link>
+        {", "}
+        <Link href="/docs/email/postmark">Postmark</Link>
+        {", "}and the{" "}
         <Link href="/docs/email">email integrations overview</Link>.
       </p>
     </>

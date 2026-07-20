@@ -245,7 +245,7 @@ export default function BlogPostPage() {
             >
               Snyk&apos;s write-up of the LiteLLM / TeamPCP compromise
             </a>
-            . The question was the same:{" "}
+            {". "}The question was the same:{" "}
             <em>are we doing anything about this?</em> Yes. Most of it was
             already shipped. The post is the receipt.
           </p>
@@ -258,9 +258,10 @@ export default function BlogPostPage() {
             the maintainer&apos;s password. They stole the{" "}
             <code>PYPI_PUBLISH</code> token straight out of LiteLLM&apos;s
             GitHub Actions runner environment via a previously compromised{" "}
-            <strong>Trivy GitHub Action</strong>: a <em>security scanner</em>{" "}
-            that LiteLLM&apos;s CI ran during the build. Same trick was used to
-            backdoor Checkmarx KICS a day earlier.
+            <strong>Trivy GitHub Action</strong>
+            {": "}a <em>security scanner</em> that LiteLLM&apos;s CI ran during
+            the build. Same trick was used to backdoor Checkmarx KICS a day
+            earlier.
           </p>
 
           <p>
@@ -278,7 +279,8 @@ export default function BlogPostPage() {
 
           <p>
             DaloyJS is Node/TypeScript, not Python, so the <code>.pth</code>{" "}
-            hook is not literally applicable. But the <em>attack chain</em>:
+            hook is not literally applicable. But the <em>attack chain</em>
+            {": "}
             poisoned scanner action → exfiltrated publish token → malicious
             release that runs at install time, is platform-agnostic, and is
             exactly what every JS framework that publishes to npm has to defend
@@ -303,7 +305,7 @@ export default function BlogPostPage() {
               &quot;LiteLLM&apos;s CI/CD pipeline ran Trivy as part of its build
               process, pulling it from apt without a pinned version&quot;
             </em>
-            . That sentence describes a class of mistake DaloyJS&apos;s CI{" "}
+            {". "}That sentence describes a class of mistake DaloyJS&apos;s CI{" "}
             <em>cannot</em> make, there are zero <code>apt install</code> calls
             in any workflow, and the only binaries downloaded at runtime
             (opengrep) are cosign-verified against the publisher&apos;s OIDC
@@ -323,8 +325,7 @@ export default function BlogPostPage() {
           <CodeBlock language="yaml" code={TRUSTED_PUBLISHING} />
 
           <p>
-            The Snyk post buries the most useful sentence in the whole
-            article:{" "}
+            The Snyk post buries the most useful sentence in the whole article:{" "}
             <em>
               &quot;The package passes all standard integrity checks because the
               malicious content was published using legitimate
@@ -395,7 +396,7 @@ export default function BlogPostPage() {
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               the supply-chain hardening post
             </Link>
-            .
+            {"."}
           </p>
 
           <h2>What this attack would have needed to do to ship DaloyJS</h2>
@@ -416,8 +417,8 @@ export default function BlogPostPage() {
             </li>
             <li>
               Land a PR that adds a runtime dependency to{" "}
-              <code>@daloyjs/core</code>: blocked by{" "}
-              <code>verify:no-runtime-deps</code>.
+              <code>@daloyjs/core</code>
+              {": "}blocked by <code>verify:no-runtime-deps</code>.
             </li>
             <li>
               Sneak in a base64-encoded payload or invisible-unicode trick,
@@ -447,9 +448,11 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              Scaffold with <code>pnpm create daloy@latest --with-ci</code>. The
-              generated <code>.github/workflows/</code> and <code>.npmrc</code>{" "}
-              already carry the SHA-pinned actions, <code>ignore-scripts</code>,
+              Scaffold with <code>pnpm create daloy@latest --with-ci</code>
+              {". "}The generated <code>.github/workflows/</code> and{" "}
+              <code>.npmrc</code> already carry the SHA-pinned actions,{" "}
+              <code>ignore-scripts</code>
+              {", "}
               and 24h release-age cooldown.
             </li>
             <li>
@@ -483,10 +486,11 @@ export default function BlogPostPage() {
             Yes, and most of it was shipped before the Snyk post existed, for
             the same reasons that post lists. SHA-pinned actions, isolated
             publish jobs with OIDC + Environment gating,{" "}
-            <code>ignore-scripts</code>, zero runtime deps, a 24h release-age
-            floor, the dozen <code>verify:*</code> gates, and{" "}
-            <code>harden-runner</code> egress logging on every job. The playbook
-            the attacker used does not have a green path through any of those.
+            <code>ignore-scripts</code>
+            {", "}zero runtime deps, a 24h release-age floor, the dozen{" "}
+            <code>verify:*</code> gates, and <code>harden-runner</code> egress
+            logging on every job. The playbook the attacker used does not have a
+            green path through any of those.
           </p>
 
           <p>
@@ -501,15 +505,18 @@ export default function BlogPostPage() {
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               Supply-chain hardening for TypeScript libraries
             </Link>
-            , <Link href="/blog/secure-by-default">Secure by Default</Link>,{" "}
+            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+            {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe coding security
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
               Scaffolding a production-ready DaloyJS app in 60 seconds
             </Link>
-            . Relevant docs: <Link href="/docs/security">/docs/security</Link>,{" "}
+            {". "}Relevant docs:{" "}
+            <Link href="/docs/security">/docs/security</Link>
+            {", "}
             <Link href="/docs/security/supply-chain">supply chain</Link>.
           </p>
         </div>

@@ -29,25 +29,25 @@ export default function Page() {
         <strong>Think of it like…</strong> a corporate firewall on your office
         laptop. You can still browse the public internet, but the firewall
         won&apos;t let you dial the building&apos;s admin console at
-        <code> 10.0.0.5</code>: even if a phishing email tells you to. SSRF is
-        the exact same trick aimed at your server: an attacker gives your code a
-        URL, hoping it&apos;ll quietly fetch your own internal admin panel or
-        the cloud provider&apos;s metadata endpoint. <code>fetchGuard()</code>
+        <code>10.0.0.5</code>
+        {": "}even if a phishing email tells you to. SSRF is the exact same
+        trick aimed at your server: an attacker gives your code a URL, hoping
+        it&apos;ll quietly fetch your own internal admin panel or the cloud
+        provider&apos;s metadata endpoint. <code>fetchGuard()</code>
         is the firewall.
       </blockquote>
       <p>
         Any handler that calls <code>fetch()</code> on a URL the user can
         influence (an avatar fetch, a webhook delivery, an &ldquo;import from
         URL&rdquo; feature, an OAuth discovery endpoint, an embed unfurler) is a
-        Server-Side Request Forgery (SSRF) sink. The canonical
-        exploit is{" "}
+        Server-Side Request Forgery (SSRF) sink. The canonical exploit is{" "}
         <a href="https://www.aikido.dev/blog/how-a-startups-cloud-got-taken-over-by-a-simple-form-that-sends-an-email">
           the Aikido write-up
         </a>{" "}
         in which a contact form that emailed an avatar was redirected to{" "}
-        <code>http://169.254.169.254/</code>, the AWS cloud metadata service,
-        which handed back short-lived IAM credentials and pivoted into the
-        startup&rsquo;s S3 buckets.
+        <code>http://169.254.169.254/</code>
+        {", "}the AWS cloud metadata service, which handed back short-lived IAM
+        credentials and pivoted into the startup&rsquo;s S3 buckets.
       </p>
 
       <UseCaseGuide
@@ -97,8 +97,9 @@ export default function Page() {
         <code>fetchGuard()</code> wraps the global <code>fetch</code> and
         refuses to dispatch a request whose target resolves to a dangerous
         internal address, including every documented cloud metadata IP (AWS /
-        Azure / DigitalOcean <code>169.254.169.254</code>, Oracle Cloud{" "}
-        <code>192.0.0.192</code>, Alibaba <code>100.100.100.200</code>).
+        Azure / DigitalOcean <code>169.254.169.254</code>
+        {", "}Oracle Cloud <code>192.0.0.192</code>
+        {", "}Alibaba <code>100.100.100.200</code>).
       </p>
 
       <h2 id="quick-start">Quick start</h2>
@@ -138,39 +139,50 @@ app.post(
       <h2 id="what-gets-blocked-by-default">What gets blocked by default</h2>
       <ul>
         <li>
-          <strong>Loopback:</strong> <code>127.0.0.0/8</code>, <code>::1</code>.
+          <strong>Loopback:</strong> <code>127.0.0.0/8</code>
+          {", "}<code>::1</code>
+          {". "}
           Opt in with <code>allowLoopback: true</code> for local-dev fixtures.
         </li>
         <li>
-          <strong>RFC1918 private:</strong> <code>10.0.0.0/8</code>,{" "}
-          <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>. Opt in with{" "}
-          <code>allowPrivate: true</code>.
+          <strong>RFC1918 private:</strong> <code>10.0.0.0/8</code>
+          {", "}
+          <code>172.16.0.0/12</code>
+          {", "}<code>192.168.0.0/16</code>
+          {". "}Opt in with <code>allowPrivate: true</code>.
         </li>
         <li>
           <strong>Link-local (covers every cloud-metadata IP):</strong>{" "}
-          <code>169.254.0.0/16</code>, <code>fe80::/10</code>. Opt in with{" "}
-          <code>allowLinkLocal: true</code>.
+          <code>169.254.0.0/16</code>
+          {", "}<code>fe80::/10</code>
+          {". "}Opt in with <code>allowLinkLocal: true</code>.
         </li>
         <li>
-          <strong>IPv6 unique-local:</strong> <code>fc00::/7</code>. Opt in with{" "}
-          <code>allowUniqueLocal: true</code>.
+          <strong>IPv6 unique-local:</strong> <code>fc00::/7</code>
+          {". "}Opt in with <code>allowUniqueLocal: true</code>.
         </li>
         <li>
           <strong>Always-deny floor (no flag lifts these):</strong>{" "}
-          <code>0.0.0.0/8</code>, <code>100.64.0.0/10</code> (CGNAT, Alibaba
-          metadata), <code>192.0.0.0/24</code> (Oracle Cloud metadata),
-          all IANA-reserved <code>TEST-NET</code> / benchmarking / docs ranges,{" "}
+          <code>0.0.0.0/8</code>
+          {", "}<code>100.64.0.0/10</code> (CGNAT, Alibaba metadata),{" "}
+          <code>192.0.0.0/24</code> (Oracle Cloud metadata), all IANA-reserved{" "}
+          <code>TEST-NET</code> / benchmarking / docs ranges,{" "}
           <code>224.0.0.0/4</code> multicast,
           <code>240.0.0.0/4</code> reserved, broadcast{" "}
-          <code>255.255.255.255</code>, IPv6 <code>::/128</code> and{" "}
-          <code>ff00::/8</code>.
+          <code>255.255.255.255</code>
+          {", "}IPv6 <code>::/128</code> and <code>ff00::/8</code>.
         </li>
         <li>
           <strong>
             Protocols other than <code>http:</code> / <code>https:</code>
           </strong>{" "}
-          (<code>file:</code>, <code>data:</code>, <code>gopher:</code>,{" "}
-          <code>ftp:</code>, <code>dict:</code>, <code>ldap:</code>).
+          (<code>file:</code>
+          {", "}<code>data:</code>
+          {", "}<code>gopher:</code>
+          {", "}
+          <code>ftp:</code>
+          {", "}<code>dict:</code>
+          {", "}<code>ldap:</code>).
         </li>
       </ul>
       <p>
@@ -179,14 +191,17 @@ app.post(
         is rejected the same way as <code>http://169.254.169.254/</code>.
       </p>
 
-      <h2 id="redirects-are-re-validated-at-every-hop">Redirects are re-validated at every hop</h2>
+      <h2 id="redirects-are-re-validated-at-every-hop">
+        Redirects are re-validated at every hop
+      </h2>
       <p>
         A common SSRF bypass is to return{" "}
         <code>302 Location: http://169.254.169.254/</code> from a public host.{" "}
-        <code>fetchGuard()</code> follows redirects <strong>manually</strong>:
+        <code>fetchGuard()</code> follows redirects <strong>manually</strong>
+        {": "}
         it re-checks the protocol and re-resolves DNS for every Location header
-        before issuing the next request. Set <code>maxRedirects: 0</code>{" "}
-        to return the 3xx directly, or pass{" "}
+        before issuing the next request. Set <code>maxRedirects: 0</code> to
+        return the 3xx directly, or pass{" "}
         <code>redirect: &quot;manual&quot;</code> per call for the same effect.
       </p>
 
@@ -204,12 +219,14 @@ app.post(
 });`}
       />
 
-      <h2 id="custom-dns-resolution-non-node-runtimes">Custom DNS resolution (non-Node runtimes)</h2>
+      <h2 id="custom-dns-resolution-non-node-runtimes">
+        Custom DNS resolution (non-Node runtimes)
+      </h2>
       <p>
         The default resolver uses Node&rsquo;s{" "}
-        <code>node:dns/promises.lookup()</code>. On Cloudflare Workers, Deno
-        without <code>--allow-net</code>, or any runtime without Node-style DNS,
-        supply a resolver:
+        <code>node:dns/promises.lookup()</code>
+        {". "}On Cloudflare Workers, Deno without <code>--allow-net</code>
+        {", "}or any runtime without Node-style DNS, supply a resolver:
       </p>
       <CodeBlock
         code={`const safeFetch = fetchGuard({
@@ -223,16 +240,18 @@ app.post(
 });`}
       />
 
-      <h2 id="dns-pinning-pinDns">DNS pinning (<code>pinDns</code>)</h2>
+      <h2 id="dns-pinning-pinDns">
+        DNS pinning (<code>pinDns</code>)
+      </h2>
       <p>
         On Node-like runtimes, <code>fetchGuard()</code> defaults{" "}
         <code>pinDns: true</code> when you do not supply a custom{" "}
-        <code>fetch</code>. For <code>http:</code> requests the socket is then
-        opened through <code>node:http</code> against the exact IP that passed
-        validation, while the original <code>Host</code> header is preserved.
-        That closes the classic DNS-rebinding (TOCTOU) window for the highest
-        value target: cloud metadata at{" "}
-        <code>http://169.254.169.254</code>.
+        <code>fetch</code>
+        {". "}For <code>http:</code> requests the socket is then opened through{" "}
+        <code>node:http</code> against the exact IP that passed validation,
+        while the original <code>Host</code> header is preserved. That closes
+        the classic DNS-rebinding (TOCTOU) window for the highest value target:
+        cloud metadata at <code>http://169.254.169.254</code>.
       </p>
       <CodeBlock
         language="ts"
@@ -256,28 +275,35 @@ const custom = fetchGuard({
         <code>process.versions.node</code> is absent.
       </p>
 
-      <h2 id="residual-risk-dns-rebinding-toctou">Residual risk: DNS rebinding (TOCTOU)</h2>
+      <h2 id="residual-risk-dns-rebinding-toctou">
+        Residual risk: DNS rebinding (TOCTOU)
+      </h2>
       <p>
-        After <code>pinDns</code>, the remaining residual is mainly{" "}
-        <code>https:</code> rebinding and non-Node runtimes without a pin path.
-        Close those with operator egress controls, and optionally a custom
-        undici dispatcher for TLS upstreams:
+        After <code>pinDns</code>
+        {", "}the remaining residual is mainly <code>https:</code> rebinding
+        and non-Node runtimes without a pin path. Close those with operator
+        egress controls, and optionally a custom undici dispatcher for TLS
+        upstreams:
       </p>
       <ol>
         <li>
           <strong>Operator-side (recommended).</strong> Run behind a network
           policy that already blocks egress to RFC1918 / metadata IPs:
-          Kubernetes <code>NetworkPolicy</code>,{" "}
+          Kubernetes <code>NetworkPolicy</code>
+          {", "}
           <code>step-security/harden-runner</code> in CI,{" "}
           <code>iptables -A OUTPUT -d 169.254.169.254 -j DROP</code> on the
           host. This neutralises rebinding even if the app is naive.
         </li>
         <li>
-          <strong>Caller-side, Node-only, for <code>https:</code>.</strong>{" "}
+          <strong>
+            Caller-side, Node-only, for <code>https:</code>.
+          </strong>{" "}
           Daloy ships zero runtime dependencies, so we do not bundle{" "}
-          <code>undici</code>. If you install it yourself, you can pin the
-          TLS socket to the IP you validated by plumbing a custom dispatcher
-          through the existing <code>fetch</code> option:
+          <code>undici</code>
+          {". "}If you install it yourself, you can pin the TLS socket to the
+          IP you validated by plumbing a custom dispatcher through the existing{" "}
+          <code>fetch</code> option:
           <CodeBlock
             language="ts"
             code={`import { fetchGuard } from "@daloyjs/core";
@@ -308,31 +334,38 @@ const safeFetch = fetchGuard({
       <h2 id="error-shape">Error shape</h2>
       <p>
         Blocked requests throw <code>SsrfBlockedError</code> with a structured{" "}
-        <code>reason</code>:
+        <code>reason</code>
+        {": "}
       </p>
       <ul>
         <li>
-          <code>protocol-not-allowed</code>: URL was <code>file:</code>,{" "}
-          <code>data:</code>, etc.
+          <code>protocol-not-allowed</code>
+          {": "}URL was <code>file:</code>
+          {", "}
+          <code>data:</code>
+          {", "}etc.
         </li>
         <li>
-          <code>address-not-allowed</code>: resolved IP fell in a blocked range.
+          <code>address-not-allowed</code>
+          {": "}resolved IP fell in a blocked range.
         </li>
         <li>
-          <code>dns-resolution-failed</code>: lookup threw or returned no
-          records.
+          <code>dns-resolution-failed</code>
+          {": "}lookup threw or returned no records.
         </li>
         <li>
-          <code>too-many-redirects</code>: chain exceeded{" "}
-          <code>maxRedirects</code>.
+          <code>too-many-redirects</code>
+          {": "}chain exceeded <code>maxRedirects</code>.
         </li>
         <li>
-          <code>credentials-in-url</code>: the URL carried userinfo (
-          <code>http://user@host/</code>), a classic SSRF obfuscation. The
-          credentials are stripped from the URL recorded on the error.
+          <code>credentials-in-url</code>
+          {": "}the URL carried userinfo (<code>http://user@host/</code>), a
+          classic SSRF obfuscation. The credentials are stripped from the URL
+          recorded on the error.
         </li>
         <li>
-          <code>invalid-url</code>: URL or Location header could not be parsed.
+          <code>invalid-url</code>
+          {": "}URL or Location header could not be parsed.
         </li>
       </ul>
       <p>

@@ -221,10 +221,10 @@ export default function BlogPostPage() {
             subject sits down to explain why developers keep getting security
             wrong, I shut up and watch. Thomas Vitale interviews{" "}
             <strong>Laurentiu Spilca</strong> about his co-authored book{" "}
-            <em>Software Security for Developers</em>, and even though it is a
-            Java-flavored conversation, almost none of it is actually about
-            Java. It is about the things we all keep messing up, regardless of
-            language.
+            <em>Software Security for Developers</em>
+            {", "}and even though it is a Java-flavored conversation, almost
+            none of it is actually about Java. It is about the things we all
+            keep messing up, regardless of language.
           </p>
 
           <p>
@@ -233,9 +233,9 @@ export default function BlogPostPage() {
             to think about your past mistakes. Most of mine were security
             mistakes. So instead of a summary, here is the talk mapped against
             the thing I now build to stop myself from repeating those mistakes:{" "}
-            <Link href="/">DaloyJS</Link>. Where the framework already makes the
-            decision for you, I will say so. Where it cannot, I will say that
-            too.
+            <Link href="/">DaloyJS</Link>
+            {". "}Where the framework already makes the decision for you, I
+            will say so. Where it cannot, I will say that too.
           </p>
 
           <h2>1. Why developers avoid security</h2>
@@ -282,8 +282,8 @@ export default function BlogPostPage() {
             just refuses to hand you the wrong tool with a friendly name.
             Passwords go through a salted argon2id KDF. Secrets at rest go
             through AEAD with a key. There is no <code>encrypt()</code> helper
-            that just base64-encodes and lets you tell your boss it is
-            secure. The vocabulary is enforced by the API surface.
+            that just base64-encodes and lets you tell your boss it is secure.
+            The vocabulary is enforced by the API surface.
           </p>
 
           <h2>3. Do not reinvent established security standards</h2>
@@ -306,7 +306,7 @@ export default function BlogPostPage() {
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
               CSRF in 2026
             </Link>
-            , not a scheme I invented. Sessions are signed cookies with the
+            {", "}not a scheme I invented. Sessions are signed cookies with the
             right prefixes already on.
           </p>
 
@@ -342,7 +342,7 @@ export default function BlogPostPage() {
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe Coding Security
             </Link>
-            .
+            {"."}
           </p>
 
           <h2>5. PKI and certificates still matter</h2>
@@ -410,15 +410,16 @@ export default function BlogPostPage() {
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe Coding Security
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
               CSRF in 2026
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
               CSP Nonces and Trusted Types
             </Link>
-            , <Link href="/blog/secure-by-default">Secure by Default</Link>.
+            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+            {"."}
           </p>
         </div>
       </article>

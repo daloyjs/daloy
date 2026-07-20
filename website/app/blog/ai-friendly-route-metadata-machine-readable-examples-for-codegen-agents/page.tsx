@@ -572,18 +572,19 @@ export default function BlogPostPage() {
         <div className="docs-prose max-w-full">
           <p>
             Devlin here. DaloyJS adds one optional field to{" "}
-            <code>app.route()</code> called <code>meta</code>. That single field
-            carries structured{" "}
-            <em>examples</em>, extra <em>description</em> copy, and a{" "}
+            <code>app.route()</code> called <code>meta</code>
+            {". "}That single field carries structured <em>examples</em>
+            {", "}extra <em>description</em> copy, and a{" "}
             <em>free-form extensions</em> bag, all of it validated against your
             Standard Schema at build time and surfaced into the OpenAPI 3.1
             document <em>and</em> a sibling <code>routes.json</code> via{" "}
-            <code>daloy inspect --ai</code>. The whole feature is additive and
-            non-breaking: every existing route keeps working with zero changes.
-            The same command keeps its default JSON shape and supports{" "}
-            <code>--yaml</code> / <code>--format yaml</code> for the same dump
-            when the reader is a human or an LLM context window. This is the
-            &quot;AI-friendly route metadata&quot; capability from the roadmap.
+            <code>daloy inspect --ai</code>
+            {". "}The whole feature is additive and non-breaking: every
+            existing route keeps working with zero changes. The same command
+            keeps its default JSON shape and supports <code>--yaml</code> /{" "}
+            <code>--format yaml</code> for the same dump when the reader is a
+            human or an LLM context window. This is the &quot;AI-friendly route
+            metadata&quot; capability from the roadmap.
           </p>
 
           <h2>The failure mode this fixes</h2>
@@ -599,7 +600,8 @@ export default function BlogPostPage() {
           <p>
             None of this is the agent&apos;s fault either. It read the schema.
             It picked the most plausible field names from the
-            <code>operationId</code>. It invented a <code>createdAt</code>
+            <code>operationId</code>
+            {". "}It invented a <code>createdAt</code>
             because that&apos;s what most APIs return. The schema was right but
             not <em>specific enough</em> to anchor the model to the real field
             names. One concrete example would have changed every decision
@@ -635,8 +637,9 @@ export default function BlogPostPage() {
             Augment the route-level fields of the same name. Route-level values
             win when both are set; tags are de-duplicated and concatenated, so
             you can keep transport tags on the route and audience tags (
-            <code>AI</code>, <code>Public</code>, <code>Internal</code>) on the
-            meta block.
+            <code>AI</code>
+            {", "}<code>Public</code>
+            {", "}<code>Internal</code>) on the meta block.
           </TierCard>
           <TierCard
             tier="meta.extensions"
@@ -645,8 +648,9 @@ export default function BlogPostPage() {
             Free-form bag emitted onto the OpenAPI operation. Keys without an{" "}
             <code>x-</code> prefix are prefixed automatically for spec
             compliance, so <code>codegen-hint</code> becomes{" "}
-            <code>x-codegen-hint</code>. Daloy does not interpret these, it
-            preserves them so your downstream tooling can.
+            <code>x-codegen-hint</code>
+            {". "}Daloy does not interpret these, it preserves them so your
+            downstream tooling can.
           </TierCard>
 
           <h2>Build-time validation, not vibes-based docs</h2>
@@ -685,11 +689,12 @@ export default function BlogPostPage() {
 
           <p>
             The named examples land on every relevant slot of the OpenAPI 3.1
-            spec, <code>requestBody.content.*.examples</code>,{" "}
-            <code>responses.*.content.*.examples</code>, and the operation-level{" "}
-            <code>x-daloy-examples</code> vendor extension for tools that want
-            the full structured shape including the response status code. That
-            last one is why the docstrings on the{" "}
+            spec, <code>requestBody.content.*.examples</code>
+            {", "}
+            <code>responses.*.content.*.examples</code>
+            {", "}and the operation-level <code>x-daloy-examples</code> vendor
+            extension for tools that want the full structured shape including
+            the response status code. That last one is why the docstrings on the{" "}
             <Link href="/docs/typed-client">Hey API typed client</Link> start
             showing your real example values on the next <code>pnpm gen</code>{" "}
             run.
@@ -790,7 +795,8 @@ export default function BlogPostPage() {
           <p>
             The whole point of contract-first is that <em>one</em> route
             definition becomes your validation, your types, your OpenAPI doc,
-            your typed client, and your contract tests. With <code>meta</code>,
+            your typed client, and your contract tests. With <code>meta</code>
+            {", "}
             that same single route definition also becomes the structured
             context a codegen agent needs to write the call site correctly on
             the first try, and the validator that refuses to let any of those
@@ -801,10 +807,9 @@ export default function BlogPostPage() {
 
           <p>
             Route metadata and the YAML-friendly CLI flags are available now.
-            New projects pick up
-            the field and the YAML-friendly CLI flags automatically; existing
-            projects can adopt them one route at a time without changing
-            anything else.
+            New projects pick up the field and the YAML-friendly CLI flags
+            automatically; existing projects can adopt them one route at a time
+            without changing anything else.
           </p>
 
           <p>

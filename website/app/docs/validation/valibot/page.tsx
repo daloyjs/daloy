@@ -35,8 +35,8 @@ export default function Page() {
         >
           Standard Schema
         </a>
-        , so DaloyJS picks it up the same way it picks up Zod: no adapter, no
-        wrapper, no extra runtime dependency in the framework.
+        {", "}so DaloyJS picks it up the same way it picks up Zod: no adapter,
+        no wrapper, no extra runtime dependency in the framework.
       </p>
       <p>
         Valibot is developed in the open at{" "}
@@ -47,8 +47,8 @@ export default function Page() {
         >
           github.com/open-circle/valibot
         </a>{" "}
-        and published to npm as <code>valibot</code>: that&apos;s the package
-        you install below.
+        and published to npm as <code>valibot</code>
+        {": "}that&apos;s the package you install below.
       </p>
 
       <h2 id="install">Install</h2>
@@ -64,7 +64,8 @@ export default function Page() {
         <li>
           <strong>Functional API.</strong>{" "}
           <code>v.pipe(v.string(), v.email())</code> instead of{" "}
-          <code>z.email()</code>. Easier to compose, easier to lint.
+          <code>z.email()</code>
+          {". "}Easier to compose, easier to lint.
         </li>
         <li>
           <strong>Standard Schema native.</strong> Same handler types and the
@@ -77,23 +78,27 @@ export default function Page() {
       <p>For each route you can declare schemas for:</p>
       <ul>
         <li>
-          <code>request.params</code>: decoded path parameters. They start as
-          strings, so use <code>v.pipe(...)</code> with transforms when you need
-          stronger shapes.
+          <code>request.params</code>
+          {": "}decoded path parameters. They start as strings, so use{" "}
+          <code>v.pipe(...)</code> with transforms when you need stronger
+          shapes.
         </li>
         <li>
-          <code>request.query</code>: query string values. Repeated keys become
-          arrays before validation.
+          <code>request.query</code>
+          {": "}query string values. Repeated keys become arrays before
+          validation.
         </li>
         <li>
-          <code>request.headers</code>: request headers as lower-case names.
+          <code>request.headers</code>
+          {": "}request headers as lower-case names.
         </li>
         <li>
-          <code>request.body</code>: parsed request bodies. The body is only
-          read when declared.
+          <code>request.body</code>
+          {": "}parsed request bodies. The body is only read when declared.
         </li>
         <li>
-          <code>responses[status].body</code>: typed and validated responses.
+          <code>responses[status].body</code>
+          {": "}typed and validated responses.
         </li>
       </ul>
 
@@ -159,18 +164,20 @@ export const app = new App().post(
       />
       <p>
         <code>body</code> in the handler is inferred from{" "}
-        <code>CreateOrder</code>. Returning anything that does not match{" "}
-        <code>Order</code> is a TypeScript error, and DaloyJS also validates the
-        response before serialization.
+        <code>CreateOrder</code>
+        {". "}Returning anything that does not match <code>Order</code> is a
+        TypeScript error, and DaloyJS also validates the response before
+        serialization.
       </p>
 
       <h2 id="params-query-and-headers">Params, query, and headers</h2>
       <p>
         Path params, query values, headers, and urlencoded form values arrive as
         strings before schema validation. Drop a <code>v.transform</code> or one
-        of the built-in <code>v.toNumber</code>, <code>v.toBoolean</code>, or{" "}
-        <code>v.toDate</code> actions into the pipe to convert before further
-        validation.
+        of the built-in <code>v.toNumber</code>
+        {", "}<code>v.toBoolean</code>
+        {", "}or <code>v.toDate</code> actions into the pipe to convert before
+        further validation.
       </p>
       <FlowDiagram
         title="Inside a v.pipe()"
@@ -237,8 +244,8 @@ app.get(
 
       <h2 id="body-limits-and-content-types">Body limits and content types</h2>
       <p>
-        When a route declares <code>request.body</code>, DaloyJS will also
-        enforce:
+        When a route declares <code>request.body</code>
+        {", "}DaloyJS will also enforce:
       </p>
       <ul>
         <li>
@@ -250,9 +257,10 @@ app.get(
           global <code>allowedContentTypes</code> if set → <strong>415</strong>.
         </li>
         <li>
-          Default accepted body types: <code>application/json</code>,{" "}
-          <code>application/x-www-form-urlencoded</code>, and{" "}
-          <code>multipart/form-data</code>.
+          Default accepted body types: <code>application/json</code>
+          {", "}
+          <code>application/x-www-form-urlencoded</code>
+          {", "}and <code>multipart/form-data</code>.
         </li>
         <li>
           Prototype-pollution-safe parsing for JSON, query strings, urlencoded
@@ -261,10 +269,11 @@ app.get(
       </ul>
       <p>
         JSON bodies validate as parsed JSON. Urlencoded bodies validate as an
-        object built from <code>URLSearchParams</code>. Multipart bodies
-        validate as an object built from <code>Request.formData()</code>. For a
-        custom text media type, opt in with <code>accepts</code> and validate a{" "}
-        <code>v.string()</code> body.
+        object built from <code>URLSearchParams</code>
+        {". "}Multipart bodies validate as an object built from{" "}
+        <code>Request.formData()</code>
+        {". "}For a custom text media type, opt in with <code>accepts</code>{" "}
+        and validate a <code>v.string()</code> body.
       </p>
       <CodeBlock
         code={`app.post(
@@ -362,9 +371,9 @@ export type Book = v.InferOutput<typeof Book>;
 export type BookInput = v.InferInput<typeof Book>;`}
       />
       <p>
-        <code>v.InferOutput</code> mirrors Zod&apos;s <code>z.infer</code>. Use{" "}
-        <code>v.InferInput</code> when you have transforms and need the
-        pre-parse shape, for example in a form library.
+        <code>v.InferOutput</code> mirrors Zod&apos;s <code>z.infer</code>
+        {". "}Use <code>v.InferInput</code> when you have transforms and need
+        the pre-parse shape, for example in a form library.
       </p>
 
       <h2 id="errors">Errors</h2>
@@ -405,20 +414,20 @@ export type BookInput = v.InferInput<typeof Book>;`}
       <h2 id="see-also">See also</h2>
       <ul>
         <li>
-          <a href="/docs/validation">Validation overview</a>: how validators
-          plug in via Standard Schema.
+          <a href="/docs/validation">Validation overview</a>
+          {": "}how validators plug in via Standard Schema.
         </li>
         <li>
-          <a href="/docs/validation/zod">Validation with Zod</a>: the chainable
-          alternative.
+          <a href="/docs/validation/zod">Validation with Zod</a>
+          {": "}the chainable alternative.
         </li>
         <li>
-          <a href="/docs/openapi">OpenAPI generation</a>: how schemas become a
-          spec.
+          <a href="/docs/openapi">OpenAPI generation</a>
+          {": "}how schemas become a spec.
         </li>
         <li>
-          <a href="/docs/errors">Errors &amp; problem+json</a>: the error
-          contract.
+          <a href="/docs/errors">Errors &amp; problem+json</a>
+          {": "}the error contract.
         </li>
       </ul>
     </>

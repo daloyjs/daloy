@@ -24,25 +24,27 @@ export default function Page() {
     <>
       <h1>Tracing with OpenTelemetry</h1>
       <p>
-        DaloyJS ships <code>otelTracing(opts)</code>, a hook factory that
-        produces a <code>Hooks</code> object compatible with{" "}
+        DaloyJS ships <code>otelTracing(opts)</code>
+        {", "}a hook factory that produces a <code>Hooks</code> object
+        compatible with{" "}
         <a href="https://www.npmjs.com/package/@opentelemetry/api">
           <code>@opentelemetry/api</code>
         </a>
-        . It starts a <strong>SERVER-kind span</strong> per HTTP request,
+        {". "}It starts a <strong>SERVER-kind span</strong> per HTTP request,
         attaches the standard{" "}
         <a href="https://opentelemetry.io/docs/specs/semconv/http/http-spans/">
           HTTP semantic-convention attributes
         </a>
-        , exposes the span on <code>ctx.state</code> for handlers, and ends the
-        span exactly once when the response is sent.
+        {", "}exposes the span on <code>ctx.state</code> for handlers, and ends
+        the span exactly once when the response is sent.
       </p>
       <p>
         The framework <strong>does not depend on</strong>{" "}
-        <code>@opentelemetry/api</code>. You pass any tracer that implements the
-        minimal <code>TracingTracer</code> interface, so the same hook works on
-        Node with the OTel SDK, on Workers with a custom exporter, or in tests
-        with an in-memory fake.
+        <code>@opentelemetry/api</code>
+        {". "}You pass any tracer that implements the minimal{" "}
+        <code>TracingTracer</code> interface, so the same hook works on Node
+        with the OTel SDK, on Workers with a custom exporter, or in tests with
+        an in-memory fake.
       </p>
 
       <FlowDiagram
@@ -92,10 +94,13 @@ const app = new App({
       <p>That single hook gives every request:</p>
       <ul>
         <li>
-          <code>http.request.method</code>, <code>url.path</code>,{" "}
-          <code>url.scheme</code>, <code>server.address</code> (host without
-          port), <code>server.port</code> (when present), <code>url.query</code>
-          , <code>user_agent.original</code> set on <code>onRequest</code>.
+          <code>http.request.method</code>
+          {", "}<code>url.path</code>
+          {", "}
+          <code>url.scheme</code>
+          {", "}<code>server.address</code> (host without port),{" "}
+          <code>server.port</code> (when present), <code>url.query</code>
+          {", "}<code>user_agent.original</code> set on <code>onRequest</code>.
         </li>
         <li>
           <code>http.response.status_code</code> set on <code>onSend</code>.
@@ -111,7 +116,9 @@ const app = new App({
         </li>
       </ul>
 
-      <h2 id="reading-the-active-span-in-handlers">Reading the active span in handlers</h2>
+      <h2 id="reading-the-active-span-in-handlers">
+        Reading the active span in handlers
+      </h2>
       <p>
         The active span is exposed on <code>ctx.state.otelSpan</code> (key
         configurable via <code>stateKey</code>). Use it to add events, child
@@ -146,7 +153,9 @@ app.post(
 );`}
       />
 
-      <h2 id="customizing-span-name-and-attributes">Customizing span name and attributes</h2>
+      <h2 id="customizing-span-name-and-attributes">
+        Customizing span name and attributes
+      </h2>
       <p>
         All extractors are optional. They are merged on top of the defaults so
         you only need to override what you care about.
@@ -213,7 +222,9 @@ otelTracing({
 # Exporting OTLP spans to: http://localhost:4318/v1/traces`}
         language="sh"
       />
-      <h3 id="3-generate-traffic-and-open-jaeger">3. Generate traffic and open Jaeger</h3>
+      <h3 id="3-generate-traffic-and-open-jaeger">
+        3. Generate traffic and open Jaeger
+      </h3>
       <CodeBlock
         code={`curl localhost:3002/orders
 curl -X POST localhost:3002/orders -d '{"item":"book","total":42}' -H 'content-type: application/json'
@@ -226,12 +237,12 @@ curl localhost:3002/orders \\
         language="sh"
       />
       <p>
-        Open <code>http://localhost:16686</code>, pick the{" "}
-        <code>daloy-otel-demo</code> service, and you will see one SERVER span
-        per request: the <code>/boom</code> span flagged as an error with an{" "}
-        <code>exception</code> event, the <code>/slow</code> span showing its
-        real duration, and the <code>traceparent</code> request stitched into
-        the upstream trace as a child span.
+        Open <code>http://localhost:16686</code>
+        {", "}pick the <code>daloy-otel-demo</code> service, and you will see
+        one SERVER span per request: the <code>/boom</code> span flagged as an
+        error with an <code>exception</code> event, the <code>/slow</code> span
+        showing its real duration, and the <code>traceparent</code> request
+        stitched into the upstream trace as a child span.
       </p>
       <p>
         In production you usually swap the demo exporter for the real SDK,{" "}
@@ -251,20 +262,23 @@ curl localhost:3002/orders \\
         </li>
         <li>
           <strong>No global side effects.</strong> The hook never touches{" "}
-          <code>globalThis</code>, never installs a propagator, and never
-          imports an OTel SDK, it stays adapter-portable.
+          <code>globalThis</code>
+          {", "}never installs a propagator, and never imports an OTel SDK, it
+          stays adapter-portable.
         </li>
         <li>
           <strong>Single end.</strong> If a handler throws, the same span is
           marked errored and ended once during <code>onSend</code>; later
-          <code> onError</code> / repeat <code>onSend</code> invocations are
+          <code>onError</code> / repeat <code>onSend</code> invocations are
           no-ops.
         </li>
         <li>
           <strong>Composes with other hooks.</strong> Combine{" "}
-          <code>otelTracing(...)</code> with <code>requestId(...)</code>,{" "}
-          <code>secureHeaders(...)</code>, etc., DaloyJS merges global, group,
-          and per-route hooks pipeline-style.
+          <code>otelTracing(...)</code> with <code>requestId(...)</code>
+          {", "}
+          <code>secureHeaders(...)</code>
+          {", "}etc., DaloyJS merges global, group, and per-route hooks
+          pipeline-style.
         </li>
       </ul>
 

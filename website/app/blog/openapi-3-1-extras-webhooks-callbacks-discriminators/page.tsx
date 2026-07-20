@@ -531,7 +531,7 @@ export default function BlogPostPage() {
             make back to the consumer, and the{" "}
             <strong>discriminator + discriminatedUnion pair</strong> that turns
             polymorphic payloads into tagged TypeScript unions a
-            <code> switch</code> statement actually understands.
+            <code>switch</code> statement actually understands.
           </p>
 
           <h2>The pain you&apos;re here to fix</h2>
@@ -555,7 +555,7 @@ export default function BlogPostPage() {
               here are the requests this API will send, and here is their exact
               shape
             </em>
-            . DaloyJS lets you declare them next to your routes:
+            {". "}DaloyJS lets you declare them next to your routes:
           </p>
 
           <EditorFrame
@@ -591,19 +591,19 @@ export default function BlogPostPage() {
           <p>
             Webhooks are subscriptions, you set them up out-of-band and they
             fire whenever an event happens. Callbacks are different: they are
-            out-of-band requests <em>tied to a specific operation</em>. The
-            canonical example is payments. The consumer creates a payment with a{" "}
-            <code>callbackUrl</code>; you POST to that URL when the payment
-            settles.
+            out-of-band requests <em>tied to a specific operation</em>
+            {". "}The canonical example is payments. The consumer creates a
+            payment with a <code>callbackUrl</code>; you POST to that URL when
+            the payment settles.
           </p>
 
           <p>
             The OpenAPI <em>runtime expression</em>{" "}
             <code>{"{$request.body#/callbackUrl}"}</code> tells the spec
-            consumer <em>where the callback URL comes from</em>: which field of
-            which message. That&apos;s the difference between a tool being able
-            to generate a mock callback server and a sentence in a README saying
-            &quot;put the URL in callbackUrl&quot;.
+            consumer <em>where the callback URL comes from</em>
+            {": "}which field of which message. That&apos;s the difference
+            between a tool being able to generate a mock callback server and a
+            sentence in a README saying &quot;put the URL in callbackUrl&quot;.
           </p>
 
           <EditorFrame
@@ -693,7 +693,7 @@ export default function BlogPostPage() {
 
           <p>
             Here is the pattern I keep recommending in design reviews:
-            <em> one</em> webhook entry whose body is a discriminated union over
+            <em>one</em> webhook entry whose body is a discriminated union over
             every event type. The alternative, one webhook per event type,
             produces an SDK with N near-identical handlers, N opportunities to
             forget signature verification, and N opportunities to disagree with
@@ -759,9 +759,9 @@ export default function BlogPostPage() {
               <strong>Webhook signing isn&apos;t the spec&apos;s job.</strong>{" "}
               The header lives in the spec; the algorithm and the secret
               rotation strategy do not. Pick one (HMAC-SHA256 of the raw body,
-              hex), document it in the operation <code>description</code>, and
-              ship a signing helper next to the client SDK so consumers
-              don&apos;t roll their own.
+              hex), document it in the operation <code>description</code>
+              {", "}and ship a signing helper next to the client SDK so
+              consumers don&apos;t roll their own.
             </li>
           </ul>
 
@@ -771,9 +771,9 @@ export default function BlogPostPage() {
             The post that&apos;s closest in spirit is{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
               Contract-First Without the Codegen Dance
-            </Link>{" "}
-            , same philosophy, different feature surface. For the recipient side
-            of any of this, the{" "}
+            </Link>
+            {", "}same philosophy, different feature surface. For the recipient
+            side of any of this, the{" "}
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
               RFC 9457 errors post
             </Link>{" "}
@@ -790,10 +790,10 @@ export default function BlogPostPage() {
             Webhooks, callbacks, and discriminators are the three places where
             an OpenAPI document earns its keep. If your spec doesn&apos;t
             describe them today, the generated client doesn&apos;t know about
-            them, the consumer&apos;s code is full of <code>unknown</code>, and
-            the &quot;just check the PDF&quot; messages have already started
-            landing in support. Pick one feature this sprint. Future you will be
-            unreasonably grateful.
+            them, the consumer&apos;s code is full of <code>unknown</code>
+            {", "}and the &quot;just check the PDF&quot; messages have already
+            started landing in support. Pick one feature this sprint. Future you
+            will be unreasonably grateful.
           </p>
 
           <p>Devlin</p>

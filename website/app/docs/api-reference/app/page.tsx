@@ -269,13 +269,15 @@ interface IntrospectedRoute {
         &rarr; <code>onResponse(res)</code>.
       </p>
       <p>
-        Header-only authentication runs in <code>preBody</code>, where route
-        params, query values, and headers are raw and <code>ctx.body</code> is
-        always <code>undefined</code>. Built-in bearer, basic, JWK, and mTLS
-        helpers can reject an unauthenticated upload without consuming it.
+        Header-only authentication runs in <code>preBody</code>
+        {", "}where route params, query values, and headers are raw and{" "}
+        <code>ctx.body</code> is always <code>undefined</code>
+        {". "}Built-in bearer, basic, JWK, and mTLS helpers can reject an
+        unauthenticated upload without consuming it.
       </p>
       <p>
-        The body is then read and validated before <code>beforeHandle</code>.
+        The body is then read and validated before <code>beforeHandle</code>
+        {". "}
         Body-aware guards still need the parsed <code>ctx.body</code>;{" "}
         <code>waf()</code> inspects it for NoSQL-operator injection and other
         inbound attack signatures, and <code>idempotency()</code> derives its
@@ -283,9 +285,10 @@ interface IntrospectedRoute {
         no-ops.
       </p>
       <p>
-        Custom cheap guards can use <code>preBody</code>. Keep rate limits that
-        depend on validated identity, WAF, idempotency, dependencies, and other
-        parsed-input logic in <code>beforeHandle</code>.
+        Custom cheap guards can use <code>preBody</code>
+        {". "}Keep rate limits that depend on validated identity, WAF,
+        idempotency, dependencies, and other parsed-input logic in{" "}
+        <code>beforeHandle</code>.
       </p>
 
       <h2 id="errors">Errors</h2>
@@ -335,7 +338,7 @@ function validate<S extends StandardSchemaV1>(schema: S, input: unknown):
         <Link href={"/docs/api-reference/middleware" as Route}>
           middleware, composition &amp; app helpers
         </Link>
-        .
+        {"."}
       </p>
     </>
   );

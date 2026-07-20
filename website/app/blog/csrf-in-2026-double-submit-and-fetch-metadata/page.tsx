@@ -388,20 +388,20 @@ export default function BlogPostPage() {
             </code>{" "}
             from the early 2010s. The &quot;we forgot to send the token from the
             new mobile app&quot; from the mid 2010s. The &quot;we set
-            <code> SameSite=None</code> for the iframe and then forgot to set
-            <code> Secure</code>&quot; one from a year I don&apos;t want to
-            name. So when the team sat down to decide what CSRF should look like
-            in DaloyJS, my entire request was: please make it unsurprising.
+            <code>SameSite=None</code> for the iframe and then forgot to set
+            <code>Secure</code>&quot; one from a year I don&apos;t want to name.
+            So when the team sat down to decide what CSRF should look like in
+            DaloyJS, my entire request was: please make it unsurprising.
           </p>
 
           <p>
             This post is the result. We ship two strategies, the classic
-            <em> double-submit cookie</em> and the modern{" "}
-            <em>Fetch-Metadata</em> check, and a third option,{" "}
-            <code>strategy: &quot;both&quot;</code>, that runs both of them. I
-            want to walk through why, when each one fails, and why
-            &quot;both&quot; is the boring grown-up default for most production
-            apps in 2026.
+            <em>double-submit cookie</em> and the modern <em>Fetch-Metadata</em>{" "}
+            check, and a third option, <code>strategy: &quot;both&quot;</code>
+            {", "}
+            that runs both of them. I want to walk through why, when each one
+            fails, and why &quot;both&quot; is the boring grown-up default for
+            most production apps in 2026.
           </p>
 
           <h2>A two-minute history of CSRF defenses</h2>
@@ -429,21 +429,24 @@ export default function BlogPostPage() {
             </li>
             <li>
               <strong>SameSite cookies</strong> (2017-2020), browsers started
-              defaulting cookies to <code>SameSite=Lax</code>, which actually
-              eliminates the most naive CSRF without any application code.
-              Great, but partial: <code>Lax</code> still allows top-level{" "}
-              <code>GET</code> navigations, and apps that need cross-site
-              cookies (third-party widgets, SSO) have to opt out.
+              defaulting cookies to <code>SameSite=Lax</code>
+              {", "}which actually eliminates the most naive CSRF without any
+              application code. Great, but partial: <code>Lax</code> still
+              allows top-level <code>GET</code> navigations, and apps that need
+              cross-site cookies (third-party widgets, SSO) have to opt out.
             </li>
             <li>
               <strong>Fetch Metadata Request Headers</strong> (2020+), the
               browser itself starts telling the server{" "}
-              <em>where this request came from</em>, via{" "}
-              <code>Sec-Fetch-Site</code>, <code>Sec-Fetch-Mode</code>,{" "}
-              <code>Sec-Fetch-Dest</code>. With one rule, &quot;reject mutating
-              requests whose <code>Sec-Fetch-Site</code> isn&apos;t{" "}
-              <code>same-origin</code> or <code>none</code>&quot;, you can ditch
-              the token entirely on modern browsers.
+              <em>where this request came from</em>
+              {", "}via <code>Sec-Fetch-Site</code>
+              {", "}<code>Sec-Fetch-Mode</code>
+              {", "}
+              <code>Sec-Fetch-Dest</code>
+              {". "}With one rule, &quot;reject mutating requests whose{" "}
+              <code>Sec-Fetch-Site</code> isn&apos;t <code>same-origin</code> or{" "}
+              <code>none</code>&quot;, you can ditch the token entirely on
+              modern browsers.
             </li>
           </ol>
 
@@ -457,9 +460,10 @@ export default function BlogPostPage() {
 
           <p>
             Three lines. The middleware mints a 32-byte URL-safe token, sets it
-            as <code>__Host-daloy.csrf</code>, and on any mutating method it
-            requires the request to echo the same value in{" "}
-            <code>x-csrf-token</code>. The comparison is timing-safe.
+            as <code>__Host-daloy.csrf</code>
+            {", "}and on any mutating method it requires the request to echo
+            the same value in <code>x-csrf-token</code>
+            {". "}The comparison is timing-safe.
           </p>
 
           <EditorFrame
@@ -548,10 +552,11 @@ export default function BlogPostPage() {
           <CodeBlock language="bash" code={RFC_QUIRK} />
 
           <p>
-            We allow <code>same-origin</code> and <code>none</code>, fall back
-            to <code>allowedOrigins</code> for everything else, and on legacy
-            browsers (no <code>Sec-Fetch-Site</code> at all) we check
-            <code> Origin</code> and then <code>Referer</code> against the same
+            We allow <code>same-origin</code> and <code>none</code>
+            {", "}fall back to <code>allowedOrigins</code> for everything else,
+            and on legacy browsers (no <code>Sec-Fetch-Site</code> at all) we
+            check
+            <code>Origin</code> and then <code>Referer</code> against the same
             allowlist. That last step is the one that keeps your support
             engineer from getting paged about &quot;my Android 9 device
             can&apos;t check out&quot;.
@@ -568,9 +573,10 @@ export default function BlogPostPage() {
           <ul>
             <li>
               When <code>Sec-Fetch-Site</code> is <code>same-site</code> or
-              <code> cross-site</code>: usually because of a subdomain or a user
-              opening your site via a partner, we check the request&apos;s
-              <code> Origin</code> against the allowlist.
+              <code>cross-site</code>
+              {": "}usually because of a subdomain or a user opening your site
+              via a partner, we check the request&apos;s
+              <code>Origin</code> against the allowlist.
             </li>
             <li>
               When <code>Sec-Fetch-Site</code> is missing entirely (legacy
@@ -596,9 +602,10 @@ export default function BlogPostPage() {
 
           <p>
             One rule for predicates: keep them <em>small</em> and{" "}
-            <em>readable</em>. The instant your predicate looks like a regex
-            engine, you have introduced a different CSRF vector, the one where a
-            future engineer misreads it.
+            <em>readable</em>
+            {". "}The instant your predicate looks like a regex engine, you
+            have introduced a different CSRF vector, the one where a future
+            engineer misreads it.
           </p>
 
           <h2>Strategy 3: both, the realistic production default</h2>
@@ -619,13 +626,13 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Together they act as a 2-of-2: a CSRF attempt would need to (a) defeat the
-            browser&apos;s <code>Sec-Fetch-Site</code> reporting <em>and</em>{" "}
-            (b) read the <code>__Host-</code> cookie from your origin to mirror
-            it back. The first is essentially &quot;break the browser&quot;; the
-            second is &quot;break the same-origin policy or already own your
-            DOM&quot;. Either of those means you have considerably larger
-            problems than CSRF.
+            Together they act as a 2-of-2: a CSRF attempt would need to (a)
+            defeat the browser&apos;s <code>Sec-Fetch-Site</code> reporting{" "}
+            <em>and</em> (b) read the <code>__Host-</code> cookie from your
+            origin to mirror it back. The first is essentially &quot;break the
+            browser&quot;; the second is &quot;break the same-origin policy or
+            already own your DOM&quot;. Either of those means you have
+            considerably larger problems than CSRF.
           </p>
 
           <StrategyCard
@@ -666,11 +673,13 @@ export default function BlogPostPage() {
             <em>
               when you call <code>csrf()</code>
             </em>
-            , not when a request arrives. A typo in the strategy string, a
+            {", "}not when a request arrives. A typo in the strategy string, a
             cookie name with a space, a <code>__Host-</code> cookie without
-            <code> secure: true</code>, a <code>SameSite=None</code> without
-            <code> Secure</code>: every one of these throws at app boot, with a
-            message that tells you exactly what to fix:
+            <code>secure: true</code>
+            {", "}a <code>SameSite=None</code> without
+            <code>Secure</code>
+            {": "}every one of these throws at app boot, with a message that
+            tells you exactly what to fix:
           </p>
 
           <EditorFrame
@@ -705,9 +714,10 @@ export default function BlogPostPage() {
 
           <p>
             CSRF, as a class, is mostly a solved problem in 2026, between
-            <code> SameSite=Lax</code> defaults, Fetch-Metadata reporting, and
+            <code>SameSite=Lax</code> defaults, Fetch-Metadata reporting, and
             double-submit being two lines away, the surviving bugs are almost
-            always configuration bugs (a cookie set without <code>Secure</code>,
+            always configuration bugs (a cookie set without <code>Secure</code>
+            {", "}
             an <code>allowedOrigins</code> that happens to match every preview
             deploy ever, a frontend that forgot to call the helper). What we
             tried to do with this middleware is make those configuration bugs
@@ -726,8 +736,8 @@ export default function BlogPostPage() {
 
           <p>
             Thanks for reading. Now go look at your frontend&apos;s
-            <code> fetch</code> helper and make sure every mutation actually
-            goes through it. Don&apos;t ask me why I know to suggest that.
+            <code>fetch</code> helper and make sure every mutation actually goes
+            through it. Don&apos;t ask me why I know to suggest that.
           </p>
 
           <p>Devlin</p>

@@ -27,12 +27,14 @@ export default function Page() {
       <h1>AWS Lambda</h1>
       <p>
         The Lambda adapter accepts{" "}
-        <strong>API Gateway HTTP API payload v2.0</strong>,{" "}
-        <strong>API Gateway REST API payload v1.0</strong>, and{" "}
-        <strong>Lambda Function URLs</strong> without configuration. It handles
-        base64 bodies, v2 <code>cookies</code>, v1{" "}
-        <code>multiValueHeaders</code>, and forwards method, path, query, and
-        headers into a standard <code>Request</code>.
+        <strong>API Gateway HTTP API payload v2.0</strong>
+        {", "}
+        <strong>API Gateway REST API payload v1.0</strong>
+        {", "}and <strong>Lambda Function URLs</strong> without configuration.
+        It handles base64 bodies, v2 <code>cookies</code>
+        {", "}v1 <code>multiValueHeaders</code>
+        {", "}and forwards method, path, query, and headers into a standard{" "}
+        <code>Request</code>.
       </p>
 
       <FlowDiagram
@@ -77,11 +79,14 @@ export default function Page() {
 
       <h2 id="install">Install</h2>
       <p>
-        The adapter ships with <code>@daloyjs/core</code>. For deployment, use
-        AWS SAM, CDK, the Serverless Framework, or any IaC of your choice.
+        The adapter ships with <code>@daloyjs/core</code>
+        {". "}For deployment, use AWS SAM, CDK, the Serverless Framework, or
+        any IaC of your choice.
       </p>
 
-      <h2 id="function-url-or-api-gateway-http-api">Function URL or API Gateway HTTP API</h2>
+      <h2 id="function-url-or-api-gateway-http-api">
+        Function URL or API Gateway HTTP API
+      </h2>
       <CodeBlock
         language="ts"
         code={`// src/lambda.ts
@@ -94,9 +99,9 @@ export const handler = toLambdaHandler(app);`}
       <h2 id="streaming-responses">Streaming responses</h2>
       <p>
         Lambda supports response streaming via{" "}
-        <code>awslambda.streamifyResponse</code>. Use the streaming variant of
-        the adapter when you need to flush headers and bytes incrementally
-        (Server-Sent Events, large downloads).
+        <code>awslambda.streamifyResponse</code>
+        {". "}Use the streaming variant of the adapter when you need to flush
+        headers and bytes incrementally (Server-Sent Events, large downloads).
       </p>
       <CodeBlock
         language="ts"
@@ -136,7 +141,9 @@ Resources:
         InvokeMode: BUFFERED   # or RESPONSE_STREAM for streaming`}
       />
 
-      <h2 id="lambda-web-adapter-container-deployments">Lambda Web Adapter (container deployments)</h2>
+      <h2 id="lambda-web-adapter-container-deployments">
+        Lambda Web Adapter (container deployments)
+      </h2>
       <p>
         If you prefer to ship a container image and keep the Node adapter, the{" "}
         <a
@@ -167,8 +174,8 @@ CMD ["node", "dist/server.js"]`}
         <li>
           Callback-style handlers (
           <code>(event, context, callback) =&gt; ...</code>) are not supported
-          on supported Node versions. Always use <code>async</code> handlers; the DaloyJS
-          adapter does.
+          on supported Node versions. Always use <code>async</code> handlers;
+          the DaloyJS adapter does.
         </li>
         <li>
           For Function URLs with streaming, set{" "}
@@ -187,8 +194,8 @@ CMD ["node", "dist/server.js"]`}
           <Link href="/docs/adapters">Adapters overview</Link>
         </li>
         <li>
-          <Link href="/docs/adapters/netlify">Netlify Functions</Link>: 
-          v1 still uses the same Lambda event shape if you need it.
+          <Link href="/docs/adapters/netlify">Netlify Functions</Link>
+          {": "}v1 still uses the same Lambda event shape if you need it.
         </li>
         <li>
           <Link href="/docs/streaming">Streaming (SSE &amp; NDJSON)</Link>

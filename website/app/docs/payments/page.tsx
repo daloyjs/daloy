@@ -28,11 +28,13 @@ export default function Page() {
       <p>
         DaloyJS treats payment providers the same way it treats{" "}
         <Link href="/docs/email">email senders</Link> and{" "}
-        <Link href="/docs/orm">database clients</Link>: wrap the provider SDK in
-        a small <Link href="/docs/plugins">plugin</Link>, attach it to{" "}
-        <code>app.state</code>, and call it from validated route handlers. That
-        keeps your business logic provider-agnostic and makes it easy to swap or
-        A/B providers later.
+        <Link href="/docs/orm">database clients</Link>
+        {": "}wrap the provider SDK in a small{" "}
+        <Link href="/docs/plugins">plugin</Link>
+        {", "}attach it to <code>app.state</code>
+        {", "}and call it from validated route handlers. That keeps your
+        business logic provider-agnostic and makes it easy to swap or A/B
+        providers later.
       </p>
 
       <h2 id="supported-providers">Supported providers</h2>
@@ -58,72 +60,76 @@ export default function Page() {
       />
       <ul>
         <li>
-          <Link href={"/docs/payments/stripe" as Route}>Stripe</Link>: create
-          hosted Checkout Sessions, redirect with{" "}
-          <code>@stripe/stripe-js</code>, verify{" "}
-          <code>Stripe-Signature</code> webhooks over the raw body, and use
-          idempotency keys with the official <code>stripe</code> Node SDK.
+          <Link href={"/docs/payments/stripe" as Route}>Stripe</Link>
+          {": "}create hosted Checkout Sessions, redirect with{" "}
+          <code>@stripe/stripe-js</code>
+          {", "}verify <code>Stripe-Signature</code> webhooks over the raw
+          body, and use idempotency keys with the official <code>stripe</code>{" "}
+          Node SDK.
         </li>
         <li>
-          <Link href={"/docs/payments/shopify" as Route}>Shopify</Link>: read
-          products, create orders, and handle Shopify webhooks via the community{" "}
-          <code>shopify-api-node</code> SDK with the GraphQL Admin API.
+          <Link href={"/docs/payments/shopify" as Route}>Shopify</Link>
+          {": "}read products, create orders, and handle Shopify webhooks via
+          the community <code>shopify-api-node</code> SDK with the GraphQL Admin
+          API.
         </li>
         <li>
           <Link href={"/docs/payments/braintree" as Route}>
             Braintree (PayPal)
           </Link>
-          : accept PayPal, cards, Venmo, Apple Pay, and Google Pay through one
-          gateway using the official <code>braintree</code> Node SDK with signed
-          webhooks.
+          {": "}accept PayPal, cards, Venmo, Apple Pay, and Google Pay through
+          one gateway using the official <code>braintree</code> Node SDK with
+          signed webhooks.
         </li>
         <li>
           <Link href={"/docs/payments/authorize-net" as Route}>
             Authorize.Net
           </Link>
-          : charge cards, Apple Pay, and Google Pay via the official{" "}
+          {": "}charge cards, Apple Pay, and Google Pay via the official{" "}
           <code>authorizenet</code> SDK, plus HMAC-SHA512 webhook verification
           through the JSON Webhooks REST API.
         </li>
         <li>
-          <Link href={"/docs/payments/adyen" as Route}>Adyen</Link>: cards,
-          wallets, and local payment methods via <code>@adyen/api-library</code>{" "}
-          using the Sessions flow for Drop-in / Components and{" "}
-          <code>hmacValidator</code> for Standard webhook notifications.
+          <Link href={"/docs/payments/adyen" as Route}>Adyen</Link>
+          {": "}cards, wallets, and local payment methods via{" "}
+          <code>@adyen/api-library</code> using the Sessions flow for Drop-in /
+          Components and <code>hmacValidator</code> for Standard webhook
+          notifications.
         </li>
         <li>
-          <Link href={"/docs/payments/mollie" as Route}>Mollie</Link>: European
-          cards, iDEAL, Bancontact, SEPA, and Klarna via the new{" "}
+          <Link href={"/docs/payments/mollie" as Route}>Mollie</Link>
+          {": "}European cards, iDEAL, Bancontact, SEPA, and Klarna via the new{" "}
           <code>mollie-api-typescript</code> SDK, with{" "}
           <code>SignatureValidator</code> for signed webhooks and async-iterable
           pagination.
         </li>
         <li>
-          <Link href={"/docs/payments/tap" as Route}>Tap Payments</Link>: GCC
-          and MENA acquiring (KNET, Mada, Benefit, STC Pay, BenefitPay) via the
-          REST Charges API with Bearer auth, hosted redirect flow, and{" "}
-          <code>hashstring</code> HMAC webhook verification.
+          <Link href={"/docs/payments/tap" as Route}>Tap Payments</Link>
+          {": "}GCC and MENA acquiring (KNET, Mada, Benefit, STC Pay,
+          BenefitPay) via the REST Charges API with Bearer auth, hosted redirect
+          flow, and <code>hashstring</code> HMAC webhook verification.
         </li>
         <li>
-          <Link href={"/docs/payments/paytabs" as Route}>PayTabs</Link>: MENA
-          acquiring (Mada, KNET, BenefitPay, STC Pay, OmanNet, cards, Apple Pay)
-          via the official
+          <Link href={"/docs/payments/paytabs" as Route}>PayTabs</Link>
+          {": "}MENA acquiring (Mada, KNET, BenefitPay, STC Pay, OmanNet,
+          cards, Apple Pay) via the official
           <code>paytabs_pt2</code> npm package, wrapped as a Promise-friendly
           plugin with HMAC-SHA256 IPN signature verification.
         </li>
         <li>
-          <Link href={"/docs/payments/razorpay" as Route}>Razorpay</Link>: UPI,
-          cards, netbanking, and wallets for India via the official{" "}
+          <Link href={"/docs/payments/razorpay" as Route}>Razorpay</Link>
+          {": "}UPI, cards, netbanking, and wallets for India via the official{" "}
           <code>razorpay</code> Node SDK using the Orders flow,{" "}
           <code>validatePaymentVerification</code> for the client callback, and{" "}
           <code>validateWebhookSignature</code> for IPN.
         </li>
         <li>
-          <Link href={"/docs/payments/square" as Route}>Square</Link>: unified
-          online + in-person payments via the v40+ <code>square</code>{" "}
-          TypeScript SDK, with BigInt money amounts, the Web Payments SDK token
-          handoff, and <code>WebhooksHelper.verifySignature</code> over the raw
-          body. Runs on Node, Vercel, Cloudflare Workers, Deno, and Bun.
+          <Link href={"/docs/payments/square" as Route}>Square</Link>
+          {": "}unified online + in-person payments via the v40+{" "}
+          <code>square</code> TypeScript SDK, with BigInt money amounts, the Web
+          Payments SDK token handoff, and{" "}
+          <code>WebhooksHelper.verifySignature</code> over the raw body. Runs on
+          Node, Vercel, Cloudflare Workers, Deno, and Bun.
         </li>
       </ul>
       <p>
@@ -132,7 +138,9 @@ export default function Page() {
         application without rewriting routes.
       </p>
 
-      <h2 id="what-every-payment-integration-needs">What every payment integration needs</h2>
+      <h2 id="what-every-payment-integration-needs">
+        What every payment integration needs
+      </h2>
       <ul>
         <li>
           <strong>Server-side secrets only.</strong> Secret keys, webhook
@@ -199,7 +207,8 @@ export default function Page() {
       />
       <p>
         Each provider guide implements roughly the same interface on{" "}
-        <code>app.state</code>:
+        <code>app.state</code>
+        {": "}
       </p>
       <CodeBlock
         code={`// src/plugins/commerce.ts

@@ -24,8 +24,9 @@ export default function Page() {
       <h1>Heroku</h1>
       <p>
         Heroku still runs DaloyJS happily as a Node web dyno. Use the{" "}
-        <Link href="/docs/adapters/node">Node adapter</Link>, declare a <code>Procfile</code>, and
-        pin to a supported stack.
+        <Link href="/docs/adapters/node">Node adapter</Link>
+        {", "}declare a <code>Procfile</code>
+        {", "}and pin to a supported stack.
       </p>
 
       <FlowDiagram
@@ -57,7 +58,10 @@ export default function Page() {
 
       <h2 id="when-to-choose-heroku">When to choose Heroku</h2>
       <ul>
-        <li>You already have Heroku add-ons and pipelines and don&apos;t want to migrate.</li>
+        <li>
+          You already have Heroku add-ons and pipelines and don&apos;t want to
+          migrate.
+        </li>
         <li>You want a known, stable deploy story without a YAML file.</li>
       </ul>
 
@@ -79,13 +83,19 @@ serve(app, {
 
       <h2 id="stack">Stack</h2>
       <p>
-        Use <code>heroku-24</code> or <code>heroku-26</code>. <code>heroku-22</code> is deprecated.
+        Use <code>heroku-24</code> or <code>heroku-26</code>
+        {". "}
+        <code>heroku-22</code> is deprecated.
       </p>
-      <CodeBlock language="bash" code={`heroku stack:set heroku-24 --app my-daloy-api`} />
+      <CodeBlock
+        language="bash"
+        code={`heroku stack:set heroku-24 --app my-daloy-api`}
+      />
 
       <h2 id="buildpack">Buildpack</h2>
       <p>
-        The <code>heroku/nodejs</code> buildpack is auto-detected from <code>package.json</code>.
+        The <code>heroku/nodejs</code> buildpack is auto-detected from{" "}
+        <code>package.json</code>.
       </p>
       <CodeBlock
         language="bash"
@@ -103,12 +113,13 @@ git push heroku main`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Heroku sends <code>SIGTERM</code> and then <code>SIGKILL</code> after 30 seconds. Set the
-          Node adapter&apos;s <code>shutdownTimeoutMs</code> to something well under 30,000.
+          Heroku sends <code>SIGTERM</code> and then <code>SIGKILL</code> after
+          30 seconds. Set the Node adapter&apos;s <code>shutdownTimeoutMs</code>{" "}
+          to something well under 30,000.
         </li>
         <li>
-          Bind to <code>0.0.0.0</code> on the <code>PORT</code> env var or the routing layer
-          won&apos;t reach the process.
+          Bind to <code>0.0.0.0</code> on the <code>PORT</code> env var or the
+          routing layer won&apos;t reach the process.
         </li>
       </ul>
 

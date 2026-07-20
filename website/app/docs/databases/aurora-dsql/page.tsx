@@ -31,28 +31,31 @@ export default function Page() {
         >
           Aurora DSQL
         </a>{" "}
-        is AWS&apos;s serverless, distributed PostgreSQL service. It speaks the Postgres wire protocol,
-        so you use the standard <code>pg</code> driver, but auth is short-lived IAM tokens instead of a
-        static password. Pair it with the <Link href="/docs/adapters">Lambda adapter</Link> for a fully
+        is AWS&apos;s serverless, distributed PostgreSQL service. It speaks the
+        Postgres wire protocol, so you use the standard <code>pg</code> driver,
+        but auth is short-lived IAM tokens instead of a static password. Pair it
+        with the <Link href="/docs/adapters">Lambda adapter</Link> for a fully
         managed AWS-native stack.
       </p>
 
       <h2 id="1-provision-a-cluster">1. Provision a cluster</h2>
       <p>
-        Create a cluster in the AWS console or via the CLI. Note the endpoint hostname and the AWS region.
+        Create a cluster in the AWS console or via the CLI. Note the endpoint
+        hostname and the AWS region.
       </p>
-      <CodeBlock
-        code={`aws dsql create-cluster --region us-east-1`}
-      />
+      <CodeBlock code={`aws dsql create-cluster --region us-east-1`} />
 
       <h2 id="2-install">2. Install</h2>
       <CodeBlock code={`pnpm add pg @aws-sdk/dsql-signer`} />
 
-      <h2 id="3-generate-a-token-and-connect">3. Generate a token and connect</h2>
+      <h2 id="3-generate-a-token-and-connect">
+        3. Generate a token and connect
+      </h2>
       <p>
-        DSQL tokens expire (default ~15 minutes), so build a connection helper that refreshes the
-        password before opening a connection. For Lambda, create one client per invocation; for long-lived
-        Node processes, refresh on a timer or on auth errors.
+        DSQL tokens expire (default ~15 minutes), so build a connection helper
+        that refreshes the password before opening a connection. For Lambda,
+        create one client per invocation; for long-lived Node processes, refresh
+        on a timer or on auth errors.
       </p>
 
       <FlowDiagram
@@ -110,7 +113,9 @@ export async function createDsqlClient() {
 }`}
       />
 
-      <h2 id="4-plugin-pattern-long-lived-node">4. Plugin pattern (long-lived Node)</h2>
+      <h2 id="4-plugin-pattern-long-lived-node">
+        4. Plugin pattern (long-lived Node)
+      </h2>
       <CodeBlock
         code={`// src/db/plugin.ts
 import type { App } from "@daloyjs/core";
@@ -128,10 +133,13 @@ export const dsqlPlugin = {
 };`}
       />
 
-      <h2 id="5-lambda-pattern-per-invocation">5. Lambda pattern (per-invocation)</h2>
+      <h2 id="5-lambda-pattern-per-invocation">
+        5. Lambda pattern (per-invocation)
+      </h2>
       <p>
-        On the <Link href="/docs/adapters">Lambda adapter</Link>, create the client inside the handler
-        and close it at the end so the IAM token doesn&apos;t expire between cold starts:
+        On the <Link href="/docs/adapters">Lambda adapter</Link>
+        {", "}create the client inside the handler and close it at the end so
+        the IAM token doesn&apos;t expire between cold starts:
       </p>
       <CodeBlock
         code={`import { toLambdaHandler } from "@daloyjs/core/lambda";
@@ -183,25 +191,32 @@ export async function createDb() {
 
       <h2 id="with-prisma">With Prisma</h2>
       <p>
-        Use the <a href="https://www.prisma.io/docs/orm/overview/databases/postgresql" target="_blank" rel="noreferrer">
+        Use the{" "}
+        <a
+          href="https://www.prisma.io/docs/orm/overview/databases/postgresql"
+          target="_blank"
+          rel="noreferrer"
+        >
           pg Driver Adapter
         </a>{" "}
-        and inject a Postgres connection that uses the IAM token. The same caveats as above apply: tokens
-        expire, so refresh per Lambda invocation.
+        and inject a Postgres connection that uses the IAM token. The same
+        caveats as above apply: tokens expire, so refresh per Lambda invocation.
       </p>
 
       <h2 id="things-to-remember">Things to remember</h2>
       <ul>
         <li>
-          DSQL is <strong>TCP</strong>-only, so it does <em>not</em> work on Cloudflare Workers. Use <Link href="/docs/databases/neon">Neon</Link> or{" "}
-          <Link href="/docs/databases/planetscale">PlanetScale</Link> there.
+          DSQL is <strong>TCP</strong>-only, so it does <em>not</em> work on
+          Cloudflare Workers. Use <Link href="/docs/databases/neon">Neon</Link>{" "}
+          or <Link href="/docs/databases/planetscale">PlanetScale</Link> there.
         </li>
         <li>
-          IAM tokens expire, refresh on every Lambda invocation, or wrap re-connection logic around
-          long-lived Node processes.
+          IAM tokens expire, refresh on every Lambda invocation, or wrap
+          re-connection logic around long-lived Node processes.
         </li>
         <li>
-          DSQL has Postgres-compatible semantics but not 100% feature parity. Check the{" "}
+          DSQL has Postgres-compatible semantics but not 100% feature parity.
+          Check the{" "}
           <a
             href="https://docs.aws.amazon.com/aurora-dsql/latest/userguide/known-issues.html"
             target="_blank"
@@ -214,8 +229,9 @@ export async function createDb() {
       </ul>
 
       <p>
-        See also the <Link href="/docs/databases">database hosting overview</Link> or jump back to{" "}
-        <Link href="/docs/orm/prisma">Prisma</Link> /{" "}
+        See also the{" "}
+        <Link href="/docs/databases">database hosting overview</Link> or jump
+        back to <Link href="/docs/orm/prisma">Prisma</Link> /{" "}
         <Link href="/docs/orm/drizzle">Drizzle</Link>.
       </p>
     </>

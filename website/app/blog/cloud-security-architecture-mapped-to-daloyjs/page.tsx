@@ -255,17 +255,17 @@ export default function BlogPostPage() {
             lives at a layer DaloyJS will never touch, VPC peering, S3 bucket
             ACLs, GuardDuty, the AWS Well-Architected Security Pillar. But every
             one of its principles has an <strong>application-layer half</strong>
-            , and that half is where a framework lives or dies. Below is the
-            honest mapping: what Daloy already gives you for free, what it gives
-            you when you opt in, and what stays in the cloud account&apos;s
-            lane.
+            {", "}and that half is where a framework lives or dies. Below is
+            the honest mapping: what Daloy already gives you for free, what it
+            gives you when you opt in, and what stays in the cloud
+            account&apos;s lane.
           </p>
 
           <p>
             Spoiler: if your worry was &quot;does my framework actively
-            <em> undermine </em> the architecture in that post,&quot; the answer
-            is no. The boring defenses are on by default. The shared-
-            responsibility line is drawn cleanly.
+            <em>undermine</em> the architecture in that post,&quot; the answer
+            is no. The boring defenses are on by default. The
+            shared-responsibility line is drawn cleanly.
           </p>
 
           <h2>
@@ -283,7 +283,8 @@ export default function BlogPostPage() {
             of <em>explicit verification points</em> that don&apos;t collapse
             into &quot;the firewall said it was fine.&quot; Daloy gives you the
             verifying middleware as first-class primitives, so the chain is
-            visible in your <code>app.ts</code>:
+            visible in your <code>app.ts</code>
+            {": "}
           </p>
 
           <CodeBlock language="ts" code={ZERO_TRUST} />
@@ -291,12 +292,15 @@ export default function BlogPostPage() {
           <p>
             Two non-negotiables worth pointing out: every secret comparison in
             the framework, basic auth, CSRF tokens, session HMAC, webhook
-            signatures, runs through <code>timingSafeEqual</code>. There is a CI
-            guard (<code>verify:secret-comparisons</code>) that fails the build
-            if anyone tries to slip a raw <code>===</code> back in. And the JWT
-            middleware refuses unsigned tokens, refuses <code>alg: none</code>,
-            and pins to JWKS by <code>kid</code>: so a stolen audience claim
-            doesn&apos;t silently become a master key.
+            signatures, runs through <code>timingSafeEqual</code>
+            {". "}There is a CI guard (<code>verify:secret-comparisons</code>)
+            that fails the build if anyone tries to slip a raw <code>===</code>{" "}
+            back in. And the JWT middleware refuses unsigned tokens, refuses{" "}
+            <code>alg: none</code>
+            {", "}
+            and pins to JWKS by <code>kid</code>
+            {": "}so a stolen audience claim doesn&apos;t silently become a
+            master key.
           </p>
 
           <h2>Principle 2: Defense-in-depth</h2>
@@ -398,7 +402,7 @@ export default function BlogPostPage() {
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               &quot;Supply-chain hardening for TypeScript libraries&quot;
             </Link>
-            . Short version: pnpm&apos;s install-time defaults, plus our CI
+            {". "}Short version: pnpm&apos;s install-time defaults, plus our CI
             gates, plus a release-age cooldown, plus SHA-pinned Actions, plus
             npm provenance, plus a CycloneDX SBOM, chosen because attackers
             don&apos;t need a 0-day if they can ship a malicious{" "}
@@ -461,10 +465,12 @@ export default function BlogPostPage() {
               still has to run the detector.
             </li>
             <li>
-              We don&apos;t replace your WAF. <code>secureHeaders()</code>,{" "}
-              <code>rateLimit()</code>, and <code>loadShedding()</code> are
-              application-layer L7, they overlap with a CDN/WAF and work behind
-              one, but they are not the same thing.
+              We don&apos;t replace your WAF. <code>secureHeaders()</code>
+              {", "}
+              <code>rateLimit()</code>
+              {", "}and <code>loadShedding()</code> are application-layer L7,
+              they overlap with a CDN/WAF and work behind one, but they are not
+              the same thing.
             </li>
           </ul>
 
@@ -484,9 +490,12 @@ export default function BlogPostPage() {
               and prototype-pollution-safe JSON.
             </li>
             <li>
-              Add <code>secureHeaders()</code>, <code>rateLimit()</code>,{" "}
-              <code>loadShedding()</code>, and <code>fetchGuard()</code>: four
-              lines, four layers.
+              Add <code>secureHeaders()</code>
+              {", "}<code>rateLimit()</code>
+              {", "}
+              <code>loadShedding()</code>
+              {", "}and <code>fetchGuard()</code>
+              {": "}four lines, four layers.
             </li>
             <li>
               Wire <code>jwt()</code> to your IdP&apos;s JWKS. Don&apos;t pass a
@@ -509,7 +518,7 @@ export default function BlogPostPage() {
               <Link href="/docs/security/owasp-api-top-10">
                 /docs/security/owasp-api-top-10
               </Link>
-              .
+              {"."}
             </li>
           </ol>
 
@@ -522,24 +531,26 @@ export default function BlogPostPage() {
 
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
-            <Link href="/blog/secure-by-default">Secure by Default</Link>,{" "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
+            {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               Supply-chain hardening for TypeScript libraries
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
               CSRF in 2026
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
               CSP nonces and Trusted Types
             </Link>
-            ,{" "}
-            <Link href="/blog/sessions-on-the-edge">Sessions on the edge</Link>,{" "}
+            {", "}
+            <Link href="/blog/sessions-on-the-edge">Sessions on the edge</Link>
+            {", "}
             <Link href="/blog/observability-without-lock-in-structured-logs-and-otel-tracing">
               Observability without lock-in
             </Link>
-            .
+            {"."}
           </p>
         </div>
       </article>

@@ -160,8 +160,8 @@ export default function BlogPostPage() {
 
           <p>
             Those lines are not glamorous. They are also the sort of thing that
-            prevents extremely annoying incidents. I trust boring
-            controls more than dramatic postmortems.
+            prevents extremely annoying incidents. I trust boring controls more
+            than dramatic postmortems.
           </p>
 
           <h2>Runtime guardrails should be part of the framework story</h2>
@@ -209,7 +209,7 @@ export default function BlogPostPage() {
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
               the scaffolding post
             </Link>
-            . They make the practical case better than any slogan can.
+            {". "}They make the practical case better than any slogan can.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

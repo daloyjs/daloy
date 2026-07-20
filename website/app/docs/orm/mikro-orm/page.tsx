@@ -137,13 +137,15 @@ export const mikroOrmPlugin = {
 };`}
       />
 
-      <h2 id="5-fork-an-entitymanager-per-request">5. Fork an EntityManager per request</h2>
+      <h2 id="5-fork-an-entitymanager-per-request">
+        5. Fork an EntityManager per request
+      </h2>
       <p>
         MikroORM relies on an <strong>Identity Map</strong> that is bound to an{" "}
-        <code>EntityManager</code>. You must <em>fork</em> the root EM for every
-        request so identity maps and unit-of-work state do not leak between
-        concurrent handlers. Do it in middleware and expose the forked EM on{" "}
-        <code>state</code>.
+        <code>EntityManager</code>
+        {". "}You must <em>fork</em> the root EM for every request so identity
+        maps and unit-of-work state do not leak between concurrent handlers. Do
+        it in middleware and expose the forked EM on <code>state</code>.
       </p>
       <FlowDiagram
         numbered
@@ -189,9 +191,9 @@ export function requestEntityManager(): Hooks {
       />
       <p>
         In Express-style middleware you will often see{" "}
-        <code>RequestContext.create(orm.em, next)</code>. Daloy hooks pass typed
-        request state directly, so the simplest pattern is to use the forked{" "}
-        <code>state.em</code> inside handlers.
+        <code>RequestContext.create(orm.em, next)</code>
+        {". "}Daloy hooks pass typed request state directly, so the simplest
+        pattern is to use the forked <code>state.em</code> inside handlers.
       </p>
 
       <h2 id="6-augment-app-state-types">6. Augment app state types</h2>
@@ -216,7 +218,9 @@ declare module "@daloyjs/core" {
 }`}
       />
 
-      <h2 id="7-use-the-entitymanager-in-routes">7. Use the EntityManager in routes</h2>
+      <h2 id="7-use-the-entitymanager-in-routes">
+        7. Use the EntityManager in routes
+      </h2>
       <CodeBlock
         code={`// src/server.ts
 import { z } from "zod";
@@ -274,8 +278,10 @@ serve(app, { port: 3000 });`}
       />
       <p>
         MikroORM batches every change in the forked EM into a single{" "}
-        <code>flush()</code>. You almost never need to call{" "}
-        <code>persist()</code> manually when using <code>em.create()</code>,
+        <code>flush()</code>
+        {". "}You almost never need to call <code>persist()</code> manually
+        when using <code>em.create()</code>
+        {", "}
         which auto-persists in v6+. Entities created with{" "}
         <code>new User()</code> still need <code>em.persist()</code>.
       </p>
@@ -302,7 +308,8 @@ serve(app, { port: 3000 });`}
       <p>
         The CLI is installed as a dev dependency and reads{" "}
         <code>src/mikro-orm.config.ts</code> by default. If you move the config
-        under <code>src/db</code>, pass <code>--config</code> or configure
+        under <code>src/db</code>
+        {", "}pass <code>--config</code> or configure
         <code>mikro-orm.configPaths</code> in <code>package.json</code>.
       </p>
       <CodeBlock
@@ -322,7 +329,8 @@ pnpm mikro-orm debug`}
       <h2 id="errors">Errors</h2>
       <p>
         Translate MikroORM errors into framework errors so they serialize as{" "}
-        <Link href="/docs/errors">problem+json</Link>:
+        <Link href="/docs/errors">problem+json</Link>
+        {": "}
       </p>
       <CodeBlock
         code={`import { HttpError } from "@daloyjs/core";
@@ -360,17 +368,22 @@ try {
           will leak the identity map and corrupt unit-of-work state.
         </li>
         <li>
-          Keep <code>@mikro-orm/core</code>, your driver package, the CLI, and{" "}
+          Keep <code>@mikro-orm/core</code>
+          {", "}your driver package, the CLI, and{" "}
           <code>@mikro-orm/migrations</code> on the same version.
         </li>
       </ul>
 
       <p>
-        Compare with <Link href="/docs/orm/prisma">Prisma</Link>,{" "}
-        <Link href="/docs/orm/drizzle">Drizzle</Link>,{" "}
-        <Link href="/docs/orm/typeorm">TypeORM</Link>,{" "}
-        <Link href="/docs/orm/sequelize">Sequelize</Link>, or the{" "}
-        <Link href="/docs/odm">ODM overview</Link> if you need document models.
+        Compare with <Link href="/docs/orm/prisma">Prisma</Link>
+        {", "}
+        <Link href="/docs/orm/drizzle">Drizzle</Link>
+        {", "}
+        <Link href="/docs/orm/typeorm">TypeORM</Link>
+        {", "}
+        <Link href="/docs/orm/sequelize">Sequelize</Link>
+        {", "}or the <Link href="/docs/odm">ODM overview</Link> if you need
+        document models.
       </p>
     </>
   );

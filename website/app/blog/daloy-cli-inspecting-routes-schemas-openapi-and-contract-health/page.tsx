@@ -445,10 +445,10 @@ export default function BlogPostPage() {
           <p>
             Hi, Devlin again. I want to talk about the CLI command that has
             saved me more pull-request meetings than any other tool in this
-            framework: <code>daloy inspect</code>. The whole premise is small
-            and a little stubborn, the reviewer should see the API surface in
-            plain text, before the merge, on every PR. Not after. Not next
-            sprint. Now.
+            framework: <code>daloy inspect</code>
+            {". "}The whole premise is small and a little stubborn, the
+            reviewer should see the API surface in plain text, before the merge,
+            on every PR. Not after. Not next sprint. Now.
           </p>
 
           <h2>The PR review that taught me to write this post</h2>
@@ -525,17 +525,20 @@ export default function BlogPostPage() {
           </FlagCard>
           <FlagCard flag="--openapi" use="print the full OpenAPI 3.1 document.">
             The exact same generator the docs UI and your Hey API codegen use.
-            Pipe to <code>generated/openapi.json</code>,
-            <code>git diff --exit-code</code>, done, your CI now blocks PRs
-            that change the surface without checking in the new spec.
+            Pipe to <code>generated/openapi.json</code>
+            {", "}
+            <code>git diff --exit-code</code>
+            {", "}done, your CI now blocks PRs that change the surface without
+            checking in the new spec.
           </FlagCard>
           <FlagCard
             flag="--json"
             use="machine-readable output for custom tooling."
           >
-            Shape: <code>{`{ routes, contract? }`}</code>. Pipe to{" "}
-            <code>jq</code>, parse with a tiny script, or feed into a GitHub
-            Action that posts a sticky review comment.
+            Shape: <code>{`{ routes, contract? }`}</code>
+            {". "}Pipe to <code>jq</code>
+            {", "}parse with a tiny script, or feed into a GitHub Action that
+            posts a sticky review comment.
           </FlagCard>
 
           <EditorFrame
@@ -628,8 +631,8 @@ export default function BlogPostPage() {
 
           <p>
             Most of what goes wrong with a public API surface goes wrong
-            quietly. An operationId drifts, a response disappears, a debug
-            route ships to prod, and nobody hears a thing. The whole reason{" "}
+            quietly. An operationId drifts, a response disappears, a debug route
+            ships to prod, and nobody hears a thing. The whole reason{" "}
             <code>daloy inspect</code> exists is to turn &quot;quietly&quot;
             into &quot;loudly, in the PR, before the merge button.&quot;
             That&apos;s it. No magic, no sprawling tool, one binary, one entry

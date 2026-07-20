@@ -29,9 +29,9 @@ export default function Page() {
         <a href="https://razorpay.com/" target="_blank" rel="noreferrer">
           Razorpay
         </a>{" "}
-        is the default payment stack for India, <strong>UPI</strong>, cards,
-        netbanking, wallets, EMI, and BNPL through one API. This guide uses the
-        official{" "}
+        is the default payment stack for India, <strong>UPI</strong>
+        {", "}cards, netbanking, wallets, EMI, and BNPL through one API. This
+        guide uses the official{" "}
         <a
           href="https://github.com/razorpay/razorpay-node"
           target="_blank"
@@ -52,8 +52,8 @@ export default function Page() {
           <code>validatePaymentVerification</code> using your{" "}
           <em>key secret</em>; (2) the server-side webhook, verify with{" "}
           <code>validateWebhookSignature</code> using your{" "}
-          <em>webhook secret</em>. They&apos;re different secrets and different
-          payloads.
+          <em>webhook secret</em>
+          {". "}They&apos;re different secrets and different payloads.
         </li>
         <li>
           <strong>Orders are the source of truth, not raw payments.</strong>{" "}
@@ -64,8 +64,8 @@ export default function Page() {
         </li>
         <li>
           <strong>Amounts are paise.</strong> ₹500.00 →{" "}
-          <code>{`{ amount: 50000, currency: "INR" }`}</code>. Don&apos;t pass
-          floats, the API rejects them.
+          <code>{`{ amount: 50000, currency: "INR" }`}</code>
+          {". "}Don&apos;t pass floats, the API rejects them.
         </li>
         <li>
           <strong>Webhook verification needs the raw body.</strong>{" "}
@@ -91,18 +91,21 @@ export default function Page() {
           >
             Razorpay dashboard
           </a>
-          .
+          {"."}
         </li>
         <li>
           Account &amp; Settings → API Keys → Generate Test Key. Save the{" "}
-          <code>key_id</code> and <code>key_secret</code>: the secret is shown
-          once.
+          <code>key_id</code> and <code>key_secret</code>
+          {": "}the secret is shown once.
         </li>
         <li>
           Account &amp; Settings → Webhooks → Add new. Point it at your DaloyJS
-          endpoint and set a <strong>webhook secret</strong>. Subscribe to at
-          least <code>payment.captured</code>, <code>payment.failed</code>,{" "}
-          <code>order.paid</code>, and <code>refund.processed</code>.
+          endpoint and set a <strong>webhook secret</strong>
+          {". "}Subscribe to at least <code>payment.captured</code>
+          {", "}<code>payment.failed</code>
+          {", "}
+          <code>order.paid</code>
+          {", "}and <code>refund.processed</code>.
         </li>
         <li>
           Activate the methods you need (UPI/cards are on by default; netbanking
@@ -511,11 +514,14 @@ await state.razorpay.refund({
       <h2 id="errors">Errors</h2>
       <p>
         Razorpay throws errors with a structured <code>error.error</code> object
-        containing <code>code</code>, <code>description</code>,{" "}
-        <code>field</code>, and <code>reason</code>. Map them through{" "}
-        <Link href="/docs/errors">problem+json</Link> with the Razorpay{" "}
-        <code>code</code> on the <code>type</code> field so reconciliation tools
-        can match them later.
+        containing <code>code</code>
+        {", "}<code>description</code>
+        {", "}
+        <code>field</code>
+        {", "}and <code>reason</code>
+        {". "}Map them through <Link href="/docs/errors">problem+json</Link>{" "}
+        with the Razorpay <code>code</code> on the <code>type</code> field so
+        reconciliation tools can match them later.
       </p>
 
       <h2 id="modernisation-notes">Modernisation notes</h2>
@@ -535,9 +541,9 @@ await state.razorpay.refund({
         <li>
           <strong>Don&apos;t fulfil on the client callback alone.</strong> The
           signature proves the call came from Razorpay, but{" "}
-          <code>status: created</code> isn&apos;t <code>captured</code>. Always
-          re-fetch the payment (or wait for the webhook) before flipping an
-          order to paid.
+          <code>status: created</code> isn&apos;t <code>captured</code>
+          {". "}Always re-fetch the payment (or wait for the webhook) before
+          flipping an order to paid.
         </li>
         <li>
           <strong>Use Promises, ignore the callback API.</strong> Every method
@@ -548,10 +554,12 @@ await state.razorpay.refund({
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href={"/docs/payments/tap" as Route}>Tap Payments guide</Link>,{" "}
-        <Link href={"/docs/payments/paytabs" as Route}>PayTabs guide</Link>, and{" "}
-        <Link href="/docs/errors">problem+json errors</Link>.
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href={"/docs/payments/tap" as Route}>Tap Payments guide</Link>
+        {", "}
+        <Link href={"/docs/payments/paytabs" as Route}>PayTabs guide</Link>
+        {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>
   );

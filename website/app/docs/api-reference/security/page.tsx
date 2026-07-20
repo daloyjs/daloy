@@ -300,7 +300,7 @@ passwordVerify(password: string, hash: string): Promise<boolean>;
         <Link href={"/docs/api-reference/modules" as Route}>
           feature modules
         </Link>
-        .
+        {"."}
       </p>
     </>
   );

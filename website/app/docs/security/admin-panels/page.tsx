@@ -85,7 +85,9 @@ export default function Page() {
         caption="Each layer maps to one rule on Aikido's checklist. A leaked password alone clears none of them: it still has to come from the right network, carry an unthrottled per-admin token, survive CSRF, and leave an audit record."
       />
 
-      <h2 id="1-don-and-apos-t-mix-admin-routes-into-your-public-app">1. Don&apos;t mix admin routes into your public app</h2>
+      <h2 id="1-don-and-apos-t-mix-admin-routes-into-your-public-app">
+        1. Don&apos;t mix admin routes into your public app
+      </h2>
       <p>
         The first rule is the most important: admin endpoints should not be
         reachable from the same hostname as the public API, and they should not
@@ -96,17 +98,16 @@ export default function Page() {
       <ul>
         <li>
           <code>internal: true</code> on a route hides it from the public
-          listener entirely. It is only reachable via{" "}
-          <code>app.inject()</code> (server-to-server) or through an adapter
-          that explicitly mounts internal routes on a separate socket / hostname
-          / port.
+          listener entirely. It is only reachable via <code>app.inject()</code>{" "}
+          (server-to-server) or through an adapter that explicitly mounts
+          internal routes on a separate socket / hostname / port.
         </li>
         <li>
           <code>subdomains()</code> lets you mount the admin sub-app on{" "}
           <code>admin.example.com</code> while the public API stays on{" "}
-          <code>api.example.com</code>, so a critical issue in the admin code
-          can be taken offline (firewall, DNS, deploy) without affecting the
-          customer-facing app.
+          <code>api.example.com</code>
+          {", "}so a critical issue in the admin code can be taken offline
+          (firewall, DNS, deploy) without affecting the customer-facing app.
         </li>
       </ul>
       <CodeBlock
@@ -159,12 +160,14 @@ app.post(
         default.
       </p>
 
-      <h2 id="2-per-admin-accounts-with-an-audit-log">2. Per-admin accounts with an audit log</h2>
+      <h2 id="2-per-admin-accounts-with-an-audit-log">
+        2. Per-admin accounts with an audit log
+      </h2>
       <p>
         Aikido&apos;s second rule is to ban shared <code>support@app.io</code>{" "}
         logins so every sensitive change is attributable. Daloy doesn&apos;t
-        ship an identity provider. Pick one (Auth0, Clerk, Cognito, Keycloak,
-        or your own JWT issuer) and verify per-admin tokens with{" "}
+        ship an identity provider. Pick one (Auth0, Clerk, Cognito, Keycloak, or
+        your own JWT issuer) and verify per-admin tokens with{" "}
         <code>bearerAuth()</code> or the JWT helpers. The framework gives you
         the audit-log primitives:
       </p>
@@ -235,7 +238,9 @@ app.post(
 );`}
       />
 
-      <h2 id="3-enforce-2fa-or-3fa-for-admin-auth">3. Enforce 2FA (or 3FA) for admin auth</h2>
+      <h2 id="3-enforce-2fa-or-3fa-for-admin-auth">
+        3. Enforce 2FA (or 3FA) for admin auth
+      </h2>
       <p>
         Daloy doesn&apos;t implement TOTP / WebAuthn itself (that belongs in
         your identity provider), but it gives you three layers that compose with
@@ -252,9 +257,11 @@ app.post(
         <li>
           <strong>Login-throttle factor.</strong>{" "}
           <code>rateLimit({'{ windowMs, max, groupId: "admin-auth" }'})</code>{" "}
-          shares one bucket across <code>/admin/login</code>,{" "}
-          <code>/admin/otp</code>, and <code>/admin/recovery</code> so password
-          spraying and OTP guessing are both throttled by the same counter.
+          shares one bucket across <code>/admin/login</code>
+          {", "}
+          <code>/admin/otp</code>
+          {", "}and <code>/admin/recovery</code> so password spraying and OTP
+          guessing are both throttled by the same counter.
         </li>
         <li>
           <strong>Session factor.</strong> <code>session()</code> with{" "}
@@ -298,7 +305,9 @@ app.post(
 );`}
       />
 
-      <h2 id="4-block-unknown-javascript-with-csp">4. Block unknown JavaScript with CSP</h2>
+      <h2 id="4-block-unknown-javascript-with-csp">
+        4. Block unknown JavaScript with CSP
+      </h2>
       <p>
         Aikido&apos;s last rule (and the one that would have prevented the
         &quot;Apple email injection&quot; case they cite) is a strict
@@ -346,7 +355,9 @@ app.use(secureHeaders({
         redaction so reported URLs don&apos;t leak PII into logs).
       </p>
 
-      <h2 id="checklist-aikido-rule-daloy-primitive">Checklist: Aikido rule → Daloy primitive</h2>
+      <h2 id="checklist-aikido-rule-daloy-primitive">
+        Checklist: Aikido rule → Daloy primitive
+      </h2>
       <table>
         <thead>
           <tr>
@@ -358,7 +369,8 @@ app.use(secureHeaders({
           <tr>
             <td>Admin panel is not built into the public app</td>
             <td>
-              <code>internal: true</code> routes + <code>app.inject()</code>,
+              <code>internal: true</code> routes + <code>app.inject()</code>
+              {", "}
               optional <code>subdomains()</code> mount on a separate host
             </td>
           </tr>
@@ -372,9 +384,11 @@ app.use(secureHeaders({
           <tr>
             <td>Per-admin authentication, no shared accounts</td>
             <td>
-              <code>bearerAuth()</code>, <code>basicAuth()</code>, JWT helpers,
-              <code>session()</code>: each ties a request to an identifiable
-              subject
+              <code>bearerAuth()</code>
+              {", "}<code>basicAuth()</code>
+              {", "}JWT helpers,
+              <code>session()</code>
+              {": "}each ties a request to an identifiable subject
             </td>
           </tr>
           <tr>

@@ -35,14 +35,14 @@ export default function Page() {
           <Link href={"/docs/api-reference/app" as Route}>
             App &amp; routing
           </Link>
-          : the <code>App</code> class, route contracts, hooks and context
+          {": "}the <code>App</code> class, route contracts, hooks and context
           types, dispatch order, errors, and schema validation.
         </li>
         <li>
           <Link href={"/docs/api-reference/middleware" as Route}>
             Middleware &amp; helpers
           </Link>
-          : built-in middleware, <code>every</code>/<code>some</code>/
+          {": "}built-in middleware, <code>every</code>/<code>some</code>/
           <code>except</code> composition, typed dependencies, config, logging,
           and connection info.
         </li>
@@ -50,22 +50,23 @@ export default function Page() {
           <Link href={"/docs/api-reference/security" as Route}>
             Security &amp; auth
           </Link>
-          : hardening primitives, <code>fetchGuard</code>,{" "}
-          <code>safeRedirect</code>, cookies, JWT/JWK, sessions, and password
-          hashing.
+          {": "}hardening primitives, <code>fetchGuard</code>
+          {", "}
+          <code>safeRedirect</code>
+          {", "}cookies, JWT/JWK, sessions, and password hashing.
         </li>
         <li>
           <Link href={"/docs/api-reference/modules" as Route}>
             Feature modules
           </Link>
-          : OpenAPI, typed client, contract tests, MCP, docs UIs, streaming,
-          multipart, WebSocket, tracing, and the CLI.
+          {": "}OpenAPI, typed client, contract tests, MCP, docs UIs,
+          streaming, multipart, WebSocket, tracing, and the CLI.
         </li>
         <li>
           <Link href={"/docs/api-reference/adapters" as Route}>
             Runtime adapters
           </Link>
-          : <code>serve()</code> for Node.js, Bun, and Deno, plus the
+          {": "}<code>serve()</code> for Node.js, Bun, and Deno, plus the
           Cloudflare, Vercel, Fastly, and Lambda handlers.
         </li>
       </ul>
@@ -104,14 +105,15 @@ const { port } = serve(app);                  // NodeServerOptions.port defaults
 console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
-        Run it with <code>node index.ts</code>: Node.js (22.18+) strips
-        TypeScript types natively, no loader required. Every response already
-        carries the secure-by-default headers (<code>secureHeaders</code>) and
-        an <code>x-request-id</code> (<code>requestId</code>); errors serialize
-        to RFC 9457 <code>application/problem+json</code>. To serve{" "}
-        <code>/docs</code> and <code>/openapi.json</code>, pass{" "}
-        <code>docs: true</code> to <code>new App(...)</code> (it defaults to{" "}
-        <code>false</code>).
+        Run it with <code>node index.ts</code>
+        {": "}Node.js (22.18+) strips TypeScript types natively, no loader
+        required. Every response already carries the secure-by-default headers (
+        <code>secureHeaders</code>) and an <code>x-request-id</code> (
+        <code>requestId</code>); errors serialize to RFC 9457{" "}
+        <code>application/problem+json</code>
+        {". "}To serve <code>/docs</code> and <code>/openapi.json</code>
+        {", "}pass <code>docs: true</code> to <code>new App(...)</code> (it
+        defaults to <code>false</code>).
       </p>
       <p>
         If you drop the response <code>body</code> schema the route still works,
@@ -228,7 +230,7 @@ console.log(\`listening on http://localhost:\${port}\`);`}
       <p>
         Ready to dig in? Start with{" "}
         <Link href={"/docs/api-reference/app" as Route}>App &amp; routing</Link>
-        .
+        {"."}
       </p>
     </>
   );

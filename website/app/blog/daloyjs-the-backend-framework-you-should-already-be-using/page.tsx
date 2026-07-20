@@ -246,7 +246,7 @@ export default function BlogPostPage() {
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               the supply-chain hardening write-up
             </Link>
-            . Both explain why the boring parts are doing most of the work.
+            {". "}Both explain why the boring parts are doing most of the work.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

@@ -34,18 +34,19 @@ export default function Page() {
         IPv4 / IPv6 / CIDR allow- and deny-lists. It is the <em>static</em>{" "}
         counterpart to <code>ipReputation()</code> (dynamic abuse feeds) and{" "}
         <code>geoBlock()</code> (country-level compliance). On reject it throws
-        a <code>ForbiddenError</code>, which DaloyJS renders as RFC 9457{" "}
+        a <code>ForbiddenError</code>
+        {", "}which DaloyJS renders as RFC 9457{" "}
         <code>application/problem+json</code> with HTTP <code>403</code>.
       </p>
 
       <h2 id="fails-closed-by-default">Fails closed by default</h2>
       <p>
         Web-standard <code>Request</code> objects do not expose the peer
-        address, so DaloyJS <strong>fails closed</strong>: unless you tell it
-        how to resolve the client IP, every request is rejected. You opt in
-        either by providing a <code>resolveIp</code> function (reads adapter
-        connection metadata) or by enabling <code>trustProxyHeaders</code>{" "}
-        behind a proxy chain you control.
+        address, so DaloyJS <strong>fails closed</strong>
+        {": "}unless you tell it how to resolve the client IP, every request is
+        rejected. You opt in either by providing a <code>resolveIp</code>{" "}
+        function (reads adapter connection metadata) or by enabling{" "}
+        <code>trustProxyHeaders</code> behind a proxy chain you control.
       </p>
 
       <h2 id="quick-start">Quick start</h2>
@@ -122,8 +123,8 @@ app.use(ipRestriction({
       <h2 id="resolving-the-client-ip">Resolving the client IP</h2>
       <p>
         Behind a trusted proxy chain, set <code>trustProxyHeaders: true</code>{" "}
-        to read <code>X-Forwarded-For</code> / <code>X-Real-IP</code>. This
-        defaults to <code>false</code> because those headers are
+        to read <code>X-Forwarded-For</code> / <code>X-Real-IP</code>
+        {". "}This defaults to <code>false</code> because those headers are
         client-spoofable unless every request reaches DaloyJS through
         infrastructure you control. Pair it with{" "}
         <code>new App(&#123; trustProxy: true &#125;)</code> in production.
@@ -148,9 +149,10 @@ app.use(ipRestriction({
 
       <h2 id="customizing-the-rejection">Customizing the rejection</h2>
       <p>
-        Override the response body with <code>message</code>. Keep it generic:
-        echoing the client IP back can leak proxy topology to attackers, so the
-        default message deliberately does not include it.
+        Override the response body with <code>message</code>
+        {". "}Keep it generic: echoing the client IP back can leak proxy
+        topology to attackers, so the default message deliberately does not
+        include it.
       </p>
       <CodeBlock
         language="ts"

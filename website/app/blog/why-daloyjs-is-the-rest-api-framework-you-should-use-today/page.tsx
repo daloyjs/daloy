@@ -221,14 +221,15 @@ export default function BlogPostPage() {
           <p>
             I do not think frameworks get credit for restraint, but they should.
             The strongest argument for DaloyJS is not that it gives you one more
-            clever abstraction. It is that it removes a pile of security
-            chores that too many teams keep forgetting. If you are building REST
-            APIs in 2026, that is not a nice-to-have. That is the baseline.
+            clever abstraction. It is that it removes a pile of security chores
+            that too many teams keep forgetting. If you are building REST APIs
+            in 2026, that is not a nice-to-have. That is the baseline.
           </p>
 
           <p>
             If you want the deeper background on the default protections, start
-            with <Link href="/blog/secure-by-default">Secure by Default</Link>.
+            with <Link href="/blog/secure-by-default">Secure by Default</Link>
+            {". "}
             If you want the origin story,{" "}
             <Link href="/blog/the-flow-i-wished-i-had">the launch story</Link>
             is where the sleep deprivation becomes autobiographical.

@@ -38,10 +38,10 @@ export default function Page() {
         <code>__Host-</code> cookie carries the session id, the payload lives in
         a pluggable <code>SessionStore</code> (in-memory by default; KV /
         Redis-shaped stores plug in directly), and per-request mutations are
-        exposed on <code>ctx.state.session</code>. There are no adapter-specific
-        code paths - the same middleware runs on Node, Bun, Deno, Cloudflare
-        and Workers because it only uses <code>WebCrypto</code> and
-        standard <code>Set-Cookie</code> headers.
+        exposed on <code>ctx.state.session</code>
+        {". "}There are no adapter-specific code paths - the same middleware
+        runs on Node, Bun, Deno, Cloudflare and Workers because it only uses{" "}
+        <code>WebCrypto</code> and standard <code>Set-Cookie</code> headers.
       </p>
 
       <SequenceDiagram
@@ -152,30 +152,36 @@ app.post(
       </p>
       <ul>
         <li>
-          <code>cookieName</code>: <code>__Host-daloy.sid</code> - forces{" "}
-          <code>Secure</code>, <code>Path=/</code>, no <code>Domain</code>.
+          <code>cookieName</code>
+          {": "}<code>__Host-daloy.sid</code> - forces <code>Secure</code>
+          {", "}<code>Path=/</code>
+          {", "}no <code>Domain</code>.
         </li>
         <li>
           <code>cookieOptions</code>:{" "}
           <code>{`{ secure: true, httpOnly: true, sameSite: "Lax", path: "/", maxAgeSeconds: 86_400 }`}</code>
-          .
+          {"."}
         </li>
         <li>
-          <code>store</code>: a fresh <code>MemorySessionStore()</code> per app.
-          Replace with a KV-backed store in production.
+          <code>store</code>
+          {": "}a fresh <code>MemorySessionStore()</code> per app. Replace with
+          a KV-backed store in production.
         </li>
         <li>
-          <code>rolling</code>: <code>true</code> - every authenticated request
-          slides the expiry and re-emits <code>Set-Cookie</code>.
+          <code>rolling</code>
+          {": "}<code>true</code> - every authenticated request slides the
+          expiry and re-emits <code>Set-Cookie</code>.
         </li>
         <li>
-          <code>saveUninitialized</code>: <code>false</code> - anonymous traffic
-          that never touches the session never writes a cookie or store record.
+          <code>saveUninitialized</code>
+          {": "}<code>false</code> - anonymous traffic that never touches the
+          session never writes a cookie or store record.
         </li>
         <li>
-          <code>generateId</code>: <code>crypto.randomUUID()</code> when
-          available; otherwise a base64url-encoded 32-byte random string. Pass
-          your own <code>generateId</code> to customize.
+          <code>generateId</code>
+          {": "}<code>crypto.randomUUID()</code> when available; otherwise a
+          base64url-encoded 32-byte random string. Pass your own{" "}
+          <code>generateId</code> to customize.
         </li>
       </ul>
 
@@ -191,7 +197,7 @@ app.post(
           <code>data: Record&lt;string, unknown&gt;</code> - payload object.
           Mutating it through <code>set</code> / <code>delete</code> marks the
           session dirty and triggers a single store write in <code>onSend</code>
-          .
+          {"."}
         </li>
         <li>
           <code>get&lt;T&gt;(key)</code> / <code>set(key, value)</code> /{" "}
@@ -209,14 +215,20 @@ app.post(
         </li>
       </ul>
 
-      <h2 id="automatic-rotation-on-privilege-changes">Automatic rotation on privilege changes</h2>
+      <h2 id="automatic-rotation-on-privilege-changes">
+        Automatic rotation on privilege changes
+      </h2>
       <p>
         <code>rotateSession()</code> watches privilege-bearing session values
         and calls <code>session.regenerate()</code> after the handler if they
-        changed. The default watch list covers <code>userId</code>,{" "}
-        <code>tenantId</code>, <code>roles</code>, <code>scopes</code>, and{" "}
-        <code>isAdmin</code>. If a handler already calls{" "}
-        <code>regenerate()</code>, the helper skips itself.
+        changed. The default watch list covers <code>userId</code>
+        {", "}
+        <code>tenantId</code>
+        {", "}<code>roles</code>
+        {", "}<code>scopes</code>
+        {", "}and <code>isAdmin</code>
+        {". "}If a handler already calls <code>regenerate()</code>
+        {", "}the helper skips itself.
       </p>
       <CodeBlock
         code={`app.use(session({ secret: process.env.SESSION_SECRET! }));
@@ -236,10 +248,10 @@ app.post(
 
       <h2 id="key-rotation">Key rotation</h2>
       <p>
-        Pass an array to <code>secret</code>. The first entry is always used to
-        sign new cookies; any later entry can verify (so older clients keep
-        working until their next request) and triggers a transparent re-sign on
-        the way out.
+        Pass an array to <code>secret</code>
+        {". "}The first entry is always used to sign new cookies; any later
+        entry can verify (so older clients keep working until their next
+        request) and triggers a transparent re-sign on the way out.
       </p>
       <CodeBlock
         code={`session({

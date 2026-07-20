@@ -31,19 +31,24 @@ export default function Page() {
       </blockquote>
       <p>
         DaloyJS ships a tiny, zero-dependency structured logger. Every app gets
-        one by default at <code>app.log</code>, and every request handler gets a
-        request-scoped child logger at <code>ctx.state.log</code> that is
-        already bound to the request id. Records are emitted as single-line JSON
-        so they drop straight into Loki, Datadog, CloudWatch, or any log
-        aggregator.
+        one by default at <code>app.log</code>
+        {", "}and every request handler gets a request-scoped child logger at{" "}
+        <code>ctx.state.log</code> that is already bound to the request id.
+        Records are emitted as single-line JSON so they drop straight into Loki,
+        Datadog, CloudWatch, or any log aggregator.
       </p>
       <p>
-        The headline feature is <strong>secure-by-default redaction</strong>:
-        common credential keys (<code>authorization</code>, <code>cookie</code>,{" "}
-        <code>password</code>, <code>token</code>, provider API keys, and more)
-        are replaced with <code>[REDACTED]</code> at any depth, and string
-        values shaped like a JWT or an opaque provider token are scrubbed even
-        when they appear under an innocent key.
+        The headline feature is <strong>secure-by-default redaction</strong>
+        {": "}
+        common credential keys (<code>authorization</code>
+        {", "}<code>cookie</code>
+        {", "}
+        <code>password</code>
+        {", "}<code>token</code>
+        {", "}provider API keys, and more) are replaced with{" "}
+        <code>[REDACTED]</code> at any depth, and string values shaped like a
+        JWT or an opaque provider token are scrubbed even when they appear under
+        an innocent key.
       </p>
 
       <h2 id="the-default-logger">The default logger</h2>
@@ -118,8 +123,8 @@ try {
       <p>
         Use <code>child()</code> to bind fields that should appear on every
         subsequent record. This is how the request id is attached to{" "}
-        <code>ctx.state.log</code>, and it is the right tool for per-component
-        or per-job context.
+        <code>ctx.state.log</code>
+        {", "}and it is the right tool for per-component or per-job context.
       </p>
       <CodeBlock
         language="ts"
@@ -131,22 +136,48 @@ jobLog.info({ processed: 1280 }, "done");`}
       <h2 id="redaction-secure-by-default">Redaction (secure by default)</h2>
       <p>
         Redaction is on by default. Keys are matched case-insensitively at any
-        depth and replaced with <code>[REDACTED]</code>. The built-in{" "}
-        <code>DEFAULT_REDACT_KEYS</code> list covers the usual suspects plus AI
-        / LLM provider credential headers. In addition, any string value shaped
-        like a JWT (<code>eyJ…</code>) or an opaque provider token (GitHub{" "}
-        <code>ghp_…</code>, AWS <code>AKIA…</code>, Stripe{" "}
-        <code>sk_live_…</code>, OpenAI <code>sk-…</code>, and more) is scrubbed
-        regardless of its key.
+        depth and replaced with <code>[REDACTED]</code>
+        {". "}The built-in <code>DEFAULT_REDACT_KEYS</code> list covers the
+        usual suspects plus AI / LLM provider credential headers. In addition,
+        any string value shaped like a JWT (<code>eyJ…</code>) or an opaque
+        provider token (GitHub <code>ghp_…</code>
+        {", "}AWS <code>AKIA…</code>
+        {", "}Stripe <code>sk_live_…</code>
+        {", "}OpenAI <code>sk-…</code>
+        {", "}and more) is scrubbed regardless of its key.
       </p>
       <FlowDiagram
         title="From log call to log line"
         steps={[
-          { eyebrow: "your call", label: "log.info(fields, msg)", detail: "{ userId, authorization, ... }", tone: "accent" },
-          { eyebrow: "bound context", label: "requestId + child fields", detail: "ctx.state.log child bindings" },
-          { eyebrow: "secure by default", label: "Redaction", detail: "keys + JWT / token values → [REDACTED]", tone: "danger" },
-          { eyebrow: "one line", label: "JSON record", detail: '{"level":"info",...}', tone: "success" },
-          { eyebrow: "sink", label: "write()", detail: "stdout → Loki · Datadog · CloudWatch", tone: "muted" },
+          {
+            eyebrow: "your call",
+            label: "log.info(fields, msg)",
+            detail: "{ userId, authorization, ... }",
+            tone: "accent",
+          },
+          {
+            eyebrow: "bound context",
+            label: "requestId + child fields",
+            detail: "ctx.state.log child bindings",
+          },
+          {
+            eyebrow: "secure by default",
+            label: "Redaction",
+            detail: "keys + JWT / token values → [REDACTED]",
+            tone: "danger",
+          },
+          {
+            eyebrow: "one line",
+            label: "JSON record",
+            detail: '{"level":"info",...}',
+            tone: "success",
+          },
+          {
+            eyebrow: "sink",
+            label: "write()",
+            detail: "stdout → Loki · Datadog · CloudWatch",
+            tone: "muted",
+          },
         ]}
         caption="Every record is enriched with the request id and any child bindings, scrubbed of credential-shaped keys and values, serialized to a single JSON line, then handed to the output sink. Redaction happens before anything is written, so secrets never hit disk."
       />
@@ -189,16 +220,19 @@ const raw = createLogger({ redact: false });`}
       </p>
       <p>
         Request URLs are a separate path: the structured redactor matches field{" "}
-        <em>names</em>, so a secret sitting in a query string under the field{" "}
+        <em>names</em>
+        {", "}so a secret sitting in a query string under the field{" "}
         <code>url</code> would not be renamed-matched. The framework therefore
         runs request URLs through <code>sanitizeUrlForLog</code> before they
         land in the per-request log record. That helper redacts values for keys
         in <code>SENSITIVE_URL_QUERY_KEYS</code> (and known prefixes), JWT-like
         query values, opaque credential-shaped values, and userinfo in the URL
-        authority, so OAuth <code>?code=</code>,{" "}
-        <code>?access_token=</code>, and signed-URL signatures do not persist
-        under <code>url</code>. Export it from <code>@daloyjs/core</code> when
-        you bind URLs into your own log calls.
+        authority, so OAuth <code>?code=</code>
+        {", "}<code>?access_token=</code>
+        {", "}
+        and signed-URL signatures do not persist under <code>url</code>
+        {". "}Export it from <code>@daloyjs/core</code> when you bind URLs into
+        your own log calls.
       </p>
       <CodeBlock
         language="ts"
@@ -210,7 +244,9 @@ log.info(
 );`}
       />
 
-      <h2 id="bring-your-own-logger-pino-winston">Bring your own logger (pino, winston)</h2>
+      <h2 id="bring-your-own-logger-pino-winston">
+        Bring your own logger (pino, winston)
+      </h2>
       <p>
         The <code>logger</code> option accepts any object implementing the{" "}
         <code>Logger</code> interface (the <code>trace</code>/<code>debug</code>

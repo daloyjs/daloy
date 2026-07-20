@@ -50,10 +50,10 @@ export default function Page() {
       <p>
         The wholesale escape hatch for the entire secure-by-default surface now
         refuses-to-construct in production unless you also pass{" "}
-        <code>acknowledgeInsecureDefaults: true</code>. This closes the
-        well-documented &quot;developer flipped the flag off while debugging and
-        shipped to production&quot; footgun by forcing an explicit two-step
-        opt-in:
+        <code>acknowledgeInsecureDefaults: true</code>
+        {". "}This closes the well-documented &quot;developer flipped the flag
+        off while debugging and shipped to production&quot; footgun by forcing
+        an explicit two-step opt-in:
       </p>
 
       <FlowDiagram
@@ -120,18 +120,24 @@ new App({
         <li>anonymous stateful plugin refuse-to-boot</li>
       </ul>
       <p>
-        Per-feature opt-outs (<code>secureHeaders: false</code>,{" "}
-        <code>corsCrossOriginGuard: false</code>,{" "}
-        <code>crashOnUnhandledRejection: false</code>,{" "}
-        <code>trustProxy: false</code>, <code>csrf: &quot;off&quot;</code>)
-        remain available without the production refusal, prefer those when you
-        only need to disable one default rather than the whole surface. Tests
-        can reset the audit-log latch via the exported{" "}
-        <code>_resetInsecureDefaultsLogForTests()</code> helper, mirroring the
-        existing <code>_resetCrashHandlersForTests</code> pattern.
+        Per-feature opt-outs (<code>secureHeaders: false</code>
+        {", "}
+        <code>corsCrossOriginGuard: false</code>
+        {", "}
+        <code>crashOnUnhandledRejection: false</code>
+        {", "}
+        <code>trustProxy: false</code>
+        {", "}<code>csrf: &quot;off&quot;</code>) remain available without the
+        production refusal, prefer those when you only need to disable one
+        default rather than the whole surface. Tests can reset the audit-log
+        latch via the exported <code>_resetInsecureDefaultsLogForTests()</code>{" "}
+        helper, mirroring the existing <code>_resetCrashHandlersForTests</code>{" "}
+        pattern.
       </p>
 
-      <h2 id="2-jwt-hs-secret-length-refuse-to-construct-rfc-7518-3-2">2. JWT HS-secret length refuse-to-construct (RFC 7518 §3.2)</h2>
+      <h2 id="2-jwt-hs-secret-length-refuse-to-construct-rfc-7518-3-2">
+        2. JWT HS-secret length refuse-to-construct (RFC 7518 §3.2)
+      </h2>
       <p>
         <code>createJwtSigner()</code> and <code>createJwtVerifier()</code> now
         refuse <code>Uint8Array</code> HS-shaped secrets shorter than{" "}
@@ -215,7 +221,9 @@ secureHeaders({
         case (no options passed) needs no changes.
       </p>
 
-      <h2 id="4-mandatory-hardware-backed-2fa-for-publish-access">4. Mandatory hardware-backed 2FA for publish access</h2>
+      <h2 id="4-mandatory-hardware-backed-2fa-for-publish-access">
+        4. Mandatory hardware-backed 2FA for publish access
+      </h2>
       <p>
         Daloy&apos;s supply-chain posture now mandates{" "}
         <strong>hardware-backed 2FA</strong> for every contributor with publish
@@ -230,7 +238,7 @@ secureHeaders({
             authentication
           </code>{" "}
           is enforced on the <code>@daloyjs</code> org; every account with write
-          access must have a hardware-backed factor (passkey or security key, 
+          access must have a hardware-backed factor (passkey or security key,
           TOTP-only accounts are off-boarded).
         </li>
         <li>

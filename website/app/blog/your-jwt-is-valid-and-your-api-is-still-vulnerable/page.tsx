@@ -245,8 +245,9 @@ export default function BlogPostPage() {
 
           <p>
             Then I change <code>/projects/alice-1</code> to{" "}
-            <code>/projects/bob-1</code>. The API returns Bob&apos;s project.
-            Login was perfect. Authorization was on holiday.
+            <code>/projects/bob-1</code>
+            {". "}The API returns Bob&apos;s project. Login was perfect.
+            Authorization was on holiday.
           </p>
 
           <p>
@@ -315,9 +316,13 @@ export default function BlogPostPage() {
           <p>
             Property-level authorization decides which fields the caller may
             read or change. A project owner may rename a project without being
-            allowed to set <code>ownerId</code>, <code>tenantId</code>,{" "}
-            <code>approvedAt</code>, or <code>role</code>. Giving someone the
-            Edit button does not mean handing them the database row and a pen.
+            allowed to set <code>ownerId</code>
+            {", "}<code>tenantId</code>
+            {", "}
+            <code>approvedAt</code>
+            {", "}or <code>role</code>
+            {". "}Giving someone the Edit button does not mean handing them the
+            database row and a pen.
           </p>
 
           <h2>Normalize identity once</h2>
@@ -370,9 +375,11 @@ export default function BlogPostPage() {
           <p>
             Creation endpoints have a second common problem: mass assignment.
             The AI passes the whole request body to the ORM, so a helpful caller
-            includes <code>ownerId</code>, <code>role</code>, or{" "}
-            <code>isApproved</code>. Very efficient. The attacker appreciates
-            the developer experience.
+            includes <code>ownerId</code>
+            {", "}<code>role</code>
+            {", "}or <code>isApproved</code>
+            {". "}Very efficient. The attacker appreciates the developer
+            experience.
           </p>
 
           <CodeBlock language="ts" code={CREATE_ROUTE} />
@@ -492,8 +499,9 @@ export default function BlogPostPage() {
             <Link href={"/docs/tutorials/multi-user-api" as Route}>
               multi-user projects tutorial
             </Link>
-            . The tutorial includes the attack tests, because an authorization
-            guide without an attacker is just optimistic documentation.
+            {". "}The tutorial includes the attack tests, because an
+            authorization guide without an attacker is just optimistic
+            documentation.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

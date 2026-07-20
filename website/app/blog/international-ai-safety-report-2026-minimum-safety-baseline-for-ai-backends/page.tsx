@@ -426,14 +426,14 @@ export default function BlogPostPage() {
               rel="noopener noreferrer"
             >
               International AI Safety Report 2026
-            </a>{" "}
-            , 100+ experts, 30+ countries, Yoshua Bengio chairing, through an
-            operator&apos;s lens and lands on a short, useful conclusion: the
+            </a>
+            {", "}100+ experts, 30+ countries, Yoshua Bengio chairing, through
+            an operator&apos;s lens and lands on a short, useful conclusion: the
             interesting safety work for the rest of us is at{" "}
-            <strong>deployment time and runtime</strong>, not at training time.
-            Aikido summarises it as a few deployment-time requirements that any
-            backend an autonomous AI system can call should meet, no matter
-            which model is calling it:
+            <strong>deployment time and runtime</strong>
+            {", "}not at training time. Aikido summarises it as a few
+            deployment-time requirements that any backend an autonomous AI
+            system can call should meet, no matter which model is calling it:
           </p>
 
           <ul>
@@ -452,8 +452,8 @@ export default function BlogPostPage() {
             <li>
               <strong>Prompt-injection-resistant constraints.</strong> Leading
               models still fall to prompt injection with a handful of tries in
-              2025 evals. Constraints must be <em>enforced</em>, not requested
-              in the system prompt.
+              2025 evals. Constraints must be <em>enforced</em>
+              {", "}not requested in the system prompt.
             </li>
             <li>
               <strong>Minimum safety requirements.</strong> Abuse prevention,
@@ -605,8 +605,9 @@ export default function BlogPostPage() {
             <li>
               <strong>Stopping you from disabling the guards.</strong> The
               guards run in your app. If you delete fetchGuard or widen the
-              schema to <code>z.any()</code>, the framework lets you, the
-              repo&apos;s AGENTS.md asks coding agents not to, and{" "}
+              schema to <code>z.any()</code>
+              {", "}the framework lets you, the repo&apos;s AGENTS.md asks
+              coding agents not to, and{" "}
               <Link href="/blog/secure-by-default">
                 the secure-by-default post
               </Link>{" "}
@@ -646,25 +647,28 @@ export default function BlogPostPage() {
             <Link href="/blog/owasp-top-10-agentic-applications-mapped-to-daloyjs">
               OWASP Top 10 for Agentic Applications, Mapped
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
               Vibe Coding Security
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
               Cloud Security Architecture, Mapped
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/secure-sdlc-five-pillars-mapped-to-daloyjs">
               The 5 Pillars of a Secure SDLC, Mapped
             </Link>
-            , <Link href="/blog/secure-by-default">Secure by Default</Link>.
-            Relevant docs: <Link href="/docs/security">/docs/security</Link>,{" "}
+            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+            {". "}
+            Relevant docs: <Link href="/docs/security">/docs/security</Link>
+            {", "}
             <Link href="/docs/security/runtime-protections">
               runtime protections
             </Link>
-            , <Link href="/docs/security/secure-defaults">secure defaults</Link>
-            .
+            {", "}
+            <Link href="/docs/security/secure-defaults">secure defaults</Link>
+            {"."}
           </p>
         </div>
       </article>

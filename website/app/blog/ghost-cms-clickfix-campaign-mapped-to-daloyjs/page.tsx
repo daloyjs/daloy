@@ -220,7 +220,7 @@ export default function BlogPostPage() {
             hadn&apos;t closed&quot;, which is a polite way of saying I missed
             it. This post is the stage-by-stage mapping plus the one-line change
             I shipped to
-            <code> secureHeaders()</code> after I stopped feeling embarrassed.
+            <code>secureHeaders()</code> after I stopped feeling embarrassed.
           </p>
 
           <p>
@@ -234,36 +234,39 @@ export default function BlogPostPage() {
               CVE-2026-26980
             </a>{" "}
             - a pre-auth SQL injection in Ghost CMS 3.24.0 → 6.19.0 - across
-            more than <strong>700 domains</strong>, including Harvard, Oxford,
-            Auburn, and DuckDuckGo. Ghost shipped the fix in 6.19.1 back on
-            February&nbsp;19, 2026. Three months later, plenty of sites were
-            still on the vulnerable version. I&apos;ve been the person who
-            didn&apos;t patch in time before. It happens to everyone exactly
-            once before they automate it.
+            more than <strong>700 domains</strong>
+            {", "}including Harvard, Oxford, Auburn, and DuckDuckGo. Ghost
+            shipped the fix in 6.19.1 back on February&nbsp;19, 2026. Three
+            months later, plenty of sites were still on the vulnerable version.
+            I&apos;ve been the person who didn&apos;t patch in time before. It
+            happens to everyone exactly once before they automate it.
           </p>
 
           <p>The attack chain has five distinct stages:</p>
 
           <ol>
             <li>
-              <strong>SQLi</strong>: read arbitrary rows from the Ghost
-              database, including the <strong>admin API keys</strong>.
+              <strong>SQLi</strong>
+              {": "}read arbitrary rows from the Ghost database, including the{" "}
+              <strong>admin API keys</strong>.
             </li>
             <li>
-              <strong>Privilege escalation via stolen API key</strong>: use the
-              admin key to log into the admin API as a manager.
+              <strong>Privilege escalation via stolen API key</strong>
+              {": "}use the admin key to log into the admin API as a manager.
             </li>
             <li>
-              <strong>Stored XSS</strong>: inject <code>&lt;script&gt;</code>{" "}
-              tags into published articles.
+              <strong>Stored XSS</strong>
+              {": "}inject <code>&lt;script&gt;</code> tags into published
+              articles.
             </li>
             <li>
-              <strong>Fake Cloudflare iframe</strong>: overlay a &quot;Verify
-              you are human&quot; prompt loaded from attacker infrastructure.
+              <strong>Fake Cloudflare iframe</strong>
+              {": "}overlay a &quot;Verify you are human&quot; prompt loaded
+              from attacker infrastructure.
             </li>
             <li>
-              <strong>ClickFix clipboard stuffing</strong>: when the visitor
-              clicks the fake checkbox, silently call{" "}
+              <strong>ClickFix clipboard stuffing</strong>
+              {": "}when the visitor clicks the fake checkbox, silently call{" "}
               <code>navigator.clipboard.writeText()</code> with a PowerShell
               payload and instruct the victim to paste it into Win+R.
             </li>
@@ -367,8 +370,9 @@ app.use(secureHeaders({
             </li>
             <li>
               Compare the stolen admin key with <code>===</code> instead of{" "}
-              <code>timingSafeEqual</code>: blocked by{" "}
-              <code>verify:secret-comparisons</code> at publish time.
+              <code>timingSafeEqual</code>
+              {": "}blocked by <code>verify:secret-comparisons</code> at
+              publish time.
             </li>
             <li>
               Render attacker HTML without CSP, the default{" "}
@@ -434,11 +438,12 @@ app.use(secureHeaders({
             every docs example, <code>timingSafeEqual</code> + JWT alg allowlist
             + revocation hook, CSP <code>default-src &apos;self&apos;</code>{" "}
             with the Trusted-Types path, and{" "}
-            <code>frame-ancestors &apos;none&apos;</code>. Stage 5, the silent
-            clipboard write that makes the whole social engineering trick land,
-            wasn&apos;t. So I changed the default. Add{" "}
-            <code>clipboard-write=()</code> to the Permissions-Policy string,
-            write the regression test, document the override pattern, ship it.
+            <code>frame-ancestors &apos;none&apos;</code>
+            {". "}Stage 5, the silent clipboard write that makes the whole
+            social engineering trick land, wasn&apos;t. So I changed the
+            default. Add <code>clipboard-write=()</code> to the
+            Permissions-Policy string, write the regression test, document the
+            override pattern, ship it.
           </p>
 
           <p>
@@ -456,16 +461,18 @@ app.use(secureHeaders({
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
               CSP nonces and Trusted Types without tears
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/aikido-top-10-app-security-problems-mapped-to-daloyjs">
               Aikido top 10 mapped to DaloyJS
             </Link>
-            ,{" "}
+            {", "}
             <Link href="/blog/litellm-teampcp-poisoned-scanner-mapped-to-daloyjs">
               LiteLLM / TeamPCP mapped to DaloyJS
             </Link>
-            , <Link href="/blog/secure-by-default">Secure by default</Link>.
-            Relevant docs: <Link href="/docs/security">/docs/security</Link>,{" "}
+            {", "}<Link href="/blog/secure-by-default">Secure by default</Link>
+            {". "}
+            Relevant docs: <Link href="/docs/security">/docs/security</Link>
+            {", "}
             <Link href="/docs/security/sql-injection">SQL injection</Link>.
           </p>
         </div>

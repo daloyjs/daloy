@@ -29,10 +29,14 @@ export default function Page() {
           PayTabs
         </a>{" "}
         is a MENA-region payment gateway with strong coverage of{" "}
-        <strong>Mada</strong>, <strong>KNET</strong>,{" "}
-        <strong>BenefitPay</strong>, <strong>STC Pay</strong>,{" "}
-        <strong>OmanNet</strong>, cards, and Apple Pay. This guide uses the
-        official{" "}
+        <strong>Mada</strong>
+        {", "}<strong>KNET</strong>
+        {", "}
+        <strong>BenefitPay</strong>
+        {", "}<strong>STC Pay</strong>
+        {", "}
+        <strong>OmanNet</strong>
+        {", "}cards, and Apple Pay. This guide uses the official{" "}
         <a
           href="https://docs.paytabs.com/manuals/Backend-Web-Packages/NodeJs/"
           target="_blank"
@@ -57,17 +61,25 @@ export default function Page() {
         </li>
         <li>
           <strong>Regions are not interchangeable.</strong> Your profile lives
-          in one of <code>ARE</code>, <code>SAU</code>, <code>OMN</code>,{" "}
-          <code>JOR</code>, <code>EGY</code>, <code>IRQ</code>, <code>PSE</code>
-          , or <code>GLOBAL</code>. Passing the wrong region results in{" "}
+          in one of <code>ARE</code>
+          {", "}<code>SAU</code>
+          {", "}<code>OMN</code>
+          {", "}
+          <code>JOR</code>
+          {", "}<code>EGY</code>
+          {", "}<code>IRQ</code>
+          {", "}<code>PSE</code>
+          {", "}or <code>GLOBAL</code>
+          {". "}Passing the wrong region results in{" "}
           <em>&quot;Invalid credentials&quot;</em> even when the key is right.
         </li>
         <li>
           <strong>It&apos;s a redirect flow.</strong> You call{" "}
-          <code>createPaymentPage</code>, PayTabs returns a{" "}
-          <code>redirect_url</code>, the customer pays there and comes back to
-          your <em>return</em> URL. The <em>callback</em> URL is the server-side
-          IPN, that&apos;s the only signal you should mark an order paid on.
+          <code>createPaymentPage</code>
+          {", "}PayTabs returns a <code>redirect_url</code>
+          {", "}the customer pays there and comes back to your <em>return</em>{" "}
+          URL. The <em>callback</em> URL is the server-side IPN, that&apos;s the
+          only signal you should mark an order paid on.
         </li>
         <li>
           <strong>IPN signature is HMAC-SHA256.</strong> The raw POST body is
@@ -96,11 +108,12 @@ export default function Page() {
           >
             PayTabs merchant dashboard
           </a>
-          .
+          {"."}
         </li>
         <li>
           Developers → Profile to grab your <strong>Profile ID</strong> and{" "}
-          <strong>Server Key</strong>. Note your <strong>Region</strong>.
+          <strong>Server Key</strong>
+          {". "}Note your <strong>Region</strong>.
         </li>
         <li>
           Enable the payment methods you need (Mada, KNET, BenefitPay, STC Pay
@@ -484,8 +497,8 @@ await state.paytabs.refund({
       <p>
         <code>paytabs_pt2</code> uses Node&apos;s <code>https</code> module and
         runs on Node 18+. It is <em>not</em> edge-runtime compatible. If
-        you&apos;re deploying to Cloudflare Workers, call the PayTabs
-        PT2 REST endpoints directly with <code>fetch</code> (Bearer auth on{" "}
+        you&apos;re deploying to Cloudflare Workers, call the PayTabs PT2 REST
+        endpoints directly with <code>fetch</code> (Bearer auth on{" "}
         <code>Authorization</code> using the server key, endpoints like{" "}
         <code>POST /payment/request</code> and <code>POST /payment/query</code>{" "}
         against your regional base URL).
@@ -531,10 +544,12 @@ await state.paytabs.refund({
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href={"/docs/payments/tap" as Route}>Tap Payments guide</Link>,{" "}
-        <Link href={"/docs/payments/adyen" as Route}>Adyen guide</Link>, and{" "}
-        <Link href="/docs/errors">problem+json errors</Link>.
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href={"/docs/payments/tap" as Route}>Tap Payments guide</Link>
+        {", "}
+        <Link href={"/docs/payments/adyen" as Route}>Adyen guide</Link>
+        {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>
   );

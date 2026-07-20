@@ -45,7 +45,7 @@ export default function Page() {
         >
           Authorize.Net API
         </a>
-        , and the separate JSON Webhooks REST API to receive event
+        {", "}and the separate JSON Webhooks REST API to receive event
         notifications.
       </p>
 
@@ -56,8 +56,8 @@ export default function Page() {
           <code>ApiContracts.*</code> classes and sent with{" "}
           <code>ApiControllers.*</code> controllers. There&apos;s no fluent
           client and no Promises by default, every controller exposes{" "}
-          <code>.execute(callback)</code>. Wrap it with{" "}
-          <code>util.promisify</code> for a sane async API.
+          <code>.execute(callback)</code>
+          {". "}Wrap it with <code>util.promisify</code> for a sane async API.
         </li>
         <li>
           <strong>Don&apos;t POST raw card numbers from a browser.</strong> Use{" "}
@@ -85,7 +85,8 @@ export default function Page() {
           against <code>https://api.authorize.net/rest/v1/webhooks</code> (or
           the <code>apitest</code> host), the XML transactions SDK doesn&apos;t
           handle them. Signatures use HMAC-SHA512 with a dedicated{" "}
-          <em>Signature Key</em>, <strong>not</strong> the Transaction Key.
+          <em>Signature Key</em>
+          {", "}<strong>not</strong> the Transaction Key.
         </li>
         <li>
           <strong>Node 14+ &amp; TLS 1.2.</strong> Anything older is rejected at
@@ -109,10 +110,11 @@ export default function Page() {
           <em>
             Account → Settings → Security Settings → API Credentials and Keys
           </em>
-          .
+          {"."}
         </li>
         <li>
-          On the same screen, generate a <strong>Signature Key</strong>.
+          On the same screen, generate a <strong>Signature Key</strong>
+          {". "}
           You&apos;ll need this to verify webhook signatures.
         </li>
         <li>
@@ -349,10 +351,13 @@ app.post(
       <p>
         Refunds, voids, and prior-auth captures all go through the same{" "}
         <code>CreateTransactionController</code> with a different{" "}
-        <code>transactionType</code> (<code>refundTransaction</code>,{" "}
-        <code>voidTransaction</code>, <code>priorAuthCaptureTransaction</code>)
-        plus a <code>refTransId</code>. Reuse <code>runController</code> from
-        the plugin and follow the same response shape.
+        <code>transactionType</code> (<code>refundTransaction</code>
+        {", "}
+        <code>voidTransaction</code>
+        {", "}<code>priorAuthCaptureTransaction</code>) plus a{" "}
+        <code>refTransId</code>
+        {". "}Reuse <code>runController</code> from the plugin and follow the
+        same response shape.
       </p>
 
       <h2 id="6-subscribe-to-webhooks">6. Subscribe to webhooks</h2>
@@ -491,7 +496,8 @@ app.post(
 
       <h2 id="runtimes">Runtimes</h2>
       <p>
-        The SDK uses <code>axios</code> over Node&apos;s <code>https</code>,
+        The SDK uses <code>axios</code> over Node&apos;s <code>https</code>
+        {", "}
         requires Node 14+ and TLS 1.2, and isn&apos;t designed for{" "}
         <Link href={"/docs/adapters" as Route}>Cloudflare Workers</Link> or
         Vercel. On an edge runtime, POST JSON straight to{" "}
@@ -504,7 +510,8 @@ app.post(
       <ul>
         <li>
           <strong>
-            Use <code>transHashSha2</code>, not <code>transHash</code>.
+            Use <code>transHashSha2</code>
+            {", "}not <code>transHash</code>.
           </strong>{" "}
           The MD5-based <code>transHash</code> field is being phased out.
           Compare against <code>transHashSha2</code> if you echo a hash back for
@@ -528,8 +535,10 @@ app.post(
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>,
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>
+        {", "}
         and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>

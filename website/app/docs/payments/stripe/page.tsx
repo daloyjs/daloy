@@ -80,13 +80,14 @@ export default function Page() {
         </li>
         <li>
           <strong>Send idempotency keys on mutating retries.</strong> Stripe
-          accepts idempotency keys on every <code>POST</code>. Generate a UUID
-          per logical attempt and reuse it when retrying the same create or
-          update call.
+          accepts idempotency keys on every <code>POST</code>
+          {". "}Generate a UUID per logical attempt and reuse it when retrying
+          the same create or update call.
         </li>
         <li>
           <strong>Stripe is separate from PayPal.</strong> Keep this guide next
-          to <Link href={"/docs/payments/braintree" as Route}>Braintree</Link>,
+          to <Link href={"/docs/payments/braintree" as Route}>Braintree</Link>
+          {", "}
           not under it. Braintree is PayPal&apos;s gateway; Stripe is a separate
           provider.
         </li>
@@ -103,7 +104,7 @@ export default function Page() {
           >
             Stripe Dashboard
           </a>
-          .
+          {"."}
         </li>
         <li>
           Install and authenticate the{" "}
@@ -124,9 +125,10 @@ export default function Page() {
         </li>
         <li>
           Add a webhook endpoint for your app and copy its{" "}
-          <strong>Signing secret</strong>, which starts with <code>whsec_</code>
-          . For local development, <code>stripe listen</code> prints a different
-          secret than the Dashboard endpoint.
+          <strong>Signing secret</strong>
+          {", "}which starts with <code>whsec_</code>
+          {". "}For local development, <code>stripe listen</code> prints a
+          different secret than the Dashboard endpoint.
         </li>
       </ol>
 
@@ -353,11 +355,13 @@ app.post(
 
       <h2 id="6-redirect-from-the-browser">6. Redirect from the browser</h2>
       <p>
-        If your route returns a <code>session.url</code>, a plain
+        If your route returns a <code>session.url</code>
+        {", "}a plain
         <code>window.location.assign(url)</code> is enough. If you prefer
         redirecting by Session ID, load Stripe.js from{" "}
         <code>@stripe/stripe-js</code>
-        and call <code>redirectToCheckout</code>:
+        and call <code>redirectToCheckout</code>
+        {": "}
       </p>
       <CodeBlock
         code={`import { loadStripe } from "@stripe/stripe-js";
@@ -503,9 +507,12 @@ await state.stripe.refund({
       <p>
         The SDK throws structured <code>Stripe.errors.StripeError</code>
         subclasses for API, card, authentication, rate-limit, and connection
-        failures. Preserve <code>requestId</code>, <code>code</code>,{" "}
-        <code>decline_code</code>, and <code>payment_intent</code> in internal
-        logs, but return a stable <Link href="/docs/errors">problem+json</Link> shape to clients.
+        failures. Preserve <code>requestId</code>
+        {", "}<code>code</code>
+        {", "}
+        <code>decline_code</code>
+        {", "}and <code>payment_intent</code> in internal logs, but return a
+        stable <Link href="/docs/errors">problem+json</Link> shape to clients.
       </p>
 
       <h2 id="runtimes">Runtimes</h2>
@@ -529,7 +536,8 @@ await state.stripe.refund({
         <li>
           <strong>
             Use Checkout first, Payment Intents when you need control.
-          </strong> Payment Intents are the lower-level API for custom payment forms and
+          </strong>{" "}
+          Payment Intents are the lower-level API for custom payment forms and
           advanced flows. Start there only when hosted Checkout cannot model the
           experience.
         </li>
@@ -548,10 +556,12 @@ await state.stripe.refund({
 
       <p>
         See also the{" "}
-        <Link href={"/docs/payments" as Route}>payments overview</Link>,{" "}
-        <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>,{" "}
-        <Link href={"/docs/payments/square" as Route}>Square guide</Link>, and{" "}
-        <Link href="/docs/errors">problem+json errors</Link>.
+        <Link href={"/docs/payments" as Route}>payments overview</Link>
+        {", "}
+        <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>
+        {", "}
+        <Link href={"/docs/payments/square" as Route}>Square guide</Link>
+        {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>
   );

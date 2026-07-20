@@ -30,35 +30,38 @@ export default function Page() {
     <>
       <h1>IP reputation / dynamic denylist feed</h1>
       <p>
-        DaloyJS ships <code>ipReputation()</code>.
-        Where <code>ipRestriction()</code> enforces a <em>static</em> allow/deny
-        list compiled once at startup, <code>ipReputation()</code> wires{" "}
-        <strong>pluggable, periodically-refreshed abuse feeds</strong> (Tor
-        exit lists, Spamhaus DROP, cloud-abuse ranges, or your own threat
+        DaloyJS ships <code>ipReputation()</code>
+        {". "}Where <code>ipRestriction()</code> enforces a <em>static</em>{" "}
+        allow/deny list compiled once at startup, <code>ipReputation()</code>{" "}
+        wires <strong>pluggable, periodically-refreshed abuse feeds</strong>{" "}
+        (Tor exit lists, Spamhaus DROP, cloud-abuse ranges, or your own threat
         intelligence) into the request path without a redeploy.
       </p>
       <ul>
         <li>
-          <strong>Pluggable feeds</strong>: any source that yields IP / CIDR
-          strings. <code>urlFeed()</code> ships for the common case (fetch a
-          newline / Spamhaus-DROP-style list over HTTP).
+          <strong>Pluggable feeds</strong>
+          {": "}any source that yields IP / CIDR strings.{" "}
+          <code>urlFeed()</code> ships for the common case (fetch a newline /
+          Spamhaus-DROP-style list over HTTP).
         </li>
         <li>
-          <strong>Periodic refresh</strong>: the denylist reloads on an
+          <strong>Periodic refresh</strong>
+          {": "}the denylist reloads on an
           <code>unref</code>&apos;d timer so stale ranges expire and new ones
           are picked up automatically.
         </li>
         <li>
-          <strong>Fail-open</strong>: a denylist is additive defense, never the
-          only gate. If a feed can&apos;t be loaded (initial or refresh),
-          traffic is <em>not</em> blocked: the last-known-good list is retained.
-          A feed outage never takes your app down.
+          <strong>Fail-open</strong>
+          {": "}a denylist is additive defense, never the only gate. If a feed
+          can&apos;t be loaded (initial or refresh), traffic is <em>not</em>{" "}
+          blocked: the last-known-good list is retained. A feed outage never
+          takes your app down.
         </li>
       </ul>
       <p>
         It reuses the same SSRF-grade CIDR matcher as{" "}
-        <code>ipRestriction()</code>, is dependency-free, and runs on every
-        supported runtime.
+        <code>ipRestriction()</code>
+        {", "}is dependency-free, and runs on every supported runtime.
       </p>
 
       <FlowDiagram
@@ -114,7 +117,8 @@ process.on("SIGTERM", () => reputation.stop());`}
 
       <h2 id="wiring-abuse-feeds">Wiring abuse feeds</h2>
       <p>
-        A feed is anything implementing <code>IpReputationFeed</code>:
+        A feed is anything implementing <code>IpReputationFeed</code>
+        {": "}
       </p>
       <CodeBlock
         language="ts"
@@ -126,12 +130,14 @@ process.on("SIGTERM", () => reputation.stop());`}
       <p>
         <code>urlFeed()</code> covers the common case. It fetches the URL,
         understands the Spamhaus-DROP-style{" "}
-        <code>{"<cidr> ; <annotation>"}</code> format, and skips <code>#</code>,{" "}
-        <code>;</code>, and <code>{"//"}</code> comment lines. Lines that
-        aren&apos;t valid IPs/CIDRs are skipped, so a partially-malformed feed
-        still loads its good rows. Its outbound fetch is{" "}
-        <a href="/docs/security/fetch-guard">SSRF-hardened by default</a>{" "}
-        (see the security notes below).
+        <code>{"<cidr> ; <annotation>"}</code> format, and skips <code>#</code>
+        {", "}
+        <code>;</code>
+        {", "}and <code>{"//"}</code> comment lines. Lines that aren&apos;t
+        valid IPs/CIDRs are skipped, so a partially-malformed feed still loads
+        its good rows. Its outbound fetch is{" "}
+        <a href="/docs/security/fetch-guard">SSRF-hardened by default</a> (see
+        the security notes below).
       </p>
       <CodeBlock
         language="ts"
@@ -169,7 +175,8 @@ const reputation = ipReputation({
         </li>
       </ul>
       <p>
-        Observe feed health with <code>onError</code>:
+        Observe feed health with <code>onError</code>
+        {": "}
       </p>
       <CodeBlock
         language="ts"
@@ -200,7 +207,9 @@ const reputation = ipReputation({
 });`}
       />
 
-      <h2 id="manual-refresh-and-introspection">Manual refresh &amp; introspection</h2>
+      <h2 id="manual-refresh-and-introspection">
+        Manual refresh &amp; introspection
+      </h2>
       <p>
         <code>ipReputation()</code> returns a controller you can drive directly:
       </p>
@@ -224,7 +233,8 @@ reputation.has("203.0.113.7");       // probe without side effects`}
         <code>trustProxyHeaders: true</code> to read{" "}
         <code>X-Forwarded-For</code> / <code>X-Real-IP</code> (only behind a
         proxy you trust to overwrite them), or pass your own{" "}
-        <code>resolveIp</code>:
+        <code>resolveIp</code>
+        {": "}
       </p>
       <CodeBlock
         language="ts"
@@ -254,8 +264,8 @@ reputation.has("203.0.113.7");       // probe without side effects`}
           </a>{" "}
           instance (per-hop redirect re-validation, cloud-metadata and internal
           IPs blocked), so a compromised feed host can&apos;t redirect the
-          request into internal space. Override <code>fetchImpl</code> only for a
-          non-standard runtime, or with{" "}
+          request into internal space. Override <code>fetchImpl</code> only for
+          a non-standard runtime, or with{" "}
           <code>
             fetchGuard({"{"} allowPrivate: true {"}"})
           </code>{" "}

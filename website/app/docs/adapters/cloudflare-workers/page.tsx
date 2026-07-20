@@ -81,13 +81,15 @@ cd my-api
 pnpm dev   # wrangler dev under the hood`}
       />
 
-      <h2 id="worker-entrypoint-no-bindings">Worker entrypoint (no bindings)</h2>
+      <h2 id="worker-entrypoint-no-bindings">
+        Worker entrypoint (no bindings)
+      </h2>
       <p>
         If you don&apos;t need <code>env</code> bindings or the Worker{" "}
-        <code>ExecutionContext</code>, <code>toFetchHandler</code> is a
-        one-liner. It returns the <code>&#123; fetch &#125;</code> object
-        Workers expect as the default export, so do <strong>not</strong>{" "}
-        wrap it again.
+        <code>ExecutionContext</code>
+        {", "}<code>toFetchHandler</code> is a one-liner. It returns the{" "}
+        <code>&#123; fetch &#125;</code> object Workers expect as the default
+        export, so do <strong>not</strong> wrap it again.
       </p>
       <CodeBlock
         language="ts"
@@ -146,12 +148,14 @@ pnpm wrangler deploy`}
 
       <h2 id="bindings-env">Bindings (env)</h2>
       <p>
-        <code>toFetchHandler(app)</code> only forwards the <code>Request</code>.
+        <code>toFetchHandler(app)</code> only forwards the <code>Request</code>
+        {". "}
         To expose Worker bindings (KV, R2, D1, Durable Objects, Queues,
         Hyperdrive, secrets) to your handlers, write the module-format export by
         hand and inject the bindings into the app with{" "}
-        <code>app.decorate(...)</code>. That&apos;s how DaloyJS makes
-        runtime values available on <code>ctx.state</code> inside every handler.
+        <code>app.decorate(...)</code>
+        {". "}That&apos;s how DaloyJS makes runtime values available on{" "}
+        <code>ctx.state</code> inside every handler.
       </p>
       <CodeBlock
         language="ts"
@@ -204,7 +208,8 @@ export default {
         <li>
           No raw TCP. Use <strong>Hyperdrive</strong> for Postgres/MySQL, or
           HTTP drivers like Neon&apos;s serverless driver, PlanetScale&apos;s{" "}
-          <code>@planetscale/database</code>, or Turso/libSQL. See{" "}
+          <code>@planetscale/database</code>
+          {", "}or Turso/libSQL. See{" "}
           <Link href="/docs/databases">Database hosting</Link>.
         </li>
         <li>
@@ -214,9 +219,8 @@ export default {
         </li>
         <li>
           For background work, decorate the app with a <code>waitUntil</code>{" "}
-          wrapper (see the bindings example above):{" "}
-          <code>toFetchHandler</code> alone does not forward the Worker{" "}
-          <code>ExecutionContext</code>.
+          wrapper (see the bindings example above): <code>toFetchHandler</code>{" "}
+          alone does not forward the Worker <code>ExecutionContext</code>.
         </li>
       </ul>
 

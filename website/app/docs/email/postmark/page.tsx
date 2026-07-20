@@ -84,7 +84,8 @@ export default function Page() {
       <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
-          Create a Postmark server under <strong>Servers → New server</strong>,
+          Create a Postmark server under <strong>Servers → New server</strong>
+          {", "}
           then open it and copy the <strong>Server API Token</strong> from{" "}
           <strong>API Tokens</strong>.
         </li>
@@ -97,11 +98,12 @@ export default function Page() {
           Decide which <strong>Message Stream</strong> you&apos;ll use:
           <ul>
             <li>
-              <code>outbound</code>: default transactional stream
+              <code>outbound</code>
+              {": "}default transactional stream
             </li>
             <li>
-              <code>broadcast</code>: bulk/marketing (must be enabled on the
-              server)
+              <code>broadcast</code>
+              {": "}bulk/marketing (must be enabled on the server)
             </li>
           </ul>
         </li>
@@ -204,7 +206,8 @@ app.post(
       <h2 id="server-side-templates">Server-side templates</h2>
       <p>
         Create a template in <strong>Templates</strong> (Mustachio syntax), then
-        send it by <code>TemplateAlias</code>:
+        send it by <code>TemplateAlias</code>
+        {": "}
       </p>
       <CodeBlock
         code={`await client.sendEmailWithTemplate({
@@ -233,15 +236,18 @@ app.post(
         The <code>postmark</code> SDK currently uses <code>axios</code> under
         the hood, so it targets Node and Node-compatible runtimes (Bun,
         Deno&apos;s Node-compat, AWS Lambda). For{" "}
-        <Link href="/docs/adapters">Cloudflare Workers</Link>, call the REST endpoint
-        directly with <code>fetch</code>:
+        <Link href="/docs/adapters">Cloudflare Workers</Link>
+        {", "}call the REST endpoint directly with <code>fetch</code>
+        {": "}
         <code>POST https://api.postmarkapp.com/email</code> with the header{" "}
         <code>X-Postmark-Server-Token</code>.
       </p>
 
       <p>
-        See also <Link href="/docs/email/resend">Resend</Link>,{" "}
-        <Link href="/docs/email/mailgun">Mailgun</Link>, and the{" "}
+        See also <Link href="/docs/email/resend">Resend</Link>
+        {", "}
+        <Link href="/docs/email/mailgun">Mailgun</Link>
+        {", "}and the{" "}
         <Link href="/docs/email">email integrations overview</Link>.
       </p>
     </>

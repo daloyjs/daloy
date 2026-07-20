@@ -36,9 +36,9 @@ export default function Page() {
       </blockquote>
       <p>
         Daloy ships exactly one correct way to hash a password. The API is two
-        functions with <strong>no knobs</strong>: no algorithm switch, no
-        cost-factor argument, no salt management. Import them from the{" "}
-        <code>@daloyjs/core/hashing</code> subpath:
+        functions with <strong>no knobs</strong>
+        {": "}no algorithm switch, no cost-factor argument, no salt management.
+        Import them from the <code>@daloyjs/core/hashing</code> subpath:
       </p>
       <CodeBlock
         code={`import { passwordHash, passwordVerify } from "@daloyjs/core/hashing";
@@ -88,11 +88,14 @@ await passwordVerify("wrong", hash);   // false`}
         Node core: using it means installing a native binding, and{" "}
         <code>@daloyjs/core</code> refuses to ship runtime dependencies as a
         supply-chain guarantee. scrypt is memory-hard like Argon2, ships in{" "}
-        <code>node:crypto</code>, and Daloy pins it to the OWASP-aligned
-        parameters (<code>N = 2^17</code>, <code>r = 8</code>,{" "}
-        <code>p = 1</code>, 32-byte key, 16-byte salt). bcrypt is not
-        memory-hard and silently truncates passwords at 72 bytes, so it is not
-        offered at all.
+        <code>node:crypto</code>
+        {", "}and Daloy pins it to the OWASP-aligned parameters (
+        <code>N = 2^17</code>
+        {", "}<code>r = 8</code>
+        {", "}
+        <code>p = 1</code>
+        {", "}32-byte key, 16-byte salt). bcrypt is not memory-hard and
+        silently truncates passwords at 72 bytes, so it is not offered at all.
       </p>
       <p>
         If your organization mandates Argon2id specifically, install the{" "}
@@ -104,11 +107,12 @@ await passwordVerify("wrong", hash);   // false`}
       <p>
         <code>passwordVerify()</code> re-derives the key with the parameters
         stored in the PHC string and compares digests with{" "}
-        <code>crypto.timingSafeEqual</code>. It returns <code>false</code> for{" "}
-        <em>any</em> failure, including a malformed or truncated stored hash,
-        and never throws. A caller (or an attacker watching your error
-        responses) cannot distinguish &quot;corrupt hash in the database&quot;
-        from &quot;wrong password&quot; through exception side channels.
+        <code>crypto.timingSafeEqual</code>
+        {". "}It returns <code>false</code> for <em>any</em> failure, including
+        a malformed or truncated stored hash, and never throws. A caller (or an
+        attacker watching your error responses) cannot distinguish &quot;corrupt
+        hash in the database&quot; from &quot;wrong password&quot; through
+        exception side channels.
       </p>
 
       <BranchDiagram
@@ -171,15 +175,16 @@ await passwordVerify("wrong", hash);   // false`}
           <code>passwordVerify</code> returns <code>false</code>.
         </li>
         <li>
-          <strong>4096-byte cap</strong>: scrypt runs PBKDF2-HMAC-SHA256 over
-          the full password, so an unbounded input lets an attacker amplify CPU
-          per call. Anything longer than 4096 UTF-8 bytes is refused, which is
-          far above any legitimate passphrase.
+          <strong>4096-byte cap</strong>
+          {": "}scrypt runs PBKDF2-HMAC-SHA256 over the full password, so an
+          unbounded input lets an attacker amplify CPU per call. Anything longer
+          than 4096 UTF-8 bytes is refused, which is far above any legitimate
+          passphrase.
         </li>
         <li>
-          <strong>Fresh salt per hash</strong>: hashing the same password twice
-          yields two different strings, so equal passwords are not linkable
-          across rows.
+          <strong>Fresh salt per hash</strong>
+          {": "}hashing the same password twice yields two different strings,
+          so equal passwords are not linkable across rows.
         </li>
       </ul>
 

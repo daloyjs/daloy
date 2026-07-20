@@ -63,9 +63,10 @@ app.post("/password-reset", { hooks: authLimit(), ... });
         language="ts"
       />
       <p>
-        When you supply a custom <code>store</code>, Daloy still prefixes the
-        derived key with <code>{`\`\${groupId}:\``}</code> so two groups cannot
-        collide in a shared Redis backend either.
+        When you supply a custom <code>store</code>
+        {", "}Daloy still prefixes the derived key with{" "}
+        <code>{`\`\${groupId}:\``}</code> so two groups cannot collide in a
+        shared Redis backend either.
       </p>
 
       <h2 id="2-combine-primitives-every-some-except">
@@ -117,36 +118,47 @@ app.use(some(
         <li>
           <code>some(...layers)</code> runs each layer&apos;s auth gate in order
           until one passes. When every candidate uses <code>preBody</code> (as
-          the built-in <code>bearerAuth()</code>, <code>basicAuth()</code>,{" "}
-          <code>jwk()</code>, and <code>clientCertAuth()</code> now do),
-          selection happens before body I/O; mixed stacks defer to{" "}
-          <code>beforeHandle</code>. A returned <code>Response</code> is treated
-          as a denial, the next layer gets a turn. The first failure wins when
-          every layer rejects, so place the auth scheme whose{" "}
-          <code>WWW-Authenticate</code> challenge you want clients to see first.
+          the built-in <code>bearerAuth()</code>
+          {", "}<code>basicAuth()</code>
+          {", "}
+          <code>jwk()</code>
+          {", "}and <code>clientCertAuth()</code> now do), selection happens
+          before body I/O; mixed stacks defer to <code>beforeHandle</code>
+          {". "}A returned <code>Response</code> is treated as a denial, the
+          next layer gets a turn. The first failure wins when every layer
+          rejects, so place the auth scheme whose <code>WWW-Authenticate</code>{" "}
+          challenge you want clients to see first.
         </li>
         <li>
           <code>except(when, hooks)</code> skips the wrapped bundle&apos;s{" "}
           <code>preBody</code> and <code>beforeHandle</code> gates for matching
-          paths (<code>/health</code>, <code>/public/**</code>,{" "}
+          paths (<code>/health</code>
+          {", "}<code>/public/**</code>
+          {", "}
           <code>/v1/*/meta</code>) or for any request where the supplied
-          predicate returns <code>true</code>. Its <code>onRequest</code>,{" "}
-          <code>afterHandle</code>, <code>onSend</code>, and{" "}
-          <code>onResponse</code> phases still run, so shared concerns wired
-          through those phases keep working.
+          predicate returns <code>true</code>
+          {". "}Its <code>onRequest</code>
+          {", "}
+          <code>afterHandle</code>
+          {", "}<code>onSend</code>
+          {", "}and <code>onResponse</code> phases still run, so shared
+          concerns wired through those phases keep working.
         </li>
       </ul>
 
       <blockquote>
         <strong>Perimeter guards run on unmatched requests too.</strong>{" "}
         <code>beforeHandle</code> guards registered with{" "}
-        <code>app.use(...)</code>, such as <code>rateLimit()</code>,{" "}
-        <code>ipRestriction()</code>, <code>csrf()</code>, and your own WAF
-        bundles, also run on the cold dispatch path: a request that matches no
-        route (<code>404</code>), hits a registered path with the wrong method
-        and gets <code>405</code>, or arrives as an <code>OPTIONS</code>{" "}
-        preflight.
-        Without this, an attacker could flood random paths to slip past a{" "}
+        <code>app.use(...)</code>
+        {", "}such as <code>rateLimit()</code>
+        {", "}
+        <code>ipRestriction()</code>
+        {", "}<code>csrf()</code>
+        {", "}and your own WAF bundles, also run on the cold dispatch path: a
+        request that matches no route (<code>404</code>), hits a registered path
+        with the wrong method and gets <code>405</code>
+        {", "}or arrives as an <code>OPTIONS</code> preflight. Without this, an
+        attacker could flood random paths to slip past a{" "}
         <code>rateLimit()</code> that an operator reasonably expects to cover
         every request. Two consequences worth knowing:
       </blockquote>
@@ -159,19 +171,21 @@ app.use(some(
           When auth is installed globally (e.g.{" "}
           <code>app.use(except(exempt, bearerAuth(...)))</code>), an
           unauthenticated request to an <em>unmatched</em> path is rejected with{" "}
-          <code>401</code> rather than <code>404</code>. This is intentional
-          route-enumeration resistance: the perimeter answers the same way
-          whether or not the route exists. Per-route hooks are unaffected, and
-          no handler is ever reached. Need public unknown paths to stay plain{" "}
-          <code>404</code>s instead? Avoid global <code>app.use()</code> auth
-          for that surface; use route/group-scoped hooks for auth and reserve{" "}
-          <code>App({"{ hooks }"})</code> <code>onRequest</code> for checks that
-          should truly run before routing.
+          <code>401</code> rather than <code>404</code>
+          {". "}This is intentional route-enumeration resistance: the perimeter
+          answers the same way whether or not the route exists. Per-route hooks
+          are unaffected, and no handler is ever reached. Need public unknown
+          paths to stay plain <code>404</code>s instead? Avoid global{" "}
+          <code>app.use()</code> auth for that surface; use route/group-scoped
+          hooks for auth and reserve <code>App({"{ hooks }"})</code>{" "}
+          <code>onRequest</code> for checks that should truly run before
+          routing.
         </li>
       </ul>
 
       <h2 id="3-iprestriction-cidr-allow-deny">
-        3. <code>ipRestriction()</code>: CIDR allow / deny
+        3. <code>ipRestriction()</code>
+        {": "}CIDR allow / deny
       </h2>
       <p>
         Block or allow requests by source IP or CIDR range. Pairs naturally with{" "}
@@ -213,11 +227,13 @@ app.use(ipRestriction({
       </h2>
       <p>
         Mark a route as <code>internal: true</code> and the public{" "}
-        <code>app.fetch(...)</code> entry point returns <code>404</code>:
+        <code>app.fetch(...)</code> entry point returns <code>404</code>
+        {": "}
         existence cannot be probed. The same route runs normally through{" "}
-        <code>app.inject(request)</code>, which is meant for cron jobs, admin
-        scripts, and integration tests. Internal routes are also excluded from
-        generated OpenAPI by default; pass <code>includeInternal: true</code> to{" "}
+        <code>app.inject(request)</code>
+        {", "}which is meant for cron jobs, admin scripts, and integration
+        tests. Internal routes are also excluded from generated OpenAPI by
+        default; pass <code>includeInternal: true</code> to{" "}
         <code>generateOpenAPI()</code> (imported from the{" "}
         <code>@daloyjs/core/openapi</code> subpath) for private admin SDK
         generation. The framework also filters

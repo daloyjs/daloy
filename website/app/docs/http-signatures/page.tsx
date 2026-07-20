@@ -30,15 +30,15 @@ export default function Page() {
     <>
       <h1>HTTP message signatures (RFC 9421)</h1>
       <p>
-        DaloyJS ships first-party{" "}
-        <strong>HTTP Message Signatures</strong> (
+        DaloyJS ships first-party <strong>HTTP Message Signatures</strong> (
         <a href="https://www.rfc-editor.org/rfc/rfc9421" rel="noreferrer">
           RFC 9421
         </a>
-        ), the IETF-standard way to prove a server-to-server request came from
-        a trusted peer. Where <a href="/docs/webhook-delivery">webhook HMAC</a>{" "}
+        ), the IETF-standard way to prove a server-to-server request came from a
+        trusted peer. Where <a href="/docs/webhook-delivery">webhook HMAC</a>{" "}
         binds a signature to a request <em>body</em> and{" "}
-        <a href="/docs/mtls">mTLS</a> authenticates the TLS <em>peer</em>,
+        <a href="/docs/mtls">mTLS</a> authenticates the TLS <em>peer</em>
+        {", "}
         message signatures bind a signature to a caller-chosen set of{" "}
         <strong>HTTP message components</strong> (method, path, authority,
         selected headers&hellip;) carried in the standard <code>Signature</code>{" "}
@@ -67,13 +67,15 @@ export default function Page() {
         </li>
         <li>
           A configurable <code>requiredComponents</code> set must be covered
-          (default <code>[&quot;@method&quot;, &quot;@target-uri&quot;]</code>), so a
-          peer cannot sign an empty or irrelevant component set. The default
-          binds scheme, authority, path, <strong>and query</strong>; a
+          (default <code>[&quot;@method&quot;, &quot;@target-uri&quot;]</code>),
+          so a peer cannot sign an empty or irrelevant component set. The
+          default binds scheme, authority, path, <strong>and query</strong>; a
           path-only signature (<code>@path</code>) no longer satisfies a default
           verify, so an attacker cannot swap the query string under a signature
           that left it unbound. Pass{" "}
-          <code>requiredComponents: [&quot;@method&quot;, &quot;@path&quot;]</code>{" "}
+          <code>
+            requiredComponents: [&quot;@method&quot;, &quot;@path&quot;]
+          </code>{" "}
           explicitly if you deliberately sign only the path.
         </li>
         <li>
@@ -88,10 +90,11 @@ export default function Page() {
           <code>alg: &quot;none&quot;</code>-style escapes do not exist.
         </li>
         <li>
-          RSA keys (<code>rsa-pss-sha512</code>, <code>rsa-v1_5-sha256</code>)
-          must have at least a 2048-bit modulus. Shorter keys are refused, in
-          parity with the JWT verifier and per NIST SP 800-131A (RSA under 2048
-          bits has been disallowed since 2014).
+          RSA keys (<code>rsa-pss-sha512</code>
+          {", "}<code>rsa-v1_5-sha256</code>) must have at least a 2048-bit
+          modulus. Shorter keys are refused, in parity with the JWT verifier and
+          per NIST SP 800-131A (RSA under 2048 bits has been disallowed since
+          2014).
         </li>
         <li>
           Optional <code>nonce</code> replay defense via an{" "}
@@ -105,21 +108,26 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <code>hmac-sha256</code>: symmetric shared secret (simplest to
-          deploy).
+          <code>hmac-sha256</code>
+          {": "}symmetric shared secret (simplest to deploy).
         </li>
         <li>
-          <code>ed25519</code>, <code>ecdsa-p256-sha256</code>,{" "}
-          <code>ecdsa-p384-sha384</code>: asymmetric (publish a public key, no
-          shared secret).
+          <code>ed25519</code>
+          {", "}<code>ecdsa-p256-sha256</code>
+          {", "}
+          <code>ecdsa-p384-sha384</code>
+          {": "}asymmetric (publish a public key, no shared secret).
         </li>
         <li>
-          <code>rsa-pss-sha512</code>, <code>rsa-v1_5-sha256</code>: RSA (2048-bit
-          modulus floor; see below).
+          <code>rsa-pss-sha512</code>
+          {", "}<code>rsa-v1_5-sha256</code>
+          {": "}RSA (2048-bit modulus floor; see below).
         </li>
       </ul>
 
-      <h2 id="verify-inbound-requests-middleware">Verify inbound requests (middleware)</h2>
+      <h2 id="verify-inbound-requests-middleware">
+        Verify inbound requests (middleware)
+      </h2>
       <p>
         <code>httpSignatureAuth()</code> rejects any request without a valid
         signature with a <code>401</code> (<code>Cache-Control: no-store</code>)
@@ -141,14 +149,16 @@ export default function Page() {
             to: "httpSignatureAuth()",
             kind: "note",
             label: "Resolve keyid -> key (alg pinned to key)",
-            detail: "alg not in allowlist -> alg_not_allowed; key missing -> key_not_found",
+            detail:
+              "alg not in allowlist -> alg_not_allowed; key missing -> key_not_found",
           },
           {
             from: "httpSignatureAuth()",
             to: "Caller",
             kind: "note",
             label: "Forged / stale / replayed / missing component -> 401",
-            detail: "invalid_signature, signature_stale, replay_detected, missing_required_component",
+            detail:
+              "invalid_signature, signature_stale, replay_detected, missing_required_component",
           },
           {
             from: "httpSignatureAuth()",
@@ -227,12 +237,15 @@ const signed = await signRequest(req, {
 await fetch(signed);`}
       />
 
-      <h2 id="bind-the-body-with-content-digest-rfc-9530">Bind the body with Content-Digest (RFC 9530)</h2>
+      <h2 id="bind-the-body-with-content-digest-rfc-9530">
+        Bind the body with Content-Digest (RFC 9530)
+      </h2>
       <p>
         Message signatures cover headers and derived components, not the body.
         To bind the body, compute a <code>Content-Digest</code> header with{" "}
-        <code>contentDigest()</code>, include <code>content-digest</code> in the
-        covered components, and re-check it on the receiving side with{" "}
+        <code>contentDigest()</code>
+        {", "}include <code>content-digest</code> in the covered components,
+        and re-check it on the receiving side with{" "}
         <code>verifyContentDigest()</code>.
       </p>
       <CodeBlock
@@ -305,13 +318,27 @@ if (!result.valid) {
         <code>verifyMessage()</code> / <code>verifyRequest()</code> never throw
         on a forged or malformed signature. They return{" "}
         <code>{`{ valid: false, reason }`}</code> with a stable code such as{" "}
-        <code>invalid_signature</code>, <code>signature_stale</code>,{" "}
-        <code>created_in_future</code>, <code>signature_expired</code>,{" "}
-        <code>missing_created</code>, <code>missing_required_component</code>,{" "}
-        <code>alg_not_allowed</code>, <code>alg_mismatch</code>,{" "}
-        <code>key_not_found</code>, <code>replay_detected</code>,{" "}
-        <code>tag_mismatch</code>, or <code>malformed_signature_headers</code>.
-        They throw only on a programming error (an empty <code>algorithms</code>{" "}
+        <code>invalid_signature</code>
+        {", "}<code>signature_stale</code>
+        {", "}
+        <code>created_in_future</code>
+        {", "}<code>signature_expired</code>
+        {", "}
+        <code>missing_created</code>
+        {", "}<code>missing_required_component</code>
+        {", "}
+        <code>alg_not_allowed</code>
+        {", "}<code>alg_mismatch</code>
+        {", "}
+        <code>key_not_found</code>
+        {", "}<code>replay_detected</code>
+        {", "}
+        <code>tag_mismatch</code>
+        {", "}or <code>malformed_signature_headers</code>
+        {". "}
+        They throw only on a programming error (an empty <code>
+          algorithms
+        </code>{" "}
         allowlist, or WebCrypto being unavailable).
       </p>
     </>

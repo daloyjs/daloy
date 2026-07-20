@@ -532,7 +532,7 @@ export default function BlogPostPage() {
             <em>
               which endpoint, can you re-send the request, what time exactly
             </em>
-            . Nobody is happy.
+            {". "}Nobody is happy.
           </p>
 
           <p>
@@ -540,9 +540,9 @@ export default function BlogPostPage() {
             point: <strong>RFC 9457 Problem Details for HTTP APIs</strong> (the
             freshly-renamed successor to RFC 7807). One Content-Type, one
             document shape, one set of optional fields, and you can build
-            <em> one</em> client-side error helper that works for every
-            endpoint. DaloyJS uses it for every error response, not sometimes,
-            every time, and this post is the tour.
+            <em>one</em> client-side error helper that works for every endpoint.
+            DaloyJS uses it for every error response, not sometimes, every time,
+            and this post is the tour.
           </p>
 
           <h2>Why the &quot;everyone invents their own&quot; pattern hurts</h2>
@@ -558,11 +558,11 @@ export default function BlogPostPage() {
           <p>
             That bottom panel is the actual cost. You can&apos;t write{" "}
             <em>one</em> <code>fetch</code> wrapper. Your TypeScript types for
-            &quot;the error case&quot; are <code>unknown</code>. Your telemetry
-            pipeline can&apos;t group errors by type because there <em>is</em>{" "}
-            no canonical type field. Every &quot;let&apos;s improve error
-            handling&quot; refactor I&apos;ve been on in the last decade started
-            here.
+            &quot;the error case&quot; are <code>unknown</code>
+            {". "}Your telemetry pipeline can&apos;t group errors by type
+            because there <em>is</em> no canonical type field. Every
+            &quot;let&apos;s improve error handling&quot; refactor I&apos;ve
+            been on in the last decade started here.
           </p>
 
           <h2>The contract: one document shape, forever</h2>
@@ -590,7 +590,8 @@ export default function BlogPostPage() {
           <p>
             The single biggest ergonomic win is that you write your handlers in
             terms of <em>successful</em> responses only. Anything that goes
-            wrong, you <code>throw</code>. The framework does the rest.
+            wrong, you <code>throw</code>
+            {". "}The framework does the rest.
           </p>
 
           <EditorFrame
@@ -682,9 +683,9 @@ export default function BlogPostPage() {
 
           <p>
             You don&apos;t throw <code>ValidationError</code> by hand most of
-            the time, the framework throws it for you the moment a request
-            body, params, query, or headers fail their declared schema. It
-            carries an <code>errors</code> array of{" "}
+            the time, the framework throws it for you the moment a request body,
+            params, query, or headers fail their declared schema. It carries an{" "}
+            <code>errors</code> array of{" "}
             <code>&#123; path, message &#125;</code> records, which is the shape
             every form library on the planet expects.
           </p>
@@ -740,12 +741,12 @@ export default function BlogPostPage() {
 
           <p>
             Whoever named these two status codes did the field a disservice.
-            <em> Unauthorized</em> means &quot;we don&apos;t know who you
+            <em>Unauthorized</em> means &quot;we don&apos;t know who you
             are&quot; (a.k.a. unauthenticated). <em>Forbidden</em> means
             &quot;we know who you are; you can&apos;t do this&quot;. The
             framework picks the right one based on which middleware triggered
             it, and your bearerAuth automatically attaches the
-            <code> WWW-Authenticate</code> challenge:
+            <code>WWW-Authenticate</code> challenge:
           </p>
 
           <EditorFrame
@@ -760,12 +761,13 @@ export default function BlogPostPage() {
 
           <p>
             One of my favorite quiet features of the error layer is the 5xx
-            redaction rule. When <code>NODE_ENV=production</code>, any error
-            with status ≥ 500 has its <code>detail</code> field{" "}
+            redaction rule. When <code>NODE_ENV=production</code>
+            {", "}any error with status ≥ 500 has its <code>detail</code> field{" "}
             <em>stripped from the response</em> before it leaves the server. The
             user gets the type, the title, the status, and a request-id-shaped{" "}
-            <code>instance</code>: enough to file a support ticket. The server
-            logs keep the full detail.
+            <code>instance</code>
+            {": "}enough to file a support ticket. The server logs keep the
+            full detail.
           </p>
 
           <EditorFrame
@@ -815,9 +817,10 @@ export default function BlogPostPage() {
           <p>
             The single most boring sentence in this post: when every error
             response is the same shape, asserting against errors is{" "}
-            <em>trivial</em>. There&apos;s nothing to special-case. A contract
-            test for &quot;this endpoint returns a 404 for a missing id&quot; is
-            six lines:
+            <em>trivial</em>
+            {". "}There&apos;s nothing to special-case. A contract test for
+            &quot;this endpoint returns a 404 for a missing id&quot; is six
+            lines:
           </p>
 
           <EditorFrame
@@ -833,9 +836,12 @@ export default function BlogPostPage() {
             <code>ProblemDetails</code> schema that every error response
             references, the typed-client codegen produces one matching
             TypeScript type. The frontend autocompletes{" "}
-            <code>problem.type</code>, <code>problem.detail</code>,{" "}
-            <code>problem.errors</code>. No drift between the docs, the wire
-            format, and the types, they are literally the same source.
+            <code>problem.type</code>
+            {", "}<code>problem.detail</code>
+            {", "}
+            <code>problem.errors</code>
+            {". "}No drift between the docs, the wire format, and the types,
+            they are literally the same source.
           </p>
 
           <EditorFrame
@@ -854,19 +860,19 @@ export default function BlogPostPage() {
             your own ad-hoc JSON from a handler (please don&apos;t). It does
             nothing for non-JSON error pages from upstream proxies (your
             CDN&apos;s 502 HTML is still HTML; deal with it in the client). And
-            the <code>type</code> URI is a <em>stable identifier</em>, not a
-            link the client necessarily dereferences, treat it like an enum
-            value. Beyond those: it&apos;s the closest thing to a free lunch the
-            HTTP standards world has given us in years.
+            the <code>type</code> URI is a <em>stable identifier</em>
+            {", "}not a link the client necessarily dereferences, treat it like
+            an enum value. Beyond those: it&apos;s the closest thing to a free
+            lunch the HTTP standards world has given us in years.
           </p>
 
           <h2>Where to go next</h2>
 
           <p>
             The full reference for every built-in error class is in the{" "}
-            <Link href="/docs/errors">errors docs</Link>. If you&apos;re still
-            wiring up the surrounding pieces, typed client, sessions, rate
-            limiting, the{" "}
+            <Link href="/docs/errors">errors docs</Link>
+            {". "}If you&apos;re still wiring up the surrounding pieces, typed
+            client, sessions, rate limiting, the{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
               contract-first
             </Link>{" "}
