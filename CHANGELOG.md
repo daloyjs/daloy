@@ -15,6 +15,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.0.0-rc.5] - 2026-07-20
+
 ### Changed
 
 - **The toolchain now builds on TypeScript 7** (`typescript@7.0.2`, the
@@ -34,6 +36,10 @@ For the forward-looking plan and the full thematic release log, see
   workshop, and the `node-basic` / `bun-basic` templates; switch to
   `^0.100.0` when the stable Hey API release is published and has cleared
   the 24h release-age cooldown.
+- **Version: `1.0.0-rc.4` → `1.0.0-rc.5`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, JSR `@daloyjs/daloy`), the `create-daloy`
+  templates and their tests, the website version reference, the workshop, and
+  the SBOMs.
 
 ### Fixed
 
@@ -55,6 +61,25 @@ For the forward-looking plan and the full thematic release log, see
 - **Lambda adapter answers malformed events with `400` problem+json.** An
   event whose host/path cannot form a valid URL previously threw out of the
   handler, which API Gateway surfaces as an opaque `502`.
+- **The typed in-process client preserves required request inputs.**
+  `createInProcessClient(app)` / `createClient(app)` inputs no longer widen
+  every `query` and `headers` to optional: a route whose contract requires
+  `query` or `headers` now requires them on the client input too, while a
+  schema that accepts an empty object keeps the field optional. Routes with no
+  path parameters omit `params`, and a route with no required inputs at all can
+  be called with no argument. Type-level tests pin the client surface against
+  the route contracts so it cannot drift.
+- **Node adapter exposes the OS-assigned ephemeral port.** `serve()` from
+  `@daloyjs/core/node` now returns `handle.port` as a live getter over the
+  server's bound address, so a caller that passes `port: 0` can read the real
+  port after the server emits `listening` (before that it still reports the
+  requested port). Previously `handle.port` always echoed the requested value,
+  so `port: 0` callers had to reach into `handle.server.address()` themselves.
+- **Deno adapter graceful shutdown no longer throws `BadResource`.** The
+  adapter now aborts its listen signal only as a fallback for runtimes that
+  lack `HttpServer.shutdown()`; Deno 2.9 closes the listener resource inside
+  `shutdown()`, so aborting the same signal afterwards raised `BadResource`
+  during an otherwise clean drain.
 
 ### Added
 
@@ -89,6 +114,23 @@ For the forward-looking plan and the full thematic release log, see
   Gateway `sourceIp`). The pure edge delegators (Cloudflare, Vercel, Fastly)
   expose no peer socket; on those platforms client addresses continue to
   arrive via platform headers governed by `behindProxy` / `trustProxyHeaders`.
+- **`requestTimeoutMs` now aborts `ctx.request.signal` on timeout.** When a
+  request exceeds `requestTimeoutMs`, the framework aborts the request signal
+  with a `TimeoutError` `DOMException` (the same reason shape as
+  `AbortSignal.timeout()`) before responding `408`, so downstream I/O a handler
+  forwarded the signal to — `fetch`, a database driver — is cooperatively
+  cancelled instead of running to completion after the client already gave up.
+  The Node adapter wires the abort hook; on platform-managed runtimes
+  (Bun / Deno / Workers) and direct `app.fetch()` callers the hook is a safe
+  no-op and the timeout still resolves as a `408`. Single-threaded JS cannot
+  preempt CPU-bound work, so this is cooperative teardown, not forced cancellation.
+- **create-daloy preflights the Node and npm floors with clear, linked errors.**
+  The scaffolder now checks Node >= 24 up front (and, for npm scaffolds,
+  npm >= 12) and fails with an actionable, link-carrying message instead of a
+  cryptic syntax error or npm's raw `EBADENGINE` dump mid-install. npm scaffolds
+  also get `engines.npm: ">=12.0.0"` plus an `engine-strict=true` `.npmrc` so
+  the floor is actually enforced at install time; the version check fails open
+  when the runtime version can't be parsed.
 
 ### Security
 
@@ -166,6 +208,22 @@ inline — review them if you depend on the prior behavior.
   and `botGuard` resets stateful (`/g`, `/y`) user-agent regex `lastIndex`
   between requests so an allowlist match cannot flip-flop, and bounds its
   verification cache with write-recency eviction.
+- **`fetchGuard()` refuses URLs carrying userinfo credentials.** A target like
+  `http://user:pass@internal/` — a classic SSRF obfuscation that hides the real
+  host after the `@` — is now rejected up front with a typed
+  `SsrfBlockedError("credentials-in-url")` (new `SsrfBlockReason`) instead of
+  letting undici's `Request` constructor throw a raw `TypeError` that escaped
+  the SSRF-block contract and could misclassify a blocked attempt as an ordinary
+  upstream failure. The credentials are stripped from the URL recorded on the
+  error so a caller-supplied secret never reaches logs.
+- **`safeRedirect()` refuses same-origin paths outside Latin-1.** A same-origin
+  target containing any code point above `U+00FF` is rejected with a typed
+  `OpenRedirectBlockedError` (`non-latin1-target` reason). Such characters
+  cannot be written to the ISO-8859-1 `Location` header — `Headers.set` throws a
+  raw `TypeError`, which previously escaped the helper's error contract and
+  surfaced as an uncaught `500` — and they cover the Unicode slash homographs
+  (`⁄` `U+2044`, `∕` `U+2215`, `／` `U+FF0F`) that `NFKC` normalization can fold
+  into `/` to smuggle a protocol-relative redirect past a same-origin path check.
 
 ## [1.0.0-rc.4] - 2026-07-12
 
