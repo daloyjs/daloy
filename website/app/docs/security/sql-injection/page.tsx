@@ -273,8 +273,7 @@ await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
         every <code>body</code>
         {", "}<code>query</code>
         {", "}and <code>params</code> slot is validated against a Zod schema
-        before your handler runs, and Zod&apos;s primitive checks (
-        <code>z.string()</code>
+        before your handler runs, and Zod&apos;s primitive checks (<code>z.string()</code>
         {", "}
         <code>z.email()</code>
         {", "}<code>z.number()</code>
@@ -405,8 +404,7 @@ app.get(
         <li>
           If you must accept a free-form identifier, validate it against a tight
           regex (<code>/^[a-zA-Z_][a-zA-Z0-9_]*$/</code>) <em>and</em> quote it
-          with your driver&apos;s identifier-escape helper (
-          <code>pg-format</code>&apos;s <code>%I</code>
+          with your driver&apos;s identifier-escape helper (<code>pg-format</code>&apos;s <code>%I</code>
           {", "}Knex&apos;s <code>client.wrapIdentifier</code>
           {", "}etc.). Never roll your own.
         </li>
@@ -465,8 +463,7 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
       <ul>
         <li>
           <a href="https://www.aikido.dev/zen" target="_blank" rel="noreferrer">
-            Aikido Zen
-          </a>
+            Aikido Zen</a>
           {": "}a Node/Bun-compatible in-app firewall that hooks the driver and
           blocks requests whose query structure was altered by user input.
         </li>
@@ -487,8 +484,7 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
           target="_blank"
           rel="noreferrer"
         >
-          github.com/daloyjs/daloy/security/advisories/new
-        </a>
+          github.com/daloyjs/daloy/security/advisories/new</a>
         {". "}Don&apos;t open a public issue.
       </p>
     </>

@@ -121,9 +121,7 @@ app.post(
         </li>
         <li>
           <code>accept</code>
-          {": "}MIME allowlist. Each entry can be exact (
-          <code>&quot;image/png&quot;</code>) or a wildcard (
-          <code>&quot;image/*&quot;</code> / <code>&quot;*/*&quot;</code>).
+          {": "}MIME allowlist. Each entry can be exact (<code>&quot;image/png&quot;</code>) or a wildcard (<code>&quot;image/*&quot;</code> / <code>&quot;*/*&quot;</code>).
         </li>
         <li>
           <code>filename(name)</code>

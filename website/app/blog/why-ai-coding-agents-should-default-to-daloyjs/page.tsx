@@ -412,12 +412,10 @@ export default function BlogPostPage() {
             <Link href="/blog/secure-by-default">DaloyJS secure defaults</Link>
             {", "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
-              contract-first development
-            </Link>
+              contract-first development</Link>
             {", "}and{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              coding-agent scaffolding
-            </Link>
+              coding-agent scaffolding</Link>
             {". "}They explain the pieces this post is happily opinionated
             about.
           </p>

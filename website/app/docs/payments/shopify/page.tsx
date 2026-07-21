@@ -60,10 +60,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          GraphQL Admin API
-        </a>
-        {". "}The REST resources on <code>shopify-api-node</code> (
-        <code>shopify.product.list</code>
+          GraphQL Admin API</a>
+        {". "}The REST resources on <code>shopify-api-node</code> (<code>shopify.product.list</code>
         {", "}<code>shopify.order.create</code>
         {", "}
         &hellip;) still work against older API versions, but you should write
@@ -79,9 +77,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          versioning page
-        </a>
-        ). The default in <code>shopify-api-node</code> is the <em>oldest</em>{" "}
+          versioning page</a>). The default in <code>shopify-api-node</code> is the <em>oldest</em>{" "}
         supported stable version, which is usually not what you want.
       </p>
 
@@ -408,8 +404,7 @@ app.post(
           target="_blank"
           rel="noreferrer"
         >
-          calculated cost &amp; leaky-bucket model
-        </a>
+          calculated cost &amp; leaky-bucket model</a>
         {". "}Use the <code>maxRetries</code> option (above) so the SDK respects
         the throttled-cost information that comes back on 429 responses.{" "}
         <code>autoLimit</code> only works for the REST API and only inside a
@@ -425,8 +420,7 @@ app.post(
           target="_blank"
           rel="noreferrer"
         >
-          got v11
-        </a>
+          got v11</a>
         {", "}which depends on Node&apos;s HTTPS module. It runs fine on Node,
         Bun, AWS Lambda, and any long-running container, but it is{" "}
         <strong>not</strong> drop-in compatible with{" "}
@@ -474,8 +468,7 @@ const res = await fetch(
         <Link href="/docs/errors">problem+json errors</Link>
         {", "}and{" "}
         <Link href="/docs/security/rate-limit-redis">
-          distributed rate-limit store
-        </Link>
+          distributed rate-limit store</Link>
         {"."}
       </p>
     </>

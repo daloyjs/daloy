@@ -66,8 +66,7 @@ export default function Page() {
       <p>
         Create a database at{" "}
         <a href="https://app.planetscale.com" target="_blank" rel="noreferrer">
-          app.planetscale.com
-        </a>
+          app.planetscale.com</a>
         {", "}generate a password, and copy the host plus credentials. Set them
         as <code>DATABASE_HOST</code>
         {", "}<code>DATABASE_USERNAME</code>
@@ -209,8 +208,7 @@ export const db = drizzle({
         constraints by default on MySQL unless you enable them in database
         settings, so set <code>relationMode = &quot;prisma&quot;</code>
         in your <code>schema.prisma</code> when you are using the default no-FK
-        mode, and point <code>DATABASE_URL</code> at the serverless host (
-        <code>aws.connect.psdb.cloud</code>).
+        mode, and point <code>DATABASE_URL</code> at the serverless host (<code>aws.connect.psdb.cloud</code>).
       </p>
       <CodeBlock
         code={`pnpm add @prisma/adapter-planetscale

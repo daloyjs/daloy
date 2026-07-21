@@ -100,8 +100,7 @@ app.get(
         language="ts"
       />
       <p>
-        Each response the cache handles carries an <code>X-Cache</code> marker (
-        <code>HIT</code>
+        Each response the cache handles carries an <code>X-Cache</code> marker (<code>HIT</code>
         {", "}<code>MISS</code>
         {", "}or <code>STALE</code>), plus an <code>Age</code> header on a hit,
         so caches and clients can observe the outcome. A request that bypasses
@@ -151,14 +150,12 @@ app.get(
         </li>
         <li>
           <strong>Stale hit within the SWR window</strong> (requires{" "}
-          <code>revalidate</code>): the stale response is served immediately (
-          <code>X-Cache: STALE</code>) while a single, de-duplicated background
+          <code>revalidate</code>): the stale response is served immediately (<code>X-Cache: STALE</code>) while a single, de-duplicated background
           refresh repopulates the cache.
         </li>
         <li>
           <strong>Miss</strong>
-          {": "}the handler runs and a cacheable response is stored (
-          <code>X-Cache: MISS</code>).
+          {": "}the handler runs and a cacheable response is stored (<code>X-Cache: MISS</code>).
         </li>
       </ul>
 

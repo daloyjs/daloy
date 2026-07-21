@@ -32,8 +32,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Standard Schema
-        </a>
+          Standard Schema</a>
         {", "}a tiny interface exposed by validators such as{" "}
         <strong>Zod</strong>
         {", "}
@@ -125,8 +124,7 @@ const CreatePayment = z
       />
       <p>
         Zod 4 already rejects <code>NaN</code> / non-finite numbers for{" "}
-        <code>z.number()</code> in many cases, but a ceiling (
-        <code>.max()</code>) and sign constraint (<code>.positive()</code> /{" "}
+        <code>z.number()</code> in many cases, but a ceiling (<code>.max()</code>) and sign constraint (<code>.positive()</code> /{" "}
         <code>.nonnegative()</code>) are still your refund-fraud and overflow
         backstop. Pair this with response schemas so sensitive fields never leak
         outbound.

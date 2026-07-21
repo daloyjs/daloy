@@ -102,8 +102,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Stripe Dashboard
-          </a>
+            Stripe Dashboard</a>
           {"."}
         </li>
         <li>

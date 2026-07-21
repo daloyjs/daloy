@@ -425,8 +425,7 @@ export default function BlogPostPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              International AI Safety Report 2026
-            </a>
+              International AI Safety Report 2026</a>
             {", "}100+ experts, 30+ countries, Yoshua Bengio chairing, through
             an operator&apos;s lens and lands on a short, useful conclusion: the
             interesting safety work for the rest of us is at{" "}
@@ -645,27 +644,22 @@ export default function BlogPostPage() {
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/owasp-top-10-agentic-applications-mapped-to-daloyjs">
-              OWASP Top 10 for Agentic Applications, Mapped
-            </Link>
+              OWASP Top 10 for Agentic Applications, Mapped</Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security
-            </Link>
+              Vibe Coding Security</Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped
-            </Link>
+              Cloud Security Architecture, Mapped</Link>
             {", "}
             <Link href="/blog/secure-sdlc-five-pillars-mapped-to-daloyjs">
-              The 5 Pillars of a Secure SDLC, Mapped
-            </Link>
+              The 5 Pillars of a Secure SDLC, Mapped</Link>
             {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
             {". "}
             Relevant docs: <Link href="/docs/security">/docs/security</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections
-            </Link>
+              runtime protections</Link>
             {", "}
             <Link href="/docs/security/secure-defaults">secure defaults</Link>
             {"."}

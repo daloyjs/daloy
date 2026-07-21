@@ -309,8 +309,7 @@ await state.duckdb.run("set lock_configuration = true");`}
           target="_blank"
           rel="noreferrer"
         >
-          DuckDB Node.js client docs
-        </a>
+          DuckDB Node.js client docs</a>
         {"."}
       </p>
     </>

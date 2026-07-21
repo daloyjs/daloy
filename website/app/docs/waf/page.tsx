@@ -141,8 +141,7 @@ app.use(waf());`}
         <li>
           <strong>sqli</strong>
           {": "}<code>UNION SELECT</code>
-          {", "}boolean tautologies (<code>OR 1=1</code>), stacked statements (
-          <code>; DROP TABLE</code>), time-based probes (<code>SLEEP()</code>
+          {", "}boolean tautologies (<code>OR 1=1</code>), stacked statements (<code>; DROP TABLE</code>), time-based probes (<code>SLEEP()</code>
           {", "}<code>WAITFOR DELAY</code>), <code>INFORMATION_SCHEMA</code>
           {", "}<code>xp_cmdshell</code>
           {", "}and file primitives.
@@ -168,10 +167,8 @@ app.use(waf());`}
           <strong>cmdi</strong>
           {": "}shell metacharacters chaining into binaries (<code>; rm</code>
           {", "}<code>| nc</code>
-          {", "}<code>&amp;&amp; curl</code>), command substitution (
-          <code>$(...)</code>
-          {", "}backticks), and sensitive path access (<code>/etc/passwd</code>
-          ).
+          {", "}<code>&amp;&amp; curl</code>), command substitution (<code>$(...)</code>
+          {", "}backticks), and sensitive path access (<code>/etc/passwd</code>).
         </li>
       </ul>
 
@@ -243,8 +240,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
       <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
-          The <code>403</code> body is intentionally generic (
-          <code>Request blocked by security policy</code>): it never tells an
+          The <code>403</code> body is intentionally generic (<code>Request blocked by security policy</code>): it never tells an
           attacker which signature fired. Rule detail is delivered server-side
           via <code>onMatch</code> only.
         </li>
@@ -260,7 +256,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         <li>
           Inspection uses bounded multi-decode (at most two percent-decode
           passes), <code>+</code>→space normalization, and SQL block-comment
-          stripping so classic double-encoding and <code>/**/</code> keyword
+          stripping so classic double-encoding and <code>{"/**/"}</code> keyword
           splits still score. Triple-or-deeper encoding remains a residual
           signature gap: keep schemas and parameterized queries as the primary
           wall, and keep an edge WAF on your roadmap for high-risk surfaces.

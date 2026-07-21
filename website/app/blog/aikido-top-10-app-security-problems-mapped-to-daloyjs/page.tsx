@@ -488,24 +488,20 @@ return new Response(null, {
             <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped to DaloyJS
-            </Link>
+              Cloud Security Architecture, Mapped to DaloyJS</Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security
-            </Link>
+              Vibe Coding Security</Link>
             {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026
-            </Link>
+              CSRF in 2026</Link>
             {". "}Or jump straight to{" "}
             <Link href="/docs/security/fetch-guard">
               /docs/security/fetch-guard
             </Link>{" "}
             and{" "}
             <Link href="/docs/security/owasp-api-top-10">
-              /docs/security/owasp-api-top-10
-            </Link>
+              /docs/security/owasp-api-top-10</Link>
             {"."}
           </p>
         </div>

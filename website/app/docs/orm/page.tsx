@@ -272,8 +272,7 @@ app.get(
           target="_blank"
           rel="noreferrer"
         >
-          Driver Adapters
-        </a>
+          Driver Adapters</a>
         {". "}TypeORM, MikroORM, and Sequelize all lean on Node-centric runtime
         assumptions and are best on the Node.js adapter.
       </p>

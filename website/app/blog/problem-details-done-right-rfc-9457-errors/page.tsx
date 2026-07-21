@@ -530,8 +530,7 @@ export default function BlogPostPage() {
             <em>Something went wrong</em> for every non-2xx, and the on-call
             engineer is in there asking{" "}
             <em>
-              which endpoint, can you re-send the request, what time exactly
-            </em>
+              which endpoint, can you re-send the request, what time exactly</em>
             {". "}Nobody is happy.
           </p>
 

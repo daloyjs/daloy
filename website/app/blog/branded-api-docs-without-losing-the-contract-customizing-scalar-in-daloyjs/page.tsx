@@ -651,8 +651,7 @@ export default function BlogPostPage() {
             HTML generator and the same CSP-friendly <code>htmlResponse()</code>{" "}
             helper. If you&apos;ve already wired up{" "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP nonces via secureHeaders()
-            </Link>
+              CSP nonces via secureHeaders()</Link>
             {", "}the nonce flows through automatically. Pass{" "}
             <code>ctx.state.cspNonce</code> into both calls and the script tag
             is allow-listed.

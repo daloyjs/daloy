@@ -341,8 +341,7 @@ export default function BlogPostPage() {
               rel="noopener noreferrer"
             >
               Aikido&apos;s walkthrough of the OWASP Top 10 for Agentic
-              Applications (2026)
-            </a>
+              Applications (2026)</a>
             {", "}ASI01 through ASI10, released in December 2025 with input
             from 100+ practitioners. The question, again:{" "}
             <em>are we doing anything about this?</em>
@@ -362,15 +361,10 @@ export default function BlogPostPage() {
 
           <p>
             Below is the per-risk mapping. The pattern is the same as the
-            previous two posts in this mini-series (
-            <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture
-            </Link>
+            previous two posts in this mini-series (<Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">Cloud Security Architecture</Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security
-            </Link>
-            ): what the framework blocks, what you still own.
+              Vibe Coding Security</Link>): what the framework blocks, what you still own.
           </p>
 
           <h2>ASI01: Agent Behavior Hijacking</h2>
@@ -545,25 +539,20 @@ export default function BlogPostPage() {
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security
-            </Link>
+              Vibe Coding Security</Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture
-            </Link>
+              Cloud Security Architecture</Link>
             {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries
-            </Link>
+              Supply-chain hardening for TypeScript libraries</Link>
             {", "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              Designing for Coding Agents
-            </Link>
+              Designing for Coding Agents</Link>
             {", "}
             <Link href="/blog/ai-friendly-route-metadata-machine-readable-examples-for-codegen-agents">
-              AI-friendly route metadata
-            </Link>
+              AI-friendly route metadata</Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}
@@ -572,8 +561,7 @@ export default function BlogPostPage() {
             <Link href="/docs/security/fetch-guard">fetch guard</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections
-            </Link>
+              runtime protections</Link>
             {", "}<Link href="/docs/security/supply-chain">supply chain</Link>.
           </p>
         </div>

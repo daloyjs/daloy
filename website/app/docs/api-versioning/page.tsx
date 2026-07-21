@@ -393,8 +393,7 @@ const v1Spec = generateOpenAPI(v1Contract, {
         {", "}
         and the{" "}
         <Link href="/docs/security/rate-limit-redis">
-          Redis rate-limit store
-        </Link>
+          Redis rate-limit store</Link>
         {"."}
       </p>
 

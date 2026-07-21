@@ -33,8 +33,7 @@ export default function Page() {
         {". "}It starts a <strong>SERVER-kind span</strong> per HTTP request,
         attaches the standard{" "}
         <a href="https://opentelemetry.io/docs/specs/semconv/http/http-spans/">
-          HTTP semantic-convention attributes
-        </a>
+          HTTP semantic-convention attributes</a>
         {", "}exposes the span on <code>ctx.state</code> for handlers, and ends
         the span exactly once when the response is sent.
       </p>

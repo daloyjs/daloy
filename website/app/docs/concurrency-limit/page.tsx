@@ -55,12 +55,10 @@ export default function Page() {
       <p>Each request:</p>
       <ul>
         <li>
-          tries to acquire a slot from a per-bucket semaphore (
-          <code>maxConcurrent</code>);
+          tries to acquire a slot from a per-bucket semaphore (<code>maxConcurrent</code>);
         </li>
         <li>
-          if all slots are busy, waits in a bounded FIFO queue (
-          <code>maxQueue</code>) for up to <code>queueTimeoutMs</code>;
+          if all slots are busy, waits in a bounded FIFO queue (<code>maxQueue</code>) for up to <code>queueTimeoutMs</code>;
         </li>
         <li>
           is rejected with a fast <code>503 Service Unavailable</code> (+{" "}

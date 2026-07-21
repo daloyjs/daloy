@@ -477,8 +477,7 @@ export default function BlogPostPage() {
             we sat down and said:{" "}
             <em>
               okay, but what would session management look like if you
-              didn&apos;t have to remember anything
-            </em>
+              didn&apos;t have to remember anything</em>
             {"?"}
           </p>
 
@@ -685,8 +684,7 @@ export default function BlogPostPage() {
           <p>
             This is the one I reach for the most. Pairs naturally with the{" "}
             <Link href="/blog/the-flow-i-wished-i-had">
-              rest of the toolkit
-            </Link>
+              rest of the toolkit</Link>
             {", "}particularly the Redis-backed rate limiter, which can share
             the same connection pool.
           </p>

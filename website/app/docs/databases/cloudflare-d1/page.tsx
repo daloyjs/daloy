@@ -179,8 +179,7 @@ export const createDb = (env: Env) => drizzle(env.DB);`}
           target="_blank"
           rel="noreferrer"
         >
-          D1 Driver Adapter
-        </a>
+          D1 Driver Adapter</a>
         {". "}Construct the adapter inside the Worker handler since it needs the
         runtime binding.
       </p>

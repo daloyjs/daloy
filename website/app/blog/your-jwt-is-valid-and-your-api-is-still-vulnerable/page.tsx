@@ -497,8 +497,7 @@ export default function BlogPostPage() {
             </Link>{" "}
             and build the{" "}
             <Link href={"/docs/tutorials/multi-user-api" as Route}>
-              multi-user projects tutorial
-            </Link>
+              multi-user projects tutorial</Link>
             {". "}The tutorial includes the attack tests, because an
             authorization guide without an attacker is just optimistic
             documentation.

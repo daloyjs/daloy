@@ -35,8 +35,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          AWS SDK for JavaScript v3
-        </a>
+          AWS SDK for JavaScript v3</a>
         {". "}Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2)
         or need very low per-message cost.
       </p>

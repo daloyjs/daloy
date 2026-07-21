@@ -131,10 +131,8 @@ await app.scheduledTasks?.runNow("purge-sessions"); // out-of-band run`}
 
       <h2 id="cron-expressions">Cron expressions</h2>
       <p>
-        The <code>cron</code> field accepts a standard 5-field expression (
-        <code>minute hour day-of-month month day-of-week</code>) with wildcards,
-        lists (<code>1,15,30</code>), ranges (<code>1-5</code>), steps (
-        <code>*/5</code>), and case-insensitive month/day names. Day-of-week
+        The <code>cron</code> field accepts a standard 5-field expression (<code>minute hour day-of-month month day-of-week</code>) with wildcards,
+        lists (<code>1,15,30</code>), ranges (<code>1-5</code>), steps (<code>*/5</code>), and case-insensitive month/day names. Day-of-week
         accepts both <code>0</code> and <code>7</code> for Sunday. The named
         aliases <code>@yearly</code>
         {", "}<code>@monthly</code>

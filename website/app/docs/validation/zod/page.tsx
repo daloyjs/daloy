@@ -32,8 +32,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Standard Schema
-        </a>
+          Standard Schema</a>
         {", "}so DaloyJS picks it up without any adapter.
       </p>
       <p>

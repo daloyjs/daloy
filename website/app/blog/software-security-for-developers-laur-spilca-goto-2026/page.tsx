@@ -304,8 +304,7 @@ export default function BlogPostPage() {
             with JWKS rotation. CSRF is double-submit plus Fetch-Metadata, which
             I wrote about in{" "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026
-            </Link>
+              CSRF in 2026</Link>
             {", "}not a scheme I invented. Sessions are signed cookies with the
             right prefixes already on.
           </p>
@@ -340,8 +339,7 @@ export default function BlogPostPage() {
             and &quot;the build is red until you do.&quot; I unpacked more of
             this in{" "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security
-            </Link>
+              Vibe Coding Security</Link>
             {"."}
           </p>
 
@@ -408,16 +406,13 @@ export default function BlogPostPage() {
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security
-            </Link>
+              Vibe Coding Security</Link>
             {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026
-            </Link>
+              CSRF in 2026</Link>
             {", "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP Nonces and Trusted Types
-            </Link>
+              CSP Nonces and Trusted Types</Link>
             {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
             {"."}
           </p>

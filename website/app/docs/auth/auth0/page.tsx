@@ -244,8 +244,7 @@ export function requirePermission(...perms: string[]): Hooks {
           target="_blank"
           rel="noreferrer"
         >
-          Action on the Login flow
-        </a>
+          Action on the Login flow</a>
         {". "}Namespace them (e.g. <code>https://acme.example.com/tenant</code>)
         per Auth0&apos;s rules, that prevents collisions with standard claims
         and is required for non-reserved claims to be included.

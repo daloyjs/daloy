@@ -469,8 +469,7 @@ return projects.findForOwner(params.id, principal.userId, principal.tenantId);`}
       <p>
         Also review the{" "}
         <Link href="/docs/security/owasp-api-top-10">
-          OWASP API Top 10 mapping
-        </Link>
+          OWASP API Top 10 mapping</Link>
         {", "}<Link href="/docs/auth">authentication overview</Link>
         {", "}and <Link href="/docs/testing">testing guide</Link>.
       </p>

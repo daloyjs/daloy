@@ -50,12 +50,10 @@ export default function Page() {
         Every guard is gated on the resolved environment being{" "}
         <code>production</code> (sources:{" "}
         <code>
-          app({"{"} env: &quot;production&quot; {"}"})
-        </code>
+          app({"{"} env: &quot;production&quot; {"}"})</code>
         {", "}then{" "}
         <code>
-          app({"{"} production: true {"}"})
-        </code>
+          app({"{"} production: true {"}"})</code>
         {", "}then <code>NODE_ENV === &quot;production&quot;</code>) so dev and
         CI workflows keep working with sample secrets and ad-hoc headers. The
         single master escape hatch{" "}
@@ -104,14 +102,12 @@ export default function Page() {
           app.use(session({"{"} secret {"}"}))
         </code>{" "}
         now refuses to register in production when the secret is shorter than 32
-        UTF-8 bytes, matches a well-known placeholder (
-        <code>&quot;changeme&quot;</code>
+        UTF-8 bytes, matches a well-known placeholder (<code>&quot;changeme&quot;</code>
         {", "}
         <code>&quot;your-jwt-secret&quot;</code>
         {", "}
         <code>&quot;it-is-very-secret&quot;</code>
-        {", "} …), or is a single repeated character (
-        <code>&quot;a&quot;.repeat(64)</code>
+        {", "} …), or is a single repeated character (<code>&quot;a&quot;.repeat(64)</code>
         {", "}
         <code>&quot;0&quot;.repeat(64)</code>). The check runs synchronously
         inside <code>app.use(...)</code> so the process exits during startup,
@@ -201,8 +197,7 @@ app.post("/items", {
         Non-browser apps (machine-to-machine APIs, webhook receivers behind
         bearer auth) can acknowledge that CSRF does not apply with{" "}
         <code>
-          app({"{"} csrf: &quot;off&quot; {"}"})
-        </code>
+          app({"{"} csrf: &quot;off&quot; {"}"})</code>
         {": "}
       </p>
       <CodeBlock
@@ -319,8 +314,7 @@ app.get(
         <code>markAuthHook()</code> stamps, in case you need to check for it
         yourself. Disable this guard along with the rest via{" "}
         <code>
-          app({"{"} secureDefaults: false {"}"})
-        </code>
+          app({"{"} secureDefaults: false {"}"})</code>
         {"."}
       </p>
 

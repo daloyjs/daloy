@@ -30,11 +30,7 @@ export default function Page() {
     <>
       <h1>HTTP message signatures (RFC 9421)</h1>
       <p>
-        DaloyJS ships first-party <strong>HTTP Message Signatures</strong> (
-        <a href="https://www.rfc-editor.org/rfc/rfc9421" rel="noreferrer">
-          RFC 9421
-        </a>
-        ), the IETF-standard way to prove a server-to-server request came from a
+        DaloyJS ships first-party <strong>HTTP Message Signatures</strong> (<a href="https://www.rfc-editor.org/rfc/rfc9421" rel="noreferrer">RFC 9421</a>), the IETF-standard way to prove a server-to-server request came from a
         trusted peer. Where <a href="/docs/webhook-delivery">webhook HMAC</a>{" "}
         binds a signature to a request <em>body</em> and{" "}
         <a href="/docs/mtls">mTLS</a> authenticates the TLS <em>peer</em>

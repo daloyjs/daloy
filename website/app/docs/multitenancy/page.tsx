@@ -36,8 +36,7 @@ export default function Page() {
         calling tenant <em>once</em> per request, validates and normalizes it,
         and exposes it on <code>ctx.state.tenant</code>
         {". "}It is the single source of truth for &ldquo;who is this request
-        for&rdquo; so the per-tenant isolation knobs already on the framework (
-        <code>rateLimit</code>
+        for&rdquo; so the per-tenant isolation knobs already on the framework (<code>rateLimit</code>
         {", "}
         <code>concurrencyLimit</code>
         {", "}<code>idempotency</code>

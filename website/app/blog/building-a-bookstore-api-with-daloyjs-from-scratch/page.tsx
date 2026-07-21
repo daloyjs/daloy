@@ -660,8 +660,7 @@ export default function BlogPostPage() {
             <code>--minimal</code>) and start with the schema. The single most
             important habit in DaloyJS:{" "}
             <strong>
-              the Zod schema is the source of truth for everything
-            </strong>
+              the Zod schema is the source of truth for everything</strong>
             {", "}validation, response shape, OpenAPI, and the generated
             TypeScript types. Write it once.
           </p>
@@ -750,8 +749,7 @@ export default function BlogPostPage() {
             For the long version of why this matters and how to consume it on
             the frontend, see the{" "}
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
-              Problem Details post
-            </Link>
+              Problem Details post</Link>
             {". "}For now, the punchline is: every wrong-shaped request your API
             will ever see returns the same document shape. The frontend code
             that handles it is one helper, total.

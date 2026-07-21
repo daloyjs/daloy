@@ -45,8 +45,7 @@ export default function Page() {
         If you only read one thing:{" "}
         <strong>
           DaloyJS is excellent at the &quot;your code answers an HTTP
-          request&quot; role
-        </strong>
+          request&quot; role</strong>
         {": "}API server, microservice, BFF, webhook receiver, WebSocket
         server, MCP server. It is <strong>not</strong> a router that proxies
         traffic to other services, a load balancer, or a page-rendering UI

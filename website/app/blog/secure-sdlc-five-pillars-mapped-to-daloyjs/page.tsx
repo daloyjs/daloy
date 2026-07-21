@@ -341,8 +341,7 @@ export default function BlogPostPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Ultimate SAST Guide
-            </a>
+              Ultimate SAST Guide</a>
             {": "}different engines catch different bug classes. Running both
             is the recommended layered posture, and the scaffolder gives you
             both with neither sitting in your supply chain as a third-party
@@ -388,8 +387,7 @@ export default function BlogPostPage() {
             context. Daloy&apos;s answer is to put the rules in the file the
             agent already loads into its context window,{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              the AGENTS.md scaffold pattern
-            </Link>
+              the AGENTS.md scaffold pattern</Link>
             {", "}and to make the secure default the{" "}
             <em>shortest line of code you can type</em>.
           </p>
@@ -529,24 +527,19 @@ export default function BlogPostPage() {
             <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries
-            </Link>
+              Supply-chain hardening for TypeScript libraries</Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security
-            </Link>
+              Vibe Coding Security</Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped
-            </Link>
+              Cloud Security Architecture, Mapped</Link>
             {", "}
             <Link href="/blog/owasp-top-10-agentic-applications-mapped-to-daloyjs">
-              OWASP Top 10 for Agentic Applications, Mapped
-            </Link>
+              OWASP Top 10 for Agentic Applications, Mapped</Link>
             {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
-              Scaffolding a production-ready DaloyJS app in 60 seconds
-            </Link>
+              Scaffolding a production-ready DaloyJS app in 60 seconds</Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}
@@ -555,8 +548,7 @@ export default function BlogPostPage() {
             <Link href="/docs/security/compliance">compliance</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections
-            </Link>
+              runtime protections</Link>
             {", "}
             <Link href="/docs/security/secure-defaults">secure defaults</Link>
             {"."}

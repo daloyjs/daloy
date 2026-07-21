@@ -433,8 +433,7 @@ export default function BlogPostPage() {
             probably had the same thought I did:{" "}
             <em>
               this could&apos;ve been me, and I&apos;m not actually sure my
-              defaults would&apos;ve saved me
-            </em>
+              defaults would&apos;ve saved me</em>
             {"."}
           </p>
 
@@ -460,13 +459,11 @@ export default function BlogPostPage() {
             </em>
             {". "}GitHub Actions permissions go from <em>everything</em> to{" "}
             <em>
-              nothing, except <code>contents: read</code> on these specific jobs
-            </em>
+              nothing, except <code>contents: read</code> on these specific jobs</em>
             {". "}NPM tokens go from{" "}
             <em>long-lived, attached to a human account</em> to{" "}
             <em>
-              none, ever, the runner does an OIDC exchange at publish time
-            </em>
+              none, ever, the runner does an OIDC exchange at publish time</em>
             {". "}The pattern repeats. Once you internalize it, the config
             writes itself.
           </p>
@@ -556,14 +553,12 @@ export default function BlogPostPage() {
               <strong>SHA-pin every action</strong>
               {". "}Not <code>@v4</code>
               {", "}not <code>@main</code>
-              {", "}the full 40-character commit SHA. The comment after it (
-              <code># v4</code>) is for humans. Dependabot keeps the SHAs
+              {", "}the full 40-character commit SHA. The comment after it (<code># v4</code>) is for humans. Dependabot keeps the SHAs
               updated.
             </li>
             <li>
               <strong>
-                No <code>cache: pnpm</code> on the install step
-              </strong>
+                No <code>cache: pnpm</code> on the install step</strong>
               {". "}The GitHub Actions cache has been used as both an
               exfiltration channel and a persistence channel. Cold installs in
               CI cost ~30s. Pay them.
@@ -646,8 +641,7 @@ export default function BlogPostPage() {
             <code>--provenance</code> is the companion: every published tarball
             gets a Sigstore attestation that records the exact commit SHA,
             workflow file, and runner that produced it. Consumers can verify
-            that an install is from the source you claim it is. (
-            <code>npm</code> verifies provenance automatically on install for
+            that an install is from the source you claim it is. (<code>npm</code> verifies provenance automatically on install for
             packages that publish it.)
           </p>
 
@@ -765,8 +759,7 @@ export default function BlogPostPage() {
           <p>
             The full discussion of the trade-offs is in{" "}
             <Link href="/docs/security/supply-chain">
-              the supply-chain docs
-            </Link>
+              the supply-chain docs</Link>
             {", "}and the broader{" "}
             <Link href="/docs/security">security overview</Link> shows how this
             slots in with sessions, CSRF, and CSP.

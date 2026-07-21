@@ -141,8 +141,7 @@ app.get(
 
       <p>
         Use <code>sseResponse(...)</code> when you want a fully-formed{" "}
-        <code>Response</code> with the standard SSE headers (
-        <code>text/event-stream</code>
+        <code>Response</code> with the standard SSE headers (<code>text/event-stream</code>
         {", "}
         <code>cache-control: no-cache, no-transform</code>
         {", "}

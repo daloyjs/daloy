@@ -176,8 +176,7 @@ declare module "@daloyjs/core" {
         If a record is user-owned or tenant-owned, do not query by URL ID alone.
         Constrain the same query with the trusted principal and follow the{" "}
         <Link href={"/docs/security/resource-authorization" as Route}>
-          resource authorization guide
-        </Link>
+          resource authorization guide</Link>
         {"."}
       </p>
       <CodeBlock
@@ -296,11 +295,9 @@ export const prisma = new PrismaClient({ adapter });`}
           target="_blank"
           rel="noreferrer"
         >
-          documented by Aikido
-        </a>
+          documented by Aikido</a>
         {". "}Daloy&apos;s contract-first routes neutralize this when you keep
-        the request body typed with primitive Zod schemas (
-        <code>z.string()</code>
+        the request body typed with primitive Zod schemas (<code>z.string()</code>
         {", "}
         <code>z.number()</code>
         {", "} &hellip;) instead of <code>z.any()</code>

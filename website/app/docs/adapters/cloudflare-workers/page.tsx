@@ -185,8 +185,7 @@ export default {
       />
       <p>
         Inside any route handler, read the binding from{" "}
-        <code>ctx.state.env</code> (the key you passed to <code>decorate</code>
-        ):
+        <code>ctx.state.env</code> (the key you passed to <code>decorate</code>):
       </p>
       <CodeBlock
         language="ts"

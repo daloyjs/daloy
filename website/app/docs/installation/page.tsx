@@ -98,8 +98,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          @daloyjs/core on npm
-        </a>
+          @daloyjs/core on npm</a>
         {"."}
       </p>
       <CodeBlock
@@ -140,8 +139,7 @@ bun  create daloy           my-api`}
           target="_blank"
           rel="noreferrer"
         >
-          Corepack
-        </a>
+          Corepack</a>
         {": "}
       </p>
       <CodeBlock
@@ -172,8 +170,7 @@ bun  add -d     typescript @hey-api/openapi-ts prettier`}
           target="_blank"
           rel="noreferrer"
         >
-          @daloyjs/core
-        </a>
+          @daloyjs/core</a>
         {"."}
       </p>
 
@@ -198,8 +195,7 @@ ignore-scripts=true`}
         Read the rationale in <Link href="/docs/security">Security</Link> and
         the{" "}
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">
-          pnpm motivation guide
-        </a>
+          pnpm motivation guide</a>
         {"."}
       </p>
 

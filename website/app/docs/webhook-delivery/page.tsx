@@ -43,8 +43,7 @@ export default function Page() {
           <strong>Signed delivery</strong>
           {": "}each request carries <code>webhook-id</code>
           {", "}<code>webhook-timestamp</code>
-          {", "}and <code>webhook-signature</code> (
-          <code>sha256=&hellip;</code>) computed over{" "}
+          {", "}and <code>webhook-signature</code> (<code>sha256=&hellip;</code>) computed over{" "}
           <code>&quot;&lt;timestamp&gt;.&lt;body&gt;&quot;</code>
           {", "}the same convention <code>verifyWebhookSignature()</code>{" "}
           validates.

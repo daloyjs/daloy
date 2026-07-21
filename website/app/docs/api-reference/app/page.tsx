@@ -336,8 +336,7 @@ function validate<S extends StandardSchemaV1>(schema: S, input: unknown):
       <p>
         Next up:{" "}
         <Link href={"/docs/api-reference/middleware" as Route}>
-          middleware, composition &amp; app helpers
-        </Link>
+          middleware, composition &amp; app helpers</Link>
         {"."}
       </p>
     </>

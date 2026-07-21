@@ -99,8 +99,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Clerk dashboard
-          </a>
+            Clerk dashboard</a>
           {". "}From <strong>API Keys</strong>
           {", "}copy the <strong>Publishable Key</strong> and{" "}
           <strong>Secret Key</strong>

@@ -43,8 +43,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Authorize.Net API
-        </a>
+          Authorize.Net API</a>
         {", "}and the separate JSON Webhooks REST API to receive event
         notifications.
       </p>
@@ -108,8 +107,7 @@ export default function Page() {
           and copy your <strong>API Login ID</strong> and{" "}
           <strong>Transaction Key</strong> from{" "}
           <em>
-            Account → Settings → Security Settings → API Credentials and Keys
-          </em>
+            Account → Settings → Security Settings → API Credentials and Keys</em>
           {"."}
         </li>
         <li>
@@ -288,8 +286,7 @@ declare module "@daloyjs/core" {
 
       <h2 id="5-charge-an-accept-js-nonce">5. Charge an Accept.js nonce</h2>
       <p>
-        Your frontend obtains an <code>opaqueData</code> nonce with Accept.js (
-        <code>dataDescriptor: &quot;COMMON.ACCEPT.INAPP.PAYMENT&quot;</code> for
+        Your frontend obtains an <code>opaqueData</code> nonce with Accept.js (<code>dataDescriptor: &quot;COMMON.ACCEPT.INAPP.PAYMENT&quot;</code> for
         browser-side Accept, or <code>COMMON.APPLE.INAPP.PAYMENT</code> /{" "}
         <code>COMMON.GOOGLE.INAPP.PAYMENT</code> for wallets). Your server only
         ever sees the nonce, never the card number.

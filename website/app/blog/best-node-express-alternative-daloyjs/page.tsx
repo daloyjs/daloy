@@ -189,8 +189,7 @@ export default function BlogPostPage() {
 
           <p>
             That one object is the validation rule, the type source, the OpenAPI
-            3.1 operation, and the input to the generated typed client (
-            <code>pnpm gen</code>
+            3.1 operation, and the input to the generated typed client (<code>pnpm gen</code>
             {", "}wrapping Hey API). The dependency arrow is reversed: the docs
             depend on the route, mechanically, with no human in the loop to
             forget. Rename a field and the spec, the client types, and the
@@ -298,8 +297,7 @@ export default function BlogPostPage() {
             If you have an existing Express app and want the mechanics rather
             than the argument, read the{" "}
             <Link href="/docs/migrating/express">
-              complete Express to DaloyJS migration guide
-            </Link>
+              complete Express to DaloyJS migration guide</Link>
             {". "}This post is the why. That guide is the how.
           </p>
 

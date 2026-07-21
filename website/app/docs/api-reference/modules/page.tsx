@@ -422,8 +422,7 @@ normalizeEntryArg(entry: string): string;`}
       <p>
         Next up:{" "}
         <Link href={"/docs/api-reference/adapters" as Route}>
-          runtime adapters
-        </Link>
+          runtime adapters</Link>
         {"."}
       </p>
     </>

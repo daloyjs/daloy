@@ -681,8 +681,7 @@ export default function BlogPostPage() {
               the most.
             </li>
             <li>
-              Add the in-process client test (
-              <code>createInProcessClient(app)</code>). You now have integration
+              Add the in-process client test (<code>createInProcessClient(app)</code>). You now have integration
               coverage without a server.
             </li>
             <li>

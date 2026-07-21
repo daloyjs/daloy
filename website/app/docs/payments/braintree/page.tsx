@@ -48,8 +48,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          server-side PayPal flow
-        </a>
+          server-side PayPal flow</a>
         {"."}
       </p>
 
@@ -61,8 +60,7 @@ export default function Page() {
       <ul>
         <li>
           <strong>
-            <code>braintree</code> (this guide)
-          </strong>
+            <code>braintree</code> (this guide)</strong>
           {": "}the long-standing Braintree server SDK. Uses the classic
           REST/XML gateway with a polished promise-based API. Production-ready,
           actively maintained, and what every Braintree docs example uses.
@@ -271,8 +269,7 @@ app.post(
           rel="noreferrer"
         >
           <code>deviceData</code>
-        </a>
-        ), submit a sale. Always send <code>amount</code> as a string with two
+        </a>), submit a sale. Always send <code>amount</code> as a string with two
         decimals, floats lose pennies.
       </p>
       <CodeBlock
@@ -440,8 +437,7 @@ app.post(
           target="_blank"
           rel="noreferrer"
         >
-          server SDK deprecation policy
-        </a>
+          server SDK deprecation policy</a>
         {": "}major versions are supported for 3 years and you should pin a
         recent major in
         <code>package.json</code>

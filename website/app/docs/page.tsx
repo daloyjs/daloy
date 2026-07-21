@@ -132,8 +132,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Fastify
-          </a>
+            Fastify</a>
           {"."}
         </li>
         <li>
@@ -143,8 +142,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Elysia
-          </a>
+            Elysia</a>
           {": "}without forcing you onto Bun.
         </li>
         <li>Hey API typed client generation as a first-class workflow.</li>
@@ -252,8 +250,7 @@ serve(app, { port: 3000 });`}
         </li>
         <li>
           <Link href="/docs/tutorials/bookstore">
-            Tutorial: build a bookstore API
-          </Link>
+            Tutorial: build a bookstore API</Link>
           {"."}
         </li>
         <li>

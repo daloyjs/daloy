@@ -36,16 +36,14 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          create-daloy on npm
-        </a>
+          create-daloy on npm</a>
         {". "}The generated apps install the framework from{" "}
         <a
           href="https://www.npmjs.com/package/@daloyjs/core"
           target="_blank"
           rel="noreferrer"
         >
-          @daloyjs/core on npm
-        </a>
+          @daloyjs/core on npm</a>
         {"."}
       </p>
 
@@ -211,8 +209,7 @@ bun  create daloy           my-api`}
         </a>{" "}
         link, and choosing <code>pnpm</code> without pnpm installed surfaces{" "}
         <a href="https://pnpm.io/installation" target="_blank" rel="noreferrer">
-          https://pnpm.io/installation
-        </a>
+          https://pnpm.io/installation</a>
         {". "}Node-flavored templates (<code>node-basic</code>
         {", "}<code>vercel</code>
         {", "}
@@ -338,8 +335,7 @@ bun  create daloy           my-api`}
         {", "}<code>deno task test</code>
         {", "}and <code>deno task gen:openapi</code> tasks, loads{" "}
         <code>@daloyjs/core</code> and Zod via <code>npm:</code> import-map
-        specifiers, and runs with the minimum permissions Deno requires (
-        <code>--allow-net --allow-env --allow-read</code>). The CLI skips
+        specifiers, and runs with the minimum permissions Deno requires (<code>--allow-net --allow-env --allow-read</code>). The CLI skips
         Node-style installs for this template, there is no{" "}
         <code>package.json</code> to patch.
       </p>

@@ -229,8 +229,7 @@ await fetch("/transfer", {
       </table>
 
       <p>
-        The default generator requires WebCrypto (
-        <code>crypto.getRandomValues</code> or <code>crypto.randomUUID</code>).
+        The default generator requires WebCrypto (<code>crypto.getRandomValues</code> or <code>crypto.randomUUID</code>).
         If you run DaloyJS in an unusual runtime without WebCrypto, pass a
         cryptographically secure custom <code>generator</code> rather than
         falling back to predictable randomness.

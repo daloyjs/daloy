@@ -55,8 +55,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Sessions flow
-          </a>
+            Sessions flow</a>
           {", "}your server creates a session, the frontend hands it to
           Drop-in, and Adyen handles 3-D Secure 2, redirects, and
           payment-method-specific quirks for you. Direct <code>/payments</code>{" "}
@@ -492,8 +491,7 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>
         {", "}
         <Link href={"/docs/payments/authorize-net" as Route}>
-          Authorize.Net guide
-        </Link>
+          Authorize.Net guide</Link>
         {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>

@@ -480,8 +480,7 @@ export default function BlogPostPage() {
           <p>
             CSP nonces let inline scripts and styles run <em>only</em> if they
             carry a per-response random token that an XSS payload cannot guess.
-            Trusted Types upgrades the browser&apos;s sink APIs (
-            <code>innerHTML</code>
+            Trusted Types upgrades the browser&apos;s sink APIs (<code>innerHTML</code>
             {", "}<code>setTimeout</code> with strings,
             <code>document.write</code>) so they refuse plain strings, anything
             dangerous has to come from a named, registered policy. Together they

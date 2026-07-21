@@ -169,8 +169,7 @@ pnpm fastly compute publish    # deploy`}
         </li>
         <li>
           <Link href="/docs/adapters/cloudflare-workers">
-            Cloudflare Workers
-          </Link>
+            Cloudflare Workers</Link>
           {", "}similar constraints, modules format.
         </li>
       </ul>

@@ -374,8 +374,7 @@ export default function Page() {
           job.
         </li>
         <li>
-          Lifecycle scripts disabled during CI installs (
-          <code>--ignore-scripts</code> for npm/yarn,{" "}
+          Lifecycle scripts disabled during CI installs (<code>--ignore-scripts</code> for npm/yarn,{" "}
           <code>ignore-scripts=true</code> in the scaffolded <code>.npmrc</code>{" "}
           for pnpm).
         </li>

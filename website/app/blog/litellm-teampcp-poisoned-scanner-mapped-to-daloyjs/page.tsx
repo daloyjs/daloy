@@ -243,8 +243,7 @@ export default function BlogPostPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Snyk&apos;s write-up of the LiteLLM / TeamPCP compromise
-            </a>
+              Snyk&apos;s write-up of the LiteLLM / TeamPCP compromise</a>
             {". "}The question was the same:{" "}
             <em>are we doing anything about this?</em> Yes. Most of it was
             already shipped. The post is the receipt.
@@ -303,8 +302,7 @@ export default function BlogPostPage() {
             class, and it costs nothing. The Snyk post calls out{" "}
             <em>
               &quot;LiteLLM&apos;s CI/CD pipeline ran Trivy as part of its build
-              process, pulling it from apt without a pinned version&quot;
-            </em>
+              process, pulling it from apt without a pinned version&quot;</em>
             {". "}That sentence describes a class of mistake DaloyJS&apos;s CI{" "}
             <em>cannot</em> make, there are zero <code>apt install</code> calls
             in any workflow, and the only binaries downloaded at runtime
@@ -394,8 +392,7 @@ export default function BlogPostPage() {
             every PR too. None of them are aspirational, a failure blocks merge.
             The full reasoning for each is in{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              the supply-chain hardening post
-            </Link>
+              the supply-chain hardening post</Link>
             {"."}
           </p>
 
@@ -503,17 +500,14 @@ export default function BlogPostPage() {
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries
-            </Link>
+              Supply-chain hardening for TypeScript libraries</Link>
             {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe coding security
-            </Link>
+              Vibe coding security</Link>
             {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
-              Scaffolding a production-ready DaloyJS app in 60 seconds
-            </Link>
+              Scaffolding a production-ready DaloyJS app in 60 seconds</Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}

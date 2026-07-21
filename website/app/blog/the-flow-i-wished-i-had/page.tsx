@@ -287,8 +287,7 @@ export default function BlogPostPage() {
                 rel="noreferrer"
                 target="_blank"
               >
-                Standard Schema
-              </a>
+                Standard Schema</a>
               {", "}so you can bring Zod, Valibot, ArkType, whatever you want.
               I used Zod here because Zod is what I have muscle memory for. Use
               what makes you happy.

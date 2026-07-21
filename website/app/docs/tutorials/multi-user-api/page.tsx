@@ -687,8 +687,7 @@ pnpm test`}
       <p>
         Read the complete{" "}
         <Link href={"/docs/security/resource-authorization" as Route}>
-          resource authorization guide
-        </Link>
+          resource authorization guide</Link>
         {", "}then connect the same boundary to{" "}
         <Link href="/docs/auth">your authentication provider</Link>
         {", "}

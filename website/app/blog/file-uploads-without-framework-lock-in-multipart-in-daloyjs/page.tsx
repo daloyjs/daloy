@@ -560,8 +560,7 @@ export default function BlogPostPage() {
             between a memory exhaustion bug and a 422 response. For the long
             version of why that error shape is what it is, see the{" "}
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
-              RFC 9457 errors post
-            </Link>
+              RFC 9457 errors post</Link>
             {"."}
           </p>
 
@@ -608,8 +607,7 @@ export default function BlogPostPage() {
             The runtime-portability story for uploads is the same story as for
             everything else in this stack, see the{" "}
             <Link href="/blog/same-app-five-runtimes-verified">
-              five-runtimes verification post
-            </Link>
+              five-runtimes verification post</Link>
             {", "}but it&apos;s especially noticeable here because uploads are
             the one feature most Node frameworks accidentally pin you to Node
             for.

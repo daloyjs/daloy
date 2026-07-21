@@ -106,8 +106,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            PayTabs merchant dashboard
-          </a>
+            PayTabs merchant dashboard</a>
           {"."}
         </li>
         <li>

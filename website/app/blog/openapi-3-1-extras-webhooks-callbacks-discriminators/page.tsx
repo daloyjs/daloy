@@ -553,8 +553,7 @@ export default function BlogPostPage() {
             top-level <code>webhooks</code> map, which is the spec saying{" "}
             <em>
               here are the requests this API will send, and here is their exact
-              shape
-            </em>
+              shape</em>
             {". "}DaloyJS lets you declare them next to your routes:
           </p>
 
@@ -770,8 +769,7 @@ export default function BlogPostPage() {
           <p>
             The post that&apos;s closest in spirit is{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
-              Contract-First Without the Codegen Dance
-            </Link>
+              Contract-First Without the Codegen Dance</Link>
             {", "}same philosophy, different feature surface. For the recipient
             side of any of this, the{" "}
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">

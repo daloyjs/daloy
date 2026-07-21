@@ -398,8 +398,7 @@ export default function BlogPostPage() {
             So when we sat down to design DaloyJS, we made a rule and stuck to
             it:{" "}
             <strong>
-              the boring, well-understood defenses must be on by default
-            </strong>
+              the boring, well-understood defenses must be on by default</strong>
             {". "}You should be able to type <code>new App()</code> with empty
             arguments and already be in a place where most of the OWASP
             &quot;low effort, high impact&quot; checklist is satisfied before

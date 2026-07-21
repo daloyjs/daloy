@@ -398,8 +398,7 @@ export default function BlogPostPage() {
             <em>I have an idea</em> to{" "}
             <em>
               I have a running server with tests, types, OpenAPI, and a CI
-              pipeline
-            </em>
+              pipeline</em>
             {". "}When that first sixty seconds is awkward, the project never
             happens. When it feels good, you keep going.
           </p>
@@ -628,11 +627,7 @@ export default function BlogPostPage() {
               <code>--with-ci</code> defaults to yes.
             </strong>{" "}
             That&apos;s the application-safe supply-chain-hardening posture from
-            yesterday&apos;s post (
-            <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-Chain Hardening for TypeScript Libraries
-            </Link>
-            ) dropped into your repo without you typing a single workflow line.
+            yesterday&apos;s post (<Link href="/blog/supply-chain-hardening-for-typescript-libraries">Supply-Chain Hardening for TypeScript Libraries</Link>) dropped into your repo without you typing a single workflow line.
             The library publish workflow stays out because this scaffold is an
             app, not an npm package release train:
           </p>
@@ -662,8 +657,7 @@ export default function BlogPostPage() {
             errors when your route changes shape. That&apos;s the entire subject
             of{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
-              Contract-First Without the Codegen Dance
-            </Link>
+              Contract-First Without the Codegen Dance</Link>
             {". "}Read it next.
           </p>
 

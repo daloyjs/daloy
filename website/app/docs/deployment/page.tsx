@@ -206,8 +206,7 @@ CMD ["dist/server.js"]`}
           Sigstore Cosign
         </a>{" "}
         (keyless / OIDC, no long-lived signing key), generates an SPDX SBOM for
-        the image, and uploads it as a Cosign attestation (
-        <code>--type spdxjson</code>). The job grants{" "}
+        the image, and uploads it as a Cosign attestation (<code>--type spdxjson</code>). The job grants{" "}
         <code>id-token: write</code> alongside <code>packages: write</code>; the
         top-level workflow keeps <code>permissions: {`{}`}</code>
         {". "}This closes the Aikido{" "}
@@ -263,8 +262,7 @@ await app.shutdown(15_000);`}
           <code>new App({"{ ... }"})</code>
           {", "}where <code>N</code> is the number of trusted proxy hops in
           front of the app (a single edge proxy is <code>1</code>; Cloudflare in
-          front of one PaaS edge is <code>2</code>
-          ). In production an <strong>unconfigured</strong> posture makes
+          front of one PaaS edge is <code>2</code>). In production an <strong>unconfigured</strong> posture makes
           DaloyJS return <code>500</code> on the first request carrying an{" "}
           <code>X-Forwarded-*</code> header, so a misconfigured chain cannot
           feed spoofable client IPs to <code>rateLimit()</code>

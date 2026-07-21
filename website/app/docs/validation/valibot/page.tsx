@@ -33,8 +33,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Standard Schema
-        </a>
+          Standard Schema</a>
         {", "}so DaloyJS picks it up the same way it picks up Zod: no adapter,
         no wrapper, no extra runtime dependency in the framework.
       </p>

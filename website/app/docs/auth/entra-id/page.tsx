@@ -107,8 +107,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Microsoft Entra admin center
-          </a>
+            Microsoft Entra admin center</a>
           {", "}go to{" "}
           <strong>Entra ID → App registrations → New registration</strong> and
           register your API app.
@@ -131,8 +130,7 @@ export default function Page() {
           </code>{" "}
           and references the JWKS at{" "}
           <code>
-            https://login.microsoftonline.com/&#123;tenantId&#125;/discovery/v2.0/keys
-          </code>
+            https://login.microsoftonline.com/&#123;tenantId&#125;/discovery/v2.0/keys</code>
           {"."}
         </li>
       </ol>
@@ -287,8 +285,7 @@ console.log(result?.accessToken);`}
         <li>
           The <code>issuer</code> for v2.0 tokens is{" "}
           <code>
-            https://login.microsoftonline.com/&#123;tenantId&#125;/v2.0
-          </code>
+            https://login.microsoftonline.com/&#123;tenantId&#125;/v2.0</code>
           {". "}Multi-tenant apps must validate the <code>tid</code> claim
           against an allowlist rather than relying on the issuer alone.
         </li>

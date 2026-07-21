@@ -56,8 +56,7 @@ export default function Page() {
         </li>
         <li>
           <strong>Circuit breaker</strong>
-          {": "}a three-state machine (
-          <code>closed &rarr; open &rarr; half-open</code>) that fails fast when
+          {": "}a three-state machine (<code>closed &rarr; open &rarr; half-open</code>) that fails fast when
           an upstream is clearly down, then probes for recovery.
         </li>
       </ul>
@@ -157,8 +156,7 @@ try {
 
       <h2 id="retry-with-backoff">Retry-with-backoff</h2>
       <p>
-        Retries only fire for <strong>idempotent</strong> methods (
-        <code>GET</code>
+        Retries only fire for <strong>idempotent</strong> methods (<code>GET</code>
         {", "}<code>HEAD</code>
         {", "}<code>OPTIONS</code>
         {", "}

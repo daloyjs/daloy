@@ -244,8 +244,7 @@ export default function BlogPostPage() {
             </Link>
             and{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              the supply-chain hardening write-up
-            </Link>
+              the supply-chain hardening write-up</Link>
             {". "}Both explain why the boring parts are doing most of the work.
           </p>
 

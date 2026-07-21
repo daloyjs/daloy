@@ -89,8 +89,7 @@ await passwordVerify("wrong", hash);   // false`}
         <code>@daloyjs/core</code> refuses to ship runtime dependencies as a
         supply-chain guarantee. scrypt is memory-hard like Argon2, ships in{" "}
         <code>node:crypto</code>
-        {", "}and Daloy pins it to the OWASP-aligned parameters (
-        <code>N = 2^17</code>
+        {", "}and Daloy pins it to the OWASP-aligned parameters (<code>N = 2^17</code>
         {", "}<code>r = 8</code>
         {", "}
         <code>p = 1</code>

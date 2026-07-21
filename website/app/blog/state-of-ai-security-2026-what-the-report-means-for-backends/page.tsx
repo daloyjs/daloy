@@ -332,8 +332,7 @@ export default function BlogPostPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                DaloyJS
-              </a>
+                DaloyJS</a>
               {", "}so weigh the framework parts accordingly. If you have not
               run into it yet: DaloyJS is a new, contract-first TypeScript
               backend framework. You define a route once and get request and
@@ -671,8 +670,7 @@ export default function BlogPostPage() {
             Second, and this is the one I think most people miss,{" "}
             <strong>
               tools built for both developers and security teams have the lowest
-              incident rates
-            </strong>
+              incident rates</strong>
             {". "}Tools that serve only one audience leave the other side
             fighting the tooling instead of the threat.
           </p>
@@ -910,8 +908,7 @@ export default function BlogPostPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                docs
-              </a>
+                docs</a>
               {". "}It is genuinely new, so kick the tires and tell me where it
               breaks. I would rather hear it from you than read about it in next
               year&apos;s report.

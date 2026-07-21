@@ -281,28 +281,22 @@ export default function Page() {
       <ul>
         <li>
           <a href="https://www.keycloak.org" target="_blank" rel="noreferrer">
-            Keycloak
-          </a>
+            Keycloak</a>
           {", "}
           <a href="https://zitadel.com" target="_blank" rel="noreferrer">
-            Zitadel
-          </a>
+            Zitadel</a>
           {", "}
           <a href="https://www.ory.sh" target="_blank" rel="noreferrer">
-            Ory (Hydra + Kratos)
-          </a>
+            Ory (Hydra + Kratos)</a>
           {", "}
           <a href="https://goauthentik.io" target="_blank" rel="noreferrer">
-            Authentik
-          </a>
+            Authentik</a>
           {", "}
           <a href="https://logto.io" target="_blank" rel="noreferrer">
-            Logto
-          </a>
+            Logto</a>
           {", "}
           <a href="https://supertokens.com" target="_blank" rel="noreferrer">
-            SuperTokens
-          </a>
+            SuperTokens</a>
           {", "}
           <a href="https://dexidp.io" target="_blank" rel="noreferrer">
             Dex
@@ -588,8 +582,7 @@ app.use(csrf());
           <code>createJwtSigner()</code> + <code>jwk()</code> when both sides
           speak JWT. See the{" "}
           <Link href="/docs/security/internal-service-preset">
-            internal-service preset
-          </Link>
+            internal-service preset</Link>
           {"."}
         </li>
       </ul>

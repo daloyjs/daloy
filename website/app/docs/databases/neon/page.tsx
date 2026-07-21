@@ -210,8 +210,7 @@ export const db = drizzle({ client: sql });`}
         >
           Neon Driver Adapter
         </a>{" "}
-        so Prisma can run on edge runtimes (GA since Prisma <code>6.16.0</code>
-        ):
+        so Prisma can run on edge runtimes (GA since Prisma <code>6.16.0</code>):
       </p>
       <CodeBlock
         code={`pnpm add @prisma/adapter-neon

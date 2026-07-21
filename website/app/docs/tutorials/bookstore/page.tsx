@@ -306,8 +306,7 @@ test("POST /books rejects without token", async () => {
       <p>
         Continue with the{" "}
         <Link href={"/docs/tutorials/multi-user-api" as Route}>
-          multi-user authorization tutorial
-        </Link>
+          multi-user authorization tutorial</Link>
         {", "}<Link href="/docs/security">Security</Link>
         {", "}
         <Link href="/docs/adapters">Adapters</Link>

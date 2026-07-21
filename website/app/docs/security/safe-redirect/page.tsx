@@ -204,8 +204,7 @@ try {
         {", "}
         <code>scheme-not-allowed</code>
         {", "}or <code>parse-failed</code>
-        {", "}useful for metrics on which attack shape you are seeing. (
-        <code>non-latin1-target</code> covers same-origin paths carrying a code
+        {", "}useful for metrics on which attack shape you are seeing. (<code>non-latin1-target</code> covers same-origin paths carrying a code
         point above U+00FF, including the Unicode slash homographs.)
       </p>
 

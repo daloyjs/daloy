@@ -420,8 +420,7 @@ export default function BlogPostPage() {
             it does not run on. So when DaloyJS says{" "}
             <em>
               the same app runs on Node, Bun, Deno, Cloudflare Workers, and
-              Vercel
-            </em>
+              Vercel</em>
             {", "}I owe you receipts, not slides. This post is the receipts.
           </p>
 

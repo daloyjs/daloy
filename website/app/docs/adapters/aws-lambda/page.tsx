@@ -115,8 +115,7 @@ export const handler = toLambdaStreamHandler(app);
 
       <h2 id="sam-template">SAM template</h2>
       <p>
-        DaloyJS requires Node 24 LTS or Node 26+ (
-        <code>engines.node: &quot;^24.0.0 || &gt;=26.0.0&quot;</code>). Use the
+        DaloyJS requires Node 24 LTS or Node 26+ (<code>engines.node: &quot;^24.0.0 || &gt;=26.0.0&quot;</code>). Use the
         <code>nodejs24.x</code> managed runtime where available, or ship a
         container image (see Lambda Web Adapter below) if your region&apos;s
         runtime catalog is older.
@@ -172,8 +171,7 @@ CMD ["node", "dist/server.js"]`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Callback-style handlers (
-          <code>(event, context, callback) =&gt; ...</code>) are not supported
+          Callback-style handlers (<code>(event, context, callback) =&gt; ...</code>) are not supported
           on supported Node versions. Always use <code>async</code> handlers;
           the DaloyJS adapter does.
         </li>

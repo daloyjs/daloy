@@ -92,8 +92,7 @@ export default function Page() {
           </a>{" "}
           and sign in to the{" "}
           <a href="https://os.tap.company/" target="_blank" rel="noreferrer">
-            dashboard
-          </a>
+            dashboard</a>
           {"."}
         </li>
         <li>
@@ -273,8 +272,7 @@ declare module "@daloyjs/core" {
           target="_blank"
           rel="noreferrer"
         >
-          their webhook docs
-        </a>
+          their webhook docs</a>
         {". "}If they add a new field to the hash, every webhook will fail until
         you update the function.
       </p>

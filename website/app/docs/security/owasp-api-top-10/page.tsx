@@ -145,8 +145,7 @@ export default function Page() {
               with <code>alg</code>-discipline and mandatory <code>exp</code>;{" "}
               <code>jwk()</code> JWKS middleware (asymmetric-only);{" "}
               <code>
-                bearerAuth({"{"} verify {"}"})
-              </code>
+                bearerAuth({"{"} verify {"}"})</code>
               {"; "}<code>basicAuth()</code> with UTF-8 credential decoding and
               construction-time validation; <code>passwordHash</code> /{" "}
               <code>passwordVerify</code> at <code>@daloyjs/core/hashing</code>;{" "}
@@ -306,8 +305,7 @@ export default function Page() {
               <code>application/json</code> and bodies over 64 KiB;
               refuse-to-boot in production on{" "}
               <code>
-                cors({"{"} origin: &quot;*&quot;{"}"})
-              </code>
+                cors({"{"} origin: &quot;*&quot;{"}"})</code>
               {", "}weak session secrets, unconfigured{" "}
               <code>X-Forwarded-*</code>
               {", "}
@@ -414,8 +412,7 @@ export default function Page() {
               <code>rateLimit()</code>
               {", "}
               <code>
-                rateLimit({"{"} groupId {"}"})
-              </code>
+                rateLimit({"{"} groupId {"}"})</code>
               {", "}<code>loginThrottle()</code>
               {", "}<code>wsRateLimit()</code>
               {", "}
@@ -431,7 +428,7 @@ export default function Page() {
               {", "}
               <code>token</code>
               {", "}<code>cookie</code>
-              {", "} ...); request-id propagation; <code>requestId()</code>{" "}
+              {","}...); request-id propagation; <code>requestId()</code>{" "}
               trust-default audit.
             </td>
           </tr>
@@ -535,8 +532,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          github.com/daloyjs/daloy/security/advisories/new
-        </a>
+          github.com/daloyjs/daloy/security/advisories/new</a>
         {"."}
       </p>
     </>

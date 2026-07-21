@@ -75,16 +75,14 @@ export default function Page() {
         </li>
         <li>
           <Link href={"/docs/payments/braintree" as Route}>
-            Braintree (PayPal)
-          </Link>
+            Braintree (PayPal)</Link>
           {": "}accept PayPal, cards, Venmo, Apple Pay, and Google Pay through
           one gateway using the official <code>braintree</code> Node SDK with
           signed webhooks.
         </li>
         <li>
           <Link href={"/docs/payments/authorize-net" as Route}>
-            Authorize.Net
-          </Link>
+            Authorize.Net</Link>
           {": "}charge cards, Apple Pay, and Google Pay via the official{" "}
           <code>authorizenet</code> SDK, plus HMAC-SHA512 webhook verification
           through the JSON Webhooks REST API.

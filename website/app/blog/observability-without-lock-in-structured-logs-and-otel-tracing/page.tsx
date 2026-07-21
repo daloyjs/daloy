@@ -544,8 +544,7 @@ export default function BlogPostPage() {
             hard dependency on <code>@opentelemetry/api</code>
             {". "}Everything composes through the same{" "}
             <Link href="/blog/middleware-without-mystery-hooks-ordering-response-transformation">
-              hooks lifecycle
-            </Link>
+              hooks lifecycle</Link>
             {", "}which is the only contract you need to understand to extend
             any of it.
           </p>
@@ -762,9 +761,7 @@ export default function BlogPostPage() {
           <p>
             Same story as the rest of the framework (see the{" "}
             <Link href="/blog/same-app-five-runtimes-verified">
-              five-runtimes post
-            </Link>
-            ): one app, swap the transport per environment, keep the handler
+              five-runtimes post</Link>): one app, swap the transport per environment, keep the handler
             code identical.
           </p>
 

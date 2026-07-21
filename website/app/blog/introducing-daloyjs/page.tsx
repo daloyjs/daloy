@@ -359,8 +359,7 @@ export default function BlogPostPage() {
                 rel="noreferrer"
                 target="_blank"
               >
-                Standard Schema
-              </a>
+                Standard Schema</a>
               {". "}I used Zod here, but you can swap in Valibot or ArkType
               without changing the framework. The schema isn&apos;t a
               decoration, it&apos;s the validator, the OpenAPI body,{" "}

@@ -38,8 +38,7 @@ export default function Page() {
       <p>
         DaloyJS ships an optional <strong>Redis-backed</strong> store at the{" "}
         <code>@daloyjs/core/rate-limit-redis</code> sub-export. Counters live in
-        Redis and are updated atomically with a small Lua script (
-        <code>INCR</code> + <code>PEXPIRE</code>), so every replica observes the
+        Redis and are updated atomically with a small Lua script (<code>INCR</code> + <code>PEXPIRE</code>), so every replica observes the
         same window without a hot key shootout.
       </p>
       <SequenceDiagram

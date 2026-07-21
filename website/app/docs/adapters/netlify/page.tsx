@@ -96,8 +96,7 @@ export const config: Config = {
       </h2>
       <p>
         Functions v2 is GA and is the recommended way to write Node functions on
-        Netlify. The old v1 lambda-style handler (
-        <code>exports.handler = (event, context) =&gt; ...</code>) is legacy. It
+        Netlify. The old v1 lambda-style handler (<code>exports.handler = (event, context) =&gt; ...</code>) is legacy. It
         still works for compatibility but you should write new code in v2.
       </p>
       <CodeBlock

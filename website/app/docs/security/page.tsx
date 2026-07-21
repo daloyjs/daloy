@@ -615,8 +615,7 @@ app.use(timing());              // Server-Timing header for observability`}
           mismatches with a timing-safe <strong>403</strong>.
         </li>
         <li>
-          <strong>Fetch Metadata</strong> (
-          <code>strategy: &quot;fetch-metadata&quot;</code>) - tokenless
+          <strong>Fetch Metadata</strong> (<code>strategy: &quot;fetch-metadata&quot;</code>) - tokenless
           protection that relies on the modern <code>Sec-Fetch-Site</code>{" "}
           header. No cookie round-trip; no HTML rendering coupling. Recommended
           for new browser-facing apps.
@@ -763,8 +762,7 @@ app.use(basicAuth({
         DaloyJS&apos;s runtime is <code>child_process</code>-free by CI gate, so
         the framework itself cannot shell out. See{" "}
         <a href="/docs/security/command-injection">Command injection</a> for the
-        safe shape of a handler that does need to invoke an external program (
-        <code>execFile</code> + argv array, never{" "}
+        safe shape of a handler that does need to invoke an external program (<code>execFile</code> + argv array, never{" "}
         <code>exec(`cmd ${"${input}"}`)</code>), the Windows <em>BatBadBut</em>{" "}
         footgun, and the grep rules to keep new bugs out at PR time.
       </p>

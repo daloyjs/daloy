@@ -202,8 +202,7 @@ app.use(
         <strong>refuses to construct</strong> unless you supply{" "}
         <code>resolveIp</code> or set <code>trustProxyHeaders</code>
         {". "}A request that claims to be a crawler but can&apos;t be verified
-        (no client IP, or a DNS failure) is blocked by default (
-        <code>blockUnverifiableBots</code>
+        (no client IP, or a DNS failure) is blocked by default (<code>blockUnverifiableBots</code>
         {", "}the secure-by-default posture). Set it to <code>false</code> to
         fail open. Verification results are cached per IP (default 1 h via{" "}
         <code>cacheTtlMs</code>) so DNS stays off the hot path.

@@ -679,9 +679,7 @@ export default function BlogPostPage() {
             The portability story here is the same as for the rest of the
             framework (see the{" "}
             <Link href="/blog/same-app-five-runtimes-verified">
-              five-runtimes post
-            </Link>
-            ): the contract is Web-standard-shaped, so you swap the transport
+              five-runtimes post</Link>): the contract is Web-standard-shaped, so you swap the transport
             per environment and keep the app code identical.
           </p>
 

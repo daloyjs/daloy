@@ -30,8 +30,7 @@ export default function Page() {
         omelette, eggs: 2&quot;) versus shouting an order through a megaphone
         the cook reads literally. With the ticket (<code>execFile</code> + argv
         array), &quot;burn down the restaurant&quot; ends up in the
-        &quot;dish&quot; field, meaningless. With the megaphone (
-        <code>exec(`cmd ${"${input}"}`)</code>), a stray semicolon turns one
+        &quot;dish&quot; field, meaningless. With the megaphone (<code>exec(`cmd ${"${input}"}`)</code>), a stray semicolon turns one
         order into two, and the second one is whatever the attacker wanted.
       </blockquote>
       <p>
@@ -77,15 +76,13 @@ export default function Page() {
               Zero <code>child_process</code> in <code>src/**</code>
             </td>
             <td>
-              A CI gate (
-              <a
+              A CI gate (<a
                 href="https://github.com/daloyjs/daloy/blob/main/scripts/verify-no-remote-exec.ts"
                 target="_blank"
                 rel="noreferrer"
               >
                 <code>verify-no-remote-exec.ts</code>
-              </a>
-              ) refuses to merge any PR that imports{" "}
+              </a>) refuses to merge any PR that imports{" "}
               <code>node:child_process</code>
               {", "}<code>node:vm</code>
               {", "}
@@ -371,8 +368,7 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
           target="_blank"
           rel="noreferrer"
         >
-          github.com/daloyjs/daloy/security/advisories/new
-        </a>
+          github.com/daloyjs/daloy/security/advisories/new</a>
         {". "}Don&apos;t open a public issue.
       </p>
     </>

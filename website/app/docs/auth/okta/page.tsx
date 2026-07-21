@@ -254,8 +254,7 @@ app.get(
         Only tokens from a <strong>Custom Authorization Server</strong> are
         meant to be verified by your app, those issuers look like{" "}
         <code>https://&#123;domain&#125;/oauth2/&#123;asId&#125;</code>
-        {". "}The Org Authorization Server (
-        <code>https://&#123;domain&#125;</code>) issues opaque tokens that only
+        {". "}The Org Authorization Server (<code>https://&#123;domain&#125;</code>) issues opaque tokens that only
         Okta should consume; validate those via the <code>/introspect</code>{" "}
         endpoint instead.
       </p>

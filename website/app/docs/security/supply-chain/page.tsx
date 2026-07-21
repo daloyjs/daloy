@@ -32,13 +32,10 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> the tamper-evident seal on every
         ingredient that enters a restaurant&apos;s kitchen. The seal proves
-        nobody opened the jar between the farm and the chef (
-        <code>--provenance</code>). The 24-hour fridge quarantine means an
-        obviously-poisoned batch gets recalled before it&apos;s served (
-        <code>minimum-release-age=1440</code>). And refusing to run the
+        nobody opened the jar between the farm and the chef (<code>--provenance</code>). The 24-hour fridge quarantine means an
+        obviously-poisoned batch gets recalled before it&apos;s served (<code>minimum-release-age=1440</code>). And refusing to run the
         &quot;please install this companion app&quot; pop-up that ships with the
-        package keeps malware out of the prep area (
-        <code>ignore-scripts=true</code>).
+        package keeps malware out of the prep area (<code>ignore-scripts=true</code>).
       </blockquote>
       <p>
         npm worm campaigns ship in waves: <code>chalk</code>/<code>debug</code>{" "}
@@ -88,8 +85,7 @@ export default function Page() {
       />
       <ul>
         <li>
-          <strong>Releases run in a separate workflow</strong> (
-          <code>release.yml</code>) that is triggered <em>only</em> by a signed
+          <strong>Releases run in a separate workflow</strong> (<code>release.yml</code>) that is triggered <em>only</em> by a signed
           tag push and gated by a protected GitHub Environment requiring
           maintainer approval. Fork PRs cannot touch it.
         </li>
@@ -103,8 +99,7 @@ export default function Page() {
         </li>
         <li>
           <strong>
-            <code>id-token: write</code> is granted only to the publish job
-          </strong>
+            <code>id-token: write</code> is granted only to the publish job</strong>
           {", "}on the post-approval runner, with egress blocked to everything
           except npm, GitHub, and Sigstore (via{" "}
           <code>step-security/harden-runner</code>).
@@ -117,8 +112,7 @@ export default function Page() {
         </li>
         <li>
           <strong>
-            No <code>pull_request_target</code> that runs fork code
-          </strong>
+            No <code>pull_request_target</code> that runs fork code</strong>
           {". "}CI uses the safe <code>pull_request</code> trigger; the one
           narrow exception (a workflow that auto-closes external PRs) never
           checks out, installs, or runs any PR code. A <code>zizmor</code> check
@@ -157,8 +151,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          SECURITY.md
-        </a>
+          SECURITY.md</a>
         {"."}
       </p>
 
@@ -181,8 +174,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer noopener"
         >
-          ClusterFuzzLite
-        </a>
+          ClusterFuzzLite</a>
         {". "}A per-PR <code>code-change</code> run fuzzes anything that touches{" "}
         <code>src/</code>
         {", "}and a daily batch job fuzzes the full corpus. This is also what
@@ -236,8 +228,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          .clusterfuzzlite/
-        </a>
+          .clusterfuzzlite/</a>
         {"."}
       </p>
 
@@ -343,8 +334,7 @@ strict-peer-dependencies=true`}
       />
       <p>
         DaloyJS itself uses the pnpm 11+ equivalent, an <code>allowBuilds</code>{" "}
-        allowlist in <code>pnpm-workspace.yaml</code> (
-        <code>package.json#pnpm.onlyBuiltDependencies</code> is the pre-v11
+        allowlist in <code>pnpm-workspace.yaml</code> (<code>package.json#pnpm.onlyBuiltDependencies</code> is the pre-v11
         form). Each entry should be reviewed in PR.
       </p>
 
@@ -516,8 +506,7 @@ safe-chain setup`}
               Reduce dependencies (&ldquo;is the dependency needed?&rdquo;)
             </td>
             <td>
-              <code>@daloyjs/core</code> ships zero runtime deps (
-              <code>verify:no-runtime-deps</code>)
+              <code>@daloyjs/core</code> ships zero runtime deps (<code>verify:no-runtime-deps</code>)
             </td>
           </tr>
         </tbody>
@@ -536,8 +525,7 @@ safe-chain setup`}
           target="_blank"
           rel="noreferrer"
         >
-          SECURITY.md &rarr; ENISA mapping
-        </a>
+          SECURITY.md &rarr; ENISA mapping</a>
         {"."}
       </p>
 
@@ -648,8 +636,7 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            Aikido: Quantum incident response
-          </a>
+            Aikido: Quantum incident response</a>
           {": "}why traditional IR cannot catch an npm worm, and why
           install-time prevention (cooldowns, blocked scripts, malware-feed
           scanners) is the only viable defense.
@@ -660,8 +647,7 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            TanStack 2026-05-11 postmortem
-          </a>
+            TanStack 2026-05-11 postmortem</a>
           {": "}the cache-poisoning + OIDC-extraction chain in detail.
         </li>
         <li>
@@ -670,8 +656,7 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            TanStack incident follow-up
-          </a>
+            TanStack incident follow-up</a>
           {": "}what they changed afterwards.
         </li>
         <li>
@@ -680,8 +665,7 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            GitHub Security Lab: preventing pwn requests
-          </a>
+            GitHub Security Lab: preventing pwn requests</a>
           {"."}
         </li>
         <li>
@@ -690,8 +674,7 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            npm provenance documentation
-          </a>
+            npm provenance documentation</a>
           {"."}
         </li>
         <li>
@@ -708,8 +691,7 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            summary
-          </a>
+            summary</a>
           {"."}
         </li>
         <li>

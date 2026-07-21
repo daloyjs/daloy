@@ -33,23 +33,20 @@ export default function Page() {
       <ul>
         <li>
           <Link href={"/docs/api-reference/app" as Route}>
-            App &amp; routing
-          </Link>
+            App &amp; routing</Link>
           {": "}the <code>App</code> class, route contracts, hooks and context
           types, dispatch order, errors, and schema validation.
         </li>
         <li>
           <Link href={"/docs/api-reference/middleware" as Route}>
-            Middleware &amp; helpers
-          </Link>
+            Middleware &amp; helpers</Link>
           {": "}built-in middleware, <code>every</code>/<code>some</code>/
           <code>except</code> composition, typed dependencies, config, logging,
           and connection info.
         </li>
         <li>
           <Link href={"/docs/api-reference/security" as Route}>
-            Security &amp; auth
-          </Link>
+            Security &amp; auth</Link>
           {": "}hardening primitives, <code>fetchGuard</code>
           {", "}
           <code>safeRedirect</code>
@@ -57,15 +54,13 @@ export default function Page() {
         </li>
         <li>
           <Link href={"/docs/api-reference/modules" as Route}>
-            Feature modules
-          </Link>
+            Feature modules</Link>
           {": "}OpenAPI, typed client, contract tests, MCP, docs UIs,
           streaming, multipart, WebSocket, tracing, and the CLI.
         </li>
         <li>
           <Link href={"/docs/api-reference/adapters" as Route}>
-            Runtime adapters
-          </Link>
+            Runtime adapters</Link>
           {": "}<code>serve()</code> for Node.js, Bun, and Deno, plus the
           Cloudflare, Vercel, Fastly, and Lambda handlers.
         </li>
@@ -107,9 +102,7 @@ console.log(\`listening on http://localhost:\${port}\`);`}
       <p>
         Run it with <code>node index.ts</code>
         {": "}Node.js (22.18+) strips TypeScript types natively, no loader
-        required. Every response already carries the secure-by-default headers (
-        <code>secureHeaders</code>) and an <code>x-request-id</code> (
-        <code>requestId</code>); errors serialize to RFC 9457{" "}
+        required. Every response already carries the secure-by-default headers (<code>secureHeaders</code>) and an <code>x-request-id</code> (<code>requestId</code>); errors serialize to RFC 9457{" "}
         <code>application/problem+json</code>
         {". "}To serve <code>/docs</code> and <code>/openapi.json</code>
         {", "}pass <code>docs: true</code> to <code>new App(...)</code> (it

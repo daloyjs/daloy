@@ -137,8 +137,7 @@ export function buildApp() {
         {". "}TypeScript entry files load directly — Node.js (22.18+) strips
         types natively. If the native load fails (older Node, non-erasable
         syntax such as enums, or extensionless relative imports), the CLI falls
-        back to <code>tsx</code> when it is installed (
-        <code>pnpm add -D tsx</code>).
+        back to <code>tsx</code> when it is installed (<code>pnpm add -D tsx</code>).
       </p>
       <p>
         Point <code>inspect</code>
@@ -157,12 +156,9 @@ export function buildApp() {
         </li>
         <li>
           <code>--check</code>
-          {": "}run the contract suite ({" "}
-          <a href="/docs/testing">
-            missing operationIds, duplicate operationIds, dead routes, body
-            schemas on safe methods, invalid examples
-          </a>
-          ) and exit 1 on any error.
+          {": "}run the contract suite (<a href="/docs/testing">missing
+            operationIds, duplicate operationIds, dead routes, body schemas on
+            safe methods, invalid examples</a>) and exit 1 on any error.
         </li>
         <li>
           <code>--schemas</code>
@@ -251,8 +247,7 @@ pnpm exec daloy dev ./src/server.ts`}
         <li>
           <strong>Deno</strong>:{" "}
           <code>
-            deno run --watch --allow-net --allow-env --allow-read &lt;entry&gt;
-          </code>
+            deno run --watch --allow-net --allow-env --allow-read &lt;entry&gt;</code>
           {"."}
         </li>
       </ul>

@@ -580,8 +580,7 @@ export default function Page() {
           if the <code>mcpRoutes()</code> <code>POST</code> endpoint has no auth
           hook. For a genuinely public server, opt out explicitly with{" "}
           <code>
-            mcpRoutes(path, handler, {"{"} public: true {"}"})
-          </code>
+            mcpRoutes(path, handler, {"{"} public: true {"}"})</code>
           {"."}
         </li>
         <li>

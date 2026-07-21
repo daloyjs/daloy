@@ -35,8 +35,7 @@ export default function Page() {
         (JWKS lookup by <code>kid</code>), revalidates that you still work here
         on every request (the <code>verify</code> hook), and refuses to cache
         the &quot;denied&quot; answer at the elevator, so a fired employee
-        can&apos;t ride up tomorrow on a stale 401 (
-        <code>Cache-Control: no-store</code>).
+        can&apos;t ride up tomorrow on a stale 401 (<code>Cache-Control: no-store</code>).
       </blockquote>
 
       <h2 id="daloyjs-is-a-relying-party-not-an-auth-server">
@@ -351,8 +350,7 @@ app.use(
         <code>requirePayloadAuth</code> scheme flag, and the WebSocket-helper
         safe defaults, are covered in{" "}
         <a href="/docs/security/websocket-login-throttle">
-          WebSocket and login safeguards
-        </a>
+          WebSocket and login safeguards</a>
         {"."}
       </p>
     </>

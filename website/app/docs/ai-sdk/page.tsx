@@ -337,8 +337,7 @@ export default function Page() {
         For the full argument behind this (why the deployment-time layer must
         hold when the model fails), see the blog post{" "}
         <a href="/blog/international-ai-safety-report-2026-minimum-safety-baseline-for-ai-backends">
-          on the International AI Safety Report
-        </a>
+          on the International AI Safety Report</a>
         {", "}and the{" "}
         <a href="/docs/security/secure-defaults">secure-by-default</a> guide.
       </p>

@@ -31,8 +31,7 @@ export default function Page() {
         call to attach <strong>structured usage examples</strong>
         {", "}extra descriptive copy, or free-form <code>x-*</code> extensions.
         Daloy validates every example against your route&rsquo;s Standard Schema
-        at build time and emits the same payload into OpenAPI (
-        <code>examples</code> on the request body, <code>examples</code> on the
+        at build time and emits the same payload into OpenAPI (<code>examples</code> on the request body, <code>examples</code> on the
         matching response, <code>x-daloy-examples</code> on the operation) and
         into the <code>daloy inspect --ai</code> dump that codegen agents and
         SDK builders consume.

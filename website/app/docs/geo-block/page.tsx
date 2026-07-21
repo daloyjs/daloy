@@ -280,8 +280,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         A blocked request throws <code>ForbiddenError</code>
         {", "}rendered as RFC 9457 <code>application/problem+json</code> with
         HTTP <code>403</code> and <code>Cache-Control: no-store</code>
-        {". "}The default message (
-        <code>&quot;Access from your region is not permitted&quot;</code>) is
+        {". "}The default message (<code>&quot;Access from your region is not permitted&quot;</code>) is
         configurable via <code>message</code> and deliberately does not echo the
         country or IP back to the client.
       </p>

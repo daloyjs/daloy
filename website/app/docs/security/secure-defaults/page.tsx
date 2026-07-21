@@ -26,8 +26,7 @@ export default function Page() {
         <strong>Think of it like…</strong> a brand-new car. Seatbelts are
         buckled, airbags are armed, doors are locked when you start moving. You{" "}
         <em>can</em> turn any of those off, but only by deliberately pressing a
-        button labelled &quot;I know this is unsafe&quot; (
-        <code>secureDefaults: false</code> +{" "}
+        button labelled &quot;I know this is unsafe&quot; (<code>secureDefaults: false</code> +{" "}
         <code>acknowledgeInsecureDefaults: true</code>), and the car logs that
         you did.
       </blockquote>
@@ -131,8 +130,7 @@ app.use(
         State-changing requests carrying an <code>Origin</code> header from a
         different origin than the request URL are now rejected with{" "}
         <code>403 problem+json</code> unless the matched route has a{" "}
-        <code>cors()</code> policy that allows that origin. Read-only methods (
-        <code>GET</code>
+        <code>cors()</code> policy that allows that origin. Read-only methods (<code>GET</code>
         {", "}<code>HEAD</code>
         {", "}<code>OPTIONS</code>), same-origin requests, and requests without
         an <code>Origin</code> header (or with <code>Origin: null</code> from a
@@ -231,8 +229,7 @@ app.use(cors({ origin: ["https://app.example.com"] }));
       <CodeBlock code={`const app = new App({ secureDefaults: false });`} />
       <p>
         This is intentionally one-shot: there is no per-feature granular master
-        flag because the per-feature opt-outs already exist (
-        <code>secureHeaders: false</code>
+        flag because the per-feature opt-outs already exist (<code>secureHeaders: false</code>
         {", "}
         <code>corsCrossOriginGuard: false</code>). Use{" "}
         <code>secureDefaults: false</code> as a time-boxed migration hatch, not

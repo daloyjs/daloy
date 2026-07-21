@@ -318,40 +318,35 @@ export default function Page() {
           target="_blank"
           rel="noreferrer noopener"
         >
-          Snyk Open Source
-        </a>
+          Snyk Open Source</a>
         {", "}
         <a
           href="https://docs.snyk.io/scan-with-snyk/snyk-code"
           target="_blank"
           rel="noreferrer noopener"
         >
-          Snyk Code
-        </a>
+          Snyk Code</a>
         {", "}
         <a
           href="https://docs.snyk.io/scan-with-snyk/snyk-container"
           target="_blank"
           rel="noreferrer noopener"
         >
-          Snyk Container
-        </a>
+          Snyk Container</a>
         {", "}
         <a
           href="https://docs.snyk.io/scan-with-snyk/snyk-iac"
           target="_blank"
           rel="noreferrer noopener"
         >
-          Snyk IaC
-        </a>
+          Snyk IaC</a>
         {", "}and{" "}
         <a
           href="https://snyk.io/product/dast-api-web/"
           target="_blank"
           rel="noreferrer noopener"
         >
-          Snyk API &amp; Web
-        </a>
+          Snyk API &amp; Web</a>
         {"."}
       </p>
 
@@ -402,8 +397,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer noopener"
           >
-            getting started guide
-          </a>
+            getting started guide</a>
           {", "}create or join the correct organization, and confirm your
           region and token policy.
         </li>
@@ -466,24 +460,21 @@ export default function Page() {
           target="_blank"
           rel="noreferrer noopener"
         >
-          PR and release gating
-        </a>
+          PR and release gating</a>
         {"; "}
         <a
           href="https://help.aikido.dev/container-image-scanning/container-image-scanning-overview"
           target="_blank"
           rel="noreferrer noopener"
         >
-          container image scanning
-        </a>
+          container image scanning</a>
         {"; "}
         <a
           href="https://help.aikido.dev/dast-surface-monitoring/dast-surface-monitoring-overview"
           target="_blank"
           rel="noreferrer noopener"
         >
-          DAST / surface monitoring
-        </a>
+          DAST / surface monitoring</a>
         {"; "}cloud scanning; AutoFix; and{" "}
         <a
           href="https://help.aikido.dev/zen-firewall/getting-started-with-zen-firewall"
@@ -546,8 +537,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer noopener"
           >
-            Connect Your Source Code
-          </a>
+            Connect Your Source Code</a>
           {". "}Aikido supports GitHub, GitHub Enterprise, GitLab, Bitbucket,
           and Azure DevOps paths in the current docs.
         </li>
@@ -558,8 +548,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer noopener"
           >
-            PR Gating Overview
-          </a>
+            PR Gating Overview</a>
           {". "}Start with visibility mode or a high severity threshold, then
           require the check after triage rules are clear.
         </li>
@@ -570,8 +559,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer noopener"
           >
-            Local Code Scanning
-          </a>
+            Local Code Scanning</a>
           {". "}Aikido recommends standard integrations for most teams because
           they provide faster results and better coverage.
         </li>
@@ -707,24 +695,21 @@ export default function Page() {
           target="_blank"
           rel="noreferrer noopener"
         >
-          Socket pricing
-        </a>
+          Socket pricing</a>
         {", "}
         <a
           href="https://snyk.io/plans/"
           target="_blank"
           rel="noreferrer noopener"
         >
-          Snyk plans
-        </a>
+          Snyk plans</a>
         {", "}and{" "}
         <a
           href="https://www.aikido.dev/pricing"
           target="_blank"
           rel="noreferrer noopener"
         >
-          Aikido pricing
-        </a>
+          Aikido pricing</a>
         {". "}If a vendor renames a product module, update the wording here and
         keep the old name out unless it is still present in the current docs.
       </p>

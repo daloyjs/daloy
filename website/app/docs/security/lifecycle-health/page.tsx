@@ -39,8 +39,7 @@ export default function Page() {
         <code>readinesscheck()</code> primitives. All three default-on the safe
         behaviour and let you opt out per-feature or globally with{" "}
         <code>
-          app({"{"} secureDefaults: false {"}"})
-        </code>
+          app({"{"} secureDefaults: false {"}"})</code>
         {"."}
       </p>
 
@@ -129,8 +128,7 @@ await app.close(10_000, "SIGTERM");
       </p>
       <ul>
         <li>
-          Omitted: install in production (
-          <code>env: &quot;production&quot;</code> or{" "}
+          Omitted: install in production (<code>env: &quot;production&quot;</code> or{" "}
           <code>NODE_ENV === &quot;production&quot;</code>), skip elsewhere.
         </li>
         <li>
@@ -194,12 +192,10 @@ app.readinesscheck({
       <p>
         Disable the whole slice with{" "}
         <code>
-          new App({"{"} secureDefaults: false {"}"})
-        </code>
+          new App({"{"} secureDefaults: false {"}"})</code>
         {", "}or just the crash handlers with{" "}
         <code>
-          new App({"{"} crashOnUnhandledRejection: false {"}"})
-        </code>
+          new App({"{"} crashOnUnhandledRejection: false {"}"})</code>
         {". "}Health and readiness routes are opt-in, no auto-registration
         happens, the framework only flips behaviour when you call{" "}
         <code>app.healthcheck()</code> / <code>app.readinesscheck()</code>{" "}

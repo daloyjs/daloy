@@ -400,8 +400,7 @@ export default function BlogPostPage() {
           <p>
             The reasoning behind each one is in{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              &quot;Supply-chain hardening for TypeScript libraries&quot;
-            </Link>
+              &quot;Supply-chain hardening for TypeScript libraries&quot;</Link>
             {". "}Short version: pnpm&apos;s install-time defaults, plus our CI
             gates, plus a release-age cooldown, plus SHA-pinned Actions, plus
             npm provenance, plus a CycloneDX SBOM, chosen because attackers
@@ -516,8 +515,7 @@ export default function BlogPostPage() {
               Read <Link href="/docs/security">/docs/security</Link> once.
               Bookmark{" "}
               <Link href="/docs/security/owasp-api-top-10">
-                /docs/security/owasp-api-top-10
-              </Link>
+                /docs/security/owasp-api-top-10</Link>
               {"."}
             </li>
           </ol>
@@ -534,22 +532,18 @@ export default function BlogPostPage() {
             <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries
-            </Link>
+              Supply-chain hardening for TypeScript libraries</Link>
             {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026
-            </Link>
+              CSRF in 2026</Link>
             {", "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP nonces and Trusted Types
-            </Link>
+              CSP nonces and Trusted Types</Link>
             {", "}
             <Link href="/blog/sessions-on-the-edge">Sessions on the edge</Link>
             {", "}
             <Link href="/blog/observability-without-lock-in-structured-logs-and-otel-tracing">
-              Observability without lock-in
-            </Link>
+              Observability without lock-in</Link>
             {"."}
           </p>
         </div>

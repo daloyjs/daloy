@@ -41,8 +41,7 @@ export default function Page() {
       <p>
         New to this? Start with{" "}
         <Link href={"/docs/auth/architecture" as Route}>
-          Auth architecture: where DaloyJS fits in OAuth2 &amp; OpenID Connect
-        </Link>
+          Auth architecture: where DaloyJS fits in OAuth2 &amp; OpenID Connect</Link>
         {". "}It explains why DaloyJS is a <strong>resource server</strong> (it
         verifies tokens, it does not issue them), how that compares to .NET and
         Duende IdentityServer, whether you actually need Auth0/Okta/Clerk or can

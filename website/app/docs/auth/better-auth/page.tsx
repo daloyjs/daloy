@@ -391,40 +391,35 @@ await authClient.signIn.email({
           target="_blank"
           rel="noreferrer"
         >
-          Better Auth installation
-        </a>
+          Better Auth installation</a>
         {", "}
         <a
           href="https://better-auth.com/docs/basic-usage"
           target="_blank"
           rel="noreferrer"
         >
-          Better Auth basic usage
-        </a>
+          Better Auth basic usage</a>
         {", "}and the framework integration docs for{" "}
         <a
           href="https://better-auth.com/docs/integrations/hono"
           target="_blank"
           rel="noreferrer"
         >
-          Hono
-        </a>
+          Hono</a>
         {", "}
         <a
           href="https://better-auth.com/docs/integrations/elysia"
           target="_blank"
           rel="noreferrer"
         >
-          Elysia
-        </a>
+          Elysia</a>
         {", "}and{" "}
         <a
           href="https://better-auth.com/docs/integrations/fastify"
           target="_blank"
           rel="noreferrer"
         >
-          Fastify
-        </a>
+          Fastify</a>
         {"."}
       </p>
     </>

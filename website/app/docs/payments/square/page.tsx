@@ -75,8 +75,7 @@ export default function Page() {
           <strong>
             You don&apos;t charge a card, you charge a <em>source ID</em>.
           </strong>{" "}
-          The Web Payments SDK on the client returns a single-use token (
-          <code>cnon:...</code> for cards, <code>cash:</code>
+          The Web Payments SDK on the client returns a single-use token (<code>cnon:...</code> for cards, <code>cash:</code>
           {", "}Apple Pay nonces, etc.) that your server passes as{" "}
           <code>sourceId</code>
           {". "}Raw PANs never touch your code.
@@ -378,8 +377,7 @@ app.post(
       />
       <p className="text-sm text-muted-foreground">
         <strong>BigInt + JSON gotcha:</strong> JavaScript&apos;s default JSON
-        serialiser throws on BigInt. Map money to strings at the response edge (
-        <code>amountMinor.toString()</code>) or use a custom replacer.
+        serialiser throws on BigInt. Map money to strings at the response edge (<code>amountMinor.toString()</code>) or use a custom replacer.
         DaloyJS&apos;s Zod responses already coerce BigInt to string when you
         declare the response as <code>z.string()</code>; declare a{" "}
         <code>z.bigint()</code> only when both ends agree on it.
@@ -560,8 +558,7 @@ await state.square.refund({
         <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>
         {", "}
         <Link href={"/docs/payments/authorize-net" as Route}>
-          Authorize.Net guide
-        </Link>
+          Authorize.Net guide</Link>
         {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>

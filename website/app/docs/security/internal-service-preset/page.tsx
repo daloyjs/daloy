@@ -137,8 +137,7 @@ const app = new App({
       <ul>
         <li>
           <strong>
-            <code>secureHeaders</code> auto-install
-          </strong>
+            <code>secureHeaders</code> auto-install</strong>
           {", "}HSTS, CSP, X-Frame-Options, COOP / CORP. No browser to read
           them.
         </li>
@@ -152,8 +151,7 @@ const app = new App({
         </li>
         <li>
           <strong>
-            <code>csrf</code> boot guard
-          </strong>
+            <code>csrf</code> boot guard</strong>
           {", "}refuses to start when <code>session()</code> is registered
           alongside a state-changing route without <code>csrf()</code>
           {". "}Internal callers authenticate with bearer tokens or mTLS, not
@@ -161,8 +159,7 @@ const app = new App({
         </li>
         <li>
           <strong>
-            unconfigured <code>X-Forwarded-*</code> guard
-          </strong>
+            unconfigured <code>X-Forwarded-*</code> guard</strong>
           {", "}the first-request 500 when <code>trustProxy</code> /{" "}
           <code>behindProxy</code> is unset. The mesh terminates TLS and the
           immediate peer inside the mesh <em>is</em> the caller.
@@ -230,8 +227,7 @@ const app = new App({
         deployments:{" "}
         <strong>
           do not remove the guards, name the topology once, audit which guards
-          stayed on, and keep everything else
-        </strong>
+          stayed on, and keep everything else</strong>
         {". "}That is closer to the <code>config.force_ssl</code> /{" "}
         <code>SECURE_*</code> settings shape used by Rails and Django than to a
         master &quot;disable everything&quot; switch.
@@ -397,16 +393,14 @@ app.use(loginThrottle()); // employees mistype passwords too`}
         <li>
           The service is reachable from a browser, even indirectly (BFF pattern,
           admin UI, embedded widgets, or an{" "}
-          <a href="#employee-only-internal-apps">employee-only internal app</a>
-          ). Use the default posture and add <code>cors()</code> per route.
+          <a href="#employee-only-internal-apps">employee-only internal app</a>). Use the default posture and add <code>cors()</code> per route.
         </li>
         <li>
           The service is exposed directly to the public internet without a mesh
           / WAF / TLS terminator in front. Use the default posture.
         </li>
         <li>
-          You only need to disable a single guard. Prefer the per-knob option (
-          <code>secureHeaders: false</code>
+          You only need to disable a single guard. Prefer the per-knob option (<code>secureHeaders: false</code>
           {", "}
           <code>corsCrossOriginGuard: false</code>
           {", "}
@@ -423,16 +417,14 @@ app.use(loginThrottle()); // employees mistype passwords too`}
         </li>
         <li>
           <a href="/docs/security/secure-defaults-enforcement">
-            <code>secureDefaults</code> enforcement
-          </a>
+            <code>secureDefaults</code> enforcement</a>
           {", "}the wholesale escape hatch (refuses-to-boot in production
           without explicit acknowledgement). Prefer the topology preset where
           possible.
         </li>
         <li>
           <a href="/docs/security/fetch-guard">
-            <code>fetchGuard()</code> SSRF defaults
-          </a>
+            <code>fetchGuard()</code> SSRF defaults</a>
           {", "}still active under the preset.
         </li>
       </ul>

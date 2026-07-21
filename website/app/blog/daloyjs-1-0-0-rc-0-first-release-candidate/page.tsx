@@ -134,8 +134,7 @@ export default function BlogPostPage() {
           <p>
             A couple of weeks ago I wrote a post whose whole punchline was that{" "}
             <Link href="/blog/daloyjs-1-0-0-beta-is-here">
-              the beta changed nothing on purpose
-            </Link>
+              the beta changed nothing on purpose</Link>
             {". "}Today I get to write the sequel, and the tone is different. We
             just tagged the first release candidate. If the beta was me quietly
             hoping the API was ready, the RC is me locking the door and putting

@@ -316,8 +316,7 @@ app.listen(3000)                      serve(app, { port: 3000 })  // from an ada
         <Link href="/docs/scaffolder">create-daloy</Link> and copy your logic
         into it, or add DaloyJS alongside Express in your existing repo for an{" "}
         <Link href={"/docs/migrating/express#incremental" as Route}>
-          incremental migration
-        </Link>
+          incremental migration</Link>
         {": "}
       </p>
       <CodeBlock
@@ -786,8 +785,7 @@ app.get(
               No built-in static server (API-first). Serve assets from a
               CDN/object store, or front the app with nginx/Caddy. See{" "}
               <Link href={"/docs/migrating/express#static" as Route}>
-                Static files
-              </Link>
+                Static files</Link>
               {"."}
             </td>
           </tr>
@@ -831,8 +829,7 @@ app.get(
               <code>{`rateLimit({ windowMs, max })`}</code>
               {". "}Redis-backed store available, see{" "}
               <Link href="/docs/security/rate-limit-redis">
-                Redis rate-limit store
-              </Link>
+                Redis rate-limit store</Link>
               {"."}
             </td>
           </tr>
@@ -844,8 +841,7 @@ app.get(
               <code>readRequestCookie()</code> to read,{" "}
               <code>serializeCookie()</code> to write. See{" "}
               <Link href={"/docs/migrating/express#sessions" as Route}>
-                Cookies &amp; sessions
-              </Link>
+                Cookies &amp; sessions</Link>
               {"."}
             </td>
           </tr>
@@ -1832,8 +1828,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </li>
         <li>
           <Link href="/blog/best-node-express-alternative-daloyjs">
-            Why DaloyJS is the best Node.js Express alternative
-          </Link>
+            Why DaloyJS is the best Node.js Express alternative</Link>
           {", "}the case for switching, if you still need to make it.
         </li>
       </ul>

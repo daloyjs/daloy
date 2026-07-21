@@ -405,9 +405,7 @@ app.use(secureHeaders({
               wikis, articles), turn on the CSP nonce + Trusted Types path (see
               the{" "}
               <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-                CSP nonces post
-              </Link>
-              ) and serve user HTML with a sanitiser like <code>DOMPurify</code>{" "}
+                CSP nonces post</Link>) and serve user HTML with a sanitiser like <code>DOMPurify</code>{" "}
               on the server.
             </li>
             <li>
@@ -459,16 +457,13 @@ app.use(secureHeaders({
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP nonces and Trusted Types without tears
-            </Link>
+              CSP nonces and Trusted Types without tears</Link>
             {", "}
             <Link href="/blog/aikido-top-10-app-security-problems-mapped-to-daloyjs">
-              Aikido top 10 mapped to DaloyJS
-            </Link>
+              Aikido top 10 mapped to DaloyJS</Link>
             {", "}
             <Link href="/blog/litellm-teampcp-poisoned-scanner-mapped-to-daloyjs">
-              LiteLLM / TeamPCP mapped to DaloyJS
-            </Link>
+              LiteLLM / TeamPCP mapped to DaloyJS</Link>
             {", "}<Link href="/blog/secure-by-default">Secure by default</Link>
             {". "}
             Relevant docs: <Link href="/docs/security">/docs/security</Link>

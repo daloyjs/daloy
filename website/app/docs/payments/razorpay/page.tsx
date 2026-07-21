@@ -89,8 +89,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Razorpay dashboard
-          </a>
+            Razorpay dashboard</a>
           {"."}
         </li>
         <li>
@@ -505,8 +504,7 @@ await state.razorpay.refund({
         <code>https</code> module, it runs on Node 18+ but is not edge-runtime
         compatible. For Cloudflare Workers, hit{" "}
         <code>https://api.razorpay.com/v1</code> directly with{" "}
-        <code>fetch</code> and Basic auth (
-        <code>Authorization: Basic base64(key_id:key_secret)</code>). The two
+        <code>fetch</code> and Basic auth (<code>Authorization: Basic base64(key_id:key_secret)</code>). The two
         signature helpers are pure HMAC and easy to reimplement with{" "}
         <code>crypto.subtle</code> if you don&apos;t want the bundled ones.
       </p>

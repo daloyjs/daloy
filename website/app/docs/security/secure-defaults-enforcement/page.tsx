@@ -31,8 +31,7 @@ export default function Page() {
       <blockquote>
         <strong>Think of it like…</strong> a smoke alarm that beeps when it
         smells smoke <em>and</em> refuses to be permanently silenced. You can
-        mute it for one cooking session by holding a clearly labelled button (
-        <code>acknowledgeInsecureDefaults: true</code>), but it logs that you
+        mute it for one cooking session by holding a clearly labelled button (<code>acknowledgeInsecureDefaults: true</code>), but it logs that you
         did and re-arms itself. The alarm also refuses to be installed at all if
         you try to give it a 4-byte battery (a JWT secret shorter than 32
         bytes).

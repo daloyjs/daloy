@@ -37,8 +37,7 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          fakerestapi.vercel.app
-        </a>
+          fakerestapi.vercel.app</a>
         {"."}
       </p>
 

@@ -213,8 +213,7 @@ export default function Page() {
             </td>
             <td>
               <a href="/docs/security/runtime-protections">
-                Runtime protections
-              </a>
+                Runtime protections</a>
               {", "}<a href="/docs/security/compression">Compression</a>
             </td>
           </tr>
@@ -224,8 +223,7 @@ export default function Page() {
               Structured logger with request-id correlation; default key
               redaction (<code>DEFAULT_REDACT_KEYS</code>) for known secret/PII
               keys; JWT-like and opaque-token value scrubbing;{" "}
-              <code>sanitizeUrlForLog</code> (
-              <code>SENSITIVE_URL_QUERY_KEYS</code>) strips secret-bearing query
+              <code>sanitizeUrlForLog</code> (<code>SENSITIVE_URL_QUERY_KEYS</code>) strips secret-bearing query
               params and userinfo from request URLs bound into log records;
               opt-in redaction for application-specific fields.
             </td>
@@ -368,11 +366,7 @@ export default function Page() {
         </li>
         <li>
           <strong>A.8.9 Configuration management</strong>
-          {": "}secure defaults are enforced at boot (
-          <a href="/docs/security/secure-defaults-enforcement">
-            secureDefaults enforcement
-          </a>
-          ), not just documented.
+          {": "}secure defaults are enforced at boot (<a href="/docs/security/secure-defaults-enforcement">secureDefaults enforcement</a>), not just documented.
         </li>
         <li>
           <strong>A.8.15 Logging</strong>
@@ -495,8 +489,7 @@ export default function Page() {
           {": "}OpenAPI is generated from the routes themselves, which gives a
           machine-readable inventory of every endpoint that touches personal
           data. Pair it with a tagging convention (e.g.{" "}
-          <code>x-daloy-data-classes: [&quot;email&quot;, &quot;ip&quot;]</code>
-          ) so the same spec answers ROPA questions.
+          <code>x-daloy-data-classes: [&quot;email&quot;, &quot;ip&quot;]</code>) so the same spec answers ROPA questions.
         </li>
         <li>
           <strong>Article 32 security of processing</strong>
@@ -682,8 +675,7 @@ export default function Page() {
         <li>
           <strong>
             Article 20 governance (management body approves the risk-management
-            measures and undergoes cybersecurity training)
-          </strong>
+            measures and undergoes cybersecurity training)</strong>
           {": "}an organizational obligation on the consumer (cannot be
           delegated to the security team). The framework layer makes the
           underlying evidence reviewable: every guardrail listed below lives in
@@ -694,8 +686,7 @@ export default function Page() {
         <li>
           <strong>
             Article 21(2)(a) policies on risk analysis and security of
-            information systems
-          </strong>
+            information systems</strong>
           {": "}the secure-by-default baseline plus the boot-guard enforcement.
         </li>
         <li>
@@ -712,8 +703,7 @@ export default function Page() {
         <li>
           <strong>
             Article 21(2)(e) security in network and information systems
-            acquisition, development, and maintenance
-          </strong>
+            acquisition, development, and maintenance</strong>
           {": "}the CI bundle from <code>create-daloy --with-ci</code> turns
           CodeQL, Scorecard, zizmor, Dependabot, and CODEOWNERS on out of the
           box.
@@ -733,8 +723,7 @@ export default function Page() {
           <strong>
             Article 23 incident reporting (24 h early warning, 72 h
             notification, 1-month final report to the national CSIRT or
-            competent authority)
-          </strong>
+            competent authority)</strong>
           {": "}this is the consumer&apos;s obligation, but the framework ships
           the technical substrate: per-request structured logs with correlated
           request IDs, OpenTelemetry-shaped spans, and plugin lifecycle hooks
@@ -775,8 +764,7 @@ export default function Page() {
           rel="noreferrer"
         >
           <code>
-            SECURITY.md &rarr; &ldquo;EU Cyber Resilience Act mapping&rdquo;
-          </code>
+            SECURITY.md &rarr; &ldquo;EU Cyber Resilience Act mapping&rdquo;</code>
         </a>
         {"; "}the table below is the operator-friendly summary.
       </p>
@@ -1527,8 +1515,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            SECURITY.md
-          </a>
+            SECURITY.md</a>
           {": "}SLAs, GHSA evidence pattern, reporting flow.
         </li>
         <li>
@@ -1537,8 +1524,7 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Aikido: cloud compliance frameworks overview
-          </a>
+            Aikido: cloud compliance frameworks overview</a>
           {": "}broader background on the frameworks themselves.
         </li>
       </ul>

@@ -379,8 +379,7 @@ export default function BlogPostPage() {
           <p>
             The full list of what the router refuses to walk into is in{" "}
             <Link href="/docs/security/runtime-protections">
-              /docs/security/runtime-protections
-            </Link>
+              /docs/security/runtime-protections</Link>
             {"."}
           </p>
 
@@ -397,8 +396,7 @@ export default function BlogPostPage() {
           <p>
             The full reasoning behind each gate is in{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              &quot;Supply-chain hardening for TypeScript libraries&quot;
-            </Link>
+              &quot;Supply-chain hardening for TypeScript libraries&quot;</Link>
             {". "}The shorter version: attackers do not need a 0-day if they can
             ship a malicious <code>postinstall</code>
             {", "}and AI agents do not inspect <code>scripts</code> blocks
@@ -421,8 +419,7 @@ export default function BlogPostPage() {
           <p>
             The dedicated page is{" "}
             <Link href="/docs/security/admin-panels">
-              /docs/security/admin-panels
-            </Link>
+              /docs/security/admin-panels</Link>
             {". "}If the &quot;Tea app&quot; team had read it, they&apos;d have
             shipped an internal-only deploy and the breach would not have
             happened. I am not claiming the framework would have <em>forced</em>{" "}
@@ -463,8 +460,7 @@ export default function BlogPostPage() {
             The &quot;agent reads the rules before it writes code&quot; piece is
             covered in{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              &quot;Designing for Coding Agents&quot;
-            </Link>
+              &quot;Designing for Coding Agents&quot;</Link>
             {". "}The point of scaffolding AGENTS.md is exactly the
             &quot;PromptBOM&quot; idea the Aikido post pitches at the end, give
             the agent provenance and rules <em>before</em> it generates, not
@@ -552,21 +548,17 @@ export default function BlogPostPage() {
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped
-            </Link>
+              Cloud Security Architecture, Mapped</Link>
             {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries
-            </Link>
+              Supply-chain hardening for TypeScript libraries</Link>
             {", "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              Designing for Coding Agents
-            </Link>
+              Designing for Coding Agents</Link>
             {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
-              Scaffolding a production-ready DaloyJS app in 60 seconds
-            </Link>
+              Scaffolding a production-ready DaloyJS app in 60 seconds</Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}
@@ -577,8 +569,7 @@ export default function BlogPostPage() {
             <Link href="/docs/security/fetch-guard">fetch guard</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections
-            </Link>
+              runtime protections</Link>
             {", "}<Link href="/docs/security/supply-chain">supply chain</Link>.
           </p>
         </div>

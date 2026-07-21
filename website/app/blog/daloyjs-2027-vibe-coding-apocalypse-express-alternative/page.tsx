@@ -525,8 +525,7 @@ export default function BlogPostPage() {
             link preview. The handler does <code>await fetch(url)</code>
             {". "}An attacker passes{" "}
             <code>
-              http://169.254.169.254/latest/meta-data/iam/security-credentials/
-            </code>
+              http://169.254.169.254/latest/meta-data/iam/security-credentials/</code>
             {", "}your server fetches it, and now the response body contains
             your instance&apos;s IAM credentials. This is Server-Side Request
             Forgery and it is responsible for some of the biggest cloud breaches
@@ -940,8 +939,7 @@ export default function BlogPostPage() {
             If you want the persuasion version rather than the how-to version,
             there is also a companion post,{" "}
             <Link href="/blog/best-node-express-alternative-daloyjs">
-              Why DaloyJS is the best Node.js Express alternative
-            </Link>
+              Why DaloyJS is the best Node.js Express alternative</Link>
             {", "}that makes the case in more detail. But honestly, the
             migration guide is the better read, because it shows you the actual
             code instead of just telling you it is nicer.
