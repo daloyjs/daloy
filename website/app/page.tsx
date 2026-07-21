@@ -2,10 +2,14 @@ import Link from "next/link";
 import {
   ArrowRightIcon,
   BookOpenTextIcon,
+  BroadcastIcon,
   CubeIcon,
   FileCodeIcon,
+  GlobeIcon,
   LockIcon,
+  PackageIcon,
   PlugsConnectedIcon,
+  RobotIcon,
   SparkleIcon,
   RocketLaunchIcon,
   ShieldCheckIcon,
@@ -136,24 +140,24 @@ for (const route of mcpRoutes("/mcp", mcp)) {
 
 const FEATURES = [
   {
-    icon: LockIcon,
-    title: "Supply-chain-hardened pnpm scaffolds",
-    body: "Pick pnpm in create-daloy and you get a hardened .npmrc out of the box: ignore-scripts=true blocks malicious post-install payloads, minimum-release-age=1440 waits out fresh-package attacks, and verify-store-integrity keeps installs honest. The optional GitHub Actions bundle adds lockfile source checks so git deps and non-registry tarballs cannot quietly sneak in.",
-  },
-  {
     icon: ShieldCheckIcon,
     title: "Secure-by-default runtime",
     body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: prototype-pollution-safe JSON, built-in load shedding, proper 405 Method Not Allowed responses, automatic 5xx info-disclosure stripping in production, and a rate-limited CSP violation receiver.",
   },
   {
-    icon: SparkleIcon,
-    title: "Hardened against LLM-era attacks",
-    body: "Attackers can use LLMs to scale package impersonation, slopsquatting, dependency reconnaissance, and vulnerability hunting. DaloyJS answers with boring but sharp defaults: blocked lifecycle scripts, delayed fresh-package resolution, source-verified lockfiles, and a zero-runtime-dependency core.",
+    icon: PackageIcon,
+    title: "Zero runtime dependencies",
+    body: "Installing @daloyjs/core adds exactly zero transitive packages. No postinstall scripts to audit, no surprise CVEs from dependencies you never chose, and nothing for a slopsquatter to impersonate: the smallest supply-chain surface a framework can ship.",
   },
   {
-    icon: SparkleIcon,
+    icon: LockIcon,
+    title: "Supply-chain-hardened scaffolds",
+    body: "Pick pnpm in create-daloy and the hardened .npmrc is already written: ignore-scripts=true blocks malicious post-install payloads, minimum-release-age=1440 waits out fresh-package attacks, and verify-store-integrity keeps installs honest. The optional security bundle adds hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, lockfile source verification, non-root + tini container templates, and a daloy doctor production-posture validator.",
+  },
+  {
+    icon: RobotIcon,
     title: "AI-native scaffolding",
-    body: "Every project scaffolded by create-daloy includes an AGENTS.md and context skills. Copilot, Claude, and Cursor automatically understand your framework's conventions, routing rules, and security primitives without a prompt-engineering ritual.",
+    body: "Every project scaffolded by create-daloy includes an AGENTS.md and context skills, and these docs are readable over MCP. Copilot, Claude, and Cursor automatically understand your framework's conventions, routing rules, and security primitives without a prompt-engineering ritual.",
   },
   {
     icon: FileCodeIcon,
@@ -161,7 +165,7 @@ const FEATURES = [
     body: "One route definition is the source of truth for validation, types, OpenAPI 3.1, the typed client, and built-in contract tests, so drift has fewer places to hide.",
   },
   {
-    icon: CubeIcon,
+    icon: GlobeIcon,
     title: "Runtime-portable",
     body: "The core only sees Request → Response. Adapters live at the edge: Node, Bun, Deno, Cloudflare Workers - same app, same tests, five runtimes.",
   },
@@ -171,14 +175,14 @@ const FEATURES = [
     body: "Run pnpm gen and get a fully typed fetch SDK, for any consumer, in any TS project, generated from your real spec. Or skip codegen with the in-process typed client.",
   },
   {
-    icon: RocketLaunchIcon,
+    icon: BroadcastIcon,
     title: "Streaming & observability",
     body: "Backpressure-safe SSE and NDJSON helpers, plus an OpenTelemetry tracing hook that emits HTTP server spans with semantic-convention attributes.",
   },
   {
     icon: CubeIcon,
-    title: "Hardened scaffolds, batteries included",
-    body: "create-daloy's security bundle ships hardened GitHub Actions (top-level permissions:{}, persist-credentials:false, pinned actions, harden-runner), Dependabot, CODEOWNERS, SECURITY.md, lockfile verification, container templates with non-root + tini PID 1, and a daloy doctor production-posture validator.",
+    title: "Batteries included",
+    body: "Edge-friendly sessions, WebSockets that spend from the same rate-limit buckets as HTTP, structured logs, and graceful shutdown: the production plumbing you usually assemble from plugins, still with zero runtime dependencies.",
   },
 ];
 
@@ -297,11 +301,12 @@ export default function HomePage() {
               className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
               style={{ animationDelay: "180ms" }}
             >
-              Contract-first routing, Standard Schema validation, OpenAPI 3.1
-              with Hey API typed client codegen, streaming and OpenTelemetry
-              tracing, edge-friendly sessions, a security-focused runtime by
-              default, and a supply-chain-hardened release pipeline for the
-              framework itself. One line on the <code>App</code> constructor,{" "}
+              Any framework can route a request. DaloyJS is built for
+              what happens next: one route definition drives validation, types,
+              OpenAPI 3.1, and a Hey API typed client, and the guardrails
+              AI-assisted code forgets (rate limits, body limits, timeouts,
+              prototype-pollution-safe parsing) ship already switched on. One
+              line on the <code>App</code> constructor,{" "}
               <code>docs: true</code>
               {": "}auto-mounts a Scalar API reference at <code>/docs</code>{" "}
               and the live OpenAPI 3.1 spec at <code>/openapi.json</code>
@@ -342,8 +347,15 @@ export default function HomePage() {
               className="float-up max-w-2xl text-sm leading-7 text-muted-foreground"
               style={{ animationDelay: "350ms" }}
             >
-              Try the quickstart, generate typed clients, or explore runtime
-              targets (Node, Deno, Bun, Edge). Secure by default out of the box.
+              New to backend TypeScript? Start with the{" "}
+              <Link
+                href="/docs/tutorials/bookstore"
+                className="underline underline-offset-4"
+              >
+                bookstore tutorial
+              </Link>
+              {". "}Evaluating options for a team? Everything below answers one
+              question: what does DaloyJS have that the others don&apos;t?
             </p>
             <div
               className="float-up flex max-w-full items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
@@ -355,11 +367,15 @@ export default function HomePage() {
               <CodeCopyButton code={CREATE_COMMAND} />
             </div>
             <div className='flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'>
-              <span>1,870/1,870 tests passing</span>
+              <span>2,357/2,357 tests passing</span>
               <span aria-hidden>·</span>
-              <span>≥90% line, function, and branch coverage gates</span>
+              <span>≥90% line/function and ≥92% branch coverage gates</span>
+              <span aria-hidden>·</span>
+              <span>0 runtime dependencies</span>
               <span aria-hidden>·</span>
               <span>Node 24 LTS, Node 26+, Bun, Deno, Cloudflare</span>
+              <span aria-hidden>·</span>
+              <span>MIT licensed</span>
             </div>
           </div>
         </div>
@@ -371,12 +387,14 @@ export default function HomePage() {
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold tracking-tight">Why DaloyJS</h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
-              The JS framework that is <strong>secure by default</strong> at the
-              runtime layer, and ships <code>create-daloy</code> with pnpm
-              install-time hardening and an optional hardened GitHub Actions
-              bundle, so the app-safe pieces of the LLM-era supply-chain defense
-              are on the happy path without giving up OpenAPI ergonomics,
-              runtime portability, typed clients, or Node ops.
+              There are plenty of good ways to route an HTTP request in
+              JavaScript. This is what the others don&apos;t give you:{" "}
+              <strong>secure by default</strong> at the runtime layer, pnpm
+              install-time hardening shipped with <code>create-daloy</code>,
+              and an optional hardened GitHub Actions bundle, so the app-safe
+              pieces of the LLM-era supply-chain defense are on the happy path
+              without giving up OpenAPI ergonomics, runtime portability, typed
+              clients, or Node ops.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

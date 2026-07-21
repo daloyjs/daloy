@@ -1,8 +1,8 @@
 const FLOW_STEPS = [
-  { label: "route", detail: "GET /books/:id" },
-  { label: "schema", detail: "z.object(...)" },
-  { label: "OpenAPI", detail: "3.1 spec" },
-  { label: "client", detail: "typed fetch" },
+  { label: "contract", detail: "GET /books/:id + z.object(...)" },
+  { label: "validation", detail: "runtime, both directions" },
+  { label: "OpenAPI 3.1", detail: "live spec + /docs UI" },
+  { label: "typed client", detail: "pnpm gen -> fetch SDK" },
 ];
 
 const PATH_A = "M 36 112 C 170 30, 260 190, 392 112 S 620 35, 864 112";
@@ -55,7 +55,7 @@ export function ContractFlowVisual() {
         <div className="contract-flow-visual__glow" />
         <div className="contract-flow-visual__topline">
           <span>contract flow</span>
-          <span>Request -&gt; Response</span>
+          <span>define once -&gt; generate the rest</span>
         </div>
 
         <div className="contract-flow-visual__stage">
