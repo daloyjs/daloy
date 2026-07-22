@@ -28,11 +28,21 @@ Disclosure](https://img.shields.io/badge/Security-Responsible%20Disclosure-yello
 
 DaloyJS is maintained in the GitHub organization at <https://github.com/daloyjs>; the canonical framework repository is <https://github.com/daloyjs/daloy>.
 
-## Partners
+## Acknowledgements
 
-<a href="https://snyk.io">
-  <img src="https://github.com/user-attachments/assets/da58db43-67cc-45d4-ade5-bdaa7b041465" alt="Snyk's Secure Developer Program" width="160">
-</a>
+We are grateful to the following companies for supporting DaloyJS with free access to their tools and services.
+
+<div align="center" style="background-color: #f5f5f5; padding: 25px; border-radius: 10px; margin: 20px 0;">
+
+  <a href="https://snyk.io"><img src="https://github.com/user-attachments/assets/da58db43-67cc-45d4-ade5-bdaa7b041465" height="75" width="auto" alt="Snyk"></a>
+     
+  <a href="https://socket.dev"><img src="https://github.com/user-attachments/assets/7d2dde1f-6b60-4f20-b05b-80ace5ae6862" height="75" width="auto" alt="Socket"></a>
+     
+  <a href="https://www.aikido.dev"><img src="https://github.com/user-attachments/assets/67e62dd1-b907-4246-a0aa-95ef13fa491c" height="75" width="auto" alt="Aikido"></a>
+     
+  <a href="https://www.coderabbit.ai"><img src="https://github.com/user-attachments/assets/0d9d8e68-eb21-41ec-978c-337b66ee34b6" height="75" width="auto" alt="CodeRabbit"></a>
+
+</div>
 
 ---
 
