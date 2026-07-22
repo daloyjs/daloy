@@ -115,7 +115,7 @@ on:
     tags: ["v*"]
 
 # Top-level permissions: deny everything by default. Each job opts in.
-# This is the single most important line in this file.
+# Security-critical: keep this line.
 permissions: {}
 
 jobs:
@@ -393,7 +393,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">

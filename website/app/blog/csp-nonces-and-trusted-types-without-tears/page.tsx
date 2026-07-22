@@ -299,7 +299,7 @@ const COMMON_PITFALLS = `# Pitfalls I have stepped on so you don't have to:
 3. "TT broke our analytics snippet."
    Of course it did. Wrap the snippet in its own policy
    ("analytics") and add it to the policies array. Each vendor that
-   uses innerHTML gets its own narrow policy - that's the point.
+   uses innerHTML gets its own narrow policy to contain its access.
 
 4. "Reports keep mentioning eval."
    Trusted Types enforcement covers setTimeout(string), new Function,
@@ -427,7 +427,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -471,8 +471,8 @@ export default function BlogPostPage() {
             almost two years on one project because removing it required a real
             refactor and there was always &quot;next quarter&quot;. What we
             shipped in <code>secureHeaders()</code> is an attempt to make the{" "}
-            <em>good</em> way only slightly more typing than the bad way.
-            Let&apos;s walk through it.
+            <em>good</em> way only slightly more typing than the bad way. The
+            rollout takes four steps.
           </p>
 
           <h2>The 30-second mental model</h2>
@@ -581,12 +581,11 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            If you forget the nonce on a tag, that tag silently does not
-            execute, which is exactly what you want, but is also why you&apos;ll
-            briefly hate yourself the first time a footer analytics snippet
-            stops working. Open the console, you&apos;ll see a clean CSP
-            violation message naming the directive. Add the nonce, refresh,
-            done.
+            If you forget the nonce, the browser silently blocks the tag as
+            intended. You may still briefly hate yourself the first time a
+            footer analytics snippet stops working. Open the console,
+            you&apos;ll see a clean CSP violation message naming the directive.
+            Add the nonce, refresh, done.
           </p>
 
           <h2>Step three: turn on Trusted Types: enforced</h2>

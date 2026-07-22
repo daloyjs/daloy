@@ -271,7 +271,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -424,9 +424,8 @@ export default function BlogPostPage() {
             </Link>
             {". "}If the &quot;Tea app&quot; team had read it, they&apos;d have
             shipped an internal-only deploy and the breach would not have
-            happened. I am not claiming the framework would have <em>forced</em>{" "}
-            them to, policy is policy, but the path of least resistance in
-            DaloyJS is the safe one.
+            happened. Frameworks cannot force deployment policy, but DaloyJS
+            makes the internal-only configuration the easier path.
           </p>
 
           <h2>Risk 5: Missing input sanitization</h2>
@@ -485,37 +484,30 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              We do not stop you from <code>rm -rf</code> your production
-              database from inside a handler. If you give the agent
-              <code>DATABASE_URL</code> with destructive privileges, the
-              framework cannot save you. Use a read-replica for the agent. Use
-              least-privilege DB roles.
+              Destructive database privileges can still ruin production from
+              inside a handler. Give agents read replicas and least-privilege
+              database roles.
             </li>
             <li>
-              We do not scan the AI-generated code for logic flaws, the article
-              is right that scanners catch known patterns and miss business
-              logic. We give you the structured surface (typed routes, typed
-              client, OpenAPI) so a reviewer or a SAST tool has something to
-              bite into.
+              AI-generated business logic still needs review. Typed routes,
+              typed clients, and OpenAPI give reviewers and SAST tools a
+              structured surface to inspect.
             </li>
             <li>
-              We do not enforce authentication on every route. We can&apos;t,
-              some routes are deliberately public. What we give you is{" "}
-              <code>jwt()</code>
+              Authentication remains an explicit per-route decision because some
+              routes are public. Daloy provides <code>jwt()</code>
               {", "}
               <code>basicAuth()</code>
               {", "}
               <code>bearerAuth()</code>
               {", "}
               <code>session()</code>
-              {", "}and an{" "}
-              <Link href="/docs/security/auth-slice">auth-slice pattern</Link>{" "}
-              so the choice is visible per route.
+              {", "}and the{" "}
+              <Link href="/docs/security/auth-slice">auth-slice pattern</Link>.
             </li>
             <li>
-              We do not provide an AI moderation layer or a runtime
-              intrusion-detection system. Daloy gives you the structured event
-              stream a detector needs; the detector itself is your call.
+              AI moderation and runtime intrusion detection need separate
+              systems. Daloy provides the event stream a detector consumes.
             </li>
           </ul>
 

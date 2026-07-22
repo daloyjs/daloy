@@ -45,10 +45,10 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 const PAIN = `# The pattern every large-team backend eventually grows:
 #
 # routes/users.ts
-#   import { metrics } from "../platform/metrics.js";       // ← infra import
-#   import { registry } from "../platform/registry.js";     // ← infra import
-#   import { tracer } from "../platform/tracing.js";        // ← infra import
-#   import { drainSignal } from "../platform/drain.js";     // ← infra import
+#   import { metrics } from "../platform/metrics.js";       // <- infra import
+#   import { registry } from "../platform/registry.js";     // <- infra import
+#   import { tracer } from "../platform/tracing.js";        // <- infra import
+#   import { drainSignal } from "../platform/drain.js";     // <- infra import
 #
 #   handler(ctx) {
 #     metrics.inc("users.read");
@@ -61,7 +61,7 @@ const PAIN = `# The pattern every large-team backend eventually grows:
 # 200-file pull request. Every junior dev learns to copy-paste the
 # preamble. Every audit finds three routes that forgot one of them.
 #
-# The fix is not "discipline". The fix is to give the platform team a
+# Give the platform team a
 # place to hang cross-cutting concerns that's NOT inside the route
 # files. That place is the plugin lifecycle.`;
 
@@ -548,7 +548,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -605,11 +605,9 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Every team I&apos;ve worked with eventually wrote this preamble in
-            every route. Every team then wrote a wiki page telling new joiners
-            to remember the preamble. Every team then had an audit finding three
-            months later because three routes had forgotten part of the
-            preamble. The framework should make the wiki page unnecessary.
+            I have watched teams copy this preamble into every route, document
+            it in a wiki, and still miss a few routes during an audit. The
+            framework should make that wiki page unnecessary.
           </p>
 
           <h2>The whole API, on one screen</h2>
@@ -617,7 +615,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["NOTES.md"]}
             activeFile="NOTES.md"
-            status="two new events · two you already knew · that's it"
+            status="two new events · two familiar events"
           >
             <CodeBlock language="ts" code={TWO_EVENTS} />
           </EditorFrame>
@@ -628,9 +626,9 @@ export default function BlogPostPage() {
           >
             Receives <code>{`{ name?, prefix }`}</code> where{" "}
             <code>prefix</code> is the effective mount path after parent and
-            group prefixes are applied. Async plugin? The listener fires when
-            its promise settles. Anonymous plugin? <code>name</code> is{" "}
-            <code>undefined</code>.
+            group prefixes are applied. For async plugins, the listener fires
+            when its promise settles. For anonymous plugins, <code>name</code>{" "}
+            is <code>undefined</code>.
           </EventCard>
           <EventCard
             event="onShutdown"
@@ -713,13 +711,12 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            That ordering is non-negotiable on purpose. If you push metrics{" "}
-            <em>after</em> drain, half the time the metrics never get pushed
-            because your container runtime SIGKILLs you mid-flush. If you
-            deregister <em>after</em> drain, you get a 30-second window where
-            the load balancer is still routing fresh traffic to a server
-            that&apos;s already saying 503. <code>onShutdown</code> exists
-            exactly to give you the early window.
+            That ordering is deliberate. Pushing metrics <em>after</em> drain
+            risks a SIGKILL in the middle of the flush. Deregistering
+            <em>after</em> drain creates a 30-second window where the load
+            balancer is still routing fresh traffic to a server that&apos;s
+            already saying 503. <code>onShutdown</code> exists exactly to give
+            you the early window.
           </p>
 
           <h2>A policy plugin that fails boot</h2>

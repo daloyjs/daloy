@@ -10,7 +10,7 @@ const POST = {
   title:
     "DaloyJS in 2027: The TypeScript REST API Framework Built for the Vibe-Coding Apocalypse and Alternative to Express?",
   description:
-    "Vibe-coded apps are getting breached because nobody reads the code anymore. Here is the blunt case for DaloyJS, a secure-by-default, runtime-agnostic TypeScript REST framework, why it is the Express alternative I now reach for, and the migration guide that actually gets you there.",
+    "Vibe-coded apps are getting breached because nobody reads the code anymore. This is the blunt case for DaloyJS, the secure-by-default TypeScript REST framework I now use instead of Express, with a migration guide for the move.",
   date: "2026-06-22",
   readingTime: "17 min read",
   author: "Devlin Duldulao",
@@ -282,7 +282,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -314,15 +314,12 @@ export default function BlogPostPage() {
         <div className="docs-prose max-w-full">
           <p>
             I have been writing backends for about ten years now. I started in
-            Manila, I now live in Norway, and somewhere along that journey I
-            learned a hard truth: most production incidents are not caused by
-            clever attackers. They are caused by us shipping code that we never
-            really read. In 2027 that problem has a name, and the name is vibe
-            coding.
+            Manila and now live in Norway. Most incidents I have cleaned up came
+            from code nobody really read. In 2027 we call that vibe coding.
           </p>
           <p>
-            Let me explain what I mean, because &quot;vibe coding&quot; gets
-            thrown around as a joke and it is not a joke anymore.
+            Vibe coding started as a joke. Deployed code made it a security
+            concern.
           </p>
 
           <h2>The state of the world in 2027</h2>
@@ -346,10 +343,10 @@ export default function BlogPostPage() {
             nobody on the team wrote that line.
           </p>
           <p>
-            The model did exactly what the prompt asked: &quot;make it
-            work.&quot; The prompt omitted the security requirements, and there
-            is a famous line from the Supabase and Aikido write-up on
-            secure-by-default development that I keep pinned to my monitor:{" "}
+            The model followed the prompt exactly: &quot;make it work.&quot;
+            Security requirements were absent. A line from the Supabase and
+            Aikido write-up on secure-by-default development that I keep pinned
+            to my monitor:{" "}
             <em>
               &quot;If you tell an AI to make something work, it might remove
               the very security checks that protect you.&quot;
@@ -371,10 +368,9 @@ export default function BlogPostPage() {
             lockfile. Fun.
           </p>
           <p>
-            So that is the environment. Fast code, written by machines, deployed
-            by people who trust the machine, on top of a registry that has
-            become a minefield. This is the world DaloyJS was built for. Not the
-            world of five years ago. This one.
+            That is the environment DaloyJS was built for: code produced quickly
+            by machines, deployed by people who trust the output, on top of a
+            registry that has become a minefield.
           </p>
 
           <h2>What DaloyJS actually is</h2>
@@ -384,9 +380,8 @@ export default function BlogPostPage() {
             is the plain version. You define a route once. That single
             definition is the source of truth for validation, your TypeScript
             types, your OpenAPI 3.1 document, your typed client, and your
-            contract tests. No decorators, no separate schema files that drift
-            out of sync, no &quot;the docs say one thing and the code does
-            another&quot; energy.
+            contract tests. Routes stay readable without decorators, while the
+            shared schema keeps the implementation and docs synchronized.
           </p>
           <p>
             And it runs the same code on Node, Bun, Deno, Cloudflare Workers,
@@ -415,24 +410,17 @@ export default function BlogPostPage() {
             </li>
           </ol>
           <p>
-            The trick, and the reason I am writing a whole blog post about it
-            instead of one tweet, is that none of this costs you developer
-            experience. The secure path is also the path of least resistance.
-            You do not earn security by suffering. You get it by default and
-            then you have to go out of your way to remove it. That is the
-            inversion that matters.
-          </p>
-          <p>
-            Let me show you, because I trust code more than I trust adjectives.
+            The secure path keeps the same developer experience. Guardrails ship
+            enabled, and disabling them takes an explicit change. The smallest
+            app shows how that works.
           </p>
 
-          <h2>Hello world, and notice what you did not have to do</h2>
+          <h2>Hello world with production guardrails</h2>
           <CodeBlock language="ts" code={HELLO_WORLD} />
           <p>
-            That is a complete API. Here is what you got for free without typing
-            a single extra line: a hard body-size cap so a 4GB upload cannot eat
-            your memory, a request timeout so a slow-loris client cannot hold
-            your handlers hostage, a JSON parser that strips{" "}
+            That complete API already has a hard body-size cap so a 4GB upload
+            cannot eat your memory, a request timeout so a slow-loris client
+            cannot hold your handlers hostage, a JSON parser that strips{" "}
             <code>__proto__</code> and <code>constructor</code> so prototype
             pollution does not happen, a router that rejects <code>..</code>{" "}
             path segments before it walks anything, header sanitizers that
@@ -449,8 +437,8 @@ export default function BlogPostPage() {
           <p>
             Now compare that to a typical vibe-coded Express app. The model
             gives you <code>{`app.get('/books/:id', ...)`}</code>
-            {", "}it works, it ships. There is no body limit. There is no
-            timeout. The JSON parser will happily accept{" "}
+            {", "}it works, and it ships without a body limit or timeout. The
+            JSON parser will happily accept{" "}
             <code>{`{"__proto__": {"isAdmin": true}}`}</code>
             {". "}The error handler prints the stack trace because that was
             helpful during development and nobody removed it. None of that is
@@ -461,9 +449,9 @@ export default function BlogPostPage() {
           <h2>The framework that refuses to start</h2>
           <p>
             This is my favorite feature and it sounds aggressive when you first
-            hear it. DaloyJS will refuse to boot if you configure it in a way
-            that is known to be dangerous. It does not warn. It does not log
-            politely and continue. It throws and your process does not come up.
+            hear it. DaloyJS refuses to boot on known-dangerous configuration.
+            It throws instead of logging a warning and continuing with an unsafe
+            process.
           </p>
           <p>Things that will stop your app from starting:</p>
           <ul>
@@ -509,19 +497,16 @@ export default function BlogPostPage() {
             {". "}Opt-in, visible, reversible. That is the pattern.
           </p>
           <p>
-            This matters specifically for vibe coding because the failure mode
-            of an AI is not malice, it is plausibility. The model writes config
-            that looks correct. A refuse-to-boot guard converts &quot;looks
-            correct&quot; into &quot;actually correct or the process dies,&quot;
-            and a dead process in CI is a million times cheaper than a live
-            process in production.
+            AI produces plausible configuration. A refuse-to-boot guard converts
+            that plausibility into a CI failure before it can become a
+            production incident.
           </p>
 
           <h2>SSRF, or the call your handler should never make</h2>
           <p>
-            Here is the one that keeps cloud engineers up at night. Your app
-            takes a URL from a user, maybe for a webhook, an image import, a
-            link preview. The handler does <code>await fetch(url)</code>
+            A common SSRF path starts when an app accepts a URL from a user,
+            perhaps for a webhook, an image import, or a link preview. The
+            handler does <code>await fetch(url)</code>
             {". "}An attacker passes{" "}
             <code>
               http://169.254.169.254/latest/meta-data/iam/security-credentials/
@@ -538,22 +523,20 @@ export default function BlogPostPage() {
           </p>
           <CodeBlock language="ts" code={FETCH_GUARD} />
           <p>
-            The deny list is not advisory. It covers every documented cloud
-            metadata IP: the AWS, Azure, DigitalOcean, and GCP IMDS address{" "}
+            The deny list covers every documented cloud metadata IP: the AWS,
+            Azure, DigitalOcean, and GCP IMDS address{" "}
             <code>169.254.169.254</code>
             {", "}the AWS ECS task metadata and EKS Pod Identity ranges, the
             Oracle <code>192.0.0.192</code>
             {", "}the Alibaba <code>100.100.100.200</code>
-            {", "}link-local, loopback, and private ranges. And here is the
-            detail I really like: it re-resolves on redirects, so an attacker
-            cannot hand you a friendly <code>https://example.com</code> that
-            then <code>302</code>s to <code>http://169.254.169.254</code>
+            {", "}link-local, loopback, and private ranges. Redirects trigger a
+            fresh resolution, so an attacker cannot hand you a friendly{" "}
+            <code>https://example.com</code> that then <code>302</code>s to{" "}
+            <code>http://169.254.169.254</code>
             {". "}The hard-deny floor cannot be lifted by any allow flag. Even
             if you misconfigure your allow list, you cannot accidentally
-            re-expose the metadata endpoint. That is what &quot;secure by
-            default&quot; means in practice: the safe thing is not something you
-            remembered to do, it is something you would have to fight the
-            framework to undo.
+            re-expose the metadata endpoint. Secure defaults put this hard-deny
+            floor in place before application configuration.
           </p>
 
           <h2>Tokens, because everybody gets JWT wrong</h2>
@@ -590,33 +573,27 @@ export default function BlogPostPage() {
             Now the developer experience, which is why you will actually use it
           </h2>
           <p>
-            I have made the security pitch. But here is the thing about security
-            tools: if they are miserable to use, people route around them, and a
-            guardrail you disabled is worse than no guardrail because it gives
-            you false confidence. So the DX has to be genuinely good, not
-            &quot;good for a security framework.&quot; Let me show you the part
-            that made me a believer.
+            Security tools fail when teams hate using them. People route around
+            friction, and a disabled guardrail creates false confidence. DaloyJS
+            therefore has to be pleasant in ordinary work. The typed-client flow
+            below is what convinced me.
           </p>
           <p>
-            One route definition gives you a typed client with zero codegen.
-            Look:
+            One route definition gives you a typed client with zero codegen:
           </p>
           <CodeBlock language="ts" code={TYPED_CLIENT} />
           <p>
             That <code>getBookById</code> method, its input shape, and its
             per-status response union are all inferred from the route
             definition. If you change the route, the client type changes, and
-            your consuming code stops compiling until you fix it. No generation
-            step, no stale client, no &quot;the mobile team is still on the old
-            contract&quot; meeting. For consumers that cannot import your
-            TypeScript (a different repo, a different language), one{" "}
-            <code>pnpm gen</code> command runs your live OpenAPI spec through
-            Hey API and emits a fully typed fetch SDK.
+            your consuming code stops compiling until you fix it. The client
+            stays synchronized without a generation step or a stale-contract
+            meeting. For consumers that cannot import your TypeScript (a
+            different repo, a different language), one <code>pnpm gen</code>{" "}
+            command runs your live OpenAPI spec through Hey API and emits a
+            fully typed fetch SDK.
           </p>
-          <p>
-            And the docs. This is the FastAPI feature everyone wishes Node had,
-            and it is one line:
-          </p>
+          <p>Interactive API docs take one line:</p>
           <CodeBlock language="ts" code={DOCS_ONE_LINER} />
           <p>
             That mounts an interactive Scalar UI at <code>/docs</code>
@@ -629,8 +606,7 @@ export default function BlogPostPage() {
             boilerplate, fewer things to forget.
           </p>
           <p>
-            Here is a fuller route, the kind I actually write, with auth,
-            validation, and typed error responses:
+            A fuller route includes auth, validation, and typed error responses:
           </p>
           <CodeBlock language="ts" code={FULLER_ROUTE} />
           <p>
@@ -640,7 +616,7 @@ export default function BlogPostPage() {
             runs, and if it fails, the client gets a clean 422 problem+json, not
             a 500 with a stack trace. You declared <code>422</code> in the
             contract, so it is in your OpenAPI doc and your typed client too.
-            One source of truth, the whole way down.
+            The route definition remains the source for each layer.
           </p>
 
           <h2>
@@ -781,12 +757,11 @@ export default function BlogPostPage() {
           <p>
             The title of this post ends with a question mark on purpose.
             &quot;Alternative to Express&quot; is a big claim, and Express is
-            not bad software. It powered half the internet for a decade, it is
-            in my muscle memory, and I have shipped a lot of money-making code
-            on top of it. I am not here to dunk on it. I am here to argue that
-            the thing that made Express great in 2015, that it does almost
-            nothing and gets out of your way, is exactly the thing that makes it
-            dangerous in the vibe-coding era of 2027.
+            mature software. It powered half the internet for a decade, remains
+            in my muscle memory, and carried plenty of code that paid the bills.
+            My argument is narrower: the trait that made Express great in 2015,
+            that it does almost nothing and gets out of your way, is exactly the
+            thing that makes it dangerous in the vibe-coding era of 2027.
           </p>
           <p>
             Think about what an Express app actually is. In its own
@@ -796,18 +771,18 @@ export default function BlogPostPage() {
             {", "}and you call <code>res.send()</code> to end the cycle. That is
             a beautiful, minimal model. It is also a blank canvas, and a blank
             canvas is the worst possible thing to hand an AI that was told to
-            &quot;make it work.&quot; The model will not add <code>helmet</code>
-            {". "}It will not add a body limit. It will not add a rate limiter
-            or a request timeout. It will not validate <code>req.body</code>
+            &quot;make it work.&quot; Unless prompted, the model may omit{" "}
+            <code>helmet</code>
+            {", "}body limits, rate limiting, request timeouts, and validation
+            for <code>req.body</code>
             {", "}which is typed <code>any</code>
             {", "}so TypeScript will not save you either. Every one of those is
             something a human has to remember to bolt on, and the entire premise
             of vibe coding is that nobody is remembering anything.
           </p>
           <p>
-            So here is the concrete case for DaloyJS as the Express alternative,
-            point by point, and none of these are things I made up for a blog
-            post. They are the actual reasons written into our migration guide:
+            The migration guide lists the concrete differences between DaloyJS
+            and Express:
           </p>
           <ul>
             <li>
@@ -865,14 +840,9 @@ export default function BlogPostPage() {
             untyped <code>req.body</code> bugs are the sweet spot.
           </p>
 
-          <h2>
-            We actually wrote the migration guide, so you do not have to guess
-          </h2>
+          <h2>The migration guide</h2>
           <p>
-            Here is the part I am genuinely proud of. A lot of frameworks tell
-            you they are &quot;a great Express alternative&quot; and then leave
-            you to figure out the move on your own. We wrote the whole thing
-            down. There is a complete, no-prior-knowledge{" "}
+            The docs include a complete, no-prior-knowledge{" "}
             <Link href="/docs/migrating/express">
               Migrate from Express.js to DaloyJS
             </Link>{" "}
@@ -952,9 +922,8 @@ export default function BlogPostPage() {
             {". "}The <code>--with-ci</code> bundle even signs your pushed
             images with Sigstore Cosign and attaches an SBOM attestation, so
             your consumers can verify the image instead of trusting the
-            registry. You did not have to remember any of that. That is the
-            recurring theme, in case I have been too subtle: you did not have to
-            remember.
+            registry. The scaffolder applies those operational details before
+            the first request ships.
           </p>
 
           <h2>Why I think this is the right bet for 2027</h2>
@@ -965,16 +934,12 @@ export default function BlogPostPage() {
             saving.
           </p>
           <p>
-            But here is the argument. The way we build software changed. The
-            volume of code went up, the amount of code any human actually reads
-            went down, and the registry turned into a hunting ground. In that
-            world, the framework cannot be a neutral tool that does whatever you
-            ask. It has to have opinions, it has to default to safe, and it has
-            to refuse to do the obviously dangerous thing even when you (or your
-            AI) confidently ask for it. The security has to be the thing you
-            would have to remove on purpose, not the thing you would have to add
-            on purpose. Because the one thing we have learned about vibe-coded
-            apps is that nobody adds the boring stuff. They just ship.
+            The way we build software changed. Code volume rose while human
+            review shrank, and the registry turned into a hunting ground. A
+            framework now needs opinions and safe defaults. It should reject the
+            obviously dangerous request even when a developer or an AI asks with
+            confidence. Removing a security control should require an explicit
+            choice.
           </p>
           <p>
             DaloyJS makes the boring stuff the default and the dangerous stuff

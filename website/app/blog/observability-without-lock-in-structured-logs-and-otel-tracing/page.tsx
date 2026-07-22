@@ -156,7 +156,7 @@ import { App, otelTracing } from "@daloyjs/core";
 // 1. Wire your OTel SDK exactly as the OTel docs say (node SDK, edge
 //    SDK, sdk-trace-base + a custom exporter, etc.). DaloyJS does not
 //    care which one - it never touches the global provider.
-import "./otel-bootstrap.js"; // ← your code; calls trace.setGlobalTracerProvider(...)
+import "./otel-bootstrap.js"; // <- your code; calls trace.setGlobalTracerProvider(...)
 
 const tracer = trace.getTracer("books-api", "1.0.0");
 
@@ -495,7 +495,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -623,11 +623,10 @@ export default function BlogPostPage() {
           <h2>OpenTelemetry without the hard dependency</h2>
 
           <p>
-            Here&apos;s the part most frameworks get wrong:{" "}
-            <code>otelTracing()</code> is shaped like the{" "}
-            <code>@opentelemetry/api</code> tracer, but the framework does not
-            import it. The contract is two small interfaces in{" "}
-            <code>src/tracing.ts</code>
+            Most frameworks get this boundary wrong: <code>otelTracing()</code>{" "}
+            is shaped like the <code>@opentelemetry/api</code> tracer, but the
+            framework does not import it. The contract is two small interfaces
+            in <code>src/tracing.ts</code>
             {": "}
             <code>TracingTracer</code> and <code>TracingSpan</code>
             {": "}and any object that fits them works. You install the OTel SDK
@@ -790,9 +789,9 @@ export default function BlogPostPage() {
             keep every contract small enough that &quot;leaving&quot; is just
             &quot;swap one tiny implementation for another&quot;:{" "}
             <code>Logger</code> is seven methods, <code>TracingTracer</code> is
-            one method, <code>Hooks</code> is the same lifecycle every other
-            middleware uses. No globals to fight, no SDK to bribe, no runtime to
-            leave behind.
+            one method, and <code>Hooks</code> follows the same lifecycle as
+            other middleware. Your SDK stays in application code, without
+            framework globals or runtime coupling.
           </p>
 
           <p>

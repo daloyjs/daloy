@@ -60,7 +60,7 @@ const PAIN = `# A PR review you have lived through, probably more than once:
 # Your review took 4 minutes because the diff was 12 lines. The
 # downstream pain takes 4 weeks because nobody saw the surface change.
 #
-# The fix is not "review harder". The fix is to put the API surface in
+# Put the API surface in
 # front of the reviewer, in plain text, in CI, on every PR.`;
 
 const INSPECT_BASIC = `# Run it from any DaloyJS project. Loads ./src/app.ts (or ./src/build-app.ts,
@@ -80,9 +80,9 @@ GET     /v1/orders        listOrders      200,500     orders
 
 const ENTRY_LOADING = `// What the CLI looks for, in order:
 //
-//   ./src/app.ts        ← most common
+//   ./src/app.ts        <- most common
 //   ./src/app.js
-//   ./src/build-app.ts  ← if you split "build" from "boot" (recommended)
+//   ./src/build-app.ts  <- if you split "build" from "boot" (recommended)
 //   ./src/build-app.js
 //   ./app.ts
 //   ./app.js
@@ -101,11 +101,11 @@ const ENTRY_LOADING = `// What the CLI looks for, in order:
 // src/app.ts that imports zod, your route schemas, your generated
 // types - all of it just works, even though no "build" ever ran.
 
-// Need a different entry? Pass it positionally:
+// Pass a different entry positionally:
 //
 //   pnpm daloy inspect ./apps/api/src/app.ts
 //
-// Need a different entry shape? Refactor a tiny exporter:
+// For a different entry shape, refactor a tiny exporter:
 
 // src/build-app.ts - recommended pattern for libraries with tests + CLI
 import { App } from "@daloyjs/core";
@@ -181,7 +181,7 @@ $ pnpm daloy inspect --openapi > generated/openapi.json
 $ git diff --exit-code generated/openapi.json
 
 # The reviewer now sees the JSON delta in the PR. New operationId? New
-# 422 schema? New webhook? It's all in the diff. No "I forgot to mention".`;
+# The diff includes 422 schemas and new webhooks, with no "I forgot to mention".`;
 
 const JSON_FLAG = `# --json gives you machine-readable output for custom tooling. The shape
 # is { routes: IntrospectedRoute[], contract?: ContractReport }.
@@ -412,7 +412,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">

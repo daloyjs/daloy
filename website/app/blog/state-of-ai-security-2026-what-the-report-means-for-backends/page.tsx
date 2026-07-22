@@ -12,7 +12,7 @@ const POST = {
   title:
     "The State of AI in Security 2026: 450 Teams, One Uncomfortable Pattern, and What Your Backend Can Do About It",
   description:
-    "Aikido and Sapio Research surveyed 450 developers, CISOs, and AppSec engineers across Europe and the US. The headline: AI now writes a quarter of production code, 1 in 5 teams had a serious incident because of it, and the usual reflex (buy more tools) makes things measurably worse. Here is the data, with charts, and the structural lesson it points to for anyone shipping an API.",
+    "Aikido and Sapio Research surveyed 450 developers, CISOs, and AppSec engineers across Europe and the US. The headline: AI now writes a quarter of production code, 1 in 5 teams had a serious incident because of it, and the usual reflex (buy more tools) makes things measurably worse. The post covers the data, charts, and the structural lesson for anyone shipping an API.",
   date: "2026-06-25",
   readingTime: "14 min read",
   author: "Devlin Duldulao",
@@ -255,7 +255,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -294,8 +294,8 @@ export default function BlogPostPage() {
             >
               State of AI in Security &amp; Development 2026
             </a>{" "}
-            report in our team chat with the comment &ldquo;this is just us, but
-            with numbers.&rdquo; I read all 52 slides on a train ride, and yeah,
+            report in our team chat with the comment &quot;this is just us, but
+            with numbers.&quot; I read all 52 slides on a train ride, and yeah,
             it was uncomfortable in the way good data usually is.
           </p>
 
@@ -303,22 +303,17 @@ export default function BlogPostPage() {
             The setup: Sapio Research surveyed 450 full-time professionals
             across Europe and the US, split evenly into 150 developers, 150
             security leaders (CISOs or equivalent), and 150 application security
-            engineers. So this is not a vendor asking its own happy customers
-            whether they are happy. It is a cross-section of the people writing
-            code, the people reviewing it, and the people who get the 2 a.m.
-            phone call when it goes wrong.
+            engineers. The independent sample covers people who write code,
+            review it, and receive the 2 a.m. phone call when production fails.
           </p>
 
           <p>
             I have shipped backends for about twelve years now, and I have lived
-            most of this report. The part that stuck with me is not any single
-            scary number. It is the loop: AI writes more of our code, incidents
-            go up, and the instinctive fix (buy another scanner) makes the
-            problem measurably worse. Let me walk through the data, and then the
-            structural lesson it points to. The lesson is not &ldquo;use our
-            framework,&rdquo; it is something more boring and more durable. But
-            since one concrete way to apply that lesson is the thing I work on,
-            let me be upfront about it.
+            most of this report. The report describes a costly loop: AI writes
+            more code, incidents rise, and another scanner adds enough noise to
+            make the response worse. The data points toward enforceable
+            contracts and fewer disconnected tools. I apply that approach in
+            DaloyJS, so the examples below use it.
           </p>
 
           <div className="not-prose my-8 rounded-xl border border-primary/30 bg-primary/[0.04] p-6">
@@ -379,9 +374,9 @@ export default function BlogPostPage() {
           <p>
             Nearly 70% of organizations say they have uncovered flaws tied to
             AI-generated code. For one in five, it escalated into a serious
-            breach. Here is the full breakdown of how teams answered &ldquo;have
+            breach. Here is the full breakdown of how teams answered &quot;have
             you ever identified a vulnerability introduced by AI-generated
-            code?&rdquo;
+            code?&quot;
           </p>
 
           <BarChart
@@ -412,15 +407,14 @@ export default function BlogPostPage() {
             assignment, so <code>role</code> and <code>isVerified</code> are
             fair game. And the response serializes the entire user record,
             <code>passwordHash</code> included. The demo works. The tests, if
-            there are any, probably pass. This is what &ldquo;the code
-            runs&rdquo; buys you now.
+            there are any, probably pass. This is what &quot;the code runs&quot;
+            buys you now.
           </p>
 
           <h2>The optimism gap is doing a lot of heavy lifting</h2>
 
           <p>
-            Here is where the report gets a little funny. Despite all of the
-            above, <strong>96%</strong> of organizations believe AI will one day
+            <strong>96%</strong> of organizations still believe AI will one day
             write near-perfect secure code. The average timeline they give is
             5.1 years. I admire the confidence. I do not share it, and neither,
             on closer reading, do they.
@@ -442,10 +436,10 @@ export default function BlogPostPage() {
           <p>
             Only <strong>21%</strong> think AI will get there without a human in
             the loop. The other 79%, as one of the report&apos;s quoted CISOs
-            puts it, are &ldquo;the smart ones.&rdquo; Almost a third expect AI
-            to reduce bugs but still need people for secure design,
-            architecture, and the business logic that no model understands
-            because it lives in your head and a Slack thread from 2024.
+            puts it, are &quot;the smart ones.&quot; Almost a third expect AI to
+            reduce bugs but still need people for secure design, architecture,
+            and the business logic that no model understands because it lives in
+            your head and a Slack thread from 2024.
           </p>
 
           <p>
@@ -484,7 +478,7 @@ export default function BlogPostPage() {
           />
 
           <p>
-            The mechanism is not mysterious. Every tool you add is another alert
+            The mechanism is easy to trace. Every tool you add is another alert
             stream, another dashboard, another set of false positives, and
             another integration that does not quite line up with the others. 93%
             of teams running separate application-security and cloud-security
@@ -516,7 +510,7 @@ export default function BlogPostPage() {
             little over 3 days to fix a critical vulnerability. For teams
             juggling five or more vendor tools, that stretches to almost 8 days.
             Every extra tool adds alerts and integration overhead, and the path
-            to &ldquo;actually fixed&rdquo; gets longer, not shorter.
+            to &quot;actually fixed&quot; gets longer, not shorter.
           </p>
 
           <h2>The $20M tax nobody puts on a slide deck</h2>
@@ -566,7 +560,7 @@ export default function BlogPostPage() {
             <strong>65%</strong> of respondents admit that false positives have
             pushed them into risky behavior: bypassing security checks,
             dismissing findings, or delaying fixes. In the US that climbs to
-            73%. I have been the engineer who clicked &ldquo;dismiss&rdquo; on a
+            73%. I have been the engineer who clicked &quot;dismiss&quot; on a
             wall of yellow because I had a release to ship and the last forty
             alerts were noise. The forty-first might not have been. That is how
             this goes.
@@ -609,9 +603,8 @@ export default function BlogPostPage() {
           />
 
           <p>
-            The way out of this loop is not heroics or another vendor. It is
-            cutting the noise at the source so the alerts that survive are worth
-            reading. Hold that thought, because it is the whole point.
+            Cut the noise at the source so the remaining alerts are worth
+            reading.
           </p>
 
           <h2>Europe prevents, the US reacts</h2>
@@ -700,33 +693,30 @@ export default function BlogPostPage() {
               people can both live with, and that produce signal instead of
               noise.
             </em>{" "}
-            That is not a product pitch. It is a way of building. It happens to
-            be the way I build APIs now, so let me show you what it looks like
-            in practice rather than wave my hands.
+            I use that design in APIs now, so the next example shows it in
+            practice.
           </p>
 
           <h2>What this looks like in a backend you ship</h2>
 
           <p>
-            Go back to that insecure AI-generated handler. The fix is not
-            &ldquo;review harder.&rdquo; Review is the thing that does not
-            scale. The fix is to make the contract enforceable so the unsafe
-            version cannot exist. Here is the same endpoint where the route
+            Go back to the insecure AI-generated handler. An enforceable
+            contract scales better than asking reviewers to catch the same
+            omission every time. Here is the same endpoint where the route
             definition is the guardrail:
           </p>
 
           <CodeBlock language="ts" code={DALOY_HANDLER} />
 
           <p>
-            Notice what changed. The validation is not a separate step a busy
-            developer might skip, it is part of the route. Unknown keys are
-            rejected, so mass assignment is gone. The response schema means
+            Validation now runs as part of the route. Unknown keys are rejected,
+            so mass assignment is gone. The response schema means
             <code>passwordHash</code> cannot leak, even by accident, even next
             quarter. An AI assistant can generate this just as quickly as the
             unsafe version. The difference is that the safe shape is the default
             shape, so the AI&apos;s confident-but-wrong instinct has nowhere to
-            land. That is what &ldquo;secure by default&rdquo; actually means:
-            not a checklist you remember, a baseline you cannot forget.
+            land. That is what &quot;secure by default&quot; means here: an
+            enforced baseline.
           </p>
 
           <p>
@@ -740,15 +730,15 @@ export default function BlogPostPage() {
 
           <p>
             Each of these is a binary pass or fail with a named offender. There
-            is no &ldquo;14 findings, severity medium, please assess&rdquo;
-            queue that trains you to click dismiss. That is the difference
-            between a gate and a scanner: a gate tells you exactly what to fix
-            and refuses to let it through, a scanner gives you homework. The
-            report is full of teams drowning in homework.
+            is no &quot;14 findings, severity medium, please assess&quot; queue
+            that trains you to click dismiss. That is the difference between a
+            gate and a scanner: a gate tells you exactly what to fix and refuses
+            to let it through, a scanner gives you homework. The report is full
+            of teams drowning in homework.
           </p>
 
           <p>
-            And on the &ldquo;tools for both devs and security&rdquo; point: the
+            And on the &quot;tools for both devs and security&quot; point: the
             same contract that gives a developer typed handlers and a generated
             client is the artifact a security reviewer reads to see exactly what
             every endpoint accepts and returns. One source of truth, two
@@ -830,12 +820,11 @@ export default function BlogPostPage() {
             DaloyJS makes the safe path the only path that is also the easy one.
           </p>
 
-          <h2>So what do I actually do on Monday?</h2>
+          <h2>What to do on Monday</h2>
 
           <p>
-            You do not need to adopt anything I work on to act on this report.
-            The lessons are structural. If I had to compress 52 slides into four
-            things worth doing this week:
+            These structural lessons apply regardless of framework choice. If I
+            had to compress 52 slides into four things worth doing this week:
           </p>
 
           <ul>
@@ -859,7 +848,7 @@ export default function BlogPostPage() {
             </li>
             <li>
               Measure the false-positive tax. Run the cost snippet above with
-              your real numbers. Once &ldquo;noise&rdquo; has a dollar figure,
+              your real numbers. Once &quot;noise&quot; has a dollar figure,
               consolidating tools stops being a nice-to-have.
             </li>
           </ul>
@@ -871,8 +860,8 @@ export default function BlogPostPage() {
             report&apos;s 79% believe, and they are right. What a framework can
             do is make the safe path the default path so your scarce human
             attention goes to the hard problems instead of the ones a schema
-            should have caught. That is a smaller claim than &ldquo;we fix AI
-            security,&rdquo; and it is also the exact category the report shows
+            should have caught. That is a smaller claim than &quot;we fix AI
+            security,&quot; and it is also the exact category the report shows
             hurting teams the most.
           </p>
 
@@ -915,14 +904,11 @@ export default function BlogPostPage() {
           </div>
 
           <p>
-            AI is going to keep writing more of our code. The report is
-            clear-eyed that this is not slowing down. The teams that do well
-            will not be the ones with the most tools or the most faith in the
-            model. They will be the ones who made the secure thing the easy
-            thing, automated the boring checks, and protected their
-            engineers&apos; attention like the expensive resource it is. That
-            practice predates the current AI cycle, and the survey gives it data
-            from 450 teams.
+            AI will keep writing more code. Teams will fare better when the
+            secure path is easy, boring checks are automated, and engineering
+            attention is treated as an expensive resource. That practice
+            predates the current AI cycle, and the survey gives it data from 450
+            teams.
           </p>
 
           <p className="text-sm text-muted-foreground">

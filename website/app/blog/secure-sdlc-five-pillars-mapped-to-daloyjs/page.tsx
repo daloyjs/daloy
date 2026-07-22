@@ -214,7 +214,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -405,12 +405,11 @@ export default function BlogPostPage() {
             <code>verify:parity-audits</code>
             {", "}
             <code>verify:runtime-parity-audits</code>
-            {", "}and <code>verify:routing-hardening-audits</code> are not
-            documentation, they are scripts in <code>scripts/</code> that fail
-            the build if a defense exists in one path but not another. The
-            framework cannot ship a release where the JWT algorithm allowlist is
-            enforced on Node but not on Workers, because the parity gate would
-            catch it.
+            {", "}and <code>verify:routing-hardening-audits</code> are
+            executable checks in <code>scripts/</code>. They fail the build if a
+            defense exists in one path but not another. The framework cannot
+            ship a release where the JWT algorithm allowlist is enforced on Node
+            but not on Workers, because the parity gate would catch it.
           </p>
 
           <p>
@@ -468,54 +467,26 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              We do not run the ASPM dashboard. Aikido (and Snyk, and Wiz, and
-              Semgrep, and a dozen others) sell that piece, and they do it well.
-              Daloy gives you the structured signal, SBOMs, SARIF, problem+json
-              with requestId, OpenAPI 3.1, that an ASPM tool ingests. Pick one
-              and point it at the repo.
+              Use Aikido, Snyk, Wiz, Semgrep, or another specialist for the ASPM
+              dashboard. Daloy emits SBOMs, SARIF, problem+json, request IDs,
+              and OpenAPI 3.1 for those tools to ingest.
             </li>
             <li>
-              We do not enforce the cultural side of a Secure SDLC: code review
-              discipline, threat modeling, post-incident reviews, security
-              champions in every team. Those are organizational practices, not
-              framework primitives. What we do is make the framework boring
-              enough that a thoughtful reviewer can focus on business logic
-              instead of catching the same five bugs every PR.
+              Secure SDLC culture stays with the team. Code review, threat
+              modeling, incident follow-up, and security ownership are
+              organizational practices.
             </li>
             <li>
-              We do not chase 100% line coverage on every defensive branch. The
-              repo runs <code>pnpm coverage</code> (90% lines / 90% functions)
-              and <code>pnpm coverage:branches</code> (92% branches on compiled
-              JS), and the README is clear that writing throwaway tests for
-              unreachable <code>catch</code> blocks is not worth blocking a
-              release on. Security gates that cannot be unit-tested (signal
-              handlers, OS-level shutdown races) are documented instead.
+              The repository targets useful coverage instead of 100% on every
+              defensive branch. Signal handlers and OS-level shutdown races are
+              documented when unit tests would be artificial.
             </li>
             <li>
-              We do not stop you from disabling a guard in your own app. The
-              verify gates run in <em>your</em> CI; if you remove the workflow
-              file, they don&apos;t run. The framework&apos;s job is to ship the
-              safe defaults and the agent-readable rules, the merge-button
-              discipline is on the team.
+              Your team can still remove its own CI workflow or disable a guard.
+              Daloy supplies safe defaults and agent-readable rules; merge
+              discipline remains a team responsibility.
             </li>
           </ul>
-
-          <h2>Coverage and limits</h2>
-
-          <p>
-            The scaffold maps the five pillars to concrete controls: SBOM and
-            vulnerability scans for visibility, CI gates for early feedback,
-            secure defaults and agent guidance for adoption, parity checks for
-            consistency, and problem details plus a published response policy
-            for actionability.
-          </p>
-
-          <p>
-            Team practices still matter: threat modeling, review, incident
-            follow-up, and security ownership remain organizational work. The
-            framework handles repeatable controls so reviewers can spend more
-            time on those decisions.
-          </p>
 
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}

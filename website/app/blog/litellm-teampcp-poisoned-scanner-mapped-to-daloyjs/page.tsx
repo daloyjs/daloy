@@ -206,7 +206,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -298,8 +298,8 @@ export default function BlogPostPage() {
           <CodeBlock language="yaml" code={SHA_PINNED} />
 
           <p>
-            This is the single most important defense for this entire attack
-            class, and it costs nothing. The Snyk post calls out{" "}
+            This defense blocks the attack class, and it costs nothing. The Snyk
+            post calls out{" "}
             <em>
               &quot;LiteLLM&apos;s CI/CD pipeline ran Trivy as part of its build
               process, pulling it from apt without a pinned version&quot;
@@ -439,8 +439,8 @@ export default function BlogPostPage() {
             finished. The path of least resistance in the LiteLLM compromise
             took (rewrite an action tag, steal a static token, ship a release
             that auto-runs on install) is shut on all four steps in this repo.
-            That&apos;s the point of secure-by-default: the obvious attack
-            doesn&apos;t work, and the non-obvious ones cost real effort.
+            Secure defaults block the obvious attack and make less obvious paths
+            cost real effort.
           </p>
 
           <h2>What you should do in your own DaloyJS project</h2>

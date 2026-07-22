@@ -89,7 +89,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -138,13 +138,12 @@ export default function BlogPostPage() {
           <h2>Routing leaves the hard parts to you</h2>
 
           <p>
-            Routing is not the hard part. The hard part is remembering every
-            defensive control that should sit around the route. Body limits,
-            timeout handling, secure headers, safe parsing, path traversal
-            rejection, timing-safe comparisons, and a supply chain that is not
-            one typo away from sadness. Most frameworks let you add those one by
-            one. In real projects, under deadline, that translates to maybe
-            later. Then maybe never.
+            Around each route, production still needs a long list of defensive
+            controls. Body limits, timeout handling, secure headers, safe
+            parsing, path traversal rejection, timing-safe comparisons, and a
+            supply chain that is not one typo away from sadness. Most frameworks
+            let you add those one by one. In real projects, under deadline, that
+            translates to maybe later. Then maybe never.
           </p>
 
           <p>
@@ -175,11 +174,10 @@ export default function BlogPostPage() {
           <CodeBlock language="ts" code={LOGIN_ROUTE} />
 
           <p>
-            That snippet is not interesting because it is fancy. It is
-            interesting because the validation, error surface, and a chunk of
-            the hardening story are already attached to the route definition. I
-            like boring code when the boring code survives contact with the
-            public internet.
+            The validation, error surface, and a chunk of the hardening story
+            are already attached to that ordinary route definition. I like
+            boring code when the boring code survives contact with the public
+            internet.
           </p>
 
           <h2>Supply chain hardening should not be extra credit</h2>
@@ -187,8 +185,8 @@ export default function BlogPostPage() {
           <p>
             DaloyJS also extends the secure-by-default mindset past the request
             path. The scaffold leans on pnpm defaults that make supply chain
-            attacks materially harder to land. No, this will not solve every
-            problem. Yes, it blocks a very stupid number of avoidable ones.
+            attacks materially harder to land. These defaults block a large
+            number of avoidable supply-chain problems.
           </p>
 
           <CodeBlock language="ini" code={HARDENED_NPMRC} />
@@ -198,9 +196,9 @@ export default function BlogPostPage() {
             script nonsense. `minimum-release-age=1440` gives the ecosystem a
             day to notice when a freshly published package turns out to be a
             small crime scene. `verify-store-integrity=true` makes sure the bits
-            you install are the bits you meant to install. None of this is
-            glamorous. It is still better than explaining to your manager why an
-            innocent `pnpm install` had opinions about crypto wallets.
+            you install are the bits you meant to install. That is better than
+            explaining to your manager why an innocent `pnpm install` had
+            opinions about crypto wallets.
           </p>
 
           <h2>Zero runtime dependencies matters</h2>
@@ -211,16 +209,15 @@ export default function BlogPostPage() {
             tree, the audit surface, and the number of maintainers you are
             trusting by accident. In a world where one compromised maintainer
             account can cause a very bad week for a lot of strangers, smaller
-            trees are not aesthetic minimalism. They are risk reduction.
+            trees reduce risk.
           </p>
 
           <h2>The baseline changed</h2>
 
           <p>
-            I do not think frameworks get credit for restraint, but they should.
-            DaloyJS removes security chores that too many teams forget under a
-            deadline. For a REST API in 2026, those controls belong in the
-            baseline.
+            Framework restraint deserves more credit. DaloyJS removes security
+            chores that teams forget under deadline pressure. For a REST API in
+            2026, those controls belong in the baseline.
           </p>
 
           <p>

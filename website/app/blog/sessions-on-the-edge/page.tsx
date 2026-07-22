@@ -438,7 +438,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -578,8 +578,8 @@ export default function BlogPostPage() {
               <em>sign</em> new cookies.
             </li>
             <li>
-              <strong>Every</strong> entry is tried, in order, to{" "}
-              <em>verify</em> incoming cookies (timing-safe).
+              Every entry is tried, in order, to <em>verify</em> incoming
+              cookies (timing-safe).
             </li>
             <li>
               Each secret must be a non-empty string of at least 16 characters,
@@ -661,8 +661,8 @@ export default function BlogPostPage() {
           <h2>The SessionStore contract</h2>
 
           <p>
-            Three required methods. One optional. That&apos;s the entire surface
-            a store has to implement to be production-ready:
+            A production store implements three required methods and one
+            optional method:
           </p>
 
           <EditorFrame
@@ -679,9 +679,8 @@ export default function BlogPostPage() {
             {": "}if your backend has a cheap &quot;just extend the TTL&quot;
             operation (like Redis <code>EXPIRE</code>), implement it; if not,
             omit it and the middleware will fall back to <code>set()</code>
-            {". "}That&apos;s the whole contract. No transactions, no advisory
-            locks, no cooperation with the cookie layer, that all stays inside
-            the middleware.
+            {". "}The store contract stays independent of transactions, advisory
+            locks, and cookie handling; the middleware owns those details.
           </p>
 
           <h2>A Redis store in twenty lines</h2>
@@ -743,15 +742,13 @@ export default function BlogPostPage() {
           <h2>Caveats</h2>
 
           <p>
-            Signed cookie sessions are not magic. If an attacker gets your
-            session secret, they can mint any session id they want, that&apos;s
-            why the secret lives in a real secrets manager and gets rotated. If
-            an attacker gets a user&apos;s cookie via TLS-stripping on a
-            misconfigured subdomain, the signature won&apos;t save you,
-            that&apos;s why <code>__Host-</code> + <code>Secure</code> are
-            non-negotiable defaults. And if your store backend goes down, your
-            users log out, that&apos;s why we picked an interface that supports
-            a replica or a fallback layer if you need one.
+            Signed cookie sessions depend on the session secret. Store it in a
+            secrets manager and rotate it, because anyone who obtains it can
+            mint session IDs. TLS stripping on a misconfigured subdomain can
+            still expose a user&apos;s cookie, which is why <code>__Host-</code>{" "}
+            and <code>Secure</code> are fixed defaults. A store outage logs
+            users out; the interface supports replicas or fallback layers when
+            that risk matters.
           </p>
 
           <p>
@@ -780,7 +777,7 @@ export default function BlogPostPage() {
             Thanks for reading. Now go check your <code>SESSION_SECRET</code> is
             at least 32 bytes. I will wait. (If it is the word{" "}
             <code>secret</code>
-            {", "}I will not judge, but I will worry.)
+            {", "}I will worry.)
           </p>
 
           <p>Devlin</p>

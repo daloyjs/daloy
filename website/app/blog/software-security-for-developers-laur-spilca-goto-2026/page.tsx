@@ -10,7 +10,7 @@ const POST = {
   title:
     "Watch: Laur Spilca on Software Security for Developers (GOTO 2026), and What DaloyJS Already Decides for You",
   description:
-    "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. Here is the talk, plus a direct mapping of which of those problems a DaloyJS app already takes out of your hands.",
+    "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. The post includes the talk and a direct mapping of the problems a DaloyJS app already handles.",
   date: "2026-06-17",
   readingTime: "9 min read",
   author: "Devlin Duldulao",
@@ -162,7 +162,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">

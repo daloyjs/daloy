@@ -59,25 +59,25 @@ const PAIN = `# The "unguided coding agent" failure mode, lightly edited from re
 # agent didn't violate them because it's stupid. It violated them
 # because the repo never told it the conventions existed.
 #
-# The fix is not "buy a better model". The fix is to put the
+# Put the
 # conventions in the repo, in small focused files, where every
 # agent already knows to look.`;
 
 const AGENTS_SHAPE = `# Every project created by 'pnpm create daloy' lands with:
 #
 # my-app/
-#   AGENTS.md                                       ← short, hot context
+#   AGENTS.md                                       <- short, hot context
 #   .agents/
 #     skills/
 #       daloyjs-best-practices/
-#         SKILL.md                                  ← long, on-demand context
+#         SKILL.md                                  <- long, on-demand context
 #   src/
-#     build-app.ts                                  ← pure factory
-#     index.ts                                      ← only file that opens a port
+#     build-app.ts                                  <- pure factory
+#     index.ts                                      <- only file that opens a port
 #   scripts/
 #     dump-openapi.ts
 #   tests/
-#   generated/                                      ← machine-written; do not edit
+#   generated/                                      <- machine-written; do not edit
 #
 # Two files, two purposes:
 #
@@ -451,7 +451,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -551,12 +551,10 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Notice what this file does <em>not</em> contain: no ASCII-art
-            architecture diagram, no copy-pasted
-            <code>@daloyjs/core</code> README, no list of every TS gotcha. It
-            says: here&apos;s where things live, here are the seven
-            non-negotiable rules, and here&apos;s where to read the manual.
-            That&apos;s it.
+            The file stays focused on three things: where the project code
+            lives, the seven non-negotiable rules, and where to read the manual.
+            An ASCII-art architecture diagram, a copied README, and a catalogue
+            of TypeScript gotchas would only bury those instructions.
           </p>
 
           <h2>Why &quot;short&quot; is the whole design</h2>

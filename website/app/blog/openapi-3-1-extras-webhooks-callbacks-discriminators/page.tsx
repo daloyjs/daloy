@@ -44,23 +44,20 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 
 const THE_PROBLEM = `# A representative API contract circa "we'll figure it out later":
 #
-# - "We POST to your /webhooks/billing endpoint when an invoice is paid.
-#    Body shape? Check our PDF docs. Versioning? We promise we won't break it.
-#    Auth? You'll see an X-Signature header. Algorithm? Email support."
+# - "The PDF documents the /webhooks/billing request body. We announce
+#    version changes manually. Ask support for the X-Signature algorithm."
 #
-# - "The booking event has 12 'type' values. Each type has a totally different
-#    payload. TypeScript? Sorry, it's all 'data: Record<string, unknown>'."
+# - "Booking events have 12 type values with unrelated payloads. The
+#    TypeScript surface exposes data: Record<string, unknown>."
 #
-# - "When you create the payment, give us a callback URL. We'll POST 'something'
-#    back when it's done. Generated SDK? Nope. Contract test? Nope. Vibes? Yes."
+# - "Provide a callback URL when creating a payment. The callback body
+#    is undocumented and the generated SDK omits it."
 #
-# Three things every grown-up API has - webhooks, callbacks, and polymorphic
-# payloads - and three things the average OpenAPI spec skips.
-# That's the gap this post fills.`;
+# Each omission becomes somebody else's integration bug.`;
 
 const WEBHOOKS_TOP_LEVEL = `// src/index.ts, top-level webhooks describe events YOU send to consumers.
 // They never become a route on your server. They show up in the OpenAPI
-// document and, more importantly, in every generated client SDK.
+// document and in every generated client SDK.
 import { App, generateOpenAPI } from "@daloyjs/core";
 import { z } from "zod";
 
@@ -111,7 +108,7 @@ const WEBHOOK_CLIENT_USAGE = `// On the CONSUMER's side, the generated SDK conta
 //     const { signature, event, error } = await handleInvoicePaidWebhook(req, {
 //       secret: process.env.INVOICE_WEBHOOK_SECRET!,
 //     });
-//     if (error) return error.toResponse();         // ← typed problem+json
+//     if (error) return error.toResponse();         // <- typed problem+json
 //     // event is fully typed: event.data.amountCents is \`number\`, not \`unknown\`.
 //     await db.invoices.update(event.data.invoiceId, { status: "paid" });
 //     return new Response(JSON.stringify({ received: true }));
@@ -130,7 +127,7 @@ import type { CallbackMap } from "@daloyjs/core";
 const PaymentCreate = z.object({
   amountCents: z.number().int().positive(),
   currency: z.enum(["EUR", "NOK", "USD"]),
-  callbackUrl: z.url(),            // ← the URL we'll POST to later
+  callbackUrl: z.url(),            // <- the URL we'll POST to later
 });
 
 const paymentCallbacks: CallbackMap = {
@@ -170,7 +167,7 @@ app.route({
       body: z.object({ paymentId: z.uuid() }),
     },
   },
-  callbacks: paymentCallbacks,     // ← attaches to THIS operation only
+  callbacks: paymentCallbacks,     // <- attaches to THIS operation only
   handler: createPaymentHandler,
 });`;
 
@@ -254,9 +251,9 @@ app.route({
   handler: async ({ body }) => {
     // \`body\` is a discriminated union. TypeScript narrows on \`body.type\`.
     switch (body.type) {
-      case "booking.created":   return create(body);    // ← totalCents is in scope
-      case "booking.cancelled": return cancel(body);    // ← refundCents in scope
-      case "booking.shipped":   return ship(body);      // ← trackingNumber in scope
+      case "booking.created":   return create(body);    // <- totalCents is in scope
+      case "booking.cancelled": return cancel(body);    // <- refundCents in scope
+      case "booking.shipped":   return ship(body);      // <- trackingNumber in scope
     }
   },
 });`;
@@ -314,7 +311,7 @@ const app = new App({
         summary: "Fires for every booking lifecycle transition.",
         request: {
           headers: z.object({ "x-signature": z.string() }),
-          body: BookingEvent,                 // ← the discriminatedUnion above
+          body: BookingEvent,                 // <- the discriminatedUnion above
         },
         responses: {
           200: { description: "Acknowledged" },
@@ -330,7 +327,7 @@ export async function POST(req: Request) {
     secret: process.env.BOOKING_WEBHOOK_SECRET!,
   });
   if (error) return error.toResponse();
-  switch (event.type) {                       // ← exhaustive, type-checked
+  switch (event.type) {                       // <- exhaustive, type-checked
     case "booking.created":   return ingestCreated(event);
     case "booking.cancelled": return ingestCancelled(event);
     case "booking.shipped":   return ingestShipped(event);
@@ -356,22 +353,22 @@ git diff --exit-code generated/openapi.json
 
 const SUMMARY_TABLE = `# When to reach for which feature.
 
-webhooks (top-level)      ↳ Events YOU emit to consumers. They never become
+webhooks (top-level)      -> Events YOU emit to consumers. They never become
                             a route on your server. Always pair with
                             x-signature headers and a discriminated union
                             body if you have more than one event type.
 
-callbacks (route-level)   ↳ Out-of-band requests YOUR API will make back to
+callbacks (route-level)   -> Out-of-band requests YOUR API will make back to
                             the consumer that triggered an operation.
                             Canonical: payments, long-running jobs, OAuth.
                             The runtime expression points at the request
                             field that supplied the URL.
 
-discriminator()           ↳ Bare OpenAPI 3.1 spec builder. Use when you
+discriminator()           -> Bare OpenAPI 3.1 spec builder. Use when you
                             already have hand-rolled JSON schemas and just
                             want the discriminator block.
 
-discriminatedUnion()      ↳ Runtime validator + OpenAPI emitter, in one.
+discriminatedUnion()      -> Runtime validator + OpenAPI emitter, in one.
                             Default choice for polymorphic request/response
                             bodies. Produces exhaustive TypeScript tagged
                             unions on the client side.`;
@@ -484,7 +481,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -692,7 +689,7 @@ export default function BlogPostPage() {
           <h2>The combo: webhooks + discriminatedUnion</h2>
 
           <p>
-            Here is the pattern I keep recommending in design reviews:
+            I keep recommending this pattern in design reviews:
             <em>one</em> webhook entry whose body is a discriminated union over
             every event type. The alternative, one webhook per event type,
             produces an SDK with N near-identical handlers, N opportunities to

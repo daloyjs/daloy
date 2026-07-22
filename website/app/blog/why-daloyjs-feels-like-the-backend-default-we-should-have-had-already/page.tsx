@@ -101,7 +101,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -151,17 +151,15 @@ export default function BlogPostPage() {
           <p>
             The supply-chain part matters more than people like to admit.
             Attackers are using LLMs to scale package impersonation, dependency
-            reconnaissance, and workflow abuse. The answer is not to panic and
-            become a security monk. The answer is to ship a sane set of
-            defaults.
+            reconnaissance, and workflow abuse. Ship a sane set of defaults
+            instead of becoming a security monk.
           </p>
 
           <CodeBlock language="ini" code={SAFETY_DEFAULTS} />
 
           <p>
-            Those lines are not glamorous. They are also the sort of thing that
-            prevents extremely annoying incidents. I trust boring controls more
-            than dramatic postmortems.
+            Those lines prevent extremely annoying incidents. I trust boring
+            controls more than dramatic postmortems.
           </p>
 
           <h2>Runtime guardrails should be part of the framework story</h2>
@@ -170,14 +168,14 @@ export default function BlogPostPage() {
             I also like that DaloyJS treats security as product behavior instead
             of a lecture. The framework is explicit about CSRF, IP restriction,
             SSRF guardrails, open redirect handling, login throttling, and other
-            defensive layers that too many teams only discover after reading a
+            defensive layers I have watched teams discover only after reading a
             report with the phrase &quot;proof of concept&quot; in it.
           </p>
 
           <p>
-            More importantly, it keeps the core development flow readable. One
-            route definition becomes validation, types, OpenAPI 3.1, docs, and
-            typed clients. That means fewer places for truth to drift and fewer
+            It also keeps the core development flow readable. One route
+            definition becomes validation, types, OpenAPI 3.1, docs, and typed
+            clients. That means fewer places for truth to drift and fewer
             moments where the code says one thing while the generated docs say
             something charmingly fictional.
           </p>
@@ -189,9 +187,9 @@ export default function BlogPostPage() {
           <p>
             DaloyJS is solving the unglamorous problems first: install-time
             safety, runtime guardrails, contract-first design, and deploy-time
-            discipline. That is not flashy. It is just useful. I would rather
-            have a framework that removes common failure modes than one that
-            gives me a tenth way to name a router group.
+            discipline. That is useful. I would rather have a framework that
+            removes common failure modes than one that gives me a tenth way to
+            name a router group.
           </p>
 
           <p>

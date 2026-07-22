@@ -367,7 +367,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -416,18 +416,16 @@ export default function BlogPostPage() {
             &quot;show&quot;. We&apos;re going to define a single route, project
             it into all three artifacts on disk and in tests, then run{" "}
             <code>pnpm gen</code> and use the typed SDK from a separate Next.js
-            frontend. No yaml editing, no version drift, no second source of
-            truth.
+            frontend. The route remains the source, so there is no YAML copy to
+            edit or version separately.
           </p>
 
           <h2>The one route</h2>
 
           <p>
-            Here is the entire input. Everything that follows in this post is
-            derived from this file. If it changes, everything else changes with
-            it. If it doesn&apos;t, nothing else does. That is what &quot;single
-            source of truth&quot; actually has to mean, not &quot;we have a wiki
-            page about it&quot;.
+            This file is the entire input. Everything that follows derives from
+            it and changes only when the route changes. That is what
+            &quot;single source of truth&quot; means in practice.
           </p>
 
           <EditorFrame
@@ -453,9 +451,8 @@ export default function BlogPostPage() {
             to="generated/openapi.json"
           >
             <p>
-              The OpenAPI document is not a separate file you maintain. It is a
-              pure function of the routes you registered. Call{" "}
-              <code>generateOpenAPI(app, ...)</code>
+              The registered routes produce the OpenAPI document as a pure
+              function. Call <code>generateOpenAPI(app, ...)</code>
               {", "}get a fully-formed RFC 3.1 document back, write it wherever
               you want it.
             </p>
@@ -587,7 +584,7 @@ export default function BlogPostPage() {
             <CodeBlock language="ts" code={HEY_API_CONFIG} />
           </EditorFrame>
 
-          <p>Now run it:</p>
+          <p>Generate the client:</p>
 
           <CodeBlock language="bash" code={PNPM_GEN_RUN} />
 
@@ -601,11 +598,11 @@ export default function BlogPostPage() {
           <h2>Using it from a separate Next.js frontend</h2>
 
           <p>
-            Here is the part that closes the loop. The frontend lives in a
-            different app (<code>apps/web</code> in a monorepo, or a totally
-            separate repo with the client published to a registry, your call).
-            It imports the generated SDK and calls it like any other module. Pay
-            attention to the call shape, <code>path</code> for path params,{" "}
+            The frontend completes the loop. It lives in a different app (
+            <code>apps/web</code> in a monorepo, or a totally separate repo with
+            the client published to a registry, your call). It imports the
+            generated SDK and calls it like any other module. Pay attention to
+            the call shape, <code>path</code> for path params,{" "}
             <code>{`{ data, error, response }`}</code> destructure for results:
           </p>
 
@@ -633,10 +630,7 @@ export default function BlogPostPage() {
 
           <h2>The diff that doesn&apos;t exist</h2>
 
-          <p>
-            Let me show the thing I most want you to feel. Change one field in
-            the route. Watch what moves on its own.
-          </p>
+          <p>Change one field in the route and watch what moves on its own.</p>
 
           <EditorFrame
             files={["apps/api/src/routes/books.ts"]}
@@ -647,13 +641,12 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            The diff in the route file is two lines. The diff in your{" "}
-            <code>openapi.yaml</code>
-            {", "}your client types, your contract tests, your frontend imports,
-            and your &quot;types package&quot; is <em>zero lines</em>
+            The route diff is two lines. Your <code>openapi.yaml</code>
+            {", "}client types, contract tests, frontend imports, and
+            &quot;types package&quot; stay at <em>zero lines</em>
             {", "}because those files don&apos;t exist as separate truths
-            anymore. You commit the route change, you run <code>pnpm gen</code>
-            {", "}the SDK regenerates. That&apos;s it. That&apos;s the post.
+            anymore. Commit the route change and run <code>pnpm gen</code> to
+            regenerate the SDK.
           </p>
 
           <h2>The four-step checklist for new projects</h2>
@@ -694,13 +687,11 @@ export default function BlogPostPage() {
             time, and it earned that reputation. Most pipelines were brittle,
             slow, and produced types that looked like they were translated from
             another language by someone who didn&apos;t want to be there. The
-            reason the workflow above works is not that we&apos;re cleverer than
-            the previous attempts. It&apos;s that we&apos;re standing on the
-            shoulders of three sturdy things at once: Standard Schema lets the
-            route own validation <em>and</em> types, OpenAPI 3.1 is the lingua
-            franca for handing that to the outside world, and Hey API takes that
-            spec and produces a typed fetch SDK that doesn&apos;t look like a
-            translation. We just connected them.
+            workflow works because three mature pieces line up: Standard Schema
+            lets the route own validation <em>and</em> types, OpenAPI 3.1 is the
+            lingua franca for handing that to the outside world, and Hey API
+            takes that spec and produces a typed fetch SDK that doesn&apos;t
+            look like a translation. We just connected them.
           </p>
 
           <p>

@@ -371,7 +371,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -428,14 +428,11 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Every team I&apos;ve been on eventually hits a moment where the
-            generated docs page is &quot;close, but&quot;. Close, but the
-            colours are wrong. Close, but Try-It should be gone in prod. Close,
-            but the favicon. So someone forks the route, copies the HTML out of
-            the framework&apos;s source, and now there&apos;s a two-hundred-line
-            bespoke handler with a hard-coded spec URL that nobody touches for
-            two years. I have shipped that handler. I&apos;ve also been the next
-            person trying to fix it. Neither was fun.
+            Generated docs eventually need the team&apos;s colours, a production
+            switch for Try-It, and the right favicon. I have handled that by
+            copying the framework&apos;s HTML into a two-hundred-line route with
+            a hard-coded spec URL. I have also inherited that route two years
+            later. Neither experience was fun.
           </p>
 
           <h2>Before and after</h2>
@@ -457,11 +454,11 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            That&apos;s it. One option. <code>docs.scalar</code> takes any
-            JSON-serialisable Scalar API reference configuration and forwards it
-            into the page. Theme, layout, brand CSS, favicon, the Try-It toggle,
-            sidebar density, &quot;open the first tag by default&quot;: all the
-            knobs Scalar already supports.
+            The <code>docs.scalar</code> option takes any JSON-serialisable
+            Scalar API reference configuration and forwards it into the page.
+            Theme, layout, brand CSS, favicon, the Try-It toggle, sidebar
+            density, &quot;open the first tag by default&quot;: all the knobs
+            Scalar already supports.
           </p>
 
           <h2>The options I actually reach for</h2>
@@ -681,8 +678,7 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Notice the last assertion. That&apos;s the one that makes me sleep
-            at night. It pins the fact that the page&apos;s configuration block
+            The last assertion pins the page&apos;s configuration block to
             carries the live spec URL, the same one your typed client, your
             contract tests, and your{" "}
             <Link href="/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health">

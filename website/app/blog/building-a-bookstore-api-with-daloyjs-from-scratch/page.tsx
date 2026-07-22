@@ -402,10 +402,10 @@ client.setConfig({ baseUrl: process.env.NEXT_PUBLIC_API_URL });
 
 export async function fetchFirstPage() {
   const { data, error } = await listBooks({
-    query: { limit: 10, offset: 0 },     // ← typed; required keys complained-about
+    query: { limit: 10, offset: 0 },     // <- typed; required keys complained-about
   });
   if (error) throw new Error(error.title);
-  return data;                            // ← { items: Book[]; total: number }
+  return data;                            // <- { items: Book[]; total: number }
 }
 
 export async function addBook(input: Parameters<typeof createBook>[0]["body"]) {
@@ -543,7 +543,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -626,7 +626,8 @@ export default function BlogPostPage() {
             turns it into a fully typed <code>fetch</code> SDK.
           </StepCard>
           <StepCard step={7} title="Test everything with app.request()">
-            No port, no fetch, no flakes. Same App you ship.
+            Test the same App you ship without opening a port or making a
+            network request.
           </StepCard>
 
           <h2>Step 1: Scaffold</h2>
@@ -659,8 +660,8 @@ export default function BlogPostPage() {
 
           <p>
             Open <code>src/routes/books.ts</code> (create it if you used{" "}
-            <code>--minimal</code>) and start with the schema. The single most
-            important habit in DaloyJS:{" "}
+            <code>--minimal</code>) and start with the schema. The habit that
+            keeps this project coherent:{" "}
             <strong>
               the Zod schema is the source of truth for everything
             </strong>
@@ -824,11 +825,9 @@ export default function BlogPostPage() {
           <h2>Step 7: Test it (without booting a server)</h2>
 
           <p>
-            <code>app.request(url, init?)</code> is the same App your production
-            server wraps, but called in-process. No port, no
-            <code>fetch</code>
-            {", "}no &quot;wait for the dev server to be ready&quot;. Faster
-            than your test runner&apos;s spinner.
+            <code>app.request(url, init?)</code> calls the same App your
+            production server wraps, in-process. Tests avoid ports, network
+            requests, and dev-server startup delays.
           </p>
 
           <EditorFrame
@@ -850,8 +849,7 @@ export default function BlogPostPage() {
           <h2>The muscle-memory scripts</h2>
 
           <p>
-            For when you forget which command does what (you will, I certainly
-            do):
+            For when you forget which command does what (you will, I will do):
           </p>
 
           <EditorFrame

@@ -205,7 +205,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -277,9 +277,9 @@ export default function BlogPostPage() {
           />
 
           <p>
-            Zero Trust at the application layer is not a vibe, it&apos;s a chain
-            of <em>explicit verification points</em> that don&apos;t collapse
-            into &quot;the firewall said it was fine.&quot; Daloy gives you the
+            Zero Trust at the application layer requires a chain of{" "}
+            <em>explicit verification points</em> that don&apos;t collapse into
+            &quot;the firewall said it was fine.&quot; Daloy gives you the
             verifying middleware as first-class primitives, so the chain is
             visible in your <code>app.ts</code>
             {": "}
@@ -311,9 +311,8 @@ export default function BlogPostPage() {
 
           <p>
             The post&apos;s castle analogy, moat, wall, towers, keep, maps
-            almost one-for-one to a Daloy middleware pipeline. The point
-            isn&apos;t that one layer catches everything; it&apos;s that
-            removing one doesn&apos;t silently disable the others:
+            almost one-for-one to a Daloy middleware pipeline. Each layer works
+            independently, so removing one does not silently disable the others:
           </p>
 
           <CodeBlock language="ts" code={DEFENSE_IN_DEPTH} />
@@ -389,8 +388,8 @@ export default function BlogPostPage() {
 
           <p>
             The cloud post is talking about Terraform scanners. The framework
-            analogue is the supply-chain CI gate. These are not aspirational,
-            they all run today, and a failure blocks merge:
+            analogue is the supply-chain CI gate. These gates run today, and any
+            failure blocks merge:
           </p>
 
           <CodeBlock language="bash" code={SUPPLY_CHAIN_VERIFY} />
@@ -424,21 +423,21 @@ export default function BlogPostPage() {
           <CodeBlock language="ts" code={STRUCTURED_LOGS} />
 
           <p>
-            The redaction is not a string regex pass, it walks the object graph,
-            so a secret hiding inside <code>req.body.user.token</code> gets
-            redacted the same way an Authorization header does. The list of keys
-            is extensible; the defaults are conservative. If your company adds a
-            new secret-shaped header, you add one string.
+            The redactor walks the object graph instead of relying on one string
+            regex, so a secret hiding inside <code>req.body.user.token</code>{" "}
+            gets redacted the same way an Authorization header does. The list of
+            keys is extensible; the defaults are conservative. If your company
+            adds a new secret-shaped header, you add one string.
           </p>
 
           <h2>The &quot;assume breach&quot; defaults you already have</h2>
 
           <p>
-            The article&apos;s most underrated line is &quot;assume a breach
-            will happen. Focus on minimizing the impact.&quot; Translated into
-            framework behavior, that means the defaults must minimize blast
-            radius even when a handler is buggy or compromised. Daloy&apos;s
-            assume-breach defaults are the seven below, and they are not opt-in:
+            The article says, &quot;assume a breach will happen. Focus on
+            minimizing the impact.&quot; Translated into framework behavior,
+            that means the defaults must minimize blast radius even when a
+            handler is buggy or compromised. Daloy&apos;s assume-breach defaults
+            are the seven below, and they are not opt-in:
           </p>
 
           <CodeBlock language="ts" code={ASSUME_BREACH} />
@@ -447,36 +446,30 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              We don&apos;t scan your cloud configuration. If you mis-IAM an S3
-              bucket, Daloy won&apos;t know. Use the cloud provider&apos;s
-              tooling or a CSPM vendor, the Aikido post lists several.
+              Cloud configuration scanning belongs to your provider or CSPM
+              vendor. Daloy cannot spot a misconfigured S3 bucket.
             </li>
             <li>
-              We don&apos;t encrypt your database. That&apos;s the data
-              layer&apos;s job (RDS encryption, KMS-managed keys). The framework
-              defaults to TLS for outbound connections and a fetch-guard
-              allow-list, but it cannot prove your DB is encrypted at rest.
+              Database encryption belongs to the data layer. Use RDS encryption,
+              KMS-managed keys, or the equivalent on your platform.
             </li>
             <li>
-              We don&apos;t do runtime threat detection (GuardDuty / Falco). We
-              give you the structured event stream a detector needs; someone
-              still has to run the detector.
+              Runtime threat detection still needs GuardDuty, Falco, or a
+              similar detector. Daloy supplies structured events for it.
             </li>
             <li>
-              We don&apos;t replace your WAF. <code>secureHeaders()</code>
+              Keep your WAF. <code>secureHeaders()</code>
               {", "}
               <code>rateLimit()</code>
-              {", "}and <code>loadShedding()</code> are application-layer L7,
-              they overlap with a CDN/WAF and work behind one, but they are not
-              the same thing.
+              {", "}and <code>loadShedding()</code> work behind one and cover
+              different application-layer controls.
             </li>
           </ul>
 
           <p>
-            That&apos;s the line. If a checklist says &quot;the application
-            framework must do X,&quot; Daloy does X by default or via a
-            documented opt-in. If a checklist says &quot;the cloud account must
-            do X,&quot; we don&apos;t lie about owning it.
+            Daloy owns the application-framework controls in this checklist.
+            Cloud-account controls stay with the platform and its security
+            tooling.
           </p>
 
           <h2>A 60-second checklist for your own deploy</h2>
@@ -522,10 +515,10 @@ export default function BlogPostPage() {
           </ol>
 
           <p>
-            None of this is novel, that&apos;s the point. The whole reason the
-            Aikido post exists is that the boring defenses are still the ones
-            that prevent breaches. Daloy&apos;s job is to make sure you
-            can&apos;t accidentally skip them.
+            These defenses are familiar because they still prevent breaches. The
+            Aikido post focuses on the same boring controls that that prevent
+            breaches. Daloy&apos;s job is to make sure you can&apos;t
+            accidentally skip them.
           </p>
 
           <p className="text-sm text-muted-foreground">

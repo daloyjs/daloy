@@ -207,7 +207,7 @@ export default function BlogPostPage() {
             href="/blog"
             className="text-sm text-muted-foreground underline-offset-4 hover:underline"
           >
-            ← Back to blog
+            &lt;- Back to blog
           </Link>
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <Badge variant="outline">BOLA / IDOR</Badge>
@@ -252,8 +252,8 @@ export default function BlogPostPage() {
 
           <p>
             This is Broken Object Level Authorization, usually shortened to
-            BOLA. Many developers also know the same family of bugs as IDOR. It
-            is especially easy to generate with AI because the endpoint looks
+            BOLA. The same family of bugs is also known as IDOR. It is
+            especially easy to generate with AI because the endpoint looks
             complete: authentication, a scope check, validation, a database
             query, and a nice JSON response. Every requested feature is there.
             The missing feature is the one the prompt did not name.
@@ -428,9 +428,8 @@ export default function BlogPostPage() {
 
           <p>
             This rule belongs in framework documentation, executable tutorials,
-            project scaffolds, AI instructions, and tests. Repeating it is not
-            glamorous, but neither is explaining a cross-customer data leak to
-            every customer at once.
+            project scaffolds, AI instructions, and tests. Repetition here is
+            cheaper than explaining a cross-customer data leak.
           </p>
 
           <CodeBlock language="text" code={AGENT_RULE} />

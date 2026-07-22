@@ -490,7 +490,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -576,9 +576,9 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            That&apos;s it. Three required fields. Two optional. Anything else
-            is an extension member you define yourself, and the framework uses{" "}
-            <code>errors</code> as the conventional spot for field-level
+            The shape has three required fields and two optional ones. Anything
+            else is an extension member you define yourself, and the framework
+            uses <code>errors</code> as the conventional spot for field-level
             validation issues. The Content-Type{" "}
             <code>application/problem+json</code> tells the client (and any
             proxies in the middle) that this is a problem document, not a domain
@@ -856,12 +856,11 @@ export default function BlogPostPage() {
           <h2>Caveats</h2>
 
           <p>
-            Problem Details isn&apos;t a magic protocol, it&apos;s a promise
-            about response shape. It does nothing if you bypass it and return
-            your own ad-hoc JSON from a handler (please don&apos;t). It does
-            nothing for non-JSON error pages from upstream proxies (your
-            CDN&apos;s 502 HTML is still HTML; deal with it in the client). And
-            the <code>type</code> URI is a <em>stable identifier</em>
+            Problem Details standardizes the response shape, provided handlers
+            use it. Ad-hoc JSON bypasses that contract, while non-JSON errors
+            from upstream proxies still need client-side handling. Your
+            CDN&apos;s 502 HTML remains HTML. The the <code>type</code> URI is a{" "}
+            <em>stable identifier</em>
             {", "}not a link the client necessarily dereferences, treat it like
             an enum value. Beyond those: it&apos;s the closest thing to a free
             lunch the HTTP standards world has given us in years.

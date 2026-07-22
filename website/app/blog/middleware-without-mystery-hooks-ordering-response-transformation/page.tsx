@@ -100,8 +100,8 @@ import type { Hooks } from "@daloyjs/core";
 export function maintenanceMode(opts: { enabled: () => boolean }): Hooks {
   return {
     beforeHandle(ctx) {
-      if (!opts.enabled()) return;            // ← void: continue the pipeline
-      if (ctx.route?.path === "/healthz") return; // ← let liveness through
+      if (!opts.enabled()) return;            // <- void: continue the pipeline
+      if (ctx.route?.path === "/healthz") return; // <- let liveness through
       return new Response(
         JSON.stringify({
           type:   "https://daloyjs.dev/errors/service-unavailable",
@@ -144,7 +144,7 @@ app.route({
   method: "DELETE",
   path: "/admin/users/:id",
   handler: deleteUser,
-  hooks: { ...requireRole("admin") },   // ← scoped to THIS route only
+  hooks: { ...requireRole("admin") },   // <- scoped to THIS route only
 });`;
 
 const AFTER_HANDLE = `// afterHandle, transform the handler's return value before serialization.
@@ -326,27 +326,27 @@ app.register(observability, {
 
 const RECIPE_TABLE = `# What goes where, print this out, tape it to your monitor.
 
-onRequest      ↳ stuff that needs the raw Request (TLS termination metadata,
+onRequest      -> stuff that needs the raw Request (TLS termination metadata,
                  conditional request decoding). No context yet. Cannot decide.
 
-preBody        ↳ CHEAP PERIMETER AUTH. Raw params/query/headers, body undefined.
+preBody        -> CHEAP PERIMETER AUTH. Raw params/query/headers, body undefined.
                  Reject bearer/basic/JWK/mTLS failures before upload I/O.
 
-beforeHandle   ↳ VALIDATED-INPUT AUTHZ. WAF. IDEMPOTENCY. RATE LIMITING.
+beforeHandle   -> VALIDATED-INPUT AUTHZ. WAF. IDEMPOTENCY. RATE LIMITING.
                  Anything that needs parsed schemas before the handler runs.
 
-handler        ↳ your code. Nothing else.
+handler        -> your code. Nothing else.
 
-afterHandle    ↳ shape transformations that span MANY routes (PII redaction,
+afterHandle    -> shape transformations that span MANY routes (PII redaction,
                  envelope wrapping). 95% of the time, just shape it in the handler.
 
-onSend         ↳ response HEADERS for every response (success + error + OPTIONS).
+onSend         -> response HEADERS for every response (success + error + OPTIONS).
                  Server-Timing, X-Request-Id, Strict-Transport-Security, CSP, ...
 
-onResponse     ↳ FIRE-AND-FORGET observers. Logging. Metrics. Audit events.
+onResponse     -> FIRE-AND-FORGET observers. Logging. Metrics. Audit events.
                  Cannot change the response. This is by design.
 
-onError        ↳ translate framework-foreign errors into HttpError subclasses,
+onError        -> translate framework-foreign errors into HttpError subclasses,
                  log once, fall through to the default problem+json serializer.`;
 
 const ANTIPATTERNS = `# Three patterns that look smart but bite you in production:
@@ -480,7 +480,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -522,9 +522,9 @@ export default function BlogPostPage() {
           <p>
             The good news: there are six hooks. The better news: they fire in
             the order they appear in the code, in the order you registered them,
-            in three nested scopes (global -&gt; group -&gt; route). No adapter
-            shim, no &quot;extends&quot; chain, no hidden re-entry. You read the
-            file, you know what happens.
+            in three nested scopes (global -&gt; group -&gt; route). The file
+            exposes the sequence directly, without adapter shims, inheritance
+            chains, or hidden re-entry.
           </p>
 
           <h2>The whole API in one screen</h2>

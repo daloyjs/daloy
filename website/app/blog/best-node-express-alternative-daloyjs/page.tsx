@@ -10,7 +10,7 @@ const POST = {
   title:
     "The Best Node.js Express Alternative in 2026 Is Contract-First: The Case for DaloyJS",
   description:
-    "Looking for a modern Node.js Express alternative? The case for a contract-first framework in the category in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
+    "A contract-first case for choosing a modern Node.js Express alternative in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
   date: "2026-06-18",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
@@ -94,7 +94,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -155,15 +155,10 @@ export default function BlogPostPage() {
             actually about.
           </p>
           <p>
-            The questions your incidents <em>are</em> about: why did the docs
-            say <code>title</code> when the API returns <code>name</code>? Why
-            did a 2GB request body take down a pod? Why did{" "}
-            <code>__proto__</code> in a JSON payload poison an object three
-            layers deep? Why did a user-supplied URL in a webhook config reach
-            the cloud metadata endpoint? None of those are throughput problems.
-            All of them are <em>contract</em> and <em>default-posture</em>{" "}
-            problems. That is the axis a serious Express alternative has to win
-            on.
+            Production incidents expose stale contracts, missing body limits,
+            prototype-pollution bugs, and unguarded outbound URLs. Router
+            throughput does not solve any of them. A serious Express alternative
+            has to win on contract accuracy and secure defaults.
           </p>
 
           <h2>Why &quot;contract-first&quot; is the real category</h2>
@@ -240,7 +235,7 @@ export default function BlogPostPage() {
             never measure.
           </p>
 
-          <h2>The supply-chain footnote that is not a footnote</h2>
+          <h2>Supply-chain risk belongs in the main comparison</h2>
           <p>
             <code>@daloyjs/core</code> has zero runtime dependencies. After
             living through a dependency-confusion scare and a postinstall-script
@@ -250,7 +245,7 @@ export default function BlogPostPage() {
             a smaller but non-trivial one. Zero is a different category.
           </p>
 
-          <h2>Where the argument breaks (because it does)</h2>
+          <h2>Where Express, Fastify, or Hono still win</h2>
           <p>I would not trust this post if it did not have this section.</p>
           <ul>
             <li>
@@ -274,14 +269,12 @@ export default function BlogPostPage() {
             </li>
           </ul>
 
-          <h2>The claim, restated</h2>
+          <h2>My pick</h2>
           <p>
-            The best Node.js Express alternative in 2026 is not the fastest
-            router or the one with the most stars. It is the one that makes your
-            API contract a derived artifact instead of a maintained one, and
-            makes the security checklist a default you must consciously weaken
-            instead of homework you must consciously remember. On those two
-            axes, contract-first wins the category, and DaloyJS is the strongest
+            The best Node.js Express alternative in 2026 should make your API
+            contract a derived artifact instead of a maintained one, and turn
+            the security checklist into reviewed defaults. On those two axes,
+            contract-first wins the category, and DaloyJS is the strongest
             contract-first option in TypeScript today, with the caveat that
             Fastify is the safer pick if maturity outranks everything else for
             you.

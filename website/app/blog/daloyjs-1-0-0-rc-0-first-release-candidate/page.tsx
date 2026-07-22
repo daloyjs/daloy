@@ -9,7 +9,7 @@ const POST = {
   slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
   title: "DaloyJS: The First Release Candidate",
   description:
-    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short list of what still stands between us and the stable release.",
+    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' This post covers what the RC means, what landed across the beta train (spoiler: MCP), and what remains before the stable release.",
   date: "2026-07-03",
   readingTime: "7 min read",
   author: "Devlin Duldulao",
@@ -102,7 +102,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -143,12 +143,12 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            The rule for a release candidate is short and unglamorous: from here
-            to the stable release, only bug fixes and documentation land. No new
-            middleware, no new adapter, no new helper. The public API you see in
-            the release candidate is the public API you get at stable, minus
-            whatever bugs you help me find. That is the entire promise, and it
-            is the reason an RC feels heavier to tag than a beta.
+            The release-candidate rule is short and unglamorous: only bug fixes
+            and documentation land before stable. Middleware, adapters, and
+            helpers are frozen. The public API you see in the release candidate
+            is the public API you get at stable, minus whatever bugs you help me
+            find. That is the entire promise, and it is the reason an RC feels
+            heavier to tag than a beta.
           </p>
 
           <h2>So the beta really was the freeze</h2>
@@ -219,11 +219,10 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Three things. I want at least three production users on file, real
-            services depending on this, not a to-do app I wrote to feel good. I
-            want the security disclosure process exercised at least once,
-            because a policy you have never run is a policy you do not actually
-            have. And I want migration guides from the frameworks people are
+            Before stable, I need at least three production users on file with
+            real services depending on this. The security disclosure process
+            also needs one exercise, because an untested policy is only a file.
+            Finally, I owe migration guides for the frameworks people are
             actually leaving. The{" "}
             <Link href="/docs/migrating/express">Express guide</Link> is up;
             Fastify and Hono are the next writing I owe you, and the RC window

@@ -353,7 +353,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -432,7 +432,7 @@ export default function BlogPostPage() {
           <p>
             Two named arguments. The rest is invisible, and intentional. The
             framework is, at this point, already enforcing six different things
-            for you. Let&apos;s walk them.
+            for you. These controls run in the core request path.
           </p>
 
           <h2>Part 1: Always on, no flag required</h2>

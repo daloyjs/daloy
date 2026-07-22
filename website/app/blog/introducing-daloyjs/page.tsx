@@ -250,7 +250,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -330,7 +330,7 @@ export default function BlogPostPage() {
             {", "}and then call the same route through the typed client, without
             a network in the middle, because the typed client knows it&apos;s
             the same process. Four things, one source of truth, no codegen step.
-            Let&apos;s go.
+            Start with one route.
           </p>
 
           <h3>Step 1: Define the route</h3>
@@ -372,11 +372,10 @@ export default function BlogPostPage() {
             </li>
             <li>
               The handler&apos;s return type is a discriminated union of every
-              status you declared. Forget to handle a status? The compiler will
-              tell you. Try to return a body for <code>404</code> when you
-              didn&apos;t declare one? Also a compile error. This is the part
-              that removes about a third of the bugs I&apos;ve shipped in the
-              last decade.
+              declared status. The compiler catches missing cases and rejects a{" "}
+              <code>404</code> body when the route never declared one. This is
+              the part that removes about a third of the bugs I&apos;ve shipped
+              in the last decade.
             </li>
             <li>
               <code>bodyLimitBytes</code> and <code>requestTimeoutMs</code> are
@@ -407,10 +406,8 @@ export default function BlogPostPage() {
           <h3>Step 3: Hit /openapi.json (the spec was free)</h3>
 
           <p>
-            You did not write an OpenAPI document. You did not run a codegen.
-            You did not maintain a YAML file in a folder called{" "}
-            <code>openapi/</code> that your team agreed to update and then
-            stopped updating around sprint 4. The spec is just... there:
+            The registered route produces the OpenAPI document directly. There
+            is no separate YAML file for the team to forget around sprint 4:
           </p>
 
           <CodeBlock language="bash" code={OPENAPI_CURL} />
@@ -519,10 +516,9 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Notice that the test imports the same <code>app</code> as the
-            server. There is no mocked schema, no parallel type definition, no
-            re-derived response shape. If someone changes the route&apos;s 200
-            body to remove <code>title</code>
+            The test imports the same <code>app</code> as the server. It uses
+            the route schema and inferred response type directly. If someone
+            changes the route&apos;s 200 body to remove <code>title</code>
             {", "}this test fails to compile. Not fails to run, fails to{" "}
             <em>compile</em>
             {". "}That&apos;s the bug being caught at the earliest possible
@@ -540,34 +536,30 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              No decorators
-              {", "}no <code>reflect-metadata</code>
-              {", "}
-              no &quot;please enable experimental TS flags&quot;. Routes are
-              objects. Handlers are functions. If you can read JavaScript, you
-              can read this.
+              Routes are objects and handlers are functions. They need neither
+              decorators nor <code>reflect-metadata</code> or experimental
+              TypeScript flags.
             </li>
             <li>
-              No separate OpenAPI file to maintain. The spec is generated; you
-              customize it, you don&apos;t author it.
+              The route definitions generate the OpenAPI spec, so you customize
+              the result instead of maintaining a separate source file.
             </li>
             <li>
-              No separate client repo to keep in sync. The in-process client is
-              one import. The generated fetch SDK is one command.
+              The in-process client takes one import, and one command generates
+              a fetch SDK for consumers in other repositories.
             </li>
             <li>
-              No security checklist to remember. Body limits, request timeouts,
-              prototype-pollution-safe JSON parsing, path-traversal rejection,
-              and 5xx redaction in production are defaults.{" "}
-              <code>secureHeaders()</code>
+              Body limits, request timeouts, prototype-pollution-safe JSON
+              parsing, path-traversal rejection, and production 5xx redaction
+              are defaults. <code>secureHeaders()</code>
               {", "}
               <code>rateLimit()</code>
               {", "}
               <code>requestId()</code>
-              {", "}CSRF, sessions, and tracing are first-party, same repo, same
-              release cadence, same test suite.
+              {", "}CSRF, sessions, and tracing are first-party modules with the
+              same release cadence and test suite.
             </li>
-            <li>No runtime lock-in. Same app, five adapters.</li>
+            <li>The same application runs through five runtime adapters.</li>
           </ul>
 
           <h2>What this post is anchoring</h2>

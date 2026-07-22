@@ -374,7 +374,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -490,12 +490,12 @@ export default function BlogPostPage() {
           <CodeBlock language="ts" code={SCHEMA_VERIFICATION} />
 
           <p>
-            This is the single most important point in the entire report and the
-            easiest one to get wrong. The temptation when a model is doing
-            something clever is to widen the schema so the clever thing fits.
-            Don&apos;t. Widen the schema only when you&apos;ve thought through
-            what the wider input means in production, and write the unhappy-path
-            test before you ship it.
+            This is the report&apos;s main point and the easiest one to get
+            wrong. The temptation when a model is doing something clever is to
+            widen the schema so the clever thing fits. Don&apos;t. Widen the
+            schema only when you&apos;ve thought through what the wider input
+            means in production, and write the unhappy-path test before you ship
+            it.
           </p>
 
           <h2>Network-level scope control: fetchGuard is one line</h2>
@@ -555,7 +555,7 @@ export default function BlogPostPage() {
 
           <RequirementCard
             requirement="Report: 'The backend should not become a path to internals via verbose error messages or leaked stack traces.'"
-            framework="In production, DaloyJS redacts 5xx response bodies by default. No stack traces, no internal hostnames, no DB error messages reach the wire. The agent sees a problem+json with a requestId; your SIEM sees the full structured detail under the same id. Same for header sanitisation, same for the JWT verifier (which never echoes the failing claim, only the reason)."
+            framework="In production, DaloyJS redacts 5xx response bodies by default, keeping stack traces, internal hostnames, and DB error messages off the wire. The agent sees a problem+json with a requestId; your SIEM sees the full structured detail under the same id. Same for header sanitisation, same for the JWT verifier (which never echoes the failing claim, only the reason)."
             user="Don't paste raw error.message into a 200 response 'so the agent can self-correct'. The agent will self-correct from a 400 problem+json with a documented type URL just as well, and the type URL doesn't leak your DB schema."
           />
 

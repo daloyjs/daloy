@@ -92,7 +92,7 @@ const AvatarUpload = multipartObject(
       accept: ["image/png", "image/jpeg", "image/webp"],
       filename: (name) => /\\.(png|jpe?g|webp)$/i.test(name),
     }),
-    alt: z.string().min(1).max(140),         // ← non-file fields use Zod (or any
+    alt: z.string().min(1).max(140),         // <- non-file fields use Zod (or any
                                              //   Standard-Schema-compatible lib)
     isPrimary: z.coerce.boolean().default(false),
   },
@@ -115,7 +115,7 @@ app.route({
     // body.file is a Web File / Blob - every runtime has it.
     // body.alt is a string. body.isPrimary is a real boolean.
     const url = await uploadToObjectStorage({
-      stream: body.file.stream(),            // ← streams. no buffer-the-world.
+      stream: body.file.stream(),            // <- streams. no buffer-the-world.
       type:   body.file.type,
       size:   body.file.size,
       name:   body.file.name ?? "avatar",
@@ -158,7 +158,7 @@ fileField({
 //   accept: ["image/*"]    ✓ matches image/jpeg, image/webp, image/svg+xml
 //   accept: ["*/*"]        ✓ matches anything (use sparingly; mostly for tests)`;
 
-const MULTIPLE_FILES = `// Need an array of files? Wrap fileField() in your validator's array
+const MULTIPLE_FILES = `// For an array of files, wrap fileField() in your validator's array
 // helper. Standard Schema is the only contract - Zod, Valibot, ArkType
 // all work. Per-file rules still apply to every entry.
 import { z } from "zod";
@@ -427,7 +427,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -639,9 +639,9 @@ export default function BlogPostPage() {
           <p>
             <code>FormData</code> and <code>File</code> are standard globals on
             Node 18+, Bun, and every other runtime DaloyJS ships an adapter for.
-            Combine them with <code>app.request()</code> and you can test the
-            entire upload path in-process. No port, no temp directory, no
-            flakes:
+            Combine them with <code>app.request()</code> to test the entire
+            upload path in-process, without opening a port or relying on a
+            temporary directory:
           </p>
 
           <EditorFrame

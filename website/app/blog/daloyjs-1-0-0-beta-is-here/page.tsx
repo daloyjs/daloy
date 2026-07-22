@@ -9,7 +9,7 @@ const POST = {
   slug: "daloyjs-1-0-0-beta-is-here",
   title: "DaloyJS Is in Beta (and Nothing Broke, on Purpose)",
   description:
-    "After a long public preview, DaloyJS enters beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the stable release.",
+    "After a long public preview, DaloyJS enters beta. The key line in this changelog is that the runtime did not change. This post covers what the beta means, how to install it, and what we need from you before the stable release.",
   date: "2026-06-21",
   readingTime: "6 min read",
   author: "Devlin Duldulao",
@@ -85,7 +85,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -122,20 +122,20 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            The most important line in this changelog is that the runtime did
-            not change. The beta adds no middleware, adapter, or helper. If you
-            used the final preview release yesterday, this is the same code with
-            a braver version label.
+            The key line in this changelog is that the runtime did not change.
+            The beta adds no middleware, adapter, or helper. If you used the
+            final preview release yesterday, this is the same code with a braver
+            version label.
           </p>
 
-          <h2>So why bother tagging it?</h2>
+          <h2>Why the beta tag matters</h2>
 
           <p>
-            Because a stable API is a promise, and I finally felt okay making
-            this one. During preview the deal was simple and a little rude:
-            public APIs could still move. That is normal for a young framework.
-            You move fast, you rename things, you apologize in the changelog. It
-            is also exhausting for anyone trying to build something real.
+            A stable API is a promise, and I finally felt ready to make this
+            one. During preview the deal was simple and a little rude: public
+            APIs could still move. That is normal for a young framework. You
+            move fast, you rename things, you apologize in the changelog. It is
+            also exhausting for anyone trying to build something real.
           </p>
 
           <p>
@@ -150,14 +150,13 @@ export default function BlogPostPage() {
           <h2>What changed during preview</h2>
 
           <p>
-            Really. But that does not mean nothing happened. The work that
-            earned a stable release happened across the entire public preview:
-            the secure-by-default request path, the contract-first route that
-            generates OpenAPI plus a typed client, the multi-runtime adapters,
-            the supply-chain hardening, the SSRF guard, the auth and rate-limit
-            and webhook pieces, all of it. Beta day is not when the features
-            arrive. It is when I stop adding features and start defending the
-            shape of what is already there.
+            The work that earned a stable release happened across the entire
+            public preview: the secure-by-default request path, the
+            contract-first route that generates OpenAPI plus a typed client, the
+            multi-runtime adapters, the supply-chain hardening, the SSRF guard,
+            the auth and rate-limit and webhook pieces, all of it. Beta day
+            starts the work of defending the shape that preview releases
+            established.
           </p>
 
           <p>
@@ -196,11 +195,11 @@ export default function BlogPostPage() {
           <h2>What I actually want from you</h2>
 
           <p>
-            A beta is not a victory lap, it is a request for evidence. The best
-            possible outcome for the next few weeks is that someone builds a
-            real thing on the beta and finds the rough edge I missed. File the
-            bug. Tell me the API name that reads wrong. Show me the adapter that
-            behaves differently than the docs claim. That is the entire point of
+            A beta asks for evidence from real projects. The best possible
+            outcome for the next few weeks is that someone builds a real thing
+            on the beta and finds the rough edge I missed. File the bug. Tell me
+            the API name that reads wrong. Show me the adapter that behaves
+            differently than the docs claim. That is the entire point of
             shipping a beta instead of just tagging a stable release and
             praying.
           </p>

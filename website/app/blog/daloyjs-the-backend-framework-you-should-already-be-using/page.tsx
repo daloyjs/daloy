@@ -108,7 +108,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -140,10 +140,9 @@ export default function BlogPostPage() {
           <p>
             A friend of mine once shipped a small Express API, went to sleep,
             and woke up to a server that had spent the night losing a fight with
-            a gradually inflating request body. No body cap, no meaningful
-            timeout, no guardrail, just vibes and rising memory usage. He is a
-            competent developer. He was also busy. Those two facts coexist all
-            the time.
+            a gradually inflating request body. The service had no body cap or
+            meaningful timeout, so memory use kept climbing. He is a competent
+            developer. He was also busy. Those two facts coexist all the time.
           </p>
 
           <p>
@@ -157,11 +156,10 @@ export default function BlogPostPage() {
           <h2>The shape of a safer default</h2>
 
           <p>
-            Here is the part I like: a minimal DaloyJS app already looks like a
-            production-minded starting point instead of a tutorial you are meant
-            to harden later. Validation lives beside the handler, the route is a
-            contract, and the common defenses are present without begging for
-            plugins.
+            A minimal DaloyJS app already looks like a production-minded
+            starting point instead of a tutorial you are meant to harden later.
+            Validation lives beside the handler, the route is a contract, and
+            the common defenses are present without begging for plugins.
           </p>
 
           <CodeBlock language="ts" code={MINIMAL_APP} />

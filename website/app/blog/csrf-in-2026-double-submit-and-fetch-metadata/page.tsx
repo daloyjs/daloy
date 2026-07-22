@@ -143,7 +143,7 @@ const FAILURE_MATRIX = `// What gets rejected, and how, under each strategy.
 //   POST /pay, Sec-Fetch-Site: cross-site, Origin allowlisted -> allowed
 //   POST /pay, Sec-Fetch-Site: cross-site, Origin not listed  -> 403
 //   POST /pay, no Sec-Fetch-Site (legacy), Origin or Referer allowlisted -> allowed
-//   POST /pay, no Sec-Fetch-Site, no Origin, no Referer -> 403
+//   POST /pay, all provenance headers missing -> 403
 
 // strategy: "both"
 //   POST /pay, fetch-metadata passes, double-submit fails -> 403
@@ -351,7 +351,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -511,13 +511,10 @@ export default function BlogPostPage() {
           <h2>Strategy 2: fetch-metadata, the way browsers want to help</h2>
 
           <p>
-            Here is the part that I genuinely think is underrated. Every modern
-            browser, on every request, sends a <code>Sec-Fetch-Site</code>{" "}
-            header that tells you, definitively, whether the request is
-            same-origin or cross-site. <strong>The browser</strong> tells you.
-            The attacker page cannot forge it; it&apos;s on the list of
-            forbidden response headers, the user&apos;s browser puts it there,
-            end of story.
+            Modern browsers send a <code>Sec-Fetch-Site</code> header that tells
+            the server whether a request is same-origin or cross-site. The
+            browser controls this forbidden request header, so an attacker page
+            cannot forge it.
           </p>
 
           <EditorFrame

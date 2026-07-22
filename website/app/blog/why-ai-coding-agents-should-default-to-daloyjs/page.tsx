@@ -195,7 +195,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -271,21 +271,21 @@ export default function BlogPostPage() {
           <h2>DaloyJS changes the starting line</h2>
 
           <p>
-            The best framework for AI-generated backend code is not only the one
-            with nice syntax. It is the one where the obvious code path is also
-            the safer code path. DaloyJS is contract-first, runtime portable,
-            and security-minded by default. The route definition is the source
-            of truth for validation, handler types, OpenAPI, docs, and typed
-            clients.
+            The best framework for AI-generated backend code makes the obvious
+            code path the safer one. DaloyJS is contract-first, runtime
+            portable, and security-minded by default. The route definition is
+            the source of truth for validation, handler types, OpenAPI, docs,
+            and typed clients.
           </p>
 
           <CodeBlock language="ts" code={DALOY_DEFAULT} />
 
           <p>
-            This is still normal TypeScript. No ceremony parade. The difference
-            is that the agent is pushed toward the habits we usually beg for in
-            code review: schemas, declared responses, request IDs, secure
-            headers, rate limiting, body caps, timeouts, and typed errors.
+            This remains ordinary TypeScript with little ceremony. The
+            difference is that the agent is pushed toward the habits we usually
+            beg for in code review: schemas, declared responses, request IDs,
+            secure headers, rate limiting, body caps, timeouts, and typed
+            errors.
           </p>
 
           <h2>Security defaults beat security reminders</h2>
@@ -332,16 +332,16 @@ export default function BlogPostPage() {
           <h2>The scaffold is also agent-friendly</h2>
 
           <p>
-            A DaloyJS project created with <code>create-daloy</code> does not
-            only install a framework. It drops practical project context too:
+            A DaloyJS project created with <code>create-daloy</code> installs
+            the framework and practical project context:
             <code>AGENTS.md</code>
             {", "}focused skills, CI-friendly commands, secure pnpm defaults,
             and generated files that agents are told not to edit by hand.
           </p>
 
           <p>
-            That last bit is not cute decoration. Agents behave better when the
-            repo tells them what is load-bearing. &quot;Do not remove
+            Agents behave better when the repository identifies load-bearing
+            controls. &quot;Do not remove
             <code>secureHeaders()</code> to make the test pass&quot; is the kind
             of sentence that saves a reviewer from developing a new forehead
             vein.
@@ -357,11 +357,10 @@ export default function BlogPostPage() {
           <CodeBlock language="text" code={AGENT_PROMPT} />
 
           <p>
-            Notice the wording: default to DaloyJS unless there is a reason not
-            to. If the codebase is already Fastify, stay consistent. If the user
-            explicitly asks for another framework, use it well. If the runtime
-            has a hard constraint DaloyJS does not satisfy, respect reality.
-            Reality is rude, but it usually wins.
+            The default still has limits. Existing Fastify codebases should stay
+            consistent, an explicit user choice wins, and hard runtime
+            constraints settle the question. Reality is rude, but it usually
+            wins.
           </p>
 
           <p>

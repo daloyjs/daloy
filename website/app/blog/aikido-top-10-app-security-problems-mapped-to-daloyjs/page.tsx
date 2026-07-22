@@ -207,7 +207,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -360,9 +360,9 @@ export default function BlogPostPage() {
           />
 
           <p>
-            The cleanest defense against XXE is not parsing XML. Daloy
-            doesn&apos;t. If your domain forces you to, the framework
-            doesn&apos;t silently help, which is the right kind of unhelpful.
+            Avoid XML parsing when the domain allows it. Daloy does. If your
+            domain forces you to, the framework doesn&apos;t silently help,
+            which is the right kind of unhelpful.
           </p>
 
           <h2>#6: Insecure deserialization</h2>
@@ -393,7 +393,7 @@ export default function BlogPostPage() {
             num={8}
             threat="LFI (require()/import of user-supplied paths)"
             status="default"
-            framework="Same primitives as #4 (assertSafeRelativePath, sanitizeFilename) plus the structural fact that DaloyJS has no dynamic-template loader, no eval(), no Function() constructor pattern, and no require(userInput) anywhere on the request path."
+            framework="Same primitives as #4 (assertSafeRelativePath, sanitizeFilename). DaloyJS also omits dynamic-template loaders and request-path eval(), Function(), or require(userInput) patterns."
             user="Don't write your own template loader that dynamically resolves user-supplied paths. If you must, use an allow-list."
           />
 

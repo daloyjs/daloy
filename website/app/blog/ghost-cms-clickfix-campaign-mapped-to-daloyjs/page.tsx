@@ -171,7 +171,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -267,11 +267,11 @@ export default function BlogPostPage() {
           </ol>
 
           <p>
-            DaloyJS isn&apos;t a CMS, it&apos;s an HTTP framework, so stages 1
-            and 2 only matter for users who build a Ghost-shaped app on top of
-            Daloy. Stages 3, 4, and 5 matter for <em>any</em> HTML surface Daloy
-            serves. Here&apos;s how each stage maps to what was already in the
-            box, and the one default we tightened in response to stage 5.
+            DaloyJS is an HTTP framework, so stages 1 and 2 only matter for
+            users who build a Ghost-shaped app on top of Daloy. Stages 3, 4, and
+            5 matter for <em>any</em> HTML surface Daloy serves. Here&apos;s how
+            each stage maps to what was already in the box, and the one default
+            we tightened in response to stage 5.
           </p>
 
           <h2>Stage 1: Pre-auth SQL injection</h2>

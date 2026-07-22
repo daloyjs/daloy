@@ -43,31 +43,28 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
-const PAIN = `# What "the codegen agent guessed it" failure mode looks like.
+const PAIN = `# Failure: the codegen agent guessed the contract.
 #
 # Prompt:  "write a fetch call that creates a book"
 #
-# What the agent shipped, with full confidence:
+# What the agent shipped:
 #
 #   await fetch("/books", {
 #     method: "POST",
 #     headers: { "content-type": "application/json" },
-#     body: JSON.stringify({ name: "Dune" }),   // ← field is 'title', not 'name'
+#     body: JSON.stringify({ name: "Dune" }),   // <- the field is 'title'
 #   });
-#   // Response shape it invented:
+#   // Invented response:
 #   //   { bookId: string, name: string, createdAt: string }
 #   //
-#   // Real response shape:
+#   // Actual response:
 #   //   { id: string, title: string }
 #
-# Why? The OpenAPI doc had a schema, but no examples. The agent read
-# the schema, inferred plausible field names from the operationId
-# ("createBook"), invented a 'createdAt' because every API has one,
-# and shipped a typed client whose types and runtime disagreed.
-#
-# The schema was not wrong. The schema was just not the most
-# pattern-matchable artifact in the room. A single concrete example
-# would have anchored the agent to the real field names.`;
+# The OpenAPI document described the schema without a concrete
+# example. The agent inferred field names from "createBook", added a
+# plausible createdAt field, and produced a client whose runtime
+# behavior disagreed with its types. One example would have supplied
+# the real names and conventions.`;
 
 const META_FIELD = `// The new optional 'meta' field on app.route(), in one place.
 //
@@ -297,60 +294,43 @@ routes:
     extensions:
       x-codegen-hint: books-table`;
 
-const WHY_EXAMPLES = `# Why "schema + examples" beats "schema alone" for codegen agents.
+const WHY_EXAMPLES = `# Schema and examples give codegen agents different signals.
 #
-# The schema tells the agent the SHAPE of a valid payload.
-# The example tells the agent what one ACTUALLY LOOKS LIKE.
-#
-# These are not redundant. They serve different mental operations:
+# A schema defines the allowed payload shape. An example shows the
+# conventions used by a real payload.
 #
 #   schema  ->  type checker.        Catches structural errors.
 #   example ->  pattern matcher.     Catches semantic errors.
 #
-# A schema says: { id: string, title: string }.
-# An example says: { id: "1", title: "Dune" } - and the agent now
-# knows your ids look like short opaque strings, not UUIDs, not ints,
-# not URL slugs. Every downstream call site picks up that signal.
+# The example { id: "1", title: "Dune" } tells the agent that this API
+# uses short opaque ids. Downstream call sites can copy that convention.
 #
-# Multiply by the unhappy path:
+# The 'missingTitle' example also records which validation rule fires
+# on an empty string, so a generated form can add the correct guard
+# before a user reports the bug.
 #
-#   The 'missingTitle' example pins exactly which validation rule
-#   fires on an empty string. The agent generating a form-validation
-#   client now writes the right client-side guard FIRST, not after
-#   the user files a bug.
-#
-# Multiply by extensions:
-#
-#   x-codegen-hint: "books-table" is a free-form lane for your own
-#   conventions. SDK builders, OpenAPI overlays, and prompt templates
-#   read it. Daloy does not interpret it - it just preserves it.`;
+# x-codegen-hint: "books-table" carries project-specific conventions.
+# SDK builders, OpenAPI overlays, and prompt templates can read it.
+# Daloy preserves the value without interpreting it.`;
 
-const SCOPE_NOTES = `# What 'meta' deliberately is, and is not.
+const SCOPE_NOTES = `# Scope of 'meta'.
 #
-# It IS:
+# Supported:
 #   - Optional per-route. Existing routes need zero changes.
-#   - A documentation + codegen-aid surface. Examples are validated,
-#     so they cannot lie about the schema, but they do NOT replace
-#     the schema. The schema remains the single source of truth.
-#   - Free-form on the 'extensions' lane. Keys without an 'x-' prefix
-#     are auto-prefixed for OpenAPI spec compliance.
-#   - Surface-stable across runtimes. The same code emits the same
-#     OpenAPI on Node, Bun, Deno, and Workers.
+#   - Validated examples for documentation and codegen.
+#   - Free-form extensions. Keys receive an 'x-' prefix when needed.
+#   - Identical OpenAPI output on Node, Bun, Deno, and Workers.
 #
-# It IS NOT:
-#   - A runtime mock. Examples are validated at build time and
-#     emitted into docs. They do not get returned by the handler.
-#     If you want a mock server, that is a separate tool reading
-#     'routes.json' or the OpenAPI doc - not a Daloy feature.
-#   - A way to override the route schema. If 'response.status: 201'
-#     in your example does not exist in 'responses', that is a hard
-#     error - not a permissive cast.
-#   - Limited to JSON. The schema-aware validator runs against any
-#     Standard Schema (Zod, Valibot, ArkType, TypeBox); the example
-#     payload is whatever your schema accepts.
-#   - A new author surface. It is one optional field on the same
-#     'route()' call you were already writing. No new file, no new
-#     concept, no new build step.`;
+# Boundaries:
+#   - Examples stay in generated artifacts and never become handler
+#     responses.
+#   - Runtime mocks require a separate tool that reads routes.json or
+#     the OpenAPI document.
+#   - The route schema stays authoritative. An undeclared response
+#     status fails validation.
+#   - Any Standard Schema implementation works, including Zod,
+#     Valibot, ArkType, and TypeBox.
+#   - Authors add one optional field to the existing route() call.`;
 
 const CARRYING_OVER = `# Adopting it on an existing route, in 6 lines.
 
@@ -540,7 +520,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -666,13 +646,12 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            This is the single most important property of the feature. There is
-            no &quot;examples drift&quot; surface to monitor, because a stale
-            example fails the contract run before the OpenAPI doc is even
-            published. The docs and the schema can never be out of sync with
-            each other, because they are both gated by the same{" "}
-            <code>pnpm daloy inspect --check</code> command, the one the
-            scaffolded{" "}
+            This property matters most. There is no &quot;examples drift&quot;
+            surface to monitor, because a stale example fails the contract run
+            before the OpenAPI doc is even published. The docs and the schema
+            can never be out of sync with each other, because they are both
+            gated by the same <code>pnpm daloy inspect --check</code> command,
+            the one the scaffolded{" "}
             <Link href="/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health">
               CLI inspector
             </Link>{" "}
@@ -802,9 +781,9 @@ export default function BlogPostPage() {
             that same single route definition also becomes the structured
             context a codegen agent needs to write the call site correctly on
             the first try, and the validator that refuses to let any of those
-            artifacts drift apart in CI. No new files, no new build step, no new
-            vendor lock-in. Just one optional field on the call you were already
-            writing.
+            artifacts drift apart in CI. This adds one optional field to the
+            call you were already writing, without adding files, build steps, or
+            a vendor-specific format.
           </p>
 
           <p>

@@ -185,7 +185,7 @@ export const app = new App();
 app.use(rateLimit({
   windowMs: 60_000,
   max: 30,                          // 30 req/min per IP per route
-  // Multi-instance? Bring the Redis adapter - same API, atomic INCR.
+  // For multiple instances, bring the Redis adapter: same API, atomic INCR.
   // store: redisStore({ url: process.env.REDIS_URL! }),
 }));
 
@@ -303,7 +303,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -425,7 +425,7 @@ export default function BlogPostPage() {
 
           <RiskCard
             risk="OWASP ASI06: The agent inadvertently leaks confidential data, IP, financial data, private user info, in its responses."
-            framework="Production-mode error responses are RFC 9457 problem+json with redaction: no stack traces, no DB error messages, no internal hostnames. The logger's redactRecord() scrubs password / token / authorization / api_key / secret / cookie / set-cookie before logs leave the process. Response-body schema validation prevents a handler from returning fields the contract hides, so an internal user.passwordHash never makes it to a tool response even if the ORM happily included it. secureHeaders() ships a strict CSP and a Referrer-Policy that don't leak query strings to third parties."
+            framework="Production-mode error responses use RFC 9457 problem+json and redact stack traces, DB error messages, and internal hostnames. The logger's redactRecord() scrubs password / token / authorization / api_key / secret / cookie / set-cookie before logs leave the process. Response-body schema validation prevents a handler from returning fields the contract hides, so an internal user.passwordHash never makes it to a tool response even if the ORM happily included it. secureHeaders() ships a strict CSP and a Referrer-Policy that don't leak query strings to third parties."
             user="Train / instruct the agent to recognize sensitive shapes (PII, PHI, secrets) before it stores them in long-term memory or echoes them back. DLP on the model output is your job, Daloy is the structured pipe, not the classifier."
           />
 
@@ -487,30 +487,23 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              We don&apos;t inspect prompts. If the agent receives an indirect
-              prompt injection inside the JSON body of a tool response, the
-              framework validated the JSON shape, not the English inside it. Run
-              a classifier above the model boundary.
+              Prompt inspection happens above the HTTP layer. Daloy validates
+              the JSON shape of a tool response, while a separate classifier
+              must inspect the language inside it.
             </li>
             <li>
-              We don&apos;t sandbox the agent itself. Daloy gives you the HTTP
-              surface the agent calls. The agent process (the model, the
-              orchestrator, the tool-loop) lives somewhere else, container, VM,
-              serverless function, and that is where ASI05&apos;s &quot;run
-              agents in strictly sandboxed environments&quot; applies.
+              The agent process needs its own sandbox. The model, orchestrator,
+              and tool loop run outside Daloy in a container, VM, or serverless
+              function.
             </li>
             <li>
-              We don&apos;t make policy decisions for you. Which tools are
-              destructive, which require human approval, what the agent&apos;s
-              wallet ceiling is, what the kill-switch triggers, those are
-              deployment policy. The framework gives you the primitives
-              (multi-App split, two-step routes, structured audit log) so the
-              policy is cheap to write.
+              Tool policy remains a deployment decision. Your team decides which
+              actions need approval, sets spending limits, and defines the kill
+              switch. Daloy supplies route separation and audit primitives.
             </li>
             <li>
-              We don&apos;t detect data poisoning above the API. If the
-              agent&apos;s vector DB is poisoned, the framework will dutifully
-              serve whatever your handler returns. Vet the sources.
+              Data poisoning above the API needs separate controls. Vet the
+              sources behind the agent&apos;s vector database.
             </li>
           </ul>
 

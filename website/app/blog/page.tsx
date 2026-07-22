@@ -25,7 +25,7 @@ const POSTS = [
     slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
     title: "DaloyJS: The First Release Candidate",
     description:
-      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short list of what still stands between us and the stable release.",
+      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' This post covers what the RC means, what landed across the beta train (spoiler: MCP), and what remains before the stable release.",
     date: "2026-07-03",
     readingTime: "7 min read",
     author: "Devlin Duldulao",
@@ -53,7 +53,7 @@ const POSTS = [
     slug: "daloyjs-1-0-0-beta-is-here",
     title: "DaloyJS Is in Beta (and Nothing Broke, on Purpose)",
     description:
-      "After a long public preview, DaloyJS enters beta. The funny part: the most important line in this changelog is that nothing changed. Here is what the beta means, how to install it, and what we need from you before the stable release.",
+      "After a long public preview, DaloyJS enters beta. The key line in this changelog is that the runtime did not change. This post covers what the beta means, how to install it, and what we need from you before the stable release.",
     date: "2026-06-21",
     readingTime: "6 min read",
     author: "Devlin Duldulao",
@@ -91,7 +91,7 @@ const POSTS = [
     title:
       "The Best Node.js Express Alternative in 2026 Is Contract-First: The Case for DaloyJS",
     description:
-      "Looking for a modern Node.js Express alternative? The case for a contract-first framework in the category in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
+      "A contract-first case for choosing a modern Node.js Express alternative in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
     date: "2026-06-18",
     readingTime: "11 min read",
     author: "Devlin Duldulao",
@@ -101,7 +101,7 @@ const POSTS = [
     title:
       "Watch: Laur Spilca on Software Security for Developers (GOTO 2026), and What DaloyJS Already Decides for You",
     description:
-      "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. Here is the talk, plus a direct mapping of which of those problems a DaloyJS app already takes out of your hands.",
+      "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. The post includes the talk and a direct mapping of the problems a DaloyJS app already handles.",
     date: "2026-06-17",
     readingTime: "9 min read",
     author: "Devlin Duldulao",

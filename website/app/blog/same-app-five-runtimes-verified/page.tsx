@@ -137,7 +137,7 @@ serve(app, {
 // Run it with the smallest set of permissions you can get away with:
 //   deno run --allow-net --allow-env src/server.deno.ts
 //
-// Need TLS? Add cert/key options and --allow-read for the PEM files.`;
+// For TLS, add cert/key options and --allow-read for the PEM files.`;
 
 const WORKER_ENTRY = `// apps/bookstore/src/worker.ts
 import { toFetchHandler } from "@daloyjs/core/cloudflare";
@@ -384,7 +384,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -431,9 +431,8 @@ export default function BlogPostPage() {
             each runtime we&apos;ll look at the adapter, the platform-specific
             options it handles for you (graceful shutdown, idle timeouts,{" "}
             <code>ctx.waitUntil</code>
-            {", "}the three Vercel shapes), and the sharp edges that are{" "}
-            <em>not</em> the adapter&apos;s fault but absolutely will bite you
-            if you ignore them.
+            {", "}the three Vercel shapes), and sharp edges outside the
+            adapters&apos; control that will bite you if ignored.
           </p>
 
           <h2>The shared app: note what&apos;s missing</h2>
@@ -528,14 +527,14 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            The thing I love most here is <code>handle.url</code>
+            My favorite detail is <code>handle.url</code>
             {". "}Bun computes the scheme and port for you, so &quot;what URL do
             I actually log on boot&quot; stops being a paragraph of
             conditionals. One field, you&apos;re done. Small luxury, big
             quality-of-life.
           </p>
 
-          <h2>3. Deno: permissions are not a chore, they&apos;re a feature</h2>
+          <h2>3. Deno: permissions are useful in production</h2>
 
           <RuntimeCard
             name="Deno"
@@ -655,8 +654,8 @@ export default function BlogPostPage() {
           <h2>The receipts</h2>
 
           <p>
-            Let&apos;s prove this isn&apos;t marketing. Same app, five hosts.
-            Same response. Same OpenAPI bytes.
+            The verification uses the same app on five hosts. Same response.
+            Same OpenAPI bytes.
           </p>
 
           <CodeBlock language="bash" code={RECEIPTS} />
@@ -767,11 +766,10 @@ export default function BlogPostPage() {
           <h2>Limits</h2>
 
           <p>
-            Runtime portability is not magic, and it&apos;s not free. It works
-            because the shared application file is disciplined about two things,
-            it never imports a runtime, and it never reads global state that is
-            shaped differently per runtime. The adapter at the edge does the
-            platform-shaped work, and the application in the middle does the
+            Runtime portability depends on two rules in the shared application
+            file: it never imports a runtime, and it never reads global state
+            that is shaped differently per runtime. The adapter at the edge does
+            the platform-shaped work, and the application in the middle does the
             application-shaped work. As long as you respect that boundary, the
             framework holds up its end.
           </p>
@@ -786,11 +784,11 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Want to skip ahead and try it? <code>pnpm create daloy@latest</code>{" "}
-            ships templates for Node, Bun, Deno, and Cloudflare Workers Edge out
-            of the box. Pick one, deploy it, then point a different adapter at
-            the same <code>src/app.ts</code> the next morning. The scaffolding
-            has done the boring parts for you.
+            To try it now, <code>pnpm create daloy@latest</code> ships templates
+            for Node, Bun, Deno, and Cloudflare Workers Edge out of the box.
+            Pick one, deploy it, then point a different adapter at the same{" "}
+            <code>src/app.ts</code> the next morning. The scaffolding has done
+            the boring parts for you.
           </p>
 
           <p>

@@ -142,7 +142,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -181,19 +181,11 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            This post is the long answer to a question I keep getting:{" "}
-            <em>another</em> TypeScript web framework, really? Why? My short
-            answer is: yes, really, because after a decade of Express, then Koa,
-            then Fastify, then Nest, then Hono, then writing my own &quot;just a
-            tiny layer&quot; libraries six different times, I got tired of the
-            same three problems. So we built DaloyJS to solve them. That&apos;s
-            the pitch.
-          </p>
-
-          <p>
-            Okay fine, longer version below. Bring coffee. Or in my case, a very
-            expensive Norwegian cup of something that costs more than my first
-            PC mouse.
+            After a decade of Express, Koa, Fastify, Nest, Hono, and six
+            supposedly tiny libraries of my own, I kept paying for the same
+            three problems. DaloyJS is the framework I built to stop paying for
+            them. Bring coffee. Mine is an expensive Norwegian cup that costs
+            more than my first PC mouse.
           </p>
 
           <h2>The three problems that wouldn&apos;t go away</h2>
@@ -272,9 +264,7 @@ export default function BlogPostPage() {
 
           <CodeBlock language="ts" code={HELLO_DALOY} />
 
-          <p>
-            A few things to notice, because they matter more than they look:
-          </p>
+          <p>These details matter:</p>
 
           <ul>
             <li>
@@ -383,27 +373,23 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              It is not a frontend framework. Use Next.js, React, Remix, Astro,
-              htmx, whatever. DaloyJS is the API on the other side of the wire.
+              Use Next.js, React, Remix, Astro, htmx, or another frontend.
+              DaloyJS handles the API on the other side of the wire.
             </li>
             <li>
-              It is not magical. There is no decorator party, no metadata
-              reflector, no dependency-injection container that needs a 40-page
-              chapter. If it looks like a function, it&apos;s a function.
+              The implementation uses ordinary functions. There is no decorator
+              party, metadata reflector, or dependency-injection container that
+              needs a 40-page chapter.
             </li>
             <li>
-              It is not trying to replace your ORM, your queue, your auth
-              provider, or your email vendor. We have{" "}
-              <Link href="/docs/orm">adapters and guides</Link> for those,
-              because in real life you&apos;re going to use Prisma, or Drizzle,
-              or whatever your team already loves.
+              Bring your existing ORM, queue, auth provider, and email vendor.
+              The <Link href="/docs/orm">adapters and guides</Link> cover common
+              choices such as Prisma and Drizzle.
             </li>
             <li>
-              It is not <em>finished</em>
-              {". "}Software never is. But it&apos;s 320 of 320 tests passing,
-              100% line and function coverage, strict TypeScript 6, and
-              shipping. That is, in my experience, much better than
-              &quot;done&quot;.
+              The project is still evolving, with 320 of 320 tests passing, 100%
+              line and function coverage, strict TypeScript 6, and active
+              releases.
             </li>
           </ul>
 

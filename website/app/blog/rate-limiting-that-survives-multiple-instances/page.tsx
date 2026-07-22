@@ -174,7 +174,7 @@ const publicStore = redisRateLimitStore({
   prefix: "rl:pub:",
   onError: (err) => {
     log.warn({ err }, "rate-limit store unavailable; failing open");
-    return "fail-open";                    // ← also the default if you omit onError
+    return "fail-open";                    // <- also the default if you omit onError
   },
 });
 
@@ -443,7 +443,7 @@ export default function BlogPostPage() {
         <header className="not-prose mb-10">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/blog" className="underline-offset-4 hover:underline">
-              ← Back to blog
+              &lt;- Back to blog
             </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
