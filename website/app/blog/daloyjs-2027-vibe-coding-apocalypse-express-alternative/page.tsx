@@ -346,9 +346,9 @@ export default function BlogPostPage() {
             nobody on the team wrote that line.
           </p>
           <p>
-            I want to be fair here. The AI is not the villain. The AI did
-            exactly what we asked. We asked it to &quot;make it work,&quot; and
-            there is a famous line from the Supabase and Aikido write-up on
+            The model did exactly what the prompt asked: &quot;make it
+            work.&quot; The prompt omitted the security requirements, and there
+            is a famous line from the Supabase and Aikido write-up on
             secure-by-default development that I keep pinned to my monitor:{" "}
             <em>
               &quot;If you tell an AI to make something work, it might remove
@@ -393,8 +393,7 @@ export default function BlogPostPage() {
             Vercel (Node and Edge), Fastly Compute, and AWS Lambda. The core
             only ever sees a web-standard <code>Request</code> and returns a{" "}
             <code>Response</code>
-            {". "}The runtime-specific stuff lives in thin adapters at the
-            edge.
+            {". "}The runtime-specific stuff lives in thin adapters at the edge.
           </p>
           <p>
             But the part I actually care about, the part that made me stop using
@@ -404,15 +403,15 @@ export default function BlogPostPage() {
           </p>
           <ol>
             <li>
-              <strong>A secure-by-default runtime.</strong> The dangerous things
-              are off until you turn them on. The safe things are on until you
-              turn them off. The framework will literally refuse to boot on
-              certain unsafe configurations.
+              A secure-by-default runtime. The dangerous things are off until
+              you turn them on. The safe things are on until you turn them off.
+              The framework will literally refuse to boot on certain unsafe
+              configurations.
             </li>
             <li>
-              <strong>A hardened supply chain.</strong> Zero runtime
-              dependencies, npm provenance, SBOMs, and a pnpm posture that
-              assumes the registry is hostile, because it is.
+              A hardened supply chain. Zero runtime dependencies, npm
+              provenance, SBOMs, and a pnpm posture that assumes the registry is
+              hostile, because it is.
             </li>
           </ol>
           <p>
@@ -471,8 +470,8 @@ export default function BlogPostPage() {
             <li>
               <code>{`cors({ origin: "*" })`}</code> with{" "}
               <code>credentials: true</code>
-              {". "}This is the classic &quot;I just wanted the CORS error to
-              go away&quot; move, and it is also how you let any website on the
+              {". "}This is the classic &quot;I just wanted the CORS error to go
+              away&quot; move, and it is also how you let any website on the
               internet make authenticated requests as your logged-in user.
               DaloyJS throws at construction.
             </li>
@@ -525,7 +524,8 @@ export default function BlogPostPage() {
             link preview. The handler does <code>await fetch(url)</code>
             {". "}An attacker passes{" "}
             <code>
-              http://169.254.169.254/latest/meta-data/iam/security-credentials/</code>
+              http://169.254.169.254/latest/meta-data/iam/security-credentials/
+            </code>
             {", "}your server fetches it, and now the response body contains
             your instance&apos;s IAM credentials. This is Server-Side Request
             Forgery and it is responsible for some of the biggest cloud breaches
@@ -571,13 +571,12 @@ export default function BlogPostPage() {
             &quot;whatever the token claims.&quot; They refuse to mix HS secrets
             with JWK key material, which is the algorithm-confusion defense.
             They refuse to sign a token without an <code>exp</code>
-            {". "}And they refuse HS-shaped secrets under 32 bytes per RFC
-            7518. The <code>jwk()</code> middleware is asymmetric-only on
-            purpose, requires <code>https://</code> JWKS URLs, caches them with
-            in-flight promise dedup, and cross-checks the <code>kid</code> and
-            the JWT-versus-JWK algorithm. You do not have to know any of this to
-            be protected by it, which is the point. The default is the secure
-            one.
+            {". "}And they refuse HS-shaped secrets under 32 bytes per RFC 7518.
+            The <code>jwk()</code> middleware is asymmetric-only on purpose,
+            requires <code>https://</code> JWKS URLs, caches them with in-flight
+            promise dedup, and cross-checks the <code>kid</code> and the
+            JWT-versus-JWK algorithm. You do not have to know any of this to be
+            protected by it, which is the point. The default is the secure one.
           </p>
           <p>
             DaloyJS is a resource server, by the way, not an identity provider.
@@ -700,7 +699,8 @@ export default function BlogPostPage() {
             {", "}and <code>verify:no-weak-random</code>
             {", "}and they carry IOC coverage for active campaigns. There are
             even gates that scan AI-agent config files (<code>CLAUDE.md</code>
-            {", "}<code>.cursorrules</code>
+            {", "}
+            <code>.cursorrules</code>
             {", "}
             <code>AGENTS.md</code>) for the prompt-injection persistence trick
             the TrapDoor crypto-stealer used, and gates that refuse editor
@@ -738,7 +738,8 @@ export default function BlogPostPage() {
             </li>
             <li>
               <code>geoBlock()</code>
-              {", "}<code>ipReputation()</code>
+              {", "}
+              <code>ipReputation()</code>
               {", "}
               <code>concurrencyLimit()</code>
               {", "}and <code>requestDecompression()</code> (a zip-bomb guard
@@ -776,10 +777,7 @@ export default function BlogPostPage() {
             throughput.
           </p>
 
-          <h2>
-            So is this the Express alternative? Yes, and here is the honest
-            version
-          </h2>
+          <h2>When DaloyJS is a practical Express alternative</h2>
           <p>
             The title of this post ends with a question mark on purpose.
             &quot;Alternative to Express&quot; is a big claim, and Express is
@@ -795,11 +793,10 @@ export default function BlogPostPage() {
             documentation it is described as &quot;essentially a series of
             middleware function calls.&quot; You wire up{" "}
             <code>(req, res, next)</code> callbacks, you mutate <code>res</code>
-            {", "}and you call <code>res.send()</code> to end the cycle. That
-            is a beautiful, minimal model. It is also a blank canvas, and a
-            blank canvas is the worst possible thing to hand an AI that was told
-            to &quot;make it work.&quot; The model will not add{" "}
-            <code>helmet</code>
+            {", "}and you call <code>res.send()</code> to end the cycle. That is
+            a beautiful, minimal model. It is also a blank canvas, and a blank
+            canvas is the worst possible thing to hand an AI that was told to
+            &quot;make it work.&quot; The model will not add <code>helmet</code>
             {". "}It will not add a body limit. It will not add a rate limiter
             or a request timeout. It will not validate <code>req.body</code>
             {", "}which is typed <code>any</code>
@@ -814,60 +811,58 @@ export default function BlogPostPage() {
           </p>
           <ul>
             <li>
-              <strong>OpenAPI and a typed client for free.</strong> In Express
-              you bolt on <code>swagger-jsdoc</code>
+              OpenAPI and a typed client for free. In Express you bolt on{" "}
+              <code>swagger-jsdoc</code>
               {", "}hand-write JSDoc comments above each route, and pray they
               stay in sync with the code. They never do. In DaloyJS the route
               definition <em>is</em> the spec, so it cannot drift, and a typed
               SDK falls out of <code>pnpm gen</code>.
             </li>
             <li>
-              <strong>Validation the type system actually trusts.</strong>{" "}
-              Express hands you <code>req.body as any</code> and wishes you
-              luck. DaloyJS validates with Standard Schema (Zod, Valibot,
-              ArkType) and infers your handler&apos;s <code>params</code>
+              Validation the type system actually trusts. Express hands you{" "}
+              <code>req.body as any</code> and wishes you luck. DaloyJS
+              validates with Standard Schema (Zod, Valibot, ArkType) and infers
+              your handler&apos;s <code>params</code>
               {", "}
               <code>query</code>
               {", "}and <code>body</code> types from the same schemas that do
               the runtime checking. One source of truth, no casts.
             </li>
             <li>
-              <strong>Secure defaults instead of a TODO list.</strong> This is
-              the whole thesis of the article. Express ships almost nothing on
-              the security front. DaloyJS ships body limits, request timeouts,
-              header sanitization, prototype-pollution-safe JSON, and one-line{" "}
+              Secure defaults instead of a TODO list. This is the whole thesis
+              of the article. Express ships almost nothing on the security
+              front. DaloyJS ships body limits, request timeouts, header
+              sanitization, prototype-pollution-safe JSON, and one-line{" "}
               <code>secureHeaders()</code> and <code>rateLimit()</code> helpers,
               and it refuses to boot on configurations that are known to be
               unsafe.
             </li>
             <li>
-              <strong>Run the same app everywhere.</strong> Express is welded to
-              Node&apos;s <code>http</code> module. DaloyJS is built on
-              web-standard <code>Request</code> and <code>Response</code>
-              {", "}so the same app object runs on Node, Bun, Deno, Workers,
-              and Lambda. When your platform decision changes (it will), you
-              swap an import, not a framework.
+              Run the same app everywhere. Express is welded to Node&apos;s{" "}
+              <code>http</code> module. DaloyJS is built on web-standard{" "}
+              <code>Request</code> and <code>Response</code>
+              {", "}so the same app object runs on Node, Bun, Deno, Workers, and
+              Lambda. When your platform decision changes (it will), you swap an
+              import, not a framework.
             </li>
             <li>
-              <strong>Zero runtime dependencies.</strong> A fresh Express app
-              pulls in dozens of transitive packages, and every one of them is a
-              slopsquatting target and a <code>postinstall</code> risk.{" "}
+              Zero runtime dependencies. A fresh Express app pulls in dozens of
+              transitive packages, and every one of them is a slopsquatting
+              target and a <code>postinstall</code> risk.{" "}
               <code>@daloyjs/core</code> has none. There is no dependency tree
               for a malicious package to hide in.
             </li>
           </ul>
           <p>
-            Now, I am going to be honest about when you should <em>not</em> do
-            this, because a blog post that only tells you to migrate is a sales
-            brochure, not advice. If your app is mostly server-rendered HTML
-            through a view engine like EJS or Pug, DaloyJS is API-first and will
-            fight you. If you depend on one weird Express middleware with no
-            equivalent and no appetite to port it, check that first. And if the
-            app is in stable maintenance-only mode, migration has a cost and you
-            should spend that energy somewhere with upside. Greenfield services,
-            anything where you were about to add OpenAPI anyway, and apps that
-            keep getting bitten by untyped <code>req.body</code> bugs are the
-            sweet spot.
+            There are also times when you should <em>not</em> do this. If your
+            app is mostly server-rendered HTML through a view engine like EJS or
+            Pug, DaloyJS is API-first and will fight you. If you depend on one
+            weird Express middleware with no equivalent and no appetite to port
+            it, check that first. And if the app is in stable maintenance-only
+            mode, migration has a cost and you should spend that energy
+            somewhere with upside. Greenfield services, anything where you were
+            about to add OpenAPI anyway, and apps that keep getting bitten by
+            untyped <code>req.body</code> bugs are the sweet spot.
           </p>
 
           <h2>
@@ -887,8 +882,8 @@ export default function BlogPostPage() {
           <p>
             The core mental shift is one sentence: you stop mutating{" "}
             <code>res</code> and calling <code>next()</code>
-            {", "}and you start declaring a contract and returning a value.
-            Here is the side-by-side that the guide opens with:
+            {", "}and you start declaring a contract and returning a value. Here
+            is the side-by-side that the guide opens with:
           </p>
           <CodeBlock language="text" code={MENTAL_MODEL} />
           <p>
@@ -909,8 +904,8 @@ export default function BlogPostPage() {
             hand. You declare the <code>422</code> and DaloyJS returns it for
             you when validation fails, so your handler only ever runs on valid
             input. Your <code>helmet</code> becomes <code>secureHeaders()</code>
-            {", "}<code>express-rate-limit</code> becomes{" "}
-            <code>rateLimit()</code>
+            {", "}
+            <code>express-rate-limit</code> becomes <code>rateLimit()</code>
             {", "}
             <code>csurf</code> becomes <code>csrf()</code>
             {", "}
@@ -939,10 +934,11 @@ export default function BlogPostPage() {
             If you want the persuasion version rather than the how-to version,
             there is also a companion post,{" "}
             <Link href="/blog/best-node-express-alternative-daloyjs">
-              Why DaloyJS is the best Node.js Express alternative</Link>
-            {", "}that makes the case in more detail. But honestly, the
-            migration guide is the better read, because it shows you the actual
-            code instead of just telling you it is nicer.
+              Why DaloyJS is the best Node.js Express alternative
+            </Link>
+            {", "}that makes the case in more detail. The migration guide is the
+            better read, because it shows you the actual code instead of just
+            telling you it is nicer.
           </p>
 
           <h2>Starting a project</h2>
@@ -963,11 +959,10 @@ export default function BlogPostPage() {
 
           <h2>Why I think this is the right bet for 2027</h2>
           <p>
-            I am not going to pretend DaloyJS is magic. It is maturing in
-            public, and its API follows SemVer. It will not write your business
-            logic or stop you from shipping a bug. No framework can save a
-            determined developer from themselves, and I say that as a determined
-            developer who has needed saving.
+            DaloyJS is maturing in public, and its API follows SemVer. It cannot
+            write your business logic or stop every bug. A determined developer
+            can still bypass a framework, and I say that as one who has needed
+            saving.
           </p>
           <p>
             But here is the argument. The way we build software changed. The

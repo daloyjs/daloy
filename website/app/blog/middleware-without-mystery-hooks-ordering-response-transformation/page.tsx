@@ -11,7 +11,7 @@ const POST = {
   title:
     "Middleware Without Mystery: Hooks, Ordering, and Response Transformation",
   description:
-    "The DaloyJS request lifecycle, end to end: onRequest → preBody → validation → beforeHandle → handler → afterHandle → onSend → onResponse, plus onError on the error path. Where each hook fires and what belongs in each slot.",
+    "The DaloyJS request lifecycle, end to end: onRequest -> preBody -> validation -> beforeHandle -> handler -> afterHandle -> onSend -> onResponse, plus onError on the error path. Where each hook fires and what belongs in each slot.",
   date: "2026-05-30",
   readingTime: "13 min read",
   author: "Devlin Duldulao",
@@ -55,21 +55,21 @@ export interface Hooks {
 }
 //
 // Successful request order:
-//   onRequest → preBody → validation/body read → beforeHandle → handler → afterHandle → onSend → onResponse
+//   onRequest -> preBody -> validation/body read -> beforeHandle -> handler -> afterHandle -> onSend -> onResponse
 // Error path:
-//   onRequest → (anywhere it throws) → onError → onSend → onResponse`;
+//   onRequest -> (anywhere it throws) -> onError -> onSend -> onResponse`;
 
 const LIFECYCLE_ASCII = `time ─────────────────────────────────────────────────────────────────▶
 
    ┌──────────┐   ┌─────────┐   ┌────────────┐   ┌──────────────┐   ┌─────────┐
-   │onRequest │ → │ preBody │ → │ validation │ → │ beforeHandle │ → │ handler │ → …
+   │onRequest │ -> │ preBody │ -> │ validation │ -> │ beforeHandle │ -> │ handler │ -> ...
    └──────────┘   └─────────┘   └────────────┘   └──────────────┘   └─────────┘
         ▲              │               │ body read            │ may return
         │              ▼ may reject    │ when declared        ▼ a Response
         │
    raw Request                                              ┌────────┐
         │                  ┌────────────┐   ┌────────────┐  │ socket │
-        │              … → │   onSend   │ → │ onResponse │→ │ closes │
+        │              ... -> │   onSend   │ -> │ onResponse │-> │ closes │
         │                  └────────────┘   └────────────┘  └────────┘
         │                      │ may                fire-and-forget
         │                      ▼ replace             observer
@@ -341,7 +341,7 @@ afterHandle    ↳ shape transformations that span MANY routes (PII redaction,
                  envelope wrapping). 95% of the time, just shape it in the handler.
 
 onSend         ↳ response HEADERS for every response (success + error + OPTIONS).
-                 Server-Timing, X-Request-Id, Strict-Transport-Security, CSP, …
+                 Server-Timing, X-Request-Id, Strict-Transport-Security, CSP, ...
 
 onResponse     ↳ FIRE-AND-FORGET observers. Logging. Metrics. Audit events.
                  Cannot change the response. This is by design.
@@ -358,7 +358,7 @@ const ANTIPATTERNS = `# Three patterns that look smart but bite you in productio
 #    belongs in preBody; authorization that needs validated input in beforeHandle.
 
 # 3) Catching errors in beforeHandle to "swallow" them. The framework already
-#    does graceful error → problem+json conversion. Trust it. If you need to
+#    does graceful error -> problem+json conversion. Trust it. If you need to
 #    REWRITE the error, do it in onError. If you need to PREVENT it, do it in
 #    beforeHandle with a short-circuit Response or a thrown HttpError.`;
 
@@ -463,7 +463,7 @@ function HookCard({
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       <p className="mt-2 font-mono text-xs tracking-wide text-muted-foreground uppercase">
-        can return → {canReturn}
+        can return -&gt; {canReturn}
       </p>
     </div>
   );
@@ -522,9 +522,9 @@ export default function BlogPostPage() {
           <p>
             The good news: there are six hooks. The better news: they fire in
             the order they appear in the code, in the order you registered them,
-            in three nested scopes (global → group → route). No adapter shim, no
-            &quot;extends&quot; chain, no hidden re-entry. You read the file,
-            you know what happens.
+            in three nested scopes (global -&gt; group -&gt; route). No adapter
+            shim, no &quot;extends&quot; chain, no hidden re-entry. You read the
+            file, you know what happens.
           </p>
 
           <h2>The whole API in one screen</h2>
@@ -632,7 +632,8 @@ export default function BlogPostPage() {
                 <strong>every</strong> response (success, error, OPTIONS
                 preflight). This is the right place to stamp universal headers:{" "}
                 <code>X-Request-Id</code>
-                {", "}<code>Server-Timing</code>
+                {", "}
+                <code>Server-Timing</code>
                 {", "}security headers. Mutate <code>res.headers</code> in
                 place, or return a brand-new <code>Response</code> to replace it
                 entirely.
@@ -684,7 +685,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["src/app.ts"]}
             activeFile="src/app.ts"
-            status="global → group (app.use) → route (route.hooks)"
+            status="global -> group (app.use) -> route (route.hooks)"
           >
             <CodeBlock language="ts" code={SCOPES} />
           </EditorFrame>
@@ -716,7 +717,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["src/middleware/maintenance.ts"]}
             activeFile="src/middleware/maintenance.ts"
-            status="return a Response → handler never runs → RFC 9457 503 + Retry-After"
+            status="return a Response -> handler never runs -> RFC 9457 503 + Retry-After"
           >
             <CodeBlock language="ts" code={SHORT_CIRCUIT} />
           </EditorFrame>
@@ -724,7 +725,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["src/middleware/require-role.ts"]}
             activeFile="src/middleware/require-role.ts"
-            status="throw HttpError → framework serializes problem+json for free"
+            status="throw HttpError -> framework serializes problem+json for free"
           >
             <CodeBlock language="ts" code={AUTH_BEFORE} />
           </EditorFrame>
@@ -755,9 +756,9 @@ export default function BlogPostPage() {
           <p>
             Anything that you&apos;d call <em>observation</em> belongs in{" "}
             <code>onResponse</code>
-            {". "}The framework guarantees you can&apos;t accidentally break
-            the request from here, which is exactly the constraint you want
-            around log lines that someone added at 3 a.m. on a Friday.
+            {". "}The framework guarantees you can&apos;t accidentally break the
+            request from here, which is exactly the constraint you want around
+            log lines that someone added at 3 a.m. on a Friday.
           </p>
 
           <EditorFrame
@@ -829,7 +830,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={ANTIPATTERNS} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Make ordering visible</h2>
 
           <p>
             Middleware in DaloyJS is one interface, <code>Hooks</code>
@@ -837,9 +838,9 @@ export default function BlogPostPage() {
             order. One side-channel for errors. That is the whole machine. Once
             the mental model clicks, you stop asking <em>where does this go</em>{" "}
             and start asking <em>which scope</em>
-            {": "}which is a far more interesting question, and one whose
-            answer you can usually argue about in a Slack thread without anyone
-            getting hurt.
+            {": "}which is a far more interesting question, and one whose answer
+            you can usually argue about in a Slack thread without anyone getting
+            hurt.
           </p>
 
           <p>

@@ -10,7 +10,7 @@ const POST = {
   title:
     "The Best Node.js Express Alternative in 2026 Is Contract-First: The Case for DaloyJS",
   description:
-    "Looking for a modern Node.js Express alternative? The honest argument for why a contract-first framework wins the category in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
+    "Looking for a modern Node.js Express alternative? The case for a contract-first framework in the category in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
   date: "2026-06-18",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
@@ -173,9 +173,9 @@ export default function BlogPostPage() {
             calls.&quot; That model is structurally ignorant of your API. The
             pipeline does not know what a route accepts or returns.{" "}
             <code>req.body</code> is <code>any</code>
-            {". "}There is no contract anywhere in the architecture, so there
-            is nothing to validate against, generate docs from, derive types
-            from, or build a client out of. Every one of those becomes a
+            {". "}There is no contract anywhere in the architecture, so there is
+            nothing to validate against, generate docs from, derive types from,
+            or build a client out of. Every one of those becomes a
             hand-maintained artifact, and hand-maintained artifacts drift. Not
             because your team is undisciplined, but because the architecture
             gave the contract no canonical home.
@@ -189,7 +189,8 @@ export default function BlogPostPage() {
 
           <p>
             That one object is the validation rule, the type source, the OpenAPI
-            3.1 operation, and the input to the generated typed client (<code>pnpm gen</code>
+            3.1 operation, and the input to the generated typed client (
+            <code>pnpm gen</code>
             {", "}wrapping Hey API). The dependency arrow is reversed: the docs
             depend on the route, mechanically, with no human in the loop to
             forget. Rename a field and the spec, the client types, and the
@@ -208,7 +209,7 @@ export default function BlogPostPage() {
           <h2>The part that should decide it: defaults</h2>
           <p>
             Write the real security checklist for an internet-facing HTTP API.
-            The honest version: body-size caps, request and handler timeouts,
+            In practice: body-size caps, request and handler timeouts,
             prototype-pollution-safe parsing, CRLF and header-injection
             rejection, path-traversal defense, real 405s, 5xx redaction in
             production, JWT algorithm allowlists, constant-time credential
@@ -217,8 +218,8 @@ export default function BlogPostPage() {
             it.
           </p>
           <p>
-            Now be honest about how much of that each Express alternative gives
-            you <em>before you configure anything</em>
+            Now check how much of that each Express alternative gives you{" "}
+            <em>before you configure anything</em>
             {". "}Express: almost none. Fastify: some, the rest via plugins you
             must know to add. Hono and Elysia: most of it opt-in. DaloyJS makes
             it the default, and the project&apos;s contributor rules explicitly
@@ -253,24 +254,23 @@ export default function BlogPostPage() {
           <p>I would not trust this post if it did not have this section.</p>
           <ul>
             <li>
-              <strong>Ecosystem.</strong> Express has fifteen years of
-              middleware for everything. If you need a niche integration that
-              exists only as Express middleware, you are porting it.
+              Ecosystem. Express has fifteen years of middleware for everything.
+              If you need a niche integration that exists only as Express
+              middleware, you are porting it.
             </li>
             <li>
-              <strong>Familiarity and hiring.</strong> Every Node engineer knows
-              Express. DaloyJS is new, so there is a small onboarding curve
-              around the route-as-object and return-don&apos;t-mutate model.
+              Familiarity and hiring. Every Node engineer knows Express. DaloyJS
+              is new, so there is a small onboarding curve around the
+              route-as-object and return-don&apos;t-mutate model.
             </li>
             <li>
-              <strong>Maturity.</strong> Fastify has years of battle-testing and
-              a huge production footprint. &quot;New and principled&quot; is not
-              the same as &quot;proven at your scale.&quot;
+              Maturity. Fastify has years of battle-testing and a huge
+              production footprint. &quot;New and principled&quot; is not the
+              same as &quot;proven at your scale.&quot;
             </li>
             <li>
-              <strong>Raw minimalism.</strong> If you want a bare router with
-              nothing opinionated, Hono is lighter. DaloyJS is opinionated on
-              purpose.
+              Raw minimalism. If you want a bare router with nothing
+              opinionated, Hono is lighter. DaloyJS is opinionated on purpose.
             </li>
           </ul>
 
@@ -287,17 +287,17 @@ export default function BlogPostPage() {
             you.
           </p>
           <p>
-            I stopped starting new services on Express not because it is bad,
-            but because I got tired of being the human whose job was to remember
-            the things the framework decided were my problem. After ten years, I
-            would rather the framework remembered them, and made me file a PR to
-            forget.
+            Express is still good at the job it was designed for. I stopped
+            choosing it for new services because I got tired of remembering
+            every control the framework leaves to the application. After ten
+            years, I would rather opt out of a safe default in a reviewed PR.
           </p>
           <p>
             If you have an existing Express app and want the mechanics rather
             than the argument, read the{" "}
             <Link href="/docs/migrating/express">
-              complete Express to DaloyJS migration guide</Link>
+              complete Express to DaloyJS migration guide
+            </Link>
             {". "}This post is the why. That guide is the how.
           </p>
 

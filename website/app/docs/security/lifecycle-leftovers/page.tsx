@@ -30,13 +30,9 @@ export default function Page() {
     <>
       <h1>Runtime resilience and configuration</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the load-shedding switch in an
-        electrical grid. When the system is near overload, it sheds non-critical
-        loads (<code>503</code> + <code>Retry-After</code>) rather than browning
-        out everyone. Add a CSP violation hotline (<code>cspReportRoute</code>),
-        a clearer code for &quot;the customer hung up&quot; (<code>499</code>),
-        and a config validator that catches typos in your env file before the
-        first request lands.
+        This page covers load shedding with <code>503</code> and
+        <code>Retry-After</code>, CSP violation reports, <code>499</code> client
+        disconnects, and configuration validation at startup.
       </blockquote>
       <p>
         Daloy provides four production safeguards for overloaded processes,
@@ -63,8 +59,7 @@ export default function Page() {
         <li>
           <code>disconnectStatusCode: 499</code> default, client-aborted
           requests record <code>499</code> instead of a <code>5xx</code>
-          {", "}so dashboards separate scraper aborts from real server
-          failures.
+          {", "}so dashboards separate scraper aborts from real server failures.
         </li>
         <li>
           <code>defineConfig({"{ schema, source }"})</code>
@@ -194,11 +189,11 @@ app.cspReportRoute({
         {", "}oversize payloads <code>413</code>
         {", "}malformed JSON <code>400</code>
         {", "}and rate-limited callers <code>429</code>
-        {". "}The default logger sink omits the parsed report body in
-        production unless <code>logCspReportBodies: true</code> is set
-        explicitly; CSP reports include violated URLs, and URLs are where PII
-        likes to hide when nobody is looking. Sink errors are caught and logged
-        at <code>error</code> through the pluggable redacted logger without
+        {". "}The default logger sink omits the parsed report body in production
+        unless <code>logCspReportBodies: true</code> is set explicitly; CSP
+        reports include violated URLs, and URLs are where PII likes to hide when
+        nobody is looking. Sink errors are caught and logged at{" "}
+        <code>error</code> through the pluggable redacted logger without
         breaking the <code>204</code> response.
       </p>
 

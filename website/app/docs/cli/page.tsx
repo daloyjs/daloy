@@ -29,10 +29,11 @@ export default function Page() {
         <code>@daloyjs/core</code> ships a tiny <code>daloy</code> binary that
         loads your <code>App</code> instance and prints what is registered. It
         is the fastest way to answer questions like{" "}
-        <em>“what routes does this service expose?”</em>
+        <em>&quot;what routes does this service expose?&quot;</em>
         {", "}
-        <em>“are any operationIds missing?”</em>
-        {", "}or <em>“give me the OpenAPI spec”</em> without starting a server.
+        <em>&quot;are any operationIds missing?&quot;</em>
+        {", "}or <em>&quot;give me the OpenAPI spec&quot;</em> without starting
+        a server.
       </p>
 
       <BranchDiagram
@@ -125,23 +126,29 @@ export function buildApp() {
       <p>
         Without an explicit entry, <code>daloy inspect</code> tries{" "}
         <code>src/app.ts</code>
-        {", "}<code>src/app.js</code>
+        {", "}
+        <code>src/app.js</code>
         {", "}
         <code>src/build-app.ts</code>
-        {", "}<code>src/build-app.js</code>
+        {", "}
+        <code>src/build-app.js</code>
         {", "}
         <code>app.ts</code>
-        {", "}<code>app.js</code>
-        {", "}<code>build-app.ts</code>
+        {", "}
+        <code>app.js</code>
+        {", "}
+        <code>build-app.ts</code>
         {", "}and <code>build-app.js</code>
-        {". "}TypeScript entry files load directly — Node.js (22.18+) strips
+        {". "}TypeScript entry files load directly. Node.js (22.18+) strips
         types natively. If the native load fails (older Node, non-erasable
         syntax such as enums, or extensionless relative imports), the CLI falls
-        back to <code>tsx</code> when it is installed (<code>pnpm add -D tsx</code>).
+        back to <code>tsx</code> when it is installed (
+        <code>pnpm add -D tsx</code>).
       </p>
       <p>
         Point <code>inspect</code>
-        {", "}<code>doctor</code>
+        {", "}
+        <code>doctor</code>
         {", "}and <code>diff</code> at import-safe app construction files, not
         files that call <code>serve(...)</code> as a module side effect. When
         redirecting JSON or YAML to a file, keep app-construction logs off
@@ -156,9 +163,12 @@ export function buildApp() {
         </li>
         <li>
           <code>--check</code>
-          {": "}run the contract suite (<a href="/docs/testing">missing
-            operationIds, duplicate operationIds, dead routes, body schemas on
-            safe methods, invalid examples</a>) and exit 1 on any error.
+          {": "}run the contract suite (
+          <a href="/docs/testing">
+            missing operationIds, duplicate operationIds, dead routes, body
+            schemas on safe methods, invalid examples
+          </a>
+          ) and exit 1 on any error.
         </li>
         <li>
           <code>--schemas</code>
@@ -176,14 +186,15 @@ export function buildApp() {
         </li>
         <li>
           <code>--ai</code>
-          {": "}print an AI/codegen-friendly dump of the route catalog with
-          JSON Schemas and any <code>meta.examples</code> you authored. See the{" "}
+          {": "}print an AI/codegen-friendly dump of the route catalog with JSON
+          Schemas and any <code>meta.examples</code> you authored. See the{" "}
           <a href="/docs/ai-metadata">AI-friendly route metadata</a> guide.
         </li>
         <li>
           <code>--yaml</code> · <code>--format &lt;json|yaml&gt;</code>
           {": "}emit <code>--openapi</code>
-          {", "}<code>--asyncapi</code>
+          {", "}
+          <code>--asyncapi</code>
           {", "}or <code>--ai</code> output as YAML instead of JSON. YAML drops
           braces, commas, and most quotes, so the payload is typically ~30%
           smaller than the equivalent pretty-printed JSON, useful when pasting
@@ -235,19 +246,22 @@ pnpm exec daloy dev ./src/server.ts`}
       </p>
       <ul>
         <li>
-          <strong>Node</strong>
-          {": "}<code>node --watch &lt;entry&gt;</code> (Node.js 22.18+ runs
-          TypeScript entries natively via built-in type stripping — no loader
+          Node
+          {": "}
+          <code>node --watch &lt;entry&gt;</code> (Node.js 22.18+ runs
+          TypeScript entries natively via built-in type stripping; no loader
           needed).
         </li>
         <li>
-          <strong>Bun</strong>
-          {": "}<code>bun --hot &lt;entry&gt;</code>.
+          Bun
+          {": "}
+          <code>bun --hot &lt;entry&gt;</code>.
         </li>
         <li>
-          <strong>Deno</strong>:{" "}
+          Deno:{" "}
           <code>
-            deno run --watch --allow-net --allow-env --allow-read &lt;entry&gt;</code>
+            deno run --watch --allow-net --allow-env --allow-read &lt;entry&gt;
+          </code>
           {"."}
         </li>
       </ul>

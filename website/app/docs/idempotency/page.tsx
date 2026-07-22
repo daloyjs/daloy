@@ -29,9 +29,12 @@ export default function Page() {
       <h1>Idempotency keys</h1>
       <p>
         Network retries are a fact of life on serverless platforms, behind load
-        balancers, and on flaky mobile connections. For unsafe methods (<code>POST</code>
-        {", "}<code>PUT</code>
-        {", "}<code>PATCH</code>
+        balancers, and on flaky mobile connections. For unsafe methods (
+        <code>POST</code>
+        {", "}
+        <code>PUT</code>
+        {", "}
+        <code>PATCH</code>
         {", "}
         <code>DELETE</code>) a blind retry can charge a card twice or create a
         duplicate order. The <code>idempotency()</code> middleware gives those
@@ -148,31 +151,32 @@ app.post(
 
       <ul>
         <li>
-          <strong>First request</strong>
+          First request
           {": "}the handler runs normally; the final response is captured and
           persisted under the key for <code>ttlSeconds</code>.
         </li>
         <li>
-          <strong>Identical retry</strong> (same key, same fingerprint, original
-          completed): the stored response is replayed byte-for-byte with an{" "}
+          Identical retry (same key, same fingerprint, original completed): the
+          stored response is replayed byte-for-byte with an{" "}
           <code>Idempotency-Replayed: true</code> header. The handler does{" "}
           <em>not</em> run again.
         </li>
         <li>
-          <strong>Retry while the first is still in flight</strong>
+          Retry while the first is still in flight
           {": "}a <code>409 Conflict</code> is returned (with{" "}
           <code>Cache-Control: no-store</code>) so the client backs off instead
           of racing.
         </li>
         <li>
-          <strong>Same key, different body</strong>
+          Same key, different body
           {": "}a <code>422 Unprocessable Content</code> is returned. A key is
           permanently bound to the first payload it was used with.
         </li>
       </ul>
       <p>
         Responses that are not safe to cache are never stored, and the
-        reservation is released so the client can retry: server errors (<code>5xx</code> by default, see <code>cacheableStatus</code>) and
+        reservation is released so the client can retry: server errors (
+        <code>5xx</code> by default, see <code>cacheableStatus</code>) and
         responses larger than <code>maxResponseBytes</code> (1&nbsp;MiB by
         default).
       </p>
@@ -272,13 +276,15 @@ async function createChargeWithRetries(amount: number) {
       <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
-          Keys are validated up front: empty, over-long (<code>maxKeyLength</code>), or non-printable keys are rejected with{" "}
+          Keys are validated up front: empty, over-long (
+          <code>maxKeyLength</code>), or non-printable keys are rejected with{" "}
           <code>400 Bad Request</code> before any store lookup.
         </li>
         <li>
           Conflict and reuse responses (<code>409</code>
-          {", "}<code>422</code>) carry <code>Cache-Control: no-store</code> so
-          a shared cache cannot mask them.
+          {", "}
+          <code>422</code>) carry <code>Cache-Control: no-store</code> so a
+          shared cache cannot mask them.
         </li>
         <li>
           Server errors are never cached, so a transient <code>5xx</code> does
@@ -300,7 +306,8 @@ async function createChargeWithRetries(amount: number) {
           e.g.{" "}
           <code>
             scope: (ctx) =&gt; (ctx.state.session as {"{ id?: string }"} |
-            undefined)?.id</code>
+            undefined)?.id
+          </code>
           {". "}Unauthenticated requests (no <code>Authorization</code>
           {", "}no <code>scope</code>) still dedupe by key alone.
         </li>

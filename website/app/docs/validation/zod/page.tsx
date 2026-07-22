@@ -32,7 +32,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Standard Schema</a>
+          Standard Schema
+        </a>
         {", "}so DaloyJS picks it up without any adapter.
       </p>
       <p>
@@ -80,7 +81,8 @@ export default function Page() {
           <code>request.params</code>
           {": "}decoded path parameters. They start as strings, so use{" "}
           <code>z.coerce.number()</code>
-          {", "}<code>z.uuid()</code>
+          {", "}
+          <code>z.uuid()</code>
           {", "}
           or enums when you need stronger shapes.
         </li>
@@ -208,11 +210,12 @@ export const app = new App().post(
       <ul>
         <li>
           Content-Length and streamed size against{" "}
-          <code>app.bodyLimitBytes</code> → <strong>413</strong>.
+          <code>app.bodyLimitBytes</code> -&gt; <strong>413</strong>.
         </li>
         <li>
           Content-Type against the route&apos;s <code>accepts</code> list, or
-          global <code>allowedContentTypes</code> if set → <strong>415</strong>.
+          global <code>allowedContentTypes</code> if set -&gt;{" "}
+          <strong>415</strong>.
         </li>
         <li>
           Default accepted body types: <code>application/json</code>
@@ -230,8 +233,8 @@ export const app = new App().post(
         object built from <code>URLSearchParams</code>
         {". "}Multipart bodies validate as an object built from{" "}
         <code>Request.formData()</code>
-        {". "}For a custom text media type, opt in with <code>accepts</code>{" "}
-        and validate a <code>z.string()</code> body.
+        {". "}For a custom text media type, opt in with <code>accepts</code> and
+        validate a <code>z.string()</code> body.
       </p>
       <CodeBlock
         code={`app.post(
@@ -288,7 +291,8 @@ app.get(
         The handler context is fully typed: <code>body</code>
         {", "}
         <code>params</code>
-        {", "}<code>query</code>
+        {", "}
+        <code>query</code>
         {", "}and <code>headers</code> are inferred from your schemas. The
         return value is also typed; TypeScript reports an error if you return a
         status not declared in <code>responses</code>.

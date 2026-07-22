@@ -41,7 +41,8 @@ export default function Page() {
         reuse a curated stack. All lifecycle phases compose:
         <code>onRequest</code> and <code>onResponse</code> run in order,{" "}
         <code>preBody</code>
-        {", "}<code>beforeHandle</code>
+        {", "}
+        <code>beforeHandle</code>
         {", "}and <code>onError</code> stop on the first <code>Response</code>
         {", "}and <code>afterHandle</code> plus <code>onSend</code> thread the
         value through each layer.
@@ -188,7 +189,8 @@ app.use(
         <li>
           Only the <code>preBody</code>/<code>beforeHandle</code> selection
           strategy changes. <code>afterHandle</code>
-          {", "}<code>onSend</code>
+          {", "}
+          <code>onSend</code>
           {", "}
           <code>onResponse</code>
           {", "}and <code>onError</code> from every bundle still compose
@@ -245,7 +247,8 @@ app.use(
         <code>beforeHandle</code> gates are skipped. Its <code>onRequest</code>
         {", "}
         <code>afterHandle</code>
-        {", "}<code>onSend</code>
+        {", "}
+        <code>onSend</code>
         {", "}and <code>onResponse</code> phases still run. Wrap each bundle
         with <code>except()</code> individually if you need to gate different
         phases with different rules.

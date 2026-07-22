@@ -35,7 +35,7 @@ export default async function DocsLayout({
         <aside className="hidden w-60 shrink-0 lg:block">
           <div
             data-sidebar-scroll
-            className="sticky top-20 max-block-[calc(100vh-6rem)] overflow-y-auto pe-2 scrollbar-gutter-stable scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent"
+            className="sticky top-20 scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent scrollbar-gutter-stable overflow-y-auto pe-2 max-block-[calc(100vh-6rem)]"
           >
             <DocsSidebar />
           </div>
@@ -53,7 +53,7 @@ export default async function DocsLayout({
           </div>
         </main>
         <aside className="hidden w-56 shrink-0 xl:block">
-          <div className="sticky top-20 max-block-[calc(100vh-6rem)] overflow-y-auto pe-2 scrollbar-gutter-stable scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent">
+          <div className="sticky top-20 scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent scrollbar-gutter-stable overflow-y-auto pe-2 max-block-[calc(100vh-6rem)]">
             <DocsToc />
           </div>
         </aside>

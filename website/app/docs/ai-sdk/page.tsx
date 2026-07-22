@@ -55,7 +55,7 @@ app.post(
     },
     responses: {
       // Streaming routes do not carry a response-body schema; OpenAPI
-      // documents them as a stream. That is the one honest trade-off.
+      // documents them as a stream. That is the trade-off.
       200: { description: "UI message stream (text/event-stream)" },
     },
   },
@@ -213,8 +213,8 @@ export default function Page() {
         {". "}DaloyJS is a web-standard core that already streams and already
         hands you the raw <code>Request</code>
         {", "}so there is <strong>no adapter to install</strong>
-        {". "}You host the AI SDK the same way you host any other route, and
-        you get DaloyJS&apos;s guardrails around it for free.
+        {". "}You host the AI SDK the same way you host any other route, and you
+        get DaloyJS&apos;s guardrails around it for free.
       </p>
       <p>
         This page covers the four things worth knowing: a streaming chat
@@ -297,12 +297,12 @@ export default function Page() {
       <p>
         This is the pattern that is meaningfully better on a contract-first
         framework. With <code>generateObject()</code>
-        {", "}the model is constrained to a Zod schema. Reuse that{" "}
-        <em>same</em> schema as the route&apos;s response schema and it becomes
-        your OpenAPI shape and your typed client too: one source of truth. The
-        model output is then validated twice, once by the AI SDK and once by
-        DaloyJS at the HTTP boundary, so a drifting model or a schema mismatch
-        becomes a controlled error instead of a malformed body on the wire.
+        {", "}the model is constrained to a Zod schema. Reuse that <em>same</em>{" "}
+        schema as the route&apos;s response schema and it becomes your OpenAPI
+        shape and your typed client too: one source of truth. The model output
+        is then validated twice, once by the AI SDK and once by DaloyJS at the
+        HTTP boundary, so a drifting model or a schema mismatch becomes a
+        controlled error instead of a malformed body on the wire.
       </p>
       <CodeBlock language="ts" code={STRUCTURED} />
 
@@ -337,7 +337,8 @@ export default function Page() {
         For the full argument behind this (why the deployment-time layer must
         hold when the model fails), see the blog post{" "}
         <a href="/blog/international-ai-safety-report-2026-minimum-safety-baseline-for-ai-backends">
-          on the International AI Safety Report</a>
+          on the International AI Safety Report
+        </a>
         {", "}and the{" "}
         <a href="/docs/security/secure-defaults">secure-by-default</a> guide.
       </p>
@@ -346,13 +347,13 @@ export default function Page() {
         What about OpenAPI and the typed client?
       </h2>
       <p>
-        Be honest with yourself about the trade-off. A pure streaming endpoint
-        cannot carry a meaningful response-body schema, so OpenAPI documents it
-        as a stream and the typed client treats it as such. Endpoints that
-        return structured output (the <code>generateObject()</code> pattern
-        above) get the full treatment: response schema, OpenAPI shape, typed
-        client, and response validation, all from the one Zod schema. Mix the
-        two freely. Stream the chat, contract the structured calls.
+        Account for the trade-off. A pure streaming endpoint cannot carry a
+        meaningful response-body schema, so OpenAPI documents it as a stream and
+        the typed client treats it as such. Endpoints that return structured
+        output (the <code>generateObject()</code> pattern above) get the full
+        treatment: response schema, OpenAPI shape, typed client, and response
+        validation, all from the one Zod schema. Mix the two freely. Stream the
+        chat, contract the structured calls.
       </p>
 
       <h2 id="next-steps">Next steps</h2>

@@ -487,7 +487,8 @@ export default function BlogPostPage() {
           >
             Keep it tiny. Two or three CSS variables (
             <code>--scalar-color-1</code>
-            {", "}<code>--scalar-color-accent</code>
+            {", "}
+            <code>--scalar-color-accent</code>
             {", "}
             <code>--scalar-font</code>) and you&apos;ve matched your brand. The
             attribute is HTML-escaped for you, so quotes and angle brackets
@@ -558,10 +559,12 @@ export default function BlogPostPage() {
           <p>
             Two things to notice. First, the fields that would change which spec
             the page reads (<code>content</code>
-            {", "}<code>sources</code>
+            {", "}
+            <code>sources</code>
             {", "}
             <code>spec</code>
-            {", "}<code>url</code>) are stripped at serialise time and{" "}
+            {", "}
+            <code>url</code>) are stripped at serialise time and{" "}
             <code>url</code> is then re-set to whatever <code>openapiPath</code>{" "}
             your App is serving. You literally cannot ship a docs page that
             reads a stale or alternate spec. I know, because I tried.
@@ -571,7 +574,8 @@ export default function BlogPostPage() {
             Second, the function-valued fields (<code>onBeforeRequest</code>
             {", "}
             <code>plugins</code>
-            {", "}<code>generateOperationSlug</code>
+            {", "}
+            <code>generateOperationSlug</code>
             {", "}friends) are typed as <code>never</code> in the public type.
             They can&apos;t ride along inside a data attribute (functions
             don&apos;t survive <code>JSON.stringify</code>), and pretending they
@@ -651,7 +655,8 @@ export default function BlogPostPage() {
             HTML generator and the same CSP-friendly <code>htmlResponse()</code>{" "}
             helper. If you&apos;ve already wired up{" "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP nonces via secureHeaders()</Link>
+              CSP nonces via secureHeaders()
+            </Link>
             {", "}the nonce flows through automatically. Pass{" "}
             <code>ctx.state.cspNonce</code> into both calls and the script tag
             is allow-listed.
@@ -697,18 +702,17 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Customize without forking</h2>
 
           <p>
-            The honest reason this feature took the shape it did: I wanted
-            FastAPI-style ergonomics for the docs page (one option, in the
-            constructor, no second mental model) without the FastAPI-style
-            outcome where a year later someone has forked the template and the
-            docs are silently rendering last quarter&apos;s spec. JSON-only
-            forces the API to stay declarative. Force-setting <code>url</code>{" "}
-            means the prettiest <code>/docs</code> page in the company
-            physically cannot lie to your customers about what the API does.
-            Everything else is just themes.
+            This feature took the shape it did because I wanted FastAPI-style
+            ergonomics for the docs page (one option, in the constructor, no
+            second mental model) without the FastAPI-style outcome where a year
+            later someone has forked the template and the docs are silently
+            rendering last quarter&apos;s spec. JSON-only forces the API to stay
+            declarative. Force-setting <code>url</code> means the prettiest{" "}
+            <code>/docs</code> page in the company physically cannot lie to your
+            customers about what the API does. Everything else is just themes.
           </p>
 
           <p>

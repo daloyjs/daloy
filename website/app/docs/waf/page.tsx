@@ -30,9 +30,9 @@ export default function Page() {
       <h1>WAF-lite signature/anomaly inspection</h1>
       <p>
         A full Web Application Firewall belongs at your <strong>edge</strong>
-        {": "}a CDN, reverse proxy, or ModSecurity with the OWASP Core Rule
-        Set. DaloyJS does not try to replace that. But plenty of teams ship
-        without an edge WAF, and for them <code>waf()</code> is a first-party,{" "}
+        {": "}a CDN, reverse proxy, or ModSecurity with the OWASP Core Rule Set.
+        DaloyJS does not try to replace that. But plenty of teams ship without
+        an edge WAF, and for them <code>waf()</code> is a first-party,{" "}
         <strong>opt-in defense-in-depth</strong> layer: it wires the
         framework&apos;s high-confidence injection signatures into a single,
         scored inbound-inspection pass you can turn on with one line.
@@ -43,7 +43,8 @@ export default function Page() {
         body for four rule categories: <strong>SQLi</strong>
         {", "}
         <strong>XSS</strong>
-        {", "}<strong>NoSQLi</strong> (Mongo-style operator injection), and{" "}
+        {", "}
+        <strong>NoSQLi</strong> (Mongo-style operator injection), and{" "}
         <strong>command injection</strong>
         {". "}Each rule that fires contributes an <em>anomaly score</em>; when
         the total reaches the threshold, the request is rejected with a generic{" "}
@@ -96,7 +97,8 @@ app.use(waf());`}
       <p>
         The middleware runs in the <code>beforeHandle</code> phase, so it sees
         the validated context: <code>query</code>
-        {", "}<code>params</code>
+        {", "}
+        <code>params</code>
         {", "}
         <code>headers</code>
         {", "}and the schema-parsed <code>body</code>
@@ -131,7 +133,8 @@ app.use(waf());`}
         it matched (<code>path</code>
         {", "}
         <code>query</code>
-        {", "}<code>header</code>
+        {", "}
+        <code>header</code>
         {", "}or <code>body</code>), and a short, control-character-stripped{" "}
         <code>sample</code> for your logs.
       </p>
@@ -139,36 +142,45 @@ app.use(waf());`}
       <h2 id="the-rules">The rules</h2>
       <ul>
         <li>
-          <strong>sqli</strong>
-          {": "}<code>UNION SELECT</code>
-          {", "}boolean tautologies (<code>OR 1=1</code>), stacked statements (<code>; DROP TABLE</code>), time-based probes (<code>SLEEP()</code>
-          {", "}<code>WAITFOR DELAY</code>), <code>INFORMATION_SCHEMA</code>
-          {", "}<code>xp_cmdshell</code>
+          sqli
+          {": "}
+          <code>UNION SELECT</code>
+          {", "}boolean tautologies (<code>OR 1=1</code>), stacked statements (
+          <code>; DROP TABLE</code>), time-based probes (<code>SLEEP()</code>
+          {", "}
+          <code>WAITFOR DELAY</code>), <code>INFORMATION_SCHEMA</code>
+          {", "}
+          <code>xp_cmdshell</code>
           {", "}and file primitives.
         </li>
         <li>
-          <strong>xss</strong>
-          {": "}<code>&lt;script&gt;</code> tags, <code>javascript:</code>{" "}
-          URIs, inline event handlers (<code>onerror=</code>
-          {", "}<code>onload=</code>), and <code>document.cookie</code>{" "}
-          exfiltration.
+          xss
+          {": "}
+          <code>&lt;script&gt;</code> tags, <code>javascript:</code> URIs,
+          inline event handlers (<code>onerror=</code>
+          {", "}
+          <code>onload=</code>), and <code>document.cookie</code> exfiltration.
         </li>
         <li>
-          <strong>nosqli</strong>
+          nosqli
           {": "}Mongo operator strings (<code>$ne</code>
           {", "}
           <code>$where</code>
-          {", "} …) <em>and</em> a structural check that rejects a parsed body
+          {", "} ...) <em>and</em> a structural check that rejects a parsed body
           containing any <code>$</code>-prefixed key, so{" "}
           <code>{`{"password": {"$ne": null}}`}</code> is caught even when no
           string value matches.
         </li>
         <li>
-          <strong>cmdi</strong>
+          cmdi
           {": "}shell metacharacters chaining into binaries (<code>; rm</code>
-          {", "}<code>| nc</code>
-          {", "}<code>&amp;&amp; curl</code>), command substitution (<code>$(...)</code>
-          {", "}backticks), and sensitive path access (<code>/etc/passwd</code>).
+          {", "}
+          <code>| nc</code>
+          {", "}
+          <code>&amp;&amp; curl</code>), command substitution (
+          <code>$(...)</code>
+          {", "}backticks), and sensitive path access (<code>/etc/passwd</code>
+          ).
         </li>
       </ul>
 
@@ -180,8 +192,8 @@ app.use(waf());`}
         (deduplicated across all inspected locations). The default score is{" "}
         <code>5</code> and the default <code>blockThreshold</code> is{" "}
         <code>5</code>
-        {", "}so any single high-confidence signature trips the guard. Raise
-        the threshold to require multiple independent categories before acting:
+        {", "}so any single high-confidence signature trips the guard. Raise the
+        threshold to require multiple independent categories before acting:
       </p>
       <CodeBlock
         language="ts"
@@ -213,7 +225,8 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         Path, query, and body are inspected by default. Header inspection is{" "}
         <strong>opt-in</strong> and requires an explicit allowlist, because
         common headers (<code>User-Agent</code>
-        {", "}<code>Cookie</code>
+        {", "}
+        <code>Cookie</code>
         {", "}
         <code>Referer</code>) carry punctuation that can trip signatures.
       </p>
@@ -240,7 +253,8 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
       <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
-          The <code>403</code> body is intentionally generic (<code>Request blocked by security policy</code>): it never tells an
+          The <code>403</code> body is intentionally generic (
+          <code>Request blocked by security policy</code>): it never tells an
           attacker which signature fired. Rule detail is delivered server-side
           via <code>onMatch</code> only.
         </li>
@@ -255,7 +269,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         </li>
         <li>
           Inspection uses bounded multi-decode (at most two percent-decode
-          passes), <code>+</code>→space normalization, and SQL block-comment
+          passes), <code>+</code>-&gt;space normalization, and SQL block-comment
           stripping so classic double-encoding and <code>{"/**/"}</code> keyword
           splits still score. Triple-or-deeper encoding remains a residual
           signature gap: keep schemas and parameterized queries as the primary

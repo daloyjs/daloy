@@ -33,7 +33,8 @@ export default function Page() {
         {". "}It starts a <strong>SERVER-kind span</strong> per HTTP request,
         attaches the standard{" "}
         <a href="https://opentelemetry.io/docs/specs/semconv/http/http-spans/">
-          HTTP semantic-convention attributes</a>
+          HTTP semantic-convention attributes
+        </a>
         {", "}exposes the span on <code>ctx.state</code> for handlers, and ends
         the span exactly once when the response is sent.
       </p>
@@ -94,12 +95,15 @@ const app = new App({
       <ul>
         <li>
           <code>http.request.method</code>
-          {", "}<code>url.path</code>
+          {", "}
+          <code>url.path</code>
           {", "}
           <code>url.scheme</code>
-          {", "}<code>server.address</code> (host without port),{" "}
+          {", "}
+          <code>server.address</code> (host without port),{" "}
           <code>server.port</code> (when present), <code>url.query</code>
-          {", "}<code>user_agent.original</code> set on <code>onRequest</code>.
+          {", "}
+          <code>user_agent.original</code> set on <code>onRequest</code>.
         </li>
         <li>
           <code>http.response.status_code</code> set on <code>onSend</code>.
@@ -255,25 +259,24 @@ curl localhost:3002/orders \\
       <h2 id="lifecycle-and-limitations">Lifecycle and limitations</h2>
       <ul>
         <li>
-          <strong>Request outcomes.</strong> Matched routes, unmatched requests
-          (<code>404</code> / <code>405</code>), and OPTIONS preflight responses
-          all end with <code>http.response.status_code</code> on the same span.
+          Request outcomes. Matched routes, unmatched requests (<code>404</code>{" "}
+          / <code>405</code>), and OPTIONS preflight responses all end with{" "}
+          <code>http.response.status_code</code> on the same span.
         </li>
         <li>
-          <strong>No global side effects.</strong> The hook never touches{" "}
-          <code>globalThis</code>
+          No global side effects. The hook never touches <code>globalThis</code>
           {", "}never installs a propagator, and never imports an OTel SDK, it
           stays adapter-portable.
         </li>
         <li>
-          <strong>Single end.</strong> If a handler throws, the same span is
-          marked errored and ended once during <code>onSend</code>; later
+          Single end. If a handler throws, the same span is marked errored and
+          ended once during <code>onSend</code>; later
           <code>onError</code> / repeat <code>onSend</code> invocations are
           no-ops.
         </li>
         <li>
-          <strong>Composes with other hooks.</strong> Combine{" "}
-          <code>otelTracing(...)</code> with <code>requestId(...)</code>
+          Composes with other hooks. Combine <code>otelTracing(...)</code> with{" "}
+          <code>requestId(...)</code>
           {", "}
           <code>secureHeaders(...)</code>
           {", "}etc., DaloyJS merges global, group, and per-route hooks

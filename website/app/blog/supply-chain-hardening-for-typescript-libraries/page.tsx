@@ -232,7 +232,7 @@ const offenders = FORBIDDEN.flatMap((re) => {
 
 if (offenders.length > 0) {
   console.error("Forbidden resolutions in pnpm-lock.yaml:");
-  for (const o of offenders) console.error(" ", o.re, "→", o.snippet);
+  for (const o of offenders) console.error(" ", o.re, "->", o.snippet);
   process.exit(1);
 }
 console.log("Lockfile sources OK.");`;
@@ -259,20 +259,20 @@ pnpm create daloy@latest my-api \\
 
 const ATTACK_PATHS = `# A short, opinionated map of the attack paths the above shuts down:
 
-attack path                                 → blocked by
+attack path                                 -> blocked by
 ------------------------------------------- -----------------------------------
-Malicious postinstall in a transitive dep   → ignore-scripts + strictDepBuilds
-Hijacked package published as a new patch   → minimum-release-age=1440
-Transitive dep swapped for a git/tarball    → blockExoticSubdeps
-Stale node_modules survives an attack PR    → verifyDepsBeforeRun
-GitHub Actions @v1 silently rolls to evil   → SHA-pinned actions (every step)
-GHA cache contains an attacker's payload    → no \`cache: pnpm\` on install
-Workflow accidentally gets contents: write  → top-level permissions: {}
-Workflow exfiltrates secrets to an attacker → zizmor checks for it, blocks PR
-Long-lived npm token leaks from a runner    → trusted publishing (OIDC) only
-Build artifacts can't be traced to a commit → --provenance attaches a Sigstore
+Malicious postinstall in a transitive dep   -> ignore-scripts + strictDepBuilds
+Hijacked package published as a new patch   -> minimum-release-age=1440
+Transitive dep swapped for a git/tarball    -> blockExoticSubdeps
+Stale node_modules survives an attack PR    -> verifyDepsBeforeRun
+GitHub Actions @v1 silently rolls to evil   -> SHA-pinned actions (every step)
+GHA cache contains an attacker's payload    -> no \`cache: pnpm\` on install
+Workflow accidentally gets contents: write  -> top-level permissions: {}
+Workflow exfiltrates secrets to an attacker -> zizmor checks for it, blocks PR
+Long-lived npm token leaks from a runner    -> trusted publishing (OIDC) only
+Build artifacts can't be traced to a commit -> --provenance attaches a Sigstore
                                               attestation to every publish
-Lockfile silently picks a wrong registry    → verify-lockfile-sources.mjs in CI`;
+Lockfile silently picks a wrong registry    -> verify-lockfile-sources.mjs in CI`;
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -433,7 +433,8 @@ export default function BlogPostPage() {
             probably had the same thought I did:{" "}
             <em>
               this could&apos;ve been me, and I&apos;m not actually sure my
-              defaults would&apos;ve saved me</em>
+              defaults would&apos;ve saved me
+            </em>
             {"."}
           </p>
 
@@ -459,11 +460,13 @@ export default function BlogPostPage() {
             </em>
             {". "}GitHub Actions permissions go from <em>everything</em> to{" "}
             <em>
-              nothing, except <code>contents: read</code> on these specific jobs</em>
+              nothing, except <code>contents: read</code> on these specific jobs
+            </em>
             {". "}NPM tokens go from{" "}
             <em>long-lived, attached to a human account</em> to{" "}
             <em>
-              none, ever, the runner does an OIDC exchange at publish time</em>
+              none, ever, the runner does an OIDC exchange at publish time
+            </em>
             {". "}The pattern repeats. Once you internalize it, the config
             writes itself.
           </p>
@@ -541,24 +544,22 @@ export default function BlogPostPage() {
 
           <ol>
             <li>
-              <strong>
-                Top-level <code>permissions: &#123;&#125;</code>
-              </strong>
+              Top-level <code>permissions: &#123;&#125;</code>
               {". "}Every workflow starts with zero scopes. Each job opts in to
               the minimum it needs. <code>id-token: write</code> in particular
               is granted on the publish job only, it&apos;s the credential the
               TanStack attackers extracted in 2026-05.
             </li>
             <li>
-              <strong>SHA-pin every action</strong>
+              SHA-pin every action
               {". "}Not <code>@v4</code>
               {", "}not <code>@main</code>
-              {", "}the full 40-character commit SHA. The comment after it (<code># v4</code>) is for humans. Dependabot keeps the SHAs
+              {", "}the full 40-character commit SHA. The comment after it (
+              <code># v4</code>) is for humans. Dependabot keeps the SHAs
               updated.
             </li>
             <li>
-              <strong>
-                No <code>cache: pnpm</code> on the install step</strong>
+              No <code>cache: pnpm</code> on the install step
               {". "}The GitHub Actions cache has been used as both an
               exfiltration channel and a persistence channel. Cold installs in
               CI cost ~30s. Pay them.
@@ -641,7 +642,8 @@ export default function BlogPostPage() {
             <code>--provenance</code> is the companion: every published tarball
             gets a Sigstore attestation that records the exact commit SHA,
             workflow file, and runner that produced it. Consumers can verify
-            that an install is from the source you claim it is. (<code>npm</code> verifies provenance automatically on install for
+            that an install is from the source you claim it is. (
+            <code>npm</code> verifies provenance automatically on install for
             packages that publish it.)
           </p>
 
@@ -719,7 +721,7 @@ export default function BlogPostPage() {
           </h2>
 
           <p>
-            Honest section. Supply-chain hardening protects against{" "}
+            Limits. Supply-chain hardening protects against{" "}
             <em>install-time</em> and <em>build-time</em> compromise. It does
             nothing for runtime vulnerabilities in your own code, write tests,
             run CodeQL, treat input as untrusted. It does nothing for a
@@ -733,12 +735,10 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Honest section, part two: I have absolutely shipped a supply-chain
-            footgun. Not recently, but it happened. The version of this post I
-            wish I&apos;d read five years ago is the one I tried to write here.
-            I hope it lands for at least one other maintainer who opens their{" "}
-            <code>.npmrc</code> today and finds <code>ignore-scripts</code>{" "}
-            isn&apos;t there.
+            Five years ago I shipped a supply-chain footgun. I wrote the guide I
+            wish I had read before making that mistake. I hope it lands for at
+            least one other maintainer who opens their <code>.npmrc</code> today
+            and finds <code>ignore-scripts</code> isn&apos;t there.
           </p>
 
           <h2>Steal the config</h2>
@@ -759,7 +759,8 @@ export default function BlogPostPage() {
           <p>
             The full discussion of the trade-offs is in{" "}
             <Link href="/docs/security/supply-chain">
-              the supply-chain docs</Link>
+              the supply-chain docs
+            </Link>
             {", "}and the broader{" "}
             <Link href="/docs/security">security overview</Link> shows how this
             slots in with sessions, CSRF, and CSP.

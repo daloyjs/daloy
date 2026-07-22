@@ -103,7 +103,8 @@ if (r.status === 200) {
           target="_blank"
           rel="noreferrer"
         >
-          @hey-api/openapi-ts</a>
+          @hey-api/openapi-ts
+        </a>
         {"."}
       </p>
 
@@ -207,7 +208,8 @@ else if (data) console.log(data.title);`}
           ts-rest
         </a>{" "}
         is a popular contract-first library that gives you end-to-end TypeScript
-        types <strong>without codegen</strong> by sharing a contract (<code>initContract</code>) between an adapter-based server (Express,
+        types <strong>without codegen</strong> by sharing a contract (
+        <code>initContract</code>) between an adapter-based server (Express,
         Fastify, NestJS, Next.js) and a fetch client (<code>initClient</code>).
         If you like that model, DaloyJS will feel familiar, with two
         differences.

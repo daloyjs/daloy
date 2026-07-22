@@ -55,10 +55,12 @@ export default function Page() {
       <p>Each request:</p>
       <ul>
         <li>
-          tries to acquire a slot from a per-bucket semaphore (<code>maxConcurrent</code>);
+          tries to acquire a slot from a per-bucket semaphore (
+          <code>maxConcurrent</code>);
         </li>
         <li>
-          if all slots are busy, waits in a bounded FIFO queue (<code>maxQueue</code>) for up to <code>queueTimeoutMs</code>;
+          if all slots are busy, waits in a bounded FIFO queue (
+          <code>maxQueue</code>) for up to <code>queueTimeoutMs</code>;
         </li>
         <li>
           is rejected with a fast <code>503 Service Unavailable</code> (+{" "}
@@ -222,36 +224,25 @@ app.use(concurrencyLimit({
       </h2>
       <ul>
         <li>
-          <strong>
-            <code>maxConnections</code>
-          </strong>{" "}
-          (Node adapter): rejects surplus <em>sockets</em> at accept time (L4
-          admission).
+          <code>maxConnections</code> (Node adapter): rejects surplus{" "}
+          <em>sockets</em> at accept time (L4 admission).
         </li>
         <li>
-          <strong>
-            <code>loadShedding()</code>
-          </strong>{" "}
-          sheds traffic when the <em>process</em> is under pressure (event-loop
-          delay, heap, RSS).
+          <code>loadShedding()</code> sheds traffic when the <em>process</em> is
+          under pressure (event-loop delay, heap, RSS).
         </li>
         <li>
-          <strong>
-            <code>concurrencyLimit()</code>
-          </strong>{" "}
-          bounds <em>in-flight requests</em> per route / client with queueing
-          (L7 fairness + backpressure).
+          <code>concurrencyLimit()</code> bounds <em>in-flight requests</em> per
+          route / client with queueing (L7 fairness + backpressure).
         </li>
         <li>
-          <strong>
-            <code>rateLimit()</code>
-          </strong>{" "}
-          bounds <em>request rate</em> over time per client.
+          <code>rateLimit()</code> bounds <em>request rate</em> over time per
+          client.
         </li>
       </ul>
       <p>
-        They stack cleanly: admission cap → process shedding → concurrency
-        fairness → rate limiting.
+        They stack cleanly: admission cap -&gt; process shedding -&gt;
+        concurrency fairness -&gt; rate limiting.
       </p>
     </>
   );

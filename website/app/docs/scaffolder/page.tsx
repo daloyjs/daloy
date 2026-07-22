@@ -36,14 +36,16 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          create-daloy on npm</a>
+          create-daloy on npm
+        </a>
         {". "}The generated apps install the framework from{" "}
         <a
           href="https://www.npmjs.com/package/@daloyjs/core"
           target="_blank"
           rel="noreferrer"
         >
-          @daloyjs/core on npm</a>
+          @daloyjs/core on npm
+        </a>
         {"."}
       </p>
 
@@ -133,16 +135,20 @@ bun  create daloy           my-api`}
       <ul>
         <li>
           <code>--template &lt;name&gt;</code>
-          {": "}<code>node-basic</code> (default), <code>vercel</code>
-          {", "}<code>cloudflare-worker</code>
+          {": "}
+          <code>node-basic</code> (default), <code>vercel</code>
+          {", "}
+          <code>cloudflare-worker</code>
           {", "}
           <code>bun-basic</code>
           {", "}or <code>deno-basic</code>.
         </li>
         <li>
           <code>--package-manager &lt;pm&gt;</code>
-          {": "}<code>pnpm</code> (default), <code>npm</code>
-          {", "}<code>yarn</code>
+          {": "}
+          <code>pnpm</code> (default), <code>npm</code>
+          {", "}
+          <code>yarn</code>
           {", "}or <code>bun</code>.
         </li>
         <li>
@@ -161,10 +167,10 @@ bun  create daloy           my-api`}
         </li>
         <li>
           <code>--minimal</code>
-          {": "}strip the bookstore demo and the auto-mounted{" "}
-          <code>/docs</code> + <code>/openapi.json</code> API docs routes so the
-          scaffold only ships the framework bootstrap and a health route. Useful
-          when you want to start from the smallest possible app.
+          {": "}strip the bookstore demo and the auto-mounted <code>/docs</code>{" "}
+          + <code>/openapi.json</code> API docs routes so the scaffold only
+          ships the framework bootstrap and a health route. Useful when you want
+          to start from the smallest possible app.
         </li>
         <li>
           <code>--with-ci</code> / <code>--no-ci</code>
@@ -209,9 +215,11 @@ bun  create daloy           my-api`}
         </a>{" "}
         link, and choosing <code>pnpm</code> without pnpm installed surfaces{" "}
         <a href="https://pnpm.io/installation" target="_blank" rel="noreferrer">
-          https://pnpm.io/installation</a>
+          https://pnpm.io/installation
+        </a>
         {". "}Node-flavored templates (<code>node-basic</code>
-        {", "}<code>vercel</code>
+        {", "}
+        <code>vercel</code>
         {", "}
         <code>cloudflare-worker</code>) point at{" "}
         <a href="https://nodejs.org" target="_blank" rel="noreferrer">
@@ -254,7 +262,8 @@ bun  create daloy           my-api`}
       <p>
         A production-ready Node.js HTTP server using <code>@daloyjs/core</code>{" "}
         with <code>secureHeaders</code>
-        {", "}<code>requestId</code>
+        {", "}
+        <code>requestId</code>
         {", "}
         <code>rateLimit</code>
         {", "}a hardened <code>.npmrc</code>
@@ -332,10 +341,12 @@ bun  create daloy           my-api`}
         runtime starter using
         <code>@daloyjs/core/deno</code>
         {". "}Ships a <code>deno.json</code> with <code>deno task dev</code>
-        {", "}<code>deno task test</code>
+        {", "}
+        <code>deno task test</code>
         {", "}and <code>deno task gen:openapi</code> tasks, loads{" "}
         <code>@daloyjs/core</code> and Zod via <code>npm:</code> import-map
-        specifiers, and runs with the minimum permissions Deno requires (<code>--allow-net --allow-env --allow-read</code>). The CLI skips
+        specifiers, and runs with the minimum permissions Deno requires (
+        <code>--allow-net --allow-env --allow-read</code>). The CLI skips
         Node-style installs for this template, there is no{" "}
         <code>package.json</code> to patch.
       </p>
@@ -434,8 +445,8 @@ bun  create daloy           my-api`}
         </li>
         <li>
           Choose <code>cloudflare-worker</code> only when your deployment target
-          is Cloudflare Workers. It exists because DaloyJS is runtime-portable,
-          not because Cloudflare is required.
+          is Cloudflare Workers. The template supports that runtime; Cloudflare
+          is optional.
         </li>
         <li>
           Choose <code>bun-basic</code> when your team already runs on{" "}
@@ -461,7 +472,8 @@ bun  create daloy           my-api`}
         same TypeScript baseline, and the same scripts so an AI coding agent or
         a new teammate can navigate it without a tour. Node, Bun, and Deno
         starters include <code>secureHeaders</code>
-        {", "}<code>requestId</code>
+        {", "}
+        <code>requestId</code>
         {", "}and <code>rateLimit</code>; the edge starters include{" "}
         <code>secureHeaders</code> and <code>requestId</code> plus tighter body
         and timeout limits.
@@ -476,7 +488,7 @@ bun  create daloy           my-api`}
         {", "}the generated app keeps the hardened <code>.npmrc</code> and{" "}
         <code>pnpm-workspace.yaml</code>
         {", "}and the CLI adds a <code>pnpm &gt;= 11</code> floor to{" "}
-        <code>engines</code> (pnpm always enforces <code>engines.pnpm</code>) —
+        <code>engines</code> (pnpm always enforces <code>engines.pnpm</code>).
         older pnpm silently ignores <code>minimumReleaseAge</code>
         {", "}which would disable the 24h supply-chain cooldown; the CLI also
         warns up front if the installed pnpm is older. When you choose{" "}

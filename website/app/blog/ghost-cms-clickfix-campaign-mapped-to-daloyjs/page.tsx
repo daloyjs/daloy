@@ -203,7 +203,7 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            Same question, different week. A reader sent over{" "}
+            A reader sent{" "}
             <a
               href="https://www.bleepingcomputer.com/news/security/ghost-cms-sql-injection-flaw-exploited-in-large-scale-clickfix-campaign/"
               target="_blank"
@@ -212,15 +212,9 @@ export default function BlogPostPage() {
               BleepingComputer&apos;s write-up of the Ghost CMS / ClickFix
               campaign
             </a>{" "}
-            and asked:{" "}
-            <em>are we doing anything about this, and if not, can we?</em> I
-            love that question because it forces me to actually look at the
-            framework instead of telling myself nice stories about it. So I
-            looked. The answer was &quot;mostly yes, but there was one default I
-            hadn&apos;t closed&quot;, which is a polite way of saying I missed
-            it. This post is the stage-by-stage mapping plus the one-line change
-            I shipped to
-            <code>secureHeaders()</code> after I stopped feeling embarrassed.
+            and asked how DaloyJS handled it. Four stages were covered, but one
+            browser permission was still open. This post maps the campaign and
+            the <code>secureHeaders()</code> change that closed the gap.
           </p>
 
           <p>
@@ -233,7 +227,7 @@ export default function BlogPostPage() {
             >
               CVE-2026-26980
             </a>{" "}
-            - a pre-auth SQL injection in Ghost CMS 3.24.0 → 6.19.0 - across
+            - a pre-auth SQL injection in Ghost CMS 3.24.0 -&gt; 6.19.0 - across
             more than <strong>700 domains</strong>
             {", "}including Harvard, Oxford, Auburn, and DuckDuckGo. Ghost
             shipped the fix in 6.19.1 back on February&nbsp;19, 2026. Three
@@ -246,26 +240,26 @@ export default function BlogPostPage() {
 
           <ol>
             <li>
-              <strong>SQLi</strong>
+              SQLi
               {": "}read arbitrary rows from the Ghost database, including the{" "}
               <strong>admin API keys</strong>.
             </li>
             <li>
-              <strong>Privilege escalation via stolen API key</strong>
+              Privilege escalation via stolen API key
               {": "}use the admin key to log into the admin API as a manager.
             </li>
             <li>
-              <strong>Stored XSS</strong>
+              Stored XSS
               {": "}inject <code>&lt;script&gt;</code> tags into published
               articles.
             </li>
             <li>
-              <strong>Fake Cloudflare iframe</strong>
+              Fake Cloudflare iframe
               {": "}overlay a &quot;Verify you are human&quot; prompt loaded
               from attacker infrastructure.
             </li>
             <li>
-              <strong>ClickFix clipboard stuffing</strong>
+              ClickFix clipboard stuffing
               {": "}when the visitor clicks the fake checkbox, silently call{" "}
               <code>navigator.clipboard.writeText()</code> with a PowerShell
               payload and instruct the victim to paste it into Win+R.
@@ -371,8 +365,8 @@ app.use(secureHeaders({
             <li>
               Compare the stolen admin key with <code>===</code> instead of{" "}
               <code>timingSafeEqual</code>
-              {": "}blocked by <code>verify:secret-comparisons</code> at
-              publish time.
+              {": "}blocked by <code>verify:secret-comparisons</code> at publish
+              time.
             </li>
             <li>
               Render attacker HTML without CSP, the default{" "}
@@ -405,7 +399,9 @@ app.use(secureHeaders({
               wikis, articles), turn on the CSP nonce + Trusted Types path (see
               the{" "}
               <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-                CSP nonces post</Link>) and serve user HTML with a sanitiser like <code>DOMPurify</code>{" "}
+                CSP nonces post
+              </Link>
+              ) and serve user HTML with a sanitiser like <code>DOMPurify</code>{" "}
               on the server.
             </li>
             <li>
@@ -425,23 +421,15 @@ app.use(secureHeaders({
             </li>
           </ul>
 
-          <h2>The honest answer to the original question</h2>
+          <h2>What changed in DaloyJS</h2>
 
           <p>
-            <em>
-              Are we doing anything to protect ourselves and the users of our
-              framework against the Ghost CMS / ClickFix campaign?
-            </em>{" "}
-            Stages 1 through 4 were already covered, parameterised queries in
-            every docs example, <code>timingSafeEqual</code> + JWT alg allowlist
-            + revocation hook, CSP <code>default-src &apos;self&apos;</code>{" "}
-            with the Trusted-Types path, and{" "}
-            <code>frame-ancestors &apos;none&apos;</code>
-            {". "}Stage 5, the silent clipboard write that makes the whole
-            social engineering trick land, wasn&apos;t. So I changed the
-            default. Add <code>clipboard-write=()</code> to the
-            Permissions-Policy string, write the regression test, document the
-            override pattern, ship it.
+            DaloyJS already covered stages 1 through 4 with parameterized query
+            examples, timing-safe credential checks, JWT restrictions, CSP, and
+            frame restrictions. Stage 5 exposed one gap: clipboard writes were
+            still allowed. I added <code>clipboard-write=()</code> to the
+            default Permissions Policy, plus a regression test and an override
+            example.
           </p>
 
           <p>
@@ -457,14 +445,18 @@ app.use(secureHeaders({
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP nonces and Trusted Types without tears</Link>
+              CSP nonces and Trusted Types without tears
+            </Link>
             {", "}
             <Link href="/blog/aikido-top-10-app-security-problems-mapped-to-daloyjs">
-              Aikido top 10 mapped to DaloyJS</Link>
+              Aikido top 10 mapped to DaloyJS
+            </Link>
             {", "}
             <Link href="/blog/litellm-teampcp-poisoned-scanner-mapped-to-daloyjs">
-              LiteLLM / TeamPCP mapped to DaloyJS</Link>
-            {", "}<Link href="/blog/secure-by-default">Secure by default</Link>
+              LiteLLM / TeamPCP mapped to DaloyJS
+            </Link>
+            {", "}
+            <Link href="/blog/secure-by-default">Secure by default</Link>
             {". "}
             Relevant docs: <Link href="/docs/security">/docs/security</Link>
             {", "}

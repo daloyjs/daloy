@@ -306,7 +306,7 @@ const WHY_THIS_HELPS = `# What concretely changes when AGENTS.md + SKILL.md are 
 #          requestId/secureHeaders/rateLimit untouched, happy +
 #          unhappy paths covered, operationId present, 422 declared.
 #
-# This is not theoretical. It's the difference I see on PR-by-PR
+# This difference shows up in PR review
 # basis in scaffolded vs unscaffolded teams. The agent isn't smarter.
 # The repo is just clearer about what "right" looks like.`;
 
@@ -641,7 +641,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Keep instructions close to the code</h2>
 
           <p>
             The boring secret of working well with coding agents is the same

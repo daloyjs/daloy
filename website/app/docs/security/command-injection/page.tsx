@@ -25,13 +25,9 @@ export default function Page() {
     <>
       <h1>Command injection</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the difference between handing a
-        kitchen a printed order ticket with separate fields (&quot;dish:
-        omelette, eggs: 2&quot;) versus shouting an order through a megaphone
-        the cook reads literally. With the ticket (<code>execFile</code> + argv
-        array), &quot;burn down the restaurant&quot; ends up in the
-        &quot;dish&quot; field, meaningless. With the megaphone (<code>exec(`cmd ${"${input}"}`)</code>), a stray semicolon turns one
-        order into two, and the second one is whatever the attacker wanted.
+        Pass executable arguments as an array with <code>execFile</code>. A
+        shell command assembled from input can interpret attacker-controlled
+        separators as additional commands.
       </blockquote>
       <p>
         Aikido&apos;s{" "}
@@ -47,7 +43,8 @@ export default function Page() {
         is always the same: untrusted input ends up inside a string that gets
         handed to <code>/bin/sh -c</code> (or <code>cmd.exe /c</code> on
         Windows), and a metacharacter like <code>;</code>
-        {", "}<code>|</code>
+        {", "}
+        <code>|</code>
         {", "}
         <code>$()</code>
         {", "}or a stray <code>&amp;</code> turns one command into many.
@@ -76,21 +73,25 @@ export default function Page() {
               Zero <code>child_process</code> in <code>src/**</code>
             </td>
             <td>
-              A CI gate (<a
+              A CI gate (
+              <a
                 href="https://github.com/daloyjs/daloy/blob/main/scripts/verify-no-remote-exec.ts"
                 target="_blank"
                 rel="noreferrer"
               >
                 <code>verify-no-remote-exec.ts</code>
-              </a>) refuses to merge any PR that imports{" "}
+              </a>
+              ) refuses to merge any PR that imports{" "}
               <code>node:child_process</code>
-              {", "}<code>node:vm</code>
+              {", "}
+              <code>node:vm</code>
               {", "}
               <code>eval</code>
-              {", "}<code>new Function</code>
-              {", "}or a remote dynamic <code>import()</code> inside the
-              runtime source. The framework cannot accidentally shell out, and a
-              compromised maintainer cannot quietly add an{" "}
+              {", "}
+              <code>new Function</code>
+              {", "}or a remote dynamic <code>import()</code> inside the runtime
+              source. The framework cannot accidentally shell out, and a
+              compromised maintainer cannot add an{" "}
               <code>exec(&apos;curl ... | sh&apos;)</code> at import time.
             </td>
           </tr>
@@ -98,7 +99,8 @@ export default function Page() {
             <td>Strict per-route schemas (Zod)</td>
             <td>
               Every route declares <code>params</code>
-              {", "}<code>query</code>
+              {", "}
+              <code>query</code>
               {", "}and <code>body</code> shapes. If you constrain a field with{" "}
               <code>z.enum([...])</code>
               {", "}a tight regex, or <code>z.uuid()</code>
@@ -270,10 +272,11 @@ git grep -nE 'require\\(["'\\\\'']child_process["'\\\\'']\\)|from\\s+["'\\\\'']n
         {". "}It refuses any import of <code>child_process</code> /{" "}
         <code>vm</code>
         {", "}any bare <code>eval</code>
-        {", "}<code>new Function</code>
+        {", "}
+        <code>new Function</code>
         {", "}or remote dynamic <code>import()</code>
-        {". "}If a handler genuinely needs to shell out, scope the allow-list
-        to that one file rather than turning the gate off for the whole repo.
+        {". "}If a handler genuinely needs to shell out, scope the allow-list to
+        that one file rather than turning the gate off for the whole repo.
       </p>
 
       <h2 id="windows-footgun-batbadbut-cve-2024-27980">
@@ -327,8 +330,8 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
       <h2 id="defense-in-depth">Defense in depth</h2>
       <ul>
         <li>
-          <strong>Drop privileges.</strong> Run the Node process as a non-root
-          user and constrain it with{" "}
+          Drop privileges. Run the Node process as a non-root user and constrain
+          it with{" "}
           <a
             href="https://kubernetes.io/docs/concepts/security/pod-security-standards/"
             target="_blank"
@@ -341,17 +344,16 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
           outside <code>/tmp</code>.
         </li>
         <li>
-          <strong>Audit your runtime dependencies.</strong> Most real-world
-          command-injection CVEs in 2024 were not in application code; they were
-          in transitive npm packages that wrapped{" "}
-          <code>child_process.exec()</code>
+          Audit your runtime dependencies. Most real-world command-injection
+          CVEs in 2024 were not in application code; they were in transitive npm
+          packages that wrapped <code>child_process.exec()</code>
           {". "}Use <code>pnpm audit</code> on a schedule, and prefer the
           supply-chain hardened install path documented in{" "}
           <a href="/docs/security/supply-chain">Supply-chain security</a>.
         </li>
         <li>
-          <strong>Reach for a library when possible.</strong> <code>sharp</code>{" "}
-          for image processing, <code>archiver</code> for zip files,{" "}
+          Reach for a library when possible. <code>sharp</code> for image
+          processing, <code>archiver</code> for zip files,{" "}
           <code>node:fs/promises</code> for copies: an in-process Node library
           never invokes a shell, so the entire bug class disappears.
         </li>
@@ -368,7 +370,8 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
           target="_blank"
           rel="noreferrer"
         >
-          github.com/daloyjs/daloy/security/advisories/new</a>
+          github.com/daloyjs/daloy/security/advisories/new
+        </a>
         {". "}Don&apos;t open a public issue.
       </p>
     </>

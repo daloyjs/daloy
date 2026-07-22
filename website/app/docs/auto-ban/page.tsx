@@ -97,7 +97,7 @@ import { autoBan } from "@daloyjs/core";
 
 const app = createApp();
 
-// Five 401/403/429s within 10 min → a 15 min ban that doubles for repeat abuse.
+// Five 401/403/429s within 10 min -> a 15 min ban that doubles for repeat abuse.
 app.use(autoBan({ trustProxyHeaders: true }));`}
       />
       <p>
@@ -134,8 +134,8 @@ app.use(
       <ul>
         <li>
           Each watched response is a <strong>strike</strong>
-          {". "}Strikes accumulate inside <code>windowMs</code> (default 10
-          min) and decay when the window passes.
+          {". "}Strikes accumulate inside <code>windowMs</code> (default 10 min)
+          and decay when the window passes.
         </li>
         <li>
           Reaching <code>maxStrikes</code> (default 5) issues a ban for{" "}
@@ -144,10 +144,12 @@ app.use(
         <li>
           With <code>escalate: true</code> (default) each <em>repeat</em> ban
           doubles (<code>banMs</code>
-          {", "}<code>2×</code>
-          {", "}<code>4×</code>
-          {", "} …), capped at <code>maxBanMs</code> (default 24 h), for as long
-          as the record stays alive.
+          {", "}
+          <code>2×</code>
+          {", "}
+          <code>4×</code>
+          {", "} ...), capped at <code>maxBanMs</code> (default 24 h), for as
+          long as the record stays alive.
         </li>
         <li>
           Once the client stops tripping statuses, the record expires and the

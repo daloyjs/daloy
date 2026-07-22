@@ -10,7 +10,7 @@ const POST = {
   title:
     "OWASP Top 10 for Agentic Applications (2026), Mapped to the DaloyJS Tool Surface",
   description:
-    "Aikido's write-up of the OWASP Top 10 for Agentic Applications 2026, ASI01 Agent Behavior Hijacking through ASI10 Over-reliance, is the new threat model for AI agents and the MCP-style HTTP tools they call. Here's the honest per-risk mapping of what a DaloyJS-exposed tool already blocks by default, what one opt-in line adds, and which risks live above the HTTP layer where no framework can save you.",
+    "Aikido's write-up of the OWASP Top 10 for Agentic Applications 2026, ASI01 Agent Behavior Hijacking through ASI10 Over-reliance, is the new threat model for AI agents and the MCP-style HTTP tools they call. This post maps each risk to what a DaloyJS-exposed tool already blocks by default, what one opt-in line adds, and which risks live above the HTTP layer where no framework can save you.",
   date: "2026-06-11",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
@@ -131,8 +131,8 @@ adminTools.route({
   method: "POST",
   path: "/ops/refund-all",
   operationId: "refundAll",
-  // Not in the public OpenAPI. Not exposed to the agent's tool discovery.
-  // Mounted on a separate hostname. The model literally cannot find it.
+  // A separate hostname keeps this route out of the public OpenAPI and
+  // the agent's tool discovery.
   handler: async () => refundService.refundEverything(),
 });`;
 
@@ -341,10 +341,11 @@ export default function BlogPostPage() {
               rel="noopener noreferrer"
             >
               Aikido&apos;s walkthrough of the OWASP Top 10 for Agentic
-              Applications (2026)</a>
-            {", "}ASI01 through ASI10, released in December 2025 with input
-            from 100+ practitioners. The question, again:{" "}
-            <em>are we doing anything about this?</em>
+              Applications (2026)
+            </a>
+            {", "}ASI01 through ASI10, released in December 2025 with input from
+            more than 100 practitioners. I checked each category against the
+            framework&apos;s HTTP and tool boundaries.
           </p>
 
           <p>
@@ -361,10 +362,15 @@ export default function BlogPostPage() {
 
           <p>
             Below is the per-risk mapping. The pattern is the same as the
-            previous two posts in this mini-series (<Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">Cloud Security Architecture</Link>
+            previous two posts in this mini-series (
+            <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
+              Cloud Security Architecture
+            </Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security</Link>): what the framework blocks, what you still own.
+              Vibe Coding Security
+            </Link>
+            ): what the framework blocks, what you still own.
           </p>
 
           <h2>ASI01: Agent Behavior Hijacking</h2>
@@ -477,82 +483,74 @@ export default function BlogPostPage() {
 
           <CodeBlock language="ts" code={ASSUME_AGENT} />
 
-          <h2>What we honestly do not do</h2>
+          <h2>What DaloyJS does not cover</h2>
 
           <ul>
             <li>
-              <strong>We don&apos;t inspect prompts.</strong> If the agent
-              receives an indirect prompt injection inside the JSON body of a
-              tool response, the framework validated the JSON shape, not the
-              English inside it. Run a classifier above the model boundary.
+              We don&apos;t inspect prompts. If the agent receives an indirect
+              prompt injection inside the JSON body of a tool response, the
+              framework validated the JSON shape, not the English inside it. Run
+              a classifier above the model boundary.
             </li>
             <li>
-              <strong>We don&apos;t sandbox the agent itself.</strong> Daloy
-              gives you the HTTP surface the agent calls. The agent process (the
-              model, the orchestrator, the tool-loop) lives somewhere else,
-              container, VM, serverless function, and that is where ASI05&apos;s
-              &quot;run agents in strictly sandboxed environments&quot; applies.
+              We don&apos;t sandbox the agent itself. Daloy gives you the HTTP
+              surface the agent calls. The agent process (the model, the
+              orchestrator, the tool-loop) lives somewhere else, container, VM,
+              serverless function, and that is where ASI05&apos;s &quot;run
+              agents in strictly sandboxed environments&quot; applies.
             </li>
             <li>
-              <strong>We don&apos;t make policy decisions for you.</strong>{" "}
-              Which tools are destructive, which require human approval, what
-              the agent&apos;s wallet ceiling is, what the kill-switch triggers,
-              those are deployment policy. The framework gives you the
-              primitives (multi-App split, two-step routes, structured audit
-              log) so the policy is cheap to write.
+              We don&apos;t make policy decisions for you. Which tools are
+              destructive, which require human approval, what the agent&apos;s
+              wallet ceiling is, what the kill-switch triggers, those are
+              deployment policy. The framework gives you the primitives
+              (multi-App split, two-step routes, structured audit log) so the
+              policy is cheap to write.
             </li>
             <li>
-              <strong>
-                We don&apos;t detect data poisoning above the API.
-              </strong>{" "}
-              If the agent&apos;s vector DB is poisoned, the framework will
-              dutifully serve whatever your handler returns. Vet the sources.
+              We don&apos;t detect data poisoning above the API. If the
+              agent&apos;s vector DB is poisoned, the framework will dutifully
+              serve whatever your handler returns. Vet the sources.
             </li>
           </ul>
 
-          <h2>The honest answer to the original question</h2>
+          <h2>HTTP boundary coverage</h2>
 
           <p>
-            <em>
-              Are we doing anything about the OWASP Top 10 for Agentic
-              Applications?
-            </em>{" "}
-            Yes, for the half of the threat model that lives at the HTTP tool
-            surface. ASI02 through ASI09 map almost one-for-one to a DaloyJS
-            primitive that already exists today. ASI01 and ASI10 are upstream
-            concerns where the best a framework can do is give the defender a
-            typed audit trail and a scaffolded <code>AGENTS.md</code>
-            {": "}and we ship both.
+            ASI02 through ASI09 map to controls that already exist in DaloyJS.
+            ASI01 and ASI10 live upstream; the framework supports investigation
+            with typed contracts, request logs, and scaffolded agent guidance.
           </p>
 
           <p>
-            The next decade of breaches will look more like &quot;the agent
-            called the tool 4,000 times and we didn&apos;t notice&quot; and less
-            like &quot;the SQL injection got past the WAF.&quot; The way you
-            don&apos;t end up in the post-mortem is by making sure the tool the
-            agent calls is small, typed, authenticated, rate-limited, and loud
-            in the logs. That is the entire job of the framework on the
-            agentic-app stack, and that is what DaloyJS ships, by default, in
-            the constructor.
+            Agentic incidents often involve excessive tool calls, weak tool
+            boundaries, or missing audit data. Keep each tool small, typed,
+            authenticated, rate-limited, and visible in request logs.
           </p>
 
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security</Link>
+              Vibe Coding Security
+            </Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture</Link>
-            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+              Cloud Security Architecture
+            </Link>
+            {", "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries</Link>
+              Supply-chain hardening for TypeScript libraries
+            </Link>
             {", "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              Designing for Coding Agents</Link>
+              Designing for Coding Agents
+            </Link>
             {", "}
             <Link href="/blog/ai-friendly-route-metadata-machine-readable-examples-for-codegen-agents">
-              AI-friendly route metadata</Link>
+              AI-friendly route metadata
+            </Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}
@@ -561,8 +559,10 @@ export default function BlogPostPage() {
             <Link href="/docs/security/fetch-guard">fetch guard</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections</Link>
-            {", "}<Link href="/docs/security/supply-chain">supply chain</Link>.
+              runtime protections
+            </Link>
+            {", "}
+            <Link href="/docs/security/supply-chain">supply chain</Link>.
           </p>
         </div>
       </article>

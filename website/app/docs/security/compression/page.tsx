@@ -25,13 +25,9 @@ export default function Page() {
     <>
       <h1>Compression middleware</h1>
       <blockquote>
-        <strong>Think of it like…</strong> vacuum-sealing parcels for shipping:
-        smaller, cheaper, faster to deliver. But you never vacuum-seal anything
-        with a return address visible through the wrap (cookies, auth headers,
-        CSRF tokens), because a thief watching the loading dock could measure
-        the bulge and figure out what&apos;s inside. That&apos;s the BREACH
-        attack, and that&apos;s why the middleware skips compression on
-        sensitive headers and small responses by default.
+        Compression reduces response size, but it can expose secrets through
+        response-length differences. The middleware skips sensitive and small
+        responses by default to limit BREACH-style attacks.
       </blockquote>
       <p>
         Daloy ships a focused compression slice: a first-party{" "}
@@ -68,7 +64,8 @@ app.use(compression());
       <h2 id="what-it-compresses">What it compresses</h2>
       <p>
         The middleware negotiates <code>br</code>
-        {", "}<code>gzip</code>
+        {", "}
+        <code>gzip</code>
         {", "}and <code>deflate</code> from the request{" "}
         <code>Accept-Encoding</code>
         header and the runtime codecs available through{" "}
@@ -129,14 +126,14 @@ app.use(compression());
       </p>
       <ul>
         <li>
-          <strong>No CDN or reverse-proxy compression:</strong> register{" "}
+          No CDN or reverse-proxy compression: register{" "}
           <code>compression()</code> globally. Daloy&apos;s skip rules still
           decide whether each individual response should be compressed.
         </li>
         <li>
-          <strong>CDN or reverse proxy already compresses responses:</strong>{" "}
-          let that layer handle compression so the application does not spend
-          CPU compressing the same traffic at the origin.
+          CDN or reverse proxy already compresses responses: let that layer
+          handle compression so the application does not spend CPU compressing
+          the same traffic at the origin.
         </li>
       </ul>
       <p>
@@ -222,7 +219,7 @@ app.use(compression());
         <code>&quot;abc&quot;</code>
         {", "}Daloy downgrades it to <code>W/&quot;abc&quot;</code>
         {". "}The ETag was computed over the upstream body, not the compressed
-        wire bytes, so a weak validator is the honest one, RFC 9110 §8.8.1
+        wire bytes, so a weak validator is the appropriate one, RFC 9110 §8.8.1
         requires strong validators to be byte-equal to the representation on the
         wire, and the wire bytes change per encoding.
       </p>
@@ -236,21 +233,16 @@ app.use(compression());
       </p>
       <ul>
         <li>
-          <strong>
-            If <code>etag()</code> runs first
-          </strong>{" "}
-          it sets a strong ETag over the uncompressed body.{" "}
-          <code>compression()</code> then encodes the body and downgrades the
-          strong ETag to weak so the validator stays consistent with what
-          actually leaves the server.
+          If <code>etag()</code> runs first it sets a strong ETag over the
+          uncompressed body. <code>compression()</code> then encodes the body
+          and downgrades the strong ETag to weak so the validator stays
+          consistent with what actually leaves the server.
         </li>
         <li>
-          <strong>
-            If <code>compression()</code> runs first
-          </strong>{" "}
-          it encodes the body. <code>etag()</code> then hashes the
-          already-compressed bytes, which is also valid, the strong tag still
-          byte-matches the wire bytes the client receives.
+          If <code>compression()</code> runs first it encodes the body.{" "}
+          <code>etag()</code> then hashes the already-compressed bytes, which is
+          also valid, the strong tag still byte-matches the wire bytes the
+          client receives.
         </li>
       </ul>
       <p>
@@ -258,7 +250,8 @@ app.use(compression());
         <code>If-None-Match</code> stay correct across <code>br</code>
         {", "}
         <code>gzip</code>
-        {", "}<code>deflate</code>
+        {", "}
+        <code>deflate</code>
         {", "}and <code>identity</code> clients because the{" "}
         <code>Vary: Accept-Encoding</code> header forces per-encoding cache
         keys. You don&apos;t have to manage the weak/strong downgrade yourself,
@@ -290,10 +283,11 @@ app.use(compression());
       <p>
         Register <code>compression()</code> after middleware that may add{" "}
         <code>Set-Cookie</code>
-        {", "}<code>Content-Encoding</code>
-        {", "}or <code>ETag</code> headers. Daloy runs <code>onSend</code>{" "}
-        hooks in registration order, so the compression hook should see the
-        final response headers before it decides whether to encode the body.
+        {", "}
+        <code>Content-Encoding</code>
+        {", "}or <code>ETag</code> headers. Daloy runs <code>onSend</code> hooks
+        in registration order, so the compression hook should see the final
+        response headers before it decides whether to encode the body.
       </p>
     </>
   );

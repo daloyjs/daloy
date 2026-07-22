@@ -339,7 +339,7 @@ export async function POST(req: Request) {
 
 const GEN_FLOW = `# The end-to-end loop you actually run:
 pnpm gen:openapi            # dumps your spec to generated/openapi.json
-pnpm gen                    # Hey API codegen → generated/client/
+pnpm gen                    # Hey API codegen -> generated/client/
 
 # What ends up on disk:
 generated/
@@ -352,7 +352,7 @@ generated/
 # CI gate: spec drift = test failure.
 pnpm gen:openapi
 git diff --exit-code generated/openapi.json
-# ─→ exits 1 if the committed spec doesn't match the live route registry.`;
+# ─-> exits 1 if the committed spec doesn't match the live route registry.`;
 
 const SUMMARY_TABLE = `# When to reach for which feature.
 
@@ -553,7 +553,8 @@ export default function BlogPostPage() {
             top-level <code>webhooks</code> map, which is the spec saying{" "}
             <em>
               here are the requests this API will send, and here is their exact
-              shape</em>
+              shape
+            </em>
             {". "}DaloyJS lets you declare them next to your routes:
           </p>
 
@@ -715,8 +716,8 @@ export default function BlogPostPage() {
             The discipline is the same as for plain routes: dump the spec from{" "}
             <code>buildApp()</code> in a script, regenerate the client, and gate
             CI on <code>git diff --exit-code</code> against the committed spec.
-            Add a webhook? The spec changes, the diff fails, the PR forces you
-            to regenerate. No drift, no surprises.
+            Adding a webhook changes the spec, fails the diff, and forces the PR
+            to regenerate the client before merge.
           </p>
 
           <EditorFrame
@@ -737,28 +738,25 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={SUMMARY_TABLE} />
           </EditorFrame>
 
-          <h2>Honest caveats</h2>
+          <h2>Caveats</h2>
 
           <ul>
             <li>
-              <strong>OpenAPI 3.1 only.</strong> Webhooks at the top level and
-              JSON Schema 2020-12 keywords <em>do not exist</em> in 3.0. If your
-              generator targets 3.0 you&apos;ll silently lose the webhooks
-              block.
+              OpenAPI 3.1 only. Webhooks at the top level and JSON Schema
+              2020-12 keywords <em>do not exist</em> in 3.0. If your generator
+              targets 3.0 you&apos;ll silently lose the webhooks block.
             </li>
             <li>
-              <strong>
-                Discriminator mapping is required by some generators.
-              </strong>{" "}
-              A few SDK generators won&apos;t build proper tagged unions without
-              an explicit mapping. The helpers in DaloyJS emit one by default,
-              keep it.
+              Discriminator mapping is required by some generators. A few SDK
+              generators won&apos;t build proper tagged unions without an
+              explicit mapping. The helpers in DaloyJS emit one by default, keep
+              it.
             </li>
             <li>
-              <strong>Webhook signing isn&apos;t the spec&apos;s job.</strong>{" "}
-              The header lives in the spec; the algorithm and the secret
-              rotation strategy do not. Pick one (HMAC-SHA256 of the raw body,
-              hex), document it in the operation <code>description</code>
+              Webhook signing isn&apos;t the spec&apos;s job. The header lives
+              in the spec; the algorithm and the secret rotation strategy do
+              not. Pick one (HMAC-SHA256 of the raw body, hex), document it in
+              the operation <code>description</code>
               {", "}and ship a signing helper next to the client SDK so
               consumers don&apos;t roll their own.
             </li>
@@ -769,7 +767,8 @@ export default function BlogPostPage() {
           <p>
             The post that&apos;s closest in spirit is{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
-              Contract-First Without the Codegen Dance</Link>
+              Contract-First Without the Codegen Dance
+            </Link>
             {", "}same philosophy, different feature surface. For the recipient
             side of any of this, the{" "}
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">

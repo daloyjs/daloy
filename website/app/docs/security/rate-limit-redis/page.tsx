@@ -23,11 +23,8 @@ export default function Page() {
     <>
       <h1>Redis rate-limit store</h1>
       <blockquote>
-        <strong>Think of it like…</strong> moving the nightclub&apos;s clicker
-        from one door to a shared headcount board every door reads from. With
-        many doors (replicas) and a local clicker each, a guest can sneak in N
-        times by trying every door. With a shared clicker (Redis), the cap is
-        honoured everywhere, no matter which door they queue at.
+        A Redis-backed store gives every replica the same rate-limit counter.
+        Requests cannot gain a separate allowance by reaching another instance.
       </blockquote>
       <p>
         The default <code>rateLimit()</code> middleware uses an in-process
@@ -38,7 +35,8 @@ export default function Page() {
       <p>
         DaloyJS ships an optional <strong>Redis-backed</strong> store at the{" "}
         <code>@daloyjs/core/rate-limit-redis</code> sub-export. Counters live in
-        Redis and are updated atomically with a small Lua script (<code>INCR</code> + <code>PEXPIRE</code>), so every replica observes the
+        Redis and are updated atomically with a small Lua script (
+        <code>INCR</code> + <code>PEXPIRE</code>), so every replica observes the
         same window without a hot key shootout.
       </p>
       <SequenceDiagram
@@ -109,12 +107,12 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Cloudflare Workers</strong>
+          Cloudflare Workers
           {": "}Durable Objects (strongly consistent per-key), or KV / D1 for
           relaxed consistency.
         </li>
         <li>
-          <strong>Fastly Compute</strong>
+          Fastly Compute
           {": "}Edge Dictionaries for static quotas, KV Store for dynamic
           counters.
         </li>
@@ -212,17 +210,17 @@ app.use(
       </p>
       <ul>
         <li>
-          <strong>Per authenticated user</strong> (preferred): pass a{" "}
-          <code>keyGenerator</code> that returns a stable id.
+          Per authenticated user (preferred): pass a <code>keyGenerator</code>{" "}
+          that returns a stable id.
         </li>
         <li>
-          <strong>Per source IP</strong>
+          Per source IP
           {": "}set <code>trustProxyHeaders: true</code> <em>only</em> when you
           run behind a trusted proxy or load balancer that <em>overwrites</em>{" "}
           <code>X-Forwarded-For</code>
-          {". "}The key is then the first <code>X-Forwarded-For</code> entry
-          (or <code>X-Real-IP</code>), and falls back to <code>global</code>{" "}
-          when neither is present.
+          {". "}The key is then the first <code>X-Forwarded-For</code> entry (or{" "}
+          <code>X-Real-IP</code>), and falls back to <code>global</code> when
+          neither is present.
         </li>
       </ul>
       <CodeBlock
@@ -255,8 +253,8 @@ app.use(
       <h2 id="failure-mode">Failure mode</h2>
       <p>
         By default the store is <strong>fail-open</strong>
-        {": "}if Redis throws (network blip, restart), the request is treated
-        as if it were the only one in the window. That keeps your API available
+        {": "}if Redis throws (network blip, restart), the request is treated as
+        if it were the only one in the window. That keeps your API available
         during a Redis outage at the cost of temporarily losing the limit.
       </p>
       <p>
@@ -338,19 +336,19 @@ const myAdapter: RedisCommands = {
       <h2 id="what-it-does-not-do">What it does not do</h2>
       <ul>
         <li>
-          <strong>It does not pool connections for you.</strong> Reuse a single
-          client across requests; do not create one per call.
+          It does not pool connections for you. Reuse a single client across
+          requests; do not create one per call.
         </li>
         <li>
-          <strong>It does not synchronize clocks.</strong> The reset timestamp
-          returned to clients is computed from the local time plus the
-          Redis-reported TTL, which is good enough for <code>Retry-After</code>{" "}
-          but not for fine-grained billing.
+          It does not synchronize clocks. The reset timestamp returned to
+          clients is computed from the local time plus the Redis-reported TTL,
+          which is good enough for <code>Retry-After</code> but not for
+          fine-grained billing.
         </li>
         <li>
-          <strong>It does not implement sliding windows.</strong> The semantics
-          match the in-process store: a fixed window of <code>windowMs</code>{" "}
-          with token-bucket-style counting.
+          It does not implement sliding windows. The semantics match the
+          in-process store: a fixed window of <code>windowMs</code> with
+          token-bucket-style counting.
         </li>
       </ul>
     </>

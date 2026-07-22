@@ -88,8 +88,10 @@ serve(app, {
 
       <h2 id="fly-toml">fly.toml</h2>
       <p>
-        <code>auto_stop_machines</code> takes a <strong>string</strong> (<code>&quot;off&quot;</code>
-        {", "}<code>&quot;stop&quot;</code>
+        <code>auto_stop_machines</code> takes a <strong>string</strong> (
+        <code>&quot;off&quot;</code>
+        {", "}
+        <code>&quot;stop&quot;</code>
         {", "}or <code>&quot;suspend&quot;</code>) and not a boolean.
       </p>
       <CodeBlock

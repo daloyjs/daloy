@@ -177,16 +177,20 @@ export const app = new App().registerRoutes([
       <h2 id="http-methods">HTTP methods</h2>
       <p>
         Supported methods include <code>GET</code>
-        {", "}<code>POST</code>
+        {", "}
+        <code>POST</code>
         {", "}
         <code>PUT</code>
-        {", "}<code>PATCH</code>
-        {", "}<code>DELETE</code>
+        {", "}
+        <code>PATCH</code>
+        {", "}
+        <code>DELETE</code>
         {", "}
         <code>HEAD</code>
         {", "}and <code>OPTIONS</code>
         {". "}Custom methods such as <code>TRACE</code>
-        {", "}<code>CONNECT</code>
+        {", "}
+        <code>CONNECT</code>
         {", "}and WebDAV verbs are rejected at registration.
       </p>
       <p>
@@ -198,11 +202,14 @@ export const app = new App().registerRoutes([
       </p>
       <p>
         Shorthand methods are available for <code>GET</code>
-        {", "}<code>POST</code>
+        {", "}
+        <code>POST</code>
         {", "}
         <code>PUT</code>
-        {", "}<code>PATCH</code>
-        {", "}<code>DELETE</code>
+        {", "}
+        <code>PATCH</code>
+        {", "}
+        <code>DELETE</code>
         {", "}and <code>HEAD</code>
         {". "}Register an explicit <code>OPTIONS</code> route with{" "}
         <code>route()</code>; otherwise DaloyJS supplies automatic preflight
@@ -294,13 +301,13 @@ export const app = new App().registerRoutes([
           {": "}schemas for <code>params</code>
           {", "}
           <code>query</code>
-          {", "}<code>headers</code>
+          {", "}
+          <code>headers</code>
           {", "}and <code>body</code>.
         </li>
         <li>
           <code>responses</code>
-          {": "}declared status codes and optional response body/header
-          schemas.
+          {": "}declared status codes and optional response body/header schemas.
         </li>
         <li>
           <code>accepts</code>
@@ -309,8 +316,8 @@ export const app = new App().registerRoutes([
         </li>
         <li>
           <code>auth</code>
-          {": "}OpenAPI security requirement for the route; pair it with an
-          auth hook such as <code>bearerAuth()</code>.
+          {": "}OpenAPI security requirement for the route; pair it with an auth
+          hook such as <code>bearerAuth()</code>.
         </li>
         <li>
           <code>internal</code>
@@ -324,8 +331,7 @@ export const app = new App().registerRoutes([
         </li>
         <li>
           <code>callbacks</code> and <code>meta</code>
-          {": "}add OpenAPI callbacks, examples, and AI-friendly route
-          metadata.
+          {": "}add OpenAPI callbacks, examples, and AI-friendly route metadata.
         </li>
       </ul>
 
@@ -421,7 +427,7 @@ export const app = new App().registerRoutes([
         for example, to attach a header, strip an internal header, or replace
         the response entirely. Returning <code>void</code> keeps the current
         response. Multiple <code>onSend</code> hooks compose pipeline-style
-        (global → group → route).
+        (global -&gt; group -&gt; route).
       </p>
       <CodeBlock
         code={`const app = new App({

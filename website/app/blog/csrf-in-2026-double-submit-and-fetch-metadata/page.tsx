@@ -86,9 +86,9 @@ app.use(
 );
 
 // No cookie issued. No token to echo. The browser does the work.
-// Sec-Fetch-Site: same-origin | none  → allow
-// Sec-Fetch-Site: same-site | cross-site → must be in allowedOrigins
-// Sec-Fetch-Site missing                 → Origin / Referer must be in allowedOrigins`;
+// Sec-Fetch-Site: same-origin | none  -> allow
+// Sec-Fetch-Site: same-site | cross-site -> must be in allowedOrigins
+// Sec-Fetch-Site missing                 -> Origin / Referer must be in allowedOrigins`;
 
 const BOTH_STRATEGY = `// src/app.ts, defense-in-depth: require both
 import { App, csrf, session } from "@daloyjs/core";
@@ -117,38 +117,38 @@ app.use(
 
 const STRATEGY_DECISION_FLOW = `# When do you reach for which strategy?
 
-double-submit  →  You serve any browser older than ~2020,
+double-submit  ->  You serve any browser older than ~2020,
                   OR you embed in iframes you don't control,
                   OR you have JS that already sets a header anyway.
 
-fetch-metadata →  Your client is a modern SPA, mobile webview,
+fetch-metadata ->  Your client is a modern SPA, mobile webview,
                   or a server-side fetch that you control.
                   You don't want to teach the frontend to mint tokens.
 
-both           →  Production app, mixed clients, no real cost.
+both           ->  Production app, mixed clients, no real cost.
                   This is the default I reach for.`;
 
 const FAILURE_MATRIX = `// What gets rejected, and how, under each strategy.
 // (All rejections are 403 Forbidden, RFC 9457 problem+json.)
 
 // strategy: "double-submit"
-//   POST /pay without x-csrf-token header     → 403 (no token)
-//   POST /pay with header but no cookie        → 403 (no cookie)
-//   POST /pay with mismatched header & cookie  → 403 (timing-safe mismatch)
-//   GET  /pay from any origin                  → allowed (safe method)
+//   POST /pay without x-csrf-token header     -> 403 (no token)
+//   POST /pay with header but no cookie        -> 403 (no cookie)
+//   POST /pay with mismatched header & cookie  -> 403 (timing-safe mismatch)
+//   GET  /pay from any origin                  -> allowed (safe method)
 
 // strategy: "fetch-metadata"
-//   POST /pay, Sec-Fetch-Site: same-origin     → allowed
-//   POST /pay, Sec-Fetch-Site: none            → allowed (e.g. address bar)
-//   POST /pay, Sec-Fetch-Site: cross-site, Origin allowlisted → allowed
-//   POST /pay, Sec-Fetch-Site: cross-site, Origin not listed  → 403
-//   POST /pay, no Sec-Fetch-Site (legacy), Origin or Referer allowlisted → allowed
-//   POST /pay, no Sec-Fetch-Site, no Origin, no Referer → 403
+//   POST /pay, Sec-Fetch-Site: same-origin     -> allowed
+//   POST /pay, Sec-Fetch-Site: none            -> allowed (e.g. address bar)
+//   POST /pay, Sec-Fetch-Site: cross-site, Origin allowlisted -> allowed
+//   POST /pay, Sec-Fetch-Site: cross-site, Origin not listed  -> 403
+//   POST /pay, no Sec-Fetch-Site (legacy), Origin or Referer allowlisted -> allowed
+//   POST /pay, no Sec-Fetch-Site, no Origin, no Referer -> 403
 
 // strategy: "both"
-//   POST /pay, fetch-metadata passes, double-submit fails → 403
-//   POST /pay, double-submit passes, fetch-metadata fails → 403
-//   POST /pay, both pass → allowed`;
+//   POST /pay, fetch-metadata passes, double-submit fails -> 403
+//   POST /pay, double-submit passes, fetch-metadata fails -> 403
+//   POST /pay, both pass -> allowed`;
 
 const CONSTRUCTION_TIME = `// These all throw at app boot, not at request time, not in prod under load.
 // You find out before your container reports "ready".
@@ -199,9 +199,9 @@ const RFC_QUIRK = `# A common surprise from the RFC:
 # server-initiated redirect, etc.). It IS safe by definition.
 #
 # So this is the correct allow rule:
-#   Sec-Fetch-Site: "same-origin" → allow
-#   Sec-Fetch-Site: "none"        → allow
-#   anything else                  → check the allowlist`;
+#   Sec-Fetch-Site: "same-origin" -> allow
+#   Sec-Fetch-Site: "none"        -> allow
+#   anything else                  -> check the allowlist`;
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -414,33 +414,33 @@ export default function BlogPostPage() {
 
           <ol>
             <li>
-              <strong>Synchronizer tokens</strong> (2005-ish), server stamps a
-              token into a hidden form field, server keeps it in session,
-              compares on submit. Works, but requires server-side state and dies
-              the moment you have a stateless API.
+              Synchronizer tokens (2005-ish), server stamps a token into a
+              hidden form field, server keeps it in session, compares on submit.
+              Works, but requires server-side state and dies the moment you have
+              a stateless API.
             </li>
             <li>
-              <strong>Double-submit cookie</strong> (2010s), server sets a
-              random token in a cookie, frontend echoes it back as a header (or
-              hidden field). The browser&apos;s same-origin policy prevents an
-              attacker page from reading the cookie, so the echo proves the
-              request came from a page that <em>could</em> read it. Stateless,
-              framework-friendly. This is what the JS world ran on for a decade.
+              Double-submit cookie (2010s), server sets a random token in a
+              cookie, frontend echoes it back as a header (or hidden field). The
+              browser&apos;s same-origin policy prevents an attacker page from
+              reading the cookie, so the echo proves the request came from a
+              page that <em>could</em> read it. Stateless, framework-friendly.
+              This is what the JS world ran on for a decade.
             </li>
             <li>
-              <strong>SameSite cookies</strong> (2017-2020), browsers started
-              defaulting cookies to <code>SameSite=Lax</code>
+              SameSite cookies (2017-2020), browsers started defaulting cookies
+              to <code>SameSite=Lax</code>
               {", "}which actually eliminates the most naive CSRF without any
               application code. Great, but partial: <code>Lax</code> still
               allows top-level <code>GET</code> navigations, and apps that need
               cross-site cookies (third-party widgets, SSO) have to opt out.
             </li>
             <li>
-              <strong>Fetch Metadata Request Headers</strong> (2020+), the
-              browser itself starts telling the server{" "}
-              <em>where this request came from</em>
+              Fetch Metadata Request Headers (2020+), the browser itself starts
+              telling the server <em>where this request came from</em>
               {", "}via <code>Sec-Fetch-Site</code>
-              {", "}<code>Sec-Fetch-Mode</code>
+              {", "}
+              <code>Sec-Fetch-Mode</code>
               {", "}
               <code>Sec-Fetch-Dest</code>
               {". "}With one rule, &quot;reject mutating requests whose{" "}
@@ -461,8 +461,8 @@ export default function BlogPostPage() {
           <p>
             Three lines. The middleware mints a 32-byte URL-safe token, sets it
             as <code>__Host-daloy.csrf</code>
-            {", "}and on any mutating method it requires the request to echo
-            the same value in <code>x-csrf-token</code>
+            {", "}and on any mutating method it requires the request to echo the
+            same value in <code>x-csrf-token</code>
             {". "}The comparison is timing-safe.
           </p>
 
@@ -603,18 +603,17 @@ export default function BlogPostPage() {
           <p>
             One rule for predicates: keep them <em>small</em> and{" "}
             <em>readable</em>
-            {". "}The instant your predicate looks like a regex engine, you
-            have introduced a different CSRF vector, the one where a future
-            engineer misreads it.
+            {". "}The instant your predicate looks like a regex engine, you have
+            introduced a different CSRF vector, the one where a future engineer
+            misreads it.
           </p>
 
           <h2>Strategy 3: both, the realistic production default</h2>
 
           <p>
-            Most apps I&apos;ve shipped in the last three years have ended up
-            here, and not because we couldn&apos;t pick a side. The reason is
-            simple, the two strategies are <em>cheap</em> to run together, and
-            they fail in different ways:
+            Most apps I&apos;ve shipped in the last three years have used both.
+            The two strategies are <em>cheap</em> to run together, and they fail
+            in different ways:
           </p>
 
           <EditorFrame
@@ -710,7 +709,7 @@ export default function BlogPostPage() {
             better.
           </p>
 
-          <h2>The honest part</h2>
+          <h2>Limits</h2>
 
           <p>
             CSRF, as a class, is mostly a solved problem in 2026, between

@@ -106,8 +106,8 @@ export default function Page() {
         </li>
         <li>
           <Link href="/docs/databases/turso">Turso</Link>
-          {": "}distributed libSQL (SQLite fork) via{" "}
-          <code>@libsql/client</code>; works over HTTP for edge runtimes.
+          {": "}distributed libSQL (SQLite fork) via <code>@libsql/client</code>
+          ; works over HTTP for edge runtimes.
         </li>
         <li>
           <Link href={"/docs/databases/duckdb" as Route}>DuckDB</Link>
@@ -203,29 +203,29 @@ export default function Page() {
       <h2 id="choosing-one">Choosing one</h2>
       <ul>
         <li>
-          <strong>You target Cloudflare Workers exclusively</strong>
+          You target Cloudflare Workers exclusively
           {": "}D1 (built-in) or Neon / PlanetScale / Turso over HTTP.
         </li>
         <li>
-          <strong>You want MySQL with database branching</strong>
+          You want MySQL with database branching
           {": "}PlanetScale.
         </li>
         <li>
-          <strong>You want auth + storage + realtime in one package</strong>
+          You want auth + storage + realtime in one package
           {": "}
           Supabase.
         </li>
         <li>
-          <strong>You&apos;re all-in on AWS with the Lambda adapter</strong>
+          You&apos;re all-in on AWS with the Lambda adapter
           {": "}
           Aurora DSQL or RDS Postgres via standard <code>pg</code>.
         </li>
         <li>
-          <strong>You need SQLite-style data close to users</strong>
+          You need SQLite-style data close to users
           {": "}Turso or D1.
         </li>
         <li>
-          <strong>You need embedded analytics over files or local data</strong>
+          You need embedded analytics over files or local data
           {": "}
           DuckDB on Node.js or Lambda.
         </li>

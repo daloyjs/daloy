@@ -32,14 +32,16 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Standard Schema</a>
+          Standard Schema
+        </a>
         {", "}a tiny interface exposed by validators such as{" "}
         <strong>Zod</strong>
         {", "}
         <strong>Valibot</strong>
-        {", "}<strong>ArkType</strong>
-        {", "}and TypeBox via a Standard Schema adapter. Pick the validator
-        that fits your project; the DaloyJS contract is the same.
+        {", "}
+        <strong>ArkType</strong>
+        {", "}and TypeBox via a Standard Schema adapter. Pick the validator that
+        fits your project; the DaloyJS contract is the same.
       </p>
 
       <BranchDiagram
@@ -92,7 +94,8 @@ export default function Page() {
       <p>
         Query strings, form fields, and multipart fields drop prototype
         pollution keys such as <code>__proto__</code>
-        {", "}<code>constructor</code>
+        {", "}
+        <code>constructor</code>
         {", "}
         and <code>prototype</code> before validation.
       </p>
@@ -124,7 +127,8 @@ const CreatePayment = z
       />
       <p>
         Zod 4 already rejects <code>NaN</code> / non-finite numbers for{" "}
-        <code>z.number()</code> in many cases, but a ceiling (<code>.max()</code>) and sign constraint (<code>.positive()</code> /{" "}
+        <code>z.number()</code> in many cases, but a ceiling (
+        <code>.max()</code>) and sign constraint (<code>.positive()</code> /{" "}
         <code>.nonnegative()</code>) are still your refund-fraud and overflow
         backstop. Pair this with response schemas so sensitive fields never leak
         outbound.
@@ -191,8 +195,8 @@ export const app = new App().post(
       <ul>
         <li>
           <Link href="/docs/validation/zod">Zod</Link>
-          {": "}the default for most teams. Chainable API, large ecosystem,
-          easy to learn.
+          {": "}the default for most teams. Chainable API, large ecosystem, easy
+          to learn.
         </li>
         <li>
           <Link href="/docs/validation/valibot">Valibot</Link>
@@ -295,11 +299,12 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
       <ul>
         <li>
           Content-Length and streamed size against{" "}
-          <code>app.bodyLimitBytes</code> → <strong>413</strong>.
+          <code>app.bodyLimitBytes</code> -&gt; <strong>413</strong>.
         </li>
         <li>
           Content-Type against the route&apos;s <code>accepts</code> list, or
-          global <code>allowedContentTypes</code> if set → <strong>415</strong>.
+          global <code>allowedContentTypes</code> if set -&gt;{" "}
+          <strong>415</strong>.
         </li>
         <li>
           Default accepted body types: <code>application/json</code>

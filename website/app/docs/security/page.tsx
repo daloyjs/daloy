@@ -28,12 +28,8 @@ export default function Page() {
         default and the deployment-specific things stay explicit.
       </p>
       <blockquote>
-        <strong>Think of it like…</strong> a modern car. Seatbelts, airbags,
-        crumple zones, and ABS are built in and armed by default (core
-        guardrails). The route the driver takes, who&apos;s allowed in the
-        passenger seat, and whether you need a child seat are decisions you make
-        per trip (first-party middleware). You don&apos;t have to wire the
-        airbag yourself, but you do have to pick a destination.
+        Core guardrails protect every app by default. First-party middleware
+        adds the policy that depends on your routes, users, and deployment.
       </blockquote>
 
       <LayerStack
@@ -70,305 +66,6 @@ export default function Page() {
         ]}
         caption="The dangerous things are blocked in the core without any setup. The deployment-specific things (CSP, CORS origins, session secrets, CSRF rollout) stay explicit middleware you opt into."
       />
-
-      <h2 id="plain-english-analogies-for-every-protection">
-        Plain-English analogies for every protection
-      </h2>
-      <p>
-        If the terminology in this page feels abstract, this table maps every
-        major protection to an everyday analogy. Skim it once and the rest of
-        the security docs read a lot faster.
-      </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Protection</th>
-            <th>Think of it like…</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Body-size limit</td>
-            <td>
-              A weight limit on a parcel before the post office accepts it, so
-              one oversized package can&apos;t jam the whole sorting room.
-            </td>
-          </tr>
-          <tr>
-            <td>Prototype-pollution-safe JSON</td>
-            <td>
-              A customs form that ignores hand-written notes in the margins.
-              Only the printed boxes count, so smugglers can&apos;t scribble
-              extra instructions (<code>__proto__</code>) that would quietly
-              change how every later parcel in the building gets handled.
-            </td>
-          </tr>
-          <tr>
-            <td>Header / response splitting guard</td>
-            <td>
-              An envelope machine that refuses to print address labels with
-              line-breaks in them, so nobody can sneak a second mailing address
-              onto your package.
-            </td>
-          </tr>
-          <tr>
-            <td>Path-traversal safety</td>
-            <td>
-              A library desk that quietly rewrites any call number with
-              &quot;..&quot; in it back to a real shelf. You always end up at a
-              valid book, never in the staff-only basement.
-            </td>
-          </tr>
-          <tr>
-            <td>Request timeout</td>
-            <td>
-              A taxi with a hard limit on the meter: at 30 seconds the ride ends
-              whether you arrived or not, so a passenger who fell asleep
-              can&apos;t hold the cab forever.
-            </td>
-          </tr>
-          <tr>
-            <td>Method 405 (with Allow header)</td>
-            <td>
-              A receptionist who tells you &quot;this counter only handles
-              deposits and withdrawals&quot; instead of pretending the counter
-              doesn&apos;t exist.
-            </td>
-          </tr>
-          <tr>
-            <td>Production 5xx redaction</td>
-            <td>
-              A &quot;sorry, we&apos;re experiencing issues&quot; sign on a shop
-              window instead of taping the till&apos;s error printout to the
-              glass.
-            </td>
-          </tr>
-          <tr>
-            <td>secureHeaders (CSP, HSTS, X-Frame-Options)</td>
-            <td>
-              A bouncer who tells every passing browser: &quot;only run scripts
-              from this building, always use HTTPS, and no, you can&apos;t stuff
-              this page inside someone else&apos;s frame.&quot;
-            </td>
-          </tr>
-          <tr>
-            <td>CSP nonces + Trusted Types</td>
-            <td>
-              Numbered wristbands handed out fresh every night. Last
-              night&apos;s wristband won&apos;t get a script onto the dance
-              floor today.
-            </td>
-          </tr>
-          <tr>
-            <td>cors (explicit allowlist)</td>
-            <td>
-              A guest list at the door. &quot;Let everyone in, VIP wristbands
-              included&quot; is not a guest list at all, so the guard refuses to
-              enforce that combination (no <code>*</code> origin with
-              credentials).
-            </td>
-          </tr>
-          <tr>
-            <td>csrf, cross-site request forgery (double-submit cookie)</td>
-            <td>
-              A doorman slips a numbered token into your pocket on the way in
-              (the cookie). To hand anything over the counter you must also say
-              the number out loud (the header), and the two must match. Another
-              website never walked past the doorman, so it can&apos;t know your
-              number.
-            </td>
-          </tr>
-          <tr>
-            <td>csrf (Fetch-Metadata)</td>
-            <td>
-              The doorman just asks &quot;did you come in through my front
-              door?&quot; The browser answers truthfully via{" "}
-              <code>Sec-Fetch-Site</code>
-              {": "}no ticket needed.
-            </td>
-          </tr>
-          <tr>
-            <td>rateLimit</td>
-            <td>
-              A bouncer&apos;s clicker. Same person tries to enter 1000 times in
-              a minute? Sit out the next 60 seconds.
-            </td>
-          </tr>
-          <tr>
-            <td>rateLimit (Redis store)</td>
-            <td>
-              One shared clicker across every door of the club, so opening more
-              doors doesn&apos;t let the same guest sneak in N times.
-            </td>
-          </tr>
-          <tr>
-            <td>loadShedding</td>
-            <td>
-              A power grid that browns out non-essential streetlights before the
-              whole city blacks out.
-            </td>
-          </tr>
-          <tr>
-            <td>loginThrottle</td>
-            <td>An ATM that swallows your card after three wrong PINs.</td>
-          </tr>
-          <tr>
-            <td>ipRestriction (CIDR allow/deny)</td>
-            <td>
-              A gated community guard list of which addresses can drive in or
-              out: only the ranges you wrote down (CIDR notation is just
-              shorthand for a range of IP addresses).
-            </td>
-          </tr>
-          <tr>
-            <td>requestId</td>
-            <td>
-              A boarding pass number stapled to every step of your journey. When
-              something breaks, every log can be cross-referenced by that one
-              number.
-            </td>
-          </tr>
-          <tr>
-            <td>bearerAuth / basicAuth</td>
-            <td>
-              An ID badge swiped at the door. <code>timingSafeEqual</code> means
-              the guard reads the whole badge before deciding, so even an
-              attacker timing the response can&apos;t tell which digit was
-              wrong.
-            </td>
-          </tr>
-          <tr>
-            <td>jwt / jwk</td>
-            <td>
-              A passport (JWT) issued by a known embassy (the identity
-              provider). The border officer checks the issuing authority&apos;s
-              signature against the embassy&apos;s published seals (JWKS), not
-              against the passport itself.
-            </td>
-          </tr>
-          <tr>
-            <td>requireScopes</td>
-            <td>
-              Hotel keycards that only open certain floors. A maintenance card
-              doesn&apos;t open guest rooms; a guest card doesn&apos;t open the
-              rooftop.
-            </td>
-          </tr>
-          <tr>
-            <td>session (signed cookie + store)</td>
-            <td>
-              A coat-check ticket. The server keeps the coat; the cookie is the
-              numbered, signed stub the browser hands back to claim it.
-            </td>
-          </tr>
-          <tr>
-            <td>rotateSession</td>
-            <td>
-              Re-issuing a new keycard the moment you log in or get promoted, so
-              anyone holding the old one loses access on the spot.
-            </td>
-          </tr>
-          <tr>
-            <td>fetchGuard (SSRF, server-side request forgery)</td>
-            <td>
-              A corporate firewall, but for your server&apos;s own outgoing
-              calls. SSRF is an attacker handing your code a URL and hoping it
-              fetches your internal admin panel or the cloud metadata endpoint
-              on their behalf; <code>fetchGuard()</code> refuses to dial inside
-              the building.
-            </td>
-          </tr>
-          <tr>
-            <td>compression (BREACH-aware)</td>
-            <td>
-              Vacuum-sealing parcels for shipping, but never vacuum-sealing
-              anything with a return address visible through the wrap, because a
-              thief watching the truck could measure the bulge and figure out
-              what&apos;s inside. (BREACH is the real attack that does exactly
-              this: guessing secrets from compressed response sizes.)
-            </td>
-          </tr>
-          <tr>
-            <td>etag (private/no-store skip)</td>
-            <td>
-              A library returns-receipt that&apos;s only stamped for public
-              books. Private records get no receipt, so two patrons can&apos;t
-              accidentally compare receipts and learn about each other&apos;s
-              files.
-            </td>
-          </tr>
-          <tr>
-            <td>Refuse-to-boot guards</td>
-            <td>
-              The engine check that won&apos;t let the car start if the parking
-              brake is on or the seatbelts are unbuckled. Better to fail in the
-              driveway than at the first intersection.
-            </td>
-          </tr>
-          <tr>
-            <td>Internal-service preset</td>
-            <td>
-              Taking off your raincoat indoors. CSRF and same-origin checks are
-              raincoats for the public street; inside a private building (your
-              service mesh) they&apos;re useless, but you still lock the safe.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              WebSocket CSWSH (cross-site WebSocket hijacking) refuse-to-boot
-            </td>
-            <td>
-              A doorman who refuses to open the back fire-exit unless they can
-              confirm who you are <em>and</em> which street you walked in from.
-            </td>
-          </tr>
-          <tr>
-            <td>Webhook HMAC verify</td>
-            <td>
-              A wax seal on a letter. Anyone can write a letter; only the real
-              sender owns the signet ring (the shared secret key) that makes
-              that exact pattern.
-            </td>
-          </tr>
-          <tr>
-            <td>fileField magicBytes</td>
-            <td>
-              Customs opening every &quot;tin of coffee&quot; to confirm it
-              actually smells like coffee, not gunpowder. Filename extensions
-              are stickers; magic bytes are the actual contents.
-            </td>
-          </tr>
-          <tr>
-            <td>Supply-chain hardening (pnpm, provenance, SBOM)</td>
-            <td>
-              Tamper-evident seals on every ingredient before it goes into the
-              kitchen, a printed ingredient list for the finished dish (the
-              SBOM), plus a paper trail (provenance) showing exactly which farm
-              grew each ingredient.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>minimum-release-age=1440</code>
-            </td>
-            <td>
-              A 24-hour fridge quarantine on freshly delivered groceries, long
-              enough that an obviously-poisoned batch gets recalled before
-              it&apos;s served.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <code>ignore-scripts=true</code>
-            </td>
-            <td>
-              Refusing to run the &quot;please install this companion app&quot;
-              pop-up that ships with the package. Just the food, not the side
-              dish that calls home.
-            </td>
-          </tr>
-        </tbody>
-      </table>
 
       <h2 id="what-the-core-enforces">What the core enforces</h2>
       <p>
@@ -424,7 +121,7 @@ export default function Page() {
             <td>Body-size DoS</td>
             <td>
               Streamed read, hard cap (default 1 MiB), Content-Length checked
-              first → 413.
+              first -&gt; 413.
             </td>
           </tr>
           <tr>
@@ -433,7 +130,8 @@ export default function Page() {
               <code>safeJsonParse</code> strips <code>__proto__</code>
               {", "}
               <code>constructor</code>
-              {", "}<code>prototype</code> via reviver.
+              {", "}
+              <code>prototype</code> via reviver.
             </td>
           </tr>
           <tr>
@@ -463,7 +161,8 @@ export default function Page() {
           <tr>
             <td>Unsupported content types</td>
             <td>
-              Routes with body schemas reject non-allowed content-types → 415.
+              Routes with body schemas reject non-allowed content-types -&gt;
+              415.
             </td>
           </tr>
           <tr>
@@ -502,7 +201,7 @@ export default function Page() {
 } from "@daloyjs/core";
 
 app.use(requestId());           // x-request-id propagation
-app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff …
+app.use(secureHeaders());       // CSP, HSTS, X-Frame-Options, COOP, CORP, no-sniff ...
 app.use(cors({                  // explicit allowlist; never * with credentials
   origin: ["https://app.example.com"],
   credentials: true,
@@ -528,7 +227,8 @@ app.use(timing());              // Server-Timing header for observability`}
       <p>
         The official starters wire these in for you: Node, Bun, and Deno enable{" "}
         <code>secureHeaders()</code>
-        {", "}<code>requestId()</code>
+        {", "}
+        <code>requestId()</code>
         {", "}and <code>rateLimit()</code>; Cloudflare Worker and Vercel enable{" "}
         <code>secureHeaders()</code> and <code>requestId()</code> plus tighter
         edge-friendly body and timeout limits.
@@ -538,9 +238,8 @@ app.use(timing());              // Server-Timing header for observability`}
         Recommended by deployment target
       </h2>
       <p>
-        Start with the middleware below unless you have a concrete reason not
-        to. The point is not to hide policy behind a boolean flag; it is to make
-        the risky choices explicit and consistent.
+        Start with the middleware below unless you have a concrete reason to
+        change it. This keeps risky choices explicit and consistent.
       </p>
       <table>
         <thead>
@@ -554,7 +253,8 @@ app.use(timing());              // Server-Timing header for observability`}
             <td>Node / Bun / Deno API</td>
             <td>
               <code>requestId()</code>
-              {", "}<code>secureHeaders()</code>
+              {", "}
+              <code>secureHeaders()</code>
               {", "}
               <code>rateLimit()</code>
               {", "}and <code>cors()</code> when the API is cross-origin.
@@ -609,16 +309,16 @@ app.use(timing());              // Server-Timing header for observability`}
       </p>
       <ul>
         <li>
-          <strong>Double-submit cookie</strong> (default): sets a token cookie
-          on safe requests, requires the same value on the{" "}
-          <code>x-csrf-token</code> header for unsafe methods, and rejects
-          mismatches with a timing-safe <strong>403</strong>.
+          Double-submit cookie (default): sets a token cookie on safe requests,
+          requires the same value on the <code>x-csrf-token</code> header for
+          unsafe methods, and rejects mismatches with a timing-safe{" "}
+          <strong>403</strong>.
         </li>
         <li>
-          <strong>Fetch Metadata</strong> (<code>strategy: &quot;fetch-metadata&quot;</code>) - tokenless
-          protection that relies on the modern <code>Sec-Fetch-Site</code>{" "}
-          header. No cookie round-trip; no HTML rendering coupling. Recommended
-          for new browser-facing apps.
+          Fetch Metadata (<code>strategy: &quot;fetch-metadata&quot;</code>) -
+          tokenless protection that relies on the modern{" "}
+          <code>Sec-Fetch-Site</code> header. No cookie round-trip; no HTML
+          rendering coupling. Recommended for new browser-facing apps.
         </li>
       </ul>
       <CodeBlock
@@ -665,7 +365,8 @@ cross-origin-resource-policy: same-origin`}
         <code>secureHeaders()</code> can build the CSP from a directive map and
         inject a fresh <strong>per-request nonce</strong> into{" "}
         <code>script-src</code>
-        {", "}<code>script-src-elem</code>
+        {", "}
+        <code>script-src-elem</code>
         {", "}
         <code>style-src</code>
         {", "}and <code>style-src-elem</code>
@@ -762,7 +463,8 @@ app.use(basicAuth({
         DaloyJS&apos;s runtime is <code>child_process</code>-free by CI gate, so
         the framework itself cannot shell out. See{" "}
         <a href="/docs/security/command-injection">Command injection</a> for the
-        safe shape of a handler that does need to invoke an external program (<code>execFile</code> + argv array, never{" "}
+        safe shape of a handler that does need to invoke an external program (
+        <code>execFile</code> + argv array, never{" "}
         <code>exec(`cmd ${"${input}"}`)</code>), the Windows <em>BatBadBut</em>{" "}
         footgun, and the grep rules to keep new bugs out at PR time.
       </p>
@@ -793,50 +495,41 @@ app.use(basicAuth({
       </p>
       <ul>
         <li>
-          <strong>Strict isolation</strong>
+          Strict isolation
           {": "}packages cannot reach phantom dependencies.
         </li>
         <li>
-          <strong>Content-addressable store</strong>
+          Content-addressable store
           {": "}every byte is hashed and verified.
         </li>
         <li>
-          <strong>Frozen lockfile in CI</strong> with{" "}
-          <code>--ignore-scripts</code>
+          Frozen lockfile in CI with <code>--ignore-scripts</code>
           {": "}reproducible installs without transitive lifecycle execution.
         </li>
         <li>
-          <strong>
-            <code>verify-store-integrity</code>
-          </strong>
+          <code>verify-store-integrity</code>
           {", "}corruption-detecting reads.
         </li>
         <li>
-          <strong>
-            <code>strict-peer-dependencies</code>
-          </strong>
+          <code>strict-peer-dependencies</code>
           {", "}no silent peer mismatches.
         </li>
         <li>
-          <strong>
-            <code>minimum-release-age=1440</code>
-          </strong>
+          <code>minimum-release-age=1440</code>
           {", "}wait 24h before installing fresh releases.
         </li>
         <li>
-          <strong>
-            <code>ignore-scripts=true</code>
-          </strong>{" "}
-          with explicit <code>pnpm.onlyBuiltDependencies</code>
+          <code>ignore-scripts=true</code> with explicit{" "}
+          <code>pnpm.onlyBuiltDependencies</code>
           {": "}reviewed allowlist for native install scripts.
         </li>
         <li>
-          <strong>SHA-pinned GitHub Actions</strong>
+          SHA-pinned GitHub Actions
           {": "}the optional generated GitHub workflows pin third-party actions
           to immutable commits, not mutable tags.
         </li>
         <li>
-          <strong>Protected DaloyJS npm publishing</strong>
+          Protected DaloyJS npm publishing
           {": "}the framework&apos;s own packages use a tag-only release
           workflow, protected environment approval, OIDC trusted publishing, and{" "}
           <code>--provenance</code>.

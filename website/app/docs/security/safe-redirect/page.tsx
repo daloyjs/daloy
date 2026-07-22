@@ -24,15 +24,14 @@ export default function Page() {
     <>
       <h1>Open redirect protection</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a receptionist who will only forward
-        your call to extensions on an approved list. Hand them a number that
-        isn&apos;t on the sheet and they hang up. They never dial a random
-        outside line just because you asked nicely.
+        <code>safeRedirect()</code> accepts only destinations allowed by your
+        policy. Rejected external or malformed targets use the configured
+        fallback or throw an <code>OpenRedirectBlockedError</code>.
       </blockquote>
       <p>
         Open redirects (OWASP &quot;Unvalidated Redirects and Forwards&quot;,
         Aikido Top 10 #10) happen when an app blindly trusts a{" "}
-        <code>?next=…</code> / <code>?returnTo=…</code> query parameter and
+        <code>?next=...</code> / <code>?returnTo=...</code> query parameter and
         emits a <code>Location</code> header pointing wherever the attacker
         wants, turning your trusted domain into a phishing launch pad.{" "}
         <code>safeRedirect()</code> validates every candidate URL against an
@@ -128,8 +127,10 @@ app.get(
         </li>
         <li>
           <code>javascript:</code>
-          {", "}<code>data:</code>
-          {", "}<code>vbscript:</code>
+          {", "}
+          <code>data:</code>
+          {", "}
+          <code>vbscript:</code>
           {", "}
           and <code>file:</code> schemes are always refused, even if you
           accidentally wrote one into the allowlist.
@@ -167,8 +168,8 @@ safeRedirect(next, { allowedPaths: ["/*"] });`}
       <h2 id="fallback-vs-throwing">Fallback vs. throwing</h2>
       <p>
         When a candidate is rejected, you choose the behavior. Provide a{" "}
-        <code>fallback</code> path and the user is quietly redirected there.
-        Omit it and <code>safeRedirect()</code> throws an{" "}
+        <code>fallback</code> path and the user is redirected there. Omit it and{" "}
+        <code>safeRedirect()</code> throws an{" "}
         <code>OpenRedirectBlockedError</code> carrying the <code>reason</code>{" "}
         and the offending <code>target</code>.
       </p>
@@ -194,17 +195,21 @@ try {
         The <code>reason</code> is one of <code>empty-target</code>
         {", "}
         <code>invalid-control-characters</code>
-        {", "}<code>non-latin1-target</code>
+        {", "}
+        <code>non-latin1-target</code>
         {", "}
         <code>protocol-relative</code>
-        {", "}<code>backslash-path</code>
+        {", "}
+        <code>backslash-path</code>
         {", "}
         <code>path-not-allowed</code>
-        {", "}<code>origin-not-allowed</code>
+        {", "}
+        <code>origin-not-allowed</code>
         {", "}
         <code>scheme-not-allowed</code>
         {", "}or <code>parse-failed</code>
-        {", "}useful for metrics on which attack shape you are seeing. (<code>non-latin1-target</code> covers same-origin paths carrying a code
+        {", "}useful for metrics on which attack shape you are seeing. (
+        <code>non-latin1-target</code> covers same-origin paths carrying a code
         point above U+00FF, including the Unicode slash homographs.)
       </p>
 
@@ -214,8 +219,10 @@ try {
         different redirect semantic. Accepted values are <code>301</code>
         {", "}
         <code>302</code>
-        {", "}<code>303</code>
-        {", "}<code>307</code>
+        {", "}
+        <code>303</code>
+        {", "}
+        <code>307</code>
         {", "}and <code>308</code>
         {". "}You can also merge extra response headers; the{" "}
         <code>Location</code> header is always overwritten with the validated

@@ -26,11 +26,9 @@ export default function Page() {
     <>
       <h1>Sessions</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a coat-check counter. The server
-        keeps the coat (your session data, sitting in a store). The cookie is
-        the numbered, tamper-proof stub the browser hands back to claim it. If
-        somebody forges the stub the signature won&apos;t match; if they steal
-        the stub, rotating it on login or privilege change cancels the old one.
+        Session data stays in the configured store. The browser receives a
+        signed identifier, and rotating that identifier after login or a
+        privilege change invalidates the previous session reference.
       </blockquote>
       <p>
         DaloyJS ships a small, runtime-portable <code>session()</code>{" "}
@@ -153,8 +151,10 @@ app.post(
       <ul>
         <li>
           <code>cookieName</code>
-          {": "}<code>__Host-daloy.sid</code> - forces <code>Secure</code>
-          {", "}<code>Path=/</code>
+          {": "}
+          <code>__Host-daloy.sid</code> - forces <code>Secure</code>
+          {", "}
+          <code>Path=/</code>
           {", "}no <code>Domain</code>.
         </li>
         <li>
@@ -169,17 +169,20 @@ app.post(
         </li>
         <li>
           <code>rolling</code>
-          {": "}<code>true</code> - every authenticated request slides the
-          expiry and re-emits <code>Set-Cookie</code>.
+          {": "}
+          <code>true</code> - every authenticated request slides the expiry and
+          re-emits <code>Set-Cookie</code>.
         </li>
         <li>
           <code>saveUninitialized</code>
-          {": "}<code>false</code> - anonymous traffic that never touches the
-          session never writes a cookie or store record.
+          {": "}
+          <code>false</code> - anonymous traffic that never touches the session
+          never writes a cookie or store record.
         </li>
         <li>
           <code>generateId</code>
-          {": "}<code>crypto.randomUUID()</code> when available; otherwise a
+          {": "}
+          <code>crypto.randomUUID()</code> when available; otherwise a
           base64url-encoded 32-byte random string. Pass your own{" "}
           <code>generateId</code> to customize.
         </li>
@@ -224,8 +227,10 @@ app.post(
         changed. The default watch list covers <code>userId</code>
         {", "}
         <code>tenantId</code>
-        {", "}<code>roles</code>
-        {", "}<code>scopes</code>
+        {", "}
+        <code>roles</code>
+        {", "}
+        <code>scopes</code>
         {", "}and <code>isAdmin</code>
         {". "}If a handler already calls <code>regenerate()</code>
         {", "}the helper skips itself.

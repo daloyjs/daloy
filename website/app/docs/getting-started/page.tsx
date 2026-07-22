@@ -150,14 +150,14 @@ printStartupBanner({
         code={`pnpm dev
 # in another shell
 curl http://localhost:3000/greet/world
-# → {"msg":"Hello, world!"}`}
+# -> {"msg":"Hello, world!"}`}
       />
 
       <p>
         Don&apos;t want to spin up a real server? Every <code>App</code> exposes{" "}
         <code>app.request(input, init?)</code>
-        {", "}an in-process test client that takes a URL or{" "}
-        <code>Request</code> and returns a <code>Response</code>
+        {", "}an in-process test client that takes a URL or <code>Request</code>{" "}
+        and returns a <code>Response</code>
         {", "}
         no network stack, no port, no second terminal. It&apos;s the same
         entrypoint the typed client and{" "}
@@ -166,7 +166,7 @@ curl http://localhost:3000/greet/world
       <CodeBlock
         code={`const res = await app.request("/greet/world");
 console.log(res.status, await res.json());
-// → 200 { msg: "Hello, world!" }`}
+// -> 200 { msg: "Hello, world!" }`}
       />
 
       <h2 id="3-add-openapi-and-docs-ui">3. Add OpenAPI &amp; docs UI</h2>
@@ -246,8 +246,8 @@ const app = createApp({
         <code>{`docs: { ui: "swagger", path: "/reference" }`}</code>
         {". "}Want it only in development? Use <code>{`docs: "auto"`}</code>
         {": "}it skips the mount when <code>production: true</code>
-        {". "}Need full control? Set <code>docs: false</code> and mount your
-        own routes with <code>generateOpenAPI()</code> and{" "}
+        {". "}Need full control? Set <code>docs: false</code> and mount your own
+        routes with <code>generateOpenAPI()</code> and{" "}
         <code>swaggerUiHtml() / scalarHtml()</code>
         {": "}see the <Link href="/docs/openapi">OpenAPI guide</Link>.
       </p>

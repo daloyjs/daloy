@@ -538,8 +538,8 @@ console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
         Alice can read <code>alice-1</code>
-        {". "}Changing only the path to <code>bob-1</code> must not turn a
-        valid Alice token into access to Bob&apos;s project:
+        {". "}Changing only the path to <code>bob-1</code> must not turn a valid
+        Alice token into access to Bob&apos;s project:
       </p>
       <CodeBlock
         language="bash"
@@ -687,7 +687,8 @@ pnpm test`}
       <p>
         Read the complete{" "}
         <Link href={"/docs/security/resource-authorization" as Route}>
-          resource authorization guide</Link>
+          resource authorization guide
+        </Link>
         {", "}then connect the same boundary to{" "}
         <Link href="/docs/auth">your authentication provider</Link>
         {", "}

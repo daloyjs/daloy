@@ -153,8 +153,8 @@ pnpm fastly compute publish    # deploy`}
           Every outbound HTTP call your REST API makes (to a database API, auth
           service, or third-party endpoint) must be declared as a{" "}
           <strong>backend</strong> in <code>fastly.toml</code>
-          {". "}Arbitrary <code>fetch(&quot;https://...&quot;)</code> calls
-          fail at runtime without one.
+          {". "}Arbitrary <code>fetch(&quot;https://...&quot;)</code> calls fail
+          at runtime without one.
         </li>
         <li>
           KV stores, config stores, and secrets are also declared in{" "}
@@ -169,7 +169,8 @@ pnpm fastly compute publish    # deploy`}
         </li>
         <li>
           <Link href="/docs/adapters/cloudflare-workers">
-            Cloudflare Workers</Link>
+            Cloudflare Workers
+          </Link>
           {", "}similar constraints, modules format.
         </li>
       </ul>

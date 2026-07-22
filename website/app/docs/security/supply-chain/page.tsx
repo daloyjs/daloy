@@ -30,12 +30,9 @@ export default function Page() {
     <>
       <h1>Supply-chain security</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the tamper-evident seal on every
-        ingredient that enters a restaurant&apos;s kitchen. The seal proves
-        nobody opened the jar between the farm and the chef (<code>--provenance</code>). The 24-hour fridge quarantine means an
-        obviously-poisoned batch gets recalled before it&apos;s served (<code>minimum-release-age=1440</code>). And refusing to run the
-        &quot;please install this companion app&quot; pop-up that ships with the
-        package keeps malware out of the prep area (<code>ignore-scripts=true</code>).
+        Provenance links a package to its build. A 24-hour release-age floor
+        delays new versions, and <code>ignore-scripts=true</code> prevents
+        dependency lifecycle scripts from running during installation.
       </blockquote>
       <p>
         npm worm campaigns ship in waves: <code>chalk</code>/<code>debug</code>{" "}
@@ -85,34 +82,31 @@ export default function Page() {
       />
       <ul>
         <li>
-          <strong>Releases run in a separate workflow</strong> (<code>release.yml</code>) that is triggered <em>only</em> by a signed
-          tag push and gated by a protected GitHub Environment requiring
-          maintainer approval. Fork PRs cannot touch it.
+          Releases run in a separate workflow (<code>release.yml</code>) that is
+          triggered <em>only</em> by a signed tag push and gated by a protected
+          GitHub Environment requiring maintainer approval. Fork PRs cannot
+          touch it.
         </li>
         <li>
-          <strong>
-            npm trusted publishing (OIDC) with <code>--provenance</code>
-          </strong>
+          npm trusted publishing (OIDC) with <code>--provenance</code>
           {": "}every <code>@daloyjs/core</code> tarball is bound to its source
           commit and workflow run via Sigstore. There is no long-lived{" "}
           <code>NPM_TOKEN</code> in repo secrets to steal.
         </li>
         <li>
-          <strong>
-            <code>id-token: write</code> is granted only to the publish job</strong>
+          <code>id-token: write</code> is granted only to the publish job
           {", "}on the post-approval runner, with egress blocked to everything
           except npm, GitHub, and Sigstore (via{" "}
           <code>step-security/harden-runner</code>).
         </li>
         <li>
-          <strong>No GitHub Actions cache</strong> in the standard CI workflow.
-          Cache scope bridges fork PRs and pushes to <code>main</code>
+          No GitHub Actions cache in the standard CI workflow. Cache scope
+          bridges fork PRs and pushes to <code>main</code>
           {", "}which is the poisoning channel that bridged TanStack&apos;s PR
           pipeline into its release pipeline.
         </li>
         <li>
-          <strong>
-            No <code>pull_request_target</code> that runs fork code</strong>
+          No <code>pull_request_target</code> that runs fork code
           {". "}CI uses the safe <code>pull_request</code> trigger; the one
           narrow exception (a workflow that auto-closes external PRs) never
           checks out, installs, or runs any PR code. A <code>zizmor</code> check
@@ -121,24 +115,24 @@ export default function Page() {
           -plus-fork-checkout pattern.
         </li>
         <li>
-          <strong>Third-party GitHub Actions are SHA-pinned</strong> so a
-          retargeted version tag cannot silently change what CI executes.
+          Third-party GitHub Actions are SHA-pinned so a retargeted version tag
+          cannot silently change what CI executes.
         </li>
         <li>
-          <strong>CodeQL, OpenSSF Scorecard, Dependabot</strong> all run
-          continuously, and <code>CODEOWNERS</code> blocks any change to{" "}
-          <code>.github/</code>
-          {", "}<code>package.json</code>
+          CodeQL, OpenSSF Scorecard, Dependabot all run continuously, and{" "}
+          <code>CODEOWNERS</code> blocks any change to <code>.github/</code>
+          {", "}
+          <code>package.json</code>
           {", "}the lockfile, or <code>.npmrc</code> without a maintainer
           review.
         </li>
         <li>
-          <strong>ClusterFuzzLite</strong> continuously fuzzes the
-          untrusted-input parsers with Jazzer.js, on every PR that touches{" "}
-          <code>src/</code> and again in a daily batch run (see below).
+          ClusterFuzzLite continuously fuzzes the untrusted-input parsers with
+          Jazzer.js, on every PR that touches <code>src/</code> and again in a
+          daily batch run (see below).
         </li>
         <li>
-          <strong>Lockfile source verification</strong> runs in CI via
+          Lockfile source verification runs in CI via
           <code>pnpm verify:lockfile</code> and fails if{" "}
           <code>pnpm-lock.yaml</code>
           introduces git dependency sources or non-registry tarball URLs.
@@ -151,7 +145,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          SECURITY.md</a>
+          SECURITY.md
+        </a>
         {"."}
       </p>
 
@@ -174,7 +169,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer noopener"
         >
-          ClusterFuzzLite</a>
+          ClusterFuzzLite
+        </a>
         {". "}A per-PR <code>code-change</code> run fuzzes anything that touches{" "}
         <code>src/</code>
         {", "}and a daily batch job fuzzes the full corpus. This is also what
@@ -228,7 +224,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          .clusterfuzzlite/</a>
+          .clusterfuzzlite/
+        </a>
         {"."}
       </p>
 
@@ -264,13 +261,13 @@ strict-peer-dependencies=true`}
         {", "}the CLI adds an <code>npm &gt;= 12</code> floor to{" "}
         <code>engines</code> and swaps the pnpm <code>.npmrc</code> for an
         npm-native one containing <code>engine-strict=true</code>
-        {", "}so npm <em>refuses</em> to install on an older CLI instead of
-        only printing a warning. pnpm scaffolds get the equivalent guard: a{" "}
+        {", "}so npm <em>refuses</em> to install on an older CLI instead of only
+        printing a warning. pnpm scaffolds get the equivalent guard: a{" "}
         <code>pnpm &gt;= 11</code> floor in <code>engines.pnpm</code>
-        {", "}which pnpm always enforces at install time — this matters because
+        {", "}which pnpm always enforces at install time. This matters because
         pnpm older than 11 silently ignores the <code>minimumReleaseAge</code>{" "}
         setting in <code>pnpm-workspace.yaml</code>
-        {", "}quietly disabling the 24-hour release-age cooldown. The CLI also
+        {", "}which disables the 24-hour release-age cooldown. The CLI also
         warns during scaffolding when the installed pnpm is below the floor.
         Yarn and Bun scaffolds never run npm or pnpm, so they get neither floor.
         This keeps npm users on a CLI new enough for the modern lockfile and
@@ -334,7 +331,8 @@ strict-peer-dependencies=true`}
       />
       <p>
         DaloyJS itself uses the pnpm 11+ equivalent, an <code>allowBuilds</code>{" "}
-        allowlist in <code>pnpm-workspace.yaml</code> (<code>package.json#pnpm.onlyBuiltDependencies</code> is the pre-v11
+        allowlist in <code>pnpm-workspace.yaml</code> (
+        <code>package.json#pnpm.onlyBuiltDependencies</code> is the pre-v11
         form). Each entry should be reviewed in PR.
       </p>
 
@@ -368,10 +366,10 @@ strict-peer-dependencies=true`}
         DaloyJS&apos;s install defaults already implement that thesis (cooldown,
         no transitive lifecycle hooks, zero runtime deps in{" "}
         <code>@daloyjs/core</code>
-        {", "}frozen + verified store). For belt-and-braces beyond the
-        cooldown, install a real-time scanner that intercepts package-manager
-        calls and checks each requested version against a live malware feed
-        before it touches disk:
+        {", "}frozen + verified store). For belt-and-braces beyond the cooldown,
+        install a real-time scanner that intercepts package-manager calls and
+        checks each requested version against a live malware feed before it
+        touches disk:
       </p>
       <CodeBlock
         language="bash"
@@ -506,7 +504,8 @@ safe-chain setup`}
               Reduce dependencies (&ldquo;is the dependency needed?&rdquo;)
             </td>
             <td>
-              <code>@daloyjs/core</code> ships zero runtime deps (<code>verify:no-runtime-deps</code>)
+              <code>@daloyjs/core</code> ships zero runtime deps (
+              <code>verify:no-runtime-deps</code>)
             </td>
           </tr>
         </tbody>
@@ -525,7 +524,8 @@ safe-chain setup`}
           target="_blank"
           rel="noreferrer"
         >
-          SECURITY.md &rarr; ENISA mapping</a>
+          SECURITY.md &rarr; ENISA mapping
+        </a>
         {"."}
       </p>
 
@@ -593,38 +593,30 @@ safe-chain setup`}
       </p>
       <ul>
         <li>
-          <strong>
-            Never use <code>pull_request_target</code>
-          </strong>{" "}
-          to check out fork code.
+          Never use <code>pull_request_target</code> to check out fork code.
         </li>
         <li>
-          <strong>
-            Top-level <code>permissions: {`{}`}</code>
-          </strong>
+          Top-level <code>permissions: {`{}`}</code>
           {"; "}opt back in per job.
         </li>
         <li>
-          <strong>Pin third-party actions to a commit SHA</strong> (Dependabot
-          will keep them updated). A retargeted tag has the same blast radius as
-          cache poisoning.
+          Pin third-party actions to a commit SHA (Dependabot will keep them
+          updated). A retargeted tag has the same blast radius as cache
+          poisoning.
         </li>
         <li>
-          <strong>Separate the publish job</strong>
+          Separate the publish job
           {". "}Do not put <code>id-token: write</code> on a workflow that runs
           untrusted code in any earlier step. OIDC tokens have been pulled from
           runner memory in real attacks.
         </li>
         <li>
-          <strong>
-            Use <code>step-security/harden-runner</code>
-          </strong>{" "}
-          on the publish job with <code>egress-policy: block</code> and an
-          explicit allowlist.
+          Use <code>step-security/harden-runner</code> on the publish job with{" "}
+          <code>egress-policy: block</code> and an explicit allowlist.
         </li>
         <li>
-          <strong>Use a protected GitHub Environment</strong> (required
-          reviewers) for any job that can publish.
+          Use a protected GitHub Environment (required reviewers) for any job
+          that can publish.
         </li>
       </ul>
 
@@ -636,7 +628,8 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            Aikido: Quantum incident response</a>
+            Aikido: Quantum incident response
+          </a>
           {": "}why traditional IR cannot catch an npm worm, and why
           install-time prevention (cooldowns, blocked scripts, malware-feed
           scanners) is the only viable defense.
@@ -647,7 +640,8 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            TanStack 2026-05-11 postmortem</a>
+            TanStack 2026-05-11 postmortem
+          </a>
           {": "}the cache-poisoning + OIDC-extraction chain in detail.
         </li>
         <li>
@@ -656,7 +650,8 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            TanStack incident follow-up</a>
+            TanStack incident follow-up
+          </a>
           {": "}what they changed afterwards.
         </li>
         <li>
@@ -665,7 +660,8 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            GitHub Security Lab: preventing pwn requests</a>
+            GitHub Security Lab: preventing pwn requests
+          </a>
           {"."}
         </li>
         <li>
@@ -674,7 +670,8 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            npm provenance documentation</a>
+            npm provenance documentation
+          </a>
           {"."}
         </li>
         <li>
@@ -691,7 +688,8 @@ safe-chain setup`}
             target="_blank"
             rel="noreferrer"
           >
-            summary</a>
+            summary
+          </a>
           {"."}
         </li>
         <li>

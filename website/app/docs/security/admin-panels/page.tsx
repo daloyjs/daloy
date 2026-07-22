@@ -25,12 +25,9 @@ export default function Page() {
     <>
       <h1>Secure admin panels</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the back office of a bank. Different
-        door, different lock, different keys, different camera, and a logbook of
-        who opened the safe and when, all separate from the public lobby. Most
-        admin-panel breaches happen because the back office was stapled to the
-        public lobby with a flimsy curtain (the same auth, the same domain, the
-        same surface).
+        Keep the admin surface separate from the public app. Give it its own
+        authentication policy, host boundary, audit trail, and tighter network
+        controls.
       </blockquote>
       <p>
         Aikido&apos;s{" "}
@@ -249,13 +246,13 @@ app.post(
       </p>
       <ul>
         <li>
-          <strong>Network factor.</strong> <code>ipRestriction()</code> with a
-          tight CIDR allow-list (corporate VPN, Cloudflare WARP egress, office
-          gateway) means a credential leak from outside that range is rejected
-          before authentication even runs.
+          Network factor. <code>ipRestriction()</code> with a tight CIDR
+          allow-list (corporate VPN, Cloudflare WARP egress, office gateway)
+          means a credential leak from outside that range is rejected before
+          authentication even runs.
         </li>
         <li>
-          <strong>Login-throttle factor.</strong>{" "}
+          Login-throttle factor.{" "}
           <code>rateLimit({'{ windowMs, max, groupId: "admin-auth" }'})</code>{" "}
           shares one bucket across <code>/admin/login</code>
           {", "}
@@ -264,7 +261,7 @@ app.post(
           guessing are both throttled by the same counter.
         </li>
         <li>
-          <strong>Session factor.</strong> <code>session()</code> with{" "}
+          Session factor. <code>session()</code> with{" "}
           <code>cookieOptions: {'{ secure: true, sameSite: "strict" }'}</code>{" "}
           plus <code>csrf()</code> on every mutating route closes the
           state-changing-request loophole even if a cookie escapes the admin
@@ -292,7 +289,7 @@ app.post(
     // Combine the limiter with your IdP verification via every(...).
     hooks: every(adminLoginLimit() /* , verifyIdpLogin */),
   },
-  // …
+  // ...
 );
 app.post(
   "/admin/otp",
@@ -301,7 +298,7 @@ app.post(
     internal: true,
     hooks: every(adminLoginLimit() /* , verifyTotpOrWebauthn */),
   },
-  // …
+  // ...
 );`}
       />
 
@@ -356,7 +353,7 @@ app.use(secureHeaders({
       </p>
 
       <h2 id="checklist-aikido-rule-daloy-primitive">
-        Checklist: Aikido rule → Daloy primitive
+        Checklist: Aikido rule -&gt; Daloy primitive
       </h2>
       <table>
         <thead>
@@ -385,7 +382,8 @@ app.use(secureHeaders({
             <td>Per-admin authentication, no shared accounts</td>
             <td>
               <code>bearerAuth()</code>
-              {", "}<code>basicAuth()</code>
+              {", "}
+              <code>basicAuth()</code>
               {", "}JWT helpers,
               <code>session()</code>
               {": "}each ties a request to an identifiable subject
@@ -419,7 +417,7 @@ app.use(secureHeaders({
               <code>
                 secureHeaders(
                 {
-                  "{ contentSecurityPolicy: { …, nonce: true, trustedTypes }, hsts, … }"
+                  "{ contentSecurityPolicy: { ..., nonce: true, trustedTypes }, hsts, ... }"
                 }
                 )
               </code>{" "}

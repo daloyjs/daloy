@@ -22,13 +22,9 @@ export default function Page() {
     <>
       <h1>CSRF protection</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a coat-check counter. When you walk
-        in, the doorman quietly slips a numbered token into your pocket (the
-        cookie). When you later try to claim something at the counter, you have
-        to show that same number written on a slip (the header). A stranger who
-        never walked past the doorman can&apos;t guess the number, so they
-        can&apos;t use your name to grab a coat that isn&apos;t theirs, even if
-        they know which counter to walk up to.
+        Double-submit CSRF protection sends a token in a cookie and requires the
+        same value in a request header. A cross-site form cannot read the cookie
+        value, so it cannot produce the matching header.
       </blockquote>
       <p>
         DaloyJS ships a small, framework-agnostic <code>csrf()</code> middleware
@@ -229,7 +225,8 @@ await fetch("/transfer", {
       </table>
 
       <p>
-        The default generator requires WebCrypto (<code>crypto.getRandomValues</code> or <code>crypto.randomUUID</code>).
+        The default generator requires WebCrypto (
+        <code>crypto.getRandomValues</code> or <code>crypto.randomUUID</code>).
         If you run DaloyJS in an unusual runtime without WebCrypto, pass a
         cryptographically secure custom <code>generator</code> rather than
         falling back to predictable randomness.
@@ -288,19 +285,18 @@ await fetch("/transfer", {
       </h2>
       <ul>
         <li>
-          <strong>Cross-origin reads.</strong> Set a strict CORS allowlist via{" "}
+          Cross-origin reads. Set a strict CORS allowlist via{" "}
           <code>cors()</code> so other origins cannot trigger credentialed
           reads.
         </li>
         <li>
-          <strong>HTML form posts.</strong> Render{" "}
-          <code>ctx.state.csrfToken</code> into a hidden field and forward it as
-          the <code>x-csrf-token</code> header (or use a small client-side
-          script to do so), the middleware only reads the header, not multipart
-          bodies.
+          HTML form posts. Render <code>ctx.state.csrfToken</code> into a hidden
+          field and forward it as the <code>x-csrf-token</code> header (or use a
+          small client-side script to do so), the middleware only reads the
+          header, not multipart bodies.
         </li>
         <li>
-          <strong>Authentication.</strong> CSRF is orthogonal to auth. Combine{" "}
+          Authentication. CSRF is orthogonal to auth. Combine{" "}
           <code>csrf()</code> with <code>bearerAuth()</code> or your session
           middleware.
         </li>

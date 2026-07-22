@@ -102,7 +102,7 @@ export default function Page() {
       <ol>
         <li>
           In the Auth0 dashboard, go to{" "}
-          <strong>Applications → APIs → Create API</strong>
+          <strong>Applications -&gt; APIs -&gt; Create API</strong>
           {". "}Pick an <strong>identifier</strong> (e.g.{" "}
           <code>https://api.acme.example.com</code>), this becomes the{" "}
           <code>aud</code> claim on issued tokens.
@@ -244,7 +244,8 @@ export function requirePermission(...perms: string[]): Hooks {
           target="_blank"
           rel="noreferrer"
         >
-          Action on the Login flow</a>
+          Action on the Login flow
+        </a>
         {". "}Namespace them (e.g. <code>https://acme.example.com/tenant</code>)
         per Auth0&apos;s rules, that prevents collisions with standard claims
         and is required for non-reserved claims to be included.

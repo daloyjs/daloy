@@ -102,8 +102,8 @@ console.log("listening on " + handle.url);`}
       <p>
         The adapter listens for <code>SIGTERM</code> / <code>SIGINT</code> by
         default (matching the Node and Deno adapters), drains{" "}
-        <code>app.shutdown()</code> hooks, and stops the Bun server — so a
-        rolling deploy under Kubernetes or systemd never hard-kills in-flight
+        <code>app.shutdown()</code> hooks, and stops the Bun server. This means
+        a rolling deploy under Kubernetes or systemd never hard-kills in-flight
         requests. Tune or opt out per deployment:
       </p>
       <CodeBlock

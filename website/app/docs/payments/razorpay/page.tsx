@@ -47,8 +47,8 @@ export default function Page() {
       <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
-          <strong>Two signatures, not one.</strong> Razorpay signs two different
-          things: (1) the client-side checkout result, verify with{" "}
+          Two signatures, not one. Razorpay signs two different things: (1) the
+          client-side checkout result, verify with{" "}
           <code>validatePaymentVerification</code> using your{" "}
           <em>key secret</em>; (2) the server-side webhook, verify with{" "}
           <code>validateWebhookSignature</code> using your{" "}
@@ -56,27 +56,26 @@ export default function Page() {
           {". "}They&apos;re different secrets and different payloads.
         </li>
         <li>
-          <strong>Orders are the source of truth, not raw payments.</strong>{" "}
-          Create an Order on your server, hand <code>order_id</code> to
-          Checkout, then verify the callback. Skipping the Order step is
-          technically allowed but loses you idempotency, reconciliation, and the
-          &quot;late authorisation&quot; protection.
+          Orders are the source of truth, not raw payments. Create an Order on
+          your server, hand <code>order_id</code> to Checkout, then verify the
+          callback. Skipping the Order step is technically allowed but loses you
+          idempotency, reconciliation, and the &quot;late authorisation&quot;
+          protection.
         </li>
         <li>
-          <strong>Amounts are paise.</strong> ₹500.00 →{" "}
+          Amounts are paise. ₹500.00 -&gt;{" "}
           <code>{`{ amount: 50000, currency: "INR" }`}</code>
           {". "}Don&apos;t pass floats, the API rejects them.
         </li>
         <li>
-          <strong>Webhook verification needs the raw body.</strong>{" "}
-          <code>JSON.parse</code> + <code>JSON.stringify</code> changes byte
-          order, which breaks the HMAC. Read the request body as a string before
-          parsing it.
+          Webhook verification needs the raw body. <code>JSON.parse</code> +{" "}
+          <code>JSON.stringify</code> changes byte order, which breaks the HMAC.
+          Read the request body as a string before parsing it.
         </li>
         <li>
-          <strong>Don&apos;t roll your own HMAC.</strong> The SDK exposes both
-          verifiers as plain helpers; using them keeps you aligned when Razorpay
-          tweaks the algorithm or adds new fields.
+          Don&apos;t roll your own HMAC. The SDK exposes both verifiers as plain
+          helpers; using them keeps you aligned when Razorpay tweaks the
+          algorithm or adds new fields.
         </li>
       </ul>
 
@@ -89,19 +88,21 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Razorpay dashboard</a>
+            Razorpay dashboard
+          </a>
           {"."}
         </li>
         <li>
-          Account &amp; Settings → API Keys → Generate Test Key. Save the{" "}
-          <code>key_id</code> and <code>key_secret</code>
+          Account &amp; Settings -&gt; API Keys -&gt; Generate Test Key. Save
+          the <code>key_id</code> and <code>key_secret</code>
           {": "}the secret is shown once.
         </li>
         <li>
-          Account &amp; Settings → Webhooks → Add new. Point it at your DaloyJS
-          endpoint and set a <strong>webhook secret</strong>
+          Account &amp; Settings -&gt; Webhooks -&gt; Add new. Point it at your
+          DaloyJS endpoint and set a <strong>webhook secret</strong>
           {". "}Subscribe to at least <code>payment.captured</code>
-          {", "}<code>payment.failed</code>
+          {", "}
+          <code>payment.failed</code>
           {", "}
           <code>order.paid</code>
           {", "}and <code>refund.processed</code>.
@@ -504,7 +505,8 @@ await state.razorpay.refund({
         <code>https</code> module, it runs on Node 18+ but is not edge-runtime
         compatible. For Cloudflare Workers, hit{" "}
         <code>https://api.razorpay.com/v1</code> directly with{" "}
-        <code>fetch</code> and Basic auth (<code>Authorization: Basic base64(key_id:key_secret)</code>). The two
+        <code>fetch</code> and Basic auth (
+        <code>Authorization: Basic base64(key_id:key_secret)</code>). The two
         signature helpers are pure HMAC and easy to reimplement with{" "}
         <code>crypto.subtle</code> if you don&apos;t want the bundled ones.
       </p>
@@ -513,7 +515,8 @@ await state.razorpay.refund({
       <p>
         Razorpay throws errors with a structured <code>error.error</code> object
         containing <code>code</code>
-        {", "}<code>description</code>
+        {", "}
+        <code>description</code>
         {", "}
         <code>field</code>
         {", "}and <code>reason</code>
@@ -525,28 +528,27 @@ await state.razorpay.refund({
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          <strong>Use Orders, not bare payment links.</strong> The Orders flow
-          gives you a server-side anchor for idempotency, lets Checkout JS show
-          the right amount, and unlocks <code>order.paid</code> webhooks that
-          fire even when the customer closes the tab before the success
-          callback.
+          Use Orders, not bare payment links. The Orders flow gives you a
+          server-side anchor for idempotency, lets Checkout JS show the right
+          amount, and unlocks <code>order.paid</code> webhooks that fire even
+          when the customer closes the tab before the success callback.
         </li>
         <li>
-          <strong>Verify both signatures.</strong> The client callback signature
-          stops forged success posts from the browser; the webhook signature
-          stops spoofed IPNs. Skipping either is a foot-gun.
+          Verify both signatures. The client callback signature stops forged
+          success posts from the browser; the webhook signature stops spoofed
+          IPNs. Skipping either is a foot-gun.
         </li>
         <li>
-          <strong>Don&apos;t fulfil on the client callback alone.</strong> The
-          signature proves the call came from Razorpay, but{" "}
-          <code>status: created</code> isn&apos;t <code>captured</code>
+          Don&apos;t fulfil on the client callback alone. The signature proves
+          the call came from Razorpay, but <code>status: created</code>{" "}
+          isn&apos;t <code>captured</code>
           {". "}Always re-fetch the payment (or wait for the webhook) before
           flipping an order to paid.
         </li>
         <li>
-          <strong>Use Promises, ignore the callback API.</strong> Every method
-          on the SDK returns a Promise. The error-first callback parameter still
-          works but exists for legacy code only.
+          Use Promises, ignore the callback API. Every method on the SDK returns
+          a Promise. The error-first callback parameter still works but exists
+          for legacy code only.
         </li>
       </ul>
 

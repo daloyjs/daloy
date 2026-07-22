@@ -48,7 +48,8 @@ export default function Page() {
         <code>app.ws()</code> also normalizes safe runtime defaults:{" "}
         <code>closeOnBackpressureLimit: true</code>
         {", "}a 1 MiB <code>backpressureLimit</code>
-        {", "}<code>perMessageDeflate: false</code>
+        {", "}
+        <code>perMessageDeflate: false</code>
         {", "}a non-zero <code>idleTimeout</code>
         {", "}and a 1 MiB <code>maxPayloadLength</code>
         {". "}Production apps running with <code>secureDefaults</code> refuse{" "}
@@ -153,10 +154,12 @@ app.ws("/chat/:room", chatHandler);`}
         </li>
         <li>
           <code>conn.bufferedAmount</code>
-          {", "}<code>conn.protocol</code>
+          {", "}
+          <code>conn.protocol</code>
           {", "}
           <code>conn.extensions</code>
-          {", "}<code>conn.binaryType</code>.
+          {", "}
+          <code>conn.binaryType</code>.
         </li>
         <li>
           <code>conn.data</code>
@@ -322,7 +325,8 @@ app.ws("/session", {
       <p>
         Override safe defaults per route when a connection needs tighter bounds.{" "}
         <code>idleTimeout</code>
-        {", "}<code>backpressureLimit</code>
+        {", "}
+        <code>backpressureLimit</code>
         {", "}and <code>maxPayloadLength</code> must be positive integers. If
         your WebSocket handler declares a body schema with a maximum size, Daloy
         refuses a larger <code>maxPayloadLength</code> at registration time.
@@ -374,8 +378,10 @@ app.ws("/session", {
         <code>sink.push(chunk)</code> and it dispatches <code>onMessage</code>{" "}
         (with reassembled payload + <code>isBinary</code> flag),{" "}
         <code>onPing</code>
-        {", "}<code>onPong</code>
-        {", "}<code>onClose</code>
+        {", "}
+        <code>onPong</code>
+        {", "}
+        <code>onClose</code>
         {", "}and <code>onProtocolError</code>
         {". "}UTF-8 validation on text frames is handled for you.
       </p>

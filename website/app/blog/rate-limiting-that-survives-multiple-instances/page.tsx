@@ -44,7 +44,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 
 const PAIN = `# A representative production timeline, lightly edited for length:
 #
-# 11:02  Auto-scaler bumps the API from 2 → 6 replicas (Tuesday lunch traffic).
+# 11:02  Auto-scaler bumps the API from 2 -> 6 replicas (Tuesday lunch traffic).
 # 11:03  Attacker starts a credential-stuffing run at ~3,000 RPS, spread
 #        across thousands of IPs via residential proxies.
 # 11:04  Per-IP rate limit (100/min) does NOTHING because each IP hits a
@@ -67,7 +67,7 @@ const app = new App();
 app.use(rateLimit({
   windowMs: 60_000,                    // 1-minute fixed window
   max: 120,                            // per key, per window
-  // store: undefined → MemoryStore (in-process Map<string, ...>)
+  // store: undefined -> MemoryStore (in-process Map<string, ...>)
 }));
 
 // What you're actually getting with N replicas behind a load balancer:
@@ -535,10 +535,10 @@ export default function BlogPostPage() {
           <p>
             That&apos;s the whole change. Same <code>rateLimit()</code>{" "}
             middleware, same <code>windowMs</code> and <code>max</code>
-            {", "}just a different store. Every replica now reads and writes
-            the same counter. The interesting bits are <em>inside</em> the
-            store, and interesting in the &quot;fewer than 15 lines of Lua&quot;
-            sense, which is the way I like my interesting bits.
+            {", "}just a different store. Every replica now reads and writes the
+            same counter. The interesting bits are <em>inside</em> the store,
+            and interesting in the &quot;fewer than 15 lines of Lua&quot; sense,
+            which is the way I like my interesting bits.
           </p>
 
           <h2>The atomic Lua script, in full</h2>
@@ -555,23 +555,22 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              <strong>Atomic.</strong> If <code>INCR</code> succeeded but{" "}
-              <code>PEXPIRE</code> didn&apos;t, you&apos;d have a counter that
-              lives forever and silently turns the limit into &quot;all
-              requests, forever&quot;. Lua running on the server makes that race
-              impossible.
+              Atomic. If <code>INCR</code> succeeded but <code>PEXPIRE</code>{" "}
+              didn&apos;t, you&apos;d have a counter that lives forever and
+              silently turns the limit into &quot;all requests, forever&quot;.
+              Lua running on the server makes that race impossible.
             </li>
             <li>
-              <strong>TTL only on the first hit.</strong> Re-arming the window
-              every request makes the budget reset only when the client stops
-              calling, exactly the opposite of what you want. The conditional{" "}
+              TTL only on the first hit. Re-arming the window every request
+              makes the budget reset only when the client stops calling, exactly
+              the opposite of what you want. The conditional{" "}
               <code>if current == 1</code> is the whole game.
             </li>
             <li>
-              <strong>Single round trip.</strong> Returning the current{" "}
-              <code>PTTL</code> in the same call lets the middleware produce an
-              accurate <code>Retry-After</code> without a second hop. Two-RTT
-              rate limiting is what people mean when they say &quot;Redis is
+              Single round trip. Returning the current <code>PTTL</code> in the
+              same call lets the middleware produce an accurate{" "}
+              <code>Retry-After</code> without a second hop. Two-RTT rate
+              limiting is what people mean when they say &quot;Redis is
               slow&quot; (it isn&apos;t; their limiter is just over-talkative).
             </li>
           </ul>
@@ -602,7 +601,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["src/rate-limit.ts"]}
             activeFile="src/rate-limit.ts"
-            status="onError → 'fail-open' | 'fail-closed' · log either way"
+            status="onError -> 'fail-open' | 'fail-closed' · log either way"
           >
             <CodeBlock language="ts" code={FAIL_OPEN_CLOSED} />
           </EditorFrame>
@@ -679,7 +678,9 @@ export default function BlogPostPage() {
             The portability story here is the same as for the rest of the
             framework (see the{" "}
             <Link href="/blog/same-app-five-runtimes-verified">
-              five-runtimes post</Link>): the contract is Web-standard-shaped, so you swap the transport
+              five-runtimes post
+            </Link>
+            ): the contract is Web-standard-shaped, so you swap the transport
             per environment and keep the app code identical.
           </p>
 
@@ -703,7 +704,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Share the counter and choose the failure mode</h2>
 
           <p>
             Two things make a production-grade rate limiter: an atomic counter

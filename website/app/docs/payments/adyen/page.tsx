@@ -46,45 +46,40 @@ export default function Page() {
       <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
-          <strong>
-            Use Sessions, not <code>/payments</code> directly.
-          </strong>{" "}
-          The modern way to integrate Adyen Web Drop-in / Components is the{" "}
+          Use Sessions, not <code>/payments</code> directly. The modern way to
+          integrate Adyen Web Drop-in / Components is the{" "}
           <a
             href="https://docs.adyen.com/online-payments/build-your-integration/sessions-flow/"
             target="_blank"
             rel="noreferrer"
           >
-            Sessions flow</a>
-          {", "}your server creates a session, the frontend hands it to
-          Drop-in, and Adyen handles 3-D Secure 2, redirects, and
-          payment-method-specific quirks for you. Direct <code>/payments</code>{" "}
-          is still supported for server-to-server use cases.
+            Sessions flow
+          </a>
+          {", "}your server creates a session, the frontend hands it to Drop-in,
+          and Adyen handles 3-D Secure 2, redirects, and payment-method-specific
+          quirks for you. Direct <code>/payments</code> is still supported for
+          server-to-server use cases.
         </li>
         <li>
-          <strong>Live needs a URL prefix.</strong> Production Checkout calls go
-          through a merchant-specific endpoint. Set{" "}
-          <code>liveEndpointUrlPrefix</code> on the <code>Client</code> for any
-          API that requires it (Checkout, BinLookup, BalanceControl, Payout,
-          Recurring). Forgetting this is the #1 cause of &ldquo;works in test,
-          404 in live&rdquo;.
+          Live needs a URL prefix. Production Checkout calls go through a
+          merchant-specific endpoint. Set <code>liveEndpointUrlPrefix</code> on
+          the <code>Client</code> for any API that requires it (Checkout,
+          BinLookup, BalanceControl, Payout, Recurring). Forgetting this is the
+          #1 cause of &ldquo;works in test, 404 in live&rdquo;.
         </li>
         <li>
-          <strong>Webhooks come signed.</strong> Each{" "}
-          <em>NotificationRequestItem</em>
+          Webhooks come signed. Each <em>NotificationRequestItem</em>
           carries an HMAC-SHA256 of selected fields in{" "}
           <code>additionalData.hmacSignature</code>
           {". "}Verify with <code>hmacValidator.validateHMAC</code> and respond{" "}
           <code>[accepted]</code> within ~10 seconds, or Adyen marks it failed
           and retries.
         </li>
+        <li>Node 18+. Older runtimes are unsupported.</li>
         <li>
-          <strong>Node 18+.</strong> Older runtimes are unsupported.
-        </li>
-        <li>
-          <strong>Amounts are minor units.</strong> EUR 10.00 →{" "}
+          Amounts are minor units. EUR 10.00 -&gt;{" "}
           <code>{`{ currency: "EUR", value: 1000 }`}</code>
-          {". "}JPY 1000 → <code>value: 1000</code>
+          {". "}JPY 1000 -&gt; <code>value: 1000</code>
           {". "}Get this wrong and you&apos;ll overcharge by 100×.
         </li>
       </ul>
@@ -111,18 +106,18 @@ export default function Page() {
           >
             API key
           </a>{" "}
-          (Customer Area → Developers → API credentials) and grant it the{" "}
-          <em>Checkout webservice</em> role.
+          (Customer Area -&gt; Developers -&gt; API credentials) and grant it
+          the <em>Checkout webservice</em> role.
         </li>
         <li>
-          Configure a <em>Standard notification</em> webhook in Customer Area →
-          Developers → Webhooks. Point it at your DaloyJS endpoint, choose JSON,
-          generate an <strong>HMAC key</strong>
+          Configure a <em>Standard notification</em> webhook in Customer Area
+          -&gt; Developers -&gt; Webhooks. Point it at your DaloyJS endpoint,
+          choose JSON, generate an <strong>HMAC key</strong>
           {", "}and enable Basic Auth.
         </li>
         <li>
           For production: note your <code>liveEndpointUrlPrefix</code> (Customer
-          Area → Developers → API URLs, looks like{" "}
+          Area -&gt; Developers -&gt; API URLs, looks like{" "}
           <code>1797a841fbb37ca7-AdyenDemo</code>).
         </li>
       </ol>
@@ -445,7 +440,8 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         Adyen returns RFC-7807-shaped errors with <code>status</code>
         {", "}
         <code>errorCode</code>
-        {", "}<code>message</code>
+        {", "}
+        <code>message</code>
         {", "}and <code>errorType</code>
         {". "}The SDK throws <code>HttpClientException</code> with those fields
         on the <code>.error</code> object; map them through{" "}
@@ -455,28 +451,24 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          <strong>
-            Sessions over <code>/payments</code> +{" "}
-            <code>/payments/details</code>.
-          </strong>{" "}
+          Sessions over <code>/payments</code> + <code>/payments/details</code>.{" "}
           The two-step Advanced flow still works, but Sessions is now the
           default in Adyen&apos;s own examples and removes a class of
           state-management bugs.
         </li>
         <li>
-          <strong>Use Web v5+ on the client.</strong> v5 expects a session
-          response shape identical to what <code>PaymentsApi.sessions</code>{" "}
-          returns; older Drop-in versions required wiring up{" "}
-          <code>onSubmit</code> / <code>onAdditionalDetails</code> callbacks by
-          hand.
+          Use Web v5+ on the client. v5 expects a session response shape
+          identical to what <code>PaymentsApi.sessions</code> returns; older
+          Drop-in versions required wiring up <code>onSubmit</code> /{" "}
+          <code>onAdditionalDetails</code> callbacks by hand.
         </li>
         <li>
-          <strong>Don&apos;t roll your own HMAC.</strong> Adyen signs a specific
-          colon-delimited subset of fields with a quirky escape rule. Let{" "}
+          Don&apos;t roll your own HMAC. Adyen signs a specific colon-delimited
+          subset of fields with a quirky escape rule. Let{" "}
           <code>hmacValidator</code> handle it.
         </li>
         <li>
-          <strong>Network tokens by default.</strong> When you tokenise with{" "}
+          Network tokens by default. When you tokenise with{" "}
           <code>storePaymentMethod: true</code> and reuse via{" "}
           <code>shopperInteraction: &quot;ContAuth&quot;</code>
           {", "}Adyen will route through scheme tokens automatically, no extra
@@ -491,7 +483,8 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>
         {", "}
         <Link href={"/docs/payments/authorize-net" as Route}>
-          Authorize.Net guide</Link>
+          Authorize.Net guide
+        </Link>
         {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>

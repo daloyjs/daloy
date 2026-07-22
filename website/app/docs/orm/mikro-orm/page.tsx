@@ -203,7 +203,7 @@ export function requestEntityManager(): Hooks {
         Declaration files are exempt from type-checking when{" "}
         <code>skipLibCheck</code> is on (the scaffolded default), so a broken
         import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.orm</code> / <code>state.em</code> quietly degrade to{" "}
+        <code>state.orm</code> / <code>state.em</code> degrade to{" "}
         <code>any</code>.
       </p>
       <CodeBlock
@@ -279,8 +279,8 @@ serve(app, { port: 3000 });`}
       <p>
         MikroORM batches every change in the forked EM into a single{" "}
         <code>flush()</code>
-        {". "}You almost never need to call <code>persist()</code> manually
-        when using <code>em.create()</code>
+        {". "}You almost never need to call <code>persist()</code> manually when
+        using <code>em.create()</code>
         {", "}
         which auto-persists in v6+. Entities created with{" "}
         <code>new User()</code> still need <code>em.persist()</code>.

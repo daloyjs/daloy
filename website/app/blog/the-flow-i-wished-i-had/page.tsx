@@ -206,26 +206,23 @@ export default function BlogPostPage() {
 
           <ol>
             <li>
-              <strong>The contract always drifts.</strong> The route definition,
-              the Zod (or Joi, or Yup, or class-validator) schema, the OpenAPI
-              YAML, the frontend types, and the client SDK are five different
-              files that pretend to agree with each other. They don&apos;t. They
-              never do. The QA team finds out first. The customer finds out
-              second.
+              The contract always drifts. The route definition, the Zod (or Joi,
+              or Yup, or class-validator) schema, the OpenAPI YAML, the frontend
+              types, and the client SDK are five different files that pretend to
+              agree with each other. They don&apos;t. They never do. The QA team
+              finds out first. The customer finds out second.
             </li>
             <li>
-              <strong>Security defaults are opt-in.</strong> Body limits,
-              request timeouts, prototype-pollution-safe JSON, path-traversal
-              rejection, 5xx redaction in prod, all of these are &quot;just add
-              this middleware&quot;. Which means in real codebases, under
-              deadline, with three Jira tickets open, they are just&hellip; not
-              there.
+              Security defaults are opt-in. Body limits, request timeouts,
+              prototype-pollution-safe JSON, path-traversal rejection, 5xx
+              redaction in prod, all of these are &quot;just add this
+              middleware&quot;. Which means in real codebases, under deadline,
+              with three Jira tickets open, they are just&hellip; not there.
             </li>
             <li>
-              <strong>The runtime is a prison.</strong> You picked Express in
-              2018. Now it&apos;s 2026, your CFO wants Cloudflare Workers
-              because the bill is scary, and your code physically cannot run
-              there. You rewrite. Again.
+              The runtime is a prison. You picked Express in 2018. Now it&apos;s
+              2026, your CFO wants Cloudflare Workers because the bill is scary,
+              and your code physically cannot run there. You rewrite. Again.
             </li>
           </ol>
 
@@ -287,9 +284,10 @@ export default function BlogPostPage() {
                 rel="noreferrer"
                 target="_blank"
               >
-                Standard Schema</a>
-              {", "}so you can bring Zod, Valibot, ArkType, whatever you want.
-              I used Zod here because Zod is what I have muscle memory for. Use
+                Standard Schema
+              </a>
+              {", "}so you can bring Zod, Valibot, ArkType, whatever you want. I
+              used Zod here because Zod is what I have muscle memory for. Use
               what makes you happy.
             </li>
             <li>
@@ -300,13 +298,14 @@ export default function BlogPostPage() {
             <li>
               <code>bodyLimitBytes</code> and <code>requestTimeoutMs</code> are
               arguments to <code>App</code>
-              {", "}not optional middleware you forgot to add. The core
-              enforces them. If a 5xx happens in production, the body is
-              redacted by default, not leaked.
+              {", "}not optional middleware you forgot to add. The core enforces
+              them. If a 5xx happens in production, the body is redacted by
+              default, not leaked.
             </li>
             <li>
               <code>secureHeaders()</code>
-              {", "}<code>rateLimit()</code>
+              {", "}
+              <code>rateLimit()</code>
               {", "}
               <code>requestId()</code> are first-party. They live in the same
               repo, they get the same tests, they ship on the same release
@@ -315,13 +314,13 @@ export default function BlogPostPage() {
             </li>
           </ul>
 
-          <h2>The typed client: my favorite part, honestly</h2>
+          <h2>The typed client: my favorite part</h2>
 
           <p>
             Run <code>pnpm gen</code> and you get a real fetch-based SDK,
             generated from the real OpenAPI spec, which was generated from the
-            real route. No hand-written types. No &quot;let me ping the backend
-            dev to ask what 422 returns&quot;. The frontend sees this:
+            real route. The frontend gets generated types and the declared 422
+            response without asking another team for the shape:
           </p>
 
           <CodeBlock language="ts" code={TYPED_CLIENT} />
@@ -330,9 +329,9 @@ export default function BlogPostPage() {
             That <code>if (result.status === 200)</code> branch is a real
             discriminated union. TypeScript will yell at you, in red, in your
             editor, before you even reach for <code>git commit</code>
-            {", "}if you try to read <code>result.body.title</code> from the
-            404 branch. This is the part where I quietly celebrate and pretend
-            it was always this simple.
+            {", "}if you try to read <code>result.body.title</code> from the 404
+            branch. This is the part where I celebrate and pretend it was always
+            this simple.
           </p>
 
           <h2>Runtime portability without the PowerPoint slides</h2>
@@ -421,14 +420,14 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            DaloyJS is, very honestly, the framework I wanted to hand my younger
-            self when he was crying into his keyboard at 2am Manila time trying
-            to figure out why staging returned HTML for a JSON endpoint. (It was
-            an nginx error page. It is always an nginx error page.) It
-            won&apos;t make you a better developer, and it definitely won&apos;t
-            make the coffee in Oslo cheaper. But it will, I hope, take a small
-            pile of recurring problems off your desk so you can go solve the
-            actually interesting ones.
+            DaloyJS is the framework I wanted to hand my younger self when he
+            was crying into his keyboard at 2am Manila time trying to figure out
+            why staging returned HTML for a JSON endpoint. (It was an nginx
+            error page. It is always an nginx error page.) It won&apos;t make
+            you a better developer, and it definitely won&apos;t make the coffee
+            in Oslo cheaper. But it will, I hope, take a small pile of recurring
+            problems off your desk so you can go solve the actually interesting
+            ones.
           </p>
 
           <h2>Try it in five minutes</h2>

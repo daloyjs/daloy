@@ -101,9 +101,9 @@ export default function Page() {
       <p>
         DaloyJS is a REST API backend framework. The core only ever sees{" "}
         <code>Request &rarr; Response</code>
-        {". "}Runtime-specific concerns, sockets, signals, edge handlers,
-        Lambda event shapes, live in thin adapters at the edge. Choose the
-        adapter for the place you want to deploy your API.
+        {". "}Runtime-specific concerns, sockets, signals, edge handlers, Lambda
+        event shapes, live in thin adapters at the edge. Choose the adapter for
+        the place you want to deploy your API.
       </p>
 
       <BranchDiagram
@@ -111,7 +111,7 @@ export default function Page() {
         source={{
           eyebrow: "web-standard core",
           label: "Your DaloyJS App",
-          detail: "Request → Response",
+          detail: "Request -> Response",
         }}
         branches={[
           {
@@ -171,8 +171,8 @@ export default {
       <ul>
         <li>
           <Link href="/docs/deployment">Deployment</Link>
-          {": "}Docker, reverse proxies, health checks, and Node platform
-          guides (Fly.io, Render, Railway, Heroku).
+          {": "}Docker, reverse proxies, health checks, and Node platform guides
+          (Fly.io, Render, Railway, Heroku).
         </li>
         <li>
           <Link href="/docs/scaffolder">Scaffolder</Link>:{" "}

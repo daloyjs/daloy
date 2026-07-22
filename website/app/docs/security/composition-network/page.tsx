@@ -26,12 +26,10 @@ export default function Page() {
     <>
       <h1>Composition &amp; network</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the velvet ropes outside a club. They
-        steer traffic into the right line (allow/deny lists via
-        <code>ipRestriction</code>), share a single headcount across a group of
-        doors (<code>rateLimit({"{ groupId }"})</code>), and let staff slip in
-        through the side door without queueing (<code>internal: true</code>
-        routes reachable only via <code>app.inject()</code>).
+        Use <code>ipRestriction</code> for network policy,
+        <code>rateLimit({"{ groupId }"})</code> for a shared quota, and
+        <code>internal: true</code> for routes reachable only through
+        <code>app.inject()</code>.
       </blockquote>
       <p>
         Daloy ships the composition & network slice of the secure-by-default
@@ -119,7 +117,8 @@ app.use(some(
           <code>some(...layers)</code> runs each layer&apos;s auth gate in order
           until one passes. When every candidate uses <code>preBody</code> (as
           the built-in <code>bearerAuth()</code>
-          {", "}<code>basicAuth()</code>
+          {", "}
+          <code>basicAuth()</code>
           {", "}
           <code>jwk()</code>
           {", "}and <code>clientCertAuth()</code> now do), selection happens
@@ -133,16 +132,18 @@ app.use(some(
           <code>except(when, hooks)</code> skips the wrapped bundle&apos;s{" "}
           <code>preBody</code> and <code>beforeHandle</code> gates for matching
           paths (<code>/health</code>
-          {", "}<code>/public/**</code>
+          {", "}
+          <code>/public/**</code>
           {", "}
           <code>/v1/*/meta</code>) or for any request where the supplied
           predicate returns <code>true</code>
           {". "}Its <code>onRequest</code>
           {", "}
           <code>afterHandle</code>
-          {", "}<code>onSend</code>
-          {", "}and <code>onResponse</code> phases still run, so shared
-          concerns wired through those phases keep working.
+          {", "}
+          <code>onSend</code>
+          {", "}and <code>onResponse</code> phases still run, so shared concerns
+          wired through those phases keep working.
         </li>
       </ul>
 
@@ -153,7 +154,8 @@ app.use(some(
         {", "}such as <code>rateLimit()</code>
         {", "}
         <code>ipRestriction()</code>
-        {", "}<code>csrf()</code>
+        {", "}
+        <code>csrf()</code>
         {", "}and your own WAF bundles, also run on the cold dispatch path: a
         request that matches no route (<code>404</code>), hits a registered path
         with the wrong method and gets <code>405</code>

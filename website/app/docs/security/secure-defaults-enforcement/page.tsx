@@ -29,12 +29,10 @@ export default function Page() {
     <>
       <h1>secureDefaults enforcement</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a smoke alarm that beeps when it
-        smells smoke <em>and</em> refuses to be permanently silenced. You can
-        mute it for one cooking session by holding a clearly labelled button (<code>acknowledgeInsecureDefaults: true</code>), but it logs that you
-        did and re-arms itself. The alarm also refuses to be installed at all if
-        you try to give it a 4-byte battery (a JWT secret shorter than 32
-        bytes).
+        Insecure settings require an explicit
+        <code>acknowledgeInsecureDefaults: true</code> and produce a startup
+        log. Some configurations, including JWT secrets shorter than 32 bytes,
+        are rejected outright.
       </blockquote>
       <p>
         Daloy applies these <strong>cross-cutting security invariants</strong>{" "}
@@ -126,7 +124,8 @@ new App({
         <code>crashOnUnhandledRejection: false</code>
         {", "}
         <code>trustProxy: false</code>
-        {", "}<code>csrf: &quot;off&quot;</code>) remain available without the
+        {", "}
+        <code>csrf: &quot;off&quot;</code>) remain available without the
         production refusal, prefer those when you only need to disable one
         default rather than the whole surface. Tests can reset the audit-log
         latch via the exported <code>_resetInsecureDefaultsLogForTests()</code>{" "}
@@ -231,9 +230,9 @@ secureHeaders({
       </p>
       <ul>
         <li>
-          <strong>GitHub organization level:</strong>{" "}
+          GitHub organization level:{" "}
           <code>
-            Settings → Authentication security → Require two-factor
+            Settings -&gt; Authentication security -&gt; Require two-factor
             authentication
           </code>{" "}
           is enforced on the <code>@daloyjs</code> org; every account with write
@@ -241,8 +240,7 @@ secureHeaders({
           TOTP-only accounts are off-boarded).
         </li>
         <li>
-          <strong>npm registry level:</strong>{" "}
-          <code>npm access 2fa-required</code> is set on{" "}
+          npm registry level: <code>npm access 2fa-required</code> is set on{" "}
           <code>@daloyjs/core</code> and <code>create-daloy</code>; OIDC trusted
           publishing from the protected <code>npm-publish</code> environment
           means publishes themselves carry no long-lived token, but every
@@ -250,16 +248,14 @@ secureHeaders({
           2FA on the registry account.
         </li>
         <li>
-          <strong>Off-boarding:</strong> when a maintainer leaves rotation,
-          their org membership, publish grants, and granular tokens are revoked
-          in the same change.
+          Off-boarding: when a maintainer leaves rotation, their org membership,
+          publish grants, and granular tokens are revoked in the same change.
         </li>
         <li>
-          <strong>Release-checklist audit gate:</strong> before tagging a
-          release the maintainer running the release verifies that every
-          contributor who approved the <code>npm-publish</code> Environment for
-          that release has 2FA enabled at both levels (the mandatory-2FA audit
-          gate).
+          Release-checklist audit gate: before tagging a release the maintainer
+          running the release verifies that every contributor who approved the{" "}
+          <code>npm-publish</code> Environment for that release has 2FA enabled
+          at both levels (the mandatory-2FA audit gate).
         </li>
       </ul>
 

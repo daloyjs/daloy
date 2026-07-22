@@ -107,7 +107,8 @@ pnpm dlx @railway/cli up`}
         <code>X-Forwarded-For</code> / <code>X-Forwarded-Proto</code> headers.
         In production DaloyJS{" "}
         <strong>
-          refuses to trust forwarded headers until you declare the proxy posture</strong>
+          refuses to trust forwarded headers until you declare the proxy posture
+        </strong>
         {": "}an app with no posture set returns{" "}
         <code>500 https://daloyjs.dev/errors/internal</code> on the first
         request that carries an <code>X-Forwarded-*</code> header (which, behind

@@ -147,7 +147,7 @@ app.shutdown(timeoutMs?: number, reason?: string): Promise<void>`}
       <CodeBlock
         code={`type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 type PathString = \`/\${string}\`;
-type ParamsOf<P>   // infers ":id" → "id" | ...
+type ParamsOf<P>   // infers ":id" -> "id" | ...
 type PathParams<P> // { [K in ParamsOf<P>]: string }
 
 interface RequestSchemas {
@@ -336,7 +336,8 @@ function validate<S extends StandardSchemaV1>(schema: S, input: unknown):
       <p>
         Next up:{" "}
         <Link href={"/docs/api-reference/middleware" as Route}>
-          middleware, composition &amp; app helpers</Link>
+          middleware, composition &amp; app helpers
+        </Link>
         {"."}
       </p>
     </>

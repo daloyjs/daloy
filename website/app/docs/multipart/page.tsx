@@ -38,8 +38,8 @@ export default function Page() {
         DaloyJS does not buffer file bodies for you: the runtime{" "}
         <code>FormData</code> entry stays a <code>File</code> or{" "}
         <code>Blob</code>
-        {", "}so handlers can stream it (<code>file.stream()</code>) directly
-        to S3, disk, or another upstream.
+        {", "}so handlers can stream it (<code>file.stream()</code>) directly to
+        S3, disk, or another upstream.
       </p>
 
       <FlowDiagram
@@ -121,7 +121,9 @@ app.post(
         </li>
         <li>
           <code>accept</code>
-          {": "}MIME allowlist. Each entry can be exact (<code>&quot;image/png&quot;</code>) or a wildcard (<code>&quot;image/*&quot;</code> / <code>&quot;*/*&quot;</code>).
+          {": "}MIME allowlist. Each entry can be exact (
+          <code>&quot;image/png&quot;</code>) or a wildcard (
+          <code>&quot;image/*&quot;</code> / <code>&quot;*/*&quot;</code>).
         </li>
         <li>
           <code>filename(name)</code>
@@ -224,7 +226,8 @@ fileField({
         the request body media type. Each <code>fileField</code> becomes{" "}
         <code>{`{ type: "string", format: "binary" }`}</code> with optional{" "}
         <code>x-accept</code>
-        {", "}<code>x-max-bytes</code>
+        {", "}
+        <code>x-max-bytes</code>
         {", "}and <code>x-magic-bytes</code> annotations so codegen tools and
         humans both see the constraints.
       </p>

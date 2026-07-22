@@ -84,9 +84,9 @@ export default function Page() {
       <ol>
         <li>
           Create a SendGrid account, enable 2FA, then go to{" "}
-          <strong>Settings → API Keys</strong> and generate a{" "}
+          <strong>Settings -&gt; API Keys</strong> and generate a{" "}
           <em>Restricted Access</em> key with only{" "}
-          <strong>Mail Send → Full Access</strong> enabled.
+          <strong>Mail Send -&gt; Full Access</strong> enabled.
         </li>
         <li>
           Complete{" "}

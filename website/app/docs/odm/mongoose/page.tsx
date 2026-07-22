@@ -105,8 +105,7 @@ export const mongoosePlugin = {
         {", "}not to a separate <code>.d.ts</code> file. Declaration files are
         exempt from type-checking when <code>skipLibCheck</code> is on (the
         scaffolded default), so a broken import inside a <code>.d.ts</code>{" "}
-        fails silently and <code>state.db</code> quietly degrades to{" "}
-        <code>any</code>.
+        fails silently and <code>state.db</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/mongoose.ts (the module that exports db)

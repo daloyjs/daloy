@@ -262,7 +262,8 @@ app.get(
 
       <p>
         <code>swaggerUiHtml</code>
-        {", "}<code>scalarHtml</code>
+        {", "}
+        <code>scalarHtml</code>
         {", "}and <code>redocHtml</code> all return self-contained HTML pages
         that load their assets from jsDelivr with a strict CSP allowing only
         that origin. When you hand-roll the route with <code>redocHtml</code>
@@ -331,8 +332,10 @@ console.log(\`wrote \${out}\`);`}
         </li>
         <li>
           <code>tags</code>
-          {", "}<code>summary</code>
-          {", "}<code>description</code>
+          {", "}
+          <code>summary</code>
+          {", "}
+          <code>description</code>
           {", "}and per-status <code>description</code>.
         </li>
       </ul>

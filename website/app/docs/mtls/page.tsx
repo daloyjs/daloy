@@ -38,16 +38,16 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Native TLS</strong>
+          Native TLS
           {": "}when the runtime terminates TLS itself, the Node adapter reads
           the peer certificate off the socket and attaches it to the request
           (lazily, so plain requests pay nothing).
         </li>
         <li>
-          <strong>Forwarded by a trusted proxy</strong>
-          {": "}when TLS is terminated upstream (Envoy, nginx, HAProxy,
-          Traefik, a cloud load balancer), the middleware parses the verified
-          identity the proxy forwards in request headers (Envoy{" "}
+          Forwarded by a trusted proxy
+          {": "}when TLS is terminated upstream (Envoy, nginx, HAProxy, Traefik,
+          a cloud load balancer), the middleware parses the verified identity
+          the proxy forwards in request headers (Envoy{" "}
           <code>X-Forwarded-Client-Cert</code> or operator-named structured
           headers).
         </li>
@@ -133,14 +133,12 @@ app.post(
       <h2 id="rejection-semantics">Rejection semantics</h2>
       <ul>
         <li>
-          <strong>No certificate presented</strong> &rarr; <code>401</code>{" "}
+          No certificate presented &rarr; <code>401</code>{" "}
           <code>application/problem+json</code> with{" "}
           <code>Cache-Control: no-store</code>.
         </li>
         <li>
-          <strong>
-            Unverified chain, failed allow-list, expired, or custom-rejected
-          </strong>{" "}
+          Unverified chain, failed allow-list, expired, or custom-rejected{" "}
           &rarr; <code>403</code> (the response never echoes certificate
           details, to avoid leaking which check failed).
         </li>
@@ -221,7 +219,7 @@ app.post(
         <p className="mt-2">
           When you use <code>format: &quot;structured&quot;</code> without a{" "}
           <code>verify</code> header, the middleware has no proof the terminator
-          actually validated the certificate chain — the subject / issuer / SAN
+          actually validated the certificate chain. The subject / issuer / SAN
           headers alone could be spoofed by anything that reaches the app
           directly. It therefore treats such a certificate as{" "}
           <strong>unverified</strong>
@@ -231,7 +229,7 @@ app.post(
           identity carries a validation result. Only if your proxy genuinely
           cannot forward one, and the app is reachable <em>exclusively</em>{" "}
           through it, set <code>requireVerified: false</code> to accept
-          identity-only headers — keep a strict <code>behindProxy</code> posture
+          identity-only headers. Keep a strict <code>behindProxy</code> posture
           if you do.
         </p>
       </div>

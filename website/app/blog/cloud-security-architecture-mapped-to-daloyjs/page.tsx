@@ -9,7 +9,7 @@ const POST = {
   slug: "cloud-security-architecture-mapped-to-daloyjs",
   title: "Cloud Security Architecture, Mapped to the DaloyJS App Layer",
   description:
-    "Aikido's 'Cloud Security Architecture' guide is a fine high-level checklist, Zero Trust, defense-in-depth, IAM, segmentation, IaC scanning, continuous monitoring. Here's the honest, per-principle mapping of what DaloyJS already ships for the application-layer half of that checklist, what the cloud platform still owns, and the opt-ins worth turning on today.",
+    "Aikido's 'Cloud Security Architecture' guide is a fine high-level checklist, Zero Trust, defense-in-depth, IAM, segmentation, IaC scanning, continuous monitoring. This post maps each principle to what DaloyJS already ships for the application-layer half of that checklist, what the cloud platform still owns, and the opt-ins worth turning on today.",
   date: "2026-06-09",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
@@ -243,11 +243,10 @@ export default function BlogPostPage() {
             >
               Aikido&apos;s &quot;Cloud Security Architecture&quot; guide
             </a>{" "}
-            and asked the only question worth asking when someone hands you a
-            security checklist: <em>are we doing any of this?</em> Fair
-            question. The piece is a tour of Zero Trust, defense-in-depth, IAM,
-            network segmentation, IaC scanning, and continuous monitoring, the
-            meat-and-potatoes of modern cloud security architecture.
+            and asked how much of it DaloyJS already covers. The piece is a tour
+            of Zero Trust, defense-in-depth, IAM, network segmentation, IaC
+            scanning, and continuous monitoring, the meat-and-potatoes of modern
+            cloud security architecture.
           </p>
 
           <p>
@@ -255,10 +254,9 @@ export default function BlogPostPage() {
             lives at a layer DaloyJS will never touch, VPC peering, S3 bucket
             ACLs, GuardDuty, the AWS Well-Architected Security Pillar. But every
             one of its principles has an <strong>application-layer half</strong>
-            {", "}and that half is where a framework lives or dies. Below is
-            the honest mapping: what Daloy already gives you for free, what it
-            gives you when you opt in, and what stays in the cloud
-            account&apos;s lane.
+            {", "}and that half is where a framework lives or dies. Below is the
+            mapping: what Daloy already gives you for free, what it gives you
+            when you opt in, and what stays in the cloud account&apos;s lane.
           </p>
 
           <p>
@@ -400,7 +398,8 @@ export default function BlogPostPage() {
           <p>
             The reasoning behind each one is in{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              &quot;Supply-chain hardening for TypeScript libraries&quot;</Link>
+              &quot;Supply-chain hardening for TypeScript libraries&quot;
+            </Link>
             {". "}Short version: pnpm&apos;s install-time defaults, plus our CI
             gates, plus a release-age cooldown, plus SHA-pinned Actions, plus
             npm provenance, plus a CycloneDX SBOM, chosen because attackers
@@ -444,7 +443,7 @@ export default function BlogPostPage() {
 
           <CodeBlock language="ts" code={ASSUME_BREACH} />
 
-          <h2>What we do not do (the honest part)</h2>
+          <h2>What DaloyJS does not cover</h2>
 
           <ul>
             <li>
@@ -490,7 +489,8 @@ export default function BlogPostPage() {
             </li>
             <li>
               Add <code>secureHeaders()</code>
-              {", "}<code>rateLimit()</code>
+              {", "}
+              <code>rateLimit()</code>
               {", "}
               <code>loadShedding()</code>
               {", "}and <code>fetchGuard()</code>
@@ -515,7 +515,8 @@ export default function BlogPostPage() {
               Read <Link href="/docs/security">/docs/security</Link> once.
               Bookmark{" "}
               <Link href="/docs/security/owasp-api-top-10">
-                /docs/security/owasp-api-top-10</Link>
+                /docs/security/owasp-api-top-10
+              </Link>
               {"."}
             </li>
           </ol>
@@ -532,18 +533,22 @@ export default function BlogPostPage() {
             <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries</Link>
+              Supply-chain hardening for TypeScript libraries
+            </Link>
             {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026</Link>
+              CSRF in 2026
+            </Link>
             {", "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP nonces and Trusted Types</Link>
+              CSP nonces and Trusted Types
+            </Link>
             {", "}
             <Link href="/blog/sessions-on-the-edge">Sessions on the edge</Link>
             {", "}
             <Link href="/blog/observability-without-lock-in-structured-logs-and-otel-tracing">
-              Observability without lock-in</Link>
+              Observability without lock-in
+            </Link>
             {"."}
           </p>
         </div>

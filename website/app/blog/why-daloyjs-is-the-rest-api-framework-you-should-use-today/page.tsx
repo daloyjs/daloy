@@ -9,7 +9,7 @@ const POST = {
   slug: "why-daloyjs-is-the-rest-api-framework-you-should-use-today",
   title: "Why DaloyJS Is the REST API Framework You Should Use Today",
   description:
-    "In 2026, security guardrails are not optional anymore. This is the blunt case for a REST framework that treats secure defaults as the baseline instead of a plugin shopping list.",
+    "Security guardrails are part of the 2026 baseline. This is the blunt case for a REST framework that ships secure defaults instead of a plugin shopping list.",
   date: "2026-06-21",
   readingTime: "7 min read",
   author: "Devlin Duldulao",
@@ -119,13 +119,12 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            In 2026, shipping a backend without security guardrails is not just
-            optimistic. It is negligent. Attackers now have LLMs helping them
-            scan CI pipelines, manifests, network config, and package trees at a
-            speed that used to require a team and a lot of caffeine. The bad
-            news is obvious. The worse news is that many developers are still
-            shipping APIs like it is 2018 and good vibes count as a threat
-            model.
+            In 2026, shipping a backend without security guardrails is
+            negligent. Attackers now have LLMs helping them scan CI pipelines,
+            manifests, network config, and package trees at a speed that used to
+            require a team and a lot of caffeine. The bad news is obvious. The
+            worse news is that many developers are still shipping APIs like it
+            is 2018 and good vibes count as a threat model.
           </p>
 
           <p>
@@ -136,7 +135,7 @@ export default function BlogPostPage() {
             necessary protections into the framework itself.
           </p>
 
-          <h2>The real problem is not routing</h2>
+          <h2>Routing leaves the hard parts to you</h2>
 
           <p>
             Routing is not the hard part. The hard part is remembering every
@@ -158,9 +157,8 @@ export default function BlogPostPage() {
 
           <p>
             Every route definition inherits protections that usually show up as
-            separate packages in other stacks. The point is not that any one of
-            them is revolutionary. The point is that they are present before the
-            first incident report.
+            separate packages in other stacks. None is novel on its own. Their
+            value is being present before the first incident report.
           </p>
 
           <ul>
@@ -220,10 +218,9 @@ export default function BlogPostPage() {
 
           <p>
             I do not think frameworks get credit for restraint, but they should.
-            The strongest argument for DaloyJS is not that it gives you one more
-            clever abstraction. It is that it removes a pile of security chores
-            that too many teams keep forgetting. If you are building REST APIs
-            in 2026, that is not a nice-to-have. That is the baseline.
+            DaloyJS removes security chores that too many teams forget under a
+            deadline. For a REST API in 2026, those controls belong in the
+            baseline.
           </p>
 
           <p>

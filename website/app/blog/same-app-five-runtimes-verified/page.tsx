@@ -420,8 +420,9 @@ export default function BlogPostPage() {
             it does not run on. So when DaloyJS says{" "}
             <em>
               the same app runs on Node, Bun, Deno, Cloudflare Workers, and
-              Vercel</em>
-            {", "}I owe you receipts, not slides. This post is the receipts.
+              Vercel
+            </em>
+            {", "}I owe you working deployments. This post records each one.
           </p>
 
           <p>
@@ -438,12 +439,13 @@ export default function BlogPostPage() {
           <h2>The shared app: note what&apos;s missing</h2>
 
           <p>
-            Before the adapters, look at what the application file does{" "}
-            <em>not</em> import. No <code>http</code>
-            {", "}no <code>node:fs</code>
+            The application file imports none of the runtime entry APIs:
+            <code>http</code>
             {", "}
-            no <code>Deno.serve</code>
-            {", "}no <code>addEventListener</code>
+            <code>node:fs</code>
+            {", "}
+            <code>Deno.serve</code>
+            {", "}or <code>addEventListener</code>
             {". "}The shared code only ever sees <code>Request</code> in,{" "}
             <code>Response</code> out. That&apos;s the whole reason this works.
           </p>
@@ -527,8 +529,8 @@ export default function BlogPostPage() {
 
           <p>
             The thing I love most here is <code>handle.url</code>
-            {". "}Bun computes the scheme and port for you, so &quot;what URL
-            do I actually log on boot&quot; stops being a paragraph of
+            {". "}Bun computes the scheme and port for you, so &quot;what URL do
+            I actually log on boot&quot; stops being a paragraph of
             conditionals. One field, you&apos;re done. Small luxury, big
             quality-of-life.
           </p>
@@ -756,13 +758,13 @@ export default function BlogPostPage() {
                   <td className="px-4 py-2">Next.js App Router</td>
                   <td className="px-4 py-2 font-mono">@daloyjs/core/vercel</td>
                   <td className="px-4 py-2 font-mono">toRouteHandlers()</td>
-                  <td className="px-4 py-2">named GET/POST/… exports</td>
+                  <td className="px-4 py-2">named GET/POST/... exports</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <h2>The honest part</h2>
+          <h2>Limits</h2>
 
           <p>
             Runtime portability is not magic, and it&apos;s not free. It works

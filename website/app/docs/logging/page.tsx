@@ -24,10 +24,8 @@ export default function Page() {
     <>
       <h1>Structured logging</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a flight recorder that automatically
-        bleeps out anything that sounds like a password before it writes to the
-        tape. You get a faithful record of what happened, minus the secrets you
-        never wanted on disk.
+        Structured logs record request context as data. DaloyJS redacts known
+        secret keys and token-shaped values before the logger writes them.
       </blockquote>
       <p>
         DaloyJS ships a tiny, zero-dependency structured logger. Every app gets
@@ -41,10 +39,12 @@ export default function Page() {
         The headline feature is <strong>secure-by-default redaction</strong>
         {": "}
         common credential keys (<code>authorization</code>
-        {", "}<code>cookie</code>
+        {", "}
+        <code>cookie</code>
         {", "}
         <code>password</code>
-        {", "}<code>token</code>
+        {", "}
+        <code>token</code>
         {", "}provider API keys, and more) are replaced with{" "}
         <code>[REDACTED]</code> at any depth, and string values shaped like a
         JWT or an opaque provider token are scrubbed even when they appear under
@@ -139,11 +139,11 @@ jobLog.info({ processed: 1280 }, "done");`}
         depth and replaced with <code>[REDACTED]</code>
         {". "}The built-in <code>DEFAULT_REDACT_KEYS</code> list covers the
         usual suspects plus AI / LLM provider credential headers. In addition,
-        any string value shaped like a JWT (<code>eyJ…</code>) or an opaque
-        provider token (GitHub <code>ghp_…</code>
-        {", "}AWS <code>AKIA…</code>
-        {", "}Stripe <code>sk_live_…</code>
-        {", "}OpenAI <code>sk-…</code>
+        any string value shaped like a JWT (<code>eyJ...</code>) or an opaque
+        provider token (GitHub <code>ghp_...</code>
+        {", "}AWS <code>AKIA...</code>
+        {", "}Stripe <code>sk_live_...</code>
+        {", "}OpenAI <code>sk-...</code>
         {", "}and more) is scrubbed regardless of its key.
       </p>
       <FlowDiagram
@@ -163,7 +163,7 @@ jobLog.info({ processed: 1280 }, "done");`}
           {
             eyebrow: "secure by default",
             label: "Redaction",
-            detail: "keys + JWT / token values → [REDACTED]",
+            detail: "keys + JWT / token values -> [REDACTED]",
             tone: "danger",
           },
           {
@@ -175,7 +175,7 @@ jobLog.info({ processed: 1280 }, "done");`}
           {
             eyebrow: "sink",
             label: "write()",
-            detail: "stdout → Loki · Datadog · CloudWatch",
+            detail: "stdout -> Loki · Datadog · CloudWatch",
             tone: "muted",
           },
         ]}
@@ -228,7 +228,8 @@ const raw = createLogger({ redact: false });`}
         in <code>SENSITIVE_URL_QUERY_KEYS</code> (and known prefixes), JWT-like
         query values, opaque credential-shaped values, and userinfo in the URL
         authority, so OAuth <code>?code=</code>
-        {", "}<code>?access_token=</code>
+        {", "}
+        <code>?access_token=</code>
         {", "}
         and signed-URL signatures do not persist under <code>url</code>
         {". "}Export it from <code>@daloyjs/core</code> when you bind URLs into
@@ -283,17 +284,17 @@ const log = createLogger({ write: (line) => lines.push(line) });`}
       <h2 id="when-to-reach-for-it">When to reach for it</h2>
       <ul>
         <li>
-          <strong>Inside handlers:</strong> use <code>ctx.state.log</code> so
-          every line is correlated to the request id automatically.
+          Inside handlers: use <code>ctx.state.log</code> so every line is
+          correlated to the request id automatically.
         </li>
         <li>
-          <strong>Background work:</strong> derive a{" "}
+          Background work: derive a{" "}
           <code>app.log.child(&#123; component &#125;)</code> so jobs are easy
           to filter.
         </li>
         <li>
-          <strong>Security-sensitive payloads:</strong> rely on the default
-          redaction rather than hand-stripping fields before you log them.
+          Security-sensitive payloads: rely on the default redaction rather than
+          hand-stripping fields before you log them.
         </li>
       </ul>
     </>

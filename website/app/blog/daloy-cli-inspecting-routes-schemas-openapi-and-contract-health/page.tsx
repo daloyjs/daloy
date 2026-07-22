@@ -272,7 +272,7 @@ const DEV_HINT = `# Bonus: daloy dev. Same entry-loading logic, but starts your 
 #   Deno:  deno run --watch --allow-net --allow-env --allow-read <entry>
 #
 $ pnpm daloy dev
-daloy dev: node → node --import tsx --watch ./src/server.ts
+daloy dev: node -> node --import tsx --watch ./src/server.ts
 
 # Force a different runtime from a package.json script:
 $ daloy dev --runtime bun ./src/server.ts
@@ -289,7 +289,7 @@ const CHECKLIST = `# Pre-merge API-review checklist (copy into your PR template)
 #    [ ] B/Q/P/H column matches what the docs claim.
 #
 # 2) Contract gates passed.
-#    [ ] pnpm daloy inspect --check  → exit 0
+#    [ ] pnpm daloy inspect --check  -> exit 0
 #    [ ] CI runs the same command on every PR.
 #
 # 3) OpenAPI diff committed.
@@ -298,8 +298,8 @@ const CHECKLIST = `# Pre-merge API-review checklist (copy into your PR template)
 #    [ ] If diff exists: include it in the PR body so consumers see it.
 #
 # 4) Filters used during review.
-#    [ ] --tag <domain>  → focused review per area owner
-#    [ ] --method POST   → focused review on writes
+#    [ ] --tag <domain>  -> focused review per area owner
+#    [ ] --method POST   -> focused review on writes
 #
 # 5) Don't trust your eyes. The CLI surface is the source of truth.
 #    Diff against main is one bash one-liner away. Use it.`;
@@ -446,9 +446,9 @@ export default function BlogPostPage() {
             Hi, Devlin again. I want to talk about the CLI command that has
             saved me more pull-request meetings than any other tool in this
             framework: <code>daloy inspect</code>
-            {". "}The whole premise is small and a little stubborn, the
-            reviewer should see the API surface in plain text, before the merge,
-            on every PR. Not after. Not next sprint. Now.
+            {". "}The whole premise is small and a little stubborn, the reviewer
+            should see the API surface in plain text on every PR, while there is
+            still time to fix it before merge.
           </p>
 
           <h2>The PR review that taught me to write this post</h2>
@@ -627,17 +627,14 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Put inspection in CI</h2>
 
           <p>
-            Most of what goes wrong with a public API surface goes wrong
-            quietly. An operationId drifts, a response disappears, a debug route
-            ships to prod, and nobody hears a thing. The whole reason{" "}
-            <code>daloy inspect</code> exists is to turn &quot;quietly&quot;
-            into &quot;loudly, in the PR, before the merge button.&quot;
-            That&apos;s it. No magic, no sprawling tool, one binary, one entry
-            file, six flags. Wire it into CI once and never lose a quarter to
-            surface drift again.
+            API drift rarely announces itself. An operationId changes, a
+            response disappears, or a debug route reaches production.{" "}
+            <code>daloy inspect</code> turns those changes into a CI failure
+            before merge. It is one command with six flags, and it belongs next
+            to the rest of your pull-request checks.
           </p>
 
           <p>

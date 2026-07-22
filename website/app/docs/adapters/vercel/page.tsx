@@ -44,12 +44,12 @@ export default function Page() {
           },
           {
             eyebrow: "vercel.json",
-            label: "/(.*) → /api rewrite",
+            label: "/(.*) -> /api rewrite",
             detail: "DaloyJS owns routing at the site root",
             tone: "accent",
           },
         ]}
-        caption="The function lives at api/index.ts on the Node.js runtime. The /(.*) → /api rewrite sends every path to the function so DaloyJS owns routing at the site root."
+        caption="The function lives at api/index.ts on the Node.js runtime. The /(.*) -> /api rewrite sends every path to the function so DaloyJS owns routing at the site root."
       />
 
       <h2 id="when-to-choose-vercel">When to choose Vercel</h2>
@@ -97,8 +97,9 @@ export default toFetchHandler(app);`}
         Vercel maps <code>api/index.ts</code> to <code>/api</code>
         {", "}but a DaloyJS app registers its routes at the{" "}
         <strong>root</strong> (<code>/healthz</code>
-        {", "}<code>/docs</code>
-        {", "} …). Add a <strong>rewrite</strong> so every path reaches the
+        {", "}
+        <code>/docs</code>
+        {", "} ...). Add a <strong>rewrite</strong> so every path reaches the
         function and DaloyJS owns routing at the site root, without it the
         deployed root domain returns a Vercel 404:
       </p>
@@ -180,7 +181,7 @@ pnpm vercel env add SESSION_SECRET production`}
           {". "}Use <code>toFetchHandler</code>.
         </li>
         <li>
-          Without the <code>/(.*)</code> → <code>/api</code> rewrite, Vercel
+          Without the <code>/(.*)</code> -&gt; <code>/api</code> rewrite, Vercel
           serves the function only at <code>/api</code> and the root domain
           returns a 404. The rewrite is what lets DaloyJS own routing at the
           site root.

@@ -84,7 +84,8 @@ export default function Page() {
       <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
-          Create a Postmark server under <strong>Servers → New server</strong>
+          Create a Postmark server under{" "}
+          <strong>Servers -&gt; New server</strong>
           {", "}
           then open it and copy the <strong>Server API Token</strong> from{" "}
           <strong>API Tokens</strong>.

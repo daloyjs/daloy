@@ -37,8 +37,8 @@ export default function Page() {
           libSQL
         </a>{" "}
         (a fork of SQLite). The <code>@libsql/client</code> driver speaks HTTP
-        and WebSocket, so the same DaloyJS app works on Node, Bun, Deno,
-        and Cloudflare Workers.
+        and WebSocket, so the same DaloyJS app works on Node, Bun, Deno, and
+        Cloudflare Workers.
       </p>
 
       <BranchDiagram
@@ -104,7 +104,7 @@ export const tursoPlugin = {
         Declaration files are exempt from type-checking when{" "}
         <code>skipLibCheck</code> is on (the scaffolded default), so a broken
         import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        <code>state.db</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/turso.ts (same module as the plugin above)

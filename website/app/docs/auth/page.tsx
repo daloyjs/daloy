@@ -41,7 +41,8 @@ export default function Page() {
       <p>
         New to this? Start with{" "}
         <Link href={"/docs/auth/architecture" as Route}>
-          Auth architecture: where DaloyJS fits in OAuth2 &amp; OpenID Connect</Link>
+          Auth architecture: where DaloyJS fits in OAuth2 &amp; OpenID Connect
+        </Link>
         {". "}It explains why DaloyJS is a <strong>resource server</strong> (it
         verifies tokens, it does not issue them), how that compares to .NET and
         Duende IdentityServer, whether you actually need Auth0/Okta/Clerk or can
@@ -93,8 +94,8 @@ export default function Page() {
           <Link href={"/docs/auth/better-auth" as Route}>Better Auth</Link>
           {": "}
           self-hosted authentication for email/password, OAuth, sessions, and
-          plugins. Mount its standard <code>Request → Response</code> handler
-          under DaloyJS and guard API routes with{" "}
+          plugins. Mount its standard <code>Request -&gt; Response</code>{" "}
+          handler under DaloyJS and guard API routes with{" "}
           <code>auth.api.getSession()</code>.
         </li>
       </ul>
@@ -290,40 +291,36 @@ declare module "@daloyjs/core" {
       <h2 id="security-checklist">Security checklist</h2>
       <ul>
         <li>
-          <strong>Always verify the signature.</strong> Never trust an
-          unverified JWT, decode-only utilities are for debugging. Use the
-          provider&apos;s JWKS endpoint with key caching and automatic rotation
-          (every SDK on the following pages handles this).
+          Always verify the signature. Never trust an unverified JWT,
+          decode-only utilities are for debugging. Use the provider&apos;s JWKS
+          endpoint with key caching and automatic rotation (every SDK on the
+          following pages handles this).
         </li>
         <li>
-          <strong>
-            Check <code>iss</code> and <code>aud</code>.
-          </strong>{" "}
-          Pin the expected issuer URL and audience/client ID. A correct
-          signature on the wrong audience is still a token confusion attack.
+          Check <code>iss</code> and <code>aud</code>. Pin the expected issuer
+          URL and audience/client ID. A correct signature on the wrong audience
+          is still a token confusion attack.
         </li>
         <li>
-          <strong>Authorize, don&apos;t just authenticate.</strong> A valid
-          token only proves the caller is who they say they are. Enforce scopes,
-          roles, or organization membership for every privileged action, then
-          apply{" "}
+          Authorize, don&apos;t just authenticate. A valid token only proves the
+          caller is who they say they are. Enforce scopes, roles, or
+          organization membership for every privileged action, then apply{" "}
           <Link href={"/docs/security/resource-authorization" as Route}>
             resource authorization
           </Link>{" "}
           to every user-owned or tenant-owned record.
         </li>
         <li>
-          <strong>Use TLS everywhere.</strong> Bearer tokens are
-          plaintext-equivalent. Require HTTPS and set the{" "}
+          Use TLS everywhere. Bearer tokens are plaintext-equivalent. Require
+          HTTPS and set the{" "}
           <Link href="/docs/security">
             <code>secureHeaders</code>
           </Link>{" "}
           middleware (<code>Strict-Transport-Security</code>).
         </li>
         <li>
-          <strong>Rate-limit token-issuing routes.</strong> Login redirects,
-          token-exchange endpoints, and any introspection passthroughs should go
-          through{" "}
+          Rate-limit token-issuing routes. Login redirects, token-exchange
+          endpoints, and any introspection passthroughs should go through{" "}
           <Link href="/docs/security">
             <code>rateLimit</code>
           </Link>{" "}
@@ -332,10 +329,9 @@ declare module "@daloyjs/core" {
           abuse can&apos;t drive cost or lock out users.
         </li>
         <li>
-          <strong>Protect cookies and CSRF.</strong> If you also use session
-          cookies (for an admin panel, say), enable{" "}
-          <Link href="/docs/security/csrf">CSRF</Link> and use{" "}
-          <code>SameSite=Lax</code> + <code>Secure</code> +{" "}
+          Protect cookies and CSRF. If you also use session cookies (for an
+          admin panel, say), enable <Link href="/docs/security/csrf">CSRF</Link>{" "}
+          and use <code>SameSite=Lax</code> + <code>Secure</code> +{" "}
           <code>HttpOnly</code> via the built-in{" "}
           <Link href="/docs/security/session">session middleware</Link>.
         </li>

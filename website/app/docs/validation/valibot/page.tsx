@@ -33,7 +33,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Standard Schema</a>
+          Standard Schema
+        </a>
         {", "}so DaloyJS picks it up the same way it picks up Zod: no adapter,
         no wrapper, no extra runtime dependency in the framework.
       </p>
@@ -56,20 +57,18 @@ export default function Page() {
       <h2 id="why-valibot">Why Valibot</h2>
       <ul>
         <li>
-          <strong>Bundle size.</strong> You import only the validators you
-          actually use, which matters on edge runtimes and in browser-shipped
-          contracts.
+          Bundle size. You import only the validators you actually use, which
+          matters on edge runtimes and in browser-shipped contracts.
         </li>
         <li>
-          <strong>Functional API.</strong>{" "}
-          <code>v.pipe(v.string(), v.email())</code> instead of{" "}
+          Functional API. <code>v.pipe(v.string(), v.email())</code> instead of{" "}
           <code>z.email()</code>
           {". "}Easier to compose, easier to lint.
         </li>
         <li>
-          <strong>Standard Schema native.</strong> Same handler types and the
-          same problem+json error shape you get with Zod. DaloyJS does not care
-          which one you picked.
+          Standard Schema native. Same handler types and the same problem+json
+          error shape you get with Zod. DaloyJS does not care which one you
+          picked.
         </li>
       </ul>
 
@@ -174,7 +173,8 @@ export const app = new App().post(
         Path params, query values, headers, and urlencoded form values arrive as
         strings before schema validation. Drop a <code>v.transform</code> or one
         of the built-in <code>v.toNumber</code>
-        {", "}<code>v.toBoolean</code>
+        {", "}
+        <code>v.toBoolean</code>
         {", "}or <code>v.toDate</code> actions into the pipe to convert before
         further validation.
       </p>
@@ -249,11 +249,12 @@ app.get(
       <ul>
         <li>
           Content-Length and streamed size against{" "}
-          <code>app.bodyLimitBytes</code> → <strong>413</strong>.
+          <code>app.bodyLimitBytes</code> -&gt; <strong>413</strong>.
         </li>
         <li>
           Content-Type against the route&apos;s <code>accepts</code> list, or
-          global <code>allowedContentTypes</code> if set → <strong>415</strong>.
+          global <code>allowedContentTypes</code> if set -&gt;{" "}
+          <strong>415</strong>.
         </li>
         <li>
           Default accepted body types: <code>application/json</code>
@@ -271,8 +272,8 @@ app.get(
         object built from <code>URLSearchParams</code>
         {". "}Multipart bodies validate as an object built from{" "}
         <code>Request.formData()</code>
-        {". "}For a custom text media type, opt in with <code>accepts</code>{" "}
-        and validate a <code>v.string()</code> body.
+        {". "}For a custom text media type, opt in with <code>accepts</code> and
+        validate a <code>v.string()</code> body.
       </p>
       <CodeBlock
         code={`app.post(

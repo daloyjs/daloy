@@ -121,7 +121,7 @@ export const neonPoolPlugin = {
         Declaration files are exempt from type-checking when{" "}
         <code>skipLibCheck</code> is on (the scaffolded default), so a broken
         import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.sql</code> / <code>state.db</code> quietly degrade to{" "}
+        <code>state.sql</code> / <code>state.db</code> degrade to{" "}
         <code>any</code>.
       </p>
       <CodeBlock
@@ -210,7 +210,8 @@ export const db = drizzle({ client: sql });`}
         >
           Neon Driver Adapter
         </a>{" "}
-        so Prisma can run on edge runtimes (GA since Prisma <code>6.16.0</code>):
+        so Prisma can run on edge runtimes (GA since Prisma <code>6.16.0</code>
+        ):
       </p>
       <CodeBlock
         code={`pnpm add @prisma/adapter-neon

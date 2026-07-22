@@ -17,7 +17,7 @@ const POST = {
   author: "Devlin Duldulao",
   authorRole: "Fullstack cloud engineer",
   authorBio:
-    "Ten years of fullstack, writing TypeScript from Norway. Once spent a long evening discovering that the reason a span had no parent was because the propagator wasn't installed, not because the universe was conspiring against him. Has been mildly more empathetic about observability complaints ever since.",
+    "Ten years of fullstack, writing TypeScript from Norway. Once lost an evening to a missing propagator and has been more patient with observability complaints ever since.",
 };
 
 export const metadata = buildMetadata({
@@ -95,7 +95,7 @@ const log = pino({ level: "info" }) as unknown as Logger;
 const app = new App({ logger: log });
 
 // In tests:
-//   new App({ logger: false })   // → noopLogger, silent
+//   new App({ logger: false })   // -> noopLogger, silent
 //   new App({ logger: noopLogger })`;
 
 const REQUEST_ID = `// src/app.ts, request IDs are the spine of observability.
@@ -141,7 +141,7 @@ const LOG_OUTPUT = `// Output for one request, note the shared requestId across 
  "requestId":"01HZQ4M8Z1F7E0SE0EH7E3WJW2","status":200,"durationMs":6,
  "msg":"request handled"}
 
-// Server-Timing on the wire (DevTools Network tab → Timing):
+// Server-Timing on the wire (DevTools Network tab -> Timing):
 HTTP/1.1 200 OK
 content-type: application/json; charset=utf-8
 x-request-id: 01HZQ4M8Z1F7E0SE0EH7E3WJW2
@@ -526,9 +526,9 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            Devlin here. The honest summary of most observability stacks
-            I&apos;ve inherited is: somebody pinned an SDK in 2023, it grew
-            global side effects, and now nobody can move the service off Node 18
+            Devlin here. Most observability stacks I&apos;ve inherited follow
+            the same pattern: somebody pinned an SDK in 2023, it grew global
+            side effects, and now nobody can move the service off Node 18
             because the SDK&apos;s instrumentation hooks don&apos;t work on the
             new runtime. The cost of cleaning that up is &quot;next
             quarter&quot; forever. The whole reason DaloyJS keeps its
@@ -544,7 +544,8 @@ export default function BlogPostPage() {
             hard dependency on <code>@opentelemetry/api</code>
             {". "}Everything composes through the same{" "}
             <Link href="/blog/middleware-without-mystery-hooks-ordering-response-transformation">
-              hooks lifecycle</Link>
+              hooks lifecycle
+            </Link>
             {", "}which is the only contract you need to understand to extend
             any of it.
           </p>
@@ -578,7 +579,7 @@ export default function BlogPostPage() {
             the request id.
           </p>
 
-          <p>Want pino in production? The shape is intentionally compatible:</p>
+          <p>For pino in production, the shape is intentionally compatible:</p>
 
           <EditorFrame
             files={["src/log.ts"]}
@@ -627,7 +628,8 @@ export default function BlogPostPage() {
             <code>@opentelemetry/api</code> tracer, but the framework does not
             import it. The contract is two small interfaces in{" "}
             <code>src/tracing.ts</code>
-            {": "}<code>TracingTracer</code> and <code>TracingSpan</code>
+            {": "}
+            <code>TracingTracer</code> and <code>TracingSpan</code>
             {": "}and any object that fits them works. You install the OTel SDK
             in <em>your</em> <code>package.json</code>
             {", "}
@@ -660,10 +662,12 @@ export default function BlogPostPage() {
             Uses OTel semantic conventions: <code>http.request.method</code>
             {", "}
             <code>url.path</code>
-            {", "}<code>url.scheme</code>
+            {", "}
+            <code>url.scheme</code>
             {", "}
             <code>server.address</code>
-            {", "}<code>url.query</code>
+            {", "}
+            <code>url.query</code>
             {", "}
             <code>user_agent.original</code>
             {". "}Your dashboards work without translation.
@@ -722,10 +726,11 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Don&apos;t need the OTel propagator? Read <code>traceparent</code>{" "}
-            off the headers yourself, build a minimal parent context object,
-            return it. The framework does not care what shape the parent context
-            has; it passes it through to <code>startSpan</code> unchanged.
+            If you do not need the OTel propagator, read
+            <code>traceparent</code> from the headers and return a minimal
+            parent context object. The framework does not care what shape the
+            parent context has; it passes it through to <code>startSpan</code>{" "}
+            unchanged.
           </p>
 
           <h2>Composing exporters and access logs</h2>
@@ -761,7 +766,9 @@ export default function BlogPostPage() {
           <p>
             Same story as the rest of the framework (see the{" "}
             <Link href="/blog/same-app-five-runtimes-verified">
-              five-runtimes post</Link>): one app, swap the transport per environment, keep the handler
+              five-runtimes post
+            </Link>
+            ): one app, swap the transport per environment, keep the handler
             code identical.
           </p>
 
@@ -775,7 +782,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Keep the telemetry boundary small</h2>
 
           <p>
             Observability is one of those areas where the bad decisions are

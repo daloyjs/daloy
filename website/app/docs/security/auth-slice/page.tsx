@@ -30,12 +30,9 @@ export default function Page() {
     <>
       <h1>JWT and authentication safeguards</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a building lobby that does three
-        things most don&apos;t. It checks not just your badge but who issued it
-        (JWKS lookup by <code>kid</code>), revalidates that you still work here
-        on every request (the <code>verify</code> hook), and refuses to cache
-        the &quot;denied&quot; answer at the elevator, so a fired employee
-        can&apos;t ride up tomorrow on a stale 401 (<code>Cache-Control: no-store</code>).
+        The authentication slice resolves signing keys by <code>kid</code>, runs
+        the <code>verify</code> hook on every request, and adds
+        <code>Cache-Control: no-store</code> to authentication failures.
       </blockquote>
 
       <h2 id="daloyjs-is-a-relying-party-not-an-auth-server">
@@ -48,19 +45,19 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Hosted IdPs</strong>
+          Hosted IdPs
           {": "}Auth0, Okta, Azure AD / Entra ID, AWS Cognito, Google Identity,
           Clerk, WorkOS, Supabase Auth, Logto, Stytch, Kinde. Anything that
           publishes a standard <code>/.well-known/jwks.json</code> works with{" "}
           <code>jwk()</code> out of the box.
         </li>
         <li>
-          <strong>Self-hosted IdPs</strong>
+          Self-hosted IdPs
           {": "}Keycloak, Ory Hydra, ZITADEL, Authentik, Dex. Same JWKS
           contract, same one-line <code>jwk()</code> setup.
         </li>
         <li>
-          <strong>Your own sibling auth service</strong>
+          Your own sibling auth service
           {": "}a separate DaloyJS app using <code>createJwtSigner()</code> to
           mint tokens and exposing a JWKS endpoint. The API service then
           validates those tokens with <code>jwk()</code> exactly as it would for
@@ -70,13 +67,14 @@ export default function Page() {
       <p>Rough mapping of which middleware to reach for:</p>
       <ul>
         <li>
-          <strong>Browser app + external IdP (OIDC)</strong>
-          {": "}<code>jwk()</code> on the API, <code>requireScopes()</code> per
-          route, <code>session()</code> only if you also need server-side
-          session state alongside the access token.
+          Browser app + external IdP (OIDC)
+          {": "}
+          <code>jwk()</code> on the API, <code>requireScopes()</code> per route,{" "}
+          <code>session()</code> only if you also need server-side session state
+          alongside the access token.
         </li>
         <li>
-          <strong>Service-to-service inside one tenant</strong>:{" "}
+          Service-to-service inside one tenant:{" "}
           <code>bearerAuth({"{ validate }"})</code> with an opaque token, or{" "}
           <code>jwk()</code> if both sides already speak JWT. The{" "}
           <a href="/docs/security/internal-service-preset">
@@ -85,14 +83,15 @@ export default function Page() {
           relaxes browser-only headers for these endpoints.
         </li>
         <li>
-          <strong>Webhook receivers</strong>
+          Webhook receivers
           {": "}neither <code>bearerAuth()</code> nor <code>jwk()</code>; use
           the dedicated HMAC verifier (see the{" "}
           <a href="/docs/security">security overview</a>).
         </li>
         <li>
-          <strong>Admin tools / scripts</strong>
-          {": "}<code>basicAuth()</code> behind <code>ipRestriction()</code>
+          Admin tools / scripts
+          {": "}
+          <code>basicAuth()</code> behind <code>ipRestriction()</code>
           {", "}or short-lived JWTs from your IdP.
         </li>
       </ul>
@@ -103,19 +102,18 @@ export default function Page() {
       <ul>
         <li>
           <code>jwk()</code>
-          {": "}asymmetric-only Bearer-token middleware backed by a JWKS
-          source. Refuses <code>HS*</code> at construction, requires a{" "}
-          <code>kid</code> header that matches a JWK in the set, and
-          cross-checks JWT-header <code>alg</code> against the JWK&apos;s
-          declared <code>alg</code> when both are present.
+          {": "}asymmetric-only Bearer-token middleware backed by a JWKS source.
+          Refuses <code>HS*</code> at construction, requires a <code>kid</code>{" "}
+          header that matches a JWK in the set, and cross-checks JWT-header{" "}
+          <code>alg</code> against the JWK&apos;s declared <code>alg</code> when
+          both are present.
         </li>
         <li>
           <code>bearerAuth({"{ verify }"})</code> /{" "}
           <code>jwk({"{ verify }"})</code>
-          {": "}per-request revalidation hook so revocation lists,
-          token-version counters, and &quot;user changed password since this
-          token was issued&quot; checks can invalidate previously-issued
-          credentials.
+          {": "}per-request revalidation hook so revocation lists, token-version
+          counters, and &quot;user changed password since this token was
+          issued&quot; checks can invalidate previously-issued credentials.
         </li>
         <li>
           <code>basicAuth({"{ onAuthSuccess }"})</code>
@@ -128,8 +126,9 @@ export default function Page() {
           <code>401</code> challenge (<code>bearerAuth()</code>
           {", "}
           <code>basicAuth()</code>
-          {", "}<code>jwk()</code>) so intermediaries never cache an auth
-          challenge, RFC 9111 §3.5 and audit alignment.
+          {", "}
+          <code>jwk()</code>) so intermediaries never cache an auth challenge,
+          RFC 9111 §3.5 and audit alignment.
         </li>
       </ul>
 
@@ -140,8 +139,10 @@ export default function Page() {
         Drop-in Bearer-token middleware backed by a JWKS source. The algorithm
         allowlist is intentionally narrow: only <code>RS256</code> /{" "}
         <code>RS384</code> / <code>RS512</code>
-        {", "}<code>PS256</code> / <code>PS384</code> / <code>PS512</code>
-        {", "}<code>ES256</code> / <code>ES384</code> / <code>ES512</code>
+        {", "}
+        <code>PS256</code> / <code>PS384</code> / <code>PS512</code>
+        {", "}
+        <code>ES256</code> / <code>ES384</code> / <code>ES512</code>
         {", "}and <code>EdDSA</code>
         {". "}
         Symmetric <code>HS*</code> algorithms are refused at construction, the
@@ -350,7 +351,8 @@ app.use(
         <code>requirePayloadAuth</code> scheme flag, and the WebSocket-helper
         safe defaults, are covered in{" "}
         <a href="/docs/security/websocket-login-throttle">
-          WebSocket and login safeguards</a>
+          WebSocket and login safeguards
+        </a>
         {"."}
       </p>
     </>

@@ -35,27 +35,26 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>No bundled database</strong>
+          No bundled database
           {": "}Daloy ships no GeoIP data and adds no runtime dependency. You
-          supply the IP&nbsp;→&nbsp;country mapping (a MaxMind reader, an{" "}
+          supply the IP&nbsp;-&gt;&nbsp;country mapping (a MaxMind reader, an{" "}
           <code>ip2location</code> reader, your own table) <em>or</em> read a
           country header injected by your edge.
         </li>
         <li>
-          <strong>Two strategies, pick one</strong>:{" "}
-          <code>lookupCountry(ip)</code> when you own the lookup, or{" "}
-          <code>resolveCountry(ctx)</code> when an upstream already attached the
-          country.
+          Two strategies, pick one: <code>lookupCountry(ip)</code> when you own
+          the lookup, or <code>resolveCountry(ctx)</code> when an upstream
+          already attached the country.
         </li>
         <li>
-          <strong>Fail-closed allow-lists</strong>
+          Fail-closed allow-lists
           {": "}when an <code>allow</code> list is configured, an{" "}
           <em>unknown</em> country is rejected by default (it&apos;s not on the
           list). Deny-only configurations fail open. Both are overridable with{" "}
           <code>allowUnknownCountry</code>.
         </li>
         <li>
-          <strong>Reuses trusted-proxy IP resolution</strong>
+          Reuses trusted-proxy IP resolution
           {": "}the same <code>X-Forwarded-For</code> / <code>X-Real-IP</code>{" "}
           handling (off by default, opt in with <code>trustProxyHeaders</code>)
           as the other network guards.
@@ -110,7 +109,7 @@ export default function Page() {
       />
 
       <h2 id="strategy-1-bring-your-own-ip-country-lookup">
-        Strategy 1: bring your own IP → country lookup
+        Strategy 1: bring your own IP -&gt; country lookup
       </h2>
       <p>
         Use any GeoIP reader as an operator dependency. Daloy resolves the
@@ -193,17 +192,17 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
       </h2>
       <ul>
         <li>
-          <strong>deny</strong>
+          deny
           {": "}listed countries are always rejected; a deny match wins over an
           allow match (least privilege).
         </li>
         <li>
-          <strong>allow</strong>
+          allow
           {": "}when non-empty, only listed countries pass; everything else
           (including an unresolved country) is rejected.
         </li>
         <li>
-          <strong>both</strong>
+          both
           {": "}deny is evaluated first, then the allow-list gate.
         </li>
       </ul>
@@ -220,11 +219,10 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
       </p>
       <ul>
         <li>
-          <strong>allow-list configured</strong> → <em>blocked</em> (fail
-          closed).
+          allow-list configured -&gt; <em>blocked</em> (fail closed).
         </li>
         <li>
-          <strong>deny-only</strong> → <em>allowed</em> (fail open).
+          deny-only -&gt; <em>allowed</em> (fail open).
         </li>
       </ul>
       <p>
@@ -280,7 +278,8 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         A blocked request throws <code>ForbiddenError</code>
         {", "}rendered as RFC 9457 <code>application/problem+json</code> with
         HTTP <code>403</code> and <code>Cache-Control: no-store</code>
-        {". "}The default message (<code>&quot;Access from your region is not permitted&quot;</code>) is
+        {". "}The default message (
+        <code>&quot;Access from your region is not permitted&quot;</code>) is
         configurable via <code>message</code> and deliberately does not echo the
         country or IP back to the client.
       </p>

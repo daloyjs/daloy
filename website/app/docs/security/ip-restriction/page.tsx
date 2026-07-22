@@ -24,10 +24,8 @@ export default function Page() {
     <>
       <h1>IP allow/deny lists</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a guest list at the door. Names on
-        the allow list get in; names on the deny list are turned away no matter
-        what, and if the bouncer can&apos;t see who you are at all, you
-        don&apos;t get in either.
+        IP restrictions evaluate the deny list first, then the allow list. If
+        the middleware cannot resolve a client address, it rejects the request.
       </blockquote>
       <p>
         <code>ipRestriction()</code> enforces network-layer access control using
@@ -104,19 +102,18 @@ app.use(ipRestriction({
       />
       <ul>
         <li>
-          <strong>Deny wins.</strong> When both lists are supplied, the matcher
-          runs deny-first then allow-otherwise. A deny match always loses to
-          nothing: even an explicit allow-list entry cannot override a deny,
-          matching the principle of least privilege.
+          Deny wins. When both lists are supplied, the matcher runs deny-first
+          then allow-otherwise. A deny match always loses to nothing: even an
+          explicit allow-list entry cannot override a deny, matching the
+          principle of least privilege.
         </li>
         <li>
-          <strong>Allow is a whitelist.</strong> When <code>allow</code> is set,
-          any peer whose address does not match an entry is rejected with{" "}
-          <code>403</code>.
+          Allow is a whitelist. When <code>allow</code> is set, any peer whose
+          address does not match an entry is rejected with <code>403</code>.
         </li>
         <li>
-          <strong>Deny-only.</strong> With just a <code>deny</code> list,
-          everything is permitted except the listed ranges.
+          Deny-only. With just a <code>deny</code> list, everything is permitted
+          except the listed ranges.
         </li>
       </ul>
 
@@ -166,16 +163,16 @@ app.use(ipRestriction({
       <h2 id="when-to-reach-for-it">When to reach for it</h2>
       <ul>
         <li>
-          <strong>Internal admin surfaces</strong> reachable only from a VPN or
-          office CIDR range.
+          Internal admin surfaces reachable only from a VPN or office CIDR
+          range.
         </li>
         <li>
-          <strong>Partner allow-lists</strong> where a fixed set of source
-          ranges may call your API.
+          Partner allow-lists where a fixed set of source ranges may call your
+          API.
         </li>
         <li>
-          <strong>Hard blocks</strong> on a handful of known-bad ranges while
-          keeping a broad allow-list. For evolving threat data, layer{" "}
+          Hard blocks on a handful of known-bad ranges while keeping a broad
+          allow-list. For evolving threat data, layer{" "}
           <code>ipReputation()</code> on top.
         </li>
       </ul>

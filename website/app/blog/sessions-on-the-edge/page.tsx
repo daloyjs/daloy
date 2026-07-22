@@ -17,7 +17,7 @@ const POST = {
   author: "Devlin Duldulao",
   authorRole: "Fullstack cloud engineer",
   authorBio:
-    "Ten years of fullstack, currently writing TypeScript from a desk in Norway. Has rotated approximately four production session secrets in his life, three of them with zero downtime, one with a very honest apology email.",
+    "Ten years of fullstack, currently writing TypeScript from a desk in Norway. Has rotated approximately four production session secrets in his life, three of them with zero downtime, one with a very apologetic email.",
 };
 
 export const metadata = buildMetadata({
@@ -113,8 +113,8 @@ const COOKIE_ANATOMY = `// The cookie that lands in DevTools looks like this:
 //   __Host-daloy.sid=Yv2k...QF8.h7Q9...kLm; Path=/; HttpOnly; Secure; SameSite=Lax
 //
 // Two halves separated by a dot:
-//   sid       → 32 random bytes, base64url-encoded
-//   signature → HMAC-SHA256(sid) using the FIRST configured secret
+//   sid       -> 32 random bytes, base64url-encoded
+//   signature -> HMAC-SHA256(sid) using the FIRST configured secret
 //
 // On the next request the middleware splits on '.', then:
 //   1. Tries every configured secret in order to verify the signature
@@ -477,7 +477,8 @@ export default function BlogPostPage() {
             we sat down and said:{" "}
             <em>
               okay, but what would session management look like if you
-              didn&apos;t have to remember anything</em>
+              didn&apos;t have to remember anything
+            </em>
             {"?"}
           </p>
 
@@ -524,11 +525,14 @@ export default function BlogPostPage() {
 
           <p>
             The API is intentionally boring: <code>get</code>
-            {", "}<code>set</code>
+            {", "}
+            <code>set</code>
             {", "}
             <code>delete</code>
-            {", "}<code>destroy</code>
-            {", "}<code>regenerate</code>
+            {", "}
+            <code>destroy</code>
+            {", "}
+            <code>regenerate</code>
             {". "}
             The interesting part is what the middleware does between your
             handler returning and the response going out, if you wrote anything,
@@ -638,11 +642,12 @@ export default function BlogPostPage() {
             The default store is <code>MemorySessionStore</code>
             {". "}It&apos;s a <code>Map</code> with TTL handling and two test
             helpers (<code>clear()</code>
-            {", "}<code>size()</code>) on top. It is <em>fantastic</em> for
-            tests because it&apos;s synchronous, has no network, and is
-            observable. It is <em>not</em> for production because the moment you
-            have two processes (or your serverless platform scales
-            horizontally), sessions stop being sticky.
+            {", "}
+            <code>size()</code>) on top. It is <em>fantastic</em> for tests
+            because it&apos;s synchronous, has no network, and is observable. It
+            is <em>not</em> for production because the moment you have two
+            processes (or your serverless platform scales horizontally),
+            sessions stop being sticky.
           </p>
 
           <EditorFrame
@@ -684,7 +689,8 @@ export default function BlogPostPage() {
           <p>
             This is the one I reach for the most. Pairs naturally with the{" "}
             <Link href="/blog/the-flow-i-wished-i-had">
-              rest of the toolkit</Link>
+              rest of the toolkit
+            </Link>
             {", "}particularly the Redis-backed rate limiter, which can share
             the same connection pool.
           </p>
@@ -734,7 +740,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>One paragraph of honest caveats</h2>
+          <h2>Caveats</h2>
 
           <p>
             Signed cookie sessions are not magic. If an attacker gets your

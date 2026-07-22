@@ -530,7 +530,8 @@ export default function BlogPostPage() {
             <em>Something went wrong</em> for every non-2xx, and the on-call
             engineer is in there asking{" "}
             <em>
-              which endpoint, can you re-send the request, what time exactly</em>
+              which endpoint, can you re-send the request, what time exactly
+            </em>
             {". "}Nobody is happy.
           </p>
 
@@ -751,7 +752,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["HTTP/1.1 401 · then HTTP/1.1 403"]}
             activeFile="HTTP/1.1 401 · then HTTP/1.1 403"
-            status="bearerAuth → 401 + WWW-Authenticate · csrf() → 403"
+            status="bearerAuth -> 401 + WWW-Authenticate · csrf() -> 403"
           >
             <CodeBlock language="http" code={UNAUTHORIZED} />
           </EditorFrame>
@@ -765,8 +766,8 @@ export default function BlogPostPage() {
             <em>stripped from the response</em> before it leaves the server. The
             user gets the type, the title, the status, and a request-id-shaped{" "}
             <code>instance</code>
-            {": "}enough to file a support ticket. The server logs keep the
-            full detail.
+            {": "}enough to file a support ticket. The server logs keep the full
+            detail.
           </p>
 
           <EditorFrame
@@ -836,7 +837,8 @@ export default function BlogPostPage() {
             references, the typed-client codegen produces one matching
             TypeScript type. The frontend autocompletes{" "}
             <code>problem.type</code>
-            {", "}<code>problem.detail</code>
+            {", "}
+            <code>problem.detail</code>
             {", "}
             <code>problem.errors</code>
             {". "}No drift between the docs, the wire format, and the types,
@@ -851,7 +853,7 @@ export default function BlogPostPage() {
             <CodeBlock language="json" code={OPENAPI_HINT} />
           </EditorFrame>
 
-          <h2>One paragraph of honest caveats</h2>
+          <h2>Caveats</h2>
 
           <p>
             Problem Details isn&apos;t a magic protocol, it&apos;s a promise

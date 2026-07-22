@@ -264,9 +264,9 @@ export default function BlogPostPage() {
           <CodeBlock language="ts" code={VULNERABLE_ROUTE} />
 
           <p>
-            The route answers one question correctly: may this caller use the
-            project-reading function? It never answers the next question: may
-            this caller read this specific project?
+            The route checks whether the caller may use the project-reading
+            function. It never checks whether that caller may read this specific
+            project.
           </p>
 
           <FlowDiagram
@@ -317,7 +317,8 @@ export default function BlogPostPage() {
             Property-level authorization decides which fields the caller may
             read or change. A project owner may rename a project without being
             allowed to set <code>ownerId</code>
-            {", "}<code>tenantId</code>
+            {", "}
+            <code>tenantId</code>
             {", "}
             <code>approvedAt</code>
             {", "}or <code>role</code>
@@ -376,7 +377,8 @@ export default function BlogPostPage() {
             Creation endpoints have a second common problem: mass assignment.
             The AI passes the whole request body to the ORM, so a helpful caller
             includes <code>ownerId</code>
-            {", "}<code>role</code>
+            {", "}
+            <code>role</code>
             {", "}or <code>isApproved</code>
             {". "}Very efficient. The attacker appreciates the developer
             experience.
@@ -474,7 +476,7 @@ export default function BlogPostPage() {
             structural in that stack.
           </p>
 
-          <h2>The takeaway</h2>
+          <h2>Authorize the resource</h2>
 
           <p>
             A valid JWT proves that the identity provider recognizes the caller.
@@ -497,7 +499,8 @@ export default function BlogPostPage() {
             </Link>{" "}
             and build the{" "}
             <Link href={"/docs/tutorials/multi-user-api" as Route}>
-              multi-user projects tutorial</Link>
+              multi-user projects tutorial
+            </Link>
             {". "}The tutorial includes the attack tests, because an
             authorization guide without an attacker is just optimistic
             documentation.

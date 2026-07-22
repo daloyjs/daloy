@@ -60,9 +60,12 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          GraphQL Admin API</a>
-        {". "}The REST resources on <code>shopify-api-node</code> (<code>shopify.product.list</code>
-        {", "}<code>shopify.order.create</code>
+          GraphQL Admin API
+        </a>
+        {". "}The REST resources on <code>shopify-api-node</code> (
+        <code>shopify.product.list</code>
+        {", "}
+        <code>shopify.order.create</code>
         {", "}
         &hellip;) still work against older API versions, but you should write
         new code against the SDK&apos;s <code>shopify.graphql()</code> method.
@@ -77,7 +80,9 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          versioning page</a>). The default in <code>shopify-api-node</code> is the <em>oldest</em>{" "}
+          versioning page
+        </a>
+        ). The default in <code>shopify-api-node</code> is the <em>oldest</em>{" "}
         supported stable version, which is usually not what you want.
       </p>
 
@@ -85,7 +90,9 @@ export default function Page() {
       <ol>
         <li>
           In the Shopify admin, open{" "}
-          <strong>Settings → Apps and sales channels → Develop apps</strong>
+          <strong>
+            Settings -&gt; Apps and sales channels -&gt; Develop apps
+          </strong>
           {", "}
           then create a custom app. The legacy &ldquo;private apps&rdquo; flow
           (API key + password) was removed back in January 2022, don&apos;t use
@@ -102,8 +109,9 @@ export default function Page() {
           </a>{" "}
           your integration actually needs (for example{" "}
           <code>read_products</code>
-          {", "}<code>write_orders</code>). Stay minimal, you can always grant
-          more later.
+          {", "}
+          <code>write_orders</code>). Stay minimal, you can always grant more
+          later.
         </li>
         <li>
           Install the app on the store. Copy the{" "}
@@ -404,7 +412,8 @@ app.post(
           target="_blank"
           rel="noreferrer"
         >
-          calculated cost &amp; leaky-bucket model</a>
+          calculated cost &amp; leaky-bucket model
+        </a>
         {". "}Use the <code>maxRetries</code> option (above) so the SDK respects
         the throttled-cost information that comes back on 429 responses.{" "}
         <code>autoLimit</code> only works for the REST API and only inside a
@@ -420,7 +429,8 @@ app.post(
           target="_blank"
           rel="noreferrer"
         >
-          got v11</a>
+          got v11
+        </a>
         {", "}which depends on Node&apos;s HTTPS module. It runs fine on Node,
         Bun, AWS Lambda, and any long-running container, but it is{" "}
         <strong>not</strong> drop-in compatible with{" "}
@@ -468,7 +478,8 @@ const res = await fetch(
         <Link href="/docs/errors">problem+json errors</Link>
         {", "}and{" "}
         <Link href="/docs/security/rate-limit-redis">
-          distributed rate-limit store</Link>
+          distributed rate-limit store
+        </Link>
         {"."}
       </p>
     </>

@@ -33,13 +33,9 @@ export default function Page() {
     <>
       <h1>Internal services & service meshes</h1>
       <blockquote>
-        <strong>Think of it like…</strong> taking off your raincoat when you
-        walk indoors. CSRF, same-origin checks, and browser-specific headers are
-        raincoats for the public street, useful when traffic comes from random
-        people&apos;s browsers, useless inside a private building (your service
-        mesh, where every caller is one of your own services). The preset takes
-        off the raincoats but keeps the safe locked, the IDs verified, and the
-        input guards on.
+        The internal-service preset removes browser-specific controls from
+        private service traffic. Input validation, identity checks, and the
+        remaining runtime guardrails stay enabled.
       </blockquote>
       <p>
         Most DaloyJS security defaults, body limits, request timeouts, JWT
@@ -136,30 +132,25 @@ const app = new App({
       <h2 id="what-the-preset-turns-off">What the preset turns OFF</h2>
       <ul>
         <li>
-          <strong>
-            <code>secureHeaders</code> auto-install</strong>
+          <code>secureHeaders</code> auto-install
           {", "}HSTS, CSP, X-Frame-Options, COOP / CORP. No browser to read
           them.
         </li>
         <li>
-          <strong>
-            <code>corsCrossOriginGuard</code>
-          </strong>
+          <code>corsCrossOriginGuard</code>
           {", "}rejects state-changing requests carrying a cross-origin{" "}
           <code>Origin</code> header. Service-to-service callers do not send{" "}
           <code>Origin</code>.
         </li>
         <li>
-          <strong>
-            <code>csrf</code> boot guard</strong>
+          <code>csrf</code> boot guard
           {", "}refuses to start when <code>session()</code> is registered
           alongside a state-changing route without <code>csrf()</code>
           {". "}Internal callers authenticate with bearer tokens or mTLS, not
           cookies.
         </li>
         <li>
-          <strong>
-            unconfigured <code>X-Forwarded-*</code> guard</strong>
+          unconfigured <code>X-Forwarded-*</code> guard
           {", "}the first-request 500 when <code>trustProxy</code> /{" "}
           <code>behindProxy</code> is unset. The mesh terminates TLS and the
           immediate peer inside the mesh <em>is</em> the caller.
@@ -227,7 +218,8 @@ const app = new App({
         deployments:{" "}
         <strong>
           do not remove the guards, name the topology once, audit which guards
-          stayed on, and keep everything else</strong>
+          stayed on, and keep everything else
+        </strong>
         {". "}That is closer to the <code>config.force_ssl</code> /{" "}
         <code>SECURE_*</code> settings shape used by Rails and Django than to a
         master &quot;disable everything&quot; switch.
@@ -297,11 +289,10 @@ const app = new App({
         Employee-only internal apps are NOT this topology
       </h2>
       <blockquote>
-        <strong>Think of it like…</strong> a staff-only cafeteria. The building
-        is private, but your employees walk in from the street all day, and
-        every one of their browsers is a revolving door to the public internet.
-        The raincoats (CSRF, secure headers, same-origin checks) stay on
-        indoors, because the weather walks in with the people.
+        A browser-facing internal app still receives requests from browsers, so
+        it needs the browser security controls that a service mesh can omit. The
+        raincoats (CSRF, secure headers, same-origin checks) stay on indoors,
+        because the weather walks in with the people.
       </blockquote>
       <p>
         A back-office tool, HR portal, or admin dashboard that only employees
@@ -314,16 +305,15 @@ const app = new App({
       </p>
       <ul>
         <li>
-          <strong>CSRF is the textbook intranet attack.</strong> An employee
-          visits a malicious public site on a lunch break; that site fires a{" "}
-          <code>POST</code> at <code>https://intranet.corp/transfer</code>
+          CSRF is the textbook intranet attack. An employee visits a malicious
+          public site on a lunch break; that site fires a <code>POST</code> at{" "}
+          <code>https://intranet.corp/transfer</code>
           {". "}The browser is inside the network and attaches the session
           cookie, so the request lands. The firewall never sees anything wrong.
         </li>
         <li>
-          <strong>DNS rebinding and clickjacking</strong> cross the perimeter
-          the same way: the victim&apos;s browser executes the attack from the
-          inside.
+          DNS rebinding and clickjacking cross the perimeter the same way: the
+          victim&apos;s browser executes the attack from the inside.
         </li>
       </ul>
       <p>
@@ -375,7 +365,8 @@ app.use(loginThrottle()); // employees mistype passwords too`}
               <code>session()</code> + <code>csrf()</code>
               {", "}
               <code>behindProxy</code>
-              {", "}<code>loginThrottle()</code>
+              {", "}
+              <code>loginThrottle()</code>
             </td>
           </tr>
           <tr>
@@ -393,14 +384,16 @@ app.use(loginThrottle()); // employees mistype passwords too`}
         <li>
           The service is reachable from a browser, even indirectly (BFF pattern,
           admin UI, embedded widgets, or an{" "}
-          <a href="#employee-only-internal-apps">employee-only internal app</a>). Use the default posture and add <code>cors()</code> per route.
+          <a href="#employee-only-internal-apps">employee-only internal app</a>
+          ). Use the default posture and add <code>cors()</code> per route.
         </li>
         <li>
           The service is exposed directly to the public internet without a mesh
           / WAF / TLS terminator in front. Use the default posture.
         </li>
         <li>
-          You only need to disable a single guard. Prefer the per-knob option (<code>secureHeaders: false</code>
+          You only need to disable a single guard. Prefer the per-knob option (
+          <code>secureHeaders: false</code>
           {", "}
           <code>corsCrossOriginGuard: false</code>
           {", "}
@@ -417,14 +410,16 @@ app.use(loginThrottle()); // employees mistype passwords too`}
         </li>
         <li>
           <a href="/docs/security/secure-defaults-enforcement">
-            <code>secureDefaults</code> enforcement</a>
+            <code>secureDefaults</code> enforcement
+          </a>
           {", "}the wholesale escape hatch (refuses-to-boot in production
           without explicit acknowledgement). Prefer the topology preset where
           possible.
         </li>
         <li>
           <a href="/docs/security/fetch-guard">
-            <code>fetchGuard()</code> SSRF defaults</a>
+            <code>fetchGuard()</code> SSRF defaults
+          </a>
           {", "}still active under the preset.
         </li>
       </ul>

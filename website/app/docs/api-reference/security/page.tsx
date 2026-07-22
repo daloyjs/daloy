@@ -298,7 +298,8 @@ passwordVerify(password: string, hash: string): Promise<boolean>;
       <p>
         Next up:{" "}
         <Link href={"/docs/api-reference/modules" as Route}>
-          feature modules</Link>
+          feature modules
+        </Link>
         {"."}
       </p>
     </>

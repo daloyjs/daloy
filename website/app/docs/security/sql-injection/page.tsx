@@ -25,13 +25,9 @@ export default function Page() {
     <>
       <h1>SQL injection</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a customs officer who insists
-        everyone fill out the standardized declaration form, not a handwritten
-        note. The form has separate boxes for &quot;name&quot; and
-        &quot;quantity&quot;, there&apos;s no way to write &quot;tobacco&quot;
-        in the quantity box and have it counted as goods. Parameterized queries
-        are the printed form; string-concatenated SQL is the handwritten note an
-        attacker can scribble extra instructions on.
+        Parameterized queries keep SQL instructions separate from input values.
+        String concatenation puts attacker-controlled text into the SQL program
+        and can change what the database executes.
       </blockquote>
       <p>
         SQL injection is the 7-on-the-original-OWASP-top-10,
@@ -71,7 +67,8 @@ export default function Page() {
             <td>Strict per-route schemas (Zod)</td>
             <td>
               Routes declare <code>params</code>
-              {", "}<code>query</code>
+              {", "}
+              <code>query</code>
               {", "}and <code>body</code> shapes. Inputs that don&apos;t match
               the schema are rejected with <strong>422 problem+json</strong>{" "}
               before your handler runs, so you almost never have to coerce raw
@@ -271,20 +268,24 @@ await pg.query(\`SELECT * FROM users WHERE email = '\${params.email}'\`);`}
         Daloy&apos;s contract-first routes neutralize this <em>by default</em>
         {": "}
         every <code>body</code>
-        {", "}<code>query</code>
+        {", "}
+        <code>query</code>
         {", "}and <code>params</code> slot is validated against a Zod schema
-        before your handler runs, and Zod&apos;s primitive checks (<code>z.string()</code>
+        before your handler runs, and Zod&apos;s primitive checks (
+        <code>z.string()</code>
         {", "}
         <code>z.email()</code>
-        {", "}<code>z.number()</code>
+        {", "}
+        <code>z.number()</code>
         {", "} &hellip;) reject nested objects with a{" "}
         <strong>422 problem+json</strong>
         {". "}The vulnerability shows up when developers route around that,
         usually with <code>z.any()</code>
-        {", "}<code>z.unknown()</code>
+        {", "}
+        <code>z.unknown()</code>
         {", "}a pass-through <code>z.record()</code>
-        {", "}or by reading <code>await req.json()</code> directly and
-        spreading it into <code>where</code>.
+        {", "}or by reading <code>await req.json()</code> directly and spreading
+        it into <code>where</code>.
       </p>
       <CodeBlock
         code={`// DANGEROUS, \`email\` is typed as string but Zod accepts anything.
@@ -335,7 +336,8 @@ await state.db.user.findMany({ where });`}
       <ul>
         <li>
           Never use <code>z.any()</code>
-          {", "}<code>z.unknown()</code>
+          {", "}
+          <code>z.unknown()</code>
           {", "}or unconstrained <code>z.record()</code> for a field that is
           then read out of a Prisma / Mongoose / TypeORM <code>where</code>{" "}
           clause. Constrain each property with a primitive schema.
@@ -343,7 +345,8 @@ await state.db.user.findMany({ where });`}
         <li>
           Never spread <code>...body</code> or <code>...query</code> into{" "}
           <code>where</code>
-          {", "}<code>data</code>
+          {", "}
+          <code>data</code>
           {", "}or <code>orderBy</code>
           {". "}Map fields one at a time after validation.
         </li>
@@ -404,7 +407,8 @@ app.get(
         <li>
           If you must accept a free-form identifier, validate it against a tight
           regex (<code>/^[a-zA-Z_][a-zA-Z0-9_]*$/</code>) <em>and</em> quote it
-          with your driver&apos;s identifier-escape helper (<code>pg-format</code>&apos;s <code>%I</code>
+          with your driver&apos;s identifier-escape helper (
+          <code>pg-format</code>&apos;s <code>%I</code>
           {", "}Knex&apos;s <code>client.wrapIdentifier</code>
           {", "}etc.). Never roll your own.
         </li>
@@ -463,7 +467,8 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
       <ul>
         <li>
           <a href="https://www.aikido.dev/zen" target="_blank" rel="noreferrer">
-            Aikido Zen</a>
+            Aikido Zen
+          </a>
           {": "}a Node/Bun-compatible in-app firewall that hooks the driver and
           blocks requests whose query structure was altered by user input.
         </li>
@@ -484,7 +489,8 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
           target="_blank"
           rel="noreferrer"
         >
-          github.com/daloyjs/daloy/security/advisories/new</a>
+          github.com/daloyjs/daloy/security/advisories/new
+        </a>
         {". "}Don&apos;t open a public issue.
       </p>
     </>

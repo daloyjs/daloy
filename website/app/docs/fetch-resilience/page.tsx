@@ -43,20 +43,21 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Per-call timeout</strong>
+          Per-call timeout
           {": "}an <code>AbortController</code> aborts any attempt that stalls,
           so a hung upstream can never exhaust your event loop. Surfaces as{" "}
           <code>FetchTimeoutError</code>.
         </li>
         <li>
-          <strong>Retry-with-backoff</strong>
-          {": "}bounded retries with exponential backoff and full jitter,
-          scoped to idempotent methods and transient statuses, honouring{" "}
+          Retry-with-backoff
+          {": "}bounded retries with exponential backoff and full jitter, scoped
+          to idempotent methods and transient statuses, honouring{" "}
           <code>Retry-After</code>.
         </li>
         <li>
-          <strong>Circuit breaker</strong>
-          {": "}a three-state machine (<code>closed &rarr; open &rarr; half-open</code>) that fails fast when
+          Circuit breaker
+          {": "}a three-state machine (
+          <code>closed &rarr; open &rarr; half-open</code>) that fails fast when
           an upstream is clearly down, then probes for recovery.
         </li>
       </ul>
@@ -156,23 +157,32 @@ try {
 
       <h2 id="retry-with-backoff">Retry-with-backoff</h2>
       <p>
-        Retries only fire for <strong>idempotent</strong> methods (<code>GET</code>
-        {", "}<code>HEAD</code>
-        {", "}<code>OPTIONS</code>
+        Retries only fire for <strong>idempotent</strong> methods (
+        <code>GET</code>
+        {", "}
+        <code>HEAD</code>
+        {", "}
+        <code>OPTIONS</code>
         {", "}
         <code>PUT</code>
-        {", "}<code>DELETE</code>) and a conservative set of transient statuses
-        (<code>408</code>
-        {", "}<code>429</code>
-        {", "}<code>500</code>
-        {", "}<code>502</code>
-        {", "}<code>503</code>
-        {", "}<code>504</code>), plus network errors and timeouts.
-        Non-idempotent <code>POST</code> / <code>PATCH</code> calls are never
-        retried unless you opt in via <code>retryableMethods</code>
-        {". "}Backoff is exponential with full jitter to avoid a
-        thundering-herd retry storm, and a <code>Retry-After</code> response
-        header is honoured (capped by <code>maxRetryDelayMs</code>).
+        {", "}
+        <code>DELETE</code>) and a conservative set of transient statuses (
+        <code>408</code>
+        {", "}
+        <code>429</code>
+        {", "}
+        <code>500</code>
+        {", "}
+        <code>502</code>
+        {", "}
+        <code>503</code>
+        {", "}
+        <code>504</code>), plus network errors and timeouts. Non-idempotent{" "}
+        <code>POST</code> / <code>PATCH</code> calls are never retried unless
+        you opt in via <code>retryableMethods</code>
+        {". "}Backoff is exponential with full jitter to avoid a thundering-herd
+        retry storm, and a <code>Retry-After</code> response header is honoured
+        (capped by <code>maxRetryDelayMs</code>).
       </p>
       <CodeBlock
         code={`const client = resilientFetch({
@@ -265,25 +275,25 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
       <h2 id="security-posture">Security posture</h2>
       <ul>
         <li>
-          <strong>SSRF protection is preserved.</strong>{" "}
-          <code>resilientFetch()</code> never replaces <code>fetchGuard()</code>
+          SSRF protection is preserved. <code>resilientFetch()</code> never
+          replaces <code>fetchGuard()</code>
           {", "}it wraps it. An <code>SsrfBlockedError</code> is a terminal
           refusal: it bubbles unchanged, is never retried, and never trips the
           circuit breaker.
         </li>
         <li>
-          <strong>Bounded amplification.</strong> Retries are capped and scoped
-          to idempotent methods, so a transient blip cannot turn into a retry
-          storm against a struggling upstream.
+          Bounded amplification. Retries are capped and scoped to idempotent
+          methods, so a transient blip cannot turn into a retry storm against a
+          struggling upstream.
         </li>
         <li>
-          <strong>No event-loop exhaustion.</strong> Every attempt is bounded by
-          a per-call timeout, and the backoff timer is <code>unref()</code>
+          No event-loop exhaustion. Every attempt is bounded by a per-call
+          timeout, and the backoff timer is <code>unref()</code>
           &rsquo;d so it never keeps the process alive on its own.
         </li>
         <li>
-          <strong>Zero runtime dependencies.</strong> Built entirely on
-          Web-standard <code>AbortController</code> / <code>fetch</code>
+          Zero runtime dependencies. Built entirely on Web-standard{" "}
+          <code>AbortController</code> / <code>fetch</code>
           {", "}so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers
           Edge.
         </li>

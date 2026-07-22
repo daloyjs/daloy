@@ -28,11 +28,9 @@ export default function Page() {
     <>
       <h1>Password hashing</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a paper shredder that always
-        cross-cuts to the same government spec. You do not choose the blade
-        pattern, the strip width, or how many passes it makes: you feed a
-        password in, and the only thing that comes out is confetti that can be
-        compared against other confetti, never reassembled.
+        The password helpers use one versioned scrypt format with fixed security
+        checks. Applications store the encoded hash and verify candidates
+        without handling the low-level parameters themselves.
       </blockquote>
       <p>
         Daloy ships exactly one correct way to hash a password. The API is two
@@ -74,7 +72,7 @@ await passwordVerify("wrong", hash);   // false`}
           {
             eyebrow: "output",
             label: "PHC-style string",
-            detail: "$scrypt$N=131072,r=8,p=1$…$…",
+            detail: "$scrypt$N=131072,r=8,p=1$...$...",
             tone: "success",
           },
         ]}
@@ -89,12 +87,14 @@ await passwordVerify("wrong", hash);   // false`}
         <code>@daloyjs/core</code> refuses to ship runtime dependencies as a
         supply-chain guarantee. scrypt is memory-hard like Argon2, ships in{" "}
         <code>node:crypto</code>
-        {", "}and Daloy pins it to the OWASP-aligned parameters (<code>N = 2^17</code>
-        {", "}<code>r = 8</code>
+        {", "}and Daloy pins it to the OWASP-aligned parameters (
+        <code>N = 2^17</code>
+        {", "}
+        <code>r = 8</code>
         {", "}
         <code>p = 1</code>
-        {", "}32-byte key, 16-byte salt). bcrypt is not memory-hard and
-        silently truncates passwords at 72 bytes, so it is not offered at all.
+        {", "}32-byte key, 16-byte salt). bcrypt is not memory-hard and silently
+        truncates passwords at 72 bytes, so it is not offered at all.
       </p>
       <p>
         If your organization mandates Argon2id specifically, install the{" "}
@@ -169,21 +169,21 @@ await passwordVerify("wrong", hash);   // false`}
       <h2 id="guardrails">Input guardrails</h2>
       <ul>
         <li>
-          <strong>Empty passwords are rejected</strong>:{" "}
-          <code>passwordHash</code> throws a <code>TypeError</code> and{" "}
-          <code>passwordVerify</code> returns <code>false</code>.
+          Empty passwords are rejected: <code>passwordHash</code> throws a{" "}
+          <code>TypeError</code> and <code>passwordVerify</code> returns{" "}
+          <code>false</code>.
         </li>
         <li>
-          <strong>4096-byte cap</strong>
+          4096-byte cap
           {": "}scrypt runs PBKDF2-HMAC-SHA256 over the full password, so an
           unbounded input lets an attacker amplify CPU per call. Anything longer
           than 4096 UTF-8 bytes is refused, which is far above any legitimate
           passphrase.
         </li>
         <li>
-          <strong>Fresh salt per hash</strong>
-          {": "}hashing the same password twice yields two different strings,
-          so equal passwords are not linkable across rows.
+          Fresh salt per hash
+          {": "}hashing the same password twice yields two different strings, so
+          equal passwords are not linkable across rows.
         </li>
       </ul>
 

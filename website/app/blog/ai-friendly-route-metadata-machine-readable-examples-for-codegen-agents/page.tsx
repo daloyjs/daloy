@@ -129,12 +129,12 @@ const BUILD_TIME_VALIDATION = `# What 'pnpm daloy inspect --check' does to every
 #
 # For every named example on every route, Daloy validates:
 #
-#   request.params  → against route.request.params  (when both exist)
-#   request.query   → against route.request.query
-#   request.headers → against route.request.headers
-#   request.body    → against route.request.body
+#   request.params  -> against route.request.params  (when both exist)
+#   request.query   -> against route.request.query
+#   request.headers -> against route.request.headers
+#   request.body    -> against route.request.body
 #
-#   response.body   → against route.responses[example.response.status].body
+#   response.body   -> against route.responses[example.response.status].body
 #                     (unknown status code is itself an error)
 #
 # Any mismatch FAILS the contract run, which means:
@@ -143,7 +143,7 @@ const BUILD_TIME_VALIDATION = `# What 'pnpm daloy inspect --check' does to every
 #     schema. The codegen agent cannot be misled by a stale example
 #     because the example cannot survive a stale schema in CI.
 #
-#   - The example AND the schema are kept honest by the same gate.
+#   - The example AND the schema are validated by the same gate.
 #     There is no "examples drift" surface to monitor; it is a build
 #     failure.
 #
@@ -304,8 +304,8 @@ const WHY_EXAMPLES = `# Why "schema + examples" beats "schema alone" for codegen
 #
 # These are not redundant. They serve different mental operations:
 #
-#   schema  →  type checker.        Catches structural errors.
-#   example →  pattern matcher.     Catches semantic errors.
+#   schema  ->  type checker.        Catches structural errors.
+#   example ->  pattern matcher.     Catches semantic errors.
 #
 # A schema says: { id: string, title: string }.
 # An example says: { id: "1", title: "Dune" } - and the agent now
@@ -401,8 +401,8 @@ const WHY_THIS_HELPS = `# Concretely: what changes for the codegen agent.
 #   fires on empty input.
 #   PR review checks the handler, not the fetch call.
 #
-# Not theoretical. This is the diff I see on PRs where the agent
-# had a routes.json in its context vs the ones where it didn't.`;
+# This is the PR difference I see when the agent has routes.json
+# in its context.`;
 
 const CHECKLIST = `# Pre-flight: is your route 'meta'-ready?
 #
@@ -421,7 +421,7 @@ const CHECKLIST = `# Pre-flight: is your route 'meta'-ready?
 #    [ ] file is consumed by Hey API or an LLM system prompt
 #    [ ] CI re-runs the dump and fails on unchecked drift
 #
-# 4) Examples are kept honest by the contract gate.
+# 4) The contract gate validates examples.
 #    [ ] CI runs 'pnpm daloy inspect --check' on every PR
 #    [ ] no skip flag exists in the project
 #
@@ -579,9 +579,9 @@ export default function BlogPostPage() {
             Standard Schema at build time and surfaced into the OpenAPI 3.1
             document <em>and</em> a sibling <code>routes.json</code> via{" "}
             <code>daloy inspect --ai</code>
-            {". "}The whole feature is additive and non-breaking: every
-            existing route keeps working with zero changes. The same command
-            keeps its default JSON shape and supports <code>--yaml</code> /{" "}
+            {". "}The whole feature is additive and non-breaking: every existing
+            route keeps working with zero changes. The same command keeps its
+            default JSON shape and supports <code>--yaml</code> /{" "}
             <code>--format yaml</code> for the same dump when the reader is a
             human or an LLM context window. This is the &quot;AI-friendly route
             metadata&quot; capability from the roadmap.
@@ -638,8 +638,10 @@ export default function BlogPostPage() {
             win when both are set; tags are de-duplicated and concatenated, so
             you can keep transport tags on the route and audience tags (
             <code>AI</code>
-            {", "}<code>Public</code>
-            {", "}<code>Internal</code>) on the meta block.
+            {", "}
+            <code>Public</code>
+            {", "}
+            <code>Internal</code>) on the meta block.
           </TierCard>
           <TierCard
             tier="meta.extensions"
@@ -658,7 +660,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["ci.log"]}
             activeFile="ci.log"
-            status="schema and examples kept honest by the same gate"
+            status="schema and examples validated by the same gate"
           >
             <CodeBlock language="bash" code={BUILD_TIME_VALIDATION} />
           </EditorFrame>
@@ -745,7 +747,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["NOTES.md"]}
             activeFile="NOTES.md"
-            status="schema → type checker · example → pattern matcher · different jobs"
+            status="schema -> type checker · example -> pattern matcher · different jobs"
           >
             <CodeBlock language="bash" code={WHY_EXAMPLES} />
           </EditorFrame>
@@ -790,7 +792,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Keep examples beside the contract</h2>
 
           <p>
             The whole point of contract-first is that <em>one</em> route
@@ -821,7 +823,7 @@ export default function BlogPostPage() {
             <Link href="/blog/daloy-cli-inspecting-routes-schemas-openapi-and-contract-health">
               CLI inspector post
             </Link>{" "}
-            for the contract gate that keeps the examples honest, the{" "}
+            for the contract gate that validates the examples, the{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
               contract-first post
             </Link>{" "}

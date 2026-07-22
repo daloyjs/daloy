@@ -142,8 +142,8 @@ await app.ready();`}
         </li>
         <li>
           <code>stateful</code>
-          {": "}production guard for plugins that mutate shared state.
-          Anonymous stateful plugins are refused unless you give them a name.
+          {": "}production guard for plugins that mutate shared state. Anonymous
+          stateful plugins are refused unless you give them a name.
         </li>
       </ul>
       <CodeBlock

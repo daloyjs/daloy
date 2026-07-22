@@ -23,12 +23,9 @@ export default function Page() {
     <>
       <h1>Runtime protections that travel with your app</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the seatbelts, airbags, and crumple
-        zones built into the car itself. They protect you in every country you
-        drive in, regardless of which dealership sold you the car, which gas
-        station you fill up at, or whether your country requires roadworthiness
-        inspections. CI hardening is the inspection sticker; these runtime
-        guards are the car.
+        Runtime protections ship with the application and behave the same way on
+        every adapter. CI controls protect the build and release path; these
+        controls protect requests after deployment.
       </blockquote>
       <p>
         These protections live inside <code>@daloyjs/core</code> and run at
@@ -239,7 +236,8 @@ export default function Page() {
             <td>Auth response caching</td>
             <td>
               <code>401</code>
-              {", "}<code>403</code>
+              {", "}
+              <code>403</code>
               {", "}and <code>429</code> automatically set{" "}
               <code>Cache-Control: no-store</code> so proxies and CDNs cannot
               reuse them.
@@ -324,14 +322,13 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Install-time hardening</strong> (blocked install scripts, 24h
-          release-age cooldown, source-verified lockfile, zero-runtime-dep gate)
-          applies when you use the pnpm scaffold and keep its{" "}
-          <code>.npmrc</code> + <code>pnpm verify:lockfile</code> script.
+          Install-time hardening (blocked install scripts, 24h release-age
+          cooldown, source-verified lockfile, zero-runtime-dep gate) applies
+          when you use the pnpm scaffold and keep its <code>.npmrc</code> +{" "}
+          <code>pnpm verify:lockfile</code> script.
         </li>
         <li>
-          <strong>CI / CD hardening</strong> (pinned actions,{" "}
-          <code>harden-runner</code>
+          CI / CD hardening (pinned actions, <code>harden-runner</code>
           {", "}top-level <code>permissions: {"{}"}</code>
           {", "}CODEOWNERS, Dependabot, CodeQL / Scorecard / zizmor) applies
           when you use the <code>create-daloy --with-ci</code> GitHub Actions
@@ -340,12 +337,10 @@ export default function Page() {
           configuration.
         </li>
         <li>
-          <strong>
-            Branch protection, environment approvals, secret hygiene, runner
-            isolation, and org policy
-          </strong>{" "}
-          are decisions of the host (GitHub / GitLab / Azure / Bitbucket / your
-          own infra). DaloyJS cannot enforce them from inside your code.
+          Branch protection, environment approvals, secret hygiene, runner
+          isolation, and org policy are decisions of the host (GitHub / GitLab /
+          Azure / Bitbucket / your own infra). DaloyJS cannot enforce them from
+          inside your code.
         </li>
       </ul>
 
@@ -374,7 +369,8 @@ export default function Page() {
           job.
         </li>
         <li>
-          Lifecycle scripts disabled during CI installs (<code>--ignore-scripts</code> for npm/yarn,{" "}
+          Lifecycle scripts disabled during CI installs (
+          <code>--ignore-scripts</code> for npm/yarn,{" "}
           <code>ignore-scripts=true</code> in the scaffolded <code>.npmrc</code>{" "}
           for pnpm).
         </li>
@@ -399,7 +395,7 @@ export default function Page() {
         DaloyJS cannot give you these guarantees automatically.
       </p>
 
-      <h2 id="the-honest-matrix">The honest matrix</h2>
+      <h2 id="the-honest-matrix">Compression behavior matrix</h2>
       <p>
         Use this table to figure out which protections you actually get for a
         given setup.

@@ -103,8 +103,8 @@ export default function Page() {
         <li>
           Configure a <strong>resource server</strong> with custom scopes (e.g.{" "}
           <code>my-api/read</code>
-          {", "}<code>my-api/write</code>) and authorize them on the app
-          client.
+          {", "}
+          <code>my-api/write</code>) and authorize them on the app client.
         </li>
         <li>
           Enable a hosted UI domain or use the OAuth 2.0 authorization-code flow

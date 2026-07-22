@@ -31,12 +31,9 @@ export default function Page() {
     <>
       <h1>Compliance posture</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the paperwork side of a building
-        safety inspection. The bricks (technical controls, TLS, auth, audit
-        logs, redaction, rate limits) are already in the framework; this page
-        shows the inspector exactly which brick satisfies which line on the SOC
-        2 / ISO 27001 / HIPAA / GDPR / PCI / NIS2 / DORA form so you stop
-        re-deriving the mapping every audit cycle.
+        This page maps DaloyJS controls to SOC 2, ISO 27001, HIPAA, GDPR, PCI,
+        NIS2, and DORA requirements. Use it as evidence guidance, then confirm
+        the final scope with your auditor or legal team.
       </blockquote>
       <p>
         DaloyJS is a backend framework, not a managed service, so it cannot
@@ -213,8 +210,10 @@ export default function Page() {
             </td>
             <td>
               <a href="/docs/security/runtime-protections">
-                Runtime protections</a>
-              {", "}<a href="/docs/security/compression">Compression</a>
+                Runtime protections
+              </a>
+              {", "}
+              <a href="/docs/security/compression">Compression</a>
             </td>
           </tr>
           <tr>
@@ -223,7 +222,8 @@ export default function Page() {
               Structured logger with request-id correlation; default key
               redaction (<code>DEFAULT_REDACT_KEYS</code>) for known secret/PII
               keys; JWT-like and opaque-token value scrubbing;{" "}
-              <code>sanitizeUrlForLog</code> (<code>SENSITIVE_URL_QUERY_KEYS</code>) strips secret-bearing query
+              <code>sanitizeUrlForLog</code> (
+              <code>SENSITIVE_URL_QUERY_KEYS</code>) strips secret-bearing query
               params and userinfo from request URLs bound into log records;
               opt-in redaction for application-specific fields.
             </td>
@@ -288,41 +288,39 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>
-            CC6.1 / CC6.6: logical access &amp; boundary protection.
-          </strong>{" "}
-          Use <code>secureHeaders()</code>
-          {", "}<code>cors()</code>
+          CC6.1 / CC6.6: logical access &amp; boundary protection. Use{" "}
+          <code>secureHeaders()</code>
+          {", "}
+          <code>cors()</code>
           {", "}
           <code>session()</code>
-          {", "}<code>bearerAuth()</code>
+          {", "}
+          <code>bearerAuth()</code>
           {", "}and <code>ipRestriction()</code> on admin routes.
         </li>
         <li>
-          <strong>CC6.7: data in transit.</strong> HSTS via{" "}
-          <code>secureHeaders()</code>; TLS termination is the platform&apos;s
-          responsibility.
+          CC6.7: data in transit. HSTS via <code>secureHeaders()</code>; TLS
+          termination is the platform&apos;s responsibility.
         </li>
         <li>
-          <strong>CC6.8: protection against malicious software.</strong>{" "}
-          Supply-chain hardening (no runtime deps, provenance, SBOM,
+          CC6.8: protection against malicious software. Supply-chain hardening
+          (no runtime deps, provenance, SBOM,
           <code>ignore-scripts</code>
           {", "}SHA-pinned actions, lockfile-source verification).
         </li>
         <li>
-          <strong>CC7.1 / CC7.2: monitoring &amp; anomaly detection.</strong>{" "}
-          Structured JSON logs with request-id correlation; Server-Timing for
-          latency monitoring; OpenTelemetry integration documented under{" "}
+          CC7.1 / CC7.2: monitoring &amp; anomaly detection. Structured JSON
+          logs with request-id correlation; Server-Timing for latency
+          monitoring; OpenTelemetry integration documented under{" "}
           <a href="/docs/tracing">Tracing</a>.
         </li>
         <li>
-          <strong>CC7.4: incident response.</strong> Published{" "}
-          <code>SECURITY.md</code>
+          CC7.4: incident response. Published <code>SECURITY.md</code>
           {", "}GHSA evidence pattern, and CVSS-keyed patch SLA.
         </li>
         <li>
-          <strong>A1.2: availability.</strong> Rate limiting, load shedding,
-          request timeouts, body-size caps, graceful shutdown hooks.
+          A1.2: availability. Rate limiting, load shedding, request timeouts,
+          body-size caps, graceful shutdown hooks.
         </li>
       </ul>
 
@@ -337,43 +335,47 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>A.5.7 Threat intelligence</strong>
+          A.5.7 Threat intelligence
           {": "}OpenSSF Scorecard, OSV-Scanner, CodeQL, Dependabot, and the
           published GHSA advisory flow feed the framework&apos;s own intel loop;
           downstream apps inherit the same signals through{" "}
           <code>create-daloy --with-ci</code>.
         </li>
         <li>
-          <strong>A.5.23 Information security for use of cloud services</strong>
+          A.5.23 Information security for use of cloud services
           {": "}runtime-parity audits keep behavior identical across Node, Bun,
           Deno, and Cloudflare Workers so the cloud provider is a deployment
           choice, not a security trade-off.
         </li>
         <li>
-          <strong>A.5.30 ICT readiness for business continuity</strong>
+          A.5.30 ICT readiness for business continuity
           {": "}
           graceful shutdown, health endpoints, and lifecycle hooks (see{" "}
           <a href="/docs/security/lifecycle-health">Lifecycle &amp; health</a>).
         </li>
         <li>
-          <strong>A.8.7 Protection against malware</strong>
+          A.8.7 Protection against malware
           {": "}supply-chain controls listed above.
         </li>
         <li>
-          <strong>A.8.8 Management of technical vulnerabilities</strong>
+          A.8.8 Management of technical vulnerabilities
           {": "}the SLA table in SECURITY.md, GHSA flow, OpenSSF Scorecard,
           CodeQL, Dependabot.
         </li>
         <li>
-          <strong>A.8.9 Configuration management</strong>
-          {": "}secure defaults are enforced at boot (<a href="/docs/security/secure-defaults-enforcement">secureDefaults enforcement</a>), not just documented.
+          A.8.9 Configuration management
+          {": "}secure defaults are enforced at boot (
+          <a href="/docs/security/secure-defaults-enforcement">
+            secureDefaults enforcement
+          </a>
+          ), not just documented.
         </li>
         <li>
-          <strong>A.8.15 Logging</strong>
+          A.8.15 Logging
           {": "}structured logger, request-id correlation, PII redaction.
         </li>
         <li>
-          <strong>A.8.16 Monitoring activities</strong>
+          A.8.16 Monitoring activities
           {": "}Server-Timing headers, OpenTelemetry spans, and the
           structured-log pipeline give downstream SIEM/observability tools the
           signals they need; rate-limit rejections, schema-validation failures,
@@ -381,32 +383,33 @@ export default function Page() {
           request-id.
         </li>
         <li>
-          <strong>A.8.23 Web filtering</strong>
-          {": "}<code>fetchGuard()</code> enforces an egress allow-list pattern
-          from inside the app.
+          A.8.23 Web filtering
+          {": "}
+          <code>fetchGuard()</code> enforces an egress allow-list pattern from
+          inside the app.
         </li>
         <li>
-          <strong>A.8.24 Use of cryptography</strong>
+          A.8.24 Use of cryptography
           {": "}algorithm allow-listing on JWT/JWK; HMAC with algorithm-prefix
           parsing; timing-safe comparisons.
         </li>
         <li>
-          <strong>A.8.25 Secure development lifecycle</strong>:{" "}
+          A.8.25 Secure development lifecycle:{" "}
           <code>create-daloy --with-ci</code> ships CodeQL, Scorecard, zizmor,
           Dependabot, CODEOWNERS, and a <code>SECURITY.md</code> template.
         </li>
         <li>
-          <strong>A.8.26 Application security requirements</strong>
+          A.8.26 Application security requirements
           {": "}input validation through Zod/Valibot; OpenAPI contract
           enforcement before any handler runs.
         </li>
         <li>
-          <strong>A.8.28 Secure coding</strong>
+          A.8.28 Secure coding
           {": "}documented patterns for SQL injection, command injection, SSRF,
           CSRF, prototype pollution.
         </li>
         <li>
-          <strong>A.8.32 Change management</strong>
+          A.8.32 Change management
           {": "}SHA-pinned GitHub Actions (verified by{" "}
           <code>verify:actions-pinned</code>), a 24h{" "}
           <code>minimum-release-age</code> cooldown on dependencies,
@@ -427,39 +430,39 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>§ 164.312(a) Access Control</strong>
+          § 164.312(a) Access Control
           {": "}unique user identification via session/JWT subject claim;
           automatic logoff via session TTL; encryption at the cookie layer with
           signed and rotated keys.
         </li>
         <li>
-          <strong>§ 164.312(b) Audit Controls</strong>
+          § 164.312(b) Audit Controls
           {": "}structured logs with request-id, route, status, latency, and
           user-id (when authenticated) so a downstream log pipeline can satisfy
           retention and tamper-evidence requirements (those still need to be
           configured at the log sink).
         </li>
         <li>
-          <strong>§ 164.312(c) Integrity</strong>
+          § 164.312(c) Integrity
           {": "}HMAC for webhook payloads; signed sessions; ETag/Last-Modified
           for optimistic concurrency on PHI mutations.
         </li>
         <li>
-          <strong>§ 164.312(d) Person or Entity Authentication</strong>
+          § 164.312(d) Person or Entity Authentication
           {": "}
           first-party authentication helpers; tested integrations with AWS
           Cognito, Microsoft Entra ID, Auth0, Okta, and Clerk.
         </li>
         <li>
-          <strong>§ 164.312(e) Transmission Security</strong>
+          § 164.312(e) Transmission Security
           {": "}HSTS and secure cookies by default; the actual TLS terminator
           (load balancer, CDN, platform) is out of the framework&apos;s scope.
         </li>
         <li>
-          <strong>Practical PHI hygiene.</strong> Add field-level redaction in
-          the logger for any field that carries PHI; do not log request bodies
-          on PHI routes; keep the <code>session()</code> cookie{" "}
-          <code>httpOnly</code> and <code>sameSite</code> (default behavior).
+          Practical PHI hygiene. Add field-level redaction in the logger for any
+          field that carries PHI; do not log request bodies on PHI routes; keep
+          the <code>session()</code> cookie <code>httpOnly</code> and{" "}
+          <code>sameSite</code> (default behavior).
         </li>
       </ul>
 
@@ -471,13 +474,13 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Article 5(1)(f) integrity &amp; confidentiality</strong>
+          Article 5(1)(f) integrity &amp; confidentiality
           {": "}
           secure headers, signed sessions, schema-validated inputs, structured
           logs with redaction.
         </li>
         <li>
-          <strong>Article 25 data protection by design and by default</strong>
+          Article 25 data protection by design and by default
           {": "}
           secure-by-default body limits, request timeouts, content-type
           allow-listing, and CSRF/cors defaults; the auditor sees that the
@@ -485,28 +488,29 @@ export default function Page() {
           {", "}not the other way around.
         </li>
         <li>
-          <strong>Article 30 records of processing</strong>
+          Article 30 records of processing
           {": "}OpenAPI is generated from the routes themselves, which gives a
           machine-readable inventory of every endpoint that touches personal
           data. Pair it with a tagging convention (e.g.{" "}
-          <code>x-daloy-data-classes: [&quot;email&quot;, &quot;ip&quot;]</code>) so the same spec answers ROPA questions.
+          <code>x-daloy-data-classes: [&quot;email&quot;, &quot;ip&quot;]</code>
+          ) so the same spec answers ROPA questions.
         </li>
         <li>
-          <strong>Article 32 security of processing</strong>
+          Article 32 security of processing
           {": "}the &ldquo;Shared technical controls&rdquo; table above is the
           short answer for the application layer; pseudonymization, encryption
           at rest, and key management still live at the data store.
         </li>
         <li>
-          <strong>Article 33 breach notification (within 72 hours)</strong>
-          {": "}the request-id and structured-log primitives make it possible
-          to reconstruct affected sessions; the published CVSS-keyed patch SLA
-          lets controllers describe the &ldquo;measures taken&rdquo; section of
-          their breach notification with real numbers rather than aspirations.
+          Article 33 breach notification (within 72 hours)
+          {": "}the request-id and structured-log primitives make it possible to
+          reconstruct affected sessions; the published CVSS-keyed patch SLA lets
+          controllers describe the &ldquo;measures taken&rdquo; section of their
+          breach notification with real numbers rather than aspirations.
         </li>
         <li>
-          <strong>Logging PII responsibly.</strong> The logger&apos;s default
-          redaction (<code>DEFAULT_REDACT_KEYS</code> via{" "}
+          Logging PII responsibly. The logger&apos;s default redaction (
+          <code>DEFAULT_REDACT_KEYS</code> via{" "}
           <code>createLogger({"{ redact }"})</code>) already masks well-known
           secret keys (passwords, tokens, API keys). Request URLs written by the
           framework go through <code>sanitizeUrlForLog</code> so OAuth codes,
@@ -527,40 +531,40 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Req 2 secure configurations</strong>
+          Req 2 secure configurations
           {": "}secure-by-default headers, content-type allow-listing, and the
           boot guards that fail-closed on insecure config.
         </li>
         <li>
-          <strong>Req 4 strong cryptography in transit</strong>
+          Req 4 strong cryptography in transit
           {": "}HSTS via <code>secureHeaders()</code>.
         </li>
         <li>
-          <strong>Req 6.2 secure software development</strong>
+          Req 6.2 secure software development
           {": "}schema-validated inputs, prototype-pollution-safe JSON parsing,
           header sanitization, path-traversal-safe router, prepared-statement
           guidance for every ORM in{" "}
           <a href="/docs/security/sql-injection">SQL injection</a>.
         </li>
         <li>
-          <strong>Req 6.3 manage vulnerabilities</strong>
+          Req 6.3 manage vulnerabilities
           {": "}SECURITY.md SLA, GHSA evidence, dependency-graph monitoring.
         </li>
         <li>
-          <strong>Req 6.4 protect public-facing web applications</strong>
+          Req 6.4 protect public-facing web applications
           {": "}CSRF, secure headers, rate limiting, request-id correlation.
         </li>
         <li>
-          <strong>Req 8 strong authentication</strong>
+          Req 8 strong authentication
           {": "}first-party session/JWT helpers with algorithm allow-listing.
         </li>
         <li>
-          <strong>Req 10 log and monitor</strong>
+          Req 10 log and monitor
           {": "}structured logs with per-request correlation IDs; the retention
           and tamper-evidence obligations live at the log sink.
         </li>
         <li>
-          <strong>SAQ scope.</strong> The strongest control here is{" "}
+          SAQ scope. The strongest control here is{" "}
           <em>not seeing the PAN at all</em>
           {". "}The payments docs (Stripe, Braintree, Authorize.Net, Square)
           document the redirect, hosted checkout, and hosted-fields patterns
@@ -604,14 +608,14 @@ export default function Page() {
       </p>
       <ol>
         <li>
-          <strong>You operate in the EU.</strong> NIS2 applies to entities
-          providing services <em>in</em> the Union, even when the entity itself
-          is established outside the EU (Article 26 establishment rules apply
-          for cloud, data centers, CDN, managed services, MSSPs, online
-          marketplaces, online search, social networks, and DNS providers).
+          You operate in the EU. NIS2 applies to entities providing services{" "}
+          <em>in</em> the Union, even when the entity itself is established
+          outside the EU (Article 26 establishment rules apply for cloud, data
+          centers, CDN, managed services, MSSPs, online marketplaces, online
+          search, social networks, and DNS providers).
         </li>
         <li>
-          <strong>Your sector is named in Annex I or Annex II.</strong>{" "}
+          Your sector is named in Annex I or Annex II.{" "}
           <em>Annex I (essential, &ldquo;high criticality&rdquo;)</em> covers
           energy, transport, banking, financial market infrastructure, health,
           drinking water, waste water, digital infrastructure (IXPs, DNS, TLDs,
@@ -627,8 +631,8 @@ export default function Page() {
           networks), and research organisations.
         </li>
         <li>
-          <strong>You meet the size threshold</strong> (medium-sized or larger
-          per the EU 2003/361 SME definition): <strong>&ge; 50 staff</strong> or{" "}
+          You meet the size threshold (medium-sized or larger per the EU
+          2003/361 SME definition): <strong>&ge; 50 staff</strong> or{" "}
           <strong>&gt; &euro;10 million</strong> annual turnover <em>or</em>{" "}
           balance sheet. Smaller entities can also be pulled in regardless of
           size when they are a sole provider in a member state, when a
@@ -673,9 +677,8 @@ export default function Page() {
       </h3>
       <ul>
         <li>
-          <strong>
-            Article 20 governance (management body approves the risk-management
-            measures and undergoes cybersecurity training)</strong>
+          Article 20 governance (management body approves the risk-management
+          measures and undergoes cybersecurity training)
           {": "}an organizational obligation on the consumer (cannot be
           delegated to the security team). The framework layer makes the
           underlying evidence reviewable: every guardrail listed below lives in
@@ -684,46 +687,42 @@ export default function Page() {
           proof rather than a slide deck.
         </li>
         <li>
-          <strong>
-            Article 21(2)(a) policies on risk analysis and security of
-            information systems</strong>
+          Article 21(2)(a) policies on risk analysis and security of information
+          systems
           {": "}the secure-by-default baseline plus the boot-guard enforcement.
         </li>
         <li>
-          <strong>Article 21(2)(b) incident handling</strong>
-          {": "}SECURITY.md publishes the response targets, escalation
-          contacts, and GHSA evidence format.
+          Article 21(2)(b) incident handling
+          {": "}SECURITY.md publishes the response targets, escalation contacts,
+          and GHSA evidence format.
         </li>
         <li>
-          <strong>Article 21(2)(d) supply-chain security</strong>
+          Article 21(2)(d) supply-chain security
           {": "}npm provenance, SBOM, SHA-pinned third-party Actions,
           lockfile-source verification, <code>ignore-scripts</code> by default
           in scaffolded projects.
         </li>
         <li>
-          <strong>
-            Article 21(2)(e) security in network and information systems
-            acquisition, development, and maintenance</strong>
+          Article 21(2)(e) security in network and information systems
+          acquisition, development, and maintenance
           {": "}the CI bundle from <code>create-daloy --with-ci</code> turns
           CodeQL, Scorecard, zizmor, Dependabot, and CODEOWNERS on out of the
           box.
         </li>
         <li>
-          <strong>Article 21(2)(g) basic cyber hygiene practices</strong>
+          Article 21(2)(g) basic cyber hygiene practices
           {": "}
           documented patterns for sessions, CSRF, SSRF, SQL/command injection,
           and admin-panel hardening; opinionated runtime protections.
         </li>
         <li>
-          <strong>Article 21(2)(h) use of cryptography</strong>
-          {": "}algorithm allow-listing, timing-safe comparisons, HMAC
-          algorithm prefix parsing.
+          Article 21(2)(h) use of cryptography
+          {": "}algorithm allow-listing, timing-safe comparisons, HMAC algorithm
+          prefix parsing.
         </li>
         <li>
-          <strong>
-            Article 23 incident reporting (24 h early warning, 72 h
-            notification, 1-month final report to the national CSIRT or
-            competent authority)</strong>
+          Article 23 incident reporting (24 h early warning, 72 h notification,
+          1-month final report to the national CSIRT or competent authority)
           {": "}this is the consumer&apos;s obligation, but the framework ships
           the technical substrate: per-request structured logs with correlated
           request IDs, OpenTelemetry-shaped spans, and plugin lifecycle hooks
@@ -732,7 +731,7 @@ export default function Page() {
           notification pipeline within the statutory window.
         </li>
         <li>
-          <strong>EU CRA upstream patch SLA</strong>
+          EU CRA upstream patch SLA
           {": "}the CVSS-keyed table in <code>SECURITY.md</code> is written
           specifically so downstream procurement can quote it verbatim.
         </li>
@@ -764,7 +763,8 @@ export default function Page() {
           rel="noreferrer"
         >
           <code>
-            SECURITY.md &rarr; &ldquo;EU Cyber Resilience Act mapping&rdquo;</code>
+            SECURITY.md &rarr; &ldquo;EU Cyber Resilience Act mapping&rdquo;
+          </code>
         </a>
         {"; "}the table below is the operator-friendly summary.
       </p>
@@ -798,7 +798,8 @@ export default function Page() {
             <td>
               Body cap (1 MiB), 30 s request timeout,{" "}
               <code>secureHeaders()</code>
-              {", "}<code>fetchGuard()</code> default-denying SSRF against
+              {", "}
+              <code>fetchGuard()</code> default-denying SSRF against
               cloud-metadata IPs, prototype-pollution stripping in every parser,
               real <code>405</code>
               {", "}problem+json 5xx detail redaction in production. Scaffolded
@@ -821,12 +822,14 @@ export default function Page() {
             <td>Annex I (1)(d), authentication and access control</td>
             <td>
               First-party <code>bearerAuth</code>
-              {", "}<code>basicAuth</code>
+              {", "}
+              <code>basicAuth</code>
               {", "}
               <code>jwk()</code> (PS256 / RS256 / ES256 / EdDSA, JWKS rotation
               with <code>kid</code> pinning), signed-cookie{" "}
               <code>session()</code>
-              {", "}<code>timingSafeEqual()</code>; the{" "}
+              {", "}
+              <code>timingSafeEqual()</code>; the{" "}
               <code>pnpm verify:secret-comparisons</code> gate rejects every
               short-circuiting comparison against header-derived values.
             </td>
@@ -1040,7 +1043,8 @@ export default function Page() {
             <td>
               <strong>CAF B2 Identity &amp; access control</strong>:{" "}
               <code>bearerAuth()</code>
-              {", "}<code>basicAuth()</code>
+              {", "}
+              <code>basicAuth()</code>
               {", "}signed-cookie <code>session()</code>
               {", "}JWT with algorithm allow-listing, IP allowlists.{" "}
               <strong>CAF B3 Data security</strong>:{" "}
@@ -1048,10 +1052,12 @@ export default function Page() {
               COOP, CORP), prod-mode RFC 9457 redaction.{" "}
               <strong>CAF B4 System security</strong>:{" "}
               <code>bodyLimitBytes</code>
-              {", "}<code>requestTimeoutMs</code>
+              {", "}
+              <code>requestTimeoutMs</code>
               {", "}
               <code>rateLimit()</code>
-              {", "}<code>fetchGuard()</code> default-deny SSRF,
+              {", "}
+              <code>fetchGuard()</code> default-deny SSRF,
               prototype-pollution-safe parsers, CRLF/NUL header rejection,{" "}
               <code>.strict()</code> schemas.{" "}
               <strong>CAF B5 Resilient networks &amp; systems</strong>
@@ -1070,7 +1076,8 @@ export default function Page() {
               Server-Timing; OpenTelemetry-shaped spans without taking a hard
               dependency on <code>@opentelemetry/api</code>; plugin lifecycle
               hooks (<code>onPluginInstalled</code>
-              {", "}<code>onShutdown</code>) suitable for wiring rate-limit /
+              {", "}
+              <code>onShutdown</code>) suitable for wiring rate-limit /
               auth-failure / SSRF-block / body-limit / timeout events into the
               regulator + NCSC notification pipeline within the statutory
               window.
@@ -1125,10 +1132,12 @@ export default function Page() {
               <code>AGENTS.md</code>), <code>secureHeaders</code>
               {", "}
               <code>requestId</code>
-              {", "}<code>rateLimit</code>
+              {", "}
+              <code>rateLimit</code>
               {", "}
               <code>bodyLimitBytes</code>
-              {", "}<code>requestTimeoutMs</code>
+              {", "}
+              <code>requestTimeoutMs</code>
               {", "}
               <code>fetchGuard</code>
               {", "}JWT algorithm allowlists, timing-safe credential
@@ -1217,7 +1226,8 @@ export default function Page() {
             <td>
               Secure-by-default baseline (body cap, request timeout,{" "}
               <code>secureHeaders()</code>
-              {", "}<code>fetchGuard()</code>
+              {", "}
+              <code>fetchGuard()</code>
               {", "}JWT algorithm allow-listing, timing-safe credential
               comparisons, <code>.strict()</code> schemas, RFC 9457 problem+json
               with prod redaction) all live in source, are version-pinned, and
@@ -1246,13 +1256,16 @@ export default function Page() {
             </td>
             <td>
               First-party <code>bearerAuth</code>
-              {", "}<code>basicAuth</code>
+              {", "}
+              <code>basicAuth</code>
               {", "}
               signed-cookie <code>session()</code>
-              {", "}<code>jwk()</code> with algorithm allow-listing and JWKS
-              rotation, <code>ipRestriction()</code>
-              {", "}<code>fetchGuard()</code> default-deny SSRF against cloud
-              metadata IPs, HMAC algorithm prefix parsing, and the{" "}
+              {", "}
+              <code>jwk()</code> with algorithm allow-listing and JWKS rotation,{" "}
+              <code>ipRestriction()</code>
+              {", "}
+              <code>fetchGuard()</code> default-deny SSRF against cloud metadata
+              IPs, HMAC algorithm prefix parsing, and the{" "}
               <code>verify:secret-comparisons</code> gate that rejects
               short-circuiting comparisons against header-derived values.
             </td>
@@ -1312,7 +1325,8 @@ export default function Page() {
               <code>ci.yml</code> / <code>release.yml</code>; package{" "}
               <code>engines.node</code> is <code>^24 || &gt;=26</code>). Every
               change runs <code>pnpm typecheck</code>
-              {", "}<code>pnpm test</code>
+              {", "}
+              <code>pnpm test</code>
               {", "}
               <code>pnpm coverage</code> (90% lines / 90% functions on the tsx
               run), and <code>pnpm coverage:branches</code> (92% branches on
@@ -1369,19 +1383,22 @@ export default function Page() {
             <td>
               Per project policy (see <code>AGENTS.md</code>),{" "}
               <code>secureHeaders</code>
-              {", "}<code>requestId</code>
+              {", "}
+              <code>requestId</code>
               {", "}
               <code>rateLimit</code>
-              {", "}<code>bodyLimitBytes</code>
+              {", "}
+              <code>bodyLimitBytes</code>
               {", "}
               <code>requestTimeoutMs</code>
-              {", "}<code>fetchGuard</code>
+              {", "}
+              <code>fetchGuard</code>
               {", "}JWT algorithm allowlists, timing-safe credential
               comparisons, schema <code>.strict()</code>
-              {", "}response-body validation, prod-mode error redaction, and
-              the scaffolded <code>_gitignore</code> / <code>_npmrc</code>{" "}
-              defaults must not be silently weakened. Key material (JWKS, cookie
-              keys) is rotated by configuration, not by code change.
+              {", "}response-body validation, prod-mode error redaction, and the
+              scaffolded <code>_gitignore</code> / <code>_npmrc</code> defaults
+              must not be silently weakened. Key material (JWKS, cookie keys) is
+              rotated by configuration, not by code change.
             </td>
           </tr>
           <tr>
@@ -1436,37 +1453,31 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>TLS termination, key management, KMS/HSM choice</strong> live
-          at your load balancer, CDN, or platform.
+          TLS termination, key management, KMS/HSM choice live at your load
+          balancer, CDN, or platform.
         </li>
         <li>
-          <strong>Encryption at rest, backup, disaster recovery</strong> live at
-          the data store and infrastructure layer.
+          Encryption at rest, backup, disaster recovery live at the data store
+          and infrastructure layer.
         </li>
         <li>
-          <strong>Identity provider, MFA enrollment, account recovery</strong>{" "}
-          live at the IdP (Cognito, Entra ID, Auth0, Okta, Clerk). The framework
-          consumes the resulting tokens; it does not run the IdP.
+          Identity provider, MFA enrollment, account recovery live at the IdP
+          (Cognito, Entra ID, Auth0, Okta, Clerk). The framework consumes the
+          resulting tokens; it does not run the IdP.
         </li>
         <li>
-          <strong>Log retention, immutability, SIEM forwarding</strong> live at
-          the log sink. The framework emits the structured logs; how long they
-          live and who can delete them is a pipeline concern.
+          Log retention, immutability, SIEM forwarding live at the log sink. The
+          framework emits the structured logs; how long they live and who can
+          delete them is a pipeline concern.
         </li>
         <li>
-          <strong>
-            Vendor management, employee training, access reviews, background
-            checks, physical security
-          </strong>{" "}
-          are organizational controls. No framework can produce evidence for
-          those.
+          Vendor management, employee training, access reviews, background
+          checks, physical security are organizational controls. No framework
+          can produce evidence for those.
         </li>
         <li>
-          <strong>
-            Data-processing agreements, standard contractual clauses, transfer
-            impact assessments
-          </strong>{" "}
-          are legal artifacts.
+          Data-processing agreements, standard contractual clauses, transfer
+          impact assessments are legal artifacts.
         </li>
       </ul>
 
@@ -1515,7 +1526,8 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            SECURITY.md</a>
+            SECURITY.md
+          </a>
           {": "}SLAs, GHSA evidence pattern, reporting flow.
         </li>
         <li>
@@ -1524,7 +1536,8 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Aikido: cloud compliance frameworks overview</a>
+            Aikido: cloud compliance frameworks overview
+          </a>
           {": "}broader background on the frameworks themselves.
         </li>
       </ul>

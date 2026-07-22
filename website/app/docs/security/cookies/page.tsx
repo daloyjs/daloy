@@ -24,11 +24,9 @@ export default function Page() {
     <>
       <h1>Cookie helpers</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a tamper-evident envelope service.
-        Every department that mails something out uses the same envelopes with
-        the same seals, so nobody invents their own flimsy version, and the mail
-        room refuses to accept two identical envelopes claiming to be the same
-        letter.
+        The cookie helpers apply one encoding and security policy across the
+        app. Duplicate cookie names are rejected instead of being interpreted
+        differently by separate parts of the stack.
       </blockquote>
       <p>
         DaloyJS exposes the same low-level cookie helpers that{" "}

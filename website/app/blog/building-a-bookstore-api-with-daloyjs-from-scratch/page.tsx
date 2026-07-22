@@ -51,10 +51,10 @@ pnpm create daloy@latest bookstore-api \\
 cd bookstore-api
 pnpm install
 pnpm dev
-# ─→ listening on http://localhost:3000
-# ─→ API docs       http://localhost:3000/docs
-# ─→ OpenAPI JSON   http://localhost:3000/openapi.json
-# ─→ Health         http://localhost:3000/healthz`;
+# ─-> listening on http://localhost:3000
+# ─-> API docs       http://localhost:3000/docs
+# ─-> OpenAPI JSON   http://localhost:3000/openapi.json
+# ─-> Health         http://localhost:3000/healthz`;
 
 const PROJECT_TREE = `bookstore-api/
 ├─ src/
@@ -385,13 +385,13 @@ console.log("Wrote", out);`;
 
 const GEN_CLIENT = `# Step 1: dump the spec from the live route table.
 pnpm gen:openapi
-# ─→ Wrote generated/openapi.json
+# ─-> Wrote generated/openapi.json
 
 # Step 2: run Hey API codegen against the spec.
 pnpm gen
-# ─→ generated/client/sdk.gen.ts
-# ─→ generated/client/types.gen.ts
-# ─→ generated/client/client.gen.ts
+# ─-> generated/client/sdk.gen.ts
+# ─-> generated/client/types.gen.ts
+# ─-> generated/client/client.gen.ts
 
 # The two scripts are also chained on CI as \`pnpm gen:all\`.`;
 
@@ -604,7 +604,8 @@ export default function BlogPostPage() {
           </StepCard>
           <StepCard step={3} title="Add the three routes">
             <code>GET /books</code>
-            {", "}<code>GET /books/:id</code>
+            {", "}
+            <code>GET /books/:id</code>
             {", "}
             <code>POST /books</code>
             {". "}Throw, don&apos;t return.
@@ -615,7 +616,8 @@ export default function BlogPostPage() {
           </StepCard>
           <StepCard step={5} title="Mount docs and serve">
             <code>/docs</code>
-            {", "}<code>/openapi.json</code>
+            {", "}
+            <code>/openapi.json</code>
             {", "}and <code>/openapi.yaml</code> come up automatically when{" "}
             <code>docs: true</code>.
           </StepCard>
@@ -641,8 +643,8 @@ export default function BlogPostPage() {
             <code>--minimal</code> strips the example bookstore routes from the
             template so we can rebuild them ourselves, pedagogy over
             convenience. (If you skip <code>--minimal</code>
-            {", "}the template gives you a working <code>/books/:id</code>{" "}
-            route out of the box. Both paths are fine.)
+            {", "}the template gives you a working <code>/books/:id</code> route
+            out of the box. Both paths are fine.)
           </p>
 
           <EditorFrame
@@ -660,7 +662,8 @@ export default function BlogPostPage() {
             <code>--minimal</code>) and start with the schema. The single most
             important habit in DaloyJS:{" "}
             <strong>
-              the Zod schema is the source of truth for everything</strong>
+              the Zod schema is the source of truth for everything
+            </strong>
             {", "}validation, response shape, OpenAPI, and the generated
             TypeScript types. Write it once.
           </p>
@@ -749,7 +752,8 @@ export default function BlogPostPage() {
             For the long version of why this matters and how to consume it on
             the frontend, see the{" "}
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
-              Problem Details post</Link>
+              Problem Details post
+            </Link>
             {". "}For now, the punchline is: every wrong-shaped request your API
             will ever see returns the same document shape. The frontend code
             that handles it is one helper, total.

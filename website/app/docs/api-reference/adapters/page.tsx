@@ -38,7 +38,7 @@ export default function Page() {
         source={{
           eyebrow: "web-standard core",
           label: "app.fetch(request)",
-          detail: "Request → Response",
+          detail: "Request -> Response",
         }}
         branches={[
           {

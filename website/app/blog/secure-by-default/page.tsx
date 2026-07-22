@@ -384,7 +384,7 @@ export default function BlogPostPage() {
         <div className="docs-prose max-w-full">
           <p>
             Hi, I&apos;m Devlin. Ten years of fullstack work, half of those
-            spent reading pentest reports and quietly thinking, &quot;we already{" "}
+            spent reading pentest reports and often thinking, &quot;we already{" "}
             <em>knew</em> that one&quot;. Most security incidents I&apos;ve had
             a hand in cleaning up were not exotic. They were not a 0-day in a
             cryptography library. They were a body limit that nobody set, a JSON
@@ -398,7 +398,8 @@ export default function BlogPostPage() {
             So when we sat down to design DaloyJS, we made a rule and stuck to
             it:{" "}
             <strong>
-              the boring, well-understood defenses must be on by default</strong>
+              the boring, well-understood defenses must be on by default
+            </strong>
             {". "}You should be able to type <code>new App()</code> with empty
             arguments and already be in a place where most of the OWASP
             &quot;low effort, high impact&quot; checklist is satisfied before
@@ -581,10 +582,9 @@ export default function BlogPostPage() {
           <h2>Part 2: Opt-in upgrades worth turning on today</h2>
 
           <p>
-            These don&apos;t live in the default constructor because they are
-            policy decisions, not safety nets. But every one of them is a single
-            import and three lines of configuration. There&apos;s no reason not
-            to.
+            These stay out of the default constructor because each application
+            needs its own policy. Every option takes one import and a few lines
+            of configuration.
           </p>
 
           <h3>secureHeaders(): CSP nonce + Trusted Types</h3>
@@ -678,13 +678,10 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            The two important details are the order of operations and the
-            comparison function. <strong>Always</strong> run both comparisons,
-            and <strong>always</strong> use <code>timingSafeEqual</code>
-            {": "}not because someone is going to time-attack your admin panel
-            from across the planet, but because writing security code with{" "}
-            <code>===</code> is how you develop unfortunate habits that follow
-            you into other systems.
+            The order of operations and the comparison function both matter. Run
+            both comparisons and use <code>timingSafeEqual</code>. A plain
+            <code>===</code> comparison leaks timing information and is a bad
+            habit to carry into more exposed credential checks.
           </p>
 
           <h3>
@@ -850,7 +847,7 @@ export default function BlogPostPage() {
             </table>
           </div>
 
-          <h2>The honest part</h2>
+          <h2>Limits</h2>
 
           <p>
             None of this makes your app un-hackable. There is no constructor

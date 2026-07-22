@@ -35,16 +35,12 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>
-            <code>app.decorate(&quot;db&quot;, client)</code>
-          </strong>{" "}
-          attaches a shared client to every handler&apos;s <code>state</code>.
+          <code>app.decorate(&quot;db&quot;, client)</code> attaches a shared
+          client to every handler&apos;s <code>state</code>.
         </li>
         <li>
-          <strong>
-            <code>app.onClose(async () =&gt; client.disconnect())</code>
-          </strong>{" "}
-          ties cleanup to graceful shutdown.
+          <code>app.onClose(async () =&gt; client.disconnect())</code> ties
+          cleanup to graceful shutdown.
         </li>
       </ul>
 
@@ -272,7 +268,8 @@ app.get(
           target="_blank"
           rel="noreferrer"
         >
-          Driver Adapters</a>
+          Driver Adapters
+        </a>
         {". "}TypeORM, MikroORM, and Sequelize all lean on Node-centric runtime
         assumptions and are best on the Node.js adapter.
       </p>
@@ -286,7 +283,7 @@ app.get(
         <code>.d.ts</code> file: declaration files are exempt from type-checking
         when <code>skipLibCheck</code> is on (the scaffolded default), so a
         broken import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        <code>state.db</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/prisma.ts (the module that creates the client)

@@ -203,7 +203,8 @@ console.log(\`\${report.checked} routes - all clean\`);`}
           Body schemas declared on safe methods (<code>GET</code>
           {", "}
           <code>HEAD</code>
-          {", "}<code>DELETE</code>) as warnings.
+          {", "}
+          <code>DELETE</code>) as warnings.
         </li>
         <li>
           Routes with no declared <code>responses</code>.

@@ -332,7 +332,8 @@ export default function BlogPostPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                DaloyJS</a>
+                DaloyJS
+              </a>
               {", "}so weigh the framework parts accordingly. If you have not
               run into it yet: DaloyJS is a new, contract-first TypeScript
               backend framework. You define a route once and get request and
@@ -351,10 +352,9 @@ export default function BlogPostPage() {
           <p>
             Start with adoption. AI coding tools now write{" "}
             <strong>24% of production code</strong> on average, 21% in Europe
-            and 29% in the US. That is not autocomplete anymore. That is a
-            junior developer who never sleeps, never asks questions, and
-            confidently commits whatever pattern was most common in its training
-            data.
+            and 29% in the US. At that volume, AI behaves more like a junior
+            contributor who never sleeps, rarely asks questions, and copies the
+            patterns it saw most often in training.
           </p>
 
           <StatGrid
@@ -397,12 +397,11 @@ export default function BlogPostPage() {
           />
 
           <p>
-            I want to be fair to the AI here. The code it writes usually works.
-            That is exactly the trap. The vulnerability is rarely a syntax error
-            a linter catches. It is the missing authorization check, the
-            mass-assignment, the response that returns the whole row. Here is a
-            real shape of it, the kind of thing I have genuinely had to send
-            back:
+            AI-generated code usually works, which makes the failures harder to
+            spot. The vulnerability is rarely a syntax error a linter catches.
+            It is the missing authorization check, the mass-assignment, the
+            response that returns the whole row. Here is a real shape of it, the
+            kind of thing I have genuinely had to send back:
           </p>
 
           <CodeBlock language="ts" code={AI_HANDLER} />
@@ -555,10 +554,9 @@ export default function BlogPostPage() {
 
           <p>
             For a 50-person engineering org that is about $1M a year. For 250,
-            about $5M. The point is not the precision, it is the category: this
-            is a real, recurring cost that scales with headcount, and most of it
-            is spent reading alerts that were never real. That is the invoice
-            tool sprawl sends you every year.
+            about $5M. Those are rough estimates, but the cost is recurring and
+            scales with headcount. Much of it pays for engineers to read alerts
+            that were never real.
           </p>
 
           <h2>False positives make good engineers do dumb things</h2>
@@ -670,7 +668,8 @@ export default function BlogPostPage() {
             Second, and this is the one I think most people miss,{" "}
             <strong>
               tools built for both developers and security teams have the lowest
-              incident rates</strong>
+              incident rates
+            </strong>
             {". "}Tools that serve only one audience leave the other side
             fighting the tooling instead of the threat.
           </p>
@@ -841,46 +840,45 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              <strong>Treat AI-generated code as untrusted input.</strong> Put
-              an enforced contract in front of every side effect, validate the
-              request before the handler runs, and validate the response on the
-              way out. The model is a fast, confident junior. Supervise it with
-              code, not with hope.
+              Treat AI-generated code as untrusted input. Put an enforced
+              contract in front of every side effect, validate the request
+              before the handler runs, and validate the response on the way out.
+              The model is a fast, confident junior. Supervise it with code, not
+              with hope.
             </li>
             <li>
-              <strong>Stop equating more tools with more security.</strong> The
-              data says the opposite. Before you buy the next scanner, ask
-              whether it produces gates or homework, and whether it adds a
-              dashboard your team will learn to ignore.
+              Stop equating more tools with more security. The data says the
+              opposite. Before you buy the next scanner, ask whether it produces
+              gates or homework, and whether it adds a dashboard your team will
+              learn to ignore.
             </li>
             <li>
-              <strong>Move your checks into the pipeline.</strong> Automated
-              gates in CI beat manual review at AI speed and volume. A check
-              that fails the build is worth ten that file a ticket.
+              Move your checks into the pipeline. Automated gates in CI beat
+              manual review at AI speed and volume. A check that fails the build
+              is worth ten that file a ticket.
             </li>
             <li>
-              <strong>Measure the false-positive tax.</strong> Run the cost
-              snippet above with your real numbers. Once &ldquo;noise&rdquo; has
-              a dollar figure, consolidating tools stops being a nice-to-have.
+              Measure the false-positive tax. Run the cost snippet above with
+              your real numbers. Once &ldquo;noise&rdquo; has a dollar figure,
+              consolidating tools stops being a nice-to-have.
             </li>
           </ul>
 
           <p>
-            The honest caveat, since I promised this would not be a pitch: no
-            framework, mine included, fixes most of this. Secure design, the
-            architecture decisions, the business logic, and the judgment calls
-            still need humans. That is literally what the report&apos;s 79%
-            believe, and they are right. What a framework can do is make the
-            safe path the default path so your scarce human attention goes to
-            the hard problems instead of the ones a schema should have caught.
-            That is a smaller claim than &ldquo;we fix AI security,&rdquo; and
-            it is also the exact category the report shows hurting teams the
-            most.
+            The limitation: no framework, mine included, fixes most of this.
+            Secure design, the architecture decisions, the business logic, and
+            the judgment calls still need humans. That is literally what the
+            report&apos;s 79% believe, and they are right. What a framework can
+            do is make the safe path the default path so your scarce human
+            attention goes to the hard problems instead of the ones a schema
+            should have caught. That is a smaller claim than &ldquo;we fix AI
+            security,&rdquo; and it is also the exact category the report shows
+            hurting teams the most.
           </p>
 
           <div className="not-prose my-8 rounded-xl border bg-muted/30 p-6">
             <p className="text-base font-semibold text-foreground">
-              Want to try the secure-by-default approach?
+              Try the secure-by-default approach
             </p>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               DaloyJS is free, MIT-licensed, and zero-runtime-dependency. One
@@ -908,7 +906,8 @@ export default function BlogPostPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                docs</a>
+                docs
+              </a>
               {". "}It is genuinely new, so kick the tires and tell me where it
               breaks. I would rather hear it from you than read about it in next
               year&apos;s report.
@@ -921,9 +920,9 @@ export default function BlogPostPage() {
             will not be the ones with the most tools or the most faith in the
             model. They will be the ones who made the secure thing the easy
             thing, automated the boring checks, and protected their
-            engineers&apos; attention like the expensive resource it is. That is
-            not a 2026 trend. That is just good engineering, and it is nice to
-            finally have 450 teams worth of data saying so.
+            engineers&apos; attention like the expensive resource it is. That
+            practice predates the current AI cycle, and the survey gives it data
+            from 450 teams.
           </p>
 
           <p className="text-sm text-muted-foreground">

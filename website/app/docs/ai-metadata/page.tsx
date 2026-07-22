@@ -31,7 +31,8 @@ export default function Page() {
         call to attach <strong>structured usage examples</strong>
         {", "}extra descriptive copy, or free-form <code>x-*</code> extensions.
         Daloy validates every example against your route&rsquo;s Standard Schema
-        at build time and emits the same payload into OpenAPI (<code>examples</code> on the request body, <code>examples</code> on the
+        at build time and emits the same payload into OpenAPI (
+        <code>examples</code> on the request body, <code>examples</code> on the
         matching response, <code>x-daloy-examples</code> on the operation) and
         into the <code>daloy inspect --ai</code> dump that codegen agents and
         SDK builders consume.
@@ -264,11 +265,11 @@ pnpm daloy inspect --ai --tag Books`}
       <p>
         Both <code>--ai</code> and <code>--openapi</code> accept{" "}
         <code>--yaml</code> (shorthand) or <code>--format yaml</code>
-        {". "}The emitter is a tiny built-in YAML 1.2 serializer with no
-        runtime dependencies. Because YAML drops braces, commas, and most
-        quotes, the dump is typically <strong>about 30% smaller</strong> than
-        the equivalent pretty-printed JSON, a meaningful saving when the file
-        becomes part of an LLM system prompt.
+        {". "}The emitter is a tiny built-in YAML 1.2 serializer with no runtime
+        dependencies. Because YAML drops braces, commas, and most quotes, the
+        dump is typically <strong>about 30% smaller</strong> than the equivalent
+        pretty-printed JSON, a meaningful saving when the file becomes part of
+        an LLM system prompt.
       </p>
       <CodeBlock
         language="yaml"
@@ -332,8 +333,8 @@ routes:
           generated SDK&rsquo;s docstrings.
         </li>
         <li>
-          An LLM (Claude / GPT / Gemini) as part of a system prompt for “write
-          me a fetch call that hits the books endpoint”.
+          An LLM (Claude / GPT / Gemini) as part of a system prompt for
+          &quot;write me a fetch call that hits the books endpoint&quot;.
         </li>
         <li>
           A custom code generator (Python client, Go SDK, Postman collection),

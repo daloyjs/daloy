@@ -287,7 +287,7 @@ export default function BlogPostPage() {
             around all of them, six times, in three different jobs. I live in
             Norway now, where the sun sets at 11pm in May and the coffee costs
             about as much as a small server. Today I want to introduce you to
-            the framework I&apos;ve been working on, the one I quietly wished
+            the framework I&apos;ve been working on, the one I kept wishing
             existed every one of those six times.
           </p>
 
@@ -304,8 +304,10 @@ export default function BlogPostPage() {
             Translated into engineering: a single{" "}
             <code>app.route(&#123;...&#125;)</code> call is the source of truth
             for <em>validation</em>
-            {", "}<em>TypeScript types</em>
-            {", "}<em>OpenAPI</em>
+            {", "}
+            <em>TypeScript types</em>
+            {", "}
+            <em>OpenAPI</em>
             {", "}the <em>typed client</em>
             {", "}and your <em>contract tests</em>
             {". "}And that same <code>app</code> runs on Node, Bun, Deno,
@@ -325,10 +327,10 @@ export default function BlogPostPage() {
           <p>
             I&apos;m going to define a single route, start a server, hit{" "}
             <code>/openapi.json</code>
-            {", "}and then call the same route through the typed client,
-            without a network in the middle, because the typed client knows
-            it&apos;s the same process. Four things, one source of truth, no
-            codegen step. Let&apos;s go.
+            {", "}and then call the same route through the typed client, without
+            a network in the middle, because the typed client knows it&apos;s
+            the same process. Four things, one source of truth, no codegen step.
+            Let&apos;s go.
           </p>
 
           <h3>Step 1: Define the route</h3>
@@ -359,7 +361,8 @@ export default function BlogPostPage() {
                 rel="noreferrer"
                 target="_blank"
               >
-                Standard Schema</a>
+                Standard Schema
+              </a>
               {". "}I used Zod here, but you can swap in Valibot or ArkType
               without changing the framework. The schema isn&apos;t a
               decoration, it&apos;s the validator, the OpenAPI body,{" "}
@@ -407,7 +410,7 @@ export default function BlogPostPage() {
             You did not write an OpenAPI document. You did not run a codegen.
             You did not maintain a YAML file in a folder called{" "}
             <code>openapi/</code> that your team agreed to update and then
-            stopped updating around sprint 4. The spec is just… there:
+            stopped updating around sprint 4. The spec is just... there:
           </p>
 
           <CodeBlock language="bash" code={OPENAPI_CURL} />
@@ -429,9 +432,9 @@ export default function BlogPostPage() {
             word I will not type here because my mother reads this blog.
             We&apos;re going to call the route{" "}
             <em>without going through HTTP</em>
-            {". "}Same app object, same validation, same response shape, just
-            no socket in the middle. Perfect for tests, scripts, and anywhere
-            you want speed without spinning up a server.
+            {". "}Same app object, same validation, same response shape, just no
+            socket in the middle. Perfect for tests, scripts, and anywhere you
+            want speed without spinning up a server.
           </p>
 
           <EditorFrame
@@ -537,7 +540,7 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              <strong>No decorators</strong>
+              No decorators
               {", "}no <code>reflect-metadata</code>
               {", "}
               no &quot;please enable experimental TS flags&quot;. Routes are
@@ -545,28 +548,26 @@ export default function BlogPostPage() {
               can read this.
             </li>
             <li>
-              <strong>No separate OpenAPI file</strong> to maintain. The spec is
-              generated; you customize it, you don&apos;t author it.
+              No separate OpenAPI file to maintain. The spec is generated; you
+              customize it, you don&apos;t author it.
             </li>
             <li>
-              <strong>No separate client repo</strong> to keep in sync. The
-              in-process client is one import. The generated fetch SDK is one
-              command.
+              No separate client repo to keep in sync. The in-process client is
+              one import. The generated fetch SDK is one command.
             </li>
             <li>
-              <strong>No security checklist to remember.</strong> Body limits,
-              request timeouts, prototype-pollution-safe JSON parsing,
-              path-traversal rejection, and 5xx redaction in production are
-              defaults. <code>secureHeaders()</code>
-              {", "}<code>rateLimit()</code>
+              No security checklist to remember. Body limits, request timeouts,
+              prototype-pollution-safe JSON parsing, path-traversal rejection,
+              and 5xx redaction in production are defaults.{" "}
+              <code>secureHeaders()</code>
+              {", "}
+              <code>rateLimit()</code>
               {", "}
               <code>requestId()</code>
-              {", "}CSRF, sessions, and tracing are first-party, same repo,
-              same release cadence, same test suite.
+              {", "}CSRF, sessions, and tracing are first-party, same repo, same
+              release cadence, same test suite.
             </li>
-            <li>
-              <strong>No runtime lock-in.</strong> Same app, five adapters.
-            </li>
+            <li>No runtime lock-in. Same app, five adapters.</li>
           </ul>
 
           <h2>What this post is anchoring</h2>
@@ -601,7 +602,7 @@ export default function BlogPostPage() {
             surviving other people&apos;s real code.
           </p>
 
-          <h2>The honest part</h2>
+          <h2>Limits</h2>
 
           <p>
             DaloyJS is not magic, it is not going to make you a better developer

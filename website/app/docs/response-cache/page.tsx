@@ -100,8 +100,10 @@ app.get(
         language="ts"
       />
       <p>
-        Each response the cache handles carries an <code>X-Cache</code> marker (<code>HIT</code>
-        {", "}<code>MISS</code>
+        Each response the cache handles carries an <code>X-Cache</code> marker (
+        <code>HIT</code>
+        {", "}
+        <code>MISS</code>
         {", "}or <code>STALE</code>), plus an <code>Age</code> header on a hit,
         so caches and clients can observe the outcome. A request that bypasses
         the cache entirely (a non-GET/HEAD method, an <code>Authorization</code>{" "}
@@ -144,18 +146,20 @@ app.get(
 
       <ul>
         <li>
-          <strong>Fresh hit</strong>
+          Fresh hit
           {": "}the stored response is served and the handler does <em>not</em>{" "}
           run (<code>X-Cache: HIT</code>).
         </li>
         <li>
-          <strong>Stale hit within the SWR window</strong> (requires{" "}
-          <code>revalidate</code>): the stale response is served immediately (<code>X-Cache: STALE</code>) while a single, de-duplicated background
-          refresh repopulates the cache.
+          Stale hit within the SWR window (requires <code>revalidate</code>):
+          the stale response is served immediately (<code>X-Cache: STALE</code>)
+          while a single, de-duplicated background refresh repopulates the
+          cache.
         </li>
         <li>
-          <strong>Miss</strong>
-          {": "}the handler runs and a cacheable response is stored (<code>X-Cache: MISS</code>).
+          Miss
+          {": "}the handler runs and a cacheable response is stored (
+          <code>X-Cache: MISS</code>).
         </li>
       </ul>
 
@@ -170,7 +174,8 @@ app.get(
       <ul>
         <li>
           carry <code>Cache-Control: no-store</code>
-          {", "}<code>private</code>
+          {", "}
+          <code>private</code>
           {", "}or <code>no-cache</code>;
         </li>
         <li>

@@ -10,7 +10,7 @@ const POST = {
   title:
     "Aikido's Top 10 App Security Problems, Mapped to DaloyJS (and the One Gap We Just Closed)",
   description:
-    "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and how safeRedirect() closes the remaining gap.",
+    "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. This post maps what a DaloyJS app already blocks by default, what one opt-in line adds, and how safeRedirect() closes the remaining gap.",
   date: "2026-05-24",
   readingTime: "10 min read",
   author: "Devlin Duldulao",
@@ -246,18 +246,17 @@ export default function BlogPostPage() {
             >
               Aikido&apos;s &quot;Top 10 App Security Problems&quot; post
             </a>{" "}
-            and the same question I get every time one of these lists makes the
-            rounds: <em>are we doing anything about this?</em> It&apos;s a fair
-            question. The post is a no-nonsense run-down, SQL/NoSQL injection,
-            XSS, SSRF, path traversal, XXE, deserialization, shell injection,
-            LFI, prototype pollution, open redirects. The basics. The stuff
-            that&apos;s been on every top-10 list since 2007 and still ships in
-            production CVEs every week.
+            and asked which items DaloyJS already covers. The post is a
+            no-nonsense run-down, SQL/NoSQL injection, XSS, SSRF, path
+            traversal, XXE, deserialization, shell injection, LFI, prototype
+            pollution, open redirects. The basics. The stuff that&apos;s been on
+            every top-10 list since 2007 and still ships in production CVEs
+            every week.
           </p>
 
           <p>
             I went down the list with our framework open in another window. The
-            honest result: <strong>nine out of ten are already covered</strong>
+            result: <strong>nine out of ten are already covered</strong>
             {", "}
             most of them by default, a couple with a single opt-in line. One,{" "}
             <em>open redirects</em>
@@ -456,7 +455,7 @@ return new Response(null, {
             also refuses a fallback that is itself an open-redirect bait).
           </p>
 
-          <h2>The honest scoreboard</h2>
+          <h2>The scoreboard</h2>
 
           <p>
             Against Aikido&apos;s top 10: nine were already covered, one (#10)
@@ -488,20 +487,24 @@ return new Response(null, {
             <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped to DaloyJS</Link>
+              Cloud Security Architecture, Mapped to DaloyJS
+            </Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security</Link>
+              Vibe Coding Security
+            </Link>
             {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026</Link>
+              CSRF in 2026
+            </Link>
             {". "}Or jump straight to{" "}
             <Link href="/docs/security/fetch-guard">
               /docs/security/fetch-guard
             </Link>{" "}
             and{" "}
             <Link href="/docs/security/owasp-api-top-10">
-              /docs/security/owasp-api-top-10</Link>
+              /docs/security/owasp-api-top-10
+            </Link>
             {"."}
           </p>
         </div>

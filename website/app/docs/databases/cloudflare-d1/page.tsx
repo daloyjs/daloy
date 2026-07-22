@@ -56,8 +56,8 @@ database_id = "<id-from-create>"`}
       <h2 id="2-type-the-binding">2. Type the binding</h2>
       <p>
         Use a regular <code>.ts</code> module (not a <code>.d.ts</code>
-        {", "}which <code>skipLibCheck</code> would silently skip) so the
-        import below resolves and the shape stays type-checked:
+        {", "}which <code>skipLibCheck</code> would silently skip) so the import
+        below resolves and the shape stays type-checked:
       </p>
       <CodeBlock
         code={`// src/types/env.ts
@@ -143,7 +143,7 @@ export default {
         not to a separate <code>.d.ts</code> file. Declaration files are exempt
         from type-checking when <code>skipLibCheck</code> is on (the scaffolded
         default), so a mistake inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        <code>state.db</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/index.ts (same module as the Worker above)
@@ -179,7 +179,8 @@ export const createDb = (env: Env) => drizzle(env.DB);`}
           target="_blank"
           rel="noreferrer"
         >
-          D1 Driver Adapter</a>
+          D1 Driver Adapter
+        </a>
         {". "}Construct the adapter inside the Worker handler since it needs the
         runtime binding.
       </p>

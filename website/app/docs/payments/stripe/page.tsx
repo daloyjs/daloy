@@ -53,7 +53,7 @@ export default function Page() {
       <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
-          <strong>Start with Checkout Sessions.</strong>{" "}
+          Start with Checkout Sessions.{" "}
           <a
             href="https://docs.stripe.com/checkout/quickstart"
             target="_blank"
@@ -66,27 +66,27 @@ export default function Page() {
           payment method collection, SCA, wallets, localization, and receipts.
         </li>
         <li>
-          <strong>Use Stripe.js on the client, not raw card forms.</strong>{" "}
+          Use Stripe.js on the client, not raw card forms.{" "}
           <code>@stripe/stripe-js</code> is a small loader for Stripe&apos;s
           hosted <code>https://js.stripe.com</code> script. Stripe says this is
           required for PCI compliance; do not bundle or self-host Stripe.js.
         </li>
         <li>
-          <strong>Webhook verification needs the raw body.</strong>{" "}
+          Webhook verification needs the raw body.{" "}
           <code>stripe.webhooks.constructEvent()</code> requires the exact raw
           request body, the <code>Stripe-Signature</code> header, and the
           endpoint secret. JSON parsing before verification will break the
           signature check.
         </li>
         <li>
-          <strong>Send idempotency keys on mutating retries.</strong> Stripe
-          accepts idempotency keys on every <code>POST</code>
+          Send idempotency keys on mutating retries. Stripe accepts idempotency
+          keys on every <code>POST</code>
           {". "}Generate a UUID per logical attempt and reuse it when retrying
           the same create or update call.
         </li>
         <li>
-          <strong>Stripe is separate from PayPal.</strong> Keep this guide next
-          to <Link href={"/docs/payments/braintree" as Route}>Braintree</Link>
+          Stripe is separate from PayPal. Keep this guide next to{" "}
+          <Link href={"/docs/payments/braintree" as Route}>Braintree</Link>
           {", "}
           not under it. Braintree is PayPal&apos;s gateway; Stripe is a separate
           provider.
@@ -102,7 +102,8 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Stripe Dashboard</a>
+            Stripe Dashboard
+          </a>
           {"."}
         </li>
         <li>
@@ -507,7 +508,8 @@ await state.stripe.refund({
         The SDK throws structured <code>Stripe.errors.StripeError</code>
         subclasses for API, card, authentication, rate-limit, and connection
         failures. Preserve <code>requestId</code>
-        {", "}<code>code</code>
+        {", "}
+        <code>code</code>
         {", "}
         <code>decline_code</code>
         {", "}and <code>payment_intent</code> in internal logs, but return a
@@ -528,28 +530,25 @@ await state.stripe.refund({
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          <strong>Do not make Stripe a framework dependency.</strong> Keep it in
-          the application, behind a plugin, so apps that use Braintree, Adyen,
-          Square, or no payments at all keep a dependency-free DaloyJS core.
+          Do not make Stripe a framework dependency. Keep it in the application,
+          behind a plugin, so apps that use Braintree, Adyen, Square, or no
+          payments at all keep a dependency-free DaloyJS core.
         </li>
         <li>
-          <strong>
-            Use Checkout first, Payment Intents when you need control.
-          </strong>{" "}
-          Payment Intents are the lower-level API for custom payment forms and
-          advanced flows. Start there only when hosted Checkout cannot model the
+          Use Checkout first, Payment Intents when you need control. Payment
+          Intents are the lower-level API for custom payment forms and advanced
+          flows. Start there only when hosted Checkout cannot model the
           experience.
         </li>
         <li>
-          <strong>Pin your API behavior deliberately.</strong> Stripe SDK types
-          track the latest API shape. If your account uses an older pinned API
-          version, test upgrades carefully and keep type suppressions rare and
-          local.
+          Pin your API behavior deliberately. Stripe SDK types track the latest
+          API shape. If your account uses an older pinned API version, test
+          upgrades carefully and keep type suppressions rare and local.
         </li>
         <li>
-          <strong>Never use real card details in test mode.</strong> Use Stripe
-          test cards or test <code>PaymentMethod</code> IDs. Real payment method
-          details belong only in live mode through Stripe-hosted collection.
+          Never use real card details in test mode. Use Stripe test cards or
+          test <code>PaymentMethod</code> IDs. Real payment method details
+          belong only in live mode through Stripe-hosted collection.
         </li>
       </ul>
 

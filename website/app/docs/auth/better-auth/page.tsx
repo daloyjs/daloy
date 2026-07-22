@@ -135,9 +135,9 @@ BETTER_AUTH_SECRET=replace-with-at-least-32-random-bytes`}
         <code>Set-Cookie</code> headers are preserved exactly.{" "}
         <code>preBody</code> runs after routing but before any body I/O, which
         is the right place to delegate to another web-standard{" "}
-        <code>Request → Response</code> handler. Because Better Auth owns the
-        successful response body, cookies, and redirects, both routes explicitly
-        set <code>acknowledgeNoResponseBodySchema: true</code>
+        <code>Request -&gt; Response</code> handler. Because Better Auth owns
+        the successful response body, cookies, and redirects, both routes
+        explicitly set <code>acknowledgeNoResponseBodySchema: true</code>
         {"."}
       </p>
       <CodeBlock
@@ -391,35 +391,40 @@ await authClient.signIn.email({
           target="_blank"
           rel="noreferrer"
         >
-          Better Auth installation</a>
+          Better Auth installation
+        </a>
         {", "}
         <a
           href="https://better-auth.com/docs/basic-usage"
           target="_blank"
           rel="noreferrer"
         >
-          Better Auth basic usage</a>
+          Better Auth basic usage
+        </a>
         {", "}and the framework integration docs for{" "}
         <a
           href="https://better-auth.com/docs/integrations/hono"
           target="_blank"
           rel="noreferrer"
         >
-          Hono</a>
+          Hono
+        </a>
         {", "}
         <a
           href="https://better-auth.com/docs/integrations/elysia"
           target="_blank"
           rel="noreferrer"
         >
-          Elysia</a>
+          Elysia
+        </a>
         {", "}and{" "}
         <a
           href="https://better-auth.com/docs/integrations/fastify"
           target="_blank"
           rel="noreferrer"
         >
-          Fastify</a>
+          Fastify
+        </a>
         {"."}
       </p>
     </>

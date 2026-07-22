@@ -35,20 +35,15 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>
-            Block empty / missing <code>User-Agent</code>
-          </strong>{" "}
-          (a common signature of crude scrapers and vulnerability scanners, on
-          by default).
+          Block empty / missing <code>User-Agent</code> (a common signature of
+          crude scrapers and vulnerability scanners, on by default).
         </li>
         <li>
-          <strong>
-            Block known-abusive <code>User-Agent</code> strings
-          </strong>{" "}
-          (your own substrings or <code>RegExp</code>s).
+          Block known-abusive <code>User-Agent</code> strings (your own
+          substrings or <code>RegExp</code>s).
         </li>
         <li>
-          <strong>Verify declared crawlers</strong>
+          Verify declared crawlers
           {": "}when a request <em>claims</em> to be Googlebot or Bingbot,
           confirm it via reverse-DNS + forward-confirm (the method Google and
           Bing themselves document) so a spoofed <code>User-Agent</code>{" "}
@@ -121,7 +116,7 @@ app.use(
   botGuard({
     trustProxyHeaders: true, // needed to read the client IP for crawler checks
     blockedUserAgents: [/sqlmap/i, /nikto/i, "masscan"],
-    verifiedBots: WELL_KNOWN_BOTS, // a spoofed Googlebot/Bingbot → 403
+    verifiedBots: WELL_KNOWN_BOTS, // a spoofed Googlebot/Bingbot -> 403
   }),
 );`}
       />
@@ -202,7 +197,8 @@ app.use(
         <strong>refuses to construct</strong> unless you supply{" "}
         <code>resolveIp</code> or set <code>trustProxyHeaders</code>
         {". "}A request that claims to be a crawler but can&apos;t be verified
-        (no client IP, or a DNS failure) is blocked by default (<code>blockUnverifiableBots</code>
+        (no client IP, or a DNS failure) is blocked by default (
+        <code>blockUnverifiableBots</code>
         {", "}the secure-by-default posture). Set it to <code>false</code> to
         fail open. Verification results are cached per IP (default 1 h via{" "}
         <code>cacheTtlMs</code>) so DNS stays off the hot path.

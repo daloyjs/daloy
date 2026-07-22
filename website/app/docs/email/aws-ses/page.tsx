@@ -35,7 +35,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          AWS SDK for JavaScript v3</a>
+          AWS SDK for JavaScript v3
+        </a>
         {". "}Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2)
         or need very low per-message cost.
       </p>
@@ -85,8 +86,8 @@ export default function Page() {
       <ol>
         <li>
           In the AWS console, open{" "}
-          <strong>Amazon SES → Verified identities</strong> and verify either an
-          email address (for development) or your sending domain (for
+          <strong>Amazon SES -&gt; Verified identities</strong> and verify
+          either an email address (for development) or your sending domain (for
           production). Add the SPF, DKIM, and DMARC records SES shows you.
         </li>
         <li>
@@ -225,7 +226,8 @@ app.post(
           <code>Content.Simple</code>
           {": "}subject + text/HTML body (used above). Also supports an{" "}
           <code>Attachments</code> array with base64 <code>RawContent</code>
-          {", "}<code>FileName</code>
+          {", "}
+          <code>FileName</code>
           {", "}and <code>ContentType</code>.
         </li>
         <li>
@@ -252,12 +254,12 @@ app.post(
       <h2 id="runtimes">Runtimes</h2>
       <ul>
         <li>
-          <strong>Node / Bun / Deno / AWS Lambda</strong>
+          Node / Bun / Deno / AWS Lambda
           {": "}works out of the box. On Lambda, omit access keys and let the
           execution role supply credentials.
         </li>
         <li>
-          <strong>Cloudflare Workers</strong>
+          Cloudflare Workers
           {": "}the SDK can run there but uses a Web Crypto signer; pin{" "}
           <code>@aws-sdk/client-sesv2</code> ≥ 3.700 and pass{" "}
           <code>credentials</code> explicitly (the default provider chain

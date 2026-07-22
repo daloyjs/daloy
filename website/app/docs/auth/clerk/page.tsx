@@ -99,7 +99,8 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Clerk dashboard</a>
+            Clerk dashboard
+          </a>
           {". "}From <strong>API Keys</strong>
           {", "}copy the <strong>Publishable Key</strong> and{" "}
           <strong>Secret Key</strong>
@@ -129,7 +130,7 @@ export default function Page() {
 CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 # Optional - enables networkless JWT verification (no Clerk API call per request)
-# Get it from API Keys → Show JWT public key → PEM Public Key
+# Get it from API Keys -> Show JWT public key -> PEM Public Key
 CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----\\n...\\n-----END PUBLIC KEY-----"`}
       />
 
@@ -250,8 +251,10 @@ app.get(
       <p>
         Clerk&apos;s <code>Auth</code> object includes the active{" "}
         <code>orgId</code>
-        {", "}<code>orgSlug</code>
-        {", "}<code>orgRole</code> (e.g. <code>org:admin</code>), and{" "}
+        {", "}
+        <code>orgSlug</code>
+        {", "}
+        <code>orgRole</code> (e.g. <code>org:admin</code>), and{" "}
         <code>orgPermissions</code>
         {". "}Add a thin helper to require a role on top of{" "}
         <code>requireClerkAuth</code>

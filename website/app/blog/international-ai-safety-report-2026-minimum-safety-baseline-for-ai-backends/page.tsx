@@ -10,7 +10,7 @@ const POST = {
   title:
     "The International AI Safety Report 2026, Translated Into a Minimum Safety Baseline for AI Backends",
   description:
-    "Aikido's read of the International AI Safety Report 2026 lands on a short list of deployment-time requirements for any backend an autonomous AI system can call, layered defense, independent verification, prompt-injection-resistant guardrails, network scope control, inference/execution separation, full observability and emergency controls. Here's the honest per-requirement mapping to what a DaloyJS app already enforces by default, what one opt-in line adds, and what still lives above the HTTP layer.",
+    "Aikido's read of the International AI Safety Report 2026 lands on a short list of deployment-time requirements for any backend an autonomous AI system can call, layered defense, independent verification, prompt-injection-resistant guardrails, network scope control, inference/execution separation, full observability and emergency controls. This post maps those requirements to what a DaloyJS app already enforces by default, what one opt-in line adds, and what still lives above the HTTP layer.",
   date: "2026-06-13",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
@@ -414,8 +414,7 @@ export default function BlogPostPage() {
               Aikido&apos;s &quot;International AI Safety Report 2026: Aikido
               Security Analysis&quot;
             </a>{" "}
-            with the same question I get every other week now:{" "}
-            <em>are we doing anything about this?</em>
+            and asked how its recommendations map to DaloyJS.
           </p>
 
           <p>
@@ -425,7 +424,8 @@ export default function BlogPostPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              International AI Safety Report 2026</a>
+              International AI Safety Report 2026
+            </a>
             {", "}100+ experts, 30+ countries, Yoshua Bengio chairing, through
             an operator&apos;s lens and lands on a short, useful conclusion: the
             interesting safety work for the rest of us is at{" "}
@@ -437,28 +437,26 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              <strong>Layered defense.</strong> Training-time safety,
-              deployment-time controls, and post-deployment monitoring are three
-              independent layers. The deployment-time layer must work even when
-              the model layer fails.
+              Layered defense. Training-time safety, deployment-time controls,
+              and post-deployment monitoring are three independent layers. The
+              deployment-time layer must work even when the model layer fails.
             </li>
             <li>
-              <strong>Mandatory verification.</strong> Models game evals and
-              sandbag on demand. Self-reports and chain-of-thought are not
-              evidence. You need an independent verifier in front of every side
-              effect.
+              Mandatory verification. Models game evals and sandbag on demand.
+              Self-reports and chain-of-thought are not evidence. You need an
+              independent verifier in front of every side effect.
             </li>
             <li>
-              <strong>Prompt-injection-resistant constraints.</strong> Leading
-              models still fall to prompt injection with a handful of tries in
-              2025 evals. Constraints must be <em>enforced</em>
+              Prompt-injection-resistant constraints. Leading models still fall
+              to prompt injection with a handful of tries in 2025 evals.
+              Constraints must be <em>enforced</em>
               {", "}not requested in the system prompt.
             </li>
             <li>
-              <strong>Minimum safety requirements.</strong> Abuse prevention,
-              network-level scope control, inference/execution separation, full
-              observability with emergency controls, data processing guarantees,
-              and verification with false-positive control.
+              Minimum safety requirements. Abuse prevention, network-level scope
+              control, inference/execution separation, full observability with
+              emergency controls, data processing guarantees, and verification
+              with false-positive control.
             </li>
           </ul>
 
@@ -466,9 +464,9 @@ export default function BlogPostPage() {
             That list reads almost like a feature spec for an HTTP framework
             built for the agent era. Which is convenient, because DaloyJS{" "}
             <em>is</em> an HTTP framework built for the agent era. Below is the
-            honest per-requirement mapping of what an app on{" "}
-            <code>@daloyjs/core</code> already enforces by default, what one
-            opt-in line adds, and the items no framework can own.
+            per-requirement mapping of what an app on <code>@daloyjs/core</code>{" "}
+            already enforces by default, what one opt-in line adds, and the
+            items no framework can own.
           </p>
 
           <h2>Layered defense: the deployment layer must stand alone</h2>
@@ -536,12 +534,11 @@ export default function BlogPostPage() {
           <h2>Prompt injection: the HTTP boundary owns the blast radius</h2>
 
           <p>
-            Let&apos;s be honest about this one. Prompt injection doesn&apos;t
-            live at the HTTP layer, it lives in the model. No framework
-            &quot;solves&quot; prompt injection. What the framework owns is the{" "}
-            <em>blast radius</em> of a successful prompt injection: how much
-            damage the model can do once it has been convinced to call your tool
-            with attacker-shaped input.
+            Prompt injection lives in the model layer, so an HTTP framework
+            cannot solve it. The framework can limit the <em>blast radius</em>{" "}
+            of a successful prompt injection: how much damage the model can do
+            once it has been convinced to call your tool with attacker-shaped
+            input.
           </p>
 
           <RequirementCard
@@ -576,35 +573,34 @@ export default function BlogPostPage() {
             minimum-safety list.
           </p>
 
-          <h2>What the framework honestly cannot do</h2>
+          <h2>What the framework cannot do</h2>
 
           <ul>
             <li>
-              <strong>Training-time safety.</strong> That&apos;s the model
-              provider&apos;s layer. The report is correct that you cannot rely
-              on it alone, but we can&apos;t supply it either. What we can do is
-              make the deployment layer strong enough that a jailbroken model is
-              still bounded by the schema.
+              Training-time safety. That&apos;s the model provider&apos;s layer.
+              The report is correct that you cannot rely on it alone, but we
+              can&apos;t supply it either. What we can do is make the deployment
+              layer strong enough that a jailbroken model is still bounded by
+              the schema.
             </li>
             <li>
-              <strong>Detecting that a model is sandbagging.</strong> A model
-              that intentionally underperforms on evals is a problem above the
-              HTTP layer. What the framework can do is make every tool call
-              observable and every side effect schema-checked, so an anomalous
-              pattern shows up in your structured log stream and your SIEM can
-              flag it.
+              Detecting that a model is sandbagging. A model that intentionally
+              underperforms on evals is a problem above the HTTP layer. What the
+              framework can do is make every tool call observable and every side
+              effect schema-checked, so an anomalous pattern shows up in your
+              structured log stream and your SIEM can flag it.
             </li>
             <li>
-              <strong>Telling you what is safe for your business.</strong> The
-              schema says &quot;amountCents must be ≤ 50,000&quot;, the
-              framework cannot tell you that 50,000 is the right number. That is
-              a product / risk / compliance call and it changes per route, per
-              customer tier, per jurisdiction.
+              Telling you what is safe for your business. The schema says
+              &quot;amountCents must be ≤ 50,000&quot;, the framework cannot
+              tell you that 50,000 is the right number. That is a product / risk
+              / compliance call and it changes per route, per customer tier, per
+              jurisdiction.
             </li>
             <li>
-              <strong>Stopping you from disabling the guards.</strong> The
-              guards run in your app. If you delete fetchGuard or widen the
-              schema to <code>z.any()</code>
+              Stopping you from disabling the guards. The guards run in your
+              app. If you delete fetchGuard or widen the schema to{" "}
+              <code>z.any()</code>
               {", "}the framework lets you, the repo&apos;s AGENTS.md asks
               coding agents not to, and{" "}
               <Link href="/blog/secure-by-default">
@@ -614,52 +610,48 @@ export default function BlogPostPage() {
             </li>
           </ul>
 
-          <h2>The honest answer to the original question</h2>
+          <h2>What DaloyJS covers</h2>
 
           <p>
-            <em>
-              Are we doing anything about the International AI Safety Report
-              2026?
-            </em>{" "}
-            Yes, the framework was already designed against this exact shape of
-            threat model. Aikido&apos;s read of the report lines up one-for-one
-            with primitives that ship today: <code>fetchGuard()</code> for
-            network scope control, route schemas + <code>.strict()</code> for
-            independent verification, two-App composition for
-            inference/execution separation, <code>requestId</code> + structured
-            logs + RFC 9457 for full observability, <code>loadShedding</code> +{" "}
-            <code>gracefulShutdown</code> for emergency controls, prod-mode
-            redaction + JWT algorithm allowlists for data processing guarantees,
-            and <code>rateLimit</code> + body limits + request timeouts for
-            abuse prevention.
+            DaloyJS maps the report&apos;s backend requirements to existing
+            controls: <code>fetchGuard()</code> limits network scope, strict
+            route schemas verify input, two-App composition separates inference
+            from execution, request logs support investigation, lifecycle tools
+            provide emergency controls, and rate limits plus request caps limit
+            abuse.
           </p>
 
           <p>
-            None of it is exotic. None of it requires a runtime dependency. All
-            of it is on by default or one line of opt-in. The framework cannot
-            make the model safe, but it can make sure that when the model
-            isn&apos;t, the backend still is.
+            These controls use built-in APIs and require either no setup or one
+            middleware call. They limit what a compromised model can do, while
+            model safety itself stays outside the HTTP framework.
           </p>
 
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/owasp-top-10-agentic-applications-mapped-to-daloyjs">
-              OWASP Top 10 for Agentic Applications, Mapped</Link>
+              OWASP Top 10 for Agentic Applications, Mapped
+            </Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security</Link>
+              Vibe Coding Security
+            </Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped</Link>
+              Cloud Security Architecture, Mapped
+            </Link>
             {", "}
             <Link href="/blog/secure-sdlc-five-pillars-mapped-to-daloyjs">
-              The 5 Pillars of a Secure SDLC, Mapped</Link>
-            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+              The 5 Pillars of a Secure SDLC, Mapped
+            </Link>
+            {", "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
             {". "}
             Relevant docs: <Link href="/docs/security">/docs/security</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections</Link>
+              runtime protections
+            </Link>
             {", "}
             <Link href="/docs/security/secure-defaults">secure defaults</Link>
             {"."}

@@ -178,7 +178,7 @@ const ORIGINS = `const mcp = createMcpHandler({
   // origins (localhost, *.localhost, 127.0.0.1, [::1]) are allowed. Every
   // other browser origin gets 403 unless listed here. A same-origin Origin is
   // NOT implicitly trusted: under DNS rebinding the attacker hostname resolves
-  // to your host, so Origin.host can equal Host — the allowlist is the gate.
+  // to your host, so Origin.host can equal Host. The allowlist is the gate.
   allowedOrigins: ["https://app.example.com"],
   tools: [/* ... */],
 });`;
@@ -333,7 +333,8 @@ export default function Page() {
       <p>
         Use <code>createMcpHandler()</code> for the MCP protocol layer and{" "}
         <code>mcpRoutes()</code> to mount <code>POST</code>
-        {", "}<code>GET</code>
+        {", "}
+        <code>GET</code>
         {", "}
         and <code>OPTIONS</code> on a DaloyJS app. The <code>POST</code> route
         is the actual MCP transport. <code>GET</code> returns a JSON hint
@@ -383,17 +384,20 @@ export default function Page() {
       <ul>
         <li>
           <code>initialize</code>
-          {", "}<code>ping</code>
-          {", "}<code>tools/list</code>
+          {", "}
+          <code>ping</code>
+          {", "}
+          <code>tools/list</code>
           {", "}
           <code>tools/call</code>
-          {", "}<code>resources/list</code>
+          {", "}
+          <code>resources/list</code>
           {", "}
           <code>resources/templates/list</code>
-          {", "}<code>resources/read</code> (including template-matched URIs),{" "}
+          {", "}
+          <code>resources/read</code> (including template-matched URIs),{" "}
           <code>prompts/list</code>
-          {", "}and <code>prompts/get</code> with required-argument
-          enforcement.
+          {", "}and <code>prompts/get</code> with required-argument enforcement.
         </li>
         <li>
           Protocol-version negotiation, <code>MCP-Protocol-Version</code>{" "}
@@ -421,7 +425,8 @@ export default function Page() {
           {", "}
           <code>websiteUrl</code>
           {", "}and <code>icons</code>; tool <code>outputSchema</code>
-          {", "}<code>annotations</code> (read-only, destructive, idempotent,
+          {", "}
+          <code>annotations</code> (read-only, destructive, idempotent,
           open-world hints), and <code>icons</code>; icons on resources,
           templates, and prompts. Tool results that return only{" "}
           <code>structuredContent</code> get a serialized text block backfilled
@@ -448,7 +453,7 @@ export default function Page() {
         {". "}A same-origin <code>Origin</code> is deliberately{" "}
         <strong>not</strong> treated as sufficient on its own: under DNS
         rebinding the attacker&apos;s hostname resolves to your host, so{" "}
-        <code>Origin.host</code> can equal the request <code>Host</code> — the{" "}
+        <code>Origin.host</code> can equal the request <code>Host</code>. The{" "}
         <code>allowedOrigins</code> allowlist is the real gate for public
         browser clients.
       </p>
@@ -476,26 +481,31 @@ export default function Page() {
         The enforced subset is deliberately small and dependency-free, but
         covers the security-relevant keywords: <code>type</code> (including{" "}
         <code>integer</code>), <code>required</code>
-        {", "}<code>properties</code>
+        {", "}
+        <code>properties</code>
         {", "}
         <code>additionalProperties</code> (including{" "}
         <code>additionalProperties: false</code>), <code>enum</code>
         {", "}
         <code>const</code>
         {", "}and basic bounds (<code>minLength</code> / <code>maxLength</code>
-        {", "}<code>minimum</code> / <code>maximum</code>
+        {", "}
+        <code>minimum</code> / <code>maximum</code>
         {", "}
         <code>minItems</code> / <code>maxItems</code>). It recurses into nested{" "}
         <code>properties</code>
-        {", "}<code>items</code>
+        {", "}
+        <code>items</code>
         {", "}and object-form <code>additionalProperties</code>.
       </p>
       <p>
         These keywords are advertised to clients but{" "}
         <strong>not enforced</strong>
         {", "}so your handler must still check them: <code>pattern</code>
-        {", "}<code>format</code>
-        {", "}<code>$ref</code>
+        {", "}
+        <code>format</code>
+        {", "}
+        <code>$ref</code>
         {", "}and <code>anyOf</code> / <code>oneOf</code> / <code>allOf</code>
         {". "}
         <code>pattern</code> is skipped on purpose so a developer-authored regex
@@ -504,8 +514,8 @@ export default function Page() {
       <p>
         The same validator is exported as{" "}
         <code>validateMcpInput(schema, value)</code>
-        {", "}which returns an array of error strings (empty when valid). Use
-        it to pre-validate arguments in tests or in your own tooling:
+        {", "}which returns an array of error strings (empty when valid). Use it
+        to pre-validate arguments in tests or in your own tooling:
       </p>
       <CodeBlock code={VALIDATE_HELPER} />
 
@@ -580,7 +590,8 @@ export default function Page() {
           if the <code>mcpRoutes()</code> <code>POST</code> endpoint has no auth
           hook. For a genuinely public server, opt out explicitly with{" "}
           <code>
-            mcpRoutes(path, handler, {"{"} public: true {"}"})</code>
+            mcpRoutes(path, handler, {"{"} public: true {"}"})
+          </code>
           {"."}
         </li>
         <li>
@@ -593,7 +604,8 @@ export default function Page() {
           <a href="#input-schema-enforcement">enforced server-side</a> for its
           supported subset, but it is still not a substitute for full
           validation: check anything expressed only through <code>pattern</code>
-          {", "}<code>format</code>
+          {", "}
+          <code>format</code>
           {", "}or <code>anyOf</code>/<code>oneOf</code>/<code>allOf</code>{" "}
           inside the handler.
         </li>

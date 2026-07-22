@@ -80,7 +80,7 @@ export default function Page() {
       <ol>
         <li>
           Add and verify your sending domain under{" "}
-          <strong>Sending → Domains → Add new domain</strong>
+          <strong>Sending -&gt; Domains -&gt; Add new domain</strong>
           {". "}Add the SPF/DKIM TXT records and the MX records Mailgun lists.
         </li>
         <li>
@@ -199,7 +199,8 @@ app.post(
 
       <h2 id="templates">Templates</h2>
       <p>
-        Create a stored template in <strong>Sending → Templates</strong> with{" "}
+        Create a stored template in <strong>Sending -&gt; Templates</strong>{" "}
+        with{" "}
         <a href="https://handlebarsjs.com/" target="_blank" rel="noreferrer">
           Handlebars
         </a>{" "}
@@ -218,11 +219,11 @@ app.post(
       <h2 id="runtimes">Runtimes</h2>
       <ul>
         <li>
-          <strong>Node / Bun / AWS Lambda</strong>
+          Node / Bun / AWS Lambda
           {": "}works with the configuration above.
         </li>
         <li>
-          <strong>Cloudflare Workers</strong>
+          Cloudflare Workers
           {": "}pass <code>useFetch: true</code> so the SDK uses the
           platform&apos;s native <code>fetch</code> instead of{" "}
           <code>request</code> (which depends on Node&apos;s HTTP module):

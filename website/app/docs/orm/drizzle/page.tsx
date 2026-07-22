@@ -125,8 +125,7 @@ export const drizzlePlugin = {
         {", "}not to a separate <code>.d.ts</code> file. Declaration files are
         exempt from type-checking when <code>skipLibCheck</code> is on (the
         scaffolded default), so a broken import inside a <code>.d.ts</code>{" "}
-        fails silently and <code>state.db</code> quietly degrades to{" "}
-        <code>any</code>.
+        fails silently and <code>state.db</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/drizzle.ts (same module as the plugin above)
@@ -214,15 +213,13 @@ serve(app, { port: 3000 });`}
       </p>
       <ul>
         <li>
-          <strong>Cloudflare Workers + D1:</strong> <code>drizzle-orm/d1</code>
+          Cloudflare Workers + D1: <code>drizzle-orm/d1</code>
         </li>
         <li>
-          <strong>Neon (Postgres) on any edge:</strong>{" "}
-          <code>drizzle-orm/neon-http</code>
+          Neon (Postgres) on any edge: <code>drizzle-orm/neon-http</code>
         </li>
         <li>
-          <strong>PlanetScale (MySQL):</strong>{" "}
-          <code>drizzle-orm/planetscale-serverless</code>
+          PlanetScale (MySQL): <code>drizzle-orm/planetscale-serverless</code>
         </li>
       </ul>
       <CodeBlock

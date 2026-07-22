@@ -145,7 +145,8 @@ export default function Page() {
         </li>
         <li>
           Mount <code>secureHeaders()</code>
-          {", "}<code>requestId()</code>
+          {", "}
+          <code>requestId()</code>
           {", "}and <code>rateLimit()</code> globally.
         </li>
         <li>
@@ -206,7 +207,8 @@ CMD ["dist/server.js"]`}
           Sigstore Cosign
         </a>{" "}
         (keyless / OIDC, no long-lived signing key), generates an SPDX SBOM for
-        the image, and uploads it as a Cosign attestation (<code>--type spdxjson</code>). The job grants{" "}
+        the image, and uploads it as a Cosign attestation (
+        <code>--type spdxjson</code>). The job grants{" "}
         <code>id-token: write</code> alongside <code>packages: write</code>; the
         top-level workflow keeps <code>permissions: {`{}`}</code>
         {". "}This closes the Aikido{" "}
@@ -262,8 +264,9 @@ await app.shutdown(15_000);`}
           <code>new App({"{ ... }"})</code>
           {", "}where <code>N</code> is the number of trusted proxy hops in
           front of the app (a single edge proxy is <code>1</code>; Cloudflare in
-          front of one PaaS edge is <code>2</code>). In production an <strong>unconfigured</strong> posture makes
-          DaloyJS return <code>500</code> on the first request carrying an{" "}
+          front of one PaaS edge is <code>2</code>). In production an{" "}
+          <strong>unconfigured</strong> posture makes DaloyJS return{" "}
+          <code>500</code> on the first request carrying an{" "}
           <code>X-Forwarded-*</code> header, so a misconfigured chain cannot
           feed spoofable client IPs to <code>rateLimit()</code>
           {", "}request-id propagation, or audit logs. Use{" "}
@@ -290,7 +293,7 @@ await app.shutdown(15_000);`}
       <p>
         DaloyJS can run on Vercel Functions, Cloudflare Workers, Netlify
         Functions, AWS Lambda, Fastly Compute, and Deno Deploy because the core
-        is Web-standard <code>Request → Response</code>
+        is Web-standard <code>Request -&gt; Response</code>
         {". "}Use these targets when you want per-request billing or a managed
         edge/serverless runtime instead of a long-lived Node process.
       </p>
@@ -315,7 +318,8 @@ export default toFetchHandler(app);
         See <Link href="/docs/adapters/vercel">Vercel</Link>
         {", "}
         <Link href="/docs/adapters/cloudflare-workers">Cloudflare Workers</Link>
-        {", "}<Link href="/docs/adapters/netlify">Netlify</Link>
+        {", "}
+        <Link href="/docs/adapters/netlify">Netlify</Link>
         {", "}
         <Link href="/docs/adapters/aws-lambda">AWS Lambda</Link>
         {", "}and <Link href="/docs/adapters/fastly">Fastly Compute</Link> for

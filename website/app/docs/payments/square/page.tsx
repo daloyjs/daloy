@@ -48,8 +48,7 @@ export default function Page() {
       <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
-          <strong>v40+ is a full rewrite.</strong> If you see{" "}
-          <code>squareConnect</code>
+          v40+ is a full rewrite. If you see <code>squareConnect</code>
           {", "}
           <code>new Client({"{ bearerAuthCredentials }"})</code>
           {", "}or <code>paymentsApi.createPayment</code> in tutorials,
@@ -61,10 +60,8 @@ export default function Page() {
           start there in 2026.
         </li>
         <li>
-          <strong>
-            Money is <code>BigInt</code>
-            {", "}in the smallest unit.
-          </strong>{" "}
+          Money is <code>BigInt</code>
+          {", "}in the smallest unit.{" "}
           <code>{`{ amount: BigInt("1000"), currency: "USD" }`}</code> means
           $10.00. Pass a plain <code>number</code> and TypeScript will
           (correctly) yell at you;
@@ -72,26 +69,23 @@ export default function Page() {
           at runtime. See the serialisation note below.
         </li>
         <li>
-          <strong>
-            You don&apos;t charge a card, you charge a <em>source ID</em>.
-          </strong>{" "}
-          The Web Payments SDK on the client returns a single-use token (<code>cnon:...</code> for cards, <code>cash:</code>
+          You don&apos;t charge a card, you charge a <em>source ID</em>. The Web
+          Payments SDK on the client returns a single-use token (
+          <code>cnon:...</code> for cards, <code>cash:</code>
           {", "}Apple Pay nonces, etc.) that your server passes as{" "}
           <code>sourceId</code>
           {". "}Raw PANs never touch your code.
         </li>
         <li>
-          <strong>
-            Always send an <code>idempotencyKey</code>.
-          </strong>{" "}
-          Required on every mutating call (<code>payments.create</code>
+          Always send an <code>idempotencyKey</code>. Required on every mutating
+          call (<code>payments.create</code>
           {", "}
           <code>refunds.refundPayment</code>
           {", "}orders, etc.). A UUID per logical attempt is the right shape,
           re-use it on retries.
         </li>
         <li>
-          <strong>Webhook verification needs three things, not two.</strong>{" "}
+          Webhook verification needs three things, not two.{" "}
           <code>WebhooksHelper.verifySignature</code> wants the raw body, the
           signature header, the signature key, <em>and</em> the exact{" "}
           <code>notificationUrl</code> you registered in the dashboard. Get the
@@ -116,15 +110,15 @@ export default function Page() {
         <li>
           Grab a <strong>Sandbox access token</strong> and your{" "}
           <strong>Application ID</strong> from <em>Credentials</em>
-          {". "}Also note a <strong>Location ID</strong> from{" "}
-          <em>Locations</em>
+          {". "}Also note a <strong>Location ID</strong> from <em>Locations</em>
           {": "}every payment needs one.
         </li>
         <li>
-          Under <em>Webhooks → Subscriptions</em>
+          Under <em>Webhooks -&gt; Subscriptions</em>
           {", "}add an endpoint pointing at your DaloyJS route, subscribe to at
           least <code>payment.updated</code>
-          {", "}<code>payment.created</code>
+          {", "}
+          <code>payment.created</code>
           {", "}and <code>refund.updated</code>
           {", "}and copy the <strong>Signature Key</strong>
           {". "}Save the full URL exactly as Square shows it.
@@ -377,7 +371,8 @@ app.post(
       />
       <p className="text-sm text-muted-foreground">
         <strong>BigInt + JSON gotcha:</strong> JavaScript&apos;s default JSON
-        serialiser throws on BigInt. Map money to strings at the response edge (<code>amountMinor.toString()</code>) or use a custom replacer.
+        serialiser throws on BigInt. Map money to strings at the response edge (
+        <code>amountMinor.toString()</code>) or use a custom replacer.
         DaloyJS&apos;s Zod responses already coerce BigInt to string when you
         declare the response as <code>z.string()</code>; declare a{" "}
         <code>z.bigint()</code> only when both ends agree on it.
@@ -506,11 +501,13 @@ await state.square.refund({
       <p>
         Non-2xx responses throw <code>SquareError</code>
         {". "}Inspect <code>err.statusCode</code>
-        {", "}<code>err.body</code>
-        {", "}and the structured <code>err.errors[]</code> array, each entry
-        has <code>category</code> (e.g. <code>PAYMENT_METHOD_ERROR</code>),{" "}
+        {", "}
+        <code>err.body</code>
+        {", "}and the structured <code>err.errors[]</code> array, each entry has{" "}
+        <code>category</code> (e.g. <code>PAYMENT_METHOD_ERROR</code>),{" "}
         <code>code</code> (e.g. <code>CARD_DECLINED</code>
-        {", "}<code>CVV_FAILURE</code>), <code>detail</code>
+        {", "}
+        <code>CVV_FAILURE</code>), <code>detail</code>
         {", "}and an optional <code>field</code>
         {". "}Map them through <Link href="/docs/errors">problem+json</Link>{" "}
         with <code>type: square:&lt;category&gt;:&lt;code&gt;</code> so
@@ -520,34 +517,29 @@ await state.square.refund({
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          <strong>
-            Use the new SDK, not <code>square/legacy</code>.
-          </strong>{" "}
-          The legacy export exists so v39 codebases can migrate piecemeal,
-          there&apos;s no reason to start a new integration on it in 2026. New
-          features ship to the new client first (or only).
+          Use the new SDK, not <code>square/legacy</code>. The legacy export
+          exists so v39 codebases can migrate piecemeal, there&apos;s no reason
+          to start a new integration on it in 2026. New features ship to the new
+          client first (or only).
         </li>
         <li>
-          <strong>Pin a Square API version in production.</strong> The SDK is
-          tied to a Square API version per release, and a new SDK major (v40 →
-          v41 → ...) can be a breaking change. Pin <code>square</code> to a
-          caret range you control and read the changelog before bumping.
+          Pin a Square API version in production. The SDK is tied to a Square
+          API version per release, and a new SDK major (v40 -&gt; v41 -&gt; ...)
+          can be a breaking change. Pin <code>square</code> to a caret range you
+          control and read the changelog before bumping.
         </li>
         <li>
-          <strong>
-            Iterate paginated endpoints with <code>for await</code>.
-          </strong>{" "}
-          List responses are async-iterable:{" "}
+          Iterate paginated endpoints with <code>for await</code>. List
+          responses are async-iterable:{" "}
           <code>for (const item of pageable)</code> (synchronously) only gives
           you the first page; use{" "}
           <code>for await (const item of pageable)</code> to walk all pages
           without manual cursor juggling.
         </li>
         <li>
-          <strong>Verify webhooks; don&apos;t trust the source IP.</strong>{" "}
-          Square&apos;s IP ranges change. The HMAC + the registered notification
-          URL together prove authenticity and that the request hit the right
-          endpoint.
+          Verify webhooks; don&apos;t trust the source IP. Square&apos;s IP
+          ranges change. The HMAC + the registered notification URL together
+          prove authenticity and that the request hit the right endpoint.
         </li>
       </ul>
 
@@ -558,7 +550,8 @@ await state.square.refund({
         <Link href={"/docs/payments/braintree" as Route}>Braintree guide</Link>
         {", "}
         <Link href={"/docs/payments/authorize-net" as Route}>
-          Authorize.Net guide</Link>
+          Authorize.Net guide
+        </Link>
         {", "}and <Link href="/docs/errors">problem+json errors</Link>.
       </p>
     </>

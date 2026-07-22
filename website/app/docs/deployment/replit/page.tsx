@@ -183,8 +183,8 @@ run = ["sh", "-c", "pnpm start"]`}
       <p>
         Replit Secrets are exposed to the app as environment variables. Add
         runtime values such as <code>NODE_ENV</code>
-        {", "}database URLs, auth secrets, JWT keys, and webhook secrets
-        through Replit Secrets or published app secrets. Do not commit a{" "}
+        {", "}database URLs, auth secrets, JWT keys, and webhook secrets through
+        Replit Secrets or published app secrets. Do not commit a{" "}
         <code>.env</code> file.
       </p>
       <CodeBlock

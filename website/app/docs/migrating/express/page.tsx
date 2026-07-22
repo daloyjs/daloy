@@ -111,24 +111,23 @@ export default function Page() {
       <h3 id="why-would-you-migrate-at-all">Why would you migrate at all?</h3>
       <ul>
         <li>
-          <strong>You want OpenAPI + typed clients for free.</strong> In Express
-          you bolt on <code>swagger-jsdoc</code>
-          {", "}hand-write JSDoc, and hope it stays in sync. In DaloyJS the
-          spec <em>is</em> the route, so it never drifts, and{" "}
+          You want OpenAPI + typed clients for free. In Express you bolt on{" "}
+          <code>swagger-jsdoc</code>
+          {", "}hand-write JSDoc, and hope it stays in sync. In DaloyJS the spec{" "}
+          <em>is</em> the route, so it never drifts, and{" "}
           <Link href="/docs/typed-client">a typed SDK</Link> falls out of{" "}
           <code>pnpm gen</code>.
         </li>
         <li>
-          <strong>You want validation that the type system trusts.</strong>{" "}
-          DaloyJS validates with{" "}
-          <Link href="/docs/validation">Standard Schema</Link> (Zod, Valibot,
-          ArkType, ...) and <em>infers</em> the handler&apos;s{" "}
+          You want validation that the type system trusts. DaloyJS validates
+          with <Link href="/docs/validation">Standard Schema</Link> (Zod,
+          Valibot, ArkType, ...) and <em>infers</em> the handler&apos;s{" "}
           <code>params</code>/<code>query</code>/<code>body</code> types from
           those schemas. No more <code>req.body as any</code>.
         </li>
         <li>
-          <strong>You want secure defaults instead of a TODO list.</strong>{" "}
-          Express ships almost nothing; you remember to add <code>helmet</code>
+          You want secure defaults instead of a TODO list. Express ships almost
+          nothing; you remember to add <code>helmet</code>
           {", "}a rate limiter, a body limit, a request timeout, and you hope
           nobody forgets. DaloyJS ships{" "}
           <Link href="/docs/security/secure-defaults">secure-by-default</Link>{" "}
@@ -136,17 +135,16 @@ export default function Page() {
           <code>secureHeaders()</code> / <code>rateLimit()</code> helpers.
         </li>
         <li>
-          <strong>You want to run the same app everywhere.</strong> Express is
-          tied to Node&apos;s <code>http</code> module. DaloyJS is built on
-          web-standard <code>Request</code> / <code>Response</code> and ships{" "}
+          You want to run the same app everywhere. Express is tied to
+          Node&apos;s <code>http</code> module. DaloyJS is built on web-standard{" "}
+          <code>Request</code> / <code>Response</code> and ships{" "}
           <Link href="/docs/adapters">adapters</Link> for Node, Bun, Deno,
           Cloudflare Workers, and more.
         </li>
         <li>
-          <strong>You want zero runtime dependencies.</strong> The Express
-          dependency tree is dozens of packages. <code>@daloyjs/core</code> has
-          no runtime dependencies, which shrinks your supply-chain attack
-          surface.
+          You want zero runtime dependencies. The Express dependency tree is
+          dozens of packages. <code>@daloyjs/core</code> has no runtime
+          dependencies, which shrinks your supply-chain attack surface.
         </li>
       </ul>
       <p>
@@ -276,21 +274,21 @@ app.listen(3000)                      serve(app, { port: 3000 })  // from an ada
       <p>Key differences to internalize:</p>
       <ul>
         <li>
-          <strong>You return, you don&apos;t mutate.</strong> There is no{" "}
-          <code>res</code> to push onto and no <code>next()</code> to forget. A
-          handler returns <code>{`{ status, body, headers? }`}</code>
+          You return, you don&apos;t mutate. There is no <code>res</code> to
+          push onto and no <code>next()</code> to forget. A handler returns{" "}
+          <code>{`{ status, body, headers? }`}</code>
           {", "}and the status code is type-checked against your declared{" "}
           <code>responses</code>.
         </li>
         <li>
-          <strong>Inputs are validated before your handler runs.</strong> If the
-          body fails its schema, the client gets a{" "}
+          Inputs are validated before your handler runs. If the body fails its
+          schema, the client gets a{" "}
           <Link href="/docs/errors">problem+json 422</Link> automatically, your
           handler is never called.
         </li>
         <li>
-          <strong>Order is structured, not positional.</strong> Express runs
-          middleware in the exact order you call <code>app.use</code>
+          Order is structured, not positional. Express runs middleware in the
+          exact order you call <code>app.use</code>
           {". "}DaloyJS runs hooks at named lifecycle points (global, then
           group, then route), which is more predictable and removes a whole
           class of &quot;why didn&apos;t my middleware run&quot; bugs.
@@ -316,7 +314,8 @@ app.listen(3000)                      serve(app, { port: 3000 })  // from an ada
         <Link href="/docs/scaffolder">create-daloy</Link> and copy your logic
         into it, or add DaloyJS alongside Express in your existing repo for an{" "}
         <Link href={"/docs/migrating/express#incremental" as Route}>
-          incremental migration</Link>
+          incremental migration
+        </Link>
         {": "}
       </p>
       <CodeBlock
@@ -384,9 +383,10 @@ console.log(\`listening on http://localhost:\${port}\`);`}
         filling in routes and hooks. Want the interactive docs UI too? Add{" "}
         <code>docs: true</code> to the <code>App</code> options and you get{" "}
         <code>GET /docs</code>
-        {", "}<code>GET /openapi.json</code>
-        {", "}and <code>GET /openapi.yaml</code> for free, no Express
-        equivalent exists without extra packages.
+        {", "}
+        <code>GET /openapi.json</code>
+        {", "}and <code>GET /openapi.yaml</code> for free, no Express equivalent
+        exists without extra packages.
       </p>
 
       <h2 id="step-2-routing">Step 2: Routing</h2>
@@ -431,15 +431,18 @@ app.post(
       />
       <p>
         Supported methods include <code>GET</code>
-        {", "}<code>POST</code>
+        {", "}
+        <code>POST</code>
         {", "}
         <code>PUT</code>
-        {", "}<code>PATCH</code>
-        {", "}<code>DELETE</code>
+        {", "}
+        <code>PATCH</code>
+        {", "}
+        <code>DELETE</code>
         {", "}
         <code>HEAD</code>
-        {", "}and <code>OPTIONS</code>. <code>HEAD</code> is auto-derived from
-        a matching <code>GET</code> when you don&apos;t declare it. See{" "}
+        {", "}and <code>OPTIONS</code>. <code>HEAD</code> is auto-derived from a
+        matching <code>GET</code> when you don&apos;t declare it. See{" "}
         <Link href="/docs/routing">Routing</Link> for the full reference.
       </p>
 
@@ -667,8 +670,7 @@ app.post(
         <code>new App({"{ hooks }"})</code> or via <code>app.use</code>) run
         first, then group hooks, then per-route hooks. You attach them globally
         with <code>app.use(...)</code>
-        {", "}to a group with{" "}
-        <code>app.group(prefix, {"{ hooks }"}, ...)</code>
+        {", "}to a group with <code>app.group(prefix, {"{ hooks }"}, ...)</code>
         {", "}or to a single route with the route&apos;s <code>hooks</code>{" "}
         field.
       </p>
@@ -733,7 +735,8 @@ app.get(
       <p>
         For real authentication you rarely hand-roll this. DaloyJS ships{" "}
         <code>bearerAuth()</code>
-        {", "}<code>basicAuth()</code>
+        {", "}
+        <code>basicAuth()</code>
         {", "}JWT/JWK verifiers, and sessions, see{" "}
         <Link href="/docs/auth">Authentication</Link>
         {". "}Those are drop-in hooks:{" "}
@@ -785,7 +788,8 @@ app.get(
               No built-in static server (API-first). Serve assets from a
               CDN/object store, or front the app with nginx/Caddy. See{" "}
               <Link href={"/docs/migrating/express#static" as Route}>
-                Static files</Link>
+                Static files
+              </Link>
               {"."}
             </td>
           </tr>
@@ -829,7 +833,8 @@ app.get(
               <code>{`rateLimit({ windowMs, max })`}</code>
               {". "}Redis-backed store available, see{" "}
               <Link href="/docs/security/rate-limit-redis">
-                Redis rate-limit store</Link>
+                Redis rate-limit store
+              </Link>
               {"."}
             </td>
           </tr>
@@ -841,7 +846,8 @@ app.get(
               <code>readRequestCookie()</code> to read,{" "}
               <code>serializeCookie()</code> to write. See{" "}
               <Link href={"/docs/migrating/express#sessions" as Route}>
-                Cookies &amp; sessions</Link>
+                Cookies &amp; sessions
+              </Link>
               {"."}
             </td>
           </tr>
@@ -888,7 +894,8 @@ app.get(
             </td>
             <td>
               <code>bearerAuth()</code>
-              {", "}<code>basicAuth()</code>
+              {", "}
+              <code>basicAuth()</code>
               {", "}JWT/JWK, or an OIDC provider, see{" "}
               <Link href="/docs/auth">Authentication</Link>.
             </td>
@@ -915,7 +922,8 @@ app.get(
         For combining hooks conditionally (the equivalent of mounting a
         middleware on some paths but not others), DaloyJS exports{" "}
         <code>every</code>
-        {", "}<code>some</code>
+        {", "}
+        <code>some</code>
         {", "}and <code>except</code> from <code>@daloyjs/core</code>
         {", "}e.g. apply CSRF everywhere <code>except</code> your webhook
         routes.
@@ -1018,16 +1026,12 @@ app.get(
       </p>
       <ul>
         <li>
-          <strong>
-            <code>app.group(prefix, opts, fn)</code>
-          </strong>{" "}
-          for a prefix + shared tags/hooks within the same file.
+          <code>app.group(prefix, opts, fn)</code> for a prefix + shared
+          tags/hooks within the same file.
         </li>
         <li>
-          <strong>
-            <Link href="/docs/plugins">Plugins</Link>
-          </strong>{" "}
-          (<code>app.register(plugin, {"{ prefix }"}</code>) for genuinely
+          <Link href="/docs/plugins">Plugins</Link> (
+          <code>app.register(plugin, {"{ prefix }"}</code>) for genuinely
           modular, encapsulated units in their own files, the real
           Router-as-module replacement, with Fastify-style encapsulation so a
           plugin can&apos;t leak its middleware into siblings.
@@ -1300,7 +1304,7 @@ await app.ready();`}
         docs). In DaloyJS, returning <code>status: 201</code> only type-checks
         if <code>201</code> is declared in that route&apos;s{" "}
         <code>responses</code>
-        {". "}The compiler keeps you honest.
+        {". "}The compiler catches drift.
       </p>
 
       <h2 id="sessions">Cookies and sessions</h2>
@@ -1353,24 +1357,23 @@ app.get(
       <p>
         Express bundles <code>express.static()</code> and{" "}
         <code>res.sendFile()</code> / <code>res.download()</code>
-        {". "}DaloyJS is deliberately API-first and ships no static file
-        server. Recommended approaches, in order:
+        {". "}DaloyJS is deliberately API-first and ships no static file server.
+        Recommended approaches, in order:
       </p>
       <ol>
         <li>
-          <strong>Serve static assets from a CDN / object store</strong>{" "}
-          (S3+CloudFront, R2, etc.). Best for production regardless of
-          framework.
+          Serve static assets from a CDN / object store (S3+CloudFront, R2,
+          etc.). Best for production regardless of framework.
         </li>
         <li>
-          <strong>Put a reverse proxy in front</strong> (nginx, Caddy, your
-          platform&apos;s edge) that serves <code>/static</code> and forwards
-          everything else to DaloyJS.
+          Put a reverse proxy in front (nginx, Caddy, your platform&apos;s edge)
+          that serves <code>/static</code> and forwards everything else to
+          DaloyJS.
         </li>
         <li>
-          <strong>Stream a specific file from a handler</strong> when you need
-          app logic (auth-gated downloads, generated files). Read the file and
-          return it as the body with the right headers, set{" "}
+          Stream a specific file from a handler when you need app logic
+          (auth-gated downloads, generated files). Read the file and return it
+          as the body with the right headers, set{" "}
           <code>content-disposition: attachment; filename=&quot;...&quot;</code>{" "}
           to reproduce <code>res.download()</code>
           {". "}Always sanitize untrusted filenames with{" "}
@@ -1411,24 +1414,24 @@ app.get(
       <p>
         If your Express app calls{" "}
         <code>app.set(&quot;view engine&quot;, &quot;ejs&quot;)</code> and{" "}
-        <code>res.render(...)</code> a lot, be honest with yourself: DaloyJS is
-        not a templating framework, and forcing server-rendered HTML through it
-        fights the grain. Two sane paths:
+        <code>res.render(...)</code> a lot, DaloyJS is not a templating
+        framework, so forcing server-rendered HTML through it fights the grain.
+        Two sane paths:
       </p>
       <ul>
         <li>
-          <strong>Split the concern.</strong> Keep DaloyJS for the JSON API and
-          move the UI to a frontend (Next.js, Astro, plain SPA) that calls your{" "}
+          Split the concern. Keep DaloyJS for the JSON API and move the UI to a
+          frontend (Next.js, Astro, plain SPA) that calls your{" "}
           <Link href="/docs/typed-client">typed client</Link>
           {". "}This is the recommended modern architecture and usually where
           teams want to end up anyway.
         </li>
         <li>
-          <strong>Render HTML strings yourself</strong> for the occasional page.
-          Build the HTML (with any template library you like, or template
-          literals) and return it with a <code>content-type: text/html</code>{" "}
-          header. Good for emails, a status page, or a handful of marketing
-          routes, not for a full server-rendered app.
+          Render HTML strings yourself for the occasional page. Build the HTML
+          (with any template library you like, or template literals) and return
+          it with a <code>content-type: text/html</code> header. Good for
+          emails, a status page, or a handful of marketing routes, not for a
+          full server-rendered app.
         </li>
       </ul>
 
@@ -1600,35 +1603,34 @@ console.log(\`up on \${port}\`);`}
       </p>
       <ol>
         <li>
-          <strong>Put a reverse proxy in front of both.</strong> nginx, Caddy,
-          or your platform&apos;s router sends already-migrated paths (say{" "}
+          Put a reverse proxy in front of both. nginx, Caddy, or your
+          platform&apos;s router sends already-migrated paths (say{" "}
           <code>/v2/*</code>) to the DaloyJS process and everything else to the
           existing Express process. Nothing in either app needs to know about
           the other.
         </li>
         <li>
-          <strong>Migrate by bounded slice, not by file.</strong> Move a whole
-          resource (all of <code>/books</code>) at once so you don&apos;t split
-          a feature across two frameworks. Mirror its routes in DaloyJS, point
-          the proxy at the new one, delete the Express version.
+          Migrate by bounded slice, not by file. Move a whole resource (all of{" "}
+          <code>/books</code>) at once so you don&apos;t split a feature across
+          two frameworks. Mirror its routes in DaloyJS, point the proxy at the
+          new one, delete the Express version.
         </li>
         <li>
-          <strong>Share nothing fragile.</strong> Both apps can talk to the same
-          database and the same session store. Keep cookie names, JWT secrets,
-          and session formats identical during the transition so a user&apos;s
-          login works no matter which app serves the request.
+          Share nothing fragile. Both apps can talk to the same database and the
+          same session store. Keep cookie names, JWT secrets, and session
+          formats identical during the transition so a user&apos;s login works
+          no matter which app serves the request.
         </li>
         <li>
-          <strong>Lock behavior with contract tests.</strong> Before moving a
-          route, capture its current responses. After moving, assert DaloyJS
-          returns the same thing. The in-process <code>app.request(...)</code>{" "}
-          client (no port needed) makes this fast, see{" "}
-          <Link href="/docs/testing">Testing</Link>.
+          Lock behavior with contract tests. Before moving a route, capture its
+          current responses. After moving, assert DaloyJS returns the same
+          thing. The in-process <code>app.request(...)</code> client (no port
+          needed) makes this fast, see <Link href="/docs/testing">Testing</Link>
+          .
         </li>
         <li>
-          <strong>Repeat until Express is empty, then delete it.</strong> When
-          the last slice is gone, remove the proxy split and the Express
-          dependency tree with it.
+          Repeat until Express is empty, then delete it. When the last slice is
+          gone, remove the proxy split and the Express dependency tree with it.
         </li>
       </ol>
       <p>
@@ -1828,7 +1830,8 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </li>
         <li>
           <Link href="/blog/best-node-express-alternative-daloyjs">
-            Why DaloyJS is the best Node.js Express alternative</Link>
+            Why DaloyJS is the best Node.js Express alternative
+          </Link>
           {", "}the case for switching, if you still need to make it.
         </li>
       </ul>

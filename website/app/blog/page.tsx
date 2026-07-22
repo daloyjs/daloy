@@ -25,7 +25,7 @@ const POSTS = [
     slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
     title: "DaloyJS: The First Release Candidate",
     description:
-      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the stable release.",
+      "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short list of what still stands between us and the stable release.",
     date: "2026-07-03",
     readingTime: "7 min read",
     author: "Devlin Duldulao",
@@ -62,7 +62,7 @@ const POSTS = [
     slug: "why-daloyjs-is-the-rest-api-framework-you-should-use-today",
     title: "Why DaloyJS Is the REST API Framework You Should Use Today",
     description:
-      "In 2026, security guardrails are not optional anymore. This is the blunt case for a REST framework that treats secure defaults as the baseline instead of a plugin shopping list.",
+      "Security guardrails are part of the 2026 baseline. This is the blunt case for a REST framework that ships secure defaults instead of a plugin shopping list.",
     date: "2026-06-21",
     readingTime: "7 min read",
     author: "Devlin Duldulao",
@@ -91,7 +91,7 @@ const POSTS = [
     title:
       "The Best Node.js Express Alternative in 2026 Is Contract-First: The Case for DaloyJS",
     description:
-      "Looking for a modern Node.js Express alternative? The honest argument for why a contract-first framework wins the category in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
+      "Looking for a modern Node.js Express alternative? The case for a contract-first framework in the category in 2026, and why DaloyJS is the Express alternative I now reach for, with the caveats where it does not hold.",
     date: "2026-06-18",
     readingTime: "11 min read",
     author: "Devlin Duldulao",
@@ -101,7 +101,7 @@ const POSTS = [
     title:
       "Watch: Laur Spilca on Software Security for Developers (GOTO 2026), and What DaloyJS Already Decides for You",
     description:
-      "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. Here is the talk, plus an honest mapping of which of those problems a DaloyJS app already takes out of your hands.",
+      "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. Here is the talk, plus a direct mapping of which of those problems a DaloyJS app already takes out of your hands.",
     date: "2026-06-17",
     readingTime: "9 min read",
     author: "Devlin Duldulao",
@@ -131,7 +131,7 @@ const POSTS = [
     title:
       "Aikido's Top 10 App Security Problems, Mapped to DaloyJS (and the One Gap We Just Closed)",
     description:
-      "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. Here's the honest per-item mapping of what a DaloyJS app already blocks by default, what one opt-in line adds, and how safeRedirect() closes the remaining gap.",
+      "Aikido's 'Top 10 App Security Problems' is the short, blunt version of the OWASP list, SQLi, XSS, SSRF, path traversal, XXE, deserialization, shell injection, LFI, prototype pollution, open redirects. This post maps what a DaloyJS app already blocks by default, what one opt-in line adds, and how safeRedirect() closes the remaining gap.",
     date: "2026-06-14",
     readingTime: "10 min read",
     author: "Devlin Duldulao",
@@ -141,7 +141,7 @@ const POSTS = [
     title:
       "The International AI Safety Report 2026, Translated Into a Minimum Safety Baseline for AI Backends",
     description:
-      "Aikido's read of the International AI Safety Report 2026 lands on a short list of deployment-time requirements for any backend an autonomous AI system can call: layered defense, independent verification, prompt-injection-resistant guardrails, network scope control, inference/execution separation, full observability and emergency controls. Here's the honest per-requirement mapping to what a DaloyJS app already enforces by default, what one opt-in line adds, and what still lives above the HTTP layer.",
+      "Aikido's read of the International AI Safety Report 2026 lands on a short list of deployment-time requirements for any backend an autonomous AI system can call: layered defense, independent verification, prompt-injection-resistant guardrails, network scope control, inference/execution separation, full observability and emergency controls. This post maps those requirements to what a DaloyJS app already enforces by default, what one opt-in line adds, and what still lives above the HTTP layer.",
     date: "2026-06-13",
     readingTime: "12 min read",
     author: "Devlin Duldulao",
@@ -150,7 +150,7 @@ const POSTS = [
     slug: "secure-sdlc-five-pillars-mapped-to-daloyjs",
     title: "The 5 Pillars of a Secure SDLC, Mapped to DaloyJS",
     description:
-      "Aikido's 'Secure SDLC Explained' lists the five pillars every engineering team needs: Visibility, Early Feedback, Developer Adoption, Consistency, Actionability. Here's the honest per-pillar mapping of what a DaloyJS app and its create-daloy scaffold already give you on day one, what you still configure, and the few items no framework can own.",
+      "Aikido's 'Secure SDLC Explained' lists the five pillars every engineering team needs: Visibility, Early Feedback, Developer Adoption, Consistency, Actionability. This post maps each pillar to what a DaloyJS app and its create-daloy scaffold already give you on day one, what you still configure, and the few items no framework can own.",
     date: "2026-06-12",
     readingTime: "11 min read",
     author: "Devlin Duldulao",
@@ -160,7 +160,7 @@ const POSTS = [
     title:
       "OWASP Top 10 for Agentic Applications (2026), Mapped to the DaloyJS Tool Surface",
     description:
-      "Aikido's write-up of the OWASP Top 10 for Agentic Applications 2026, ASI01 Agent Behavior Hijacking through ASI10 Over-reliance, is the new threat model for AI agents and the MCP-style HTTP tools they call. Here's the honest per-risk mapping of what a DaloyJS-exposed tool already blocks by default, what one opt-in line adds, and which risks live above the HTTP layer where no framework can save you.",
+      "Aikido's write-up of the OWASP Top 10 for Agentic Applications 2026, ASI01 Agent Behavior Hijacking through ASI10 Over-reliance, is the new threat model for AI agents and the MCP-style HTTP tools they call. This post maps each risk to what a DaloyJS-exposed tool already blocks by default, what one opt-in line adds, and which risks live above the HTTP layer where no framework can save you.",
     date: "2026-06-11",
     readingTime: "12 min read",
     author: "Devlin Duldulao",
@@ -170,7 +170,7 @@ const POSTS = [
     title:
       "Vibe Coding Security: What DaloyJS Already Blocks Before Your AI Even Ships",
     description:
-      "Aikido's 'WTF is Vibe Coding Security' post lists the usual suspects: SQL injection, path traversal, hardcoded secrets, unlocked admin routes, missing input sanitization, dependency rot. Here's the honest mapping of which of those a DaloyJS app already blocks by default, even when the code is written by a sales rep at 1am with Claude, and the small list of things you still have to opt into.",
+      "Aikido's 'WTF is Vibe Coding Security' post lists the usual suspects: SQL injection, path traversal, hardcoded secrets, unlocked admin routes, missing input sanitization, dependency rot. This post shows which of those a DaloyJS app already blocks by default, even when the code is written by a sales rep at 1am with Claude, and the small list of things you still have to opt into.",
     date: "2026-06-10",
     readingTime: "10 min read",
     author: "Devlin Duldulao",
@@ -179,7 +179,7 @@ const POSTS = [
     slug: "cloud-security-architecture-mapped-to-daloyjs",
     title: "Cloud Security Architecture, Mapped to the DaloyJS App Layer",
     description:
-      "Aikido's 'Cloud Security Architecture' guide is a fine high-level checklist: Zero Trust, defense-in-depth, IAM, segmentation, IaC scanning, continuous monitoring. Here's the honest, per-principle mapping of what DaloyJS already ships for the application-layer half of that checklist, what the cloud platform still owns, and the opt-ins worth turning on today.",
+      "Aikido's 'Cloud Security Architecture' guide is a fine high-level checklist: Zero Trust, defense-in-depth, IAM, segmentation, IaC scanning, continuous monitoring. This post maps each principle to what DaloyJS already ships for the application-layer half of that checklist, what the cloud platform still owns, and the opt-ins worth turning on today.",
     date: "2026-06-09",
     readingTime: "11 min read",
     author: "Devlin Duldulao",
@@ -427,7 +427,7 @@ export default function BlogIndexPage() {
         <h1 className="text-4xl font-bold tracking-tight">Blog</h1>
         <p className="mt-4 text-lg leading-8 text-muted-foreground">
           Field notes from people who actually use this thing in anger. Short,
-          honest, and occasionally funny.
+          plainspoken, and occasionally funny.
         </p>
 
         <ul className="mt-12 space-y-10">

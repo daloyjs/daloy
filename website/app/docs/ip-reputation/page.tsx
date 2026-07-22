@@ -39,19 +39,19 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Pluggable feeds</strong>
-          {": "}any source that yields IP / CIDR strings.{" "}
-          <code>urlFeed()</code> ships for the common case (fetch a newline /
-          Spamhaus-DROP-style list over HTTP).
+          Pluggable feeds
+          {": "}any source that yields IP / CIDR strings. <code>urlFeed()</code>{" "}
+          ships for the common case (fetch a newline / Spamhaus-DROP-style list
+          over HTTP).
         </li>
         <li>
-          <strong>Periodic refresh</strong>
+          Periodic refresh
           {": "}the denylist reloads on an
           <code>unref</code>&apos;d timer so stale ranges expire and new ones
           are picked up automatically.
         </li>
         <li>
-          <strong>Fail-open</strong>
+          Fail-open
           {": "}a denylist is additive defense, never the only gate. If a feed
           can&apos;t be loaded (initial or refresh), traffic is <em>not</em>{" "}
           blocked: the last-known-good list is retained. A feed outage never
@@ -247,18 +247,18 @@ reputation.has("203.0.113.7");       // probe without side effects`}
       <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
-          <strong>Defense in depth.</strong> A denylist complements (never
-          replaces) authentication, rate limiting, and{" "}
-          <code>ipRestriction()</code> allowlists.
+          Defense in depth. A denylist complements (never replaces)
+          authentication, rate limiting, and <code>ipRestriction()</code>{" "}
+          allowlists.
         </li>
         <li>
-          <strong>Trust your feeds.</strong> A compromised feed can deny
-          legitimate clients. Prefer reputable sources and watch{" "}
-          <code>onError</code> / match volume.
+          Trust your feeds. A compromised feed can deny legitimate clients.
+          Prefer reputable sources and watch <code>onError</code> / match
+          volume.
         </li>
         <li>
-          <strong>SSRF.</strong> <code>urlFeed()</code>&apos;s outbound fetch is
-          SSRF-hardened by default: it routes through a{" "}
+          SSRF. <code>urlFeed()</code>&apos;s outbound fetch is SSRF-hardened by
+          default: it routes through a{" "}
           <a href="/docs/security/fetch-guard">
             <code>fetchGuard()</code>
           </a>{" "}

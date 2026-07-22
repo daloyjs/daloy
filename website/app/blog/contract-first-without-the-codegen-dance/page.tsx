@@ -222,18 +222,18 @@ export default async function BookPage({
   );
 }`;
 
-const DIFF_DEMO = `// One change in the route file…
+const DIFF_DEMO = `// One change in the route file...
 - 200: { description: "Found", body: Book },
 + 200: { description: "Found", body: Book.extend({ rating: z.number().min(0).max(5) }) },
 
-// …and immediately, without writing types or running codegen by hand:
+// ...and immediately, without writing types or running codegen by hand:
 //
 //   - generated/openapi.json gains \`rating\` in the 200 schema
 //   - createClient(app) narrows res.body to include rating
 //   - the contract test still passes (operationId, response set unchanged)
 //   - the frontend's getBookById() refuses to compile until you render it
 //
-// That last bullet is what I'm here for, honestly.`;
+// That last bullet is the reason this workflow matters.`;
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -345,7 +345,7 @@ function ProjectionStep({
           {from}
         </Badge>
         <span aria-hidden className="text-muted-foreground">
-          →
+          -&gt;
         </span>
         <Badge className="font-mono">{to}</Badge>
       </div>
@@ -557,11 +557,9 @@ export default function BlogPostPage() {
           <h2>The codegen dance, but the dance is one command</h2>
 
           <p>
-            All right, the three projections above never leave your repo. What
-            about the <em>other</em> consumer of your API, the one written in a
-            different repo, possibly by a different team, possibly in a
-            different language than yours? That&apos;s where{" "}
-            <code>pnpm gen</code> comes in. Two scripts, one parent script:
+            The three projections above stay in your repo. For consumers in
+            another repo, team, or language, <code>pnpm gen</code> produces the
+            client artifacts. It uses two scripts and one parent script:
           </p>
 
           <EditorFrame
@@ -594,12 +592,10 @@ export default function BlogPostPage() {
           <CodeBlock language="bash" code={PNPM_GEN_RUN} />
 
           <p>
-            That is the entire &quot;dance&quot;. No swagger-codegen Java
-            invocation. No <code>--lang typescript-fetch</code> flag you googled
-            three years ago. No Docker container. No post-processing script.{" "}
-            <code>generated/client/</code> is now a real, typed, tree-shakeable
-            fetch SDK that you can import from anywhere you can import
-            TypeScript.
+            One command replaces the old Java invocation, language flags, Docker
+            wrapper, and post-processing script. <code>generated/client/</code>{" "}
+            is a real, typed, tree-shakeable fetch SDK that you can import from
+            anywhere you can import TypeScript.
           </p>
 
           <h2>Using it from a separate Next.js frontend</h2>
@@ -630,10 +626,9 @@ export default function BlogPostPage() {
             other side of the monorepo. <code>data.title</code> is a{" "}
             <code>string</code>. <code>data.publishedYear</code> is a{" "}
             <code>number | undefined</code>
-            {". "}If the backend renames <code>title</code> to{" "}
-            <code>name</code>
-            {", "}this file refuses to compile, and the frontend developer
-            finds out before the PR even opens, not after the user complains.
+            {". "}If the backend renames <code>title</code> to <code>name</code>
+            {", "}this file refuses to compile, and the frontend developer finds
+            out before the PR even opens, not after the user complains.
           </p>
 
           <h2>The diff that doesn&apos;t exist</h2>
@@ -654,8 +649,8 @@ export default function BlogPostPage() {
           <p>
             The diff in the route file is two lines. The diff in your{" "}
             <code>openapi.yaml</code>
-            {", "}your client types, your contract tests, your frontend
-            imports, and your &quot;types package&quot; is <em>zero lines</em>
+            {", "}your client types, your contract tests, your frontend imports,
+            and your &quot;types package&quot; is <em>zero lines</em>
             {", "}because those files don&apos;t exist as separate truths
             anymore. You commit the route change, you run <code>pnpm gen</code>
             {", "}the SDK regenerates. That&apos;s it. That&apos;s the post.
@@ -681,7 +676,8 @@ export default function BlogPostPage() {
               the most.
             </li>
             <li>
-              Add the in-process client test (<code>createInProcessClient(app)</code>). You now have integration
+              Add the in-process client test (
+              <code>createInProcessClient(app)</code>). You now have integration
               coverage without a server.
             </li>
             <li>
@@ -691,20 +687,20 @@ export default function BlogPostPage() {
             </li>
           </ol>
 
-          <h2>The honest part</h2>
+          <h2>Limits</h2>
 
           <p>
             Code generation has had a bad reputation in the JS world for a long
-            time, and honestly it earned that reputation, most pipelines were
-            brittle, slow, and produced types that looked like they were
-            translated from another language by someone who didn&apos;t want to
-            be there. The reason the workflow above works is not that we&apos;re
-            cleverer than the previous attempts. It&apos;s that we&apos;re
-            standing on the shoulders of three sturdy things at once: Standard
-            Schema lets the route own validation <em>and</em> types, OpenAPI 3.1
-            is the lingua franca for handing that to the outside world, and Hey
-            API takes that spec and produces a typed fetch SDK that doesn&apos;t
-            look like a translation. We just connected them.
+            time, and it earned that reputation. Most pipelines were brittle,
+            slow, and produced types that looked like they were translated from
+            another language by someone who didn&apos;t want to be there. The
+            reason the workflow above works is not that we&apos;re cleverer than
+            the previous attempts. It&apos;s that we&apos;re standing on the
+            shoulders of three sturdy things at once: Standard Schema lets the
+            route own validation <em>and</em> types, OpenAPI 3.1 is the lingua
+            franca for handing that to the outside world, and Hey API takes that
+            spec and produces a typed fetch SDK that doesn&apos;t look like a
+            translation. We just connected them.
           </p>
 
           <p>

@@ -87,7 +87,8 @@ pnpm dev   # wrangler dev under the hood`}
       <p>
         If you don&apos;t need <code>env</code> bindings or the Worker{" "}
         <code>ExecutionContext</code>
-        {", "}<code>toFetchHandler</code> is a one-liner. It returns the{" "}
+        {", "}
+        <code>toFetchHandler</code> is a one-liner. It returns the{" "}
         <code>&#123; fetch &#125;</code> object Workers expect as the default
         export, so do <strong>not</strong> wrap it again.
       </p>
@@ -185,7 +186,8 @@ export default {
       />
       <p>
         Inside any route handler, read the binding from{" "}
-        <code>ctx.state.env</code> (the key you passed to <code>decorate</code>):
+        <code>ctx.state.env</code> (the key you passed to <code>decorate</code>
+        ):
       </p>
       <CodeBlock
         language="ts"

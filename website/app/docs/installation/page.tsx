@@ -29,8 +29,10 @@ export default function Page() {
         {". "}
         The package has <strong>no peer dependencies</strong>
         {", "}so <code>npm</code>
-        {", "}<code>yarn</code>
-        {", "}<code>pnpm</code>
+        {", "}
+        <code>yarn</code>
+        {", "}
+        <code>pnpm</code>
         {", "}and <code>bun</code> can all install it directly. We{" "}
         <em>recommend</em>{" "}
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">
@@ -98,7 +100,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          @daloyjs/core on npm</a>
+          @daloyjs/core on npm
+        </a>
         {"."}
       </p>
       <CodeBlock
@@ -139,7 +142,8 @@ bun  create daloy           my-api`}
           target="_blank"
           rel="noreferrer"
         >
-          Corepack</a>
+          Corepack
+        </a>
         {": "}
       </p>
       <CodeBlock
@@ -170,7 +174,8 @@ bun  add -d     typescript @hey-api/openapi-ts prettier`}
           target="_blank"
           rel="noreferrer"
         >
-          @daloyjs/core</a>
+          @daloyjs/core
+        </a>
         {"."}
       </p>
 
@@ -195,7 +200,8 @@ ignore-scripts=true`}
         Read the rationale in <Link href="/docs/security">Security</Link> and
         the{" "}
         <a href="https://pnpm.io/motivation" target="_blank" rel="noreferrer">
-          pnpm motivation guide</a>
+          pnpm motivation guide
+        </a>
         {"."}
       </p>
 
@@ -207,7 +213,7 @@ ignore-scripts=true`}
       </p>
       <CodeBlock
         language="bash"
-        code={`node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok →', Object.keys(m).slice(0, 6)))"`}
+        code={`node -e "import('@daloyjs/core').then(m => console.log('DaloyJS ok ->', Object.keys(m).slice(0, 6)))"`}
       />
 
       <h2 id="next">Next</h2>

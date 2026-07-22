@@ -43,7 +43,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          Authorize.Net API</a>
+          Authorize.Net API
+        </a>
         {", "}and the separate JSON Webhooks REST API to receive event
         notifications.
       </p>
@@ -51,7 +52,7 @@ export default function Page() {
       <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
-          <strong>It&apos;s a thin XML wrapper.</strong> Requests are built with{" "}
+          It&apos;s a thin XML wrapper. Requests are built with{" "}
           <code>ApiContracts.*</code> classes and sent with{" "}
           <code>ApiControllers.*</code> controllers. There&apos;s no fluent
           client and no Promises by default, every controller exposes{" "}
@@ -59,7 +60,7 @@ export default function Page() {
           {". "}Wrap it with <code>util.promisify</code> for a sane async API.
         </li>
         <li>
-          <strong>Don&apos;t POST raw card numbers from a browser.</strong> Use{" "}
+          Don&apos;t POST raw card numbers from a browser. Use{" "}
           <a
             href="https://developer.authorize.net/api/reference/features/acceptjs.html"
             target="_blank"
@@ -80,16 +81,17 @@ export default function Page() {
           SAQ-D scope.
         </li>
         <li>
-          <strong>Webhooks are a separate API.</strong> Subscribe and verify
-          against <code>https://api.authorize.net/rest/v1/webhooks</code> (or
-          the <code>apitest</code> host), the XML transactions SDK doesn&apos;t
+          Webhooks are a separate API. Subscribe and verify against{" "}
+          <code>https://api.authorize.net/rest/v1/webhooks</code> (or the{" "}
+          <code>apitest</code> host), the XML transactions SDK doesn&apos;t
           handle them. Signatures use HMAC-SHA512 with a dedicated{" "}
           <em>Signature Key</em>
-          {", "}<strong>not</strong> the Transaction Key.
+          {", "}
+          <strong>not</strong> the Transaction Key.
         </li>
         <li>
-          <strong>Node 14+ &amp; TLS 1.2.</strong> Anything older is rejected at
-          the connection layer.
+          Node 14+ &amp; TLS 1.2. Anything older is rejected at the connection
+          layer.
         </li>
       </ul>
 
@@ -107,7 +109,9 @@ export default function Page() {
           and copy your <strong>API Login ID</strong> and{" "}
           <strong>Transaction Key</strong> from{" "}
           <em>
-            Account → Settings → Security Settings → API Credentials and Keys</em>
+            Account -&gt; Settings -&gt; Security Settings -&gt; API Credentials
+            and Keys
+          </em>
           {"."}
         </li>
         <li>
@@ -286,7 +290,8 @@ declare module "@daloyjs/core" {
 
       <h2 id="5-charge-an-accept-js-nonce">5. Charge an Accept.js nonce</h2>
       <p>
-        Your frontend obtains an <code>opaqueData</code> nonce with Accept.js (<code>dataDescriptor: &quot;COMMON.ACCEPT.INAPP.PAYMENT&quot;</code> for
+        Your frontend obtains an <code>opaqueData</code> nonce with Accept.js (
+        <code>dataDescriptor: &quot;COMMON.ACCEPT.INAPP.PAYMENT&quot;</code> for
         browser-side Accept, or <code>COMMON.APPLE.INAPP.PAYMENT</code> /{" "}
         <code>COMMON.GOOGLE.INAPP.PAYMENT</code> for wallets). Your server only
         ever sees the nonce, never the card number.
@@ -351,8 +356,8 @@ app.post(
         <code>transactionType</code> (<code>refundTransaction</code>
         {", "}
         <code>voidTransaction</code>
-        {", "}<code>priorAuthCaptureTransaction</code>) plus a{" "}
-        <code>refTransId</code>
+        {", "}
+        <code>priorAuthCaptureTransaction</code>) plus a <code>refTransId</code>
         {". "}Reuse <code>runController</code> from the plugin and follow the
         same response shape.
       </p>
@@ -506,26 +511,20 @@ app.post(
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          <strong>
-            Use <code>transHashSha2</code>
-            {", "}not <code>transHash</code>.
-          </strong>{" "}
-          The MD5-based <code>transHash</code> field is being phased out.
-          Compare against <code>transHashSha2</code> if you echo a hash back for
-          receipt-style verification.
+          Use <code>transHashSha2</code>
+          {", "}not <code>transHash</code>. The MD5-based <code>transHash</code>{" "}
+          field is being phased out. Compare against <code>transHashSha2</code>{" "}
+          if you echo a hash back for receipt-style verification.
         </li>
         <li>
-          <strong>
-            Skip the <code>shopify-style</code> auto-retry config.
-          </strong>{" "}
-          The SDK has no built-in retry; if you need it, wrap{" "}
-          <code>runController</code> with your own back-off on transient network
-          errors only, never on declines.
+          Skip the <code>shopify-style</code> auto-retry config. The SDK has no
+          built-in retry; if you need it, wrap <code>runController</code> with
+          your own back-off on transient network errors only, never on declines.
         </li>
         <li>
-          <strong>Prefer Customer Profiles for repeat business.</strong> Vault
-          the card into a customer payment profile on first charge, then bill
-          subsequent transactions by <code>profile.customerProfileId</code> /{" "}
+          Prefer Customer Profiles for repeat business. Vault the card into a
+          customer payment profile on first charge, then bill subsequent
+          transactions by <code>profile.customerProfileId</code> /{" "}
           <code>paymentProfileId</code> so you never touch the nonce twice.
         </li>
       </ul>

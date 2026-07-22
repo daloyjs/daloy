@@ -30,7 +30,11 @@ export default function Page() {
     <>
       <h1>HTTP message signatures (RFC 9421)</h1>
       <p>
-        DaloyJS ships first-party <strong>HTTP Message Signatures</strong> (<a href="https://www.rfc-editor.org/rfc/rfc9421" rel="noreferrer">RFC 9421</a>), the IETF-standard way to prove a server-to-server request came from a
+        DaloyJS ships first-party <strong>HTTP Message Signatures</strong> (
+        <a href="https://www.rfc-editor.org/rfc/rfc9421" rel="noreferrer">
+          RFC 9421
+        </a>
+        ), the IETF-standard way to prove a server-to-server request came from a
         trusted peer. Where <a href="/docs/webhook-delivery">webhook HMAC</a>{" "}
         binds a signature to a request <em>body</em> and{" "}
         <a href="/docs/mtls">mTLS</a> authenticates the TLS <em>peer</em>
@@ -78,7 +82,7 @@ export default function Page() {
           <code>@query-param</code> refuses to sign a parameter that appears
           more than once. Signing only the first value while an app or
           intermediary reads the last value (or the full array) is a classic
-          HTTP parameter-pollution differential — cover <code>@query</code> or{" "}
+          HTTP parameter-pollution differential. Cover <code>@query</code> or{" "}
           <code>@target-uri</code> instead when multiple values are legitimate.
         </li>
         <li>
@@ -87,10 +91,10 @@ export default function Page() {
         </li>
         <li>
           RSA keys (<code>rsa-pss-sha512</code>
-          {", "}<code>rsa-v1_5-sha256</code>) must have at least a 2048-bit
-          modulus. Shorter keys are refused, in parity with the JWT verifier and
-          per NIST SP 800-131A (RSA under 2048 bits has been disallowed since
-          2014).
+          {", "}
+          <code>rsa-v1_5-sha256</code>) must have at least a 2048-bit modulus.
+          Shorter keys are refused, in parity with the JWT verifier and per NIST
+          SP 800-131A (RSA under 2048 bits has been disallowed since 2014).
         </li>
         <li>
           Optional <code>nonce</code> replay defense via an{" "}
@@ -109,14 +113,16 @@ export default function Page() {
         </li>
         <li>
           <code>ed25519</code>
-          {", "}<code>ecdsa-p256-sha256</code>
+          {", "}
+          <code>ecdsa-p256-sha256</code>
           {", "}
           <code>ecdsa-p384-sha384</code>
           {": "}asymmetric (publish a public key, no shared secret).
         </li>
         <li>
           <code>rsa-pss-sha512</code>
-          {", "}<code>rsa-v1_5-sha256</code>
+          {", "}
+          <code>rsa-v1_5-sha256</code>
           {": "}RSA (2048-bit modulus floor; see below).
         </li>
       </ul>
@@ -240,8 +246,8 @@ await fetch(signed);`}
         Message signatures cover headers and derived components, not the body.
         To bind the body, compute a <code>Content-Digest</code> header with{" "}
         <code>contentDigest()</code>
-        {", "}include <code>content-digest</code> in the covered components,
-        and re-check it on the receiving side with{" "}
+        {", "}include <code>content-digest</code> in the covered components, and
+        re-check it on the receiving side with{" "}
         <code>verifyContentDigest()</code>.
       </p>
       <CodeBlock
@@ -315,19 +321,24 @@ if (!result.valid) {
         on a forged or malformed signature. They return{" "}
         <code>{`{ valid: false, reason }`}</code> with a stable code such as{" "}
         <code>invalid_signature</code>
-        {", "}<code>signature_stale</code>
+        {", "}
+        <code>signature_stale</code>
         {", "}
         <code>created_in_future</code>
-        {", "}<code>signature_expired</code>
+        {", "}
+        <code>signature_expired</code>
         {", "}
         <code>missing_created</code>
-        {", "}<code>missing_required_component</code>
+        {", "}
+        <code>missing_required_component</code>
         {", "}
         <code>alg_not_allowed</code>
-        {", "}<code>alg_mismatch</code>
+        {", "}
+        <code>alg_mismatch</code>
         {", "}
         <code>key_not_found</code>
-        {", "}<code>replay_detected</code>
+        {", "}
+        <code>replay_detected</code>
         {", "}
         <code>tag_mismatch</code>
         {", "}or <code>malformed_signature_headers</code>

@@ -152,9 +152,9 @@ app.ws("/chat/:room", {
   },
 });
 
-// GET /asyncapi        → interactive AsyncAPI UI
-// GET /asyncapi.json   → AsyncAPI 3.0 document
-// GET /asyncapi.yaml   → AsyncAPI 3.0 document (YAML)`}
+// GET /asyncapi        -> interactive AsyncAPI UI
+// GET /asyncapi.json   -> AsyncAPI 3.0 document
+// GET /asyncapi.yaml   -> AsyncAPI 3.0 document (YAML)`}
       />
       <p>
         Like the Scalar/Swagger docs link, surface the URL in your startup
@@ -323,7 +323,7 @@ daloy inspect --asyncapi --format yaml > asyncapi.yaml`}
         </li>
         <li>
           Channel keys are derived from the path (<code>/chat/:room/feed</code>{" "}
-          → <code>chatRoomFeed</code>); collisions are de-duplicated with a
+          -&gt; <code>chatRoomFeed</code>); collisions are de-duplicated with a
           numeric suffix. Set <code>meta.operationId</code> for a stable,
           explicit key.
         </li>

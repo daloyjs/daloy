@@ -24,10 +24,8 @@ export default function Page() {
     <>
       <h1>Config validation</h1>
       <blockquote>
-        <strong>Think of it like…</strong> a pre-flight checklist. Instead of
-        taking off and discovering the fuel gauge is broken at 30,000 feet, you
-        catch every problem on the ground, and you get the whole list at once,
-        not one redeploy at a time.
+        Validate configuration before the app starts. DaloyJS reports every
+        invalid value in one pass, so a deploy fails before it accepts traffic.
       </blockquote>
       <p>
         <code>defineConfig()</code> is a single boot-time helper that loads your
@@ -138,7 +136,8 @@ serve(app, { port: config.PORT });`}
       <p>
         File sources read through <code>node:fs/promises</code>
         {". "}On edge runtimes, prefer <code>env</code>
-        {", "}<code>object</code>
+        {", "}
+        <code>object</code>
         {", "}or <code>custom</code> sources supplied by the platform.
       </p>
       <CodeBlock
@@ -202,8 +201,8 @@ await defineConfig({
         Use <code>transform</code> to coerce or rename raw values before they
         hit the schema, for example mapping <code>FOO_BAR</code> to{" "}
         <code>fooBar</code>
-        {", "}or normalizing string flags. It receives the raw source object
-        and returns the object handed to the validator.
+        {", "}or normalizing string flags. It receives the raw source object and
+        returns the object handed to the validator.
       </p>
       <CodeBlock
         language="ts"

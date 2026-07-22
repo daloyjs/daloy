@@ -115,18 +115,17 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            DaloyJS just crossed a line I have been quietly nervous about for
-            months. We tagged the beta. The framework that spent its whole life
-            in public preview is now being tested as a stable foundation for
-            production applications.
+            DaloyJS just crossed a line I have been nervous about for months. We
+            tagged the beta. The framework that spent its whole life in public
+            preview is now being tested as a stable foundation for production
+            applications.
           </p>
 
           <p>
-            And here is the part that feels like a punchline: the single most
-            important line in this changelog is that nothing changed. No new
-            middleware. No new adapter. No clever helper I will write three blog
-            posts about. If you were on the final preview release yesterday, the
-            beta is the exact same code with a braver version label.
+            The most important line in this changelog is that the runtime did
+            not change. The beta adds no middleware, adapter, or helper. If you
+            used the final preview release yesterday, this is the same code with
+            a braver version label.
           </p>
 
           <h2>So why bother tagging it?</h2>
@@ -148,7 +147,7 @@ export default function BlogPostPage() {
             to prove me wrong before the stable release.
           </p>
 
-          <h2>Wait, nothing changed, really?</h2>
+          <h2>What changed during preview</h2>
 
           <p>
             Really. But that does not mean nothing happened. The work that

@@ -103,7 +103,7 @@ export const duckDbPlugin = {
         Declaration files are exempt from type-checking when{" "}
         <code>skipLibCheck</code> is on (the scaffolded default), so a broken
         import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.duckdb</code> quietly degrades to <code>any</code>.
+        <code>state.duckdb</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/duckdb.ts (same module as the plugin above)
@@ -256,7 +256,8 @@ await state.duckdb.run("set lock_configuration = true");`}
           supplied path directly into <code>read_csv</code>
           {", "}
           <code>read_parquet</code>
-          {", "}<code>COPY</code>
+          {", "}
+          <code>COPY</code>
           {", "}or <code>ATTACH</code>.
         </li>
         <li>
@@ -309,7 +310,8 @@ await state.duckdb.run("set lock_configuration = true");`}
           target="_blank"
           rel="noreferrer"
         >
-          DuckDB Node.js client docs</a>
+          DuckDB Node.js client docs
+        </a>
         {"."}
       </p>
     </>

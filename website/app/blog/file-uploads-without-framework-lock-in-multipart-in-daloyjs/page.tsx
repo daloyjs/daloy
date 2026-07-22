@@ -523,10 +523,10 @@ export default function BlogPostPage() {
             <code>fileField()</code> validates uploads; <code>z.string()</code>
             {", "}
             <code>z.coerce.boolean()</code>
-            {", "}and anything else Standard-Schema-shaped validate text
-            fields. One <code>multipartObject({})</code> wraps both. You
-            don&apos;t split your validation between &quot;the upload
-            library&quot; and &quot;the validation library&quot;.
+            {", "}and anything else Standard-Schema-shaped validate text fields.
+            One <code>multipartObject({})</code> wraps both. You don&apos;t
+            split your validation between &quot;the upload library&quot; and
+            &quot;the validation library&quot;.
           </CheckCard>
           <CheckCard badge="2" title="strict: true rejects unknown fields">
             Extra form fields are usually either a misconfigured frontend
@@ -560,7 +560,8 @@ export default function BlogPostPage() {
             between a memory exhaustion bug and a 422 response. For the long
             version of why that error shape is what it is, see the{" "}
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
-              RFC 9457 errors post</Link>
+              RFC 9457 errors post
+            </Link>
             {"."}
           </p>
 
@@ -607,7 +608,8 @@ export default function BlogPostPage() {
             The runtime-portability story for uploads is the same story as for
             everything else in this stack, see the{" "}
             <Link href="/blog/same-app-five-runtimes-verified">
-              five-runtimes verification post</Link>
+              five-runtimes verification post
+            </Link>
             {", "}but it&apos;s especially noticeable here because uploads are
             the one feature most Node frameworks accidentally pin you to Node
             for.
@@ -660,7 +662,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={SECURITY_NOTES} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Keep uploads portable</h2>
 
           <p>
             File uploads stop being a special case the moment you commit to two

@@ -10,7 +10,7 @@ const POST = {
   title:
     "Watch: Laur Spilca on Software Security for Developers (GOTO 2026), and What DaloyJS Already Decides for You",
   description:
-    "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. Here is the talk, plus an honest mapping of which of those problems a DaloyJS app already takes out of your hands.",
+    "Laurentiu Spilca and Thomas Vitale spend a GOTO 2026 conversation on why developers avoid security, the eternal encoding-vs-hashing-vs-encryption confusion, the danger of reinventing crypto, AI writing code with no security awareness, and why PKI still matters. Here is the talk, plus a direct mapping of which of those problems a DaloyJS app already takes out of your hands.",
   date: "2026-06-17",
   readingTime: "9 min read",
   author: "Devlin Duldulao",
@@ -234,8 +234,8 @@ export default function BlogPostPage() {
             mistakes. So instead of a summary, here is the talk mapped against
             the thing I now build to stop myself from repeating those mistakes:{" "}
             <Link href="/">DaloyJS</Link>
-            {". "}Where the framework already makes the decision for you, I
-            will say so. Where it cannot, I will say that too.
+            {". "}Where the framework already makes the decision for you, I will
+            say so. Where it cannot, I will say that too.
           </p>
 
           <h2>1. Why developers avoid security</h2>
@@ -251,12 +251,12 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            My honest take is that you cannot motivate your way out of this. You
-            have to make the secure path the lazy path. That is the entire
-            design bet of DaloyJS. The dangerous defaults are off, and turning
-            them back on is what costs you effort, not the other way around. And
-            the parts that genuinely require discipline get moved into CI, so
-            the pipeline stays motivated even when you do not.
+            You cannot motivate your way out of this. You have to make the
+            secure path the lazy path. That is the entire design bet of DaloyJS.
+            The dangerous defaults are off, and turning them back on is what
+            costs you effort, not the other way around. And the parts that
+            genuinely require discipline get moved into CI, so the pipeline
+            stays motivated even when you do not.
           </p>
 
           <CodeBlock language="bash" code={SECRET_COMPARE} />
@@ -304,7 +304,8 @@ export default function BlogPostPage() {
             with JWKS rotation. CSRF is double-submit plus Fetch-Metadata, which
             I wrote about in{" "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026</Link>
+              CSRF in 2026
+            </Link>
             {", "}not a scheme I invented. Sessions are signed cookies with the
             right prefixes already on.
           </p>
@@ -339,7 +340,8 @@ export default function BlogPostPage() {
             and &quot;the build is red until you do.&quot; I unpacked more of
             this in{" "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security</Link>
+              Vibe Coding Security
+            </Link>
             {"."}
           </p>
 
@@ -385,7 +387,7 @@ export default function BlogPostPage() {
             </li>
           </ul>
 
-          <h2>The takeaway</h2>
+          <h2>Build security into the workflow</h2>
 
           <p>
             Watch the talk for the literacy: the <em>why</em> behind encoding
@@ -406,14 +408,18 @@ export default function BlogPostPage() {
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security</Link>
+              Vibe Coding Security
+            </Link>
             {", "}
             <Link href="/blog/csrf-in-2026-double-submit-and-fetch-metadata">
-              CSRF in 2026</Link>
+              CSRF in 2026
+            </Link>
             {", "}
             <Link href="/blog/csp-nonces-and-trusted-types-without-tears">
-              CSP Nonces and Trusted Types</Link>
-            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+              CSP Nonces and Trusted Types
+            </Link>
+            {", "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
             {"."}
           </p>
         </div>

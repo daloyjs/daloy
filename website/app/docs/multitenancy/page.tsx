@@ -36,10 +36,12 @@ export default function Page() {
         calling tenant <em>once</em> per request, validates and normalizes it,
         and exposes it on <code>ctx.state.tenant</code>
         {". "}It is the single source of truth for &ldquo;who is this request
-        for&rdquo; so the per-tenant isolation knobs already on the framework (<code>rateLimit</code>
+        for&rdquo; so the per-tenant isolation knobs already on the framework (
+        <code>rateLimit</code>
         {", "}
         <code>concurrencyLimit</code>
-        {", "}<code>idempotency</code>
+        {", "}
+        <code>idempotency</code>
         {", "}
         <code>responseCache</code>) can all key off the same resolved value via{" "}
         <code>tenantScope()</code>.
@@ -87,7 +89,7 @@ export default function Page() {
         code={`import { App, rateLimit, tenancy, tenantFromSubdomain, tenantScope } from "@daloyjs/core";
 
 const app = new App({
-  // Global hook → resolves before any group hook below.
+  // Global hook -> resolves before any group hook below.
   hooks: tenancy({
     resolve: tenantFromSubdomain({ baseDomain: "example.com" }),
     allow: ["acme", "globex"],
@@ -104,7 +106,7 @@ app.get(
     responses: { 200: { description: "ok" } },
   },
   ({ state }) => {
-    // acme.example.com → state.tenant === "acme"
+    // acme.example.com -> state.tenant === "acme"
     const tenant = state.tenant as string;
     return { status: 200 as const, body: { tenant, orders: ordersFor(tenant) } };
   },
@@ -179,7 +181,7 @@ app.get(
                 <code>tenantFromSubdomain({`{ baseDomain }`})</code>
               </td>
               <td>
-                <code>acme.example.com</code> → <code>acme</code>
+                <code>acme.example.com</code> -&gt; <code>acme</code>
               </td>
               <td>
                 PSL-aware via <code>subdomains()</code>
@@ -205,7 +207,7 @@ app.get(
                 <code>tenantFromPathPrefix()</code>
               </td>
               <td>
-                <code>/acme/orders</code> → <code>acme</code>
+                <code>/acme/orders</code> -&gt; <code>acme</code>
               </td>
               <td>
                 Reads the segment only (does not rewrite the path); your routes
@@ -467,33 +469,32 @@ declare module "@daloyjs/core" {
       <h2 id="security-posture">Security posture</h2>
       <ul>
         <li>
-          <strong>Refuse-unresolved by default.</strong> With{" "}
-          <code>require: true</code>
+          Refuse-unresolved by default. With <code>require: true</code>
           {", "}a request whose tenant cannot be resolved is rejected rather
           than silently served as a default tenant, the failure mode that leaks
           one tenant&apos;s data to another.
         </li>
         <li>
-          <strong>Format-validated ids.</strong> Resolved ids are normalized to
-          a conservative tenant-id grammar before they are stored or used as a
-          key. A spoofable header value cannot smuggle newlines, <code>:</code>
+          Format-validated ids. Resolved ids are normalized to a conservative
+          tenant-id grammar before they are stored or used as a key. A spoofable
+          header value cannot smuggle newlines, <code>:</code>
           {", "}
           <code>/</code>
-          {", "}or <code>*</code> into rate-limit keys, cache keys, or log
-          lines (key/log injection, cache poisoning).
+          {", "}or <code>*</code> into rate-limit keys, cache keys, or log lines
+          (key/log injection, cache poisoning).
         </li>
         <li>
-          <strong>No enumeration.</strong> A resolved-but-unknown tenant is{" "}
-          <code>404</code> by default, indistinguishable from a missing route,
-          so attackers cannot probe for valid tenant names.
+          No enumeration. A resolved-but-unknown tenant is <code>404</code> by
+          default, indistinguishable from a missing route, so attackers cannot
+          probe for valid tenant names.
         </li>
         <li>
-          <strong>Host-spoof safe.</strong> <code>tenantFromSubdomain</code>{" "}
-          treats a <code>Host</code> that is not under the declared{" "}
+          Host-spoof safe. <code>tenantFromSubdomain</code> treats a{" "}
+          <code>Host</code> that is not under the declared{" "}
           <code>baseDomain</code> as unresolved instead of trusting it.
         </li>
         <li>
-          <strong>Header resolution is opt-in and spoofable.</strong> Only use{" "}
+          Header resolution is opt-in and spoofable. Only use{" "}
           <code>tenantFromHeader</code> behind a trusted proxy that overwrites
           the header, and bound it with <code>allow</code>.
         </li>
@@ -515,7 +516,7 @@ curl -s -X POST localhost:3003/orders -H 'Host: acme.example.com' \\
   -H 'content-type: application/json' -d '{"item":"widget","total":9.99}'
 curl -s localhost:3003/orders -H 'Host: globex.example.com'   # still empty
 
-# Unknown tenant → 404 (no enumeration); no subdomain → 400:
+# Unknown tenant -> 404 (no enumeration); no subdomain -> 400:
 curl -s -o /dev/null -w '%{http_code}\\n' localhost:3003/orders -H 'Host: intruder.example.com'
 curl -s -o /dev/null -w '%{http_code}\\n' localhost:3003/orders -H 'Host: example.com'`}
         language="sh"

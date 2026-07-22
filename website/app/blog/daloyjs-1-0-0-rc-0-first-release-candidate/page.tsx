@@ -9,7 +9,7 @@ const POST = {
   slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
   title: "DaloyJS: The First Release Candidate",
   description:
-    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short honest list of what still stands between us and the stable release.",
+    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' Here is what the RC means, what landed across the beta train (spoiler: MCP), and the short list of what still stands between us and the stable release.",
   date: "2026-07-03",
   readingTime: "7 min read",
   author: "Devlin Duldulao",
@@ -134,11 +134,12 @@ export default function BlogPostPage() {
           <p>
             A couple of weeks ago I wrote a post whose whole punchline was that{" "}
             <Link href="/blog/daloyjs-1-0-0-beta-is-here">
-              the beta changed nothing on purpose</Link>
+              the beta changed nothing on purpose
+            </Link>
             {". "}Today I get to write the sequel, and the tone is different. We
-            just tagged the first release candidate. If the beta was me quietly
-            hoping the API was ready, the RC is me locking the door and putting
-            the key on the table.
+            just tagged the first release candidate. If the beta was me
+            tentatively hoping the API was ready, the RC is me locking the door
+            and putting the key on the table.
           </p>
 
           <p>
@@ -195,7 +196,8 @@ export default function BlogPostPage() {
             Updating is a lockfile change and a good night&apos;s sleep. We
             moved
             <code>@daloyjs/core</code>
-            {", "}<code>create-daloy</code>
+            {", "}
+            <code>create-daloy</code>
             {", "}and the JSR package <code>@daloyjs/daloy</code> together, as
             always, and every
             <code>create-daloy</code> template points at the matching core
@@ -205,7 +207,7 @@ export default function BlogPostPage() {
 
           <CodeBlock language="bash" code={INSTALL} />
 
-          <h2>The honest part: what remains before stable</h2>
+          <h2>What remains before stable</h2>
 
           <p>
             I could pretend a release candidate means we are basically done. We

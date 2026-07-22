@@ -45,12 +45,13 @@ export default function Page() {
         If you only read one thing:{" "}
         <strong>
           DaloyJS is excellent at the &quot;your code answers an HTTP
-          request&quot; role</strong>
-        {": "}API server, microservice, BFF, webhook receiver, WebSocket
-        server, MCP server. It is <strong>not</strong> a router that proxies
-        traffic to other services, a load balancer, or a page-rendering UI
-        framework. For those, pair it with something purpose-built and let
-        DaloyJS be the smart endpoint behind them.
+          request&quot; role
+        </strong>
+        {": "}API server, microservice, BFF, webhook receiver, WebSocket server,
+        MCP server. It is <strong>not</strong> a router that proxies traffic to
+        other services, a load balancer, or a page-rendering UI framework. For
+        those, pair it with something purpose-built and let DaloyJS be the smart
+        endpoint behind them.
       </p>
 
       <h2 id="the-quick-verdict">The quick verdict</h2>
@@ -179,87 +180,87 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>API server</strong>
+          API server
           {": "}a process that exposes endpoints (like
           <code>GET /books/:id</code>) over HTTP and returns structured data
           (usually JSON). The thing your mobile app, web app, or another service
           talks to.
         </li>
         <li>
-          <strong>Web server</strong>
+          Web server
           {": "}historically, a process that serves HTML pages, images, and
           static files to a browser. NGINX and Apache are web servers. An API
           server is a specialized web server.
         </li>
         <li>
-          <strong>Microservice</strong>
-          {": "}one small service that does one thing (orders, payments,
-          search) and talks to others over the network. &quot;Microservice
+          Microservice
+          {": "}one small service that does one thing (orders, payments, search)
+          and talks to others over the network. &quot;Microservice
           architecture&quot; just means you have many of them instead of one big
           app.
         </li>
         <li>
-          <strong>Service-to-service (S2S)</strong>
+          Service-to-service (S2S)
           {": "}when two of your own backend services call each other directly,
           with no human in the loop. Usually authenticated with a shared secret
           or mTLS, not a user cookie.
         </li>
         <li>
-          <strong>Backend-for-Frontend (BFF)</strong>
+          Backend-for-Frontend (BFF)
           {": "}a thin server that sits between a specific frontend (your web
           app, your iOS app) and your internal APIs. It composes upstream calls,
           holds the session, and returns exactly the shape the UI needs.
         </li>
         <li>
-          <strong>API gateway</strong>
+          API gateway
           {": "}a process at the edge of your network that takes <em>all</em>{" "}
           incoming traffic and routes it to the right internal service. It
           usually handles auth, rate limiting, request translation, retries, and
           observability for many services at once.
         </li>
         <li>
-          <strong>Load balancer</strong>
+          Load balancer
           {": "}a network-level box that takes one stream of requests and
           spreads them across many identical copies of your service. It cares
           about TCP connections and health checks, not your routes or schemas.
         </li>
         <li>
-          <strong>Server-side renderer (SSR)</strong>
+          Server-side renderer (SSR)
           {": "}a process that turns components (React, Vue, Svelte) into HTML
           on the server, then ships that HTML to the browser. Next.js, Remix,
           and Astro are SSR frameworks.
         </li>
         <li>
-          <strong>Webhook receiver</strong>
-          {": "}an endpoint that other systems (Stripe, GitHub, Shopify) call
-          to notify your app of events. Usually signed with HMAC so you can
-          verify the sender.
+          Webhook receiver
+          {": "}an endpoint that other systems (Stripe, GitHub, Shopify) call to
+          notify your app of events. Usually signed with HMAC so you can verify
+          the sender.
         </li>
         <li>
-          <strong>WebSocket server</strong>
+          WebSocket server
           {": "}a long-lived, bidirectional connection over TCP. Used for chat,
           live dashboards, multiplayer, collaborative editing.
         </li>
         <li>
-          <strong>MCP server</strong>
+          MCP server
           {": "}Model Context Protocol. A standardized way for AI assistants to
           call tools and read resources. Transports are stdio or Streamable
           HTTP, with optional SSE for streaming server messages.
         </li>
         <li>
-          <strong>gRPC</strong>
+          gRPC
           {": "}a binary RPC protocol from Google, defined with{" "}
           <code>.proto</code> files and running over HTTP/2 with Protobuf
           encoding. Great for fast, typed S2S inside a cluster.
         </li>
         <li>
-          <strong>GraphQL</strong>
+          GraphQL
           {": "}a query language where the client picks the shape of the
           response from a single endpoint (usually
           <code>POST /graphql</code>).
         </li>
         <li>
-          <strong>SOAP</strong>
+          SOAP
           {": "}an older XML-based RPC protocol with WSDL contracts. Still
           common in banking, government, and legacy enterprise.
         </li>
@@ -346,23 +347,23 @@ const app = new App({
         4. Backend-for-Frontend (BFF): the sweet spot
       </h3>
       <p>
-        BFF is arguably where DaloyJS is at its best. The combination you want
-        is all first-party:
+        DaloyJS is especially useful as a BFF. The combination you want is all
+        first-party:
       </p>
       <ul>
         <li>
-          <strong>Typed upstream calls</strong> via Hey API codegen or the
-          in-process typed client.
+          Typed upstream calls via Hey API codegen or the in-process typed
+          client.
         </li>
         <li>
-          <strong>Safe egress</strong> via{" "}
+          Safe egress via{" "}
           <Link href="/docs/security/fetch-guard">
             <code>fetchGuard()</code>
           </Link>
           {": "}blocks SSRF, private CIDRs, and cloud-metadata IPs by default.
         </li>
         <li>
-          <strong>Session edge</strong> via{" "}
+          Session edge via{" "}
           <Link href="/docs/security/session">
             <code>session()</code>
           </Link>{" "}
@@ -373,11 +374,11 @@ const app = new App({
           (double-submit or tokenless Fetch-Metadata).
         </li>
         <li>
-          <strong>Streaming to the browser</strong> via SSE and NDJSON helpers,
-          plus <code>compression()</code> with BREACH-aware guards.
+          Streaming to the browser via SSE and NDJSON helpers, plus{" "}
+          <code>compression()</code> with BREACH-aware guards.
         </li>
         <li>
-          <strong>Edge runtimes</strong>
+          Edge runtimes
           {": "}deploy on Cloudflare, Vercel, Fastly Compute, or Lambda.
         </li>
       </ul>
@@ -395,24 +396,33 @@ const app = new App({
       <ul>
         <li>
           AuthN/Z: <code>bearerAuth</code>
-          {", "}<code>basicAuth</code>
+          {", "}
+          <code>basicAuth</code>
           {", "}
           <code>jwt</code>
-          {", "}<code>jwk</code>
-          {", "}<code>requireScopes</code>
+          {", "}
+          <code>jwk</code>
+          {", "}
+          <code>requireScopes</code>
         </li>
         <li>
           Traffic: <code>rateLimit</code> (with Redis store),{" "}
           <code>loadShedding</code>
-          {", "}<code>ipRestriction</code>
+          {", "}
+          <code>ipRestriction</code>
         </li>
         <li>
           Edge: <code>secureHeaders</code>
-          {", "}<code>cors</code>
-          {", "}<code>csrf</code>
-          {", "}<code>compression</code>
-          {", "}<code>etag</code>
-          {", "}<code>requestId</code>
+          {", "}
+          <code>cors</code>
+          {", "}
+          <code>csrf</code>
+          {", "}
+          <code>compression</code>
+          {", "}
+          <code>etag</code>
+          {", "}
+          <code>requestId</code>
         </li>
         <li>
           Egress: <code>fetchGuard</code> (SSRF defaults)
@@ -493,11 +503,14 @@ const app = new App({
       <p>
         First-party WebSocket primitives run on the Node and Bun adapters with a
         Bun-style handler shape (<code>open</code>
-        {", "}<code>message</code>
+        {", "}
+        <code>message</code>
         {", "}
         <code>close</code>
-        {", "}<code>drain</code>
-        {", "}<code>error</code>).
+        {", "}
+        <code>drain</code>
+        {", "}
+        <code>error</code>).
       </p>
       <p>
         Under <code>secureDefaults</code>
@@ -587,8 +600,8 @@ const app = new App({
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr className="text-left">
-              <th className="px-3 py-2">If your problem is…</th>
-              <th className="px-3 py-2">Reach for…</th>
+              <th className="px-3 py-2">If your problem is...</th>
+              <th className="px-3 py-2">Reach for...</th>
               <th className="px-3 py-2">Why not DaloyJS?</th>
             </tr>
           </thead>

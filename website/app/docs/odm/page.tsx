@@ -35,13 +35,12 @@ export default function Page() {
       <h2 id="orm-vs-odm">ORM vs ODM</h2>
       <ul>
         <li>
-          <strong>ORM</strong> maps relational tables and joins into TypeScript
-          objects. Use it for PostgreSQL, MySQL, SQLite, MariaDB, or MSSQL.
+          ORM maps relational tables and joins into TypeScript objects. Use it
+          for PostgreSQL, MySQL, SQLite, MariaDB, or MSSQL.
         </li>
         <li>
-          <strong>ODM</strong> maps JSON-like documents and collection workflows
-          into TypeScript objects. Use it for document databases such as MongoDB
-          or Couchbase.
+          ODM maps JSON-like documents and collection workflows into TypeScript
+          objects. Use it for document databases such as MongoDB or Couchbase.
         </li>
       </ul>
 
@@ -158,7 +157,7 @@ export function databasePlugin(db: Database) {
         separate <code>.d.ts</code> file: declaration files are exempt from
         type-checking when <code>skipLibCheck</code> is on (the scaffolded
         default), so a broken import inside a <code>.d.ts</code> fails silently
-        and <code>state.db</code> quietly degrades to <code>any</code>.
+        and <code>state.db</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/mongoose.ts (the module that exports db)

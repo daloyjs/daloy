@@ -45,38 +45,38 @@ export default function Page() {
       <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
-          <strong>Right package, please.</strong> The new SDK is{" "}
+          Right package, please. The new SDK is{" "}
           <code>mollie-api-typescript</code> (Speakeasy-generated, Fetch-based,
           tree-shakable, edge-runtime friendly). The older{" "}
           <code>@mollie/api-client</code> still works but is the previous
           generation, new projects should use the TypeScript-first one.
         </li>
         <li>
-          <strong>It&apos;s a redirect flow.</strong> You create a payment,
-          Mollie returns a <code>_links.checkout.href</code>
+          It&apos;s a redirect flow. You create a payment, Mollie returns a{" "}
+          <code>_links.checkout.href</code>
           {", "}you redirect the customer there. They come back to your{" "}
           <code>redirectUrl</code> (browser) and your <code>webhookUrl</code>{" "}
           gets POSTed (server). The redirect is a UX signal only, the webhook is
           the source of truth.
         </li>
         <li>
-          <strong>Webhooks are signed now.</strong> Mollie sends{" "}
+          Webhooks are signed now. Mollie sends{" "}
           <code>X-Mollie-Signature: sha256=...</code> on signed endpoints.
           Verify with <code>SignatureValidator</code>; treat &quot;no signature
           header&quot; as a legacy webhook (older subscriptions don&apos;t
           sign).
         </li>
         <li>
-          <strong>Amounts are decimal strings.</strong> Unlike most providers,
-          Mollie wants <code>{`{ currency: "EUR", value: "10.00" }`}</code>
+          Amounts are decimal strings. Unlike most providers, Mollie wants{" "}
+          <code>{`{ currency: "EUR", value: "10.00" }`}</code>
           {": "}a string with exactly two decimals for EUR. Pass{" "}
           <code>1000</code> as a number and you&apos;ll get a 422.
         </li>
         <li>
-          <strong>Test vs live is the API key.</strong> Keys are prefixed{" "}
-          <code>test_</code> or <code>live_</code>; there&apos;s no separate
-          environment flag for normal API-key auth. <code>testmode: true</code>{" "}
-          is only needed for organisation-level OAuth tokens.
+          Test vs live is the API key. Keys are prefixed <code>test_</code> or{" "}
+          <code>live_</code>; there&apos;s no separate environment flag for
+          normal API-key auth. <code>testmode: true</code> is only needed for
+          organisation-level OAuth tokens.
         </li>
       </ul>
 
@@ -90,18 +90,19 @@ export default function Page() {
           and create a profile.
         </li>
         <li>
-          Generate a <strong>test API key</strong> (Dashboard → Developers → API
-          keys). It starts with <code>test_</code>.
+          Generate a <strong>test API key</strong> (Dashboard -&gt; Developers
+          -&gt; API keys). It starts with <code>test_</code>.
         </li>
         <li>
-          In Developers → Webhooks, create a webhook subscription pointing at
-          your DaloyJS endpoint. Save the <strong>signing secret</strong>
+          In Developers -&gt; Webhooks, create a webhook subscription pointing
+          at your DaloyJS endpoint. Save the <strong>signing secret</strong>
           {": "}
           you&apos;ll only see it once.
         </li>
         <li>
-          Enable the payment methods you want under Settings → Website profile →
-          Payment methods. iDEAL and Bancontact need explicit activation.
+          Enable the payment methods you want under Settings -&gt; Website
+          profile -&gt; Payment methods. iDEAL and Bancontact need explicit
+          activation.
         </li>
       </ol>
 
@@ -451,7 +452,7 @@ try {
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          <strong>Use the TypeScript SDK over the JS client.</strong>{" "}
+          Use the TypeScript SDK over the JS client.{" "}
           <code>mollie-api-typescript</code> ships first-class types,
           tree-shakable standalone functions, async-iterable pagination, and a
           Fetch-based HTTP client that runs at the edge. The older{" "}
@@ -459,22 +460,22 @@ try {
           the recommended starting point.
         </li>
         <li>
-          <strong>Verify signatures.</strong> Mollie added signed webhooks
-          specifically so you don&apos;t have to rely on &quot;refetch the
-          payment and hope IP allow-lists are right&quot;. Use{" "}
-          <code>SignatureValidator</code> with the raw body.
+          Verify signatures. Mollie added signed webhooks specifically so you
+          don&apos;t have to rely on &quot;refetch the payment and hope IP
+          allow-lists are right&quot;. Use <code>SignatureValidator</code> with
+          the raw body.
         </li>
         <li>
-          <strong>Idempotency keys on every create.</strong> The SDK accepts{" "}
+          Idempotency keys on every create. The SDK accepts{" "}
           <code>idempotencyKey</code> alongside the request body, pass one
           derived from your order id so a network retry doesn&apos;t spawn
           duplicate payments.
         </li>
         <li>
-          <strong>Don&apos;t trust the redirect.</strong> The{" "}
-          <code>redirectUrl</code> only tells you the user came back, they could
-          close the tab mid-iDEAL. The webhook + a follow-up{" "}
-          <code>payments.get</code> is what flips an order to paid.
+          Don&apos;t trust the redirect. The <code>redirectUrl</code> only tells
+          you the user came back, they could close the tab mid-iDEAL. The
+          webhook + a follow-up <code>payments.get</code> is what flips an order
+          to paid.
         </li>
       </ul>
 

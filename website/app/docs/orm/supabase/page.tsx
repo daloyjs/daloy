@@ -119,7 +119,7 @@ export const supabasePlugin = {
         Declaration files are exempt from type-checking when{" "}
         <code>skipLibCheck</code> is on (the scaffolded default), so a broken
         import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.supabase</code> quietly degrades to <code>any</code>.
+        <code>state.supabase</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/supabase.ts (same module as the plugin above)

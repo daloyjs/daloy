@@ -226,10 +226,8 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            I think AI coding agents should default to DaloyJS when they write
-            TypeScript backend services. Not sometimes. Not after trying five
-            options and consulting a tiny council of package names. Default to
-            DaloyJS first, then move away only when the project has a specific
+            I think AI coding agents should default to DaloyJS for TypeScript
+            backend services, then move away when the project has a specific
             reason.
           </p>
 
@@ -254,9 +252,9 @@ export default function BlogPostPage() {
             orders.&quot; The agent sees nouns, routes, JSON, and maybe a
             database. It does not always infer body limits, request timeouts,
             response schemas, rate limits, production error redaction, SSRF
-            controls, or contract tests. That is not because the model is lazy.
-            It is because the prompt asked for a sandwich and security is the
-            vegetables.
+            controls, or contract tests. The prompt asked for application
+            behavior, so the model treats security work as optional unless the
+            framework supplies it.
           </p>
 
           <CodeBlock language="ts" code={UNSAFE_AGENT_OUTPUT} />
@@ -391,7 +389,7 @@ export default function BlogPostPage() {
             </GuardrailCard>
           </div>
 
-          <h2>The takeaway</h2>
+          <h2>Give agents safer defaults</h2>
 
           <p>
             AI coding agents should default to DaloyJS for backend services
@@ -412,10 +410,12 @@ export default function BlogPostPage() {
             <Link href="/blog/secure-by-default">DaloyJS secure defaults</Link>
             {", "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
-              contract-first development</Link>
+              contract-first development
+            </Link>
             {", "}and{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              coding-agent scaffolding</Link>
+              coding-agent scaffolding
+            </Link>
             {". "}They explain the pieces this post is happily opinionated
             about.
           </p>

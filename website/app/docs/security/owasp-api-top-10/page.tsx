@@ -24,12 +24,9 @@ export default function Page() {
     <>
       <h1>OWASP API Security Top 10 mapping</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the fire marshal&apos;s inspection
-        checklist. Each item is a known way buildings burn down; this page maps
-        every item to the equivalent fire-safety feature already installed in
-        the framework, sprinklers, fire doors, smoke alarms, so you can point at
-        the actual hardware instead of writing &quot;we&apos;ll get to it&quot;
-        on the form.
+        This page maps each OWASP API Security Top 10 category to the relevant
+        DaloyJS control. The mapping also names the policy and infrastructure
+        work that remains outside the framework.
       </blockquote>
       <p>
         The{" "}
@@ -56,10 +53,10 @@ export default function Page() {
       </p>
       <p>
         Daloy&apos;s posture is <strong>secure-by-default</strong>
-        {": "}dangerous choices are refused at construction or boot, the rest
-        is one documented call away. Items marked <em>your responsibility</em>{" "}
-        are the ones no framework can decide for you (business-logic
-        authorization, data sensitivity classification, threat modelling).
+        {": "}dangerous choices are refused at construction or boot, the rest is
+        one documented call away. Items marked <em>your responsibility</em> are
+        the ones no framework can decide for you (business-logic authorization,
+        data sensitivity classification, threat modelling).
       </p>
 
       <LayerStack
@@ -145,8 +142,10 @@ export default function Page() {
               with <code>alg</code>-discipline and mandatory <code>exp</code>;{" "}
               <code>jwk()</code> JWKS middleware (asymmetric-only);{" "}
               <code>
-                bearerAuth({"{"} verify {"}"})</code>
-              {"; "}<code>basicAuth()</code> with UTF-8 credential decoding and
+                bearerAuth({"{"} verify {"}"})
+              </code>
+              {"; "}
+              <code>basicAuth()</code> with UTF-8 credential decoding and
               construction-time validation; <code>passwordHash</code> /{" "}
               <code>passwordVerify</code> at <code>@daloyjs/core/hashing</code>;{" "}
               <code>session()</code> with <code>__Host-</code> cookie +
@@ -196,8 +195,9 @@ export default function Page() {
               Framework-mounted routes (<code>/openapi.json</code>
               {", "}
               <code>/docs</code>
-              {", "}<code>/asyncapi</code>
-              {", "}health, metrics) acknowledge themselves — the warning only
+              {", "}
+              <code>/asyncapi</code>
+              {", "}health, metrics) acknowledge themselves. The warning only
               ever names routes you wrote.
             </td>
           </tr>
@@ -305,7 +305,8 @@ export default function Page() {
               <code>application/json</code> and bodies over 64 KiB;
               refuse-to-boot in production on{" "}
               <code>
-                cors({"{"} origin: &quot;*&quot;{"}"})</code>
+                cors({"{"} origin: &quot;*&quot;{"}"})
+              </code>
               {", "}weak session secrets, unconfigured{" "}
               <code>X-Forwarded-*</code>
               {", "}
@@ -412,9 +413,12 @@ export default function Page() {
               <code>rateLimit()</code>
               {", "}
               <code>
-                rateLimit({"{"} groupId {"}"})</code>
-              {", "}<code>loginThrottle()</code>
-              {", "}<code>wsRateLimit()</code>
+                rateLimit({"{"} groupId {"}"})
+              </code>
+              {", "}
+              <code>loginThrottle()</code>
+              {", "}
+              <code>wsRateLimit()</code>
               {", "}
               <code>@daloyjs/core/rate-limit-redis</code>.
             </td>
@@ -424,10 +428,12 @@ export default function Page() {
             <td>
               Structured pluggable logger with default redaction of common
               secret keys (<code>authorization</code>
-              {", "}<code>password</code>
+              {", "}
+              <code>password</code>
               {", "}
               <code>token</code>
-              {", "}<code>cookie</code>
+              {", "}
+              <code>cookie</code>
               {","}...); request-id propagation; <code>requestId()</code>{" "}
               trust-default audit.
             </td>
@@ -480,23 +486,21 @@ export default function Page() {
       </h2>
       <ul>
         <li>
-          <strong>Business-logic abuse:</strong> only your code knows whether a
-          sequence of valid API calls amounts to fraud. Threat-model the
-          workflow.
+          Business-logic abuse: only your code knows whether a sequence of valid
+          API calls amounts to fraud. Threat-model the workflow.
         </li>
         <li>
-          <strong>Object-level authorization:</strong> Daloy enforces{" "}
-          <em>who</em> can call a route; <em>which</em> records they can touch
-          is application logic.
+          Object-level authorization: Daloy enforces <em>who</em> can call a
+          route; <em>which</em> records they can touch is application logic.
         </li>
         <li>
-          <strong>Data classification:</strong> deciding which fields are
-          sensitive is a product decision. Daloy keeps unwanted fields out if
-          you list them in the response schema.
+          Data classification: deciding which fields are sensitive is a product
+          decision. Daloy keeps unwanted fields out if you list them in the
+          response schema.
         </li>
         <li>
-          <strong>Penetration testing:</strong> automated scanners catch common
-          issues; a human tester catches logic chains. Run both on a schedule.
+          Penetration testing: automated scanners catch common issues; a human
+          tester catches logic chains. Run both on a schedule.
         </li>
       </ul>
 
@@ -532,7 +536,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          github.com/daloyjs/daloy/security/advisories/new</a>
+          github.com/daloyjs/daloy/security/advisories/new
+        </a>
         {"."}
       </p>
     </>

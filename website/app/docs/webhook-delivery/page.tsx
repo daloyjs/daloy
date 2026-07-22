@@ -40,28 +40,30 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>Signed delivery</strong>
+          Signed delivery
           {": "}each request carries <code>webhook-id</code>
-          {", "}<code>webhook-timestamp</code>
-          {", "}and <code>webhook-signature</code> (<code>sha256=&hellip;</code>) computed over{" "}
+          {", "}
+          <code>webhook-timestamp</code>
+          {", "}and <code>webhook-signature</code> (<code>sha256=&hellip;</code>
+          ) computed over{" "}
           <code>&quot;&lt;timestamp&gt;.&lt;body&gt;&quot;</code>
           {", "}the same convention <code>verifyWebhookSignature()</code>{" "}
           validates.
         </li>
         <li>
-          <strong>Retry with backoff</strong>
+          Retry with backoff
           {": "}transient statuses (<code>408/429/500/502/503/504</code>) and
           network errors are retried with exponential backoff + jitter,
           honouring <code>Retry-After</code>.
         </li>
         <li>
-          <strong>Dead-letter</strong>
+          Dead-letter
           {": "}events that exhaust their attempts (or fail permanently) are
           handed to a <code>WebhookDeadLetterSink</code> for later inspection or
           replay.
         </li>
         <li>
-          <strong>SSRF-safe by default</strong>
+          SSRF-safe by default
           {": "}the transport defaults to <code>fetchGuard()</code>
           {", "}so a subscriber URL pointing at cloud metadata or a private
           range is refused (and never retried).
@@ -232,9 +234,9 @@ app.post(
         When an event exhausts its attempts, or fails permanently (a{" "}
         non-retryable status or an SSRF refusal), it is handed to the configured{" "}
         <code>WebhookDeadLetterSink</code>
-        {". "}The built-in <code>MemoryWebhookDeadLetterSink</code> is a
-        bounded ring buffer; in production, implement the one-method interface
-        to persist to your queue or table:
+        {". "}The built-in <code>MemoryWebhookDeadLetterSink</code> is a bounded
+        ring buffer; in production, implement the one-method interface to
+        persist to your queue or table:
       </p>
       <CodeBlock
         language="ts"

@@ -207,7 +207,8 @@ export default function BlogPostPage() {
             <Link href="/blog/secure-by-default">Secure by Default</Link>
             and{" "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
-              the scaffolding post</Link>
+              the scaffolding post
+            </Link>
             {". "}They make the practical case better than any slogan can.
           </p>
 

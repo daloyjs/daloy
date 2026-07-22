@@ -141,9 +141,9 @@ app.use(requestDecompression({
       <h2 id="supported-encodings">Supported encodings</h2>
       <p>
         Built on the web-standard <code>DecompressionStream</code>
-        {", "}so the same line works on Node, Bun, Deno, and Cloudflare
-        Workers. Only <code>gzip</code> and <code>deflate</code> are accepted
-        (the encodings <code>DecompressionStream</code> implements consistently
+        {", "}so the same line works on Node, Bun, Deno, and Cloudflare Workers.
+        Only <code>gzip</code> and <code>deflate</code> are accepted (the
+        encodings <code>DecompressionStream</code> implements consistently
         across runtimes).
         <strong>Brotli is intentionally excluded</strong>
         {": "}it is not part of the Compression Streams spec and is unavailable
@@ -175,9 +175,9 @@ app.use(requestDecompression({
         </li>
         <li>
           <code>400</code>
-          {": "}a malformed / truncated compressed stream. Refusing (rather
-          than treating a malformed body as empty) prevents
-          request-smuggling-style desync with any downstream parser.
+          {": "}a malformed / truncated compressed stream. Refusing (rather than
+          treating a malformed body as empty) prevents request-smuggling-style
+          desync with any downstream parser.
         </li>
       </ul>
       <p>

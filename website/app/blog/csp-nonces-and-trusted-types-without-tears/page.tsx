@@ -307,7 +307,7 @@ const COMMON_PITFALLS = `# Pitfalls I have stepped on so you don't have to:
    one-line refactor; the report tells you exactly the file and line.
 
 5. "I added trustedTypes: true but nothing changed in the page."
-   Open DevTools → Network → Response Headers and check that
+   Open DevTools -> Network -> Response Headers and check that
    require-trusted-types-for 'script' is present. If not, your app is
    probably returning early without going through the middleware
    (a manual Response somewhere upstream). The middleware only sets the
@@ -480,8 +480,10 @@ export default function BlogPostPage() {
           <p>
             CSP nonces let inline scripts and styles run <em>only</em> if they
             carry a per-response random token that an XSS payload cannot guess.
-            Trusted Types upgrades the browser&apos;s sink APIs (<code>innerHTML</code>
-            {", "}<code>setTimeout</code> with strings,
+            Trusted Types upgrades the browser&apos;s sink APIs (
+            <code>innerHTML</code>
+            {", "}
+            <code>setTimeout</code> with strings,
             <code>document.write</code>) so they refuse plain strings, anything
             dangerous has to come from a named, registered policy. Together they
             shrink the XSS attack surface from &quot;anywhere in your
@@ -566,8 +568,8 @@ export default function BlogPostPage() {
             The middleware does its job. Your handler reads{" "}
             <code>ctx.state.cspNonce</code> and attaches it to every inline{" "}
             <code>&lt;script&gt;</code> and <code>&lt;style&gt;</code>
-            {". "}The shape of the handler is the same whether you&apos;re
-            using a template engine or just template literals like this demo:
+            {". "}The shape of the handler is the same whether you&apos;re using
+            a template engine or just template literals like this demo:
           </p>
 
           <EditorFrame
@@ -632,19 +634,18 @@ export default function BlogPostPage() {
           </h2>
 
           <p>
-            Honest moment: if you flip <code>trustedTypes</code> on enforced
-            from day one in a real app, you will break things. Not because
-            Trusted Types is wrong, but because every framework, every
-            third-party widget, and at least one ancient utility someone wrote
-            in 2019 will have an <code>innerHTML</code> in it somewhere.
-            Don&apos;t do that. Roll out in report-only mode first.
+            Enforcing <code>trustedTypes</code> on the first deployment will
+            break many existing apps. Framework code, third-party widgets, and
+            an ancient utility someone wrote in 2019 probably call
+            <code>innerHTML</code> somewhere. Don&apos;t do that. Roll out in
+            report-only mode first.
           </p>
 
           <p>
             The CSP spec gives us a beautiful escape hatch, a parallel header
             called <code>Content-Security-Policy-Report-Only</code>
-            {". "}The browser evaluates it exactly like the enforced policy,
-            but instead of blocking violations it sends them to a{" "}
+            {". "}The browser evaluates it exactly like the enforced policy, but
+            instead of blocking violations it sends them to a{" "}
             <code>report-uri</code>
             {". "}
             DaloyJS doesn&apos;t ship a built-in toggle for this (yet), but
@@ -747,8 +748,8 @@ export default function BlogPostPage() {
           <p>
             Thanks for reading. Now go grep your codebase for{" "}
             <code>.innerHTML =</code>
-            {". "}Whatever the number is, it&apos;s either smaller than you
-            fear or much, much larger. Both outcomes are useful information.
+            {". "}Whatever the number is, it&apos;s either smaller than you fear
+            or much, much larger. Both outcomes are useful information.
           </p>
 
           <p>Devlin</p>

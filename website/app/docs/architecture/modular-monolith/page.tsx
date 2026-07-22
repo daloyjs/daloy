@@ -45,19 +45,21 @@ export default function Page() {
       <h2 id="mental-model">Mental model</h2>
       <ul>
         <li>
-          <strong>Module</strong>
+          Module
           {": "}one bounded context (e.g. <code>catalog</code>
-          {", "}<code>orders</code>
-          {", "}<code>identity</code>). Owns its routes, domain logic,
-          persistence, and tests. Exposes only a public surface.
+          {", "}
+          <code>orders</code>
+          {", "}
+          <code>identity</code>). Owns its routes, domain logic, persistence,
+          and tests. Exposes only a public surface.
         </li>
         <li>
-          <strong>Shared kernel</strong>
+          Shared kernel
           {": "}cross-cutting infrastructure (db client, logger, http hooks,
           config). Knows nothing about any specific module.
         </li>
         <li>
-          <strong>Platform</strong>
+          Platform
           {": "}wiring code: which modules to register, in what order, with
           which prefixes. Builds the <code>App</code> and exposes the typed
           client.
@@ -126,7 +128,7 @@ export default function Page() {
 │
 ├── platform/                # wiring only - no domain logic
 │   ├── modules.ts           # ordered list of modules to register
-│   ├── openapi.ts           # generateOpenAPI(app) → openapi.json
+│   ├── openapi.ts           # generateOpenAPI(app) -> openapi.json
 │   └── client.ts            # in-process typed client wiring
 │
 └── tests/
@@ -146,7 +148,7 @@ generated/                   # Hey API typed client output
         The whole point of a modular monolith is that the rules are{" "}
         <em>enforceable</em>
         {", "}not just documented. There are only three rules and a linter can
-        keep you honest.
+        enforce those boundaries.
       </p>
       <LayerStack
         title="Dependency direction"
@@ -191,13 +193,13 @@ generated/                   # Hey API typed client output
             │   db · http · logger · config · types    │
             └──────────────────────────────────────────┘
 
-  Allowed:   modules/* → shared/*
-  Allowed:   modules/* → other-module/contracts/public  (types only)
-  Allowed:   modules/* → platform/client (in-process typed client)
+  Allowed:   modules/* -> shared/*
+  Allowed:   modules/* -> other-module/contracts/public  (types only)
+  Allowed:   modules/* -> platform/client (in-process typed client)
 
-  Forbidden: modules/A → modules/B/{domain,infra,routes}
-  Forbidden: shared/* → modules/*
-  Forbidden: domain/* → infra/* or framework code
+  Forbidden: modules/A -> modules/B/{domain,infra,routes}
+  Forbidden: shared/* -> modules/*
+  Forbidden: domain/* -> infra/* or framework code
 `}
       />
 
@@ -477,37 +479,30 @@ tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
       <h2 id="anti-patterns-to-avoid">Anti-patterns to avoid</h2>
       <ul>
         <li>
-          <strong>
-            Reaching into another module&apos;s <code>domain/</code> or{" "}
-            <code>infra/</code>.
-          </strong>{" "}
-          The instant this is allowed, the modules collapse back into a tangle.
-          Keep the lint rule enforced.
+          Reaching into another module&apos;s <code>domain/</code> or{" "}
+          <code>infra/</code>. The instant this is allowed, the modules collapse
+          back into a tangle. Keep the lint rule enforced.
         </li>
         <li>
-          <strong>
-            Putting domain logic in <code>shared/</code>.
-          </strong>{" "}
-          <code>shared/</code> is for plumbing only. If you need a helper that
-          knows about <code>Book</code>
+          Putting domain logic in <code>shared/</code>. <code>shared/</code> is
+          for plumbing only. If you need a helper that knows about{" "}
+          <code>Book</code>
           {", "}it belongs inside <code>modules/catalog</code>.
         </li>
         <li>
-          <strong>
-            One giant <code>routes.ts</code> per module.
-          </strong>{" "}
-          Prefer one file per route, it keeps OpenAPI diffs reviewable and gives
-          you obvious test boundaries.
+          One giant <code>routes.ts</code> per module. Prefer one file per
+          route, it keeps OpenAPI diffs reviewable and gives you obvious test
+          boundaries.
         </li>
         <li>
-          <strong>Auto-loading modules from the filesystem.</strong> Explicit
-          registration in <code>platform/modules.ts</code> is easier to audit,
-          diff, and reason about across runtimes.
+          Auto-loading modules from the filesystem. Explicit registration in{" "}
+          <code>platform/modules.ts</code> is easier to audit, diff, and reason
+          about across runtimes.
         </li>
         <li>
-          <strong>Premature service extraction.</strong> Stay a monolith until
-          the operational benefit is concrete. The contracts you build along the
-          way are what makes splitting cheap later.
+          Premature service extraction. Stay a monolith until the operational
+          benefit is concrete. The contracts you build along the way are what
+          makes splitting cheap later.
         </li>
       </ul>
 

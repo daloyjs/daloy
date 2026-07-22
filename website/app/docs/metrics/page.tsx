@@ -422,15 +422,15 @@ app.get(
       <p>This brings up:</p>
       <ul>
         <li>
-          <strong>Prometheus</strong> at <code>http://localhost:9090</code>
+          Prometheus at <code>http://localhost:9090</code>
           {", "}
           pre-configured to scrape{" "}
           <code>host.docker.internal:3001/metrics</code> every 10 seconds.
         </li>
         <li>
-          <strong>Grafana</strong> at <code>http://localhost:3000</code> (admin
-          / admin). Prometheus datasource and the DaloyJS dashboard are
-          auto-provisioned on first start, no manual import required.
+          Grafana at <code>http://localhost:3000</code> (admin / admin).
+          Prometheus datasource and the DaloyJS dashboard are auto-provisioned
+          on first start, no manual import required.
         </li>
       </ul>
       <h3 id="3-open-the-dashboard">3. Open the dashboard</h3>
@@ -511,35 +511,36 @@ daloy_http_requests_in_flight`}
       </p>
       <ul>
         <li>
-          <strong>Bearer token</strong> (<code>opts.token</code>) compared with{" "}
+          Bearer token (<code>opts.token</code>) compared with{" "}
           <code>timingSafeEqual</code>
           {". "}Missing token is a <code>401</code> with{" "}
           <code>WWW-Authenticate</code>; wrong token is a <code>403</code>.
         </li>
         <li>
-          <strong>Per-IP rate limit</strong> (default{" "}
+          Per-IP rate limit (default{" "}
           <code>{`{ limit: 60, windowMs: 60_000 }`}</code>) returning{" "}
           <code>429</code> with <code>Retry-After</code> on overflow. Pass{" "}
           <code>rateLimit: false</code> to disable.
         </li>
         <li>
-          <strong>Refuse-to-boot</strong>
+          Refuse-to-boot
           {": "}an unauthenticated scrape endpoint in production throws at
           registration unless you set a token or explicitly pass{" "}
           <code>acknowledgeUnauthenticated: true</code>.
         </li>
         <li>
-          <strong>Cardinality cap</strong>
+          Cardinality cap
           {": "}every metric is bounded by <code>maxSeries</code> (default
           5000); overflowing label combinations are dropped and counted in{" "}
           <code>daloy_metrics_series_dropped_total</code>
           {", "}a memory-exhaustion defense.
         </li>
         <li>
-          <strong>Exposition-injection defense</strong>
+          Exposition-injection defense
           {": "}metric and label names are validated against the Prometheus
           grammar at definition time, and label values escape <code>\\</code>
-          {", "}<code>&quot;</code>
+          {", "}
+          <code>&quot;</code>
           {", "}and newlines so a hostile value cannot forge extra samples.
         </li>
       </ul>

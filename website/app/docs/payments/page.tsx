@@ -63,9 +63,9 @@ export default function Page() {
           <Link href={"/docs/payments/stripe" as Route}>Stripe</Link>
           {": "}create hosted Checkout Sessions, redirect with{" "}
           <code>@stripe/stripe-js</code>
-          {", "}verify <code>Stripe-Signature</code> webhooks over the raw
-          body, and use idempotency keys with the official <code>stripe</code>{" "}
-          Node SDK.
+          {", "}verify <code>Stripe-Signature</code> webhooks over the raw body,
+          and use idempotency keys with the official <code>stripe</code> Node
+          SDK.
         </li>
         <li>
           <Link href={"/docs/payments/shopify" as Route}>Shopify</Link>
@@ -75,14 +75,16 @@ export default function Page() {
         </li>
         <li>
           <Link href={"/docs/payments/braintree" as Route}>
-            Braintree (PayPal)</Link>
+            Braintree (PayPal)
+          </Link>
           {": "}accept PayPal, cards, Venmo, Apple Pay, and Google Pay through
           one gateway using the official <code>braintree</code> Node SDK with
           signed webhooks.
         </li>
         <li>
           <Link href={"/docs/payments/authorize-net" as Route}>
-            Authorize.Net</Link>
+            Authorize.Net
+          </Link>
           {": "}charge cards, Apple Pay, and Google Pay via the official{" "}
           <code>authorizenet</code> SDK, plus HMAC-SHA512 webhook verification
           through the JSON Webhooks REST API.
@@ -109,8 +111,8 @@ export default function Page() {
         </li>
         <li>
           <Link href={"/docs/payments/paytabs" as Route}>PayTabs</Link>
-          {": "}MENA acquiring (Mada, KNET, BenefitPay, STC Pay, OmanNet,
-          cards, Apple Pay) via the official
+          {": "}MENA acquiring (Mada, KNET, BenefitPay, STC Pay, OmanNet, cards,
+          Apple Pay) via the official
           <code>paytabs_pt2</code> npm package, wrapped as a Promise-friendly
           plugin with HMAC-SHA256 IPN signature verification.
         </li>
@@ -141,32 +143,29 @@ export default function Page() {
       </h2>
       <ul>
         <li>
-          <strong>Server-side secrets only.</strong> Secret keys, webhook
-          signing secrets, and OAuth access tokens belong in environment
-          variables, never in the browser bundle or in a Next.js client
-          component.
+          Server-side secrets only. Secret keys, webhook signing secrets, and
+          OAuth access tokens belong in environment variables, never in the
+          browser bundle or in a Next.js client component.
         </li>
         <li>
-          <strong>Webhook signature verification.</strong> Every provider signs
-          its webhooks. Verify the signature on the raw request body{" "}
-          <em>before</em> doing anything with the payload, DaloyJS exposes the
-          unparsed body so HMAC checks work correctly.
+          Webhook signature verification. Every provider signs its webhooks.
+          Verify the signature on the raw request body <em>before</em> doing
+          anything with the payload, DaloyJS exposes the unparsed body so HMAC
+          checks work correctly.
         </li>
         <li>
-          <strong>Idempotency.</strong> Networks retry. Store the
-          provider&apos;s event ID (or send an idempotency key on outbound
-          requests) so duplicate deliveries don&apos;t double-charge or
-          double-fulfill.
+          Idempotency. Networks retry. Store the provider&apos;s event ID (or
+          send an idempotency key on outbound requests) so duplicate deliveries
+          don&apos;t double-charge or double-fulfill.
         </li>
         <li>
-          <strong>Rate limits.</strong> Most commerce APIs throttle
-          aggressively. Wrap the provider client so retries and back-off live in
-          one place, and lean on the built-in{" "}
-          <Link href="/docs/security">rateLimit middleware</Link> for your own
-          endpoints.
+          Rate limits. Most commerce APIs throttle aggressively. Wrap the
+          provider client so retries and back-off live in one place, and lean on
+          the built-in <Link href="/docs/security">rateLimit middleware</Link>{" "}
+          for your own endpoints.
         </li>
         <li>
-          <strong>Error mapping.</strong> Surface provider failures through{" "}
+          Error mapping. Surface provider failures through{" "}
           <Link href="/docs/errors">problem+json</Link> so clients (and{" "}
           <Link href="/docs/typed-client">typed clients</Link>) see a consistent
           error shape.

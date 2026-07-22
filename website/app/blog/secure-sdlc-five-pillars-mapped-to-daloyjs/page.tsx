@@ -9,7 +9,7 @@ const POST = {
   slug: "secure-sdlc-five-pillars-mapped-to-daloyjs",
   title: "The 5 Pillars of a Secure SDLC, Mapped to DaloyJS",
   description:
-    "Aikido's 'Secure SDLC Explained' lists the five pillars every engineering team needs, Visibility, Early Feedback, Developer Adoption, Consistency, Actionability. Here's the honest per-pillar mapping of what a DaloyJS app and its create-daloy scaffold already give you on day one, what you still configure, and the few items no framework can own.",
+    "Aikido's 'Secure SDLC Explained' lists the five pillars every engineering team needs, Visibility, Early Feedback, Developer Adoption, Consistency, Actionability. This post maps each pillar to what a DaloyJS app and its create-daloy scaffold already give you on day one, what you still configure, and the few items no framework can own.",
   date: "2026-06-12",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
@@ -254,8 +254,7 @@ export default function BlogPostPage() {
               Aikido&apos;s &quot;Secure SDLC Explained: The 5 Pillars of a
               Secure Software Development Lifecycle&quot;
             </a>{" "}
-            with the same question they always ask:{" "}
-            <em>are we doing anything about this?</em>
+            and asked which parts the DaloyJS scaffold already covers.
           </p>
 
           <p>
@@ -273,9 +272,8 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Below is the honest per-pillar mapping of what an app built on
-            DaloyJS, and scaffolded with{" "}
-            <code>pnpm create daloy@latest --with-ci</code>
+            Below is the per-pillar mapping of what an app built on DaloyJS, and
+            scaffolded with <code>pnpm create daloy@latest --with-ci</code>
             {": "}already gives you on day one, what you still configure
             yourself, and the few items no framework can own. The TL;DR: if you
             ship the scaffold, you get four-and-a-half of the five pillars wired
@@ -341,12 +339,13 @@ export default function BlogPostPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Ultimate SAST Guide</a>
-            {": "}different engines catch different bug classes. Running both
-            is the recommended layered posture, and the scaffolder gives you
-            both with neither sitting in your supply chain as a third-party
-            action, Opengrep&apos;s binary is downloaded from a pinned release
-            and verified by its sigstore cosign signature before it runs.
+              Ultimate SAST Guide
+            </a>
+            {": "}different engines catch different bug classes. Running both is
+            the recommended layered posture, and the scaffolder gives you both
+            with neither sitting in your supply chain as a third-party action,
+            Opengrep&apos;s binary is downloaded from a pinned release and
+            verified by its sigstore cosign signature before it runs.
           </p>
 
           <p>
@@ -387,7 +386,8 @@ export default function BlogPostPage() {
             context. Daloy&apos;s answer is to put the rules in the file the
             agent already loads into its context window,{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              the AGENTS.md scaffold pattern</Link>
+              the AGENTS.md scaffold pattern
+            </Link>
             {", "}and to make the secure default the{" "}
             <em>shortest line of code you can type</em>.
           </p>
@@ -461,10 +461,10 @@ export default function BlogPostPage() {
             One command. Day-one coverage for four-and-a-half of the five
             pillars. The half you still drive is the &quot;does the team
             actually use the tools&quot; piece, and the AGENTS.md the scaffolder
-            drops keeps even the coding agent honest.
+            drops catches drift even when a coding agent makes the change.
           </p>
 
-          <h2>What we honestly do not do</h2>
+          <h2>What DaloyJS does not cover</h2>
 
           <ul>
             <li>
@@ -500,26 +500,21 @@ export default function BlogPostPage() {
             </li>
           </ul>
 
-          <h2>The honest answer to the original question</h2>
+          <h2>Coverage and limits</h2>
 
           <p>
-            <em>Are we doing anything about the Secure SDLC five pillars?</em>{" "}
-            Yes, the framework, the scaffolder, and the templates were designed
-            against this exact shape of checklist. Aikido&apos;s five-pillar
-            framing maps one-for-one onto primitives that already ship today:
-            SBOM + vuln-scan for Visibility, the verify:* family + DAST + dual
-            SAST for Early Feedback, the secure-by-default constructor +
-            AGENTS.md for Developer Adoption, the parity-audit gates + uniform
-            templates for Consistency, and problem+json + GHSA + the CVSS-keyed
-            SLA in SECURITY.md for Actionability.
+            The scaffold maps the five pillars to concrete controls: SBOM and
+            vulnerability scans for visibility, CI gates for early feedback,
+            secure defaults and agent guidance for adoption, parity checks for
+            consistency, and problem details plus a published response policy
+            for actionability.
           </p>
 
           <p>
-            What the framework cannot do is the culture, but the framework also
-            stops being the bottleneck. The team can spend its security
-            attention on threat modeling and review, not on remembering to set{" "}
-            <code>SameSite=Lax</code> or chasing the next <code>chalk</code>
-            -style postinstall worm.
+            Team practices still matter: threat modeling, review, incident
+            follow-up, and security ownership remain organizational work. The
+            framework handles repeatable controls so reviewers can spend more
+            time on those decisions.
           </p>
 
           <p className="text-sm text-muted-foreground">
@@ -527,19 +522,24 @@ export default function BlogPostPage() {
             <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries</Link>
+              Supply-chain hardening for TypeScript libraries
+            </Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe Coding Security</Link>
+              Vibe Coding Security
+            </Link>
             {", "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped</Link>
+              Cloud Security Architecture, Mapped
+            </Link>
             {", "}
             <Link href="/blog/owasp-top-10-agentic-applications-mapped-to-daloyjs">
-              OWASP Top 10 for Agentic Applications, Mapped</Link>
+              OWASP Top 10 for Agentic Applications, Mapped
+            </Link>
             {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
-              Scaffolding a production-ready DaloyJS app in 60 seconds</Link>
+              Scaffolding a production-ready DaloyJS app in 60 seconds
+            </Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}
@@ -548,7 +548,8 @@ export default function BlogPostPage() {
             <Link href="/docs/security/compliance">compliance</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections</Link>
+              runtime protections
+            </Link>
             {", "}
             <Link href="/docs/security/secure-defaults">secure defaults</Link>
             {"."}

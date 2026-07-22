@@ -102,11 +102,13 @@ import { sseStream } from "@daloyjs/core/streaming";`}
 
       <h2 id="server-sent-events-sse">Server-Sent Events (SSE)</h2>
       <p>
-        Yield either a string (sent as <code>data: …</code>) or an{" "}
+        Yield either a string (sent as <code>data: ...</code>) or an{" "}
         <code>SSEMessage</code> object with any combination of{" "}
         <code>event</code>
-        {", "}<code>id</code>
-        {", "}<code>retry</code>
+        {", "}
+        <code>id</code>
+        {", "}
+        <code>retry</code>
         {", "}
         <code>comment</code>
         {", "}and <code>data</code>
@@ -141,7 +143,8 @@ app.get(
 
       <p>
         Use <code>sseResponse(...)</code> when you want a fully-formed{" "}
-        <code>Response</code> with the standard SSE headers (<code>text/event-stream</code>
+        <code>Response</code> with the standard SSE headers (
+        <code>text/event-stream</code>
         {", "}
         <code>cache-control: no-cache, no-transform</code>
         {", "}

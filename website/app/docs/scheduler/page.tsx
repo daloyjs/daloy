@@ -29,34 +29,34 @@ export default function Page() {
       <h1>Scheduled tasks (in-process cron)</h1>
       <p>
         DaloyJS ships a <strong>queue-agnostic schedule primitive</strong>
-        {": "}run periodic work inside <em>this</em> process on a fixed
-        interval or a cron expression. It is the in-process counterpart to an
-        external job queue. Reach for it for cache sweeps, token refresh,
-        reconciliation, and other housekeeping, not for distributed fan-out. It
-        has zero runtime dependencies and three properties a production
-        scheduler needs:
+        {": "}run periodic work inside <em>this</em> process on a fixed interval
+        or a cron expression. It is the in-process counterpart to an external
+        job queue. Reach for it for cache sweeps, token refresh, reconciliation,
+        and other housekeeping, not for distributed fan-out. It has zero runtime
+        dependencies and three properties a production scheduler needs:
       </p>
       <ul>
         <li>
-          <strong>Flexible schedules</strong>
+          Flexible schedules
           {": "}fixed intervals (<code>intervalMs</code>) or 5-field cron
           expressions (<code>cron</code>
-          {", "}with <code>@hourly</code>/<code>@daily</code>/… aliases and an
+          {", "}with <code>@hourly</code>/<code>@daily</code>/... aliases and an
           optional IANA <code>timeZone</code>).
         </li>
         <li>
-          <strong>Single-flight</strong>
-          {": "}a task never overlaps itself. If a tick fires while the
-          previous run is still in progress, the tick is skipped (and counted),
-          so a slow task can never pile up unbounded concurrent runs.
+          Single-flight
+          {": "}a task never overlaps itself. If a tick fires while the previous
+          run is still in progress, the tick is skipped (and counted), so a slow
+          task can never pile up unbounded concurrent runs.
         </li>
         <li>
-          <strong>Graceful shutdown</strong>
-          {": "}<code>app.cron()</code> ties the scheduler to the app
-          lifecycle: on shutdown it stops arming new runs, awaits in-flight
-          runs, and aborts their <code>AbortSignal</code> if they outlast the
-          grace period. Timers are <code>unref</code>&apos;d, so a scheduler
-          never keeps an idle process alive on its own.
+          Graceful shutdown
+          {": "}
+          <code>app.cron()</code> ties the scheduler to the app lifecycle: on
+          shutdown it stops arming new runs, awaits in-flight runs, and aborts
+          their <code>AbortSignal</code> if they outlast the grace period.
+          Timers are <code>unref</code>&apos;d, so a scheduler never keeps an
+          idle process alive on its own.
         </li>
       </ul>
 
@@ -131,14 +131,18 @@ await app.scheduledTasks?.runNow("purge-sessions"); // out-of-band run`}
 
       <h2 id="cron-expressions">Cron expressions</h2>
       <p>
-        The <code>cron</code> field accepts a standard 5-field expression (<code>minute hour day-of-month month day-of-week</code>) with wildcards,
-        lists (<code>1,15,30</code>), ranges (<code>1-5</code>), steps (<code>*/5</code>), and case-insensitive month/day names. Day-of-week
+        The <code>cron</code> field accepts a standard 5-field expression (
+        <code>minute hour day-of-month month day-of-week</code>) with wildcards,
+        lists (<code>1,15,30</code>), ranges (<code>1-5</code>), steps (
+        <code>*/5</code>), and case-insensitive month/day names. Day-of-week
         accepts both <code>0</code> and <code>7</code> for Sunday. The named
         aliases <code>@yearly</code>
-        {", "}<code>@monthly</code>
+        {", "}
+        <code>@monthly</code>
         {", "}
         <code>@weekly</code>
-        {", "}<code>@daily</code>
+        {", "}
+        <code>@daily</code>
         {", "}and <code>@hourly</code> are also supported.
       </p>
       <CodeBlock

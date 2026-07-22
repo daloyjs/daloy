@@ -234,15 +234,15 @@ function nearestPrefix(map: Map<string, string>, path: string) {
 const SHUTDOWN_FLOW = `# What happens when app.shutdown() is called:
 #
 # T+0       app.shutdown(10_000, "SIGTERM") starts.
-#           - this.draining = true  → every NEW request gets
+#           - this.draining = true  -> every NEW request gets
 #             503 Service Unavailable + Retry-After: 5.
 #           - onShutdown listeners fire IN ORDER:
-#               1) metrics → push to gateway     (last chance to send)
-#               2) service registry → deregister (so the LB stops
+#               1) metrics -> push to gateway     (last chance to send)
+#               2) service registry -> deregister (so the LB stops
 #                  sending us new traffic; the 503 above is a
 #                  safety net for traffic already in flight)
-#               3) tracing → flush span buffer
-#               4) feature flags → snapshot decisions for debugging
+#               3) tracing -> flush span buffer
+#               4) feature flags -> snapshot decisions for debugging
 #
 # T+t       Drain loop polls inflight count every 25ms.
 #           Waits up to timeoutMs for in-flight requests to settle.
@@ -264,7 +264,7 @@ const POLICY_PLUGIN = `// platform/policy-plugin.ts, central tagging / enforceme
 import type { App } from "@daloyjs/core";
 
 interface Policy {
-  /** Plugin name → required prefix pattern */
+  /** Plugin name -> required prefix pattern */
   prefixRules: RegExp;
   /** Plugin names that must be present in every build */
   required: string[];
@@ -366,7 +366,7 @@ const PLATFORM_FLOW = `# What boot looks like in the logs of a single replica:
 # 08:42:11.732  msg="closed redis"
 # 08:42:11.733  inflight=0  msg="DaloyJS shutdown complete"
 #
-# The whole sequence is composable. Add a plugin → its listener slots
+# The whole sequence is composable. Add a plugin -> its listener slots
 # into onPluginInstalled and onShutdown alongside everyone else's.`;
 
 const TESTING_PLUGINS = `// tests/platform-plugins.test.ts, verify the wiring without a network.
@@ -653,7 +653,7 @@ export default function BlogPostPage() {
           >
             Sync plugins also push observer promises here, so it&apos;s always
             safe to call. Standard pattern:{" "}
-            <code>register → ready → serve</code>.
+            <code>register -&gt; ready -&gt; serve</code>.
           </EventCard>
 
           <h2>What a register() call actually looks like</h2>
@@ -707,7 +707,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["NOTES.md"]}
             activeFile="NOTES.md"
-            status="onShutdown → 503-new-requests → drain → onClose · in that order, every time"
+            status="onShutdown -> 503-new-requests -> drain -> onClose · in that order, every time"
           >
             <CodeBlock language="bash" code={SHUTDOWN_FLOW} />
           </EditorFrame>
@@ -745,7 +745,7 @@ export default function BlogPostPage() {
           <EditorFrame
             files={["src/server.ts"]}
             activeFile="src/server.ts"
-            status="platform plugins FIRST · then app plugins · ready → verifyPolicy → serve"
+            status="platform plugins FIRST · then app plugins · ready -> verifyPolicy -> serve"
           >
             <CodeBlock language="ts" code={COMPOSE} />
           </EditorFrame>
@@ -754,7 +754,8 @@ export default function BlogPostPage() {
             Note carefully: <code>routes/users.ts</code>
             {", "}
             <code>routes/orders.ts</code>
-            {", "}<code>routes/admin.ts</code> have <em>zero</em> imports from{" "}
+            {", "}
+            <code>routes/admin.ts</code> have <em>zero</em> imports from{" "}
             <code>platform/*</code>
             {". "}The metrics show up, the registration happens, the policy
             fires, all without a single line in the route files knowing any of
@@ -791,7 +792,7 @@ export default function BlogPostPage() {
             <CodeBlock language="bash" code={CHECKLIST} />
           </EditorFrame>
 
-          <h2>Wrapping up</h2>
+          <h2>Put platform policy in plugins</h2>
 
           <p>
             The number of large-team backend codebases I&apos;ve seen with

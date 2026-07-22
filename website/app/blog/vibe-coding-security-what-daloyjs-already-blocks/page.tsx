@@ -10,7 +10,7 @@ const POST = {
   title:
     "Vibe Coding Security: What DaloyJS Already Blocks Before Your AI Even Ships",
   description:
-    "Aikido's 'WTF is Vibe Coding Security' post lists the usual suspects: SQL injection, path traversal, hardcoded secrets, unlocked admin routes, missing input sanitization, dependency rot. Here's the honest mapping of which of those a DaloyJS app already blocks by default, even when the code is written by a sales rep at 1am with Claude, and the small list of things you still have to opt into.",
+    "Aikido's 'WTF is Vibe Coding Security' post lists the usual suspects: SQL injection, path traversal, hardcoded secrets, unlocked admin routes, missing input sanitization, dependency rot. This post shows which of those a DaloyJS app already blocks by default, even when the code is written by a sales rep at 1am with Claude, and the small list of things you still have to opt into.",
   date: "2026-06-10",
   readingTime: "10 min read",
   author: "Devlin Duldulao",
@@ -301,7 +301,7 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            Same reader. Different week. This time the link was{" "}
+            A reader sent{" "}
             <a
               href="https://www.aikido.dev/blog/vibe-coding-security"
               target="_blank"
@@ -309,8 +309,7 @@ export default function BlogPostPage() {
             >
               Aikido&apos;s &quot;WTF is Vibe Coding Security&quot;
             </a>{" "}
-            and the question was, again, the only one worth asking:{" "}
-            <em>so are we doing anything about this?</em>
+            and asked which risks DaloyJS already blocks.
           </p>
 
           <p>
@@ -328,7 +327,7 @@ export default function BlogPostPage() {
 
           <p>
             I read it, opened DaloyJS, and went through each risk to see what we
-            already block, what needs one opt-in line, and where we honestly
+            already block, what needs one opt-in line, and where DaloyJS
             can&apos;t help. Below is that mapping. The TL;DR: if a sales rep
             uses Claude to scaffold a DaloyJS app at 1am, the boring stuff, body
             limits, prototype pollution, header splitting, path traversal,
@@ -379,7 +378,8 @@ export default function BlogPostPage() {
           <p>
             The full list of what the router refuses to walk into is in{" "}
             <Link href="/docs/security/runtime-protections">
-              /docs/security/runtime-protections</Link>
+              /docs/security/runtime-protections
+            </Link>
             {"."}
           </p>
 
@@ -396,7 +396,8 @@ export default function BlogPostPage() {
           <p>
             The full reasoning behind each gate is in{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              &quot;Supply-chain hardening for TypeScript libraries&quot;</Link>
+              &quot;Supply-chain hardening for TypeScript libraries&quot;
+            </Link>
             {". "}The shorter version: attackers do not need a 0-day if they can
             ship a malicious <code>postinstall</code>
             {", "}and AI agents do not inspect <code>scripts</code> blocks
@@ -419,7 +420,8 @@ export default function BlogPostPage() {
           <p>
             The dedicated page is{" "}
             <Link href="/docs/security/admin-panels">
-              /docs/security/admin-panels</Link>
+              /docs/security/admin-panels
+            </Link>
             {". "}If the &quot;Tea app&quot; team had read it, they&apos;d have
             shipped an internal-only deploy and the breach would not have
             happened. I am not claiming the framework would have <em>forced</em>{" "}
@@ -460,7 +462,8 @@ export default function BlogPostPage() {
             The &quot;agent reads the rules before it writes code&quot; piece is
             covered in{" "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              &quot;Designing for Coding Agents&quot;</Link>
+              &quot;Designing for Coding Agents&quot;
+            </Link>
             {". "}The point of scaffolding AGENTS.md is exactly the
             &quot;PromptBOM&quot; idea the Aikido post pitches at the end, give
             the agent provenance and rules <em>before</em> it generates, not
@@ -478,7 +481,7 @@ export default function BlogPostPage() {
 
           <CodeBlock language="ts" code={ASSUME_VIBE} />
 
-          <h2>What we honestly do not do</h2>
+          <h2>What DaloyJS does not cover</h2>
 
           <ul>
             <li>
@@ -499,10 +502,12 @@ export default function BlogPostPage() {
               We do not enforce authentication on every route. We can&apos;t,
               some routes are deliberately public. What we give you is{" "}
               <code>jwt()</code>
-              {", "}<code>basicAuth()</code>
+              {", "}
+              <code>basicAuth()</code>
               {", "}
               <code>bearerAuth()</code>
-              {", "}<code>session()</code>
+              {", "}
+              <code>session()</code>
               {", "}and an{" "}
               <Link href="/docs/security/auth-slice">auth-slice pattern</Link>{" "}
               so the choice is visible per route.
@@ -526,39 +531,34 @@ export default function BlogPostPage() {
             sales rep at 1am has to actively work to disable any of it.
           </p>
 
-          <h2>The honest answer to the original question</h2>
+          <h2>What DaloyJS covers</h2>
 
           <p>
-            <em>Are we doing anything about vibe coding security?</em> Yes, the
-            framework was designed assuming the person writing the handler
-            either doesn&apos;t know or doesn&apos;t care about the security
-            layer, and the defaults reflect that. The Aikido post&apos;s
-            shopping list of risks maps almost one-for-one to a primitive that
-            already exists in DaloyJS today. The few items that don&apos;t map
-            are the ones no framework can own, pick an IdP, lock down the DB
-            role, don&apos;t hand the prod creds to the agent, review the
-            commits.
-          </p>
-
-          <p>
-            The vibes can stay good. Just point them at a framework that
-            won&apos;t let them ship the obvious mistakes.
+            DaloyJS defaults cover the common mistakes in the Aikido list even
+            when a generated handler omits them. Application owners still have
+            to choose an identity provider, restrict the database role, protect
+            production credentials, and review changes.
           </p>
 
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/cloud-security-architecture-mapped-to-daloyjs">
-              Cloud Security Architecture, Mapped</Link>
-            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+              Cloud Security Architecture, Mapped
+            </Link>
+            {", "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries</Link>
+              Supply-chain hardening for TypeScript libraries
+            </Link>
             {", "}
             <Link href="/blog/designing-for-coding-agents-why-daloyjs-scaffolds-agents-md-and-skills">
-              Designing for Coding Agents</Link>
+              Designing for Coding Agents
+            </Link>
             {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
-              Scaffolding a production-ready DaloyJS app in 60 seconds</Link>
+              Scaffolding a production-ready DaloyJS app in 60 seconds
+            </Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}
@@ -569,8 +569,10 @@ export default function BlogPostPage() {
             <Link href="/docs/security/fetch-guard">fetch guard</Link>
             {", "}
             <Link href="/docs/security/runtime-protections">
-              runtime protections</Link>
-            {", "}<Link href="/docs/security/supply-chain">supply chain</Link>.
+              runtime protections
+            </Link>
+            {", "}
+            <Link href="/docs/security/supply-chain">supply chain</Link>.
           </p>
         </div>
       </article>

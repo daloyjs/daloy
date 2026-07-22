@@ -102,8 +102,7 @@ export default function Page() {
         The name comes from the Tagalog word <strong>daloy</strong>
         {", "}meaning <strong>flow</strong>
         {", "}pronounced <strong>da-loy</strong>
-        {". "}The project also uses the Baybayin spelling{" "}
-        <strong>ᜇᜎᜓᜌ᜔</strong>
+        {". "}The project also uses the Baybayin spelling <strong>ᜇᜎᜓᜌ᜔</strong>
         {". "}See <Link href="/about-the-name">About the name</Link> for the
         short version.
       </p>
@@ -123,7 +122,7 @@ export default function Page() {
           <a href="https://hono.dev/docs/" target="_blank" rel="noreferrer">
             Hono
           </a>{" "}
-          - web-standard <code>Request → Response</code>.
+          - web-standard <code>Request -&gt; Response</code>.
         </li>
         <li>
           Mature plugin/lifecycle/ops story on par with{" "}
@@ -132,7 +131,8 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Fastify</a>
+            Fastify
+          </a>
           {"."}
         </li>
         <li>
@@ -142,7 +142,8 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            Elysia</a>
+            Elysia
+          </a>
           {": "}without forcing you onto Bun.
         </li>
         <li>Hey API typed client generation as a first-class workflow.</li>
@@ -223,7 +224,7 @@ serve(app, { port: 3000 });`}
         </li>
         <li>
           A typed return - TypeScript knows{" "}
-          <code>200 → {`{ msg: string }`}</code>.
+          <code>200 -&gt; {`{ msg: string }`}</code>.
         </li>
         <li>
           An OpenAPI 3.1 entry under <code>operationId: sayHello</code>.
@@ -250,7 +251,8 @@ serve(app, { port: 3000 });`}
         </li>
         <li>
           <Link href="/docs/tutorials/bookstore">
-            Tutorial: build a bookstore API</Link>
+            Tutorial: build a bookstore API
+          </Link>
           {"."}
         </li>
         <li>

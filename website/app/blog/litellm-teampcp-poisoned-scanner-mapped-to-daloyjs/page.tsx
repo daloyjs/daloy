@@ -10,7 +10,7 @@ const POST = {
   title:
     "When the Security Scanner Is the Attacker: The LiteLLM / TeamPCP Compromise, Mapped to DaloyJS",
   description:
-    "On March 24, 2026 the litellm Python package was backdoored after a poisoned Trivy GitHub Action stole the maintainer's PyPI token. The same attack pattern - compromised scanner action → exfiltrated publish token → malicious release with a startup-time payload - would have to clear nine of DaloyJS's existing CI gates before it could ship. Here's the stage-by-stage mapping.",
+    "On March 24, 2026 the litellm Python package was backdoored after a poisoned Trivy GitHub Action stole the maintainer's PyPI token. The same attack pattern - compromised scanner action -> exfiltrated publish token -> malicious release with a startup-time payload - would have to clear nine of DaloyJS's existing CI gates before it could ship. Here's the stage-by-stage mapping.",
   date: "2026-06-15",
   readingTime: "9 min read",
   author: "Devlin Duldulao",
@@ -237,16 +237,16 @@ export default function BlogPostPage() {
 
         <div className="docs-prose max-w-full">
           <p>
-            Different reader this time. The link was{" "}
+            A reader sent{" "}
             <a
               href="https://snyk.io/blog/poisoned-security-scanner-backdooring-litellm/"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Snyk&apos;s write-up of the LiteLLM / TeamPCP compromise</a>
-            {". "}The question was the same:{" "}
-            <em>are we doing anything about this?</em> Yes. Most of it was
-            already shipped. The post is the receipt.
+              Snyk&apos;s write-up of the LiteLLM / TeamPCP compromise
+            </a>
+            {". "}Most of the relevant protections were already shipped, so I
+            checked the attack stage by stage.
           </p>
 
           <p>
@@ -277,14 +277,14 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            DaloyJS is Node/TypeScript, not Python, so the <code>.pth</code>{" "}
-            hook is not literally applicable. But the <em>attack chain</em>
+            DaloyJS runs on Node/TypeScript, so the Python <code>.pth</code>{" "}
+            hook does not apply. The <em>attack chain</em>
             {": "}
-            poisoned scanner action → exfiltrated publish token → malicious
-            release that runs at install time, is platform-agnostic, and is
-            exactly what every JS framework that publishes to npm has to defend
-            against. Here is how each stage maps to what&apos;s already in this
-            repo, in the order the attack ran.
+            poisoned scanner action -&gt; exfiltrated publish token -&gt;
+            malicious release that runs at install time, is platform-agnostic,
+            and is exactly what every JS framework that publishes to npm has to
+            defend against. Here is how each stage maps to what&apos;s already
+            in this repo, in the order the attack ran.
           </p>
 
           <h2>Stage 0: The Trivy tag rewrite (March 19)</h2>
@@ -302,7 +302,8 @@ export default function BlogPostPage() {
             class, and it costs nothing. The Snyk post calls out{" "}
             <em>
               &quot;LiteLLM&apos;s CI/CD pipeline ran Trivy as part of its build
-              process, pulling it from apt without a pinned version&quot;</em>
+              process, pulling it from apt without a pinned version&quot;
+            </em>
             {". "}That sentence describes a class of mistake DaloyJS&apos;s CI{" "}
             <em>cannot</em> make, there are zero <code>apt install</code> calls
             in any workflow, and the only binaries downloaded at runtime
@@ -376,8 +377,8 @@ export default function BlogPostPage() {
           <p>
             This is the single most boring decision in DaloyJS, and it&apos;s
             the one I&apos;m proudest of. Frameworks that pull in 30 transitive
-            packages at runtime cannot honestly claim a hardened supply chain,
-            the attacker only has to compromise the smallest of those 30. A
+            packages at runtime cannot claim a hardened supply chain; the
+            attacker only has to compromise the smallest of those 30. A
             zero-runtime-deps core has exactly one supply-chain target: the core
             itself, published through the gated OIDC pipeline above.
           </p>
@@ -392,7 +393,8 @@ export default function BlogPostPage() {
             every PR too. None of them are aspirational, a failure blocks merge.
             The full reasoning for each is in{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              the supply-chain hardening post</Link>
+              the supply-chain hardening post
+            </Link>
             {"."}
           </p>
 
@@ -433,11 +435,11 @@ export default function BlogPostPage() {
           </ol>
 
           <p>
-            Could a determined attacker still find a way? Of course, security is
-            never &quot;done.&quot; But the path of least resistance the LiteLLM
-            compromise took (rewrite an action tag, steal a static token, ship a
-            release that auto-runs on install) is shut on all four steps in this
-            repo. That&apos;s the point of secure-by-default: the obvious attack
+            A determined attacker may still find another way; security is never
+            finished. The path of least resistance in the LiteLLM compromise
+            took (rewrite an action tag, steal a static token, ship a release
+            that auto-runs on install) is shut on all four steps in this repo.
+            That&apos;s the point of secure-by-default: the obvious attack
             doesn&apos;t work, and the non-obvious ones cost real effort.
           </p>
 
@@ -473,21 +475,14 @@ export default function BlogPostPage() {
             </li>
           </ul>
 
-          <h2>The honest answer to the original question</h2>
+          <h2>Existing protections</h2>
 
           <p>
-            <em>
-              Are we doing anything to protect ourselves and the users of our
-              framework against the LiteLLM-class supply-chain attack?
-            </em>{" "}
-            Yes, and most of it was shipped before the Snyk post existed, for
-            the same reasons that post lists. SHA-pinned actions, isolated
-            publish jobs with OIDC + Environment gating,{" "}
-            <code>ignore-scripts</code>
-            {", "}zero runtime deps, a 24h release-age floor, the dozen{" "}
-            <code>verify:*</code> gates, and <code>harden-runner</code> egress
-            logging on every job. The playbook the attacker used does not have a
-            green path through any of those.
+            The repository already used SHA-pinned actions, isolated OIDC
+            publishing, environment approval, ignored lifecycle scripts, zero
+            runtime dependencies, a 24-hour release-age floor, verification
+            gates, and egress logging. The LiteLLM attack path would fail at
+            several independent steps.
           </p>
 
           <p>
@@ -500,14 +495,18 @@ export default function BlogPostPage() {
           <p className="text-sm text-muted-foreground">
             Related reading on this blog:{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
-              Supply-chain hardening for TypeScript libraries</Link>
-            {", "}<Link href="/blog/secure-by-default">Secure by Default</Link>
+              Supply-chain hardening for TypeScript libraries
+            </Link>
+            {", "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link>
             {", "}
             <Link href="/blog/vibe-coding-security-what-daloyjs-already-blocks">
-              Vibe coding security</Link>
+              Vibe coding security
+            </Link>
             {", "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
-              Scaffolding a production-ready DaloyJS app in 60 seconds</Link>
+              Scaffolding a production-ready DaloyJS app in 60 seconds
+            </Link>
             {". "}Relevant docs:{" "}
             <Link href="/docs/security">/docs/security</Link>
             {", "}

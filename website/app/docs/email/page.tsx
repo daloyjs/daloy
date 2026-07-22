@@ -69,8 +69,7 @@ export default function Page() {
         </li>
         <li>
           <Link href="/docs/email/sendgrid">SendGrid</Link>
-          {": "}Twilio&apos;s established sender via{" "}
-          <code>@sendgrid/mail</code>
+          {": "}Twilio&apos;s established sender via <code>@sendgrid/mail</code>
           {". "}Good for high-volume marketing plus transactional.
         </li>
         <li>
@@ -162,9 +161,9 @@ export default function Page() {
         Every guide in this section follows the same three steps: install the
         SDK, register a DaloyJS plugin that puts the client on{" "}
         <code>app.state</code>
-        {", "}then call it inside a validated route handler. The plugin shape
-        is intentionally tiny so you can swap providers without touching
-        business logic:
+        {", "}then call it inside a validated route handler. The plugin shape is
+        intentionally tiny so you can swap providers without touching business
+        logic:
       </p>
 
       <FlowDiagram
@@ -230,19 +229,20 @@ declare module "@daloyjs/core" {
       <h2 id="security-checklist">Security checklist</h2>
       <ul>
         <li>
-          <strong>Keep API keys in environment variables.</strong> Never commit
-          them. Use AWS IAM roles on Lambda and platform-managed secrets on
-          Vercel, Cloudflare, Fly, and Render.
+          Keep API keys in environment variables. Never commit them. Use AWS IAM
+          roles on Lambda and platform-managed secrets on Vercel, Cloudflare,
+          Fly, and Render.
         </li>
         <li>
-          <strong>Verify your sending domain.</strong> Add SPF, DKIM, and DMARC
-          records before going live; every provider here rejects unverified
-          senders in production.
+          Verify your sending domain. Add SPF, DKIM, and DMARC records before
+          going live; every provider here rejects unverified senders in
+          production.
         </li>
         <li>
-          <strong>Validate inputs and reject CRLF in header fields.</strong>{" "}
-          Treat <code>to</code>
-          {", "}<code>subject</code>
+          Validate inputs and reject CRLF in header fields. Treat{" "}
+          <code>to</code>
+          {", "}
+          <code>subject</code>
           {", "}display names, <code>reply_to</code>
           {", "}and any custom header value as untrusted. Use{" "}
           <Link href="/docs/validation">DaloyJS validation</Link> with{" "}
@@ -284,27 +284,27 @@ export const SendEmailBody = z
       />
       <ul>
         <li>
-          <strong>Prefer HTTPS provider SDKs over raw SMTP libraries.</strong>{" "}
-          The six providers documented here all speak HTTPS+JSON, so the
-          CRLF-in-SMTP-command class of bug (<code>smtp-client</code>
+          Prefer HTTPS provider SDKs over raw SMTP libraries. The six providers
+          documented here all speak HTTPS+JSON, so the CRLF-in-SMTP-command
+          class of bug (<code>smtp-client</code>
           {", "}
           <code>smtp-channel</code>
-          {", "}<code>aiosmtplib</code> <code>source_address</code>)
-          doesn&apos;t reach the wire. If you must use a raw SMTP client,
-          validate every field, including hostname and source address, with the
-          schema above.
+          {", "}
+          <code>aiosmtplib</code> <code>source_address</code>) doesn&apos;t
+          reach the wire. If you must use a raw SMTP client, validate every
+          field, including hostname and source address, with the schema above.
         </li>
         <li>
-          <strong>Rate-limit the send route.</strong> Use the built-in{" "}
+          Rate-limit the send route. Use the built-in{" "}
           <Link href="/docs/security">rateLimit middleware</Link> (or the{" "}
           <Link href="/docs/security/rate-limit-redis">Redis store</Link>) on
           any endpoint that triggers email so abuse can&apos;t drive your bill
           or reputation down.
         </li>
         <li>
-          <strong>Verify provider webhooks.</strong> If you process bounces,
-          complaints, or opens, verify the signature on every incoming webhook
-          before trusting its payload.
+          Verify provider webhooks. If you process bounces, complaints, or
+          opens, verify the signature on every incoming webhook before trusting
+          its payload.
         </li>
       </ul>
     </>

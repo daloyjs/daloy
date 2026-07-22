@@ -49,10 +49,10 @@ const ONE_LINER = `# The 60-second path.
 pnpm create daloy@latest my-api
 cd my-api
 pnpm dev
-# → server up at http://localhost:3000
-# → /docs serving Swagger UI
-# → /openapi.json serving the contract
-# → secure headers, CSRF, session, rate-limit middleware preloaded`;
+# -> server up at http://localhost:3000
+# -> /docs serving Swagger UI
+# -> /openapi.json serving the contract
+# -> secure headers, CSRF, session, rate-limit middleware preloaded`;
 
 const FULL_FLAGS = `# Every flag, when you want them.
 
@@ -135,11 +135,11 @@ it twice, --minimal strips it so you can start your own app cleanly.`;
 
 const RUNTIME_TEMPLATES = `# Same app shape, five entry files.
 
-node-basic/src/index.ts          → \`serve()\` from @daloyjs/core/node
-bun-basic/src/index.ts           → Bun.serve(handle.url) with \`bun --hot\`
-deno-basic/main.ts               → Deno.serve(handle.url) with deno.json tasks
-cloudflare-worker/src/index.ts   → export default { fetch: handle.fetch }
-vercel/api/[...path].ts     → export const config = { runtime: "edge" }
+node-basic/src/index.ts          -> \`serve()\` from @daloyjs/core/node
+bun-basic/src/index.ts           -> Bun.serve(handle.url) with \`bun --hot\`
+deno-basic/main.ts               -> Deno.serve(handle.url) with deno.json tasks
+cloudflare-worker/src/index.ts   -> export default { fetch: handle.fetch }
+vercel/api/[...path].ts     -> export const config = { runtime: "edge" }
 
 The buildApp() in src/app.ts is byte-identical across all five templates.
 That is on purpose - and it's the same property the "Same App on Five
@@ -398,7 +398,8 @@ export default function BlogPostPage() {
             <em>I have an idea</em> to{" "}
             <em>
               I have a running server with tests, types, OpenAPI, and a CI
-              pipeline</em>
+              pipeline
+            </em>
             {". "}When that first sixty seconds is awkward, the project never
             happens. When it feels good, you keep going.
           </p>
@@ -454,7 +455,8 @@ export default function BlogPostPage() {
           <p>
             One detail worth pointing out: when the package manager is{" "}
             <code>pnpm</code>
-            {", "}<code>--install</code> defaults to <em>N</em>
+            {", "}
+            <code>--install</code> defaults to <em>N</em>
             {". "}
             That&apos;s on purpose. The scaffolded project ships a{" "}
             <code>.npmrc</code> with <code>minimum-release-age=1440</code> and a{" "}
@@ -627,7 +629,11 @@ export default function BlogPostPage() {
               <code>--with-ci</code> defaults to yes.
             </strong>{" "}
             That&apos;s the application-safe supply-chain-hardening posture from
-            yesterday&apos;s post (<Link href="/blog/supply-chain-hardening-for-typescript-libraries">Supply-Chain Hardening for TypeScript Libraries</Link>) dropped into your repo without you typing a single workflow line.
+            yesterday&apos;s post (
+            <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
+              Supply-Chain Hardening for TypeScript Libraries
+            </Link>
+            ) dropped into your repo without you typing a single workflow line.
             The library publish workflow stays out because this scaffold is an
             app, not an npm package release train:
           </p>
@@ -657,7 +663,8 @@ export default function BlogPostPage() {
             errors when your route changes shape. That&apos;s the entire subject
             of{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
-              Contract-First Without the Codegen Dance</Link>
+              Contract-First Without the Codegen Dance
+            </Link>
             {". "}Read it next.
           </p>
 

@@ -43,24 +43,24 @@ export default function Page() {
       <h2 id="short-answer">The short answer</h2>
       <ul>
         <li>
-          <strong>DaloyJS is a resource server</strong> (and a toolkit for
-          building a relying party). It checks tokens; it does not issue them.
+          DaloyJS is a resource server (and a toolkit for building a relying
+          party). It checks tokens; it does not issue them.
         </li>
         <li>
-          <strong>It is not an &quot;IdentityServer&quot;.</strong> It cannot,
-          on its own, do what Duende IdentityServer, Keycloak, or Auth0 do: run
-          login pages, manage clients and consent, and mint tokens.
+          It is not an &quot;IdentityServer&quot;. It cannot, on its own, do
+          what Duende IdentityServer, Keycloak, or Auth0 do: run login pages,
+          manage clients and consent, and mint tokens.
         </li>
         <li>
-          <strong>You need an identity and session system.</strong> For an
-          OAuth2/OIDC architecture, use a standards-compliant managed or
-          self-hosted IdP. For a first-party application that does not need an
-          external token issuer, an embedded system such as Better Auth can own
-          login and cookie sessions inside your DaloyJS deployment.
+          You need an identity and session system. For an OAuth2/OIDC
+          architecture, use a standards-compliant managed or self-hosted IdP.
+          For a first-party application that does not need an external token
+          issuer, an embedded system such as Better Auth can own login and
+          cookie sessions inside your DaloyJS deployment.
         </li>
         <li>
-          <strong>Do not build your own authorization server.</strong> Verify
-          tokens from a vetted provider instead.
+          Do not build your own authorization server. Verify tokens from a
+          vetted provider instead.
         </li>
       </ul>
 
@@ -186,10 +186,10 @@ export default function Page() {
         an ecosystem of first-party frameworks. <strong>DaloyJS</strong> is a
         single web framework that runs on JavaScript runtimes. The closest .NET
         analog to DaloyJS is <strong>ASP.NET Core</strong>
-        {", "}not &quot;.NET&quot; as a whole. And the identity pieces that
-        ship in the .NET ecosystem (Duende IdentityServer, OpenIddict, ASP.NET
-        Core Identity) have no built-in DaloyJS equivalent on purpose, you bring
-        an external IdP.
+        {", "}not &quot;.NET&quot; as a whole. And the identity pieces that ship
+        in the .NET ecosystem (Duende IdentityServer, OpenIddict, ASP.NET Core
+        Identity) have no built-in DaloyJS equivalent on purpose, you bring an
+        external IdP.
       </p>
       <table>
         <thead>
@@ -281,22 +281,28 @@ export default function Page() {
       <ul>
         <li>
           <a href="https://www.keycloak.org" target="_blank" rel="noreferrer">
-            Keycloak</a>
+            Keycloak
+          </a>
           {", "}
           <a href="https://zitadel.com" target="_blank" rel="noreferrer">
-            Zitadel</a>
+            Zitadel
+          </a>
           {", "}
           <a href="https://www.ory.sh" target="_blank" rel="noreferrer">
-            Ory (Hydra + Kratos)</a>
+            Ory (Hydra + Kratos)
+          </a>
           {", "}
           <a href="https://goauthentik.io" target="_blank" rel="noreferrer">
-            Authentik</a>
+            Authentik
+          </a>
           {", "}
           <a href="https://logto.io" target="_blank" rel="noreferrer">
-            Logto</a>
+            Logto
+          </a>
           {", "}
           <a href="https://supertokens.com" target="_blank" rel="noreferrer">
-            SuperTokens</a>
+            SuperTokens
+          </a>
           {", "}
           <a href="https://dexidp.io" target="_blank" rel="noreferrer">
             Dex
@@ -361,8 +367,8 @@ app.get(
         allowlist (it refuses <code>HS*</code> to block the classic
         confused-deputy attack), checks <code>issuer</code> and{" "}
         <code>audience</code>
-        {", "}caches the JWKS, and sends <code>Cache-Control: no-store</code>{" "}
-        on its <code>401</code> challenges. See{" "}
+        {", "}caches the JWKS, and sends <code>Cache-Control: no-store</code> on
+        its <code>401</code> challenges. See{" "}
         <Link href="/docs/security/auth-slice">the auth slice</Link> for the
         full behavior, and the per-provider guides for{" "}
         <Link href="/docs/auth/auth0">Auth0</Link>
@@ -439,7 +445,7 @@ app.use(csrf());
             from: "Browser",
             to: "BFF (DaloyJS)",
             label: "Call same-origin route (+ CSRF token)",
-            detail: "cookie auth → csrf() guards the mutation",
+            detail: "cookie auth -> csrf() guards the mutation",
             kind: "request",
           },
           {
@@ -556,33 +562,30 @@ app.use(csrf());
       <h2 id="recommendations">What we recommend</h2>
       <ul>
         <li>
-          <strong>Default to a resource server.</strong> Verify JWTs with{" "}
-          <code>jwk()</code>
+          Default to a resource server. Verify JWTs with <code>jwk()</code>
           {", "}pin an asymmetric algorithm allowlist, enforce{" "}
           <code>issuer</code> + <code>audience</code>
           {", "}and gate routes with <code>requireScopes()</code>.
         </li>
         <li>
-          <strong>Use the BFF pattern for browser logins.</strong> Run
-          authorization-code + PKCE on the server, keep tokens in a{" "}
-          <code>session()</code> cookie, never expose them to JavaScript, and
-          protect mutations with <code>csrf()</code>.
+          Use the BFF pattern for browser logins. Run authorization-code + PKCE
+          on the server, keep tokens in a <code>session()</code> cookie, never
+          expose them to JavaScript, and protect mutations with{" "}
+          <code>csrf()</code>.
         </li>
         <li>
-          <strong>Bring an IdP you do not operate</strong> unless you have a
-          strong reason not to: managed for speed, self-hosted open source for
-          control and data residency.
+          Bring an IdP you do not operate unless you have a strong reason not
+          to: managed for speed, self-hosted open source for control and data
+          residency.
         </li>
+        <li>Never build your own authorization server.</li>
         <li>
-          <strong>Never build your own authorization server.</strong>
-        </li>
-        <li>
-          <strong>Service-to-service / internal traffic:</strong> use{" "}
-          <code>bearerAuth()</code> with a verified token, or{" "}
-          <code>createJwtSigner()</code> + <code>jwk()</code> when both sides
-          speak JWT. See the{" "}
+          Service-to-service / internal traffic: use <code>bearerAuth()</code>{" "}
+          with a verified token, or <code>createJwtSigner()</code> +{" "}
+          <code>jwk()</code> when both sides speak JWT. See the{" "}
           <Link href="/docs/security/internal-service-preset">
-            internal-service preset</Link>
+            internal-service preset
+          </Link>
           {"."}
         </li>
       </ul>

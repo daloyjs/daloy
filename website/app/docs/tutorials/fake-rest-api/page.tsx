@@ -37,7 +37,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          fakerestapi.vercel.app</a>
+          fakerestapi.vercel.app
+        </a>
         {"."}
       </p>
 
@@ -112,7 +113,8 @@ export default function Page() {
       <h2 id="where-to-continue">Where to continue</h2>
       <p>
         Pair this demo with <Link href="/docs/openapi">OpenAPI generation</Link>
-        {", "}<Link href="/docs/typed-client">typed clients</Link>
+        {", "}
+        <Link href="/docs/typed-client">typed clients</Link>
         {", "}and the{" "}
         <Link href="/docs/tutorials/bookstore">Bookstore tutorial</Link> for a
         smaller end-to-end build.

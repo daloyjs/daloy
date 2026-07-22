@@ -66,10 +66,12 @@ export default function Page() {
       <p>
         Create a database at{" "}
         <a href="https://app.planetscale.com" target="_blank" rel="noreferrer">
-          app.planetscale.com</a>
+          app.planetscale.com
+        </a>
         {", "}generate a password, and copy the host plus credentials. Set them
         as <code>DATABASE_HOST</code>
-        {", "}<code>DATABASE_USERNAME</code>
+        {", "}
+        <code>DATABASE_USERNAME</code>
         {", "}and <code>DATABASE_PASSWORD</code>.
       </p>
 
@@ -104,7 +106,7 @@ export const planetscalePlugin = {
         Declaration files are exempt from type-checking when{" "}
         <code>skipLibCheck</code> is on (the scaffolded default), so a broken
         import inside a <code>.d.ts</code> fails silently and{" "}
-        <code>state.db</code> quietly degrades to <code>any</code>.
+        <code>state.db</code> degrades to <code>any</code>.
       </p>
       <CodeBlock
         code={`// src/db/planetscale.ts (same module as the plugin above)
@@ -208,7 +210,8 @@ export const db = drizzle({
         constraints by default on MySQL unless you enable them in database
         settings, so set <code>relationMode = &quot;prisma&quot;</code>
         in your <code>schema.prisma</code> when you are using the default no-FK
-        mode, and point <code>DATABASE_URL</code> at the serverless host (<code>aws.connect.psdb.cloud</code>).
+        mode, and point <code>DATABASE_URL</code> at the serverless host (
+        <code>aws.connect.psdb.cloud</code>).
       </p>
       <CodeBlock
         code={`pnpm add @prisma/adapter-planetscale

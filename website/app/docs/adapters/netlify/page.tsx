@@ -7,7 +7,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Netlify adapter",
   description:
-    "Deploy DaloyJS to Netlify Edge Functions (Deno) or Netlify Functions v2 (Node fetch-style). Both share the same Request → Response model.",
+    "Deploy DaloyJS to Netlify Edge Functions (Deno) or Netlify Functions v2 (Node fetch-style). Both share the same Request -> Response model.",
   path: "/docs/adapters/netlify",
   keywords: [
     "DaloyJS Netlify adapter",
@@ -27,9 +27,9 @@ export default function Page() {
         Netlify gives you two runtime options for an API:{" "}
         <strong>Edge Functions</strong> (Deno-based, global) and{" "}
         <strong>Functions v2</strong> (Node, fetch-style). Both speak the
-        web-standard <code>Request → Response</code> contract, so the DaloyJS
-        adapter is the same helper in both places. Only the file location and
-        the optional config export change.
+        web-standard <code>Request -&gt; Response</code> contract, so the
+        DaloyJS adapter is the same helper in both places. Only the file
+        location and the optional config export change.
       </p>
 
       <BranchDiagram
@@ -37,7 +37,7 @@ export default function Page() {
         source={{
           eyebrow: "identical app",
           label: "Your DaloyJS App",
-          detail: "Request → Response",
+          detail: "Request -> Response",
         }}
         branches={[
           {
@@ -57,7 +57,7 @@ export default function Page() {
             tone: "muted",
           },
         ]}
-        caption="Edge and Functions v2 both speak Request → Response, so they share toWebHandler; only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2."
+        caption="Edge and Functions v2 both speak Request -> Response, so they share toWebHandler; only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2."
       />
 
       <h2 id="when-to-choose-netlify">When to choose Netlify</h2>
@@ -96,7 +96,8 @@ export const config: Config = {
       </h2>
       <p>
         Functions v2 is GA and is the recommended way to write Node functions on
-        Netlify. The old v1 lambda-style handler (<code>exports.handler = (event, context) =&gt; ...</code>) is legacy. It
+        Netlify. The old v1 lambda-style handler (
+        <code>exports.handler = (event, context) =&gt; ...</code>) is legacy. It
         still works for compatibility but you should write new code in v2.
       </p>
       <CodeBlock

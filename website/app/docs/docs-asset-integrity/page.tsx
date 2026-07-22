@@ -40,7 +40,7 @@ export default function Page() {
       <p>
         DaloyJS ships version-exact default assets with matching{" "}
         <strong>Subresource Integrity (SRI)</strong> hashes. It emits an{" "}
-        <code>integrity=&quot;…&quot;</code> attribute plus a{" "}
+        <code>integrity=&quot;...&quot;</code> attribute plus a{" "}
         <code>crossorigin</code> attribute on the matching{" "}
         <code>&lt;script&gt;</code> / <code>&lt;link&gt;</code> tag, so the
         browser refuses to execute an asset whose bytes don&apos;t match the

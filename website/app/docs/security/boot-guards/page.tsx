@@ -28,13 +28,9 @@ export default function Page() {
     <>
       <h1>Boot guards</h1>
       <blockquote>
-        <strong>Think of it like…</strong> the engine check that won&apos;t let
-        your car start if the parking brake is on, the doors aren&apos;t shut,
-        or a seatbelt isn&apos;t buckled. It is much better to fail loudly in
-        the driveway than to discover the problem at the first intersection
-        under load. Boot guards turn the most common misconfigurations (wildcard
-        CORS with credentials, weak session secrets, unconfigured proxy headers)
-        into refuse-to-start errors.
+        Boot guards stop the app when they find unsafe configuration, including
+        credentialed wildcard CORS, weak session secrets, and missing proxy
+        trust settings.
       </blockquote>
       <p>
         Daloy ships the boot-guards slice of the secure-by-default initiative:
@@ -50,10 +46,12 @@ export default function Page() {
         Every guard is gated on the resolved environment being{" "}
         <code>production</code> (sources:{" "}
         <code>
-          app({"{"} env: &quot;production&quot; {"}"})</code>
+          app({"{"} env: &quot;production&quot; {"}"})
+        </code>
         {", "}then{" "}
         <code>
-          app({"{"} production: true {"}"})</code>
+          app({"{"} production: true {"}"})
+        </code>
         {", "}then <code>NODE_ENV === &quot;production&quot;</code>) so dev and
         CI workflows keep working with sample secrets and ad-hoc headers. The
         single master escape hatch{" "}
@@ -102,12 +100,14 @@ export default function Page() {
           app.use(session({"{"} secret {"}"}))
         </code>{" "}
         now refuses to register in production when the secret is shorter than 32
-        UTF-8 bytes, matches a well-known placeholder (<code>&quot;changeme&quot;</code>
+        UTF-8 bytes, matches a well-known placeholder (
+        <code>&quot;changeme&quot;</code>
         {", "}
         <code>&quot;your-jwt-secret&quot;</code>
         {", "}
         <code>&quot;it-is-very-secret&quot;</code>
-        {", "} …), or is a single repeated character (<code>&quot;a&quot;.repeat(64)</code>
+        {", "} ...), or is a single repeated character (
+        <code>&quot;a&quot;.repeat(64)</code>
         {", "}
         <code>&quot;0&quot;.repeat(64)</code>). The check runs synchronously
         inside <code>app.use(...)</code> so the process exits during startup,
@@ -172,7 +172,8 @@ app.use(cors({ origin: (o) => o.endsWith(".example.com") }));`}
       </h2>
       <p>
         When any route accepts <code>POST</code>
-        {", "}<code>PUT</code>
+        {", "}
+        <code>PUT</code>
         {", "}
         <code>PATCH</code>
         {", "}or <code>DELETE</code> AND a <code>session()</code> hook is
@@ -197,7 +198,8 @@ app.post("/items", {
         Non-browser apps (machine-to-machine APIs, webhook receivers behind
         bearer auth) can acknowledge that CSRF does not apply with{" "}
         <code>
-          app({"{"} csrf: &quot;off&quot; {"}"})</code>
+          app({"{"} csrf: &quot;off&quot; {"}"})
+        </code>
         {": "}
       </p>
       <CodeBlock
@@ -218,7 +220,8 @@ app.use(session({ secret: process.env.SESSION_SECRET! }));
         is not set and a request arrives carrying <code>X-Forwarded-For</code>
         {", "}
         <code>X-Forwarded-Host</code>
-        {", "}<code>X-Forwarded-Proto</code>
+        {", "}
+        <code>X-Forwarded-Proto</code>
         {", "}
         <code>X-Forwarded-Port</code>
         {", "}or <code>X-Real-IP</code>
@@ -274,10 +277,13 @@ const app = new App({ env: "production", secureDefaults: false });`}
         The built-in auth middlewares (<code>bearerAuth</code>
         {", "}
         <code>basicAuth</code>
-        {", "}<code>jwk</code>
-        {", "}<code>httpSignatureAuth</code>
-        {", "}<code>clientCertAuth</code>) satisfy the guard automatically. For
-        a custom auth hook, or when authentication is actually enforced by an
+        {", "}
+        <code>jwk</code>
+        {", "}
+        <code>httpSignatureAuth</code>
+        {", "}
+        <code>clientCertAuth</code>) satisfy the guard automatically. For a
+        custom auth hook, or when authentication is actually enforced by an
         upstream gateway, wrap the hook with the exported{" "}
         <code>markAuthHook()</code> so the guard can see it.
       </p>
@@ -314,7 +320,8 @@ app.get(
         <code>markAuthHook()</code> stamps, in case you need to check for it
         yourself. Disable this guard along with the rest via{" "}
         <code>
-          app({"{"} secureDefaults: false {"}"})</code>
+          app({"{"} secureDefaults: false {"}"})
+        </code>
         {"."}
       </p>
 

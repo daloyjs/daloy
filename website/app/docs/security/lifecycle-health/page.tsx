@@ -25,12 +25,9 @@ export default function Page() {
     <>
       <h1>Lifecycle &amp; health</h1>
       <blockquote>
-        <strong>Think of it like…</strong> closing a kitchen at the end of the
-        night. Finish the orders already on the stove (drain in-flight
-        requests), turn off the burners safely (graceful shutdown with
-        <code>Connection: close</code>), and put a &quot;closed&quot; sign on
-        the door (<code>healthcheck</code>/<code>readinesscheck</code>) so the
-        next courier knows to come back later, not to hammer on the locked door.
+        Graceful shutdown drains in-flight requests and sends
+        <code>Connection: close</code>. Health and readiness checks keep new
+        traffic away from an instance that is starting or stopping.
       </blockquote>
       <p>
         Daloy ships the lifecycle & health slice of the secure-by-default
@@ -39,7 +36,8 @@ export default function Page() {
         <code>readinesscheck()</code> primitives. All three default-on the safe
         behaviour and let you opt out per-feature or globally with{" "}
         <code>
-          app({"{"} secureDefaults: false {"}"})</code>
+          app({"{"} secureDefaults: false {"}"})
+        </code>
         {"."}
       </p>
 
@@ -128,7 +126,8 @@ await app.close(10_000, "SIGTERM");
       </p>
       <ul>
         <li>
-          Omitted: install in production (<code>env: &quot;production&quot;</code> or{" "}
+          Omitted: install in production (
+          <code>env: &quot;production&quot;</code> or{" "}
           <code>NODE_ENV === &quot;production&quot;</code>), skip elsewhere.
         </li>
         <li>
@@ -192,10 +191,12 @@ app.readinesscheck({
       <p>
         Disable the whole slice with{" "}
         <code>
-          new App({"{"} secureDefaults: false {"}"})</code>
+          new App({"{"} secureDefaults: false {"}"})
+        </code>
         {", "}or just the crash handlers with{" "}
         <code>
-          new App({"{"} crashOnUnhandledRejection: false {"}"})</code>
+          new App({"{"} crashOnUnhandledRejection: false {"}"})
+        </code>
         {". "}Health and readiness routes are opt-in, no auto-registration
         happens, the framework only flips behaviour when you call{" "}
         <code>app.healthcheck()</code> / <code>app.readinesscheck()</code>{" "}

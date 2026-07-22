@@ -60,12 +60,13 @@ export default function Page() {
       <h2 id="1-provision">1. Provision</h2>
       <ol>
         <li>
-          For testing, open <strong>Email Sandbox → Inboxes</strong> and copy
-          the inbox <strong>ID</strong> plus an <strong>API token</strong>{" "}
+          For testing, open <strong>Email Sandbox -&gt; Inboxes</strong> and
+          copy the inbox <strong>ID</strong> plus an <strong>API token</strong>{" "}
           scoped to the sandbox.
         </li>
         <li>
-          For production, open <strong>Email Sending → Sending Domains</strong>
+          For production, open{" "}
+          <strong>Email Sending -&gt; Sending Domains</strong>
           {", "}
           verify a domain via SPF/DKIM/DMARC records, then create an API token
           with <em>Email Sending</em> permissions.
@@ -193,7 +194,8 @@ app.post(
 
       <h2 id="templates">Templates</h2>
       <p>
-        Create a template in <strong>Email Sending → Email Templates</strong>
+        Create a template in{" "}
+        <strong>Email Sending -&gt; Email Templates</strong>
         {", "}
         then send it by UUID and provide variables instead of{" "}
         <code>subject</code>/<code>text</code>/<code>html</code>

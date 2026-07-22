@@ -48,7 +48,8 @@ export default function Page() {
           target="_blank"
           rel="noreferrer"
         >
-          server-side PayPal flow</a>
+          server-side PayPal flow
+        </a>
         {"."}
       </p>
 
@@ -59,25 +60,20 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          <strong>
-            <code>braintree</code> (this guide)</strong>
+          <code>braintree</code> (this guide)
           {": "}the long-standing Braintree server SDK. Uses the classic
           REST/XML gateway with a polished promise-based API. Production-ready,
           actively maintained, and what every Braintree docs example uses.
         </li>
         <li>
-          <strong>
-            <code>@braintree/graphql-client-node</code>
-          </strong>
+          <code>@braintree/graphql-client-node</code>
           {": "}a thin GraphQL client for the same gateway. Useful if you want
           to write GraphQL queries directly, but you&apos;ll re-implement a lot
           that the classic SDK gives you for free. Skip unless you have a
           reason.
         </li>
         <li>
-          <strong>
-            <code>@paypal/paypal-server-sdk</code>
-          </strong>
+          <code>@paypal/paypal-server-sdk</code>
           {": "}the <em>PayPal REST</em> SDK (Checkout / Orders v2). Different
           product, different account, different API. Don&apos;t install it for a
           Braintree integration.
@@ -106,7 +102,7 @@ export default function Page() {
           from the sandbox control panel.
         </li>
         <li>
-          In <strong>Settings → Processing</strong>
+          In <strong>Settings -&gt; Processing</strong>
           {", "}link your sandbox PayPal Business account so PayPal nonces flow
           through the same gateway as cards.
         </li>
@@ -269,7 +265,8 @@ app.post(
           rel="noreferrer"
         >
           <code>deviceData</code>
-        </a>), submit a sale. Always send <code>amount</code> as a string with two
+        </a>
+        ), submit a sale. Always send <code>amount</code> as a string with two
         decimals, floats lose pennies.
       </p>
       <CodeBlock
@@ -354,8 +351,8 @@ app.post(
         <code>application/x-www-form-urlencoded</code> with two fields:{" "}
         <code>bt_signature</code> and <code>bt_payload</code>
         {". "}Pass them to <code>webhookNotification.parse()</code>
-        {", "}which verifies the signature and rejects tampered payloads with
-        an <code>InvalidSignatureError</code>
+        {", "}which verifies the signature and rejects tampered payloads with an{" "}
+        <code>InvalidSignatureError</code>
         {". "}You don&apos;t hash anything yourself.
       </p>
       <CodeBlock
@@ -404,8 +401,8 @@ app.post(
         {", "}
         <code>result.transaction.processorResponseCode</code>
         {", "}and <code>result.errors.deepErrors()</code>
-        {". "}The plugin above turns the unsuccessful result into a thrown
-        error so it lands in your <Link href="/docs/errors">problem+json</Link>{" "}
+        {". "}The plugin above turns the unsuccessful result into a thrown error
+        so it lands in your <Link href="/docs/errors">problem+json</Link>{" "}
         mapper. For genuine network failures the SDK throws an exception
         directly.
       </p>
@@ -437,7 +434,8 @@ app.post(
           target="_blank"
           rel="noreferrer"
         >
-          server SDK deprecation policy</a>
+          server SDK deprecation policy
+        </a>
         {": "}major versions are supported for 3 years and you should pin a
         recent major in
         <code>package.json</code>

@@ -30,10 +30,12 @@ export default function Page() {
         </a>{" "}
         is a MENA-region payment gateway with strong coverage of{" "}
         <strong>Mada</strong>
-        {", "}<strong>KNET</strong>
+        {", "}
+        <strong>KNET</strong>
         {", "}
         <strong>BenefitPay</strong>
-        {", "}<strong>STC Pay</strong>
+        {", "}
+        <strong>STC Pay</strong>
         {", "}
         <strong>OmanNet</strong>
         {", "}cards, and Apple Pay. This guide uses the official{" "}
@@ -51,49 +53,48 @@ export default function Page() {
       <h2 id="what-you-should-know-up-front">What you should know up front</h2>
       <ul>
         <li>
-          <strong>
-            The official SDK is callback-based with positional array arguments.
-          </strong>{" "}
-          It works, but it&apos;s noisy. We&apos;ll wrap{" "}
+          The official SDK is callback-based with positional array arguments. It
+          works, but it&apos;s noisy. We&apos;ll wrap{" "}
           <code>createPaymentPage</code> once in a Promise-returning function
           with named object arguments, every route handler stays clean after
           that.
         </li>
         <li>
-          <strong>Regions are not interchangeable.</strong> Your profile lives
-          in one of <code>ARE</code>
-          {", "}<code>SAU</code>
-          {", "}<code>OMN</code>
+          Regions are not interchangeable. Your profile lives in one of{" "}
+          <code>ARE</code>
+          {", "}
+          <code>SAU</code>
+          {", "}
+          <code>OMN</code>
           {", "}
           <code>JOR</code>
-          {", "}<code>EGY</code>
-          {", "}<code>IRQ</code>
-          {", "}<code>PSE</code>
+          {", "}
+          <code>EGY</code>
+          {", "}
+          <code>IRQ</code>
+          {", "}
+          <code>PSE</code>
           {", "}or <code>GLOBAL</code>
           {". "}Passing the wrong region results in{" "}
           <em>&quot;Invalid credentials&quot;</em> even when the key is right.
         </li>
         <li>
-          <strong>It&apos;s a redirect flow.</strong> You call{" "}
-          <code>createPaymentPage</code>
+          It&apos;s a redirect flow. You call <code>createPaymentPage</code>
           {", "}PayTabs returns a <code>redirect_url</code>
           {", "}the customer pays there and comes back to your <em>return</em>{" "}
           URL. The <em>callback</em> URL is the server-side IPN, that&apos;s the
           only signal you should mark an order paid on.
         </li>
         <li>
-          <strong>IPN signature is HMAC-SHA256.</strong> The raw POST body is
-          signed with your <code>server_key</code> and sent in the{" "}
-          <code>signature</code> header. Verify before trusting anything in the
-          payload.
+          IPN signature is HMAC-SHA256. The raw POST body is signed with your{" "}
+          <code>server_key</code> and sent in the <code>signature</code> header.
+          Verify before trusting anything in the payload.
         </li>
         <li>
-          <strong>
-            Use <code>tran_type: &quot;sale&quot;</code>
-          </strong>{" "}
-          for direct capture, <code>&quot;auth&quot;</code> for an authorisation
-          you&apos;ll capture later, and{" "}
-          <code>tran_class: &quot;ecom&quot;</code> for normal online checkouts.
+          Use <code>tran_type: &quot;sale&quot;</code> for direct capture,{" "}
+          <code>&quot;auth&quot;</code> for an authorisation you&apos;ll capture
+          later, and <code>tran_class: &quot;ecom&quot;</code> for normal online
+          checkouts.
         </li>
       </ul>
 
@@ -106,11 +107,12 @@ export default function Page() {
             target="_blank"
             rel="noreferrer"
           >
-            PayTabs merchant dashboard</a>
+            PayTabs merchant dashboard
+          </a>
           {"."}
         </li>
         <li>
-          Developers → Profile to grab your <strong>Profile ID</strong> and{" "}
+          Developers -&gt; Profile to grab your <strong>Profile ID</strong> and{" "}
           <strong>Server Key</strong>
           {". "}Note your <strong>Region</strong>.
         </li>
@@ -119,7 +121,7 @@ export default function Page() {
           all require explicit activation, some need extra paperwork).
         </li>
         <li>
-          In Developers → IPN, point the IPN URL at your DaloyJS webhook
+          In Developers -&gt; IPN, point the IPN URL at your DaloyJS webhook
           endpoint.
         </li>
       </ol>
@@ -517,27 +519,25 @@ await state.paytabs.refund({
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          <strong>Wrap the SDK once, then forget it.</strong> The
-          positional-array signatures are easy to typo and harder to grep for
-          than named-object arguments. The plugin above pays that cost in one
-          place.
+          Wrap the SDK once, then forget it. The positional-array signatures are
+          easy to typo and harder to grep for than named-object arguments. The
+          plugin above pays that cost in one place.
         </li>
         <li>
-          <strong>Verify the IPN signature, always.</strong> Don&apos;t fall
-          back to &quot;the IP is from PayTabs&quot;, IPs change, and HMAC over
-          the raw body is the only verification PayTabs actually publishes a
-          contract for.
+          Verify the IPN signature, always. Don&apos;t fall back to &quot;the IP
+          is from PayTabs&quot;, IPs change, and HMAC over the raw body is the
+          only verification PayTabs actually publishes a contract for.
         </li>
         <li>
-          <strong>Fulfil on IPN, not on return URL.</strong> The customer can
-          close the tab mid-3DS. The IPN is the source of truth; the return URL
-          just renders a confirmation page.
+          Fulfil on IPN, not on return URL. The customer can close the tab
+          mid-3DS. The IPN is the source of truth; the return URL just renders a
+          confirmation page.
         </li>
         <li>
-          <strong>Consider the REST API directly if you need edge.</strong> The
-          Node SDK predates the wide adoption of edge runtimes. A 30-line{" "}
-          <code>fetch</code> wrapper gives you the same shape and works on
-          Workers/Edge, at the cost of maintaining the request shape yourself.
+          Consider the REST API directly if you need edge. The Node SDK predates
+          the wide adoption of edge runtimes. A 30-line <code>fetch</code>{" "}
+          wrapper gives you the same shape and works on Workers/Edge, at the
+          cost of maintaining the request shape yourself.
         </li>
       </ul>
 

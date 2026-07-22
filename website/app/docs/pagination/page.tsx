@@ -43,7 +43,8 @@ export default function Page() {
       </p>
       <p>
         Everything is built on Web-standard <code>URL</code>
-        {", "}<code>btoa</code> / <code>atob</code>
+        {", "}
+        <code>btoa</code> / <code>atob</code>
         {", "}and <code>JSON</code>
         {", "}so it runs unchanged on Node, Bun, Deno, and Cloudflare Workers.
       </p>
@@ -175,7 +176,8 @@ const payload = decodeCursor<{ id: number; createdAt: string }>(cursor);
         <code>prev</code>
         {", "}and <code>first</code> page URLs, preserving every other query
         parameter (filters, <code>limit</code>
-        {", "} …), then serializes them into a single <code>Link</code> header.
+        {", "} ...), then serializes them into a single <code>Link</code>{" "}
+        header.
       </p>
       <CodeBlock
         code={`const { links, linkHeader, urls } = buildPageLinks({
@@ -243,9 +245,9 @@ set.headers.set("Link", linkHeader);
       <ul>
         <li>
           Cursors are <strong>opaque, not secret</strong>
-          {": "}they are encoded, not encrypted or signed. Never trust a
-          decoded cursor for authorization; always re-scope the underlying query
-          by the authenticated principal on the server.
+          {": "}they are encoded, not encrypted or signed. Never trust a decoded
+          cursor for authorization; always re-scope the underlying query by the
+          authenticated principal on the server.
         </li>
         <li>
           <code>decodeCursor()</code> caps input length, rejects malformed

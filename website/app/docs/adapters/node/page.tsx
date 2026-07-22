@@ -119,10 +119,10 @@ await close();`}
       <ul>
         <li>
           <code>requestTimeout</code>
-          {", "}<code>headersTimeout</code>
-          {", "}and <code>keepAliveTimeout</code> set to safe production
-          values. Both request timeouts derive from{" "}
-          <code>connectionTimeoutMs</code>
+          {", "}
+          <code>headersTimeout</code>
+          {", "}and <code>keepAliveTimeout</code> set to safe production values.
+          Both request timeouts derive from <code>connectionTimeoutMs</code>
           {", "}and the adapter also lowers Node&apos;s connection-check
           interval to a fraction of that value so a slowloris (a client that
           stalls or trickles its request headers to hold a socket open) is
@@ -228,19 +228,13 @@ serve(app, {
       </p>
       <ul>
         <li>
-          <strong>
-            <code>maxConnections</code>
-          </strong>{" "}
-          (connection layer) caps how many sockets are ever accepted, keeping
-          the event loop in its measured sweet spot.
+          <code>maxConnections</code> (connection layer) caps how many sockets
+          are ever accepted, keeping the event loop in its measured sweet spot.
         </li>
         <li>
-          <strong>
-            <code>loadShedding()</code>
-          </strong>{" "}
-          (application layer) sheds requests when an honest overload signal,
-          event-loop <em>delay</em> (queue backlog) or in-flight concurrency,
-          trips a threshold.
+          <code>loadShedding()</code> (application layer) sheds requests when an
+          reliable overload signal, event-loop <em>delay</em> (queue backlog) or
+          in-flight concurrency, trips a threshold.
         </li>
       </ul>
       <p>
@@ -248,7 +242,7 @@ serve(app, {
         <strong>utilization</strong> is the wrong knob for an always-busy,
         CPU-bound server, which can sit near 100% utilization while perfectly
         healthy and would shed good traffic. Event-loop <strong>delay</strong>{" "}
-        (how far behind the loop has fallen) is the honest overload signal.
+        (how far behind the loop has fallen) is the reliable overload signal.
         Likewise, <code>requestTimeoutMs</code> alone does <em>not</em> fix the
         cliff: it wraps handler execution, not the accept-queue wait where the
         multi-second tail actually lives.
