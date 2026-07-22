@@ -1,6 +1,9 @@
 // DaloyJS — large streaming response. GET /stream returns a ~10 MiB body
-// chunked through a Node Readable (Fastify/Koa/Express-style fast path on Node).
-import { Readable } from "node:stream";
+// chunked through a Web ReadableStream — the body type Daloy's response
+// contract actually supports for streaming. (A Node Readable is NOT a valid
+// handler body: it fails the `instanceof ReadableStream` check and falls
+// through to JSON serialization, which silently turned this fixture into a
+// ~130-byte JSON response and invalidated earlier streaming numbers.)
 import { z } from "zod";
 import { App } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
@@ -9,7 +12,7 @@ import { serve } from "@daloyjs/core/node";
 // streaming cost story and allocates a per-request child.
 const app = new App({ logger: false });
 
-const CHUNK = Buffer.alloc(64 * 1024, 0x61);
+const CHUNK = new Uint8Array(64 * 1024).fill(0x61);
 const TOTAL_CHUNKS = 160;
 
 app.route({
@@ -32,20 +35,20 @@ app.route({
   },
   handler: async () => {
     let sent = 0;
-    const body = new Readable({
-      read() {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
         if (sent >= TOTAL_CHUNKS) {
-          this.push(null);
+          controller.close();
           return;
         }
-        this.push(CHUNK);
+        controller.enqueue(CHUNK);
         sent++;
       },
     });
     return {
       status: 200,
       headers: { "content-type": "application/octet-stream" },
-      body: body as unknown as ReadableStream<Uint8Array>,
+      body,
     };
   },
 });

@@ -5,6 +5,12 @@
 // Why: directly validates whether body-handling fast paths scale, and where
 // they fall over (e.g. when streaming kicks in above an adapter buffer cap).
 //
+// Bandwidth semantics: the servers echo a tiny content-length ack, so
+// autocannon's own throughput field is RESPONSE bandwidth of that ack — not
+// the interesting number. The reported `uploadMBps` (req/s × body size) is
+// the request UPLOAD bandwidth the sweep is actually about; the ack-side
+// figure is kept in the JSON as `responseMBps` for completeness.
+//
 // Usage:
 //   node body-size-sweep.mjs
 //   node body-size-sweep.mjs --only=daloy
@@ -79,7 +85,10 @@ async function benchOne(fw) {
         const r = await runAutocannon({ duration: DURATION, connections: CONNECTIONS, body });
         samples.push({
           reqPerSec: r.requests.average,
-          throughputMBps: r.throughput.average / 1024 / 1024,
+          // Request upload bandwidth: bytes the server ingested per second.
+          uploadMBps: (r.requests.average * sz.bytes) / 1024 / 1024,
+          // Response bandwidth of the tiny ack (autocannon's throughput).
+          responseMBps: r.throughput.average / 1024 / 1024,
           p50: r.latency.p50,
           p99: r.latency.p99,
           non2xx: r.non2xx ?? 0,
@@ -87,11 +96,13 @@ async function benchOne(fw) {
         });
       }
       const rps = stats(samples.map((s) => s.reqPerSec));
-      const tput = stats(samples.map((s) => s.throughputMBps));
+      const upload = stats(samples.map((s) => s.uploadMBps));
+      const resp = stats(samples.map((s) => s.responseMBps));
       out[sz.id] = {
         bytes: sz.bytes,
         reqPerSec: rps,
-        throughputMBps: tput,
+        uploadMBps: upload,
+        responseMBps: resp,
         p50: samples.reduce((a, s) => a + s.p50, 0) / samples.length,
         p99: samples.reduce((a, s) => a + s.p99, 0) / samples.length,
         errors: samples.reduce((a, s) => a + s.non2xx + s.errors, 0),
@@ -99,7 +110,7 @@ async function benchOne(fw) {
       };
       console.error(metricsLine(sz.id, [
         c.green(c.bold(fmt(rps.median))) + c.dim(" req/s"),
-        c.cyan(tput.median.toFixed(1)) + c.dim(" MiB/s"),
+        c.cyan(upload.median.toFixed(1)) + c.dim(" up-MiB/s"),
         metric("p99", out[sz.id].p99.toFixed(2), { unit: "ms" }),
         out[sz.id].errors ? c.red(`${sym.warn} ${out[sz.id].errors} errors`) : "",
       ].filter(Boolean), { labelWidth: 8 }));
@@ -135,14 +146,14 @@ async function main() {
         r.framework,
         sz.id,
         fmt(s.reqPerSec.median),
-        s.throughputMBps.median.toFixed(1),
+        s.uploadMBps.median.toFixed(1),
         s.p99.toFixed(2),
         String(s.errors),
       ]);
     }
   }
   console.log("\n" + summary({
-    head: ["Framework", "size", "req/s (median)", "MiB/s (median)", "p99 (ms)", "errors"],
+    head: ["Framework", "size", "req/s (median)", "upload MiB/s (median)", "p99 (ms)", "errors"],
     rows: tableRows,
     align: ["l", "l", "r", "r", "r", "r"],
     highlight: (row) => row[0].includes("daloy"),

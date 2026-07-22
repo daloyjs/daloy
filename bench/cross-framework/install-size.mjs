@@ -7,6 +7,12 @@
 // package and its transitive deps (skipping symlinks-to-elsewhere and
 // duplicated content via pnpm's content-addressable store).
 //
+// Workspace-linked packages (the local @daloyjs/core `link:../..`) are NOT
+// walked: realpath resolves the link to the repository root, so a naive walk
+// would count the entire repo (node_modules, website, .git, …) as "install
+// size". Those roots are measured with `npm pack --dry-run --json` instead,
+// which reports the publish footprint an npm consumer actually installs.
+//
 // Each framework is measured in two variants where applicable:
 //   - "minimal"       = just the framework's core packages (router/runtime).
 //   - "secure parity" = framework + the middleware needed to match Daloy's
@@ -20,6 +26,7 @@
 //   node install-size.mjs --only=daloy
 
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync, realpathSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { resultsPath, ROOT, machineInfo, parseArgs, fmt } from "./lib/common.mjs";
@@ -60,6 +67,37 @@ function findPackageRoot(pkgName) {
   const direct = path.join(ROOT, "node_modules", pkgName);
   if (existsSync(direct)) return realpathSync(direct);
   return null;
+}
+
+// Everything installed from the registry realpaths into this folder's
+// node_modules (pnpm's .pnpm store lives under it). A `link:`/`workspace:`
+// package realpaths OUTSIDE it — walking that directory would measure the
+// whole source repository, not an install.
+const NODE_MODULES_REAL = realpathSync(path.join(ROOT, "node_modules")) + path.sep;
+function isWorkspaceLink(pkgRoot) {
+  return !pkgRoot.startsWith(NODE_MODULES_REAL);
+}
+
+// Measure a workspace-linked package by its publish footprint: what `npm
+// pack` would ship (honors the "files" allowlist), i.e. what a registry
+// consumer actually installs. --ignore-scripts keeps this hermetic — the
+// bench flow builds dist/ via prepare-daloy.mjs before this script runs.
+function measurePacked(pkgRoot) {
+  // Static command string via execSync: npm is `npm.cmd` on Windows, which
+  // Node refuses to execFileSync without a shell (and shell+args triggers
+  // DEP0190). No user input is interpolated.
+  const out = execSync("npm pack --dry-run --json --ignore-scripts", {
+    cwd: pkgRoot,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  // npm's --json shape varies by version: an array of entries, or an object
+  // keyed by package name.
+  const parsed = JSON.parse(out);
+  const info = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
+  if (!info?.unpackedSize) throw new Error(`unexpected npm pack --json output in ${pkgRoot}`);
+  return { bytes: info.unpackedSize, files: info.entryCount ?? info.files?.length ?? 0, tarballBytes: info.size };
 }
 
 // pnpm-aware: resolve a dependency from a specific parent package's location
@@ -146,7 +184,19 @@ function measure(pkgNames) {
   const seen = new Set();
   let ownBytes = 0;
   let ownFiles = 0;
+  let tarballBytes = null;
+  let packedRoots = false;
   for (const r of roots) {
+    if (isWorkspaceLink(r.root)) {
+      // link:/workspace: package — realpath escapes node_modules, so walking
+      // it would count the whole source repo. Use the publish footprint.
+      const p = measurePacked(r.root);
+      ownBytes += p.bytes;
+      ownFiles += p.files;
+      tarballBytes = (tarballBytes ?? 0) + p.tarballBytes;
+      packedRoots = true;
+      continue;
+    }
     const w = walkSize(r.root, seen);
     ownBytes += w.bytes;
     ownFiles += w.files;
@@ -174,6 +224,10 @@ function measure(pkgNames) {
     totalFiles,
     directDepCount: directDeps.size,
     transitiveDepCount: transitive.size,
+    // True when any root was a workspace link measured via `npm pack`
+    // (publish footprint) rather than a node_modules walk.
+    measuredViaPack: packedRoots,
+    tarballBytes,
   };
 }
 
@@ -189,7 +243,8 @@ async function main() {
         metric("own", `${(r.ownBytes / 1024).toFixed(1)} KiB / ${r.ownFiles} files`),
         metric("total", `${(r.totalBytes / 1024).toFixed(1)} KiB / ${r.totalFiles} files`, { color: c.cyan }),
         metric("deps", `${r.directDepCount} direct / ${r.transitiveDepCount} transitive`),
-      ], { labelWidth: 24 }));
+        r.measuredViaPack ? c.dim("(npm pack)") : "",
+      ].filter(Boolean), { labelWidth: 24 }));
     } catch (err) {
       console.error("  " + fail(`${label(fw)}: ${err.message}`));
       rows.push({ framework: fw.name, variant: fw.variant ?? null, error: err.message });

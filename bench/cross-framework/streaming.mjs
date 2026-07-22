@@ -7,6 +7,11 @@
 // We measure (a) requests/sec at 50 concurrent connections, and (b) bytes/sec
 // throughput.
 //
+// Preflight: before measuring, each fixture must actually stream the full
+// 10 MiB payload. A fixture that falls back to serializing the stream object
+// (e.g. a tiny JSON blob) would otherwise post a bogus req/s "win" — that row
+// is failed instead of recorded.
+//
 // Usage:
 //   node streaming.mjs
 //   node streaming.mjs --only=daloy
@@ -37,6 +42,7 @@ const WARMUP = Number(process.env.WARMUP ?? 10);
 const ITERATIONS = Number(process.env.ITERATIONS ?? 5);
 const CONNECTIONS = Number(process.env.CONNECTIONS ?? 50);
 const PORT = 3580;
+const EXPECTED_BYTES = 160 * 64 * 1024; // 10 MiB — must match every fixture
 
 function runAutocannon(duration) {
   return new Promise((resolve, reject) => {
@@ -56,6 +62,16 @@ async function benchOne(fw) {
   const child = await startServer(fw.file, { port: PORT });
   try {
     await waitForHealthy(PORT, "/health");
+    // Payload preflight: fail closed if the fixture does not stream the full
+    // 10 MiB body. Without this, a serialization fallback (stream object →
+    // tiny JSON) measures as an absurdly fast — and meaningless — result.
+    const pre = await fetch(`http://127.0.0.1:${PORT}/stream`);
+    const preBytes = (await pre.arrayBuffer()).byteLength;
+    if (pre.status !== 200 || preBytes !== EXPECTED_BYTES) {
+      throw new Error(
+        `preflight failed: GET /stream → ${pre.status} with ${preBytes} bytes (expected ${EXPECTED_BYTES})`,
+      );
+    }
     await runAutocannon(WARMUP);
     const samples = [];
     for (let i = 0; i < ITERATIONS; i++) {
