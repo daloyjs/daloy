@@ -260,7 +260,7 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Spoiler: if your worry was &quot;does my framework actively
+            If your worry was &quot;does my framework actively{" "}
             <em>undermine</em> the architecture in that post,&quot; the answer
             is no. The boring defenses are on by default. The
             shared-responsibility line is drawn cleanly.
@@ -515,10 +515,8 @@ export default function BlogPostPage() {
           </ol>
 
           <p>
-            These defenses are familiar because they still prevent breaches. The
-            Aikido post focuses on the same boring controls that that prevent
-            breaches. Daloy&apos;s job is to make sure you can&apos;t
-            accidentally skip them.
+            Daloy&apos;s job is to make sure you can&apos;t accidentally skip
+            the boring controls that still prevent breaches.
           </p>
 
           <p className="text-sm text-muted-foreground">

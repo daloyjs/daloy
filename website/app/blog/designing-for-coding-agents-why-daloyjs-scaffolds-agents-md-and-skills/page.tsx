@@ -11,7 +11,7 @@ const POST = {
   title:
     "Designing for Coding Agents: Why DaloyJS Scaffolds AGENTS.md and Skills",
   description:
-    "Every project created by create-daloy ships with a short AGENTS.md and a focused .agents/skills/daloyjs-best-practices/SKILL.md. Here's why those two files matter, why they're intentionally small, and how they let Copilot, Claude Code, Cursor, Codex, and friends make safer edits in your scaffolded DaloyJS app from the first prompt.",
+    "Every project created by create-daloy ships with a short AGENTS.md and a focused .agents/skills/daloyjs-best-practices/SKILL.md. Those two files are intentionally small, and they help Copilot, Claude Code, Cursor, Codex, and friends make safer edits in your scaffolded DaloyJS app from the first prompt.",
   date: "2026-06-06",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
@@ -642,10 +642,10 @@ export default function BlogPostPage() {
           <h2>Keep instructions close to the code</h2>
 
           <p>
-            The boring secret of working well with coding agents is the same
-            boring secret of working well with new human joiners: write down the
-            load-bearing conventions, keep them short, link to the deeper manual
-            when one is needed, and enforce what you can in tooling. DaloyJS
+            Working well with coding agents looks a lot like onboarding a new
+            human joiner: write down the load-bearing conventions, keep them
+            short, link to the deeper manual when one is needed, and enforce
+            what you can in tooling. DaloyJS
             just makes sure the scaffold gives you a head start on all four.
           </p>
 

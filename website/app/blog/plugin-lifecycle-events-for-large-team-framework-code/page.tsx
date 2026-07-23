@@ -589,9 +589,9 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Two callbacks. That&apos;s the answer. Two callbacks and the
-            discipline to put the platform code in plugins instead of inside
-            routes.
+            Two callbacks, <code>onPluginInstalled</code> and{" "}
+            <code>onShutdown</code>, plus the discipline to put the platform
+            code in plugins instead of inside routes.
           </p>
 
           <h2>The shape of the problem</h2>

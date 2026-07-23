@@ -11,7 +11,7 @@ const POST = {
   title:
     "The DaloyJS CLI: Inspecting Routes, Schemas, OpenAPI, and Contract Health",
   description:
-    "daloy inspect is the CLI you point at your App before a PR merges. It prints the full route table, schema presence, contract issues, and the live OpenAPI 3.1 document, loaded straight from your TypeScript entry through tsx with zero build step. This is the API-surface review tool platform teams keep wishing they had.",
+    "daloy inspect is the CLI you point at your App before a PR merges. It prints the full route table, schema presence, contract issues, and the live OpenAPI 3.1 document, loaded straight from your TypeScript entry through tsx with zero build step.",
   date: "2026-06-05",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
@@ -594,8 +594,8 @@ export default function BlogPostPage() {
           <p>
             Two hard gates (<code>--check</code> + OpenAPI diff) and one soft
             helper (sticky PR comment with the route-table diff against{" "}
-            <code>main</code>). The hard gates do the policing. The soft helper
-            does the persuading.
+            <code>main</code>). Hard gates fail the build; the sticky comment is
+            optional review help.
           </p>
 
           <h2>Bonus: daloy dev, same entry-loading logic</h2>

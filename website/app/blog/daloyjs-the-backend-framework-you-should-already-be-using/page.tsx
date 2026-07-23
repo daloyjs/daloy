@@ -146,10 +146,9 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            That is why DaloyJS stands out. It is not trying to win by making
-            routing 3 percent prettier. It wins by bundling the things teams
-            usually forget: typed contracts, OpenAPI, docs, client generation,
-            and a security posture that does not depend on whether somebody had
+            That is why DaloyJS stands out. It bundles the things teams usually
+            forget: typed contracts, OpenAPI, docs, client generation, and a
+            security posture that does not depend on whether somebody had
             enough coffee before opening the middleware docs.
           </p>
 
@@ -225,14 +224,14 @@ export default function BlogPostPage() {
             better deal.
           </p>
 
-          <h2>It deserves more attention than it gets</h2>
+          <h2>What I would start with on a new service</h2>
 
           <p>
-            DaloyJS still feels underrated to me because it is solving the least
-            glamorous problems first. Install-time safety. Runtime defaults.
-            Contract drift. Typed clients. Portable execution. None of that is a
-            flashy conference demo, but it is exactly what makes teams faster
-            once the demo is over and actual maintenance begins.
+            DaloyJS is solving the least glamorous problems first: install-time
+            safety, runtime defaults, contract drift, typed clients, and
+            portable execution. None of that is a flashy conference demo, but it
+            is exactly what makes teams faster once the demo is over and actual
+            maintenance begins.
           </p>
 
           <p>

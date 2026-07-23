@@ -727,9 +727,8 @@ export default function BlogPostPage() {
             But once you have them on, you get a property that&apos;s very hard
             to get any other way: a future XSS bug in your codebase has to land
             specifically in the one file that calls <code>createPolicy</code> to
-            be exploitable. That&apos;s a shockingly large blast-radius
-            reduction for what amounts to a config object and a one-time
-            refactor.
+            be exploitable. That is a large blast-radius reduction for a config
+            object and a one-time refactor.
           </p>
 
           <h2>Where to go next</h2>

@@ -699,8 +699,7 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            On the frontend, the entire universe of error handling reduces to{" "}
-            <em>one</em> helper:
+            On the frontend, you can share one error helper across endpoints:
           </p>
 
           <EditorFrame
@@ -859,11 +858,10 @@ export default function BlogPostPage() {
             Problem Details standardizes the response shape, provided handlers
             use it. Ad-hoc JSON bypasses that contract, while non-JSON errors
             from upstream proxies still need client-side handling. Your
-            CDN&apos;s 502 HTML remains HTML. The the <code>type</code> URI is a{" "}
+            CDN&apos;s 502 HTML remains HTML. The <code>type</code> URI is a{" "}
             <em>stable identifier</em>
             {", "}not a link the client necessarily dereferences, treat it like
-            an enum value. Beyond those: it&apos;s the closest thing to a free
-            lunch the HTTP standards world has given us in years.
+            an enum value.
           </p>
 
           <h2>Where to go next</h2>

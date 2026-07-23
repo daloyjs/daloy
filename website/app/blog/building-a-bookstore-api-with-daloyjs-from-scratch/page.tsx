@@ -714,7 +714,8 @@ export default function BlogPostPage() {
             the <em>every framework on earth</em> bug of handlers receiving{" "}
             <code>&quot;20&quot;</code> when they asked for <code>20</code>
             {". "}
-            Schema-first means schema-once.
+            Define the schema once on the route, and validation, types, docs,
+            and the client all share it.
           </p>
 
           <EditorFrame
@@ -755,9 +756,9 @@ export default function BlogPostPage() {
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
               Problem Details post
             </Link>
-            {". "}For now, the punchline is: every wrong-shaped request your API
-            will ever see returns the same document shape. The frontend code
-            that handles it is one helper, total.
+            {". "}For now: every wrong-shaped request your API will ever see
+            returns the same document shape. The frontend code that handles it
+            is one helper, total.
           </p>
 
           <h2>Step 5: Wire it onto the App and serve</h2>

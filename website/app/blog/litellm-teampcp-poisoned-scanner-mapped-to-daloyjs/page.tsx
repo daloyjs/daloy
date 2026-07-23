@@ -10,7 +10,7 @@ const POST = {
   title:
     "When the Security Scanner Is the Attacker: The LiteLLM / TeamPCP Compromise, Mapped to DaloyJS",
   description:
-    "On March 24, 2026 the litellm Python package was backdoored after a poisoned Trivy GitHub Action stole the maintainer's PyPI token. The same attack pattern - compromised scanner action -> exfiltrated publish token -> malicious release with a startup-time payload - would have to clear nine of DaloyJS's existing CI gates before it could ship. Here's the stage-by-stage mapping.",
+    "On March 24, 2026 the litellm Python package was backdoored after a poisoned Trivy GitHub Action stole the maintainer's PyPI token. The same attack pattern - compromised scanner action -> exfiltrated publish token -> malicious release with a startup-time payload - would have to clear nine of DaloyJS's existing CI gates before it could ship. Stage-by-stage mapping below.",
   date: "2026-06-15",
   readingTime: "9 min read",
   author: "Devlin Duldulao",
@@ -486,10 +486,9 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            None of this is hypothetical. Open <code>.github/workflows/</code>{" "}
-            in the repo, run <code>pnpm verify</code> locally, look at the
-            commit SHAs on every <code>uses:</code> line. The receipts are in
-            the workflow files.
+            Open <code>.github/workflows/</code> in the repo, run{" "}
+            <code>pnpm verify</code> locally, look at the commit SHAs on every{" "}
+            <code>uses:</code> line. The receipts are in the workflow files.
           </p>
 
           <p className="text-sm text-muted-foreground">

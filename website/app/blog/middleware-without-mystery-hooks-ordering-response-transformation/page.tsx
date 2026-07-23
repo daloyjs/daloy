@@ -520,9 +520,9 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            The good news: there are six hooks. The better news: they fire in
-            the order they appear in the code, in the order you registered them,
-            in three nested scopes (global -&gt; group -&gt; route). The file
+            There are six hooks. They fire in the order they appear in the code,
+            in the order you registered them, in three nested scopes (global
+            -&gt; group -&gt; route). The file
             exposes the sequence directly, without adapter shims, inheritance
             chains, or hidden re-entry.
           </p>
@@ -835,9 +835,9 @@ export default function BlogPostPage() {
           <p>
             Middleware in DaloyJS is one interface, <code>Hooks</code>
             {", "}with six method slots. Three scopes, composed in a fixed
-            order. One side-channel for errors. That is the whole machine. Once
-            the mental model clicks, you stop asking <em>where does this go</em>{" "}
-            and start asking <em>which scope</em>
+            order. One side-channel for errors. Once the mental model clicks,
+            you stop asking <em>where does this go</em> and start asking{" "}
+            <em>which scope</em>
             {": "}which is a far more interesting question, and one whose answer
             you can usually argue about in a Slack thread without anyone getting
             hurt.

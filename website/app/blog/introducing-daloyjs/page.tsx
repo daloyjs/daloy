@@ -297,7 +297,8 @@ export default function BlogPostPage() {
           </p>
 
           <blockquote>
-            <strong>One route. Many runtimes. Zero ceremony.</strong>
+            One route definition, many runtimes, and as little ceremony as we
+            can get away with.
           </blockquote>
 
           <p>
@@ -562,7 +563,7 @@ export default function BlogPostPage() {
             <li>The same application runs through five runtime adapters.</li>
           </ul>
 
-          <h2>What this post is anchoring</h2>
+          <h2>What later posts assume</h2>
 
           <p>
             This is the launch post, and every later post on this blog will
@@ -603,8 +604,7 @@ export default function BlogPostPage() {
             ten years ago, eight years ago, five years ago, and last Thursday.
             It removes a stack of recurring, boring, soul-eroding problems, the
             kind that cost you a Saturday at 2am, so you can spend your energy
-            on the actually interesting parts of your product. That&apos;s the
-            whole promise. One route, many runtimes, zero ceremony.
+            on the actually interesting parts of your product.
           </p>
 
           <p>

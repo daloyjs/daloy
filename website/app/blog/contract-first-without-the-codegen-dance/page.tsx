@@ -412,8 +412,8 @@ export default function BlogPostPage() {
             promised you that <em>one</em>{" "}
             <code>app.route(&#123;...&#125;)</code> call is the source of truth
             for validation, types, OpenAPI, the typed client, and contract
-            tests. That post was the &quot;tell&quot;. This post is the
-            &quot;show&quot;. We&apos;re going to define a single route, project
+            tests. This post walks one route into OpenAPI, the typed client, and
+            contract tests. We&apos;re going to define a single route, project
             it into all three artifacts on disk and in tests, then run{" "}
             <code>pnpm gen</code> and use the typed SDK from a separate Next.js
             frontend. The route remains the source, so there is no YAML copy to
@@ -547,7 +547,7 @@ export default function BlogPostPage() {
               feature tests. It catches the &quot;oh, two routes accidentally
               share an <code>operationId</code> because copy-paste&quot; bug
               that ruins your generated SDK before it&apos;s even generated.
-              Cheap to write, expensive to forget.
+              Cheap to add; costly when you skip it.
             </p>
           </ProjectionStep>
 
@@ -706,8 +706,7 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Thanks for reading. Now go delete a hand-written API client. It will
-            be the best part of your week.
+            Go delete a hand-written API client.
           </p>
 
           <p>Devlin</p>

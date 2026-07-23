@@ -249,9 +249,8 @@ export default function BlogPostPage() {
             and asked which items DaloyJS already covers. The post is a
             no-nonsense run-down, SQL/NoSQL injection, XSS, SSRF, path
             traversal, XXE, deserialization, shell injection, LFI, prototype
-            pollution, open redirects. The basics. The stuff that&apos;s been on
-            every top-10 list since 2007 and still ships in production CVEs
-            every week.
+            pollution, open redirects: the basics that have been on every top-10
+            list since 2007 and still ship in production CVEs every week.
           </p>
 
           <p>
@@ -265,9 +264,8 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Below is the per-item map. No marketing voice, no &quot;trust us,
-            we&apos;re secure.&quot; Just what the constructor gives you, what
-            you opt into, and what stays your problem.
+            Below is the per-item map: what the constructor gives you, what you
+            opt into, and what stays your problem.
           </p>
 
           <h2>#1: SQL &amp; NoSQL injection</h2>

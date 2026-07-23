@@ -216,11 +216,10 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            One small, slightly emotional note to close on. Tagging a beta, even
-            a boring one, is the part of a project where it stops being a thing
-            I am tinkering with and starts being a thing other people are
-            allowed to depend on. That is terrifying in the good way. Thanks for
-            being early.
+            Tagging a beta, even a boring one, is the part of a project where it
+            stops being a thing I am tinkering with and starts being a thing
+            other people are allowed to depend on. Dependency is real now, and I
+            want the production reports. Thanks for being early.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

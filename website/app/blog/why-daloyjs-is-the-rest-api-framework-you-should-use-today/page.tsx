@@ -204,7 +204,7 @@ export default function BlogPostPage() {
           <h2>Zero runtime dependencies matters</h2>
 
           <p>
-            One of DaloyJS&apos;s more underrated properties is that the core
+            One property that matters more than it looks: the core
             keeps a zero-runtime-dependency posture. That reduces the transitive
             tree, the audit surface, and the number of maintainers you are
             trusting by accident. In a world where one compromised maintainer
@@ -215,9 +215,10 @@ export default function BlogPostPage() {
           <h2>The baseline changed</h2>
 
           <p>
-            Framework restraint deserves more credit. DaloyJS removes security
-            chores that teams forget under deadline pressure. For a REST API in
-            2026, those controls belong in the baseline.
+            The useful part is what the framework refuses to leave optional.
+            DaloyJS removes security chores that teams forget under deadline
+            pressure. For a REST API in 2026, those controls belong in the
+            baseline.
           </p>
 
           <p>

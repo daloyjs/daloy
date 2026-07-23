@@ -476,8 +476,8 @@ export default function BlogPostPage() {
           <p>
             Hi, Devlin. Ten years of fullstack, currently in Norway, currently
             nursing a particular kind of opinion you only earn by watching an
-            in-memory rate limiter fail in production exactly once. Spoiler: the
-            limiter doesn&apos;t look broken in the metrics. The metrics look{" "}
+            in-memory rate limiter fail in production exactly once. The limiter
+            doesn&apos;t look broken in the metrics. The metrics look{" "}
             <em>fine</em>
             {". "}The login endpoint is on fire, the SREs are confused, and
             somebody in the postmortem says the sentence everyone is thinking:{" "}

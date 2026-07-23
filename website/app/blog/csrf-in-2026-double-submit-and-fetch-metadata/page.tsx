@@ -699,7 +699,6 @@ export default function BlogPostPage() {
           <CodeBlock language="bash" code={STRATEGY_DECISION_FLOW} />
 
           <p>
-            If you only take one line away from this post:{" "}
             <code>strategy: &quot;both&quot;</code> is the safest default that
             doesn&apos;t cost anything extra, and the <code>__Host-</code>{" "}
             cookie prefix does half the security work for free. Set both, sleep

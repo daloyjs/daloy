@@ -10,7 +10,7 @@ const POST = {
   title:
     "The Ghost CMS / ClickFix Campaign, Mapped to DaloyJS, Plus the One Default We Just Tightened",
   description:
-    "A pre-auth SQL injection in Ghost CMS (CVE-2026-26980) is being exploited at scale to hijack 700+ sites, including Harvard, Oxford, and DuckDuckGo, and serve a fake Cloudflare \"verify you are human\" prompt that silently stuffs a PowerShell one-liner into the visitor's clipboard. Most of the chain was already blocked by DaloyJS defaults; the last mile (the clipboard write) wasn't. Here's the stage-by-stage mapping and the one-line default we changed in response.",
+    "A pre-auth SQL injection in Ghost CMS (CVE-2026-26980) is being exploited at scale to hijack 700+ sites, including Harvard, Oxford, and DuckDuckGo, and serve a fake Cloudflare \"verify you are human\" prompt that silently stuffs a PowerShell one-liner into the visitor's clipboard. Most of the chain was already blocked by DaloyJS defaults; the last mile (the clipboard write) wasn't. Stage-by-stage mapping and the one-line default we changed in response.",
   date: "2026-06-16",
   readingTime: "8 min read",
   author: "Devlin Duldulao",
@@ -433,13 +433,12 @@ app.use(secureHeaders({
           </p>
 
           <p>
-            That&apos;s the whole job of secure-by-default in my head: when the
-            threat model moves, the default moves with it, and apps that already
-            trust the framework inherit the fix on the next dependency bump
-            without reading a CVE or running a migration script. If you have to
-            read a security blog before your app is safe, the framework already
-            failed you. I&apos;d rather feel a little dumb for missing this one
-            line than ship a framework that leaves it to you.
+            That is what secure-by-default is for in my head: when the threat
+            model moves, the default moves with it, and apps that already trust
+            the framework inherit the fix on the next dependency bump without
+            reading a CVE or running a migration script. I&apos;d rather feel a
+            little dumb for missing this one line than ship a framework that
+            leaves it to you.
           </p>
 
           <p className="text-sm text-muted-foreground">

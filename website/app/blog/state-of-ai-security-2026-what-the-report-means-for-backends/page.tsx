@@ -815,9 +815,9 @@ export default function BlogPostPage() {
 
           <p>
             None of that is exotic, and none of it is a paid add-on. It is the
-            default shape of a route, which is the whole idea: the report keeps
-            showing that the safe path loses whenever it is the extra step. So
-            DaloyJS makes the safe path the only path that is also the easy one.
+            default shape of a route. The report keeps showing that the safe
+            path loses whenever it is the extra step; schema-on-the-route means
+            the unsafe handler shape fails closed.
           </p>
 
           <h2>What to do on Monday</h2>
@@ -902,14 +902,6 @@ export default function BlogPostPage() {
               year&apos;s report.
             </p>
           </div>
-
-          <p>
-            AI will keep writing more code. Teams will fare better when the
-            secure path is easy, boring checks are automated, and engineering
-            attention is treated as an expensive resource. That practice
-            predates the current AI cycle, and the survey gives it data from 450
-            teams.
-          </p>
 
           <p className="text-sm text-muted-foreground">
             Data throughout this post is from Aikido and Sapio Research&apos;s{" "}

@@ -786,8 +786,8 @@ export default function BlogPostPage() {
             describe them today, the generated client doesn&apos;t know about
             them, the consumer&apos;s code is full of <code>unknown</code>
             {", "}and the &quot;just check the PDF&quot; messages have already
-            started landing in support. Pick one feature this sprint. Future you
-            will be unreasonably grateful.
+            started landing in support. Pick one feature this sprint and wire it
+            into the OpenAPI document while the contract is still small.
           </p>
 
           <p>Devlin</p>

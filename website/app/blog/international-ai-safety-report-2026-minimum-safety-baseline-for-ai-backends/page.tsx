@@ -461,9 +461,8 @@ export default function BlogPostPage() {
           </ul>
 
           <p>
-            That list reads almost like a feature spec for an HTTP framework
-            built for the agent era. Which is convenient, because DaloyJS{" "}
-            <em>is</em> an HTTP framework built for the agent era. Below is the
+            That list maps cleanly onto what an HTTP framework can enforce at
+            the request boundary. Below is the
             per-requirement mapping of what an app on <code>@daloyjs/core</code>{" "}
             already enforces by default, what one opt-in line adds, and the
             items no framework can own.

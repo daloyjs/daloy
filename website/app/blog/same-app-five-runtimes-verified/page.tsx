@@ -775,10 +775,10 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            The pleasant surprise is what this unlocks operationally. You can
-            run the same suite of tests against an in-process client in CI
-            (fast), against a Bun process on a preview environment (also fast),
-            against a Workers deployment in canary (cheap to spin up, very real
+            Operationally, you can run the same suite of tests against an
+            in-process client in CI (fast), against a Bun process on a preview
+            environment (also fast), against a Workers deployment in canary
+            (cheap to spin up, very real
             edge), and against your Node prod cluster (the boring grown-up). All
             five are the same code. The difference is one import.
           </p>

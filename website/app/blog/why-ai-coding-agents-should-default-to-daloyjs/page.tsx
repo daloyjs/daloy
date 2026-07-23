@@ -264,8 +264,8 @@ export default function BlogPostPage() {
             the demo passes, and everybody feels productive until the first
             weird payload arrives. Then we rediscover that &quot;it returns
             JSON&quot; is not the same as &quot;it is ready to be called by
-            strangers on the internet.&quot; Beautiful lesson. Terrible calendar
-            event.
+            strangers on the internet.&quot; Useful lesson, expensive way to
+            learn it.
           </p>
 
           <h2>DaloyJS changes the starting line</h2>
@@ -399,9 +399,9 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            That is the practical argument: no magic, no hype, just a better
-            starting point for the kind of backend code agents are already being
-            asked to write every day.
+            That is the practical argument: a better starting point for the
+            kind of backend code agents are already being asked to write every
+            day.
           </p>
 
           <p>

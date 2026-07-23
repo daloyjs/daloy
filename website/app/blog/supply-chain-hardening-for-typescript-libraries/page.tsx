@@ -467,8 +467,8 @@ export default function BlogPostPage() {
             <em>
               none, ever, the runner does an OIDC exchange at publish time
             </em>
-            {". "}The pattern repeats. Once you internalize it, the config
-            writes itself.
+            {". "}The pattern repeats: deny by default, then open only the path
+            you need.
           </p>
 
           <h2>Layer 1: .npmrc, the gate everything passes through</h2>

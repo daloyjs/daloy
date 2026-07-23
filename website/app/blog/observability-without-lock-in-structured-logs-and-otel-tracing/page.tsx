@@ -574,9 +574,8 @@ export default function BlogPostPage() {
             The default <code>createLogger</code> is intentionally tiny: JSON to
             stdout, level threshold, bindings merged into every record, and a{" "}
             <code>child(bindings)</code> method that returns a new logger with
-            extra fields baked in. That last bit is the magic ingredient, the
-            framework uses it to give every request its own logger pre-bound to
-            the request id.
+            extra fields baked in. The framework uses <code>child()</code> to
+            give every request its own logger pre-bound to the request id.
           </p>
 
           <p>For pino in production, the shape is intentionally compatible:</p>
@@ -616,8 +615,7 @@ export default function BlogPostPage() {
             with (or impersonate) other requests in your log stream. Second,{" "}
             <code>timing()</code> writes the standard <code>Server-Timing</code>{" "}
             header so Chrome and Firefox DevTools surface handler latency in the
-            Network tab with zero frontend code. Free observability is the best
-            kind.
+            Network tab with zero frontend code.
           </p>
 
           <h2>OpenTelemetry without the hard dependency</h2>

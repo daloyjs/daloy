@@ -457,7 +457,7 @@ export default function BlogPostPage() {
           <CodeBlock language="bash" code={SCAFFOLD_SHELL} />
 
           <p>
-            One command. Day-one coverage for four-and-a-half of the five
+            That one command wires day-one coverage for most of the five
             pillars. The half you still drive is the &quot;does the team
             actually use the tools&quot; piece, and the AGENTS.md the scaffolder
             drops catches drift even when a coding agent makes the change.

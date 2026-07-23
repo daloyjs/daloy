@@ -9,7 +9,7 @@ const POST = {
   slug: "daloyjs-1-0-0-rc-0-first-release-candidate",
   title: "DaloyJS: The First Release Candidate",
   description:
-    "The beta said 'nothing changed, on purpose.' The release candidate says 'the door is now locked.' This post covers what the RC means, what landed across the beta train (spoiler: MCP), and what remains before the stable release.",
+    "What the release candidate means: bug fixes and docs only until stable. This post covers what landed across the beta train (including MCP), and what remains before the stable release.",
   date: "2026-07-03",
   readingTime: "7 min read",
   author: "Devlin Duldulao",
@@ -255,7 +255,7 @@ export default function BlogPostPage() {
           <p>
             Tagging a release candidate is the moment a project stops being
             &quot;almost ready&quot; and becomes &quot;prove it.&quot; That is
-            the scary-in-a-good-way part, and I would rather be here nervous
+            the part that makes me nervous, and I would rather be here nervous
             than still adding features I would have to defend forever. Thanks
             for being early. Let us go find the bugs.
           </p>

@@ -454,7 +454,7 @@ export default function BlogPostPage() {
           <h2>ASI09: Insecure Supply Chain and Integration</h2>
 
           <RiskCard
-            risk="OWASP ASI09: Vulnerabilities introduced through third-party components, models, or data sources. Your security is only as strong as your weakest link."
+            risk="OWASP ASI09: Vulnerabilities introduced through third-party components, models, or data sources. A solid app framework does not help if the agent installed a poisoned model, a compromised SDK, or a tool that calls an untrusted API."
             framework="This is the area DaloyJS is most opinionated about, and the area where an agent installing 'whatever the prompt said' is most dangerous. @daloyjs/core ships with ZERO runtime dependencies (verify:no-runtime-deps is a CI gate). Every create-daloy project enables a 24h minimum-release-age cooldown on installs, ignore-scripts to block postinstall lifecycle hooks (the #1 npm attack vector), SHA-pinned GitHub Actions, lockfile-source verification (registry.npmjs.org only), a license allow-list, and a signed CycloneDX SBOM per release."
             user="Run 'pnpm verify' in your project's CI. Do not 'temporarily' disable a gate to ship faster, that gate exists precisely because a dependency 'needed' a postinstall. Audit the third-party APIs your tools call with the same scrutiny you'd give an internal service."
           />
@@ -466,7 +466,7 @@ export default function BlogPostPage() {
           <RiskCard
             risk="OWASP ASI10: Users and organizations place blind faith in the agent's outputs and actions, accepting flawed or malicious results without oversight."
             framework="The framework can't force a human review. What it can do: make every tool call structurally auditable (request ID, principal, operationId, body schema, response status, latency, one line per call). Make destructive routes ergonomic to split into a two-step propose/confirm flow. Make the OpenAPI contract the single source of truth so the human reviewing the agent's actions sees the same shape the agent did."
-            user="Mandate human-in-the-loop for destructive or irreversible tools. Don't give the agent prod credentials with destructive scope, use a read-replica / staging account / time-bounded escalation. Foster a culture of critical evaluation: 'the agent did it' is not a status report, it's the start of a review."
+            user="Mandate human-in-the-loop for destructive or irreversible tools. Don't give the agent prod credentials with destructive scope, use a read-replica / staging account / time-bounded escalation. Treat 'the agent did it' as the start of a review, not a status report."
           />
 
           <CodeBlock language="ts" code={HUMAN_IN_LOOP} />

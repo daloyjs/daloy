@@ -339,8 +339,8 @@ export default function BlogPostPage() {
             <code>Response</code> out. Adapters live at the edges where the
             runtime quirks live. That means when your CFO discovers Cloudflare
             Workers next quarter, your team changes <em>one import</em>
-            {", "}not the shape of your application. Beautiful. Boring. Both,
-            simultaneously.
+            {", "}not the shape of your application. Boring and useful at the
+            same time.
           </p>
 
           <h2>What we&apos;re actually solving, in plain words</h2>
@@ -358,8 +358,8 @@ export default function BlogPostPage() {
           </blockquote>
 
           <p>
-            That&apos;s the whole product. Everything in the{" "}
-            <Link href="/docs">docs</Link> is a consequence of that index card.
+            Everything in the <Link href="/docs">docs</Link> is a consequence
+            of that index card.
           </p>
 
           <h2>
