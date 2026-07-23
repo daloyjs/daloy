@@ -400,8 +400,8 @@ export default function BlogPostPage() {
               I have a running server with tests, types, OpenAPI, and a CI
               pipeline
             </em>
-            {". "}When that first sixty seconds is awkward, the project never
-            happens. When it feels good, you keep going.
+            {". "}First-run friction kills projects before they start; a clean
+            first minute is how you keep going.
           </p>
 
           <p>
