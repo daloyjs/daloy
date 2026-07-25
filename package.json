@@ -254,7 +254,7 @@
     "bench:json-e2e": "node --import tsx bench/json-body-e2e.bench.ts",
     "bench:ablation": "pnpm build && node --import tsx bench/ablation.bench.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
-    "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts tests/red-team-attacks-6.test.ts tests/red-team-attacks-7.test.ts tests/red-team-attacks-8.test.ts tests/red-team-attacks-9.test.ts tests/red-team-attacks-10.test.ts",
+    "test:red-team": "node --import tsx --test tests/red-team-attacks.test.ts tests/red-team-attacks-2.test.ts tests/red-team-attacks-3.test.ts tests/red-team-attacks-4.test.ts tests/red-team-attacks-5.test.ts tests/red-team-attacks-6.test.ts tests/red-team-attacks-7.test.ts tests/red-team-attacks-8.test.ts tests/red-team-attacks-9.test.ts tests/red-team-attacks-10.test.ts tests/red-team-attacks-11.test.ts",
     "red-team:live": "node --import tsx red-team-live/run.ts",
     "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=90 --test-coverage-functions=90 tests/**/*.test.ts",
     "coverage:branches": "tsc -p tsconfig.coverage.json && node --test --experimental-test-coverage --test-coverage-include='dist-coverage/src/**' --test-coverage-branches=92 dist-coverage/tests/**/*.test.js",

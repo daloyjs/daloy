@@ -484,6 +484,7 @@ export type {
 export {
   responseCache,
   MemoryResponseCacheStore,
+  RESPONSE_CACHE_HOOK_MARKER,
   _resetSharedResponseCacheStoresForTests,
 } from "./response-cache.js";
 export type { ResponseCacheOptions, ResponseCacheStore, CachedResponse } from "./response-cache.js";
@@ -556,6 +557,9 @@ export {
   tenantFromPathPrefix,
   tenantFromClaim,
   defaultTenantNormalize,
+  TENANCY_HOOK_MARKER,
+  TENANCY_RESOLVED_MARKER,
+  TENANT_UNRESOLVED,
 } from "./tenancy.js";
 export type {
   TenancyOptions,

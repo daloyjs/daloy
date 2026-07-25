@@ -1012,6 +1012,12 @@ interface RouteSecurityMarkers {
   declaresAuth: boolean;
   /** Route was produced by {@link mcpRoutes} without opting out of the auth boot guard. */
   isMcp: boolean;
+  /**
+   * Route's effective hook chain runs a `responseCache()` *before* `tenancy()`,
+   * so the tenant is not yet in `ctx.state` when the cache key is built and the
+   * cache cannot partition on it.
+   */
+  cacheBeforeTenancy: boolean;
 }
 
 /**
@@ -1021,6 +1027,16 @@ interface RouteSecurityMarkers {
  * `App` bundle. Must match the string used in `mcpRoutes`.
  */
 const MCP_ROUTE_MARKER = Symbol.for("daloyjs.mcp.route");
+
+/**
+ * Global-registry symbols stamped by `responseCache()` and `tenancy()` on the
+ * `Hooks` bundles they return. Read here — rather than imported from
+ * `response-cache.ts` / `tenancy.ts` — so neither module is pulled into the core
+ * `App` bundle (which would cost every serverless cold start). Must match the
+ * strings used in those modules.
+ */
+const RESPONSE_CACHE_HOOK_MARKER = Symbol.for("daloyjs.response-cache.hook");
+const TENANCY_HOOK_MARKER = Symbol.for("daloyjs.tenancy.hook");
 
 interface BootGuardCache {
   checked: boolean;
@@ -2047,7 +2063,11 @@ export class App<
    *    auth hook unless it opted out with `mcpRoutes(path, handler, { public: true })`.
    *    MCP tools are model-controlled and side-effecting, so a public one is a
    *    high-impact default.
-   * 3. **Missing CSRF** — when `session()` is installed and any route accepts a
+   * 3. **Cache ahead of tenancy** — a `responseCache()` that runs before
+   *    `tenancy()` builds its key before the tenant exists in `ctx.state`, so
+   *    every tenant collides on one entry and one tenant's response is served to
+   *    the next caller (CWE-524).
+   * 4. **Missing CSRF** — when `session()` is installed and any route accepts a
    *    state-changing method (`POST`/`PUT`/`PATCH`/`DELETE`), a `csrf()` hook
    *    (or third-party equivalent stamped with {@link CSRF_HOOK_MARKER}) must
    *    also be present. Skipped when `app({ csrf: "off" })`.
@@ -2100,7 +2120,27 @@ export class App<
       throw err;
     }
 
-    // Guard 3: session() + state-changing route without csrf().
+    // Guard 3: responseCache() mounted ahead of tenancy(). The cache partitions
+    // on the tenant automatically, but only if the tenant is already in
+    // ctx.state when the key is built. Mounted first, it would key every
+    // tenant's response identically and serve one tenant's private body to the
+    // next caller (CWE-524) — silently, with a normal-looking cache HIT.
+    const cacheBeforeTenancy = this.routeSecurityMarkers.find((r) => r.cacheBeforeTenancy);
+    if (cacheBeforeTenancy) {
+      const err = new Error(
+        `Route ${cacheBeforeTenancy.method} ${cacheBeforeTenancy.path} runs responseCache() ` +
+          `before tenancy() in its effective hook chain. The cache key is built before the tenant ` +
+          `is resolved, so every tenant would share one cache entry and one tenant's response ` +
+          `would be served to the next caller (CWE-524 cross-tenant cached-response disclosure). ` +
+          `Register tenancy() first — as a global hook (new App({ hooks: tenancy(...) })) or an ` +
+          `earlier app.use(...) — so the tenant is in ctx.state before the cache reads it. ` +
+          `See https://daloyjs.dev/docs/security/boot-guards.`
+      );
+      this.bootGuard.error = err;
+      throw err;
+    }
+
+    // Guard 4: session() + state-changing route without csrf().
     if (this.options.csrf === "off") return;
     const stateChanging = this.routeSecurityMarkers.find(
       (r) => isStateChangingMethod(r.method) && r.hasSession && !r.hasCsrf
@@ -4550,17 +4590,31 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
 
 function securityMarkersFromHooks(
   layers: Hooks[]
-): Pick<RouteSecurityMarkers, "hasSession" | "hasCsrf" | "hasAuth"> {
+): Pick<
+  RouteSecurityMarkers,
+  "hasSession" | "hasCsrf" | "hasAuth" | "cacheBeforeTenancy"
+> {
   let hasSession = false;
   let hasCsrf = false;
   let hasAuth = false;
-  for (const hooks of layers) {
-    const record = hooks as Record<PropertyKey, unknown>;
+  // `layers` is in execution order, so the first index of each marker is enough
+  // to tell whether the cache reads state before tenancy has written it.
+  let cacheIndex = -1;
+  let tenancyIndex = -1;
+  for (let i = 0; i < layers.length; i++) {
+    const record = layers[i] as Record<PropertyKey, unknown>;
     if (record[SESSION_HOOK_MARKER] === true) hasSession = true;
     if (record[CSRF_HOOK_MARKER] === true) hasCsrf = true;
     if (record[AUTH_HOOK_MARKER] === true) hasAuth = true;
+    if (cacheIndex === -1 && record[RESPONSE_CACHE_HOOK_MARKER] === true) cacheIndex = i;
+    if (tenancyIndex === -1 && record[TENANCY_HOOK_MARKER] === true) tenancyIndex = i;
   }
-  return { hasSession, hasCsrf, hasAuth };
+  return {
+    hasSession,
+    hasCsrf,
+    hasAuth,
+    cacheBeforeTenancy: cacheIndex !== -1 && tenancyIndex !== -1 && cacheIndex < tenancyIndex,
+  };
 }
 
 function isStateChangingMethod(method: HttpMethod): boolean {

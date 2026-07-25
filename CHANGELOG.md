@@ -15,6 +15,81 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- **`responseCache()` cross-principal disclosure (CWE-524) closed on three more
+  dimensions — F-4, F-5, F-6 in [`SECURITY-AUDIT.md`](SECURITY-AUDIT.md).** A
+  live over-the-wire engagement against a realistic multi-tenant app found that
+  the F-3 remediation (shipped in 0.40.0) had fixed only the `Authorization`
+  dimension of the defect, while the same function still ignored three other
+  inputs that vary a private response. All three were confirmed exploitable with
+  no attacker sophistication — the leak fires on ordinary traffic, behind a
+  perfectly normal-looking `x-cache: HIT`:
+  - **The cache key omitted the request authority (F-4, HIGH).** The key was
+    `method + pathname + search`, but RFC 9111 §4 keys a cache on the *effective
+    request URI*, which includes the authority. Any one process serving several
+    hostnames (vanity domains, subdomain-per-customer, staging beside
+    production) shared a single entry across all of them. **Plain defaults — no
+    opt-in and no misconfiguration required.**
+  - **The resolved tenant was ignored (F-5, HIGH).** `tenancy()` resolved the
+    tenant into `ctx.state`, then the cache keyed every tenant's response
+    identically. A second tenant — and a caller supplying *no tenant at all* —
+    received the first tenant's confidential body.
+  - **Cookie identity was treated as anonymous (F-6, MEDIUM-HIGH).** The request
+    `Cookie` header was never consulted (only response `Set-Cookie` was), so a
+    cookie-authenticated private response was stored and replayed to an
+    anonymous stranger.
+
+- **New boot guard (production, `secureDefaults` on): `responseCache()` mounted
+  ahead of `tenancy()` refuses to boot.** The cache builds its key in
+  `beforeHandle`, so in that order the tenant does not exist yet and automatic
+  partitioning cannot protect the entry. Register `tenancy()` first. Joins the
+  existing guards for `session()`-without-`csrf()` and `auth:`-without-an-auth-hook.
+
+### Added
+
+- **`responseCache({ principal })`** — identify the caller so credentialed
+  responses cache *per principal* instead of bypassing the cache entirely.
+  Return a stable id (user id, tenant, API-key fingerprint — never the raw
+  credential), or `null` for anonymous. A `principal` that returns `null` for a
+  request that *does* carry credentials fails closed. This is what makes
+  cookie-authenticated caching both possible and safe.
+- **`TENANCY_RESOLVED_MARKER` / `TENANT_UNRESOLVED` / `TENANCY_HOOK_MARKER`
+  (`tenancy`) and `RESPONSE_CACHE_HOOK_MARKER` (`response-cache`)** — the
+  `ctx.state` marker under which `tenancy()` records the tenant it resolved
+  (independently of the configurable `stateKey`), plus the hook markers the boot
+  guard reads. Exported so third-party middleware can participate in the same
+  partitioning contract.
+
+### Changed
+
+- **BREAKING — the `responseCache()` key now includes the request authority.**
+  Cache keys change shape, so the first deploy after upgrading sees a one-time
+  cold cache (a miss storm, not a correctness problem). Nothing to migrate.
+- **BREAKING — requests carrying `Cookie` now bypass the shared cache by
+  default**, exactly as `Authorization` already did. A route that was
+  (unsafely) caching cookie-bearing traffic will stop caching it. To restore
+  caching, add a `principal` — the safe fix — or, only for genuinely shareable
+  content, opt in explicitly.
+- **BREAKING — `cacheAuthenticatedRequests` widened to
+  `boolean | { authorization?: boolean; cookie?: boolean }`.** `true` now opts
+  in *both* credential headers rather than just `Authorization`; pass
+  `{ authorization: true }` to keep the old narrow meaning. Declaring a
+  credential header in `varyHeaders` also counts as handling it.
+- **`keyGenerator` now derives the key *body* only.** The tenant/principal
+  partition is applied around whatever it returns, so a custom generator can no
+  longer accidentally widen the partition — and the `tenantScope()`-based
+  `responseCache` recipe previously documented for multitenancy is no longer
+  needed. Existing generators keep working; the manual tenant prefix is now
+  redundant but harmless.
+- **`responseCache()` got faster.** Building the key from `Request.url` (already
+  an absolute, normalized serialization) instead of allocating a `URL` makes the
+  key builder ~9× faster with no `varyHeaders` and ~2.5× faster with two, so the
+  security fix is a net hot-path win. The added per-request work is two
+  `Headers.has()` probes (~60 ns) and a partition that costs nothing when
+  absent. `App`'s import graph is unchanged, so serverless cold start is
+  unaffected.
+
 ## [1.0.0-rc.5] - 2026-07-20
 
 ### Changed

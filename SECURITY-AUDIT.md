@@ -1,8 +1,18 @@
 # Security Audit — `@daloyjs/core`
 
-**Date:** 2026-06-18
-**Method:** Adversarial black/grey-box testing (a 104-attack red-team suite across four waves) plus targeted source review of the security-critical paths (request pipeline, serialization, JWT/HMAC, SSRF guard, auth/authz middleware, router, access-control modules).
-**Overall posture:** **Strong.** Three High-severity findings were identified, remediated, and verified closed (one response over-exposure, two cross-tenant cached-response disclosures). Remaining items are documented residual risks with explicit owners and mitigations.
+**Date:** 2026-07-25 (previous revision: 2026-06-18)
+**Method:** Adversarial black/grey-box testing (a red-team suite across eleven waves) plus targeted source review of the security-critical paths (request pipeline, serialization, JWT/HMAC, SSRF guard, auth/authz middleware, router, access-control modules), plus a live over-the-wire engagement against a realistic multi-tenant app on the Node adapter (54 probes; see `red-team-live/`).
+**Overall posture:** **Strong.** Six findings were identified, remediated, and verified closed: one response over-exposure (F-1) and five cross-principal cached-response disclosures (F-2 … F-6). Remaining items are documented residual risks with explicit owners and mitigations.
+
+> **Lesson recorded from the F-4/F-5/F-6 round.** The F-3 remediation fixed the
+> `Authorization` dimension of CWE-524 and was signed off as closed, while three
+> other dimensions of the *same* defect — the request authority, the resolved
+> tenant, and cookie identity — stayed open in the same function. A cache is only
+> as safe as its key, so the durable fix is to enumerate **every** input that
+> varies the response and confirm each one is either in the key or fails closed,
+> rather than patching the dimension the last exploit happened to use. The live
+> engagement found all three; the in-process suites had not, because each asserted
+> the dimension it was written for.
 
 This document is generated and maintained alongside the red-team suite
 (`tests/red-team-attacks*.test.ts`, run as the `pnpm test:red-team` CI gate)
@@ -32,8 +42,8 @@ the residual DNS-rebinding window noted under R-2.
 | #     | Category                                     | Verdict                     | Evidence (red-team coverage)                                                                                  |
 | ----- | -------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | API1  | Broken Object-Level Authorization (BOLA)     | Operator scope              | Framework enforces *who* can call a route; *which records* is application logic (documented)                  |
-| API2  | Broken Authentication                        | Pass (remediated)           | JWT (`none`/confusion/tamper/expiry/weak-key/**header key-injection**), bearer/basic, session signing, HTTP signatures; **cross-tenant idempotency replay (F-2) and response-cache disclosure (F-3) closed** |
-| API3  | Broken Object **Property**-Level Auth        | Pass (remediated)           | Request strips extra keys; **response strips undeclared fields at all depths** (F-1); schema-coverage audit (R-1) |
+| API2  | Broken Authentication                        | Pass (remediated)           | JWT (`none`/confusion/tamper/expiry/weak-key/**header key-injection**), bearer/basic, session signing, HTTP signatures; **cross-principal idempotency replay (F-2) and response-cache disclosure via `Authorization` (F-3), authority (F-4), tenant (F-5), and `Cookie` (F-6) all closed** |
+| API3  | Broken Object **Property**-Level Auth        | Pass (remediated)           | Request strips extra keys; **response strips undeclared fields at all depths** (F-1); schema-coverage audit (R-1); cached responses partitioned per authority/tenant/principal (F-4…F-6) |
 | API4  | Unrestricted Resource Consumption            | Pass                        | body `413`, header-count `431`, decompression-bomb `413`, concurrency/load-shedding `503`, rate-limit `429`, ReDoS-bounded WAF |
 | API5  | Broken Function-Level Authorization          | Pass                        | `requireScopes`, exact case-sensitive routing, `except()` fail-closed path matching, no method-override        |
 | API6  | Unrestricted Access to Sensitive Flows       | Operator scope              | Business-logic abuse is application-specific (documented)                                                       |
@@ -67,8 +77,30 @@ the residual DNS-rebinding window noted under R-2.
 - **Description:** `responseCache()` keyed on `method + URL + varyHeaders` and did not refuse to cache `Authorization`-bearing requests. An authenticated response with no explicit `private`/`no-store` directive was cached and served to the next caller of the same URL. Confirmed with a live exploit (fully automatic, no attacker effort): client B received `owner: "Bearer USER_A"` with `x-cache: HIT`.
 - **Remediation:** requests carrying an `Authorization` header now bypass the shared cache by default (RFC 9111 §3.5), with an explicit `cacheAuthenticatedRequests: true` opt-in for genuinely shareable content. Unauthenticated/public responses are still cached.
 - **Verification:** `tests/red-team-attacks-5.test.ts`.
+- **Follow-up:** this remediation was **incomplete**. It fixed the `Authorization` dimension only, while the cache key still omitted the request authority and the resolved tenant, and `Cookie` was not treated as a credential at all. See F-4, F-5, and F-6 — all three found by a later live engagement and closed in 1.0.0.
 
-No other defects were identified across the six red-team waves.
+### F-4 — Response-cache key omits the request authority — HIGH — **CLOSED**
+
+- **Class:** CWE-524; OWASP API2/API3. RFC 9111 §4 violation.
+- **Description:** `defaultKey()` built the cache key from `method + pathname + search`, omitting the authority. RFC 9111 keys a cache on the *effective request URI*, which includes it. Any single process serving several hostnames — vanity domains, subdomain-per-customer, staging alongside production — therefore shared one entry across all of them. **No opt-in and no misconfiguration required: plain defaults.** Confirmed with a live exploit over raw sockets: `Host: customer-b.example.com` received `customer-a.example.com`'s body with `x-cache: HIT`.
+- **Remediation:** the key is now built from the full effective request URI. As a side effect this removed a `new URL()` allocation from the hot path, so the key builder is ~9× faster than before the fix.
+- **Verification:** `tests/red-team-attacks-11.test.ts` (cross-host isolation, plus same-host hit, scheme/port distinctness, and fragment-insensitivity happy paths).
+
+### F-5 — Response-cache ignored the framework-resolved tenant — HIGH — **CLOSED**
+
+- **Class:** CWE-524; OWASP API2/API3.
+- **Description:** `tenancy()` resolved the tenant into `ctx.state.tenant`, and `responseCache()` then cached per-tenant responses under a tenant-less key. A second tenant — and even a caller supplying **no tenant at all** — received the first tenant's confidential body with `x-cache: HIT`. A documented `tenantScope()` `keyGenerator` recipe existed, but it was silently opt-in while the `Authorization` dimension of the same CWE fail-closed automatically, and nothing warned when the two middlewares were composed without it. Confirmed with a live exploit.
+- **Remediation:** the resolved tenant is now folded into the cache key automatically, keyed off a `ctx.state` marker (`TENANCY_RESOLVED_MARKER`) rather than the configurable `stateKey`, so it works regardless of configuration. Tenant-less traffic gets its own partition instead of sharing the resolved ones. The partition is applied *around* a custom `keyGenerator`, so a hand-written generator cannot widen it. Because the key is built in `beforeHandle`, a `responseCache()` mounted *ahead of* `tenancy()` cannot see the tenant — that ordering now **refuses to boot** in production (boot guard 7) rather than leaking silently.
+- **Verification:** `tests/red-team-attacks-11.test.ts` (cross-tenant, tenant-less-anonymous, custom-keyGenerator, and boot-guard cases, plus the same-tenant cache-hit happy path).
+
+### F-6 — Response-cache treated cookie identity as anonymous — MEDIUM-HIGH — **CLOSED**
+
+- **Class:** CWE-524; OWASP API2/API3.
+- **Description:** the request `Cookie` header was never consulted — only response `Set-Cookie` was. A cookie-authenticated private response was stored in the shared cache and replayed to an anonymous stranger. The default `session({ rolling: true })` masked this (a rolling session re-emits `Set-Cookie` on every response, which blocks storage), but the documented `rolling: false` option removed that accidental protection. Notably the F-5 remediation does **not** cover this axis: `tenantScope()` partitions by tenant, not by user. Confirmed with a live exploit: an unauthenticated caller received `alice@acme.test`.
+- **Remediation:** `Cookie` is now a credential alongside `Authorization` — a request carrying either bypasses the shared cache by default. `cacheAuthenticatedRequests` accepts `boolean | { authorization?, cookie? }` for per-header opt-in, and a new `principal` option lets an app name the caller so credentialed responses cache *per principal* instead of merely being skipped. A `principal` that returns `null` for a credentialed request fails closed. Partition components are length-prefixed so a crafted id cannot collide with another partition (cache-key injection).
+- **Verification:** `tests/red-team-attacks-11.test.ts` (anonymous-stranger, cross-user, null-principal fail-closed, and per-header opt-in isolation cases, plus per-principal hit and public-caching happy paths).
+
+No other defects were identified across the eleven red-team waves.
 
 ### Verified-secure controls (wave 6 — no defects, locked as regression tests)
 
@@ -99,7 +131,7 @@ the existing defenses sound; they are now regression-locked in
 
 ## Red-team suite inventory
 
-The adversarial suite (`pnpm test:red-team`, gated in CI) contains **127 attacks** across seven files:
+The adversarial suite (`pnpm test:red-team`, gated in CI) contains **176 attacks** across eleven files:
 
 - **Wave 1** (`red-team-attacks.test.ts`): prototype pollution, body/header DoS, request smuggling and header injection, JWT, SSRF, open redirect, NoSQL operators, path traversal, constant-time compare, webhook HMAC, CORS, rate limit, CSRF, WAF, content-type, mass assignment, error redaction, secure headers, strong-secret guard, response over-exposure.
 - **Wave 2** (`red-team-attacks-2.test.ts`): decompression bombs, signed-value/session integrity, cookie attribute guards, mTLS header spoofing, HTTP message signatures, bearer/basic/scopes/fetch-metadata, WebSocket frame protocol and CSWSH, pagination cursors, idempotency, concurrency, multipart magic-bytes, refuse-to-boot, internal-service preset.
@@ -108,6 +140,10 @@ The adversarial suite (`pnpm test:red-team`, gated in CI) contains **127 attacks
 - **Wave 5** (`red-team-attacks-5.test.ts`): cross-tenant cached-response disclosure — idempotency replay isolation (F-2) and response-cache Authorization bypass (F-3), including the same-principal/public happy paths and the explicit opt-in path.
 - **Wave 6** (`red-team-attacks-6.test.ts`): defense verification — session fixation/forgery + `regenerate()` rotation, `__Host-` cookie scoping, BREACH-aware compression skips, multipart per-file cap, WAF single- and double-encoding catch (bounded multi-decode).
 - **Wave 7** (`red-team-attacks-7.test.ts`): three-front offensive simulation — (R) production docs/OpenAPI hidden, error-response leak-free, forged-JWT privilege-escalation rejected; (C) request-timeout slowloris cutoff, deep-nest stack-bomb rejected fast, wide-JSON hash-flood bounded; (N) prototype-gadget pollutes nothing, no dynamic code-execution primitive on the public surface.
+- **Wave 8** (`red-team-attacks-8.test.ts`): OWASP WSTG methodology sweep — rendered-HTML XSS in the API docs, HTTP Parameter Pollution, verb tampering / Cross-Site Tracing, CORS origin-matching bypasses.
+- **Wave 9** (`red-team-attacks-9.test.ts`): Doyensec WAPT methodology, live-service pass — framework fingerprinting and error-code disclosure, plus the assessor-style categories waves 1–8 had not exercised end-to-end.
+- **Wave 10** (`red-team-attacks-10.test.ts`): deep-dive campaigns — WAF multi-encoding evasion with the typed-contract backstop, and the full JWT algorithm matrix.
+- **Wave 11** (`red-team-attacks-11.test.ts`): response-cache key completeness — the three remaining CWE-524 dimensions found by the live engagement: authority (F-4), resolved tenant (F-5), and cookie identity (F-6), including the cache-still-works happy paths (same-host hit, same-tenant hit, per-principal hit, public caching), the per-header opt-in, the ordering boot guard, and cache-key injection via a crafted principal.
 
 ---
 

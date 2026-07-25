@@ -54,14 +54,15 @@ export default function Page() {
 
       <UseCaseGuide
         featureName="Response caching middleware"
-        recommendation="Use server-side response caching for public, high-read, and computationally expensive GET/HEAD endpoints. Never cache personalized, authenticated, or mutative requests, as this risks leaking sensitive session details between users."
+        recommendation="Use server-side response caching for public, high-read, and computationally expensive GET/HEAD endpoints. Credentialed requests bypass the cache by default; to cache personalized responses, identify the caller with principal() so each one gets its own entry instead of sharing yours."
         whenToUse={[
           "Public, non-personalized read endpoints (e.g., product lists, public profiles, configuration feeds).",
           "Handlers that perform expensive database operations, complex calculations, or third-party API fetches.",
           "GET or HEAD endpoints with high request volumes where responses change infrequently.",
+          "Personalized reads, ONLY with a principal() that names the caller so the key partitions per user.",
         ]}
         whenNotToUse={[
-          "Personalized, user-specific data (e.g., /me, dashboard, checkout pages, billing history) to prevent cross-user data leakage.",
+          "Personalized, user-specific data without a principal() — the request will simply bypass the cache, so you gain nothing and should not reach for the middleware.",
           "Mutative requests (POST, PUT, PATCH, DELETE) which perform side-effects.",
           "Real-time data feeds (e.g., live stock prices, chat messages) where any latency is unacceptable.",
           "Endpoints that carry high-entropy security tokens in headers or response bodies.",
@@ -241,9 +242,14 @@ app.use(
     cacheableStatus: (status) => status === 200,
     // Request headers whose values partition the cache (e.g. localization).
     varyHeaders: ["accept-language"],
-    // Cache Authorization-bearing requests only when responses are shareable.
+    // Identify the caller so credentialed responses cache per principal
+    // instead of bypassing. Return null for anonymous.
+    principal: (ctx) => ctx.state.session?.get("userId") ?? null,
+    // Cache credentialed requests only when responses are shareable. Boolean
+    // sets both Authorization and Cookie; an object controls them separately.
     cacheAuthenticatedRequests: false,
-    // Custom cache key; return null to skip caching this request.
+    // Custom cache key BODY; the tenant/principal partition is applied around it.
+    // Return null to skip caching this request.
     keyGenerator: (ctx) => new URL(ctx.request.url).pathname,
     // Largest response body buffered + stored. Default: 1 MiB.
     maxBodyBytes: 1_048_576,
@@ -286,26 +292,102 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
         language="ts"
       />
 
-      <h2 id="security-notes">Security notes</h2>
+      <h2 id="cache-key-and-isolation">Cache key and cross-principal isolation</h2>
+      <p>
+        A shared response cache is only as safe as its key. Anything that varies
+        the response but <em>not</em> the key becomes a cross-principal
+        disclosure (CWE-524): the next caller of the same URL receives the
+        previous caller&apos;s private body, with a perfectly normal-looking{" "}
+        <code>x-cache: HIT</code>. DaloyJS is fail-closed on every principal
+        dimension the framework can see.
+      </p>
+      <div className="not-prose my-6 overflow-x-auto rounded-lg border border-border bg-muted/30 p-4">
+        <pre className="text-xs leading-relaxed">
+          <code>{`cache key = [ tenant partition ] [ principal partition ] method + effective request URI + varyHeaders
+             │                    │                          │
+             │                    │                          └─ scheme + authority + path + query  (RFC 9111 §4)
+             │                    └─ principal(ctx), when supplied
+             └─ ctx.state.tenant, folded in automatically by tenancy()
+
+Authorization or Cookie present, and neither handled nor identified?  →  bypass the cache entirely`}</code>
+        </pre>
+      </div>
+      <h3 id="the-authority-is-part-of-the-key">The authority is part of the key</h3>
+      <p>
+        The key is built from the <strong>effective request URI</strong> — scheme,
+        authority, path, and query — per RFC&nbsp;9111&nbsp;§4. One process
+        serving several hostnames (vanity domains, subdomain-per-customer,
+        staging alongside production) therefore never shares an entry across
+        them. A key covering only path and query would silently mix them.
+      </p>
+      <h3 id="credentials-fail-closed">Credentials fail closed</h3>
+      <p>
+        Requests carrying <code>Authorization</code> <strong>or</strong>{" "}
+        <code>Cookie</code> bypass the shared cache entirely
+        (RFC&nbsp;9111&nbsp;§3.5). <code>Cookie</code> counts because a session
+        cookie is the single most common way a response becomes private — a
+        cache that only knew about <code>Authorization</code> would happily serve
+        one logged-in user&apos;s page to the next visitor.
+      </p>
+      <p>
+        Rather than simply losing the cache on authenticated routes, name the
+        caller with <code>principal</code>. The id is folded into the key, so
+        each principal gets their own entry and hits still work:
+      </p>
+      <CodeBlock
+        code={`app.use(
+  responseCache({
+    ttlSeconds: 30,
+    // Return a stable id — never the raw credential. null means anonymous.
+    principal: (ctx) => ctx.state.session?.get<string>("userId") ?? null,
+  }),
+);
+
+// Genuinely shareable content behind a gate? Opt in per header instead.
+app.use(
+  responseCache({
+    // e.g. a public endpoint that receives unrelated analytics cookies, but
+    // must still never cache a bearer-authenticated response.
+    cacheAuthenticatedRequests: { cookie: true },
+  }),
+);`}
+        language="ts"
+      />
+      <p>
+        A <code>principal</code> that returns <code>null</code> for a request
+        that <em>does</em> carry credentials is treated as &quot;cannot identify
+        this caller&quot;, and the request bypasses the cache rather than sharing
+        one anonymous entry among authenticated users. Declaring the credential
+        in <code>varyHeaders</code> also counts as handling it, since its value
+        then partitions the key by itself.
+      </p>
+      <h3 id="tenants-partition-automatically">Tenants partition automatically</h3>
+      <p>
+        When <code>tenancy()</code> has resolved a tenant for the request, that
+        tenant is folded into the cache key with no wiring on your part — and
+        the partition is applied <em>around</em> a custom{" "}
+        <code>keyGenerator</code> too, so a hand-written generator cannot
+        accidentally widen it. A caller that resolves to no tenant is kept in its
+        own partition rather than sharing the resolved ones.
+      </p>
+      <p>
+        Ordering still matters, and it is enforced rather than merely documented:
+        because the key is built in <code>beforeHandle</code>, a{" "}
+        <code>responseCache()</code> mounted <em>ahead of</em>{" "}
+        <code>tenancy()</code> would run before the tenant exists in{" "}
+        <code>ctx.state</code>. In production that combination{" "}
+        <strong>refuses to boot</strong> (see{" "}
+        <a href="/docs/security/boot-guards">boot guards</a>) instead of quietly
+        serving one tenant&apos;s data to another. Register{" "}
+        <code>tenancy()</code> first.
+      </p>
+
+      <h2 id="security-notes">Other security notes</h2>
       <ul>
         <li>
-          Credentialed and per-user responses are never shared by default:
-          anything carrying <code>Set-Cookie</code> or{" "}
-          <code>Cache-Control: private | no-store | no-cache</code> is skipped,
-          the same skip posture as <code>etag()</code>.
-        </li>
-        <li>
-          <strong>
-            Requests carrying an <code>Authorization</code> header bypass the
-            cache entirely (CWE-524, RFC&nbsp;9111&nbsp;§3.5).
-          </strong>{" "}
-          A shared cache keyed on method + path + query does not include the
-          credential, so caching an authenticated response would serve one
-          user&apos;s private data to the next caller of the same resource. Set{" "}
-          <code>cacheAuthenticatedRequests: true</code> only for content that is
-          genuinely shareable across principals, and pair it with{" "}
-          <code>varyHeaders: [&quot;authorization&quot;]</code> (or a custom{" "}
-          <code>keyGenerator</code>) so distinct callers cannot collide.
+          Responses carrying <code>Set-Cookie</code> or{" "}
+          <code>Cache-Control: private | no-store | no-cache</code> are never
+          stored, the same skip posture as <code>etag()</code>.
         </li>
         <li>
           Only <code>200 OK</code> is cached unless you widen{" "}
@@ -320,6 +402,11 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
           Use <code>varyHeaders</code> (or a custom <code>keyGenerator</code>)
           to partition the cache whenever the response depends on a request
           header such as <code>Accept-Language</code>.
+        </li>
+        <li>
+          Partition components are length-prefixed, so a principal or tenant id
+          containing the key delimiter cannot be crafted to collide with another
+          partition (cache-key injection).
         </li>
       </ul>
     </>

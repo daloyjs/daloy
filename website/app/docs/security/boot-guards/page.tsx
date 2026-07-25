@@ -365,6 +365,49 @@ for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
         setup.
       </p>
 
+      <h2 id="7-responsecache-mounted-ahead-of-tenancy">
+        7. <code>responseCache()</code> mounted ahead of <code>tenancy()</code>
+      </h2>
+      <p>
+        <code>responseCache()</code> folds the resolved tenant into its cache key
+        automatically, which is what keeps one tenant&apos;s cached response from
+        being served to another (CWE-524). That only works if the tenant is
+        already in <code>ctx.state</code> when the key is built — and both
+        middlewares resolve in <code>beforeHandle</code>, in registration order.
+        Mounted <em>before</em> <code>tenancy()</code>, the cache would key every
+        tenant&apos;s response identically and leak silently, behind a
+        perfectly ordinary-looking <code>x-cache: HIT</code>.
+      </p>
+      <p>
+        In production with <code>secureDefaults</code> on, that ordering refuses
+        to boot. The fix is registration order, not configuration:
+      </p>
+      <CodeBlock
+        code={`import { App, responseCache, tenancy, tenantFromSubdomain } from "@daloyjs/core";
+
+// (a) WRONG - refuses to boot: the cache reads state before tenancy writes it.
+const bad = new App({ env: "production" });
+bad.use(responseCache({ ttlSeconds: 30 }));
+bad.use(tenancy({ resolve: tenantFromSubdomain({ baseDomain: "example.com" }) }));
+
+// (b) RIGHT - tenancy first, so ctx.state.tenant exists when the key is built.
+const good = new App({ env: "production" });
+good.use(tenancy({ resolve: tenantFromSubdomain({ baseDomain: "example.com" }) }));
+good.use(responseCache({ ttlSeconds: 30 }));
+
+// (c) Also right - tenancy as a global hook always runs first.
+const alsoGood = new App({
+  env: "production",
+  hooks: tenancy({ resolve: tenantFromSubdomain({ baseDomain: "example.com" }) }),
+});
+alsoGood.use(responseCache({ ttlSeconds: 30 }));`}
+      />
+      <p>
+        See <a href="/docs/response-cache#cache-key-and-isolation">cache key and
+        cross-principal isolation</a> for the full keying model, including the{" "}
+        <code>principal</code> option for cookie-authenticated routes.
+      </p>
+
       <h2 id="migration-checklist">Migration checklist</h2>
       <ul>
         <li>

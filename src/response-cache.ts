@@ -32,6 +32,25 @@
  *   the rate-limit store, with an in-memory {@link MemoryResponseCacheStore}
  *   default; supply a shared backend (e.g. Redis) for multi-instance fleets.
  *
+ * ## Cross-principal isolation (CWE-524)
+ *
+ * A shared response cache is only as safe as its key. Anything that varies the
+ * response but not the key becomes a cross-principal disclosure: the next caller
+ * of the same URL receives the previous caller's private body. This module is
+ * fail-closed on every principal dimension the framework can see:
+ *
+ * - **Authority.** The key is built from the *effective request URI* (scheme +
+ *   authority + path + query) per RFC 9111 §4, so one process serving several
+ *   hostnames (vanity domains, subdomain-per-customer) never shares an entry
+ *   across them.
+ * - **Credentials.** Requests carrying `Authorization` **or** `Cookie` bypass
+ *   the shared cache entirely unless the caller is identified (see
+ *   {@link ResponseCacheOptions.principal}) or the header is explicitly declared
+ *   shareable (see {@link ResponseCacheOptions.cacheAuthenticatedRequests}).
+ * - **Tenant.** When `tenancy()` has resolved a tenant for the request, that
+ *   tenant is folded into the key automatically — no `keyGenerator` wiring
+ *   required, and it applies to a custom `keyGenerator` too.
+ *
  * This module is dependency-free and uses only Web Standard
  * `Request`/`Response` + `Headers`, so it runs unchanged on Node, Bun, Deno,
  * Cloudflare Workers, and Vercel.
@@ -45,6 +64,34 @@ import { markSchemaValidatedResponse } from "./internal-response.js";
 
 /** Internal `ctx.state` key carrying the pending cache key between hooks. */
 const PENDING_STATE_KEY = "__responseCachePending";
+
+/**
+ * Marker stamped on the `Hooks` object returned by {@link responseCache}, so the
+ * `App` boot guard can detect a cache mounted *ahead of* `tenancy()` — an order
+ * in which the tenant is not yet in `ctx.state` when the cache key is built, and
+ * automatic tenant partitioning therefore cannot protect the entry.
+ *
+ * @since 1.0.0
+ */
+export const RESPONSE_CACHE_HOOK_MARKER: unique symbol = Symbol.for(
+  "daloyjs.response-cache.hook"
+);
+
+/**
+ * `ctx.state` symbol under which `tenancy()` records the tenant it resolved for
+ * the request, or its `TENANT_UNRESOLVED` sentinel when it ran and resolved
+ * nothing. Either way the value is a string, so it partitions the cache key —
+ * which keeps tenant-less traffic out of the resolved tenants' entries without
+ * this module needing to know the sentinel's value.
+ *
+ * Re-derived from the global symbol registry rather than imported from
+ * `tenancy.js` so that using `responseCache()` never pulls the tenancy module
+ * into the bundle — the same technique `app.ts` uses for the MCP route marker.
+ * Must match the string in `tenancy.ts`.
+ *
+ * @internal
+ */
+const TENANCY_RESOLVED_MARKER = Symbol.for("daloyjs.tenancy.resolved");
 
 /**
  * Process-wide registry of in-memory stores shared by
@@ -142,10 +189,42 @@ export interface ResponseCacheOptions {
    */
   varyHeaders?: string[];
   /**
-   * Derive the cache key from the request. Default: method + URL +
+   * Derive the cache key **body** from the request. Default: method + the
+   * effective request URI (scheme + authority + path + query) +
    * {@link varyHeaders} values. Return `null` to skip caching for this request.
+   *
+   * The resolved tenant and {@link principal} partition is applied *around*
+   * whatever this returns, so a custom generator does not have to (and should
+   * not bother to) fold them in itself — it cannot accidentally widen the
+   * partition below what the framework knows about the caller.
    */
   keyGenerator?: (ctx: BaseContext<any, any>) => string | null;
+
+  /**
+   * Identify the caller, so responses to credentialed requests can be cached
+   * *per principal* instead of bypassing the cache.
+   *
+   * Return a stable id for the calling principal (user id, tenant id, API-key
+   * fingerprint — never the raw credential), or `null` / `undefined` when the
+   * request is anonymous. The returned id is folded into the cache key.
+   *
+   * This is what makes cookie-authenticated caching safe: a session cookie
+   * identifies a user that the cache key would otherwise ignore, so without a
+   * `principal` such a request is not cached at all.
+   *
+   * ```ts
+   * responseCache({
+   *   ttlSeconds: 30,
+   *   principal: (ctx) => ctx.state.session?.get<string>("userId") ?? null,
+   * });
+   * ```
+   *
+   * @remarks Returning `null` for a request that *does* carry credentials is
+   * treated as "cannot identify this caller", and the request bypasses the cache
+   * rather than sharing an anonymous entry.
+   * @since 1.0.0
+   */
+  principal?: (ctx: BaseContext<any, any>) => string | null | undefined;
   /**
    * Maximum response body size (bytes) the middleware will buffer and store.
    * Larger responses pass through uncached. Default: `1048576` (1 MiB).
@@ -163,25 +242,34 @@ export interface ResponseCacheOptions {
    */
   groupId?: string;
   /**
-   * Whether to cache responses to requests that carry an `Authorization`
-   * header. Default: `false`.
+   * Whether to cache responses to requests that carry credentials — an
+   * `Authorization` header or a `Cookie` header. Default: `false` for both.
    *
-   * A shared response cache keyed on method + URL (the default) does not
-   * include the credential, so caching an authenticated response would serve
-   * one user's private data to the next user requesting the same URL
-   * (CWE-524 — cross-tenant cached-response disclosure). For that reason, and
-   * per RFC 9111 §3.5 (a shared cache MUST NOT reuse a response to an
-   * `Authorization`-bearing request unless explicitly permitted), such
-   * requests bypass the cache entirely by default.
+   * A shared response cache keyed on the request URI does not include the
+   * credential, so caching a credentialed response would serve one user's
+   * private data to the next caller of the same URL (CWE-524 — cross-principal
+   * cached-response disclosure). Per RFC 9111 §3.5 a shared cache MUST NOT
+   * reuse a response to an `Authorization`-bearing request unless explicitly
+   * permitted; `Cookie` is treated the same way because a session cookie is the
+   * single most common way a response is made private.
    *
-   * Set this to `true` only when the response is genuinely shareable across
-   * principals (e.g. public reference data served behind a bearer gate) — and
-   * then also add the credential to {@link varyHeaders} or a custom
-   * {@link keyGenerator} so distinct callers cannot collide.
+   * Pass a boolean to set both, or an object to control them independently —
+   * useful when a public endpoint receives unrelated analytics cookies but must
+   * never cache bearer-authenticated responses:
    *
-   * @since 0.40.0
+   * ```ts
+   * responseCache({ cacheAuthenticatedRequests: { cookie: true } });
+   * ```
+   *
+   * Enable a dimension only when the response is genuinely shareable across
+   * principals (e.g. public reference data behind a bearer gate). Otherwise
+   * prefer {@link principal}, which keeps caching *and* keeps callers apart.
+   *
+   * @remarks Declaring the credential header in {@link varyHeaders} also counts
+   * as handling it, since its value then partitions the key.
+   * @since 0.40.0 — extended to `Cookie` and per-header control in 1.0.0.
    */
-  cacheAuthenticatedRequests?: boolean;
+  cacheAuthenticatedRequests?: boolean | { authorization?: boolean; cookie?: boolean };
 }
 
 // ---------- Default store ----------
@@ -301,13 +389,38 @@ function freshnessFromResponse(res: Response): number | null | undefined {
   return undefined;
 }
 
+/**
+ * Build the default cache-key body: the method plus the **effective request
+ * URI** (scheme + authority + path + query), plus any {@link
+ * ResponseCacheOptions.varyHeaders} values.
+ *
+ * Including the authority is what keeps one process serving several hostnames
+ * from sharing entries across them (RFC 9111 §4 keys a cache on the target URI,
+ * which includes the authority). `Request.url` is already an absolute,
+ * normalized serialization (host lower-cased, default port elided), so it is
+ * used directly — no `URL` object is allocated on this hot path. Only the
+ * fragment, which is meaningless to a cache and never sent by HTTP clients, is
+ * trimmed.
+ */
 function defaultKey(ctx: BaseContext<any, any>, varyHeaders: string[]): string {
-  const url = new URL(ctx.request.url);
-  let key = `${ctx.request.method} ${url.pathname}${url.search}`;
+  const url = ctx.request.url;
+  const hash = url.indexOf("#");
+  let key = `${ctx.request.method} ${hash === -1 ? url : url.slice(0, hash)}`;
   for (const name of varyHeaders) {
     key += `\n${name}: ${ctx.request.headers.get(name) ?? ""}`;
   }
   return key;
+}
+
+/**
+ * Append a length-prefixed `name=value` component to a cache-key partition.
+ *
+ * The length prefix makes the component unambiguous, so a principal id
+ * containing the delimiter (or a whole forged key fragment) cannot be crafted to
+ * collide with a different partition — cache-key injection.
+ */
+function appendPartition(partition: string, name: string, value: string): string {
+  return `${partition}${name}=${value.length}:${value}\n`;
 }
 
 function buildResponseFromCache(
@@ -398,9 +511,23 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
   }
 
   const methods = new Set((opts.methods ?? ["GET", "HEAD"]).map((m) => m.toUpperCase()));
-  const cacheAuthenticatedRequests = opts.cacheAuthenticatedRequests === true;
   const cacheableStatus = opts.cacheableStatus ?? ((status: number) => status === 200);
   const varyHeaders = (opts.varyHeaders ?? []).map((h) => h.toLowerCase());
+  const principal = opts.principal;
+
+  // Resolve the per-header credential policy once, at construction. A credential
+  // header counts as "handled" when the caller declared it shareable, or when it
+  // is in `varyHeaders` (its value then partitions the key by itself).
+  const credentialOptIn = opts.cacheAuthenticatedRequests;
+  const optInAll = credentialOptIn === true;
+  const authorizationHandled =
+    optInAll ||
+    (typeof credentialOptIn === "object" && credentialOptIn?.authorization === true) ||
+    varyHeaders.includes("authorization");
+  const cookieHandled =
+    optInAll ||
+    (typeof credentialOptIn === "object" && credentialOptIn?.cookie === true) ||
+    varyHeaders.includes("cookie");
   const statusHeaderName =
     opts.statusHeaderName === null ? null : (opts.statusHeaderName ?? "x-cache").toLowerCase();
   const ttlMs = ttlSeconds * 1_000;
@@ -440,25 +567,56 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
       .finally(() => refreshing.delete(key));
   }
 
-  return {
+  const hooks: Hooks = {
     async beforeHandle(ctx) {
       const method = ctx.request.method.toUpperCase();
       if (!methods.has(method)) return undefined;
 
-      // RFC 9111 §3.5 / CWE-524: a shared cache keyed on method+URL must not
-      // store or reuse a response to an Authorization-bearing request, or it
-      // would serve one principal's private data to the next caller. Opt in
-      // via `cacheAuthenticatedRequests` for genuinely shareable content.
-      if (!cacheAuthenticatedRequests && ctx.request.headers.has("authorization")) {
+      const headers = ctx.request.headers;
+
+      // Checked before `principal` runs so a fully bypassed request never pays
+      // for the caller's callback.
+      const reqCc = parseCacheControl(headers.get("cache-control"));
+      if (reqCc.has("no-store")) return undefined;
+
+      // Identify the caller, if the app can. A non-empty principal is folded
+      // into the key below, which is what makes caching a credentialed response
+      // safe: the entry belongs to that principal alone. Not wrapped in a
+      // try/catch, matching `keyGenerator`: a throwing option is a bug in the
+      // app, and swallowing it would hide the misconfiguration.
+      const principalId = principal ? (principal(ctx) ?? null) : null;
+
+      // RFC 9111 §3.5 / CWE-524: a shared cache keyed on the request URI must not
+      // store or reuse a response to a credentialed request, or it would serve
+      // one principal's private data to the next caller. `Cookie` counts as a
+      // credential alongside `Authorization` — a session cookie is the most
+      // common way a response becomes private. An unhandled credential is only
+      // safe once `principal` has named the caller.
+      if (
+        !principalId &&
+        ((!authorizationHandled && headers.has("authorization")) ||
+          (!cookieHandled && headers.has("cookie")))
+      ) {
         return undefined;
       }
 
-      const reqCc = parseCacheControl(ctx.request.headers.get("cache-control"));
-      if (reqCc.has("no-store")) return undefined;
-
       const rawKey = opts.keyGenerator ? opts.keyGenerator(ctx) : defaultKey(ctx, varyHeaders);
       if (rawKey === null) return undefined;
-      const key = `${keyPrefix}${rawKey}`;
+
+      // Partition the key by everything the framework knows about the caller
+      // that the URI does not already express. Applied around `keyGenerator`
+      // output too, so a custom generator cannot widen the partition. Skipped
+      // entirely — no allocation — for the common unpartitioned public request.
+      let partition = "";
+      const tenant = (ctx.state as Record<PropertyKey, unknown>)[TENANCY_RESOLVED_MARKER];
+      if (typeof tenant === "string") {
+        partition = appendPartition(partition, "tenant", tenant);
+      }
+      if (principalId) {
+        partition = appendPartition(partition, "principal", principalId);
+      }
+
+      const key = `${keyPrefix}${partition}${rawKey}`;
 
       // `no-cache` bypasses the read but still allows a fresh write below.
       const bypassRead = reqCc.has("no-cache");
@@ -532,4 +690,9 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
       return undefined;
     },
   };
+
+  // Let the App boot guard see that a response cache is in this hook chain, and
+  // where in the order it sits relative to `tenancy()`.
+  (hooks as Record<PropertyKey, unknown>)[RESPONSE_CACHE_HOOK_MARKER] = true;
+  return hooks;
 }

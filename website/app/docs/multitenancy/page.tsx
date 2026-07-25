@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Multitenancy",
   description:
-    "Resolve, validate, and isolate tenants with the secure-by-default tenancy() middleware: pluggable resolution (subdomain, header, path, JWT claim, or custom), refuse-unresolved by default, format-validated tenant ids, no-enumeration rejection, and a tenantScope() helper that partitions rateLimit, concurrencyLimit, idempotency, and responseCache per tenant.",
+    "Resolve, validate, and isolate tenants with the secure-by-default tenancy() middleware: pluggable resolution (subdomain, header, path, JWT claim, or custom), refuse-unresolved by default, format-validated tenant ids, no-enumeration rejection, automatic per-tenant response-cache partitioning, and a tenantScope() helper that partitions rateLimit, concurrencyLimit, and idempotency per tenant.",
   path: "/docs/multitenancy",
   keywords: [
     "multitenancy",
@@ -377,16 +377,10 @@ rateLimit({ windowMs: 60_000, max: 100, keyGenerator: scope });
 concurrencyLimit({ maxConcurrent: 20, scope });
 idempotency({ scope });   // CWE-524 cross-tenant cached-response defense
 
-// responseCache differs: its keyGenerator REPLACES the whole cache key, and it
-// takes ttlSeconds (not ttlMs). Fold the tenant in alongside the path yourself,
-// or every URL for a tenant would collide on one entry.
-responseCache({
-  ttlSeconds: 30,
-  keyGenerator: (ctx) => {
-    const u = new URL(ctx.request.url);
-    return \`\${scope(ctx)}:\${ctx.request.method} \${u.pathname}\${u.search}\`;
-  },
-});`}
+// responseCache needs NO wiring: it folds the resolved tenant into its cache
+// key on its own, and does so around any custom keyGenerator, so a generator
+// cannot accidentally widen the partition.
+responseCache({ ttlSeconds: 30 });`}
         language="ts"
       />
       <p>
@@ -397,7 +391,14 @@ responseCache({
         the first <code>app.use(...)</code>
         {", "}so the tenant is populated before any <code>keyGenerator</code> /{" "}
         <code>scope</code> callback runs. If a limiter runs first, its key falls
-        back to <code>tenant:unknown</code>.
+        back to <code>tenant:unknown</code>. For{" "}
+        <code>responseCache()</code> specifically the stakes are high enough that
+        the order is <em>enforced</em>: a cache mounted ahead of{" "}
+        <code>tenancy()</code>{" "}
+        <a href="/docs/security/boot-guards#7-responsecache-mounted-ahead-of-tenancy">
+          refuses to boot in production
+        </a>{" "}
+        rather than serve one tenant&apos;s response to another.
       </p>
 
       <h2 id="database-isolation-is-yours-to-wire">

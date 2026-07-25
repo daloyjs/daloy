@@ -55,6 +55,39 @@ function get(headers?: Record<string, string>): RequestInit {
   return { method: "GET", headers };
 }
 
+/**
+ * Wrap a {@link MemoryResponseCacheStore} so a test can address the entry the
+ * middleware actually wrote without hardcoding the internal cache-key format.
+ *
+ * The key is deliberately opaque: it contains the full effective request URI
+ * (scheme + authority + path + query, per RFC 9111 §4) plus any tenant /
+ * principal partition, and those components are a security control that may grow.
+ * Tests that assert *behavior* should never re-derive it by hand.
+ */
+function keyCapturingStore(): {
+  store: ResponseCacheStore;
+  inner: MemoryResponseCacheStore;
+  lastKey: () => string;
+} {
+  const inner = new MemoryResponseCacheStore();
+  let lastKey: string | undefined;
+  return {
+    inner,
+    lastKey: () => {
+      assert.ok(lastKey !== undefined, "no cache entry was written");
+      return lastKey;
+    },
+    store: {
+      get: (key) => inner.get(key),
+      set: (key, entry, ttlMs) => {
+        lastKey = key;
+        inner.set(key, entry, ttlMs);
+      },
+      delete: (key) => inner.delete(key),
+    },
+  };
+}
+
 // ---------- Happy paths ----------
 
 test("first request misses and runs the handler", async () => {
@@ -88,16 +121,16 @@ test("HEAD request serves a cached body as an empty body", async () => {
 });
 
 test("entries expire after the TTL elapses", async () => {
-  const store = new MemoryResponseCacheStore();
+  const { store, inner, lastKey } = keyCapturingStore();
   const { app, state } = makeApp({ ttlSeconds: 60, store });
   await app.request("/now", get());
   assert.equal(state.calls, 1);
 
   // Force the stored entry to look expired.
-  const key = "GET /now";
-  const entry = store.get(key) as CachedResponse;
+  const key = lastKey();
+  const entry = inner.get(key) as CachedResponse;
   assert.ok(entry);
-  store.set(key, { ...entry, freshUntil: Date.now() - 1, staleUntil: Date.now() - 1 }, 1);
+  inner.set(key, { ...entry, freshUntil: Date.now() - 1, staleUntil: Date.now() - 1 }, 1);
 
   const res = await app.request("/now", get());
   assert.equal(state.calls, 2, "expired entry must re-run the handler");
@@ -107,22 +140,22 @@ test("entries expire after the TTL elapses", async () => {
 // ---------- Cache-Control orchestration ----------
 
 test("response max-age overrides the configured ttl as the freshness window", async () => {
-  const store = new MemoryResponseCacheStore();
+  const { store, inner, lastKey } = keyCapturingStore();
   const { app, state } = makeApp({ ttlSeconds: 5, store });
   state.cacheControl = "max-age=600";
   await app.request("/now", get());
-  const entry = store.get("GET /now") as CachedResponse;
+  const entry = inner.get(lastKey()) as CachedResponse;
   assert.ok(entry);
   const freshFor = entry.freshUntil - entry.storedAt;
   assert.ok(freshFor > 500_000, `expected ~600s freshness, got ${freshFor}ms`);
 });
 
 test("response s-maxage wins over max-age", async () => {
-  const store = new MemoryResponseCacheStore();
+  const { store, inner, lastKey } = keyCapturingStore();
   const { app, state } = makeApp({ ttlSeconds: 5, store });
   state.cacheControl = "max-age=10, s-maxage=600";
   await app.request("/now", get());
-  const entry = store.get("GET /now") as CachedResponse;
+  const entry = inner.get(lastKey()) as CachedResponse;
   const freshFor = entry.freshUntil - entry.storedAt;
   assert.ok(freshFor > 500_000, `expected s-maxage to win, got ${freshFor}ms`);
 });
@@ -226,7 +259,7 @@ test("responses larger than maxBodyBytes are not cached", async () => {
 // ---------- stale-while-revalidate ----------
 
 test("stale-while-revalidate serves stale and refreshes in the background", async () => {
-  const store = new MemoryResponseCacheStore();
+  const { store, inner, lastKey } = keyCapturingStore();
   let app!: App<any>;
   const built = makeAppWithSwr(store, () => app);
   app = built.app;
@@ -237,9 +270,9 @@ test("stale-while-revalidate serves stale and refreshes in the background", asyn
   assert.equal(await firstCalls(first), 1);
 
   // Make the stored entry stale (past freshUntil, within staleUntil).
-  const key = "GET /now";
-  const entry = store.get(key) as CachedResponse;
-  store.set(key, { ...entry, freshUntil: Date.now() - 1 }, 1_000_000);
+  const key = lastKey();
+  const entry = inner.get(key) as CachedResponse;
+  inner.set(key, { ...entry, freshUntil: Date.now() - 1 }, 1_000_000);
 
   const stale = await app.request("/now", get());
   assert.equal(stale.headers.get("x-cache"), "STALE");

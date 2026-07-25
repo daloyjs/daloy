@@ -32,6 +32,12 @@
  * (as the first group hook, or in `AppOptions.hooks`) so `ctx.state.tenant`
  * is populated by the time their `keyGenerator` / `scope` callbacks run.
  *
+ * `responseCache()` is a special case in two ways: it partitions on the resolved
+ * tenant **automatically** (no `keyGenerator` needed — see
+ * {@link TENANCY_RESOLVED_MARKER}), and because a mis-ordered cache is a silent
+ * cross-tenant disclosure rather than a merely wrong bucket, mounting it *ahead*
+ * of `tenancy()` refuses to boot in production instead of leaking.
+ *
  * ```ts
  * import { App, tenancy, tenantFromSubdomain, tenantScope, rateLimit } from "@daloyjs/core";
  *
@@ -245,6 +251,43 @@ export function tenantFromClaim(claim: string, opts: ClaimTenantOptions = {}): T
 }
 
 /** Status codes acceptable for an unresolved-tenant rejection. @since 0.42.0 */
+/**
+ * Marker stamped on the `Hooks` object returned by {@link tenancy}, so the `App`
+ * boot guard can verify that a `responseCache()` in the same chain is mounted
+ * *after* tenancy — i.e. that the tenant is in `ctx.state` by the time the cache
+ * key is built.
+ *
+ * @since 1.0.0
+ */
+export const TENANCY_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.tenancy.hook");
+
+/**
+ * `ctx.state` symbol under which {@link tenancy} records the tenant it resolved,
+ * independently of the configurable {@link TenancyOptions.stateKey}.
+ *
+ * Consumers that must partition shared state per tenant — notably
+ * `responseCache()`, which folds it into the cache key to prevent cross-tenant
+ * cached-response disclosure (CWE-524) — read this instead of guessing the
+ * `stateKey`. Kept in the global symbol registry so a consumer can re-derive it
+ * with `Symbol.for(...)` without importing this module.
+ *
+ * @since 1.0.0
+ */
+export const TENANCY_RESOLVED_MARKER: unique symbol = Symbol.for("daloyjs.tenancy.resolved");
+
+/**
+ * Value recorded under {@link TENANCY_RESOLVED_MARKER} when {@link tenancy} ran
+ * but resolved no tenant (only reachable with `tenancy({ require: false })`).
+ *
+ * Distinguishing "tenancy is active and resolved nothing" from "no tenancy at
+ * all" lets a consumer keep tenant-less traffic in its own partition rather than
+ * sharing the unpartitioned one. The leading space cannot occur in a normalized
+ * tenant id, so it can never collide with a real one.
+ *
+ * @since 1.0.0
+ */
+export const TENANT_UNRESOLVED = " unresolved";
+
 export type UnresolvedStatus = 400 | 401 | 403 | 404;
 /** Status codes acceptable for an unknown/disallowed-tenant rejection. @since 0.42.0 */
 export type InvalidStatus = 400 | 403 | 404;
@@ -339,8 +382,14 @@ export function tenancy(opts: TenancyOptions): Hooks {
     allowFn = opts.allow;
   }
 
-  return {
+  const hooks: Hooks = {
     async beforeHandle(ctx) {
+      const state = ctx.state as Record<PropertyKey, unknown>;
+      // Record "tenancy ran" up front, so a tenant-less request is partitioned
+      // as such by downstream consumers instead of falling into the shared,
+      // unpartitioned bucket alongside resolved tenants.
+      state[TENANCY_RESOLVED_MARKER] = TENANT_UNRESOLVED;
+
       let raw: string | null | undefined;
       for (const resolve of resolvers) {
         raw = await resolve(ctx);
@@ -368,9 +417,15 @@ export function tenancy(opts: TenancyOptions): Hooks {
         throw rejection(invalidStatus, "Unknown tenant.");
       }
 
-      (ctx.state as Record<string, unknown>)[stateKey] = id;
+      state[stateKey] = id;
+      state[TENANCY_RESOLVED_MARKER] = id;
     },
   };
+
+  // Let the App boot guard see tenancy's position in the hook chain relative to
+  // any responseCache() that must partition on the tenant it resolves.
+  (hooks as Record<PropertyKey, unknown>)[TENANCY_HOOK_MARKER] = true;
+  return hooks;
 }
 
 /** Options for {@link tenantScope}. @since 0.42.0 */
