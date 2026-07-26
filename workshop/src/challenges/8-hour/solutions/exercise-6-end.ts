@@ -1,4 +1,10 @@
-import { App, createJwtSigner, createJwtVerifier, UnauthorizedError, type Hooks } from "@daloyjs/core";
+import {
+  App,
+  createJwtSigner,
+  createJwtVerifier,
+  UnauthorizedError,
+  type Hooks,
+} from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { z } from "zod";
 
@@ -55,7 +61,7 @@ app.post(
     const now = Math.floor(Date.now() / 1000);
     const token = await signer.sign({ sub: body.username, iat: now, exp: now + 60 * 60 });
     return { status: 200 as const, body: { token } };
-  },
+  }
 );
 
 app.get(
@@ -70,7 +76,7 @@ app.get(
       401: { description: "Unauthorized" },
     },
   },
-  async (ctx) => ({ status: 200 as const, body: { sub: String(ctx.state.user) } }),
+  async (ctx) => ({ status: 200 as const, body: { sub: String(ctx.state.user) } })
 );
 
 // Bonus: JWKS-based asymmetric verification

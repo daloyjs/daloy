@@ -42,7 +42,7 @@ DaloyJS is a **contract-first** framework. On Vercel, additionally:
    then drop `node:` modules.
 2. **The route definition is the contract.** Method, path, request
    schemas, and response schemas live in one place — `app.get(path,
-   contract, handler)` (and the matching `app.post`/`put`/`patch`/
+contract, handler)` (and the matching `app.post`/`put`/`patch`/
    `delete`/`head` shorthands), or `app.route({...})` when you need a
    reusable `defineRoute()` contract or a metadata-heavy route. Both
    forms produce identical runtime behavior, validation, security, and

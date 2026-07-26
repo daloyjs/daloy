@@ -109,8 +109,8 @@ test("[boot-warning] dev mode warns once about a schema-less 2xx response", asyn
   await app.request("/profile");
   await app.request("/profile"); // second request must NOT re-warn
 
-  const hits = warns.filter((w) =>
-    (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing",
+  const hits = warns.filter(
+    (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
   );
   assert.equal(hits.length, 1, "the warning fires exactly once per process");
   assert.match(hits[0]!.msg, /OWASP API3|body schema/i);
@@ -128,9 +128,10 @@ test("[boot-warning] no warning when every 2xx response declares a body schema",
   });
   await app.request("/profile");
   assert.equal(
-    warns.filter((w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing")
-      .length,
-    0,
+    warns.filter(
+      (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
+    ).length,
+    0
   );
 });
 
@@ -197,10 +198,11 @@ test("[boot-warning] production stays silent (operators run `daloy doctor` in CI
   });
   await app.request("/profile");
   assert.equal(
-    warns.filter((w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing")
-      .length,
+    warns.filter(
+      (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
+    ).length,
     0,
-    "the dev warning must not fire in production",
+    "the dev warning must not fire in production"
   );
 });
 
@@ -216,9 +218,10 @@ test("[boot-warning] secureDefaults:false suppresses the warning (the developer 
   });
   await app.request("/profile");
   assert.equal(
-    warns.filter((w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing")
-      .length,
-    0,
+    warns.filter(
+      (w) => (w.obj as { event?: string } | null)?.event === "security.response.bodySchemaMissing"
+    ).length,
+    0
   );
 });
 
@@ -250,7 +253,9 @@ test("[doctor] reports audit.response.bodySchema for a schema-less 2xx route", a
   const { io, out } = doctorIO(app);
   await runCli(["doctor", "--json"], io);
   const report = JSON.parse(out.join(""));
-  const finding = report.findings.find((f: { code: string }) => f.code === "audit.response.bodySchema");
+  const finding = report.findings.find(
+    (f: { code: string }) => f.code === "audit.response.bodySchema"
+  );
   assert.ok(finding, "doctor must surface the response.bodySchema audit");
   assert.equal(finding.level, "warn");
   assert.match(finding.message, /\/leaky/);

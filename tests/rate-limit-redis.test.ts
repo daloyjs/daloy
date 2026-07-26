@@ -88,7 +88,11 @@ test("redisRateLimitStore coerces bigint and string EVAL return values", async (
     ["not-a-number", "abc", 0],
   ];
   for (const [count, ttl, expectedCount] of cases) {
-    const client: RedisCommands = { async eval() { return [count, ttl]; } };
+    const client: RedisCommands = {
+      async eval() {
+        return [count, ttl];
+      },
+    };
     const store = redisRateLimitStore({ client });
     const result = await store.hit("k", 1_000);
     assert.equal(result.count, expectedCount);
@@ -96,7 +100,11 @@ test("redisRateLimitStore coerces bigint and string EVAL return values", async (
 });
 
 test("redisRateLimitStore handles missing/empty EVAL response", async () => {
-  const client: RedisCommands = { async eval() { return null; } };
+  const client: RedisCommands = {
+    async eval() {
+      return null;
+    },
+  };
   const store = redisRateLimitStore({ client });
   const result = await store.hit("k", 1_000);
   assert.equal(result.count, 0);
@@ -137,7 +145,7 @@ test("redisRateLimitStore integrates with rateLimit and surfaces 429 + Retry-Aft
       max: 2,
       store: redisRateLimitStore({ client }),
       keyGenerator: () => "shared",
-    }),
+    })
   );
   app.route({
     method: "GET",

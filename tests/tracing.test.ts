@@ -233,7 +233,11 @@ test("otelTracing supports custom spanName, attribute extractors, parent context
       tracer,
       spanName: (req) => `custom ${new URL(req.url).pathname}`,
       attributesFromRequest: () => ({ "tenant.id": "acme", "feature.flags": ["a", "b"] }),
-      attributesFromResponse: (res) => ({ "http.response.body.size": res.headers.get("content-length") ? Number(res.headers.get("content-length")) : 0 }),
+      attributesFromResponse: (res) => ({
+        "http.response.body.size": res.headers.get("content-length")
+          ? Number(res.headers.get("content-length"))
+          : 0,
+      }),
       contextFromRequest: () => parentContext,
       onSpanStart: (req, _span) => {
         startCalls.push(req.url);

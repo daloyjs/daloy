@@ -131,7 +131,7 @@ interface PackageJsonLike {
  *     on demand inside CI or in a developer workflow).
  */
 export function findShrinkwrapManifestIssues(
-  manifest: PackageJsonLike,
+  manifest: PackageJsonLike
 ): readonly ShrinkwrapViolation["reason"][] {
   const issues: ShrinkwrapViolation["reason"][] = [];
   const files = manifest.files;

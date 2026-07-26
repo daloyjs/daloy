@@ -152,11 +152,10 @@ function isBinary(path: string): boolean {
  * invocation against a tarball).
  */
 export function listStagedFiles(cwd: string = process.cwd()): readonly string[] | null {
-  const res = spawnSync(
-    "git",
-    ["diff", "--cached", "--name-only", "--diff-filter=AM", "-z"],
-    { cwd, encoding: "utf8" },
-  );
+  const res = spawnSync("git", ["diff", "--cached", "--name-only", "--diff-filter=AM", "-z"], {
+    cwd,
+    encoding: "utf8",
+  });
   if (res.status !== 0) return null;
   const out = res.stdout ?? "";
   if (out.length === 0) return [];
@@ -173,7 +172,7 @@ export function listStagedFiles(cwd: string = process.cwd()): readonly string[] 
  */
 export async function scanOneStagedFile(
   cwd: string,
-  rel: string,
+  rel: string
 ): Promise<readonly StagedFinding[]> {
   const findings: StagedFinding[] = [];
   const basename = basenameOf(rel);
@@ -213,7 +212,7 @@ export async function scanOneStagedFile(
  */
 export async function scanStagedSecrets(
   cwd: string = process.cwd(),
-  staged: readonly string[] | null = listStagedFiles(cwd),
+  staged: readonly string[] | null = listStagedFiles(cwd)
 ): Promise<readonly StagedFinding[]> {
   if (staged === null) return [];
   const out: StagedFinding[] = [];
@@ -235,7 +234,7 @@ async function main(): Promise<void> {
     `scan-staged-secrets: ${findings.length} finding${findings.length === 1 ? "" : "s"} ` +
       "in staged files. Unstage the file (`git restore --staged <path>`) and " +
       "rotate the credential — once a secret is committed it is considered burned. " +
-      "Allowlist legitimate placeholders by renaming to `.env.example` / `.env.sample` / `.env.template`.",
+      "Allowlist legitimate placeholders by renaming to `.env.example` / `.env.sample` / `.env.template`."
   );
   process.exitCode = 1;
 }

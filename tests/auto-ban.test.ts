@@ -58,7 +58,7 @@ test("autoBan() validates numeric options", () => {
   assert.throws(() => autoBan({ keyGenerator: byHeader, banMs: 1.5 }), /banMs/);
   assert.throws(
     () => autoBan({ keyGenerator: byHeader, banMs: 1000, maxBanMs: 500 }),
-    /maxBanMs must be >= banMs/,
+    /maxBanMs must be >= banMs/
   );
 });
 
@@ -66,16 +66,13 @@ test("autoBan() validates banStatus and watchStatuses", () => {
   assert.throws(
     // @ts-expect-error intentionally invalid
     () => autoBan({ keyGenerator: byHeader, banStatus: 418 }),
-    /banStatus/,
+    /banStatus/
   );
   assert.throws(
     () => autoBan({ keyGenerator: byHeader, watchStatuses: [] }),
-    /at least one status/,
+    /at least one status/
   );
-  assert.throws(
-    () => autoBan({ keyGenerator: byHeader, watchStatuses: [99] }),
-    /100-599/,
-  );
+  assert.throws(() => autoBan({ keyGenerator: byHeader, watchStatuses: [99] }), /100-599/);
 });
 
 // ---------- happy paths ----------
@@ -216,7 +213,7 @@ test("autoBan() fires onStrike and onBan callbacks", async () => {
       maxStrikes: 2,
       onStrike: (e) => strikes.push(e.strikes),
       onBan: (e) => bans.push(e),
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -259,7 +256,7 @@ test("autoBan() escalates the ban duration for repeat offenders", async () => {
       banMs: 1000,
       store,
       onBan: (e) => bans.push(e),
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -312,7 +309,7 @@ test("autoBan() escalate:false keeps a constant ban duration", async () => {
       escalate: false,
       store,
       onBan: (e) => bans.push(e),
-    }),
+    })
   );
   app.route({
     method: "GET",

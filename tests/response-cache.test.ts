@@ -196,8 +196,16 @@ test("custom cacheableStatus controls which statuses are stored", async () => {
 
 test("non-eligible methods bypass the cache", async () => {
   const { app, state } = makeApp({ ttlSeconds: 60 });
-  await app.request("/now", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-  await app.request("/now", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  await app.request("/now", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  await app.request("/now", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
   assert.equal(state.calls, 2);
 });
 
@@ -283,7 +291,11 @@ test("stale-while-revalidate serves stale and refreshes in the background", asyn
   await new Promise((r) => setTimeout(r, 20));
   const refreshed = await app.request("/now", get());
   assert.equal(refreshed.headers.get("x-cache"), "HIT");
-  assert.deepEqual(await refreshed.json(), { calls: 2 }, "background refresh repopulated the cache");
+  assert.deepEqual(
+    await refreshed.json(),
+    { calls: 2 },
+    "background refresh repopulated the cache"
+  );
 });
 
 function makeAppWithSwr(store: ResponseCacheStore, getApp: () => App<any>) {
@@ -295,7 +307,7 @@ function makeAppWithSwr(store: ResponseCacheStore, getApp: () => App<any>) {
       staleWhileRevalidateSeconds: 600,
       store,
       revalidate: (req) => getApp().fetch(req),
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -356,17 +368,11 @@ test("invalid ttlSeconds throws", () => {
 });
 
 test("invalid staleWhileRevalidateSeconds throws", () => {
-  assert.throws(
-    () => responseCache({ staleWhileRevalidateSeconds: -1 }),
-    /non-negative integer/,
-  );
+  assert.throws(() => responseCache({ staleWhileRevalidateSeconds: -1 }), /non-negative integer/);
 });
 
 test("staleWhileRevalidateSeconds without a revalidate callback throws", () => {
-  assert.throws(
-    () => responseCache({ staleWhileRevalidateSeconds: 30 }),
-    /revalidate callback/,
-  );
+  assert.throws(() => responseCache({ staleWhileRevalidateSeconds: 30 }), /revalidate callback/);
 });
 
 test("invalid maxBodyBytes throws", () => {
@@ -518,7 +524,7 @@ test("x-request-id is not frozen into the entry and replayed", async () => {
   assert.notEqual(
     hit.headers.get("x-request-id"),
     first.headers.get("x-request-id"),
-    "a cache hit must not replay the correlation id of the request that populated it",
+    "a cache hit must not replay the correlation id of the request that populated it"
   );
 });
 

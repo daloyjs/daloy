@@ -61,12 +61,18 @@ test("[bot-guard] a spoofed Googlebot (Google UA from a non-Google IP) is blocke
   okRoute(app);
 
   const spoofed = await app.request("/", {
-    headers: { "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1)", "x-forwarded-for": "1.2.3.4" },
+    headers: {
+      "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1)",
+      "x-forwarded-for": "1.2.3.4",
+    },
   });
   assert.equal(spoofed.status, 403, "Googlebot UA from a non-Google IP must be blocked");
 
   const genuine = await app.request("/", {
-    headers: { "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1)", "x-forwarded-for": "66.249.66.1" },
+    headers: {
+      "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1)",
+      "x-forwarded-for": "66.249.66.1",
+    },
   });
   assert.equal(genuine.status, 200, "a reverse+forward-verified Googlebot IP is allowed");
 });
@@ -75,7 +81,10 @@ test("[bot-guard] explicitly blocked user-agents are rejected; ordinary clients 
   const app = devApp();
   app.use(botGuard({ blockedUserAgents: [/evil-scraper/i] }));
   okRoute(app);
-  assert.equal((await app.request("/", { headers: { "user-agent": "evil-scraper/1.0" } })).status, 403);
+  assert.equal(
+    (await app.request("/", { headers: { "user-agent": "evil-scraper/1.0" } })).status,
+    403
+  );
   assert.equal((await app.request("/", { headers: { "user-agent": "Mozilla/5.0" } })).status, 200);
 });
 
@@ -93,17 +102,31 @@ const COUNTRY: Record<string, string> = {
 
 test("[geo-block] allowlist mode blocks a country not on the list (403)", async () => {
   const app = devApp();
-  app.use(geoBlock({ allow: ["XA", "XB", "XC"], trustProxyHeaders: true, lookupCountry: (ip) => COUNTRY[ip] }));
+  app.use(
+    geoBlock({
+      allow: ["XA", "XB", "XC"],
+      trustProxyHeaders: true,
+      lookupCountry: (ip) => COUNTRY[ip],
+    })
+  );
   okRoute(app);
-  assert.equal((await app.request("/", { headers: { "x-forwarded-for": "203.0.113.7" } })).status, 403);
+  assert.equal(
+    (await app.request("/", { headers: { "x-forwarded-for": "203.0.113.7" } })).status,
+    403
+  );
   assert.equal((await app.request("/", { headers: { "x-forwarded-for": "8.8.8.8" } })).status, 200);
 });
 
 test("[geo-block] denylist mode blocks a listed country, passes everything else (403)", async () => {
   const app = devApp();
-  app.use(geoBlock({ deny: ["ZZ", "ZY"], trustProxyHeaders: true, lookupCountry: (ip) => COUNTRY[ip] }));
+  app.use(
+    geoBlock({ deny: ["ZZ", "ZY"], trustProxyHeaders: true, lookupCountry: (ip) => COUNTRY[ip] })
+  );
   okRoute(app);
-  assert.equal((await app.request("/", { headers: { "x-forwarded-for": "203.0.113.7" } })).status, 403);
+  assert.equal(
+    (await app.request("/", { headers: { "x-forwarded-for": "203.0.113.7" } })).status,
+    403
+  );
   assert.equal((await app.request("/", { headers: { "x-forwarded-for": "8.8.8.8" } })).status, 200);
 });
 
@@ -129,9 +152,19 @@ test("[ip-reputation] an IP on the denylist feed is blocked; exact + CIDR; clean
     const app = devApp();
     app.use(ctrl.hooks);
     okRoute(app);
-    assert.equal((await app.request("/", { headers: { "x-forwarded-for": "6.6.6.6" } })).status, 403);
-    assert.equal((await app.request("/", { headers: { "x-forwarded-for": "10.5.5.5" } })).status, 403, "CIDR match");
-    assert.equal((await app.request("/", { headers: { "x-forwarded-for": "198.51.100.4" } })).status, 200);
+    assert.equal(
+      (await app.request("/", { headers: { "x-forwarded-for": "6.6.6.6" } })).status,
+      403
+    );
+    assert.equal(
+      (await app.request("/", { headers: { "x-forwarded-for": "10.5.5.5" } })).status,
+      403,
+      "CIDR match"
+    );
+    assert.equal(
+      (await app.request("/", { headers: { "x-forwarded-for": "198.51.100.4" } })).status,
+      200
+    );
   } finally {
     ctrl.stop();
   }
@@ -152,7 +185,7 @@ test("[auto-ban] repeated 401s from one IP trigger a ban; other IPs unaffected",
       banMs: 10_000,
       watchStatuses: [401, 403, 429],
       banStatus: 429,
-    }),
+    })
   );
   app.route({
     method: "GET",

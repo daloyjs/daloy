@@ -68,7 +68,7 @@ app.get(
       status: 200 as const,
       body: { items: filtered.slice(0, query.limit), total: filtered.length },
     };
-  },
+  }
 );
 ```
 
@@ -91,7 +91,10 @@ app.post(
   async ({ headers, body }) => {
     const key = headers["idempotency-key"];
     if (seenIdempotencyKeys.has(key)) {
-      throw new HttpError(409, { title: "Conflict", detail: "This idempotency-key was already used" });
+      throw new HttpError(409, {
+        title: "Conflict",
+        detail: "This idempotency-key was already used",
+      });
     }
     if (books.has(body.id)) {
       throw new HttpError(409, { title: "Conflict", detail: `Book ${body.id} already exists` });
@@ -99,7 +102,7 @@ app.post(
     seenIdempotencyKeys.add(key);
     books.set(body.id, body);
     return { status: 201 as const, body };
-  },
+  }
 );
 ```
 
@@ -118,12 +121,12 @@ Each parameter has its `in` field set correctly. The generated typed client will
 
 ## Code-change cheat sheet
 
-| Step | Where        | Change                                                            |
-| ---- | ------------ | ----------------------------------------------------------------- |
-| 1    | Top          | Three schemas: `ListBooksQuery`, `CreateBookBody`, `IdempotencyHeaders` |
-| 2    | New route    | `GET /books` with `request.query`                                  |
-| 3    | New route    | `POST /books` with `request.headers` + `request.body`              |
-| 4    | Verify       | Inspect `/openapi.json` for `in:` locations                        |
+| Step | Where     | Change                                                                  |
+| ---- | --------- | ----------------------------------------------------------------------- |
+| 1    | Top       | Three schemas: `ListBooksQuery`, `CreateBookBody`, `IdempotencyHeaders` |
+| 2    | New route | `GET /books` with `request.query`                                       |
+| 3    | New route | `POST /books` with `request.headers` + `request.body`                   |
+| 4    | Verify    | Inspect `/openapi.json` for `in:` locations                             |
 
 ## Common mistakes
 

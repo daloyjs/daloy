@@ -44,8 +44,7 @@ import {
 import { z } from "zod";
 
 const SERVICE_NAME = "daloy-otel-demo";
-const OTLP_TRACES_URL =
-  process.env.OTLP_TRACES_URL ?? "http://localhost:4318/v1/traces";
+const OTLP_TRACES_URL = process.env.OTLP_TRACES_URL ?? "http://localhost:4318/v1/traces";
 
 // --------------------------------------------------------------------------
 // A minimal, dependency-free OTLP/HTTP JSON tracer.
@@ -160,7 +159,7 @@ class DemoSpan implements TracingSpan {
     private readonly traceId: string,
     private readonly spanId: string,
     private readonly parentSpanId: string | undefined,
-    initial: TracingAttributes | undefined,
+    initial: TracingAttributes | undefined
   ) {
     if (initial) Object.assign(this.attributes, initial);
   }
@@ -211,11 +210,7 @@ class DemoSpan implements TracingSpan {
 }
 
 const tracer: TracingTracer = {
-  startSpan(
-    name: string,
-    options?: TracingStartSpanOptions,
-    context?: unknown,
-  ): TracingSpan {
+  startSpan(name: string, options?: TracingStartSpanOptions, context?: unknown): TracingSpan {
     const parent = (context as ParentContext | undefined) ?? undefined;
     // DaloyJS passes the @opentelemetry/api SpanKind convention (SERVER = 1).
     // The OTLP wire enum is offset by one (SPAN_KIND_UNSPECIFIED = 0,
@@ -227,7 +222,7 @@ const tracer: TracingTracer = {
       parent?.traceId ?? randomHex(16),
       randomHex(8),
       parent?.spanId,
-      options?.attributes,
+      options?.attributes
     );
   },
 };
@@ -316,7 +311,7 @@ app.get(
     summary: "Liveness probe",
     responses: { 200: { description: "OK", body: z.object({ status: z.string() }) } },
   },
-  () => ({ status: 200 as const, body: { status: "ok" } }),
+  () => ({ status: 200 as const, body: { status: "ok" } })
 );
 
 app.get(
@@ -344,7 +339,7 @@ app.get(
         ],
       },
     };
-  },
+  }
 );
 
 app.post(
@@ -368,7 +363,7 @@ app.post(
       status: 201 as const,
       body: { id: `ord-${randomHex(4)}`, item: body.item, total: body.total },
     };
-  },
+  }
 );
 
 app.get(
@@ -382,7 +377,7 @@ app.get(
     const waitedMs = 150;
     await new Promise((r) => setTimeout(r, waitedMs));
     return { status: 200 as const, body: { waitedMs } };
-  },
+  }
 );
 
 app.get(
@@ -394,7 +389,7 @@ app.get(
   },
   () => {
     throw new Error("synthetic failure for tracing demo");
-  },
+  }
 );
 
 const PORT = 3002;

@@ -4,7 +4,17 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, openSync, constants as FS_CONSTANTS } from "node:fs";
-import { mkdir, readdir, readFile, writeFile, copyFile, rm, stat, chmod, access } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  writeFile,
+  copyFile,
+  rm,
+  stat,
+  chmod,
+  access,
+} from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { ReadStream as TtyReadStream } from "node:tty";
@@ -45,10 +55,26 @@ const TEMPLATE_OPTIONS = [
 ];
 
 const PACKAGE_MANAGER_OPTIONS = [
-  { value: "pnpm", title: "pnpm", description: "Recommended default with the hardened pnpm workspace settings" },
-  { value: "npm", title: "npm", description: "Use the stock npm CLI with rewritten scripts and docs" },
-  { value: "yarn", title: "Yarn", description: "Yarn workflow with rewritten scripts and lockfile-friendly installs" },
-  { value: "bun", title: "Bun", description: "Bun package manager for fast installs; runtime templates stay Bun-native" },
+  {
+    value: "pnpm",
+    title: "pnpm",
+    description: "Recommended default with the hardened pnpm workspace settings",
+  },
+  {
+    value: "npm",
+    title: "npm",
+    description: "Use the stock npm CLI with rewritten scripts and docs",
+  },
+  {
+    value: "yarn",
+    title: "Yarn",
+    description: "Yarn workflow with rewritten scripts and lockfile-friendly installs",
+  },
+  {
+    value: "bun",
+    title: "Bun",
+    description: "Bun package manager for fast installs; runtime templates stay Bun-native",
+  },
 ];
 
 const TEMPLATES = TEMPLATE_OPTIONS.map((option) => option.value);
@@ -233,8 +259,12 @@ const SYMBOLS = SUPPORTS_UNICODE
 const BAR = color(COLORS.gray, SYMBOLS.bar);
 
 function printIntro(title) {
-  console.log(`${color(COLORS.cyan, SYMBOLS.cornerTL + SYMBOLS.lineH)}  ${color(COLORS.bold + COLORS.white, title)}`);
-  console.log(`${BAR}  ${color(COLORS.dim, "Answer a few prompts \u2014 arrow keys to move, Enter to confirm.")}`);
+  console.log(
+    `${color(COLORS.cyan, SYMBOLS.cornerTL + SYMBOLS.lineH)}  ${color(COLORS.bold + COLORS.white, title)}`
+  );
+  console.log(
+    `${BAR}  ${color(COLORS.dim, "Answer a few prompts \u2014 arrow keys to move, Enter to confirm.")}`
+  );
   console.log(BAR);
 }
 
@@ -262,7 +292,9 @@ function renderBox(lines, options = {}) {
   const out = [top];
   for (const line of lines) {
     const padding = " ".repeat(Math.max(0, contentWidth - stringWidth(line)));
-    out.push(`${color(accent, SYMBOLS.lineV)}${" ".repeat(innerPadding)}${line}${padding}${" ".repeat(innerPadding)}${color(accent, SYMBOLS.lineV)}`);
+    out.push(
+      `${color(accent, SYMBOLS.lineV)}${" ".repeat(innerPadding)}${line}${padding}${" ".repeat(innerPadding)}${color(accent, SYMBOLS.lineV)}`
+    );
   }
   out.push(bottom);
   return out.join("\n");
@@ -309,9 +341,18 @@ function gradientLine(line, startRgb, endRgb) {
 
 function printBanner(version) {
   if (!SUPPORTS_UNICODE) {
-    console.log(`\n${color(COLORS.bold + COLORS.cyan, "create-daloy")}  ${color(COLORS.dim, `v${version}`)}`);
-    console.log(color(COLORS.dim, "The runtime-portable framework with supply-chain-aware defaults"));
-    console.log(color(COLORS.dim, "Secure-by-default runtime | Blocked install scripts | Source-verified lockfiles | Typed end-to-end"));
+    console.log(
+      `\n${color(COLORS.bold + COLORS.cyan, "create-daloy")}  ${color(COLORS.dim, `v${version}`)}`
+    );
+    console.log(
+      color(COLORS.dim, "The runtime-portable framework with supply-chain-aware defaults")
+    );
+    console.log(
+      color(
+        COLORS.dim,
+        "Secure-by-default runtime | Blocked install scripts | Source-verified lockfiles | Typed end-to-end"
+      )
+    );
     console.log(color(COLORS.dim, "https://daloyjs.dev\n"));
     return;
   }
@@ -320,10 +361,13 @@ function printBanner(version) {
   // tagline on the right — mirroring the social banner on https://daloyjs.dev.
   const wordmark = `${color(COLORS.bold + COLORS.white, "Daloy")}${color(COLORS.bold + COLORS.cyan, "JS")}`;
   const versionTag = color(COLORS.gray, `v${version}`);
-  const tagline = color(COLORS.gray, "The runtime-portable framework with supply-chain-aware defaults");
+  const tagline = color(
+    COLORS.gray,
+    "The runtime-portable framework with supply-chain-aware defaults"
+  );
 
   const waves = LOGO_WAVE_LINES.map((line, i) =>
-    gradientLine(line, LOGO_WAVE_GRADIENTS[i].start, LOGO_WAVE_GRADIENTS[i].end),
+    gradientLine(line, LOGO_WAVE_GRADIENTS[i].start, LOGO_WAVE_GRADIENTS[i].end)
   );
   const gap = "   ";
 
@@ -348,10 +392,11 @@ function printBanner(version) {
   // Inverse-video "daloyjs.dev" badge, echoing the rounded pill in the brand
   // banner. Inverse degrades to plain text when color is unavailable.
   const pill = color(COLORS.cyan + COLORS.inverse, " daloyjs.dev ");
-  console.log(`  ${pill}  ${color(COLORS.gray, "docs:")} ${color(COLORS.cyan + COLORS.underline, "https://daloyjs.dev/docs")}`);
+  console.log(
+    `  ${pill}  ${color(COLORS.gray, "docs:")} ${color(COLORS.cyan + COLORS.underline, "https://daloyjs.dev/docs")}`
+  );
   console.log("");
 }
-
 
 function printHelp() {
   const heading = (text) => color(COLORS.bold + COLORS.cyan, text);
@@ -386,7 +431,9 @@ ${heading("Docs")}  ${color(COLORS.cyan, "https://daloyjs.dev/docs")}
 
 function printTemplates() {
   console.log("");
-  console.log(`${color(COLORS.cyan, SYMBOLS.sparkle)}  ${color(COLORS.bold, "Available DaloyJS templates")}`);
+  console.log(
+    `${color(COLORS.cyan, SYMBOLS.sparkle)}  ${color(COLORS.bold, "Available DaloyJS templates")}`
+  );
   console.log("");
   const valueWidth = Math.max(...TEMPLATE_OPTIONS.map((option) => option.value.length));
   for (const option of TEMPLATE_OPTIONS) {
@@ -446,7 +493,8 @@ function parseArgs(argv) {
     else if (a === "--template") out.template = args.shift();
     else if (a?.startsWith("--template=")) out.template = a.slice("--template=".length);
     else if (a === "--package-manager" || a === "--pm") out.packageManager = args.shift();
-    else if (a?.startsWith("--package-manager=")) out.packageManager = a.slice("--package-manager=".length);
+    else if (a?.startsWith("--package-manager="))
+      out.packageManager = a.slice("--package-manager=".length);
     else if (a?.startsWith("--pm=")) out.packageManager = a.slice("--pm=".length);
     else if (a && !a.startsWith("-") && out.projectName === undefined) out.projectName = a;
     else if (a) {
@@ -581,7 +629,10 @@ async function isToolInstalled(binary, env = process.env) {
   const dirs = pathValue.split(path.delimiter).filter(Boolean);
   const isWindows = process.platform === "win32";
   const extensions = isWindows
-    ? (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").map((ext) => ext.trim()).filter(Boolean)
+    ? (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+        .split(";")
+        .map((ext) => ext.trim())
+        .filter(Boolean)
     : [""];
   const mode = isWindows ? FS_CONSTANTS.F_OK : FS_CONSTANTS.X_OK;
   for (const dir of dirs) {
@@ -719,7 +770,7 @@ function rewritePackageManagerText(raw, packageManager) {
   return raw
     .replace(
       "Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).",
-      `Package manager: ${packageManager}.`,
+      `Package manager: ${packageManager}.`
     )
     .replace(/\bpnpm install\b/g, `${packageManager} install`)
     .replace(/\bpnpm gen:openapi\b/g, `${packageManager} run gen:openapi`)
@@ -735,15 +786,15 @@ function rewritePackageManagerText(raw, packageManager) {
     .replace(/\bpnpm audit\b/g, `${packageManager} audit`)
     .replace(
       "- Hardened `.npmrc` for safer installs.",
-      `- Package-manager scripts adjusted for ${packageManager}.`,
+      `- Package-manager scripts adjusted for ${packageManager}.`
     )
     .replace(
       "- Hey API codegen wired to `pnpm gen`.",
-      `- Hey API codegen wired to \`${packageManager} run gen\`.`,
+      `- Hey API codegen wired to \`${packageManager} run gen\`.`
     )
     .replace(
       "- Do not add runtime dependencies without checking the hardened `.npmrc` (installs wait 24h after publish by default).",
-      `- Add runtime dependencies with \`${packageManager} install <package>\` and rerun the quality gates after dependency changes.`,
+      `- Add runtime dependencies with \`${packageManager} install <package>\` and rerun the quality gates after dependency changes.`
     );
 }
 
@@ -852,14 +903,11 @@ async function patchDockerfileForPackageManager(dir, packageManager) {
   // pnpm-specific COPY/RUN lines in place for npm/yarn/bun scaffolds.
   let next = raw.replace(
     /COPY package\.json pnpm-lock\.yaml\* \.\/\r?\nRUN corepack enable && corepack prepare pnpm@latest --activate && \\\r?\n\s+pnpm install --frozen-lockfile --ignore-scripts/,
-    `${install.copy}\n${install.run}`,
+    `${install.copy}\n${install.run}`
   );
 
   if (packageManager !== "pnpm") {
-    next = next.replaceAll(
-      "pnpm install --frozen-lockfile --ignore-scripts",
-      install.text,
-    );
+    next = next.replaceAll("pnpm install --frozen-lockfile --ignore-scripts", install.text);
     next = next.replaceAll("pnpm build", runScriptCommand(packageManager, "build"));
   }
 
@@ -870,7 +918,7 @@ async function patchDockerfileForPackageManager(dir, packageManager) {
       // would never be inserted.
       next = next.replace(
         /ARG NODE_IMAGE=node:24-alpine\r?\n/,
-        "ARG NODE_IMAGE=node:24-alpine\nARG BUN_IMAGE=oven/bun:1-alpine\n",
+        "ARG NODE_IMAGE=node:24-alpine\nARG BUN_IMAGE=oven/bun:1-alpine\n"
       );
     }
     next = next.replace("FROM ${NODE_IMAGE} AS builder", "FROM ${BUN_IMAGE} AS builder");
@@ -893,11 +941,14 @@ const DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES = {
 };
 
 const ALL_DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES = new Set(
-  Object.values(DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES).flat(),
+  Object.values(DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES).flat()
 );
 
 function dockerignorePackageManagerEntries(packageManager) {
-  return DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES[packageManager] ?? DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES.pnpm;
+  return (
+    DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES[packageManager] ??
+    DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES.pnpm
+  );
 }
 
 async function patchDockerignoreForPackageManager(dir, packageManager) {
@@ -907,12 +958,10 @@ async function patchDockerignoreForPackageManager(dir, packageManager) {
   const raw = await readFile(file, "utf8");
   const wanted = dockerignorePackageManagerEntries(packageManager);
   const wantedSet = new Set(wanted);
-  const lines = raw
-    .split(/\r?\n/)
-    .filter((line) => {
-      const trimmed = line.trim();
-      return !ALL_DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES.has(trimmed) || wantedSet.has(trimmed);
-    });
+  const lines = raw.split(/\r?\n/).filter((line) => {
+    const trimmed = line.trim();
+    return !ALL_DOCKERIGNORE_PACKAGE_MANAGER_ENTRIES.has(trimmed) || wantedSet.has(trimmed);
+  });
   const existing = new Set(lines.map((line) => line.trim()).filter(Boolean));
   const missing = wanted.filter((entry) => !existing.has(entry));
   let next = lines.join("\n").trimEnd();
@@ -930,7 +979,8 @@ function hasPackageScript(packageJson, scriptName) {
 function runScriptCommand(packageManager, scriptName) {
   if (packageManager === "pnpm") return `pnpm ${scriptName}`;
   if (packageManager === "npm") return scriptName === "test" ? "npm test" : `npm run ${scriptName}`;
-  if (packageManager === "yarn") return scriptName === "test" ? "yarn test" : `yarn run ${scriptName}`;
+  if (packageManager === "yarn")
+    return scriptName === "test" ? "yarn test" : `yarn run ${scriptName}`;
   if (packageManager === "bun") return scriptName === "test" ? "bun test" : `bun run ${scriptName}`;
   return `${packageManager} run ${scriptName}`;
 }
@@ -961,7 +1011,8 @@ function auditCommand(packageManager) {
 }
 
 function auditStepName(packageManager, suffix = "") {
-  const baseName = packageManager === "bun" ? "Audit dependencies" : "Audit production dependencies";
+  const baseName =
+    packageManager === "bun" ? "Audit dependencies" : "Audit production dependencies";
   return suffix ? `${baseName} ${suffix}` : baseName;
 }
 
@@ -1172,7 +1223,7 @@ function vercelDeploySteps(packageManager) {
           : "\${VERCEL_TOKEN:?Set the VERCEL_TOKEN Actions secret before running this workflow.}"
           : "\${VERCEL_ORG_ID:?Set the VERCEL_ORG_ID Actions variable before running this workflow.}"
           : "\${VERCEL_PROJECT_ID:?Set the VERCEL_PROJECT_ID Actions variable before running this workflow.}"
-          ${execCommand(packageManager, "vercel", "deploy --prod --yes --token \"$VERCEL_TOKEN\"")}`;
+          ${execCommand(packageManager, "vercel", 'deploy --prod --yes --token "$VERCEL_TOKEN"')}`;
 }
 
 function cloudflareDeploySteps(packageManager) {
@@ -1231,7 +1282,11 @@ async function readPackageJsonIfPresent(dir) {
 }
 
 async function writePackageJson(dir, packageJson) {
-  await writeFile(path.join(dir, "package.json"), JSON.stringify(packageJson, null, 2) + "\n", "utf8");
+  await writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify(packageJson, null, 2) + "\n",
+    "utf8"
+  );
 }
 
 async function addSecurityScripts(dir, packageManager) {
@@ -1240,7 +1295,9 @@ async function addSecurityScripts(dir, packageManager) {
   packageJson.scripts ??= {};
   packageJson.scripts["verify:lockfile"] = "node scripts/verify-lockfile-sources.mjs";
   packageJson.scripts["verify:runtime-eol"] =
-    packageManager === "bun" ? "bun scripts/verify-runtime-eol.mjs" : "node scripts/verify-runtime-eol.mjs";
+    packageManager === "bun"
+      ? "bun scripts/verify-runtime-eol.mjs"
+      : "node scripts/verify-runtime-eol.mjs";
   await writePackageJson(dir, packageJson);
 }
 
@@ -1254,12 +1311,20 @@ async function addDenoSecurityTasks(dir) {
   await writeFile(file, JSON.stringify(denoJson, null, 2) + "\n", "utf8");
 }
 
-function renderCiReplacements({ packageManager, template, packageJson, codeOwner, includeSecurityBundle = true }) {
+function renderCiReplacements({
+  packageManager,
+  template,
+  packageJson,
+  codeOwner,
+  includeSecurityBundle = true,
+}) {
   const setupPm = setupPackageManagerStep(packageManager);
   const needsBunRuntime = template === "bun-basic" && packageManager !== "bun";
   const audit = auditCommand(packageManager);
   const auditFull = auditFullCommand(packageManager);
-  const buildStep = hasPackageScript(packageJson, "build") ? workflowStep("Build", runScriptCommand(packageManager, "build")) : "";
+  const buildStep = hasPackageScript(packageJson, "build")
+    ? workflowStep("Build", runScriptCommand(packageManager, "build"))
+    : "";
   const auditStep = audit ? workflowStep(auditStepName(packageManager), audit) : "";
   const deploy = renderDeployConfig({ template, packageManager, needsBunRuntime });
   // The verify:lockfile script is only scaffolded when the security bundle
@@ -1274,7 +1339,10 @@ function renderCiReplacements({ packageManager, template, packageJson, codeOwner
   // not page the on-call on a daily cron.
   const auditProdStep = audit
     ? workflowStep(auditStepName(packageManager, "(blocking)"), audit)
-    : workflowStep("No package-manager audit available", "echo 'No audit command available for this package manager; consider switching to npm/pnpm/yarn/bun.'");
+    : workflowStep(
+        "No package-manager audit available",
+        "echo 'No audit command available for this package manager; consider switching to npm/pnpm/yarn/bun.'"
+      );
   const auditFullStep = auditFull
     ? `      - name: Audit full dependency tree (advisory)\n        run: ${auditFull}\n        continue-on-error: true`
     : "";
@@ -1312,7 +1380,10 @@ async function replacePlaceholdersInTree(dir, replacements) {
       continue;
     }
     if (!entry.isFile()) continue;
-    if (!CI_PLACEHOLDER_EXTENSIONS.has(path.extname(entry.name)) && !CI_PLACEHOLDER_FILES.has(entry.name)) {
+    if (
+      !CI_PLACEHOLDER_EXTENSIONS.has(path.extname(entry.name)) &&
+      !CI_PLACEHOLDER_FILES.has(entry.name)
+    ) {
       continue;
     }
     const raw = await readFile(full, "utf8");
@@ -1326,9 +1397,33 @@ async function replacePlaceholdersInTree(dir, replacements) {
 
 async function pruneCiBundle(targetDir, flavor, { includeSecurityBundle, includeDeployWorkflow }) {
   if (!includeSecurityBundle) {
-    const workflowFiles = flavor === "deno"
-      ? ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "eol-scan.yml", "opengrep.yml", "osv-scan.yml", "scorecard.yml", "secret-scan.yml", "zizmor.yml"]
-      : ["ci.yml", "codeql.yml", "container-scan.yml", "dast.yml", "eol-scan.yml", "opengrep.yml", "osv-scan.yml", "scorecard.yml", "secret-scan.yml", "vuln-scan.yml", "zizmor.yml"];
+    const workflowFiles =
+      flavor === "deno"
+        ? [
+            "ci.yml",
+            "codeql.yml",
+            "container-scan.yml",
+            "dast.yml",
+            "eol-scan.yml",
+            "opengrep.yml",
+            "osv-scan.yml",
+            "scorecard.yml",
+            "secret-scan.yml",
+            "zizmor.yml",
+          ]
+        : [
+            "ci.yml",
+            "codeql.yml",
+            "container-scan.yml",
+            "dast.yml",
+            "eol-scan.yml",
+            "opengrep.yml",
+            "osv-scan.yml",
+            "scorecard.yml",
+            "secret-scan.yml",
+            "vuln-scan.yml",
+            "zizmor.yml",
+          ];
     for (const file of workflowFiles) {
       await rm(path.join(targetDir, ".github", "workflows", file), { force: true });
     }
@@ -1352,7 +1447,7 @@ async function copyCiBundle(
   packageManager,
   skipPackageManager,
   codeOwner,
-  { includeSecurityBundle = true, includeDeployWorkflow = true } = {},
+  { includeSecurityBundle = true, includeDeployWorkflow = true } = {}
 ) {
   const flavor = skipPackageManager ? "deno" : "node";
   const sourceDir = path.join(CI_TEMPLATES_DIR, flavor);
@@ -1372,7 +1467,7 @@ async function copyCiBundle(
   if (skipPackageManager) {
     if (includeSecurityBundle && candidate && !VALID_CODE_OWNER.test(candidate)) {
       throw new Error(
-        `Invalid --code-owner "${candidate}". Use a GitHub handle (@user), a team (@org/team), or an email address.`,
+        `Invalid --code-owner "${candidate}". Use a GitHub handle (@user), a team (@org/team), or an email address.`
       );
     }
     if (includeSecurityBundle) {
@@ -1385,7 +1480,7 @@ async function copyCiBundle(
   if (includeSecurityBundle) {
     if (candidate && !VALID_CODE_OWNER.test(candidate)) {
       throw new Error(
-        `Invalid --code-owner "${candidate}". Use a GitHub handle (@user), a team (@org/team), or an email address.`,
+        `Invalid --code-owner "${candidate}". Use a GitHub handle (@user), a team (@org/team), or an email address.`
       );
     }
     await addSecurityScripts(targetDir, packageManager);
@@ -1399,7 +1494,7 @@ async function copyCiBundle(
       packageJson,
       codeOwner: owner,
       includeSecurityBundle,
-    }),
+    })
   );
 }
 
@@ -1474,7 +1569,11 @@ function runQuiet(cmd, args, cwd) {
       output += chunk.toString("utf8");
       if (output.length > maxOutputBytes) output = output.slice(-maxOutputBytes);
     };
-    const proc = spawn(cmd, args, { cwd, stdio: ["ignore", "pipe", "pipe"], shell: process.platform === "win32" });
+    const proc = spawn(cmd, args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: process.platform === "win32",
+    });
     proc.stdout.on("data", appendOutput);
     proc.stderr.on("data", appendOutput);
     proc.on("exit", (code) => resolve({ code: code ?? 0, output }));
@@ -1529,13 +1628,17 @@ function printPromptHeader(question) {
 }
 
 function printPromptResult(question, value) {
-  console.log(`${color(COLORS.green, SYMBOLS.stepDone)}  ${question}  ${color(COLORS.dim, SYMBOLS.arrow)} ${color(COLORS.cyan, value)}`);
+  console.log(
+    `${color(COLORS.green, SYMBOLS.stepDone)}  ${question}  ${color(COLORS.dim, SYMBOLS.arrow)} ${color(COLORS.cyan, value)}`
+  );
 }
 
 async function ask(rl, question, defaultValue) {
   printPromptHeader(question);
   const hint = defaultValue !== undefined ? color(COLORS.dim, ` (default: ${defaultValue})`) : "";
-  const answer = (await rl.question(`${BAR}  ${color(COLORS.gray, SYMBOLS.pointer)}${hint} `)).trim();
+  const answer = (
+    await rl.question(`${BAR}  ${color(COLORS.gray, SYMBOLS.pointer)}${hint} `)
+  ).trim();
   const value = answer.length === 0 ? defaultValue : answer;
   // readline already echoed the prompt + answer line; emit a final summary
   // line on the rail so the transcript reads cleanly after scroll-back.
@@ -1546,7 +1649,11 @@ async function ask(rl, question, defaultValue) {
 async function askYesNo(rl, question, defaultYes) {
   printPromptHeader(question);
   const def = defaultYes ? "Y/n" : "y/N";
-  const answer = (await rl.question(`${BAR}  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `(${def})`)} `))
+  const answer = (
+    await rl.question(
+      `${BAR}  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `(${def})`)} `
+    )
+  )
     .trim()
     .toLowerCase();
   printRailGap();
@@ -1563,7 +1670,7 @@ function optionTitle(option) {
 }
 
 function optionDescription(option) {
-  return typeof option === "string" ? "" : option.description ?? "";
+  return typeof option === "string" ? "" : (option.description ?? "");
 }
 
 // Arrow-key powered choice prompt. Falls back to numbered input whenever raw
@@ -1575,12 +1682,12 @@ async function askChoice(rl, question, choices, defaultChoice) {
 
   printPromptHeader(question);
   printRailLine(
-    `${color(COLORS.dim, "\u2191/\u2193")} ${color(COLORS.gray, "navigate")}   ${color(COLORS.dim, "1\u20139")} ${color(COLORS.gray, "jump")}   ${color(COLORS.dim, "enter")} ${color(COLORS.gray, "confirm")}`,
+    `${color(COLORS.dim, "\u2191/\u2193")} ${color(COLORS.gray, "navigate")}   ${color(COLORS.dim, "1\u20139")} ${color(COLORS.gray, "jump")}   ${color(COLORS.dim, "enter")} ${color(COLORS.gray, "confirm")}`
   );
 
   let index = Math.max(
     0,
-    choices.findIndex((choice) => optionValue(choice) === defaultChoice),
+    choices.findIndex((choice) => optionValue(choice) === defaultChoice)
   );
   const titleWidth = Math.max(...choices.map((choice) => optionTitle(choice).length));
   const valueWidth = Math.max(...choices.map((choice) => optionValue(choice).length));
@@ -1591,13 +1698,19 @@ async function askChoice(rl, question, choices, defaultChoice) {
         const isActive = i === active;
         const isDefault = optionValue(choice) === defaultChoice;
         const pointer = isActive ? color(COLORS.cyan, SYMBOLS.pointer) : " ";
-        const marker = isActive ? color(COLORS.cyan, SYMBOLS.radioOn) : color(COLORS.gray, SYMBOLS.radioOff);
+        const marker = isActive
+          ? color(COLORS.cyan, SYMBOLS.radioOn)
+          : color(COLORS.gray, SYMBOLS.radioOff);
         const titleRaw = optionTitle(choice).padEnd(titleWidth);
         const valueRaw = optionValue(choice).padEnd(valueWidth);
-        const title = isActive ? color(COLORS.bold + COLORS.cyan, titleRaw) : color(COLORS.white, titleRaw);
+        const title = isActive
+          ? color(COLORS.bold + COLORS.cyan, titleRaw)
+          : color(COLORS.white, titleRaw);
         const value = color(COLORS.dim, `${valueRaw}`);
         const description = optionDescription(choice);
-        const descColored = isActive ? color(COLORS.cyan, description) : color(COLORS.dim, description);
+        const descColored = isActive
+          ? color(COLORS.cyan, description)
+          : color(COLORS.dim, description);
         const recommended = isDefault ? color(COLORS.green, `  ${SYMBOLS.star} recommended`) : "";
         return `${BAR}  ${pointer} ${marker} ${title}  ${value}  ${descColored}${recommended}`;
       })
@@ -1707,7 +1820,9 @@ async function askChoiceNumbered(rl, question, choices, defaultChoice) {
     return optionValue(choices[asNumber - 1]);
   }
   if (choices.some((choice) => optionValue(choice) === raw)) return raw;
-  console.error(`${BAR}  ${color(COLORS.red, `Invalid choice. Pick one of: ${choices.map(optionValue).join(", ")}`)}`);
+  console.error(
+    `${BAR}  ${color(COLORS.red, `Invalid choice. Pick one of: ${choices.map(optionValue).join(", ")}`)}`
+  );
   return askChoiceNumbered(rl, question, choices, defaultChoice);
 }
 
@@ -1729,7 +1844,18 @@ function logError(message) {
 // ----------------------------------------------------------------------------
 
 const SPINNER_FRAMES = SUPPORTS_UNICODE
-  ? ["\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F"]
+  ? [
+      "\u280B",
+      "\u2819",
+      "\u2839",
+      "\u2838",
+      "\u283C",
+      "\u2834",
+      "\u2826",
+      "\u2827",
+      "\u2807",
+      "\u280F",
+    ]
   : ["|", "/", "-", "\\"];
 
 function createSpinner(initialMessage) {
@@ -1761,9 +1887,7 @@ function createSpinner(initialMessage) {
       if (timer) clearInterval(timer);
       timer = null;
       active = false;
-      const symbol = ok
-        ? color(COLORS.green, SYMBOLS.success)
-        : color(COLORS.red, SYMBOLS.error);
+      const symbol = ok ? color(COLORS.green, SYMBOLS.success) : color(COLORS.red, SYMBOLS.error);
       const finalMessage = text ?? message;
       if (process.stdout.isTTY) {
         process.stdout.write(`\r\x1b[2K${symbol}  ${finalMessage}\n`);
@@ -1774,9 +1898,21 @@ function createSpinner(initialMessage) {
   };
 }
 
-function printSummary({ projectName, shouldChangeDirectory = true, template, packageManager, installDeps, skipPackageManager, withCi, withDeploy, missingTools = [] }) {
+function printSummary({
+  projectName,
+  shouldChangeDirectory = true,
+  template,
+  packageManager,
+  installDeps,
+  skipPackageManager,
+  withCi,
+  withDeploy,
+  missingTools = [],
+}) {
   const templateMeta = TEMPLATE_OPTIONS.find((option) => option.value === template);
-  const templateLabel = templateMeta ? `${templateMeta.title} ${color(COLORS.dim, `(${template})`)}` : template;
+  const templateLabel = templateMeta
+    ? `${templateMeta.title} ${color(COLORS.dim, `(${template})`)}`
+    : template;
   const summaryLines = [
     `${color(COLORS.green, SYMBOLS.sparkle)}  ${color(COLORS.bold, "Your DaloyJS project is ready!")}`,
     "",
@@ -1784,15 +1920,21 @@ function printSummary({ projectName, shouldChangeDirectory = true, template, pac
     `${color(COLORS.gray, "Template  ")} ${templateLabel}`,
   ];
   if (skipPackageManager) {
-    summaryLines.push(`${color(COLORS.gray, "Runtime   ")} ${color(COLORS.cyan, template === "deno-basic" ? "Deno" : "runtime")}`);
+    summaryLines.push(
+      `${color(COLORS.gray, "Runtime   ")} ${color(COLORS.cyan, template === "deno-basic" ? "Deno" : "runtime")}`
+    );
   } else {
     summaryLines.push(`${color(COLORS.gray, "Manager   ")} ${color(COLORS.cyan, packageManager)}`);
   }
   if (withCi) {
-    summaryLines.push(`${color(COLORS.gray, "Security  ")} ${color(COLORS.cyan, "GitHub CI bundle")}`);
+    summaryLines.push(
+      `${color(COLORS.gray, "Security  ")} ${color(COLORS.cyan, "GitHub CI bundle")}`
+    );
   }
   if (withDeploy) {
-    summaryLines.push(`${color(COLORS.gray, "Deploy    ")} ${color(COLORS.cyan, "Starter workflow")}`);
+    summaryLines.push(
+      `${color(COLORS.gray, "Deploy    ")} ${color(COLORS.cyan, "Starter workflow")}`
+    );
   }
   console.log("");
   console.log(renderBox(summaryLines, { accent: COLORS.green }));
@@ -1816,10 +1958,14 @@ function printSummary({ projectName, shouldChangeDirectory = true, template, pac
   if (missingTools.length > 0) {
     const labelWidth = Math.max(...missingTools.map((tool) => tool.label.length));
     console.log("");
-    console.log(`${color(COLORS.yellow, SYMBOLS.warn)}  ${color(COLORS.bold, "Install these to run the commands above")}`);
+    console.log(
+      `${color(COLORS.yellow, SYMBOLS.warn)}  ${color(COLORS.bold, "Install these to run the commands above")}`
+    );
     for (const { label, url } of missingTools) {
       const name = color(COLORS.bold, label.padEnd(labelWidth));
-      console.log(`  ${color(COLORS.yellow, SYMBOLS.pointer)} ${name}  ${color(COLORS.cyan + COLORS.underline, url)}`);
+      console.log(
+        `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${name}  ${color(COLORS.cyan + COLORS.underline, url)}`
+      );
     }
   }
 
@@ -1827,41 +1973,55 @@ function printSummary({ projectName, shouldChangeDirectory = true, template, pac
     console.log("");
     console.log(`${color(COLORS.bold, "Heads-up before \`pnpm install\`")}`);
     console.log(
-      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "pnpm-workspace.yaml sets minimumReleaseAge: 1440 \u2014 newly-published deps")}`,
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "pnpm-workspace.yaml sets minimumReleaseAge: 1440 \u2014 newly-published deps")}`
     );
     console.log(
-      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "(including a just-released @daloyjs/core) are embargoed for 24 h.")}`,
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "(including a just-released @daloyjs/core) are embargoed for 24 h.")}`
     );
     console.log(
-      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "Lifecycle scripts stay blocked by default (ignore-scripts=true);")}`,
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "Lifecycle scripts stay blocked by default (ignore-scripts=true);")}`
     );
     console.log(
-      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "if you later tighten build-script policy, keep exceptions in")}`,
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "if you later tighten build-script policy, keep exceptions in")}`
     );
     console.log(
-      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "pnpm-workspace.yaml under allowBuilds instead of weakening .npmrc.")}`,
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "pnpm-workspace.yaml under allowBuilds instead of weakening .npmrc.")}`
     );
   }
 
   console.log("");
   console.log(`${color(COLORS.bold, "Useful commands")}`);
   if (skipPackageManager) {
-    console.log(`  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "deno task typecheck")}`);
+    console.log(
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "deno task typecheck")}`
+    );
     console.log(`  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "deno task test")}`);
-    console.log(`  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "deno task gen:openapi")}`);
+    console.log(
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, "deno task gen:openapi")}`
+    );
   } else {
-    console.log(`  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `${packageManager} run typecheck`)}`);
-    console.log(`  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `${packageManager} test`)}`);
+    console.log(
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `${packageManager} run typecheck`)}`
+    );
+    console.log(
+      `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `${packageManager} test`)}`
+    );
     if (template === "node-basic" || template === "bun-basic") {
-      console.log(`  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `${packageManager} run gen`)}`);
+      console.log(
+        `  ${color(COLORS.gray, SYMBOLS.pointer)} ${color(COLORS.dim, `${packageManager} run gen`)}`
+      );
     }
   }
 
   console.log("");
   console.log(`${color(COLORS.gray, "Docs:")}   ${color(COLORS.cyan, "https://daloyjs.dev/docs")}`);
-  console.log(`${color(COLORS.gray, "Issues:")} ${color(COLORS.cyan, "https://github.com/daloyjs/daloy/issues")}`);
+  console.log(
+    `${color(COLORS.gray, "Issues:")} ${color(COLORS.cyan, "https://github.com/daloyjs/daloy/issues")}`
+  );
   console.log("");
-  console.log(`${color(COLORS.magenta, SYMBOLS.sparkle)}  ${color(COLORS.bold, "Happy shipping!")}\n`);
+  console.log(
+    `${color(COLORS.magenta, SYMBOLS.sparkle)}  ${color(COLORS.bold, "Happy shipping!")}\n`
+  );
 }
 
 async function main() {
@@ -1887,14 +2047,12 @@ async function main() {
   const nodeCheck = checkNodeVersion();
   if (!nodeCheck.ok) {
     printBanner(await readPkgVersion());
-    logError(
-      `DaloyJS needs Node.js ${MIN_NODE_MAJOR} or newer — you're on ${process.version}.`,
+    logError(`DaloyJS needs Node.js ${MIN_NODE_MAJOR} or newer — you're on ${process.version}.`);
+    console.log(
+      `  ${color(COLORS.yellow, SYMBOLS.pointer)} Install an up-to-date Node.js: ${color(COLORS.cyan + COLORS.underline, TOOL_INSTALL_GUIDES.node.url)}`
     );
     console.log(
-      `  ${color(COLORS.yellow, SYMBOLS.pointer)} Install an up-to-date Node.js: ${color(COLORS.cyan + COLORS.underline, TOOL_INSTALL_GUIDES.node.url)}`,
-    );
-    console.log(
-      `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Or switch versions with a manager like nvm, fnm, or Volta.")}`,
+      `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Or switch versions with a manager like nvm, fnm, or Volta.")}`
     );
     console.log("");
     process.exit(1);
@@ -1935,7 +2093,9 @@ async function main() {
 
     let template = opts.template;
     if (!template) {
-      template = rl ? await askChoice(rl, "Choose a starter template:", TEMPLATE_OPTIONS, "node-basic") : "node-basic";
+      template = rl
+        ? await askChoice(rl, "Choose a starter template:", TEMPLATE_OPTIONS, "node-basic")
+        : "node-basic";
     }
     // Resolve deprecated template aliases.
     if (TEMPLATE_ALIASES.has(template)) {
@@ -1958,7 +2118,9 @@ async function main() {
     const packageName = projectPackageName(projectName, cwd);
     const packageNameCheck = projectName === "." ? validateProjectName(packageName) : true;
     if (packageNameCheck !== true) {
-      logError(`Current directory name "${packageName}" cannot be used as a package name. ${packageNameCheck}`);
+      logError(
+        `Current directory name "${packageName}" cannot be used as a package name. ${packageNameCheck}`
+      );
       process.exit(1);
     }
     const targetDir = projectName === "." ? cwd : path.resolve(cwd, projectName);
@@ -1982,7 +2144,9 @@ async function main() {
       }
     }
     if (!PACKAGE_MANAGERS.includes(packageManager)) {
-      logError(`Unknown --package-manager "${packageManager}". Use one of: ${PACKAGE_MANAGERS.join(", ")}`);
+      logError(
+        `Unknown --package-manager "${packageManager}". Use one of: ${PACKAGE_MANAGERS.join(", ")}`
+      );
       process.exit(1);
     }
 
@@ -2003,15 +2167,17 @@ async function main() {
           console.log(
             color(
               COLORS.gray,
-              "  (pnpm install may wait out a fresh-release embargo and keeps lifecycle scripts blocked by default \u2014 see .npmrc + pnpm-workspace.yaml)",
-            ),
+              "  (pnpm install may wait out a fresh-release embargo and keeps lifecycle scripts blocked by default \u2014 see .npmrc + pnpm-workspace.yaml)"
+            )
           );
           installDeps = await askYesNo(rl, `Install dependencies with ${packageManager}?`, false);
         } else {
           installDeps = false;
         }
       } else {
-        installDeps = rl ? await askYesNo(rl, `Install dependencies with ${packageManager}?`, true) : false;
+        installDeps = rl
+          ? await askYesNo(rl, `Install dependencies with ${packageManager}?`, true)
+          : false;
       }
     }
 
@@ -2024,7 +2190,9 @@ async function main() {
     if (withCi === undefined) {
       // Default to Y — the hardened GitHub Actions + Dependabot + CODEOWNERS
       // + SECURITY.md bundle is opt-out, not opt-in. Most users want it.
-      withCi = rl ? await askYesNo(rl, "Add hardened GitHub Actions and security files?", true) : true;
+      withCi = rl
+        ? await askYesNo(rl, "Add hardened GitHub Actions and security files?", true)
+        : true;
     }
 
     let withDeploy = opts.deploy;
@@ -2042,7 +2210,9 @@ async function main() {
       printOutro(color(COLORS.dim, "Configuration locked in. Building your project\u2026"));
     }
     console.log("");
-    console.log(`${color(COLORS.cyan, SYMBOLS.sparkle)}  ${color(COLORS.bold, "Scaffolding your project")}`);
+    console.log(
+      `${color(COLORS.cyan, SYMBOLS.sparkle)}  ${color(COLORS.bold, "Scaffolding your project")}`
+    );
     console.log("");
 
     await mkdir(targetDir, { recursive: true });
@@ -2072,7 +2242,10 @@ async function main() {
         includeDeployWorkflow: withDeploy,
       });
       if (withCi && withDeploy) {
-        logStep("GitHub automation added", `${skipPackageManager ? "deno" : packageManager} + deploy`);
+        logStep(
+          "GitHub automation added",
+          `${skipPackageManager ? "deno" : packageManager} + deploy`
+        );
       } else if (withCi) {
         logStep("GitHub security bundle added", skipPackageManager ? "deno" : packageManager);
       } else if (withDeploy) {
@@ -2093,10 +2266,12 @@ async function main() {
     // can print official install links (and avoid spawning a doomed install).
     const missingTools = await missingToolGuides(
       requiredTools({ template, packageManager, skipPackageManager }),
-      isToolInstalled,
+      isToolInstalled
     );
     if (installDeps && missingTools.some((tool) => tool.tool === packageManager)) {
-      logWarn(`${packageManager} is not installed; skipping dependency install. Install it from ${TOOL_INSTALL_GUIDES[packageManager].url}`);
+      logWarn(
+        `${packageManager} is not installed; skipping dependency install. Install it from ${TOOL_INSTALL_GUIDES[packageManager].url}`
+      );
       installDeps = false;
     }
 
@@ -2108,11 +2283,11 @@ async function main() {
       if (Number.isFinite(npmMajor) && npmMajor < MIN_NPM_MAJOR) {
         logWarn(`This project requires npm >= ${MIN_NPM_MAJOR}, but you're on npm ${npmMajor}.x.`);
         console.log(
-          `  ${color(COLORS.yellow, SYMBOLS.pointer)} Upgrade npm: ${color(COLORS.cyan, "npm install -g npm@latest")} ${color(COLORS.dim, `(or reinstall Node.js: ${TOOL_INSTALL_GUIDES.npm.url})`)}`,
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} Upgrade npm: ${color(COLORS.cyan, "npm install -g npm@latest")} ${color(COLORS.dim, `(or reinstall Node.js: ${TOOL_INSTALL_GUIDES.npm.url})`)}`
         );
         if (installDeps) {
           console.log(
-            `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Skipping the automatic install until npm is up to date.")}`,
+            `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Skipping the automatic install until npm is up to date.")}`
           );
           installDeps = false;
         }
@@ -2127,16 +2302,18 @@ async function main() {
     if (packageManager === "pnpm" && !missingTools.some((tool) => tool.tool === "pnpm")) {
       const pnpmMajor = await detectToolMajor("pnpm", targetDir);
       if (Number.isFinite(pnpmMajor) && pnpmMajor < MIN_PNPM_MAJOR) {
-        logWarn(`This project requires pnpm >= ${MIN_PNPM_MAJOR}, but you're on pnpm ${pnpmMajor}.x.`);
-        console.log(
-          `  ${color(COLORS.yellow, SYMBOLS.pointer)} Upgrade pnpm: ${color(COLORS.cyan, "npm install -g pnpm@latest")} ${color(COLORS.dim, `(or corepack use pnpm@latest — ${TOOL_INSTALL_GUIDES.pnpm.url})`)}`,
+        logWarn(
+          `This project requires pnpm >= ${MIN_PNPM_MAJOR}, but you're on pnpm ${pnpmMajor}.x.`
         );
         console.log(
-          `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, `pnpm < ${MIN_PNPM_MAJOR} silently ignores minimumReleaseAge in pnpm-workspace.yaml, disabling the 24h supply-chain cooldown.`)}`,
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} Upgrade pnpm: ${color(COLORS.cyan, "npm install -g pnpm@latest")} ${color(COLORS.dim, `(or corepack use pnpm@latest — ${TOOL_INSTALL_GUIDES.pnpm.url})`)}`
+        );
+        console.log(
+          `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, `pnpm < ${MIN_PNPM_MAJOR} silently ignores minimumReleaseAge in pnpm-workspace.yaml, disabling the 24h supply-chain cooldown.`)}`
         );
         if (installDeps) {
           console.log(
-            `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Skipping the automatic install until pnpm is up to date.")}`,
+            `  ${color(COLORS.yellow, SYMBOLS.pointer)} ${color(COLORS.dim, "Skipping the automatic install until pnpm is up to date.")}`
           );
           installDeps = false;
         }
@@ -2144,9 +2321,15 @@ async function main() {
     }
 
     if (installDeps) {
-      const spinner = createSpinner(`Installing dependencies with ${color(COLORS.cyan, packageManager)}\u2026`);
+      const spinner = createSpinner(
+        `Installing dependencies with ${color(COLORS.cyan, packageManager)}\u2026`
+      );
       spinner.start();
-      const { code, output: installOutput } = await runQuiet(packageManager, ["install"], targetDir);
+      const { code, output: installOutput } = await runQuiet(
+        packageManager,
+        ["install"],
+        targetDir
+      );
       if (code !== 0) {
         spinner.stop(`${packageManager} install failed (exit ${code})`, false);
         // Replay the captured output so the user can see what went wrong.
@@ -2154,7 +2337,9 @@ async function main() {
         if (tail.trim().length > 0) {
           console.error(color(COLORS.dim, tail));
         }
-        logWarn(`Retry inside ${projectName === "." ? "this directory" : projectName} with: ${packageManager} install`);
+        logWarn(
+          `Retry inside ${projectName === "." ? "this directory" : projectName} with: ${packageManager} install`
+        );
       } else {
         spinner.stop(`Installed dependencies with ${color(COLORS.cyan, packageManager)}`);
       }

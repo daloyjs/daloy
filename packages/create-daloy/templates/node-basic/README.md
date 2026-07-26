@@ -73,9 +73,13 @@ On `pnpm build`, TypeScript rewrites the `.ts` specifier to `.js` in the compile
 ## What's included
 
 - `@daloyjs/core` with starter security middleware: `secureHeaders`, `requestId`, and `rateLimit`.
+
 <!-- daloy-minimal:strip-start books -->
+
 - A health route and a contract-first `/books/:id` route with Zod validation.
+
 <!-- daloy-minimal:strip-end books -->
+
 - Hardened `.npmrc` for safer installs.
 - Hey API codegen wired to `pnpm gen`.
 

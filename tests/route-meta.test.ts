@@ -345,9 +345,8 @@ test("OpenAPI: explicit response examples win over meta-derived examples", () =>
     handler: async () => ({ status: 200 as const, body: { source: "handler" } }),
   });
   const doc = generateOpenAPI(app, { info: { title: "T", version: "0" } });
-  const examples = (doc.paths as any)["/examples"].get.responses["200"].content[
-    "application/json"
-  ].examples;
+  const examples = (doc.paths as any)["/examples"].get.responses["200"].content["application/json"]
+    .examples;
   assert.deepEqual(examples.shared, { source: "response-spec" });
 });
 
@@ -538,6 +537,6 @@ test("YAML output is meaningfully smaller than pretty JSON for the same payload"
   // YAML should be at least 20% smaller than the equivalent pretty JSON.
   assert.ok(
     yamlLen < jsonLen * 0.8,
-    `expected YAML (${yamlLen}) < 80% of pretty JSON (${jsonLen})`,
+    `expected YAML (${yamlLen}) < 80% of pretty JSON (${jsonLen})`
   );
 });

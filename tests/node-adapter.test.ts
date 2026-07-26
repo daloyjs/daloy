@@ -94,7 +94,10 @@ test("node adapter: trustProxy honors x-forwarded-host and x-forwarded-proto", a
   const { handle, port } = await startServer(buildEchoApp(), { trustProxy: true });
   try {
     const res = await fetch(`http://127.0.0.1:${port}/url`, {
-      headers: { "x-forwarded-host": "proxied.example, real.example", "x-forwarded-proto": "https" },
+      headers: {
+        "x-forwarded-host": "proxied.example, real.example",
+        "x-forwarded-proto": "https",
+      },
     });
     const body = (await res.json()) as { url: string };
     assert.match(body.url, /^https:\/\/proxied\.example\/url$/);
@@ -141,7 +144,7 @@ test("node adapter: adapter error path returns 500 problem+json", async () => {
             start(controller) {
               controller.error(new Error("stream boom"));
             },
-          }),
+          })
         ),
     },
   });
@@ -167,7 +170,7 @@ test("node adapter: adapter error path returns 500 problem+json", async () => {
 test("node adapter: rejects invalid maxHeaderBytes", () => {
   assert.throws(
     () => serveNode(new App({ logger: false }), { maxHeaderBytes: -1, handleSignals: false }),
-    /maxHeaderSize|range|out of range/i,
+    /maxHeaderSize|range|out of range/i
   );
 });
 
@@ -190,13 +193,18 @@ test("node adapter: maxConnections sheds overflow sockets while admitted ones st
   // contract: overflow is rejected fast rather than inflating tail latency.
   const app = new App({ logger: false });
   let release!: () => void;
-  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   app.route({
     method: "GET",
     path: "/slow",
     operationId: "slow",
     responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
-    handler: async () => { await gate; return { status: 200 as const, body: { ok: true } }; },
+    handler: async () => {
+      await gate;
+      return { status: 200 as const, body: { ok: true } };
+    },
   });
   const { handle, port } = await startServer(app, { maxConnections: 1 });
   try {
@@ -209,7 +217,7 @@ test("node adapter: maxConnections sheds overflow sockets while admitted ones st
     // Second connection should be rejected at the socket layer.
     await assert.rejects(
       fetch(`http://127.0.0.1:${port}/slow`, { headers: { connection: "close" } }),
-      /fetch failed|ECONNRESET|ECONNREFUSED|socket/i,
+      /fetch failed|ECONNRESET|ECONNREFUSED|socket/i
     );
     // The admitted request still completes successfully once released.
     release();
@@ -285,7 +293,10 @@ test("node adapter: double close() is a no-op", async () => {
  * keeps dribbling header bytes (the evasive slowloris variant); otherwise the
  * socket goes idle after the partial preamble.
  */
-function slowlorisReapMs(port: number, opts: { trickle: boolean; deadlineMs: number }): Promise<number | null> {
+function slowlorisReapMs(
+  port: number,
+  opts: { trickle: boolean; deadlineMs: number }
+): Promise<number | null> {
   return new Promise((resolve) => {
     const sock = connect(port, "127.0.0.1");
     const t0 = Date.now();
@@ -412,13 +423,13 @@ test("node adapter: Fetch-forbidden methods (TRACE/TRACK) are refused with 501, 
     // would throw. The adapter must turn that into a clean 501.
     const trace = await rawHttp(
       port,
-      "TRACE /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n",
+      "TRACE /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"
     );
     const traceStatus = trace.split("\r\n")[0] ?? "";
     assert.match(
       traceStatus,
       /^HTTP\/1\.1 501\b/,
-      `TRACE must be refused with 501 Not Implemented, got: ${traceStatus}`,
+      `TRACE must be refused with 501 Not Implemented, got: ${traceStatus}`
     );
     assert.doesNotMatch(traceStatus, /\b500\b/, "TRACE must not surface as a 500");
     assert.match(trace, /application\/problem\+json/, "TRACE refusal should be problem+json");
@@ -429,13 +440,13 @@ test("node adapter: Fetch-forbidden methods (TRACE/TRACK) are refused with 501, 
     // any runtime that does surface it as a normal request).
     const track = await rawHttp(
       port,
-      "TRACK /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n",
+      "TRACK /hello HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n"
     );
     const trackStatus = track.split("\r\n")[0] ?? "";
     assert.match(
       trackStatus,
       /^HTTP\/1\.1 (400|501)\b/,
-      `TRACK must be a clean refusal (400 or 501), got: ${trackStatus}`,
+      `TRACK must be a clean refusal (400 or 501), got: ${trackStatus}`
     );
     assert.doesNotMatch(trackStatus, /\b500\b/, "TRACK must not surface as a 500");
   } finally {
@@ -453,21 +464,25 @@ test("node adapter: absolute-form request targets are routed by path and never 5
   try {
     const ok = await rawHttp(
       port,
-      `GET http://169.254.169.254/hello?x=1 HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
+      `GET http://169.254.169.254/hello?x=1 HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`
     );
     const okStatus = ok.split("\r\n")[0] ?? "";
-    assert.match(okStatus, /^HTTP\/1\.1 200\b/, `absolute-form /hello should route, got: ${okStatus}`);
+    assert.match(
+      okStatus,
+      /^HTTP\/1\.1 200\b/,
+      `absolute-form /hello should route, got: ${okStatus}`
+    );
     assert.match(ok, /"msg":"hi"/);
 
     const missing = await rawHttp(
       port,
-      `GET http://169.254.169.254/latest/meta-data/ HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
+      `GET http://169.254.169.254/latest/meta-data/ HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`
     );
     const missingStatus = missing.split("\r\n")[0] ?? "";
     assert.match(
       missingStatus,
       /^HTTP\/1\.1 404\b/,
-      `absolute-form unknown path should be a normal 404, got: ${missingStatus}`,
+      `absolute-form unknown path should be a normal 404, got: ${missingStatus}`
     );
     assert.doesNotMatch(missingStatus, /\b500\b/, "absolute-form targets must not surface as 500");
   } finally {
@@ -486,30 +501,30 @@ test("node adapter: malformed Host port suffix returns 400 while a trailing-dot 
   try {
     const malformed = await rawHttp(
       port,
-      `GET /hello HTTP/1.1\r\nHost: 127.0.0.1:${port}.\r\nConnection: close\r\n\r\n`,
+      `GET /hello HTTP/1.1\r\nHost: 127.0.0.1:${port}.\r\nConnection: close\r\n\r\n`
     );
     const statusLine = malformed.split("\r\n")[0] ?? "";
     assert.match(
       statusLine,
       /^HTTP\/1\.1 400\b/,
-      `malformed Host must be rejected with 400 Bad Request, got: ${statusLine}`,
+      `malformed Host must be rejected with 400 Bad Request, got: ${statusLine}`
     );
     assert.doesNotMatch(statusLine, /\b500\b/, "malformed Host must not surface as a 500");
     assert.match(
       malformed,
       /application\/problem\+json/,
-      "malformed Host refusal should be problem+json",
+      "malformed Host refusal should be problem+json"
     );
 
     const validTrailingDot = await rawHttp(
       port,
-      `GET /hello HTTP/1.1\r\nHost: example.test.:${port}\r\nConnection: close\r\n\r\n`,
+      `GET /hello HTTP/1.1\r\nHost: example.test.:${port}\r\nConnection: close\r\n\r\n`
     );
     const validStatusLine = validTrailingDot.split("\r\n")[0] ?? "";
     assert.match(
       validStatusLine,
       /^HTTP\/1\.1 200\b/,
-      `a valid trailing-dot hostname must remain accepted, got: ${validStatusLine}`,
+      `a valid trailing-dot hostname must remain accepted, got: ${validStatusLine}`
     );
   } finally {
     await handle.close();
@@ -714,10 +729,7 @@ test("node adapter: multiple Set-Cookie headers all reach the client", async () 
     const res = await fetch(`http://127.0.0.1:${port}/cookies`);
     assert.equal(res.status, 200);
     const cookies = res.headers.getSetCookie();
-    assert.deepEqual(
-      [...cookies].sort(),
-      ["a=1; Path=/", "b=2; Path=/; HttpOnly"],
-    );
+    assert.deepEqual([...cookies].sort(), ["a=1; Path=/", "b=2; Path=/; HttpOnly"]);
   } finally {
     await handle.close();
   }
@@ -774,7 +786,11 @@ test("node adapter: attaches conn-info with the immediate TCP peer", async () =>
   try {
     const res = await fetch(`http://127.0.0.1:${port}/conn`);
     assert.equal(res.status, 200);
-    const body = (await res.json()) as { addr: string | null; hasPort: boolean; tls: boolean | null };
+    const body = (await res.json()) as {
+      addr: string | null;
+      hasPort: boolean;
+      tls: boolean | null;
+    };
     assert.match(body.addr ?? "", /^(::ffff:)?127\.0\.0\.1$|^::1$/);
     assert.equal(body.hasPort, true);
     assert.equal(body.tls, false);
@@ -874,9 +890,10 @@ test("node adapter: requestTimeoutMs aborts ctx.request.signal with a TimeoutErr
     // The abort fires at ~30ms; wait past that (but under the handler's 200ms
     // sleep) before probing the flag the background handler set.
     await new Promise((r) => setTimeout(r, 120));
-    const probe = (await (
-      await fetch(`http://127.0.0.1:${port}/abort-probe`)
-    ).json()) as { sawAbort: boolean; abortReason?: string };
+    const probe = (await (await fetch(`http://127.0.0.1:${port}/abort-probe`)).json()) as {
+      sawAbort: boolean;
+      abortReason?: string;
+    };
     assert.equal(probe.sawAbort, true, "ctx.request.signal must fire on timeout");
     assert.equal(probe.abortReason, "TimeoutError");
   } finally {

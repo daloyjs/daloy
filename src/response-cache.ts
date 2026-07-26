@@ -79,9 +79,7 @@ const PENDING_STATE_KEY = "__responseCachePending";
  *
  * @since 1.0.0
  */
-export const RESPONSE_CACHE_HOOK_MARKER: unique symbol = Symbol.for(
-  "daloyjs.response-cache.hook"
-);
+export const RESPONSE_CACHE_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.response-cache.hook");
 
 /**
  * `ctx.state` symbol under which `tenancy()` records the tenant it resolved for

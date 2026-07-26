@@ -73,9 +73,10 @@ type VariantInputs<V extends Record<string, StandardSchemaV1>> = {
  * as a runtime validator (`~standard.validate`) and an OpenAPI emitter
  * (`toJSONSchema()` returns `{ oneOf, discriminator }`).
  */
-export type DiscriminatedUnion<
-  V extends Record<string, StandardSchemaV1>
-> = StandardSchemaV1<VariantInputs<V>, VariantOutputs<V>> & {
+export type DiscriminatedUnion<V extends Record<string, StandardSchemaV1>> = StandardSchemaV1<
+  VariantInputs<V>,
+  VariantOutputs<V>
+> & {
   toJSONSchema(): {
     oneOf: unknown[];
     discriminator: DiscriminatorObject;
@@ -100,38 +101,26 @@ export type DiscriminatedUnion<
  * @returns A {@link DiscriminatedUnion} usable as validator and OpenAPI emitter.
  * @throws TypeError if `propertyName` is empty or `variants` has no entries.
  */
-export function discriminatedUnion<
-  P extends string,
-  V extends Record<string, StandardSchemaV1>
->(
+export function discriminatedUnion<P extends string, V extends Record<string, StandardSchemaV1>>(
   propertyName: P,
   variants: V,
   opts?: DiscriminatedUnionOptions
 ): DiscriminatedUnion<V> {
   if (typeof propertyName !== "string" || propertyName.length === 0) {
-    throw new TypeError(
-      "discriminatedUnion(): propertyName must be a non-empty string"
-    );
+    throw new TypeError("discriminatedUnion(): propertyName must be a non-empty string");
   }
   const variantEntries = Object.entries(variants);
   if (variantEntries.length === 0) {
-    throw new TypeError(
-      "discriminatedUnion(): at least one variant is required"
-    );
+    throw new TypeError("discriminatedUnion(): at least one variant is required");
   }
 
   const vendor = opts?.vendor ?? "daloy/discriminated-union";
   const mapping = opts?.mapping;
 
-  const validator: StandardSchemaV1.Props<
-    VariantInputs<V>,
-    VariantOutputs<V>
-  > = {
+  const validator: StandardSchemaV1.Props<VariantInputs<V>, VariantOutputs<V>> = {
     version: 1,
     vendor,
-    validate: async (
-      value: unknown
-    ): Promise<StandardSchemaV1.Result<VariantOutputs<V>>> => {
+    validate: async (value: unknown): Promise<StandardSchemaV1.Result<VariantOutputs<V>>> => {
       if (typeof value !== "object" || value === null || Array.isArray(value)) {
         return {
           issues: [

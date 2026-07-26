@@ -34,20 +34,22 @@ async function genRs256Pair(): Promise<CryptoKeyPair> {
       hash: "SHA-256",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
 }
 
 async function genEs256Pair(): Promise<CryptoKeyPair> {
-  return (await subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
+  return (await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair;
 }
 
 test("createJwtSigner: refuses missing options object", () => {
-  assert.throws(() => createJwtSigner(undefined as unknown as Parameters<typeof createJwtSigner>[0]), JwtError);
+  assert.throws(
+    () => createJwtSigner(undefined as unknown as Parameters<typeof createJwtSigner>[0]),
+    JwtError
+  );
 });
 
 test("createJwtSigner: refuses alg 'none'", () => {
@@ -58,7 +60,7 @@ test("createJwtSigner: refuses alg 'none'", () => {
         key: new Uint8Array(32),
         maxLifetimeSeconds: 60,
       }),
-    /alg_none_refused/,
+    /alg_none_refused/
   );
 });
 
@@ -70,22 +72,27 @@ test("createJwtSigner: refuses unknown algorithm", () => {
         key: new Uint8Array(32),
         maxLifetimeSeconds: 60,
       }),
-    /invalid_alg/,
+    /invalid_alg/
   );
 });
 
 test("createJwtSigner: refuses missing maxLifetimeSeconds", () => {
   assert.throws(
     () => createJwtSigner({ alg: "HS256", key: new Uint8Array(32) } as never),
-    /missing_max_lifetime/,
+    /missing_max_lifetime/
   );
   assert.throws(
     () => createJwtSigner({ alg: "HS256", key: new Uint8Array(32), maxLifetimeSeconds: 0 }),
-    /missing_max_lifetime/,
+    /missing_max_lifetime/
   );
   assert.throws(
-    () => createJwtSigner({ alg: "HS256", key: new Uint8Array(32), maxLifetimeSeconds: Number.POSITIVE_INFINITY }),
-    /missing_max_lifetime/,
+    () =>
+      createJwtSigner({
+        alg: "HS256",
+        key: new Uint8Array(32),
+        maxLifetimeSeconds: Number.POSITIVE_INFINITY,
+      }),
+    /missing_max_lifetime/
   );
 });
 
@@ -99,7 +106,7 @@ test("createJwtSigner: refuses acknowledgeNoExp: true in production", () => {
         acknowledgeNoExp: true,
         env: "production",
       }),
-    /ack_no_exp_refused_in_production/,
+    /ack_no_exp_refused_in_production/
   );
 });
 
@@ -131,7 +138,10 @@ test("createJwtSigner: rejects non-object payload", async () => {
     key: await genHs256Key(),
     maxLifetimeSeconds: 60,
   });
-  await assert.rejects(() => signer.sign(null as unknown as Record<string, unknown>), /invalid_payload/);
+  await assert.rejects(
+    () => signer.sign(null as unknown as Record<string, unknown>),
+    /invalid_payload/
+  );
 });
 
 test("createJwtSigner: rejects non-numeric exp", async () => {
@@ -224,14 +234,14 @@ test("DEFAULT_JWT_MAX_LIFETIME_SECONDS is 30 days", () => {
 test("createJwtVerifier: refuses missing options", () => {
   assert.throws(
     () => createJwtVerifier(undefined as unknown as Parameters<typeof createJwtVerifier>[0]),
-    /invalid_options/,
+    /invalid_options/
   );
 });
 
 test("createJwtVerifier: requires non-empty algorithms allowlist", () => {
   assert.throws(
     () => createJwtVerifier({ algorithms: [], key: new Uint8Array(32) }),
-    /missing_algorithms/,
+    /missing_algorithms/
   );
   assert.throws(
     () =>
@@ -239,7 +249,7 @@ test("createJwtVerifier: requires non-empty algorithms allowlist", () => {
         algorithms: undefined as unknown as never,
         key: new Uint8Array(32),
       }),
-    /missing_algorithms/,
+    /missing_algorithms/
   );
 });
 
@@ -250,7 +260,7 @@ test("createJwtVerifier: refuses 'none' in allowlist", () => {
         algorithms: ["none" as unknown as "HS256"],
         key: new Uint8Array(32),
       }),
-    /alg_none_refused/,
+    /alg_none_refused/
   );
 });
 
@@ -261,7 +271,7 @@ test("createJwtVerifier: refuses unknown alg in allowlist", () => {
         algorithms: ["HS999" as unknown as "HS256"],
         key: new Uint8Array(32),
       }),
-    /invalid_alg/,
+    /invalid_alg/
   );
 });
 
@@ -272,7 +282,7 @@ test("createJwtVerifier: refuses HS+JWK combination at construction", () => {
         algorithms: ["HS256"],
         key: { kty: "oct", k: "AAAA" } as JsonWebKey,
       }),
-    /sym_with_jwk_refused/,
+    /sym_with_jwk_refused/
   );
 });
 
@@ -283,7 +293,7 @@ test("createJwtVerifier: refuses HS + resolver function combination at construct
         algorithms: ["HS256"],
         key: () => new Uint8Array(32),
       }),
-    /sym_with_jwk_refused/,
+    /sym_with_jwk_refused/
   );
 });
 
@@ -304,7 +314,7 @@ test("createJwtVerifier: refuses invalid clockSkewSeconds", () => {
         key: new Uint8Array(32),
         clockSkewSeconds: -1,
       }),
-    /invalid_clock_skew/,
+    /invalid_clock_skew/
   );
   assert.throws(
     () =>
@@ -313,7 +323,7 @@ test("createJwtVerifier: refuses invalid clockSkewSeconds", () => {
         key: new Uint8Array(32),
         clockSkewSeconds: Number.NaN,
       }),
-    /invalid_clock_skew/,
+    /invalid_clock_skew/
   );
 });
 
@@ -325,7 +335,7 @@ test("createJwtVerifier: normalizes issuer/audience and rejects empty arrays/str
         key: new Uint8Array(32),
         issuer: [],
       }),
-    /invalid_string_set/,
+    /invalid_string_set/
   );
   assert.throws(
     () =>
@@ -334,7 +344,7 @@ test("createJwtVerifier: normalizes issuer/audience and rejects empty arrays/str
         key: new Uint8Array(32),
         issuer: ["" as string],
       }),
-    /invalid_string_set/,
+    /invalid_string_set/
   );
   // Valid string form is accepted.
   const v = createJwtVerifier({
@@ -379,15 +389,12 @@ test("jwt: refuses RS256 signer with sub-2048-bit RSA key", async () => {
       hash: "SHA-256",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
-  await assert.rejects(
-    async () => {
-      const s = createJwtSigner({ alg: "RS256", key: weakPair.privateKey, maxLifetimeSeconds: 60 });
-      await s.sign({ exp: Math.floor(Date.now() / 1000) + 30 });
-    },
-    /weak_rsa_key|at least 2048 bits/,
-  );
+  await assert.rejects(async () => {
+    const s = createJwtSigner({ alg: "RS256", key: weakPair.privateKey, maxLifetimeSeconds: 60 });
+    await s.sign({ exp: Math.floor(Date.now() / 1000) + 30 });
+  }, /weak_rsa_key|at least 2048 bits/);
 });
 
 test("jwt: refuses PS256 verifier with sub-2048-bit RSA JWK", async () => {
@@ -399,12 +406,14 @@ test("jwt: refuses PS256 verifier with sub-2048-bit RSA JWK", async () => {
       hash: "SHA-256",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
   const jwk = await subtle.exportKey("jwk", weakPair.publicKey);
   const v = createJwtVerifier({ algorithms: ["PS256"], key: jwk });
   const h = Buffer.from(JSON.stringify({ alg: "PS256" })).toString("base64url");
-  const p = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 30 })).toString("base64url");
+  const p = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 30 })).toString(
+    "base64url"
+  );
   await assert.rejects(() => v.verify(`${h}.${p}.AAAA`), /weak_rsa_key|at least 2048 bits/);
 });
 
@@ -517,13 +526,13 @@ test("jwt verify: non-number exp/nbf/iat -> errors", async () => {
     key as BufferSource,
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"],
+    ["sign"]
   );
   async function craft(payload: Record<string, unknown>): Promise<string> {
     const h = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
     const p = Buffer.from(JSON.stringify(payload)).toString("base64url");
     const sig = new Uint8Array(
-      await subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(`${h}.${p}`) as BufferSource),
+      await subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(`${h}.${p}`) as BufferSource)
     );
     return `${h}.${p}.${Buffer.from(sig).toString("base64url")}`;
   }
@@ -548,9 +557,12 @@ test("jwt verify: strips prototype-pollution keys from header/payload", async ()
     key as BufferSource,
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"],
+    ["sign"]
   );
-  const headerObj = { alg: "HS256", typ: "JWT", __proto__: { polluted: true } } as Record<string, unknown>;
+  const headerObj = { alg: "HS256", typ: "JWT", __proto__: { polluted: true } } as Record<
+    string,
+    unknown
+  >;
   const payloadObj = {
     sub: "u",
     __proto__: { polluted: true },
@@ -560,7 +572,7 @@ test("jwt verify: strips prototype-pollution keys from header/payload", async ()
   const h = Buffer.from(JSON.stringify(headerObj)).toString("base64url");
   const p = Buffer.from(JSON.stringify(payloadObj)).toString("base64url");
   const sig = new Uint8Array(
-    await subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(`${h}.${p}`) as BufferSource),
+    await subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(`${h}.${p}`) as BufferSource)
   );
   const tok = `${h}.${p}.${Buffer.from(sig).toString("base64url")}`;
   const verifier = createJwtVerifier({ algorithms: ["HS256"], key });
@@ -655,7 +667,7 @@ test("createJwtVerifier: refuses non-function isRevoked", () => {
         key: new Uint8Array(32),
         isRevoked: "yes" as unknown as () => boolean,
       }),
-    /invalid_is_revoked/,
+    /invalid_is_revoked/
   );
 });
 
@@ -750,7 +762,10 @@ test("requireScopes: 401 with Bearer challenge when user is absent", async () =>
   });
   const res = await app.fetch(new Request("http://x/"));
   assert.equal(res.status, 401);
-  assert.match(res.headers.get("www-authenticate") ?? "", /Bearer scope="users:read", error="insufficient_scope"/);
+  assert.match(
+    res.headers.get("www-authenticate") ?? "",
+    /Bearer scope="users:read", error="insufficient_scope"/
+  );
   assert.equal(res.headers.get("cache-control"), "no-store");
   const body = (await res.json()) as { detail: string; status: number };
   assert.equal(body.status, 401);
@@ -762,7 +777,7 @@ test("requireScopes: 403 when user lacks required scopes", async () => {
   app.use(
     bearerAuth({
       validate: () => true,
-    }),
+    })
   );
   app.use({
     beforeHandle(ctx) {
@@ -908,12 +923,12 @@ test("etag: 304 on matching If-None-Match (and on wildcard *)", async () => {
   assert.equal(third.status, 304);
   // List with one matching tag
   const fourth = await app.fetch(
-    new Request("http://x/", { headers: { "if-none-match": `"nope", ${tag}` } }),
+    new Request("http://x/", { headers: { "if-none-match": `"nope", ${tag}` } })
   );
   assert.equal(fourth.status, 304);
   // Weak comparison: W/"x" matches "x"
   const fifth = await app.fetch(
-    new Request("http://x/", { headers: { "if-none-match": `W/${tag}` } }),
+    new Request("http://x/", { headers: { "if-none-match": `W/${tag}` } })
   );
   assert.equal(fifth.status, 304);
 });
@@ -1011,7 +1026,7 @@ test("etag: skips non-GET/HEAD methods", async () => {
     handler: () => ({ status: 200 as const, body: { v: 1 } }),
   });
   const res = await app.fetch(
-    new Request("http://x/", { method: "POST", headers: { origin: "http://x" } }),
+    new Request("http://x/", { method: "POST", headers: { origin: "http://x" } })
   );
   assert.equal(res.headers.get("etag"), null);
 });

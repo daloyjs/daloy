@@ -89,18 +89,21 @@ test("onPluginInstalled observes nested plugin registrations with full prefix", 
     {
       name: "outer",
       register(child) {
-        child.register({
-          name: "inner",
-          register(grandchild) {
-            grandchild.route({
-              method: "GET",
-              path: "/status",
-              operationId: "nestedStatus",
-              responses: { 200: { description: "ok" } },
-              handler: async () => ({ status: 200 as const, body: { ok: true } }),
-            });
+        child.register(
+          {
+            name: "inner",
+            register(grandchild) {
+              grandchild.route({
+                method: "GET",
+                path: "/status",
+                operationId: "nestedStatus",
+                responses: { 200: { description: "ok" } },
+                handler: async () => ({ status: 200 as const, body: { ok: true } }),
+              });
+            },
           },
-        }, { prefix: "/inner" });
+          { prefix: "/inner" }
+        );
       },
     },
     { prefix: "/outer" }
@@ -117,19 +120,22 @@ test("onPluginInstalled observes nested plugin registrations with full prefix", 
 test("async plugin routes are visible to introspection after ready", async () => {
   const app = new App({ logger: false });
 
-  app.register({
-    name: "async-routes",
-    async register(child) {
-      await Promise.resolve();
-      child.route({
-        method: "GET",
-        path: "/later",
-        operationId: "later",
-        responses: { 200: { description: "ok" } },
-        handler: async () => ({ status: 200 as const, body: { ok: true } }),
-      });
+  app.register(
+    {
+      name: "async-routes",
+      async register(child) {
+        await Promise.resolve();
+        child.route({
+          method: "GET",
+          path: "/later",
+          operationId: "later",
+          responses: { 200: { description: "ok" } },
+          handler: async () => ({ status: 200 as const, body: { ok: true } }),
+        });
+      },
     },
-  }, { prefix: "/plugin" });
+    { prefix: "/plugin" }
+  );
 
   await app.ready();
   assert.ok(app.introspect().some((route) => route.path === "/plugin/later"));
@@ -139,8 +145,14 @@ test("register propagates sync plugin failures", () => {
   const app = new App({ logger: false });
 
   assert.throws(
-    () => app.register({ name: "broken", register: () => { throw new Error("sync boom"); } }),
-    /sync boom/,
+    () =>
+      app.register({
+        name: "broken",
+        register: () => {
+          throw new Error("sync boom");
+        },
+      }),
+    /sync boom/
   );
 });
 
@@ -163,7 +175,7 @@ test("register rejects plugins with missing dependencies", () => {
 
   assert.throws(
     () => app.register({ name: "needs-db", dependencies: ["db"], register: () => {} }),
-    /dependency on "db"/,
+    /dependency on "db"/
   );
 });
 
@@ -171,10 +183,17 @@ test("onPluginInstalled listener errors are caught and logged but do not crash r
   const logs: Array<{ level: string; msg: string }> = [];
   const logger = {
     level: "error" as const,
-    debug() {}, info() {}, warn() {}, fatal() {},
-    error(obj: any, msg?: string) { logs.push({ level: "error", msg: msg ?? String(obj) }); },
+    debug() {},
+    info() {},
+    warn() {},
+    fatal() {},
+    error(obj: any, msg?: string) {
+      logs.push({ level: "error", msg: msg ?? String(obj) });
+    },
     trace() {},
-    child() { return logger; },
+    child() {
+      return logger;
+    },
   };
   const app = new App({ logger: logger as any });
 
@@ -247,9 +266,17 @@ test("onShutdown listener errors are caught and logged", async () => {
   const logs: string[] = [];
   const logger = {
     level: "error" as const,
-    debug() {}, info() {}, warn() {}, fatal() {}, trace() {},
-    error(_: any, msg?: string) { logs.push(msg ?? ""); },
-    child() { return logger; },
+    debug() {},
+    info() {},
+    warn() {},
+    fatal() {},
+    trace() {},
+    error(_: any, msg?: string) {
+      logs.push(msg ?? "");
+    },
+    child() {
+      return logger;
+    },
   };
   const app = new App({ logger: logger as any });
 

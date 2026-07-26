@@ -321,7 +321,7 @@ const UNIQUE_LOCAL = ["fc00::/7"];
  */
 export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
   const allowProtocols = new Set(
-    (options.allowProtocols ?? ["http:", "https:"]).map((s) => s.toLowerCase()),
+    (options.allowProtocols ?? ["http:", "https:"]).map((s) => s.toLowerCase())
   );
   // Hard-deny floor: ALWAYS_DENY (cloud metadata + reserved) plus any
   // user-supplied `denyAddresses`. No allow flag, including
@@ -346,8 +346,7 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
   // to the validated IP. A custom `options.fetch` owns its own socket / DNS
   // policy, so pinDns stays off unless the caller opts in. Non-Node runtimes
   // default off (no node:http). Opt out on Node with `pinDns: false`.
-  const pinDns =
-    options.pinDns ?? (options.fetch === undefined && defaultPinDnsEnabled());
+  const pinDns = options.pinDns ?? (options.fetch === undefined && defaultPinDnsEnabled());
 
   for (const c of ALWAYS_DENY) hardDenyMatchers.push(compileCidrMatcher(c));
   for (const c of options.denyAddresses ?? []) hardDenyMatchers.push(compileCidrMatcher(c));
@@ -539,7 +538,7 @@ async function pinnedHttpFetch(req: Request, ip: string): Promise<Response> {
   } catch {
     throw new Error(
       "fetchGuard({ pinDns: true }): node:http is unavailable on this runtime; " +
-        "DNS pinning for http: requires Node. Disable pinDns or run on Node.",
+        "DNS pinning for http: requires Node. Disable pinDns or run on Node."
     );
   }
   const url = new URL(req.url);
@@ -580,7 +579,9 @@ async function pinnedHttpFetch(req: Request, ip: string): Promise<Response> {
         const nullBody = status === 204 || status === 304 || method === "HEAD";
         if (nullBody) {
           res.resume(); // drain so the socket can be released
-          resolve(new Response(null, { status, statusText: res.statusMessage, headers: responseHeaders }));
+          resolve(
+            new Response(null, { status, statusText: res.statusMessage, headers: responseHeaders })
+          );
           return;
         }
         resolve(
@@ -588,9 +589,9 @@ async function pinnedHttpFetch(req: Request, ip: string): Promise<Response> {
             status,
             statusText: res.statusMessage,
             headers: responseHeaders,
-          }),
+          })
         );
-      },
+      }
     );
     clientReq.on("error", reject);
     if (bodyBytes && bodyBytes.byteLength > 0) clientReq.write(bodyBytes);
@@ -609,17 +610,25 @@ function stripBodyHeaders(headers: Headers): Headers {
 }
 
 function createDefaultResolver(): (host: string) => Promise<readonly string[]> {
-  let lookupPromise: Promise<((h: string, opts: { all: true; verbatim: true }) => Promise<Array<{ address: string }>>) | null> | null = null;
+  let lookupPromise: Promise<
+    ((h: string, opts: { all: true; verbatim: true }) => Promise<Array<{ address: string }>>) | null
+  > | null = null;
   return async (host) => {
     if (!lookupPromise) {
       lookupPromise = import("node:dns/promises")
-        .then((m) => m.lookup as unknown as (h: string, opts: { all: true; verbatim: true }) => Promise<Array<{ address: string }>>)
+        .then(
+          (m) =>
+            m.lookup as unknown as (
+              h: string,
+              opts: { all: true; verbatim: true }
+            ) => Promise<Array<{ address: string }>>
+        )
         .catch(() => null);
     }
     const lookup = await lookupPromise;
     if (!lookup) {
       throw new Error(
-        "fetchGuard: no DNS resolver available on this runtime. Pass options.resolve.",
+        "fetchGuard: no DNS resolver available on this runtime. Pass options.resolve."
       );
     }
     const results = await lookup(host, { all: true, verbatim: true });

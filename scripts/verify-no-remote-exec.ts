@@ -82,7 +82,8 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
     // Lives in the import-group so the URL string literal is still intact
     // when this regex runs (Phase 2 strips string literals).
     re: /\bimport\s*\(\s*["']https?:\/\//,
-    reason: "remote dynamic `import('http(s)://...')` in core can pull arbitrary code (BlokTrooper class)",
+    reason:
+      "remote dynamic `import('http(s)://...')` in core can pull arbitrary code (BlokTrooper class)",
   },
   {
     // Bare `eval(...)` call. The leading character must be an
@@ -177,7 +178,7 @@ const CODE_GEN_PATTERNS = FORBIDDEN_PATTERNS.slice(5);
 
 export function findForbiddenRemoteExecCalls(
   file: string,
-  source: string,
+  source: string
 ): readonly ForbiddenRemoteExecCall[] {
   const out: ForbiddenRemoteExecCall[] = [];
   const lines = source.split(/\r?\n/);
@@ -245,19 +246,18 @@ async function main(): Promise<void> {
   try {
     await stat(SRC_ROOT);
   } catch (err) {
-    console.error(
-      `verify-no-remote-exec: cannot stat src/: ${(err as Error).message}`,
-    );
+    console.error(`verify-no-remote-exec: cannot stat src/: ${(err as Error).message}`);
     process.exitCode = 1;
     return;
   }
   for await (const absolute of walk(SRC_ROOT)) {
-    const rel =
-      "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
+    const rel = "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
     const text = await readFile(absolute, "utf8");
     const findings = findForbiddenRemoteExecCalls(rel, text);
     for (const f of findings) {
-      console.error(`${f.file}:${f.line}: forbidden remote-exec primitive (${f.reason}): ${f.text}`);
+      console.error(
+        `${f.file}:${f.line}: forbidden remote-exec primitive (${f.reason}): ${f.text}`
+      );
       total++;
     }
   }
@@ -267,7 +267,7 @@ async function main(): Promise<void> {
         "Core source must not import `node:child_process` / `node:vm`, call bare `eval(...)` or " +
         "`new Function(...)`, or dynamically `import('http(s)://...')`. These are the runtime " +
         "primitives the BlokTrooper / Shai-Hulud class of supply-chain worm uses to fetch a " +
-        "remote payload and execute it. See https://www.aikido.dev/blog/fast-draft-open-vsx-bloktrooper.",
+        "remote payload and execute it. See https://www.aikido.dev/blog/fast-draft-open-vsx-bloktrooper."
     );
     process.exitCode = 1;
   }

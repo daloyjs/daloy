@@ -46,7 +46,7 @@ app.get(
       };
     }
     return { status: 200 as const, body: book };
-  },
+  }
 );
 
 // TODO: add POST /books with a `.strict()` request body schema.

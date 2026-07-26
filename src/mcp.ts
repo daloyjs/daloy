@@ -1047,8 +1047,10 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
   if (resourceMap.size !== resources.length)
     throw new TypeError("MCP resource URIs must be unique.");
   if (promptMap.size !== prompts.length) throw new TypeError("MCP prompt names must be unique.");
-  if (new Set(resourceTemplates.map((template) => template.uriTemplate)).size !==
-    resourceTemplates.length) {
+  if (
+    new Set(resourceTemplates.map((template) => template.uriTemplate)).size !==
+    resourceTemplates.length
+  ) {
     throw new TypeError("MCP resource template URIs must be unique.");
   }
   const compiledTemplates = resourceTemplates.map(compileUriTemplate);

@@ -32,7 +32,7 @@ test("createLogger redacts default sensitive keys", () => {
       nested: { apikey: "secret" },
       keep: "ok",
     },
-    "hi",
+    "hi"
   );
   const obj = JSON.parse(lines[0]!);
   assert.equal(obj.authorization, "[REDACTED]");
@@ -220,28 +220,19 @@ test("logger redacts the 2026 stateless JWT-format GitHub installation token (gh
   const lines: string[] = [];
   const log = createLogger({ level: "info", write: (l) => lines.push(l) });
   const statelessToken =
-    "ghs_" +
-    "A".repeat(80) +
-    "." +
-    "B".repeat(300) +
-    "." +
-    "C".repeat(100) +
-    "-_";
+    "ghs_" + "A".repeat(80) + "." + "B".repeat(300) + "." + "C".repeat(100) + "-_";
   log.info({ whole: statelessToken });
-  log.error(
-    { err: `auth failed with token ${statelessToken} from CI` },
-    "auth-fail",
-  );
+  log.error({ err: `auth failed with token ${statelessToken} from CI` }, "auth-fail");
   const whole = JSON.parse(lines[0]!);
   const interpolated = JSON.parse(lines[1]!);
   assert.equal(whole.whole, "[REDACTED]", "whole stateless token must be redacted");
   assert.ok(
     !interpolated.err.includes("B".repeat(300)),
-    "JWT payload segment must not survive after the first dot",
+    "JWT payload segment must not survive after the first dot"
   );
   assert.ok(
     !interpolated.err.includes(statelessToken),
-    "raw stateless token must not appear in log output",
+    "raw stateless token must not appear in log output"
   );
   assert.match(interpolated.err, /\[REDACTED\]/);
 });
@@ -263,11 +254,11 @@ test("logger leaves ordinary identifiers alone (no false positives)", () => {
   const lines: string[] = [];
   const log = createLogger({ level: "info", write: (l) => lines.push(l) });
   log.info({
-    short: "sk-abc",            // below the 20-char minimum
-    name: "ghp_short",          // below the 36-char minimum
+    short: "sk-abc", // below the 20-char minimum
+    name: "ghp_short", // below the 36-char minimum
     uuid: "550e8400-e29b-41d4-a716-446655440000",
     text: "hello world",
-    awsLooking: "AKIASHORT",    // below the 16-char tail
+    awsLooking: "AKIASHORT", // below the 16-char tail
   });
   const obj = JSON.parse(lines[0]!);
   assert.equal(obj.short, "sk-abc");
@@ -327,7 +318,7 @@ test("logger redacts AI provider keys case-insensitively", () => {
       "X-Goog-Api-Key": "AIzaLeakGoogle",
       "x-litellm-master-key": "sk-litellm-leak",
     },
-    "ai-call",
+    "ai-call"
   );
   const obj = JSON.parse(lines[0]!);
   assert.equal(obj["X-OpenAI-Api-Key"], "[REDACTED]");
@@ -479,7 +470,7 @@ test("duplicate Transfer-Encoding is rejected before user onRequest hooks run", 
       method: "POST",
       headers,
       body: "{}",
-    }),
+    })
   );
   assert.equal(res.status, 400);
   assert.equal(called, false);
@@ -498,10 +489,7 @@ test("signWebhookPayload + verifyWebhookSignature roundtrip (hex)", async () => 
   const payload = new TextEncoder().encode('{"event":"ping"}');
   const sig = await signWebhookPayload({ payload, secret });
   assert.match(sig, /^[0-9a-f]{64}$/);
-  assert.equal(
-    await verifyWebhookSignature({ payload, signature: sig, secret }),
-    true,
-  );
+  assert.equal(await verifyWebhookSignature({ payload, signature: sig, secret }), true);
 });
 
 test("verifyWebhookSignature accepts sha256= prefix", async () => {
@@ -514,7 +502,7 @@ test("verifyWebhookSignature accepts sha256= prefix", async () => {
       signature: `sha256=${sig}`,
       secret,
     }),
-    true,
+    true
   );
 });
 
@@ -526,20 +514,14 @@ test("verifyWebhookSignature accepts base64-encoded signatures", async () => {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
   const b64 = Buffer.from(bytes).toString("base64");
-  assert.equal(
-    await verifyWebhookSignature({ payload, signature: b64, secret }),
-    true,
-  );
+  assert.equal(await verifyWebhookSignature({ payload, signature: b64, secret }), true);
 });
 
 test("verifyWebhookSignature accepts padded base64 without treating padding as a prefix", async () => {
   const payload = "payload-3";
   const secret = "k";
   const signature = "qu48YYDwTExIPPVUjRLGjNZPIz8BDPL6NtxfZ71w4es=";
-  assert.equal(
-    await verifyWebhookSignature({ payload, signature, secret }),
-    true,
-  );
+  assert.equal(await verifyWebhookSignature({ payload, signature, secret }), true);
 });
 
 test("verifyWebhookSignature rejects mismatched or deprecated algorithm prefixes", async () => {
@@ -548,21 +530,18 @@ test("verifyWebhookSignature rejects mismatched or deprecated algorithm prefixes
   const sha256 = await signWebhookPayload({ payload, secret });
   assert.equal(
     await verifyWebhookSignature({ payload, signature: `sha512=${sha256}`, secret }),
-    false,
+    false
   );
   assert.equal(
     await verifyWebhookSignature({ payload, signature: `sha1=${sha256}`, secret }),
-    false,
+    false
   );
 });
 
 test("verifyWebhookSignature returns false on tampered payload", async () => {
   const secret = "k";
   const sig = await signWebhookPayload({ payload: "hello", secret });
-  assert.equal(
-    await verifyWebhookSignature({ payload: "hello!", signature: sig, secret }),
-    false,
-  );
+  assert.equal(await verifyWebhookSignature({ payload: "hello!", signature: sig, secret }), false);
 });
 
 test("verifyWebhookSignature returns false on malformed signature", async () => {
@@ -572,7 +551,7 @@ test("verifyWebhookSignature returns false on malformed signature", async () => 
       signature: "not-hex-or-b64!!!",
       secret: "k",
     }),
-    false,
+    false
   );
 });
 
@@ -589,7 +568,7 @@ test("verifyWebhookSignature works with sha512 and Uint8Array signature", async 
       secret,
       algorithm: "sha512",
     }),
-    true,
+    true
   );
 });
 
@@ -601,7 +580,7 @@ test("signWebhookPayload supports sha384", async () => {
 test("signWebhookPayload rejects unsupported runtime algorithms", async () => {
   await assert.rejects(
     () => signWebhookPayload({ payload: "x", secret: "k", algorithm: "sha1" as any }),
-    TypeError,
+    TypeError
   );
 });
 
@@ -612,29 +591,26 @@ test("verifyWebhookSignature rejects Uint8Array signatures of wrong length", asy
       signature: new Uint8Array(8),
       secret: "k",
     }),
-    false,
+    false
   );
 });
 
 test("verifyWebhookSignature rejects empty signature strings", async () => {
-  assert.equal(
-    await verifyWebhookSignature({ payload: "x", signature: "", secret: "k" }),
-    false,
-  );
+  assert.equal(await verifyWebhookSignature({ payload: "x", signature: "", secret: "k" }), false);
   assert.equal(
     await verifyWebhookSignature({
       payload: "x",
       signature: "sha256=",
       secret: "k",
     }),
-    false,
+    false
   );
 });
 
 test("verifyWebhookSignature rejects base64 strings with invalid padding length", async () => {
   assert.equal(
     await verifyWebhookSignature({ payload: "x", signature: "AAAAA", secret: "k" }),
-    false,
+    false
   );
 });
 
@@ -646,7 +622,7 @@ test("verifyWebhookSignature returns false on bogus runtime algorithm value", as
       secret: "k",
       algorithm: "md5" as any,
     }),
-    false,
+    false
   );
 });
 
@@ -666,7 +642,7 @@ test("sign + verify roundtrip binds the signature to the timestamp", async () =>
       timestamp: ts,
       now: () => ts * 1000,
     }),
-    true,
+    true
   );
   // Same signature, but caller swapped the timestamp → reject (different
   // signed payload string, even if math happens to line up they aren't equal).
@@ -678,7 +654,7 @@ test("sign + verify roundtrip binds the signature to the timestamp", async () =>
       timestamp: ts + 1,
       now: () => (ts + 1) * 1000,
     }),
-    false,
+    false
   );
 });
 
@@ -696,7 +672,7 @@ test("verifyWebhookSignature rejects timestamps outside the tolerance window (re
       timestamp: ts,
       now: () => (ts + 600) * 1000,
     }),
-    false,
+    false
   );
   // Same drift, but the receiver bumped tolerance to 15 minutes → accepted.
   assert.equal(
@@ -708,7 +684,7 @@ test("verifyWebhookSignature rejects timestamps outside the tolerance window (re
       toleranceSeconds: 900,
       now: () => (ts + 600) * 1000,
     }),
-    true,
+    true
   );
 });
 
@@ -725,7 +701,7 @@ test("verifyWebhookSignature also rejects timestamps that are too far in the fut
       timestamp: ts,
       now: () => (ts - 600) * 1000, // receiver clock 10 min behind
     }),
-    false,
+    false
   );
 });
 
@@ -743,7 +719,7 @@ test("verifyWebhookSignature without timestamp does not accept signatures bound 
       signature: signedWithTs,
       secret,
     }),
-    false,
+    false
   );
   // Symmetric: signature WITHOUT ts must not verify if receiver supplies one.
   const signedWithoutTs = await signWebhookPayload({ payload, secret });
@@ -755,7 +731,7 @@ test("verifyWebhookSignature without timestamp does not accept signatures bound 
       timestamp: ts,
       now: () => ts * 1000,
     }),
-    false,
+    false
   );
 });
 
@@ -772,7 +748,7 @@ test("verifyWebhookSignature accepts string timestamps in canonical integer-seco
       timestamp: String(ts),
       now: () => ts * 1000,
     }),
-    true,
+    true
   );
 });
 
@@ -780,7 +756,16 @@ test("verifyWebhookSignature rejects malformed timestamp strings", async () => {
   const secret = "k";
   const payload = "evt";
   const sig = await signWebhookPayload({ payload, secret, timestamp: 1_730_000_000 });
-  for (const bad of ["  1730000000", "1730000000 ", "+1730000000", "-1", "1.5", "00123", "abc", ""]) {
+  for (const bad of [
+    "  1730000000",
+    "1730000000 ",
+    "+1730000000",
+    "-1",
+    "1.5",
+    "00123",
+    "abc",
+    "",
+  ]) {
     assert.equal(
       await verifyWebhookSignature({
         payload,
@@ -790,7 +775,7 @@ test("verifyWebhookSignature rejects malformed timestamp strings", async () => {
         now: () => 1_730_000_000 * 1000,
       }),
       false,
-      `timestamp ${JSON.stringify(bad)} must be rejected`,
+      `timestamp ${JSON.stringify(bad)} must be rejected`
     );
   }
 });
@@ -810,7 +795,7 @@ test("verifyWebhookSignature rejects non-finite / negative tolerance", async () 
         toleranceSeconds: bad,
         now: () => ts * 1000,
       }),
-      false,
+      false
     );
   }
 });
@@ -824,7 +809,7 @@ test("signWebhookPayload rejects malformed timestamp values", async () => {
           secret: "k",
           timestamp: bad as any,
         }),
-      TypeError,
+      TypeError
     );
   }
 });
@@ -900,8 +885,7 @@ test("App stays silent when env is omitted (no mismatch possible)", () => {
 // ---------- request URL sanitization for logs (DeepSec audit) ----------
 
 test("sanitizeUrlForLog redacts OAuth/code/token query values", () => {
-  const raw =
-    "https://app.example.com/callback?code=oauth-secret-code&state=xyz&q=books";
+  const raw = "https://app.example.com/callback?code=oauth-secret-code&state=xyz&q=books";
   const safe = sanitizeUrlForLog(raw);
   assert.match(safe, /\/callback/);
   assert.match(safe, /q=books/);
@@ -973,7 +957,7 @@ test("DEFAULT_REDACT_KEYS does not redact common non-secret structured fields", 
   for (const k of ["id", "key", "state", "code", "session", "sid", "sig", "signature", "auth"]) {
     assert.ok(
       !DEFAULT_REDACT_KEYS.includes(k),
-      `${k} should NOT be a global structured redact key (over-redaction risk)`,
+      `${k} should NOT be a global structured redact key (over-redaction risk)`
     );
   }
 });

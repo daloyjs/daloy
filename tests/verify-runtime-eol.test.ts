@@ -122,11 +122,6 @@ test("evaluateFindings tolerates malformed eol strings", () => {
 test("evaluateFindings respects a custom warnDays threshold", () => {
   // Node 22 EOL is ~69 days out on 2026-05-24. With warnDays=30, no warning.
   const grouped = new Map<number, readonly string[]>([[22, ["package.json"]]]);
-  const findings = evaluateFindings(
-    grouped,
-    FEED,
-    new Date("2026-05-24T00:00:00Z"),
-    30,
-  );
+  const findings = evaluateFindings(grouped, FEED, new Date("2026-05-24T00:00:00Z"), 30);
   assert.equal(findings.length, 0);
 });

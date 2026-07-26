@@ -72,7 +72,11 @@ test("[response-exposure/array] sensitive fields inside an ARRAY of objects are 
     }),
   });
   const json = await (await app.request("/users")).json();
-  assert.deepEqual(json, [{ id: "1" }, { id: "2" }], "every array element must be stripped to the schema");
+  assert.deepEqual(
+    json,
+    [{ id: "1" }, { id: "2" }],
+    "every array element must be stripped to the schema"
+  );
   assert.ok(!JSON.stringify(json).includes("ssn") && !JSON.stringify(json).includes("sk_live"));
 });
 
@@ -102,7 +106,7 @@ test("[jwt/key-injection] an embedded jwk/jku header is ignored; the configured 
   await assert.rejects(
     verifier.verify(forged),
     (e: any) => e instanceof JwtError && e.code === "invalid_signature",
-    "verifier must use the configured key and reject the attacker-signed token",
+    "verifier must use the configured key and reject the attacker-signed token"
   );
 });
 
@@ -137,7 +141,11 @@ test("[method-override] X-HTTP-Method-Override / _method cannot turn a GET into 
   });
   // No GET handler exists on /resource → 405, and the DELETE handler must not run.
   assert.equal(res.status, 405);
-  assert.equal(deleteRan, false, "method-override headers must never invoke the destructive handler");
+  assert.equal(
+    deleteRan,
+    false,
+    "method-override headers must never invoke the destructive handler"
+  );
 });
 
 // ===========================================================================
@@ -161,7 +169,11 @@ test("[path-confusion] encoded/dot-segment tricks cannot skip auth via an except
   // Traversal that COLLAPSES to /api/admin must not become exempt and must not 200.
   for (const p of ["/public/../api/admin", "/public/%2e%2e/api/admin", "/public//api/admin"]) {
     const res = await app.request(p);
-    assert.notEqual(res.status, 200, `path "${p}" must never reach the admin handler unauthenticated`);
+    assert.notEqual(
+      res.status,
+      200,
+      `path "${p}" must never reach the admin handler unauthenticated`
+    );
   }
 
   // The genuine exempt path still works without a token.

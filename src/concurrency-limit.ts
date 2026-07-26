@@ -180,7 +180,7 @@ function pathnameOf(url: string): string {
  * @internal
  */
 function buildScopeResolver(
-  opts: ConcurrencyLimitOptions,
+  opts: ConcurrencyLimitOptions
 ): (ctx: BaseContext<any, any>) => string | undefined {
   const scope = opts.scope ?? "global";
   if (typeof scope === "function") return scope;
@@ -192,7 +192,7 @@ function buildScopeResolver(
   if (!opts.keyGenerator && !opts.trustProxyHeaders) {
     throw new Error(
       'concurrencyLimit(): scope "client" requires keyGenerator or trustProxyHeaders so ' +
-        "clients can be identified; otherwise every caller shares one bucket.",
+        "clients can be identified; otherwise every caller shares one bucket."
     );
   }
   const resolve = opts.keyGenerator ?? forwardedKey;
@@ -247,7 +247,8 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
 
   const reject503 = (rejection: ConcurrencyRejection): never => {
     opts.onReject?.(rejection);
-    const headers = retryAfterSeconds > 0 ? { "retry-after": String(retryAfterSeconds) } : undefined;
+    const headers =
+      retryAfterSeconds > 0 ? { "retry-after": String(retryAfterSeconds) } : undefined;
     throw new HttpError(
       503,
       {
@@ -255,7 +256,7 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
         title: "Service Unavailable",
         detail: message,
       },
-      headers,
+      headers
     );
   };
 

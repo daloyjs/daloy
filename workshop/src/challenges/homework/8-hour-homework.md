@@ -15,46 +15,46 @@ Use Zod 4 (same as the workshop).
 
 ### Public routes
 
-| Method | Path             | Purpose                                                                 | Auth | Notes                                              |
-| ------ | ---------------- | ----------------------------------------------------------------------- | ---- | -------------------------------------------------- |
-| GET    | `/books`         | List books. `?q=`, `?tag=`, `?limit=` (1–100, default 20), `?cursor=`   | None | Returns `{ items: Book[], nextCursor: string \| null }` |
-| GET    | `/books/:id`     | Fetch one book                                                          | None | 404 problem+json on miss                           |
-| GET    | `/books/:id/cover` | Proxy a cover image from an allowlisted upstream                      | None | Outbound fetch MUST go through `fetchGuard()`      |
+| Method | Path               | Purpose                                                               | Auth | Notes                                                   |
+| ------ | ------------------ | --------------------------------------------------------------------- | ---- | ------------------------------------------------------- |
+| GET    | `/books`           | List books. `?q=`, `?tag=`, `?limit=` (1–100, default 20), `?cursor=` | None | Returns `{ items: Book[], nextCursor: string \| null }` |
+| GET    | `/books/:id`       | Fetch one book                                                        | None | 404 problem+json on miss                                |
+| GET    | `/books/:id/cover` | Proxy a cover image from an allowlisted upstream                      | None | Outbound fetch MUST go through `fetchGuard()`           |
 
 ### Admin routes (JWT bearer)
 
-| Method | Path           | Purpose                       | Auth          | Notes                                          |
-| ------ | -------------- | ----------------------------- | ------------- | ---------------------------------------------- |
-| POST   | `/admin/books` | Create a book                 | Bearer (JWT)  | `.strict()` body, 201 returns the created book |
-| PATCH  | `/admin/books/:id` | Partial update            | Bearer (JWT)  | 404 on miss, 409 on stale `version`            |
-| DELETE | `/admin/books/:id` | Delete a book             | Bearer (JWT)  | 204, idempotent                                |
+| Method | Path               | Purpose        | Auth         | Notes                                          |
+| ------ | ------------------ | -------------- | ------------ | ---------------------------------------------- |
+| POST   | `/admin/books`     | Create a book  | Bearer (JWT) | `.strict()` body, 201 returns the created book |
+| PATCH  | `/admin/books/:id` | Partial update | Bearer (JWT) | 404 on miss, 409 on stale `version`            |
+| DELETE | `/admin/books/:id` | Delete a book  | Bearer (JWT) | 204, idempotent                                |
 
 ### Session + CSRF surface (browser flow)
 
-| Method | Path            | Purpose                                  | Auth            | Notes                                        |
-| ------ | --------------- | ---------------------------------------- | --------------- | -------------------------------------------- |
-| POST   | `/auth/login`   | Issue a signed-cookie session            | None            | Sets `Set-Cookie` session + CSRF token       |
-| POST   | `/auth/logout`  | Destroy the session                      | Session + CSRF  | 204                                          |
-| GET    | `/me`           | Current session principal                | Session         | 401 if no valid session                      |
+| Method | Path           | Purpose                       | Auth           | Notes                                  |
+| ------ | -------------- | ----------------------------- | -------------- | -------------------------------------- |
+| POST   | `/auth/login`  | Issue a signed-cookie session | None           | Sets `Set-Cookie` session + CSRF token |
+| POST   | `/auth/logout` | Destroy the session           | Session + CSRF | 204                                    |
+| GET    | `/me`          | Current session principal     | Session        | 401 if no valid session                |
 
 ### WebSocket
 
-| Path        | Purpose                                   | Auth                        | Notes                                       |
-| ----------- | ----------------------------------------- | --------------------------- | ------------------------------------------- |
-| `/ws/feed`  | Live feed of book create/update/delete    | JWT in query or `Sec-WebSocket-Protocol` | Reject the upgrade on missing/invalid token |
+| Path       | Purpose                                | Auth                                     | Notes                                       |
+| ---------- | -------------------------------------- | ---------------------------------------- | ------------------------------------------- |
+| `/ws/feed` | Live feed of book create/update/delete | JWT in query or `Sec-WebSocket-Protocol` | Reject the upgrade on missing/invalid token |
 
 ### Schema
 
 ```ts
 type Book = {
-  id: string;            // uuid
-  title: string;         // 1–200 chars
-  author: string;        // 1–120 chars
-  tags: string[];        // each 1–30 chars, max 10
-  priceCents: number;    // ≥ 0, integer
-  version: number;       // optimistic-concurrency counter, starts at 1
-  createdAt: string;     // ISO 8601
-  updatedAt: string;     // ISO 8601
+  id: string; // uuid
+  title: string; // 1–200 chars
+  author: string; // 1–120 chars
+  tags: string[]; // each 1–30 chars, max 10
+  priceCents: number; // ≥ 0, integer
+  version: number; // optimistic-concurrency counter, starts at 1
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
 };
 ```
 
@@ -99,15 +99,15 @@ This is self-paced — there is no submission. Push the result to your own fork 
 
 ## When to reach for documentation
 
-| If you're stuck on…    | Read                                            |
-| ----------------------- | ----------------------------------------------- |
-| Schema design           | <https://daloyjs.dev/docs/validation>           |
-| Error types and shape   | <https://daloyjs.dev/docs/errors>               |
-| Middleware order        | <https://daloyjs.dev/docs/security>             |
-| Bearer + JWT/JWK auth   | <https://daloyjs.dev/docs/auth>                 |
-| OpenAPI examples        | <https://daloyjs.dev/docs/openapi>              |
-| Hey API codegen         | <https://daloyjs.dev/docs/clients>              |
-| Adapter swap            | <https://daloyjs.dev/docs/adapters>             |
-| WebSocket upgrades      | <https://daloyjs.dev/docs/websockets>           |
-| Testing patterns        | <https://daloyjs.dev/docs/testing>              |
-| Full reference example  | <https://daloyjs.dev/docs/tutorials/bookstore>  |
+| If you're stuck on…    | Read                                           |
+| ---------------------- | ---------------------------------------------- |
+| Schema design          | <https://daloyjs.dev/docs/validation>          |
+| Error types and shape  | <https://daloyjs.dev/docs/errors>              |
+| Middleware order       | <https://daloyjs.dev/docs/security>            |
+| Bearer + JWT/JWK auth  | <https://daloyjs.dev/docs/auth>                |
+| OpenAPI examples       | <https://daloyjs.dev/docs/openapi>             |
+| Hey API codegen        | <https://daloyjs.dev/docs/clients>             |
+| Adapter swap           | <https://daloyjs.dev/docs/adapters>            |
+| WebSocket upgrades     | <https://daloyjs.dev/docs/websockets>          |
+| Testing patterns       | <https://daloyjs.dev/docs/testing>             |
+| Full reference example | <https://daloyjs.dev/docs/tutorials/bookstore> |

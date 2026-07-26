@@ -177,11 +177,7 @@ export interface WebSocketMeta {
  * - `open`/`message`/`close`/`error`/`drain` follow Bun's signature so the
  *   same handler runs on both Node and Bun.
  */
-export interface WebSocketHandler<
-  P extends string = string,
-  S = AppState,
-  TData = unknown,
-> {
+export interface WebSocketHandler<P extends string = string, S = AppState, TData = unknown> {
   /** Optional schema used for payload-size consistency checks. */
   request?: { body?: StandardSchemaV1 };
   /**
@@ -247,9 +243,7 @@ export interface WebSocketHandler<
    * @since 0.33.0
    */
   allowedOrigins?:
-    | "same-origin"
-    | readonly string[]
-    | ((origin: string | null, request: Request) => boolean);
+    "same-origin" | readonly string[] | ((origin: string | null, request: Request) => boolean);
   /**
    * Acknowledge that this WebSocket route is intentionally exposed to
    * upgrade requests from any browser origin. In production with
@@ -270,25 +264,18 @@ export interface WebSocketHandler<
    */
   beforeUpgrade?(
     request: Request,
-    ctx: WebSocketContext<P, S>,
+    ctx: WebSocketContext<P, S>
   ): Response | string | undefined | Promise<Response | string | undefined>;
   /** Called once after the upgrade completes and the connection is open. */
-  open?(
-    conn: WebSocketConnection<TData>,
-    ctx: WebSocketContext<P, S>,
-  ): void | Promise<void>;
+  open?(conn: WebSocketConnection<TData>, ctx: WebSocketContext<P, S>): void | Promise<void>;
   /** Called for each complete inbound message; `data` is a string for text frames, bytes for binary (`isBinary: true`). */
   message?(
     conn: WebSocketConnection<TData>,
     data: string | Uint8Array | ArrayBuffer,
-    isBinary: boolean,
+    isBinary: boolean
   ): void | Promise<void>;
   /** Called when the connection closes, with the RFC 6455 close code and reason. */
-  close?(
-    conn: WebSocketConnection<TData>,
-    code: number,
-    reason: string,
-  ): void | Promise<void>;
+  close?(conn: WebSocketConnection<TData>, code: number, reason: string): void | Promise<void>;
   /** Called when a socket or handler error occurs on the connection. */
   error?(conn: WebSocketConnection<TData>, err: unknown): void | Promise<void>;
   /** Called when the socket's send buffer drains after backpressure. */
@@ -316,12 +303,12 @@ function assertPositiveWebSocketInteger(name: string, value: number): void {
 }
 
 function assertWebSocketOriginPolicy(
-  policy: WebSocketHandler<any, any, any>["allowedOrigins"],
+  policy: WebSocketHandler<any, any, any>["allowedOrigins"]
 ): void {
   if (policy === undefined || policy === "same-origin" || typeof policy === "function") return;
   if (!Array.isArray(policy)) {
     throw new Error(
-      'app.ws(): allowedOrigins must be "same-origin", an array of origin strings, or a predicate function.',
+      'app.ws(): allowedOrigins must be "same-origin", an array of origin strings, or a predicate function.'
     );
   }
   for (const origin of policy) {
@@ -332,7 +319,8 @@ function assertWebSocketOriginPolicy(
 }
 
 function schemaToJson(schema: StandardSchemaV1 | undefined): unknown {
-  const converter = (schema as unknown as { toJSONSchema?: () => unknown } | undefined)?.toJSONSchema;
+  const converter = (schema as unknown as { toJSONSchema?: () => unknown } | undefined)
+    ?.toJSONSchema;
   if (typeof converter !== "function") return undefined;
   try {
     return converter.call(schema);
@@ -370,7 +358,7 @@ function declaredSchemaMaxBytes(schema: StandardSchemaV1 | undefined): number | 
  */
 export function normalizeWebSocketOptions(
   handler: WebSocketHandler<any, any, any>,
-  context: { production: boolean; secureDefaults: boolean },
+  context: { production: boolean; secureDefaults: boolean }
 ): NormalizedWebSocketOptions {
   const closeOnBackpressureLimit = handler.closeOnBackpressureLimit ?? true;
   const backpressureLimit = handler.backpressureLimit ?? DEFAULT_WS_BACKPRESSURE_LIMIT;
@@ -391,13 +379,13 @@ export function normalizeWebSocketOptions(
   if (perMessageDeflate && context.secureDefaults && context.production) {
     throw new Error(
       "app.ws(): perMessageDeflate: true is refused in production under secureDefaults. " +
-        "Leave it false or pass app({ secureDefaults: false }) only for a reviewed deployment.",
+        "Leave it false or pass app({ secureDefaults: false }) only for a reviewed deployment."
     );
   }
   const schemaMaxBytes = declaredSchemaMaxBytes(handler.request?.body);
   if (schemaMaxBytes !== undefined && maxPayloadLength > schemaMaxBytes) {
     throw new Error(
-      `app.ws(): maxPayloadLength (${maxPayloadLength}) exceeds the route body schema maximum (${schemaMaxBytes}).`,
+      `app.ws(): maxPayloadLength (${maxPayloadLength}) exceeds the route body schema maximum (${schemaMaxBytes}).`
     );
   }
   return {
@@ -424,7 +412,7 @@ export type WebSocketBeforeUpgrade<P extends string = string, S = AppState> = No
  * @since 0.23.0
  */
 export function wsRateLimit<P extends string = string, S = AppState>(
-  options: RateLimitOptions,
+  options: RateLimitOptions
 ): WebSocketBeforeUpgrade<P, S> {
   const hooks = rateLimit(options);
   return async (request, wsContext) => {
@@ -446,9 +434,12 @@ export function wsRateLimit<P extends string = string, S = AppState>(
       }
       return undefined;
     } catch (err) {
-      const response = err instanceof HttpError
-        ? err.toResponse()
-        : new InternalError(err instanceof Error ? err.message : "WebSocket rate limit failed").toResponse();
+      const response =
+        err instanceof HttpError
+          ? err.toResponse()
+          : new InternalError(
+              err instanceof Error ? err.message : "WebSocket rate limit failed"
+            ).toResponse();
       copyWsRateLimitHeaders(setHeaders, response);
       return response;
     }
@@ -467,11 +458,9 @@ function copyWsRateLimitHeaders(headers: Headers, response: Response): void {
  * @param handler The {@link WebSocketHandler} to type-check; returned as-is.
  * @returns The same handler object, with `P`/`S`/`TData` inferred.
  */
-export function defineWebSocket<
-  P extends string,
-  S = AppState,
-  TData = unknown,
->(handler: WebSocketHandler<P, S, TData>): WebSocketHandler<P, S, TData> {
+export function defineWebSocket<P extends string, S = AppState, TData = unknown>(
+  handler: WebSocketHandler<P, S, TData>
+): WebSocketHandler<P, S, TData> {
   return handler;
 }
 
@@ -499,7 +488,8 @@ type WebSocketStateFactory = () => Record<string, unknown>;
  * event (Node) or inside `fetch` (Bun / Workers).
  */
 export class WebSocketRegistry {
-  private router = new Router<WebSocketRouteEntry>(); private _size = 0;
+  private router = new Router<WebSocketRouteEntry>();
+  private _size = 0;
   private entries: WebSocketRouteEntry[] = [];
   /**
    * Register a WebSocket route.
@@ -516,7 +506,7 @@ export class WebSocketRegistry {
     options: NormalizedWebSocketOptions = normalizeWebSocketOptions(handler, {
       production: false,
       secureDefaults: true,
-    }),
+    })
   ): void {
     const entry = { path, handler, createState, options };
     this.router.add("GET", path, entry);
@@ -574,7 +564,7 @@ export class WebSocketRegistry {
     }
     return {
       closeOnBackpressureLimit: this.entries.every(
-        (entry) => entry.options.closeOnBackpressureLimit,
+        (entry) => entry.options.closeOnBackpressureLimit
       ),
       backpressureLimit: Math.max(...this.entries.map((entry) => entry.options.backpressureLimit)),
       perMessageDeflate: this.entries.some((entry) => entry.options.perMessageDeflate),
@@ -598,7 +588,7 @@ function getSubtle(): SubtleCrypto {
   const c: Crypto | undefined = (globalThis as { crypto?: Crypto }).crypto;
   if (!c?.subtle) {
     throw new Error(
-      "websocket: Web Crypto (crypto.subtle) is required to compute Sec-WebSocket-Accept.",
+      "websocket: Web Crypto (crypto.subtle) is required to compute Sec-WebSocket-Accept."
     );
   }
   return c.subtle;
@@ -647,18 +637,13 @@ const WS_TOKEN_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
  * @throws WebSocketProtocolError when `protocol` is not a valid HTTP token
  *   or was not offered by the client.
  */
-export function validateSelectedSubprotocol(
-  protocol: string,
-  offered: readonly string[],
-): string {
+export function validateSelectedSubprotocol(protocol: string, offered: readonly string[]): string {
   if (!WS_TOKEN_RE.test(protocol)) {
-    throw new WebSocketProtocolError(
-      "Selected WebSocket subprotocol must be a valid HTTP token",
-    );
+    throw new WebSocketProtocolError("Selected WebSocket subprotocol must be a valid HTTP token");
   }
   if (!offered.includes(protocol)) {
     throw new WebSocketProtocolError(
-      "Selected WebSocket subprotocol was not offered by the client",
+      "Selected WebSocket subprotocol was not offered by the client"
     );
   }
   return protocol;
@@ -754,7 +739,7 @@ function isValidWebSocketKey(key: string): boolean {
  */
 export function checkWebSocketOrigin(
   request: Request,
-  policy: WebSocketHandler<any, any, any>["allowedOrigins"],
+  policy: WebSocketHandler<any, any, any>["allowedOrigins"]
 ): { ok: true } | { ok: false; reason: string } {
   if (policy === undefined) return { ok: true };
   const origin = request.headers.get("origin");
@@ -844,7 +829,7 @@ export const FRAME_INCOMPLETE = Symbol("daloy.ws.frameIncomplete");
  */
 export function parseFrame(
   buf: Uint8Array,
-  opts: { requireMask?: boolean; maxPayload?: number } = {},
+  opts: { requireMask?: boolean; maxPayload?: number } = {}
 ): ParsedFrame | typeof FRAME_INCOMPLETE {
   if (buf.length < 2) return FRAME_INCOMPLETE;
   const b0 = buf[0]!;
@@ -852,37 +837,24 @@ export function parseFrame(
   const fin = (b0 & 0x80) !== 0;
   const rsv = b0 & 0x70;
   if (rsv !== 0)
-    throw new WebSocketProtocolError(
-      "RSV bits must be zero (no extensions negotiated)",
-    );
+    throw new WebSocketProtocolError("RSV bits must be zero (no extensions negotiated)");
   const opcode = b0 & 0x0f;
   const masked = (b1 & 0x80) !== 0;
   let payloadLen = b1 & 0x7f;
   let offset = 2;
 
   if ((opcode & 0x8) !== 0) {
-    if (!fin)
-      throw new WebSocketProtocolError("Control frames must not be fragmented");
+    if (!fin) throw new WebSocketProtocolError("Control frames must not be fragmented");
     if (payloadLen > WS_MAX_CONTROL_PAYLOAD)
-      throw new WebSocketProtocolError(
-        "Control frame payload exceeds 125 bytes",
-      );
-    if (
-      opcode !== WS_OPCODE.CLOSE &&
-      opcode !== WS_OPCODE.PING &&
-      opcode !== WS_OPCODE.PONG
-    )
-      throw new WebSocketProtocolError(
-        `Unknown control opcode 0x${opcode.toString(16)}`,
-      );
+      throw new WebSocketProtocolError("Control frame payload exceeds 125 bytes");
+    if (opcode !== WS_OPCODE.CLOSE && opcode !== WS_OPCODE.PING && opcode !== WS_OPCODE.PONG)
+      throw new WebSocketProtocolError(`Unknown control opcode 0x${opcode.toString(16)}`);
   } else if (
     opcode !== WS_OPCODE.CONTINUATION &&
     opcode !== WS_OPCODE.TEXT &&
     opcode !== WS_OPCODE.BINARY
   ) {
-    throw new WebSocketProtocolError(
-      `Unknown data opcode 0x${opcode.toString(16)}`,
-    );
+    throw new WebSocketProtocolError(`Unknown data opcode 0x${opcode.toString(16)}`);
   }
 
   if (payloadLen === 126) {
@@ -903,9 +875,7 @@ export function parseFrame(
       (buf[offset + 6]! << 8) +
       buf[offset + 7]!;
     if (hi > 0x1fffff)
-      throw new WebSocketProtocolError(
-        "Frame payload exceeds Number.MAX_SAFE_INTEGER",
-      );
+      throw new WebSocketProtocolError("Frame payload exceeds Number.MAX_SAFE_INTEGER");
     payloadLen = hi * 2 ** 32 + lo;
     offset += 8;
   }
@@ -915,11 +885,7 @@ export function parseFrame(
   // caller buffer an unbounded incomplete frame by trickling payload bytes.
   // Cumulative accounting across fragments stays with the caller; a declared
   // length above the limit always implies the assembled message exceeds it.
-  if (
-    (opcode & 0x8) === 0 &&
-    opts.maxPayload !== undefined &&
-    payloadLen > opts.maxPayload
-  ) {
+  if ((opcode & 0x8) === 0 && opts.maxPayload !== undefined && payloadLen > opts.maxPayload) {
     throw new WebSocketPayloadTooLargeError(opts.maxPayload, payloadLen);
   }
 
@@ -1011,9 +977,7 @@ export function encodeFrame(opts: {
     const maskOff = 2 + extLen;
     const c = (globalThis as { crypto?: Crypto }).crypto;
     if (!c?.getRandomValues) {
-      throw new Error(
-        "websocket: Web Crypto getRandomValues required to mask frames",
-      );
+      throw new Error("websocket: Web Crypto getRandomValues required to mask frames");
     }
     c.getRandomValues(out.subarray(maskOff, maskOff + 4));
     const mask = out.subarray(maskOff, maskOff + 4);
@@ -1060,14 +1024,11 @@ export function decodeClosePayload(payload: Uint8Array): {
   code: number;
   reason: string;
 } {
-  if (payload.length === 0)
-    return { code: WS_CLOSE_CODE.NO_STATUS_RECEIVED, reason: "" };
+  if (payload.length === 0) return { code: WS_CLOSE_CODE.NO_STATUS_RECEIVED, reason: "" };
   if (payload.length === 1)
     throw new WebSocketProtocolError("Close payload must be empty or ≥2 bytes");
   const code = (payload[0]! << 8) | payload[1]!;
-  const reason = new TextDecoder("utf-8", { fatal: true }).decode(
-    payload.subarray(2),
-  );
+  const reason = new TextDecoder("utf-8", { fatal: true }).decode(payload.subarray(2));
   return { code, reason };
 }
 
@@ -1083,7 +1044,7 @@ export class WebSocketProtocolError extends Error {
 export class WebSocketPayloadTooLargeError extends WebSocketProtocolError {
   constructor(
     readonly limit: number,
-    readonly actual: number,
+    readonly actual: number
   ) {
     super(`WebSocket message exceeds maxPayloadLength (${actual} > ${limit})`);
     this.name = "WebSocketPayloadTooLargeError";
@@ -1134,7 +1095,7 @@ export class FrameSink {
     private readonly opts: FrameSinkEvents & {
       requireMask?: boolean;
       maxPayloadLength?: number;
-    },
+    }
   ) {}
 
   /**
@@ -1193,16 +1154,14 @@ export class FrameSink {
 
     if (frame.opcode === WS_OPCODE.CONTINUATION) {
       if (this.fragmentOpcode === -1) {
-        throw new WebSocketProtocolError(
-          "Continuation frame without an initial data frame",
-        );
+        throw new WebSocketProtocolError("Continuation frame without an initial data frame");
       }
       this.assertMessageSize(frame.payload.length);
       this.fragments.push(frame.payload.slice());
     } else {
       if (this.fragmentOpcode !== -1) {
         throw new WebSocketProtocolError(
-          "New data frame received while a fragmented message is in progress",
+          "New data frame received while a fragmented message is in progress"
         );
       }
       this.fragmentOpcode = frame.opcode;
@@ -1255,9 +1214,10 @@ export class FrameSink {
  *   BINARY without copying when possible).
  * @returns The `WS_OPCODE` to use and the payload bytes to frame.
  */
-export function encodeSendPayload(
-  data: string | ArrayBufferLike | ArrayBufferView,
-): { opcode: number; payload: Uint8Array } {
+export function encodeSendPayload(data: string | ArrayBufferLike | ArrayBufferView): {
+  opcode: number;
+  payload: Uint8Array;
+} {
   if (typeof data === "string") {
     return { opcode: WS_OPCODE.TEXT, payload: enc.encode(data) };
   }

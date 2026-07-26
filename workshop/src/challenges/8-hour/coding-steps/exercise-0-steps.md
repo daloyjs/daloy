@@ -25,7 +25,7 @@ app.get(
     tags: ["Meta"],
     responses: { 200: { description: "OK", body: z.object({ status: z.literal("ok") }) } },
   },
-  async () => ({ status: 200 as const, body: { status: "ok" as const } }),
+  async () => ({ status: 200 as const, body: { status: "ok" as const } })
 );
 ```
 
@@ -48,11 +48,11 @@ for (const op of app.introspect()) {
 
 ## Code-change cheat sheet
 
-| Step | Where     | Change                                                                    |
-| ---- | --------- | ------------------------------------------------------------------------- |
+| Step | Where     | Change                                                                   |
+| ---- | --------- | ------------------------------------------------------------------------ |
 | 1    | Top       | `const app = new App({ title, version, openapi: { info }, docs: true })` |
 | 2    | Mid       | `app.get("/health", { ... }, handler)`                                   |
-| 3    | Bottom    | `serve(app, { port: 3000 })`                                              |
+| 3    | Bottom    | `serve(app, { port: 3000 })`                                             |
 | 4    | Above (3) | `for (const op of app.introspect()) console.log(...)`                    |
 
 ## Common mistakes

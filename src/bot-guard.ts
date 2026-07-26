@@ -202,10 +202,7 @@ export const BINGBOT: VerifiedBotRule = {
  */
 export const WELL_KNOWN_BOTS: readonly VerifiedBotRule[] = [GOOGLEBOT, BINGBOT];
 
-function matchesUserAgent(
-  ua: string,
-  patterns: readonly (string | RegExp)[],
-): boolean {
+function matchesUserAgent(ua: string, patterns: readonly (string | RegExp)[]): boolean {
   const lower = ua.toLowerCase();
   for (const pattern of patterns) {
     if (typeof pattern === "string") {
@@ -248,7 +245,7 @@ function createDefaultResolver(): BotResolver {
           reverse: m.reverse as unknown as (ip: string) => Promise<string[]>,
           lookup: m.lookup as unknown as (
             host: string,
-            opts: { all: true },
+            opts: { all: true }
           ) => Promise<Array<{ address: string }>>,
         }))
         .catch(() => null);
@@ -256,7 +253,7 @@ function createDefaultResolver(): BotResolver {
     const dns = await dnsPromise;
     if (!dns) {
       throw new Error(
-        "botGuard: no DNS resolver available on this runtime. Pass options.resolver.",
+        "botGuard: no DNS resolver available on this runtime. Pass options.resolver."
       );
     }
     return dns;
@@ -295,10 +292,7 @@ export function _createDefaultBotResolver(): BotResolver {
  *
  * @internal
  */
-function hostnameMatchesDomains(
-  hostname: string,
-  domains: readonly string[],
-): boolean {
+function hostnameMatchesDomains(hostname: string, domains: readonly string[]): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
   for (const domain of domains) {
     const d = domain.toLowerCase();
@@ -321,7 +315,7 @@ function hostnameMatchesDomains(
 async function verifyCrawler(
   resolver: BotResolver,
   ip: string,
-  rule: VerifiedBotRule,
+  rule: VerifiedBotRule
 ): Promise<boolean> {
   const hostnames = await resolver.reverse(ip);
   for (const hostname of hostnames) {
@@ -362,13 +356,12 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
     throw new Error('botGuard(): mode must be "block" or "log".');
   }
 
-  const resolveIp =
-    opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
 
   if (verifiedBots.length > 0 && !opts.resolveIp && !opts.trustProxyHeaders) {
     throw new Error(
       "botGuard(): verifiedBots requires a client-IP source — provide resolveIp " +
-        "or set trustProxyHeaders, otherwise declared crawlers cannot be verified.",
+        "or set trustProxyHeaders, otherwise declared crawlers cannot be verified."
     );
   }
   const resolver = opts.resolver ?? createDefaultResolver();

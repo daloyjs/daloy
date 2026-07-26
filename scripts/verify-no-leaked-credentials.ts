@@ -82,39 +82,38 @@ const ALLOWED_FILENAME_PATTERNS: readonly RegExp[] = [
 ];
 
 /** Credential-shaped string patterns scanned in every included file. */
-export const CREDENTIAL_CONTENT_PATTERNS: readonly { name: string; re: RegExp }[] =
-  Object.freeze([
-    { name: "AWS access key id", re: /\bAKIA[0-9A-Z]{16}\b/ },
-    { name: "GitHub personal access token (ghp_)", re: /\bghp_[A-Za-z0-9]{36}\b/ },
-    { name: "GitHub OAuth token (gho_)", re: /\bgho_[A-Za-z0-9]{36}\b/ },
-    {
-      // Matches both the classic opaque 36-char form and the 2026 stateless
-      // JWT-format installation token (a ~520-char `ghs_`-prefixed JWT with
-      // two dots). GitHub's recommended shape is `ghs_[A-Za-z0-9.\-_]{36,}`:
-      // https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/
-      name: "GitHub server-to-server token (ghs_)",
-      re: /\bghs_[A-Za-z0-9._-]{36,1024}/,
-    },
-    { name: "GitHub refresh token (ghr_)", re: /\bghr_[A-Za-z0-9]{36}\b/ },
-    { name: "GitHub user-to-server token (ghu_)", re: /\bghu_[A-Za-z0-9]{36}\b/ },
-    {
-      name: "GitHub fine-grained PAT (github_pat_)",
-      re: /\bgithub_pat_[A-Za-z0-9_]{82}\b/,
-    },
-    { name: "npm access token (npm_)", re: /\bnpm_[A-Za-z0-9]{36}\b/ },
-    { name: "Slack token", re: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/ },
-    { name: "Stripe live secret key", re: /\bsk_live_[A-Za-z0-9]{24,}\b/ },
-    { name: "Google API key", re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
-    {
-      name: "PEM private-key block",
-      re: /-----BEGIN(?: [A-Z]+)? PRIVATE KEY-----/,
-    },
-    {
-      name: "JWT-shaped string",
-      re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
-    },
-    { name: "npm-registry _authToken", re: /(^|[\s,;])_authToken\s*=\s*\S+/im },
-  ]);
+export const CREDENTIAL_CONTENT_PATTERNS: readonly { name: string; re: RegExp }[] = Object.freeze([
+  { name: "AWS access key id", re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { name: "GitHub personal access token (ghp_)", re: /\bghp_[A-Za-z0-9]{36}\b/ },
+  { name: "GitHub OAuth token (gho_)", re: /\bgho_[A-Za-z0-9]{36}\b/ },
+  {
+    // Matches both the classic opaque 36-char form and the 2026 stateless
+    // JWT-format installation token (a ~520-char `ghs_`-prefixed JWT with
+    // two dots). GitHub's recommended shape is `ghs_[A-Za-z0-9.\-_]{36,}`:
+    // https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/
+    name: "GitHub server-to-server token (ghs_)",
+    re: /\bghs_[A-Za-z0-9._-]{36,1024}/,
+  },
+  { name: "GitHub refresh token (ghr_)", re: /\bghr_[A-Za-z0-9]{36}\b/ },
+  { name: "GitHub user-to-server token (ghu_)", re: /\bghu_[A-Za-z0-9]{36}\b/ },
+  {
+    name: "GitHub fine-grained PAT (github_pat_)",
+    re: /\bgithub_pat_[A-Za-z0-9_]{82}\b/,
+  },
+  { name: "npm access token (npm_)", re: /\bnpm_[A-Za-z0-9]{36}\b/ },
+  { name: "Slack token", re: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/ },
+  { name: "Stripe live secret key", re: /\bsk_live_[A-Za-z0-9]{24,}\b/ },
+  { name: "Google API key", re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  {
+    name: "PEM private-key block",
+    re: /-----BEGIN(?: [A-Z]+)? PRIVATE KEY-----/,
+  },
+  {
+    name: "JWT-shaped string",
+    re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
+  },
+  { name: "npm-registry _authToken", re: /(^|[\s,;])_authToken\s*=\s*\S+/im },
+]);
 
 /**
  * Binary file extensions skipped by the content scanner. Avoids spurious
@@ -162,7 +161,7 @@ function isBinary(path: string): boolean {
 }
 
 export function scanFileContentForCredentials(
-  source: string,
+  source: string
 ): readonly { line: number; detail: string }[] {
   const out: { line: number; detail: string }[] = [];
   const lines = source.split(/\r?\n/);
@@ -218,7 +217,7 @@ async function* resolveFilesEntry(pkgDir: string, entry: string): AsyncIterable<
 
 export async function findCredentialLeaks(
   pkg: PublishablePackage,
-  rootDir: string = REPO_ROOT,
+  rootDir: string = REPO_ROOT
 ): Promise<readonly CredentialFinding[]> {
   const pkgDir = resolve(rootDir, pkg.packageDir);
   const pkgJsonPath = join(pkgDir, "package.json");
@@ -232,7 +231,7 @@ export async function findCredentialLeaks(
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     throw new Error(
       `${pkg.name}: package.json must declare a non-empty "files" whitelist ` +
-        "(defense against publishing every file under the package dir).",
+        "(defense against publishing every file under the package dir)."
     );
   }
 
@@ -254,7 +253,7 @@ async function scanOnePath(
   pkg: PublishablePackage,
   pkgDir: string,
   file: string,
-  findings: CredentialFinding[],
+  findings: CredentialFinding[]
 ): Promise<void> {
   const rel = posix.normalize(relative(pkgDir, file).split(/[\\/]/g).join("/"));
   const basename = rel.includes("/") ? rel.slice(rel.lastIndexOf("/") + 1) : rel;
@@ -275,7 +274,13 @@ async function scanOnePath(
     return; // unreadable or non-UTF-8 — treated as binary
   }
   for (const hit of scanFileContentForCredentials(text)) {
-    findings.push({ pkg: pkg.name, file: rel, kind: "content", detail: hit.detail, line: hit.line });
+    findings.push({
+      pkg: pkg.name,
+      file: rel,
+      kind: "content",
+      detail: hit.detail,
+      line: hit.line,
+    });
   }
 }
 
@@ -300,7 +305,7 @@ async function main(): Promise<void> {
     console.error(
       `verify-no-leaked-credentials: ${total} credential leak${total === 1 ? "" : "s"} ` +
         "detected in publishable tarball contents. Remove the file or value before " +
-        "release (see https://snyk.io/blog/leaked-credentials-in-packages/).",
+        "release (see https://snyk.io/blog/leaked-credentials-in-packages/)."
     );
     process.exitCode = 1;
   }

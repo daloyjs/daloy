@@ -18,18 +18,18 @@ Tutorial note: the workshop exercises intentionally avoid file-based routing or 
 
 The 4-hour track lives under [`src/challenges/4-hour/`](./src/challenges/4-hour). It keeps only the activities that give senior attendees the biggest practical return on day one.
 
-| Step | Activity                                | Focus                                                                         |
-| ---- | --------------------------------------- | ----------------------------------------------------------------------------- |
-| 0    | Setup & Hello World                     | `new App()`, `serve()`, `docs: true`, `/openapi.json`, Scalar at `/docs`      |
-| 1    | Contract-First Route                    | `app.get(path, { request, responses }, handler)` shorthand, Zod params, response body schema |
-| 2    | Validation + RFC 9457 Errors            | `.strict()` schemas, `throw new NotFoundError`, problem+json shape            |
-| 3    | Security Middleware Stack               | `requestId`, `secureHeaders`, `cors`, `rateLimit`, body limit, request timeout |
-| 4    | Bearer Auth on a Route                  | `auth: { scheme: 'bearer' }`, `bearerAuth({ validate })`, security schemes    |
-| 5    | OpenAPI + Typed Client Codegen          | `pnpm gen:openapi`, `@hey-api/openapi-ts`, in-process `createClient(app)`     |
-| 6    | Runtime Portability                     | Swap `@daloyjs/core/node` for the Bun/Deno/Workers adapter, same `App`        |
-| 7    | Testing & Introspection                 | `app.introspect()`, contract tests, problem+json regression test              |
-| C2   | **Bug Challenge:** Security Regression  | Diagnose disabled secureHeaders, missing `.strict()`, JWT alg confusion        |
-| HW   | Compressed Capstone                     | Apply the highest-impact patterns to one production slice                     |
+| Step | Activity                               | Focus                                                                                        |
+| ---- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 0    | Setup & Hello World                    | `new App()`, `serve()`, `docs: true`, `/openapi.json`, Scalar at `/docs`                     |
+| 1    | Contract-First Route                   | `app.get(path, { request, responses }, handler)` shorthand, Zod params, response body schema |
+| 2    | Validation + RFC 9457 Errors           | `.strict()` schemas, `throw new NotFoundError`, problem+json shape                           |
+| 3    | Security Middleware Stack              | `requestId`, `secureHeaders`, `cors`, `rateLimit`, body limit, request timeout               |
+| 4    | Bearer Auth on a Route                 | `auth: { scheme: 'bearer' }`, `bearerAuth({ validate })`, security schemes                   |
+| 5    | OpenAPI + Typed Client Codegen         | `pnpm gen:openapi`, `@hey-api/openapi-ts`, in-process `createClient(app)`                    |
+| 6    | Runtime Portability                    | Swap `@daloyjs/core/node` for the Bun/Deno/Workers adapter, same `App`                       |
+| 7    | Testing & Introspection                | `app.introspect()`, contract tests, problem+json regression test                             |
+| C2   | **Bug Challenge:** Security Regression | Diagnose disabled secureHeaders, missing `.strict()`, JWT alg confusion                      |
+| HW   | Compressed Capstone                    | Apply the highest-impact patterns to one production slice                                    |
 
 ## 8-Hour Workshop
 
@@ -37,46 +37,46 @@ The 8-hour track lives under [`src/challenges/8-hour/`](./src/challenges/8-hour)
 
 ### Part 1 · Contract-First Routing
 
-| #   | Title                              | Focus                                                                       |
-| --- | ---------------------------------- | --------------------------------------------------------------------------- |
-| 0   | Workshop Setup                     | Verify `@daloyjs/core` install, `/docs`, `/openapi.json`, `app.introspect()` |
-| 1   | Contract-First Route               | Zod request/response, `operationId`, `tags`, OpenAPI examples               |
-| 2   | Path Params, Query, Body, Headers  | Each slot validated separately, why `.strict()` is the convention           |
-| 3   | RFC 9457 Errors & Redaction        | `NotFoundError`, `ValidationError`, prod-mode detail redaction              |
+| #   | Title                             | Focus                                                                        |
+| --- | --------------------------------- | ---------------------------------------------------------------------------- |
+| 0   | Workshop Setup                    | Verify `@daloyjs/core` install, `/docs`, `/openapi.json`, `app.introspect()` |
+| 1   | Contract-First Route              | Zod request/response, `operationId`, `tags`, OpenAPI examples                |
+| 2   | Path Params, Query, Body, Headers | Each slot validated separately, why `.strict()` is the convention            |
+| 3   | RFC 9457 Errors & Redaction       | `NotFoundError`, `ValidationError`, prod-mode detail redaction               |
 
 ### Part 2 · Plugins, Auth, and OpenAPI
 
-| #   | Title                                  | Focus                                                                       |
-| --- | -------------------------------------- | --------------------------------------------------------------------------- |
-| 4   | Middleware Plugins & Encapsulation     | `app.use(...)`, plugin scopes, request ids, structured logger               |
-| 5   | Bearer Auth + per-Route Auth           | `bearerAuth({ validate })`, route-level `auth`, 401 vs 403                  |
-| 6   | JWT with Algorithm Allowlist + JWK     | `createJwtSigner`, `createJwtVerifier`, `none`/alg-confusion defense, JWKs |
-| 7   | OpenAPI Auto-Docs & Tuning             | `securitySchemes`, response examples, branded `/docs`, `/openapi.yaml`      |
-| 8   | Typed Client Codegen with Hey API      | `pnpm gen`, generated SDK, in-process client for tests                      |
+| #   | Title                              | Focus                                                                      |
+| --- | ---------------------------------- | -------------------------------------------------------------------------- |
+| 4   | Middleware Plugins & Encapsulation | `app.use(...)`, plugin scopes, request ids, structured logger              |
+| 5   | Bearer Auth + per-Route Auth       | `bearerAuth({ validate })`, route-level `auth`, 401 vs 403                 |
+| 6   | JWT with Algorithm Allowlist + JWK | `createJwtSigner`, `createJwtVerifier`, `none`/alg-confusion defense, JWKs |
+| 7   | OpenAPI Auto-Docs & Tuning         | `securitySchemes`, response examples, branded `/docs`, `/openapi.yaml`     |
+| 8   | Typed Client Codegen with Hey API  | `pnpm gen`, generated SDK, in-process client for tests                     |
 
 ### Part 3 · Production Hardening + Challenges
 
-| #   | Title                              | Focus                                                                       |
-| --- | ---------------------------------- | --------------------------------------------------------------------------- |
-| 9   | Secure Headers, CSP, CORS, CSRF    | Helmet-grade defaults, CSP nonces, CSRF double-submit                       |
-| 10  | Rate Limits, Body Limits, Timeouts | `rateLimit`, `bodyLimitBytes`, `requestTimeoutMs`, 429 vs 408 vs 413        |
-| 11  | SSRF, Sessions, WebSocket          | `fetchGuard`, signed-cookie sessions, WebSocket upgrade auth                |
-| C1  | **Feature Challenge:** Authors CRUD | Full CRUD slice with validation, errors, OpenAPI examples, typed client    |
+| #   | Title                                  | Focus                                                                    |
+| --- | -------------------------------------- | ------------------------------------------------------------------------ |
+| 9   | Secure Headers, CSP, CORS, CSRF        | Helmet-grade defaults, CSP nonces, CSRF double-submit                    |
+| 10  | Rate Limits, Body Limits, Timeouts     | `rateLimit`, `bodyLimitBytes`, `requestTimeoutMs`, 429 vs 408 vs 413     |
+| 11  | SSRF, Sessions, WebSocket              | `fetchGuard`, signed-cookie sessions, WebSocket upgrade auth             |
+| C1  | **Feature Challenge:** Authors CRUD    | Full CRUD slice with validation, errors, OpenAPI examples, typed client  |
 | C2  | **Bug Challenge:** Security Regression | Diagnose a weakened guardrail (alg confusion, leaked headers, open CORS) |
-| HW  | Capstone Homework                  | Production-ready Books/Admin API using every pattern from the track         |
+| HW  | Capstone Homework                      | Production-ready Books/Admin API using every pattern from the track      |
 
 ## Why DaloyJS Is the Pitch
 
-| Concern                             | Express / Fastify              | Hono                  | FastAPI (Python)     | DaloyJS                       |
-| ----------------------------------- | ------------------------------ | --------------------- | -------------------- | ----------------------------- |
-| Single source of truth for contract | Multiple plugins, drift-prone  | Plugin afterthought   | Yes                  | Yes — one `app.get(path, contract, handler)`  |
-| Runtime portability                 | Node / Bun only                | Yes                   | Python only          | Node, Bun, Deno, Vercel, CF   |
-| Auto OpenAPI 3.1                    | Manual or plugin               | Plugin                | Yes                  | First-class, one line         |
-| Typed client codegen                | Separate, you wire it          | Optional              | Separate             | `pnpm gen` (Hey API)          |
-| Validator                           | Pick one, glue it              | Pick one              | Pydantic-only        | Standard Schema (Zod/Valibot) |
-| Errors                              | Ad-hoc                         | Ad-hoc                | Custom               | RFC 9457 problem+json         |
-| Security defaults                   | BYO helmet                     | BYO                   | BYO                  | Helmet-grade + body/timeout   |
-| Supply-chain posture                | `npm install` runs scripts     | Same                  | Same                 | `ignore-scripts`, 24h cooldown |
+| Concern                             | Express / Fastify             | Hono                | FastAPI (Python) | DaloyJS                                      |
+| ----------------------------------- | ----------------------------- | ------------------- | ---------------- | -------------------------------------------- |
+| Single source of truth for contract | Multiple plugins, drift-prone | Plugin afterthought | Yes              | Yes — one `app.get(path, contract, handler)` |
+| Runtime portability                 | Node / Bun only               | Yes                 | Python only      | Node, Bun, Deno, Vercel, CF                  |
+| Auto OpenAPI 3.1                    | Manual or plugin              | Plugin              | Yes              | First-class, one line                        |
+| Typed client codegen                | Separate, you wire it         | Optional            | Separate         | `pnpm gen` (Hey API)                         |
+| Validator                           | Pick one, glue it             | Pick one            | Pydantic-only    | Standard Schema (Zod/Valibot)                |
+| Errors                              | Ad-hoc                        | Ad-hoc              | Custom           | RFC 9457 problem+json                        |
+| Security defaults                   | BYO helmet                    | BYO                 | BYO              | Helmet-grade + body/timeout                  |
+| Supply-chain posture                | `npm install` runs scripts    | Same                | Same             | `ignore-scripts`, 24h cooldown               |
 
 ## How to Use
 

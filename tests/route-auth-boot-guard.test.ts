@@ -17,10 +17,11 @@ test("built-in auth middlewares and markAuthHook stamp AUTH_HOOK_MARKER", () => 
   const bearer = bearerAuth({ validate: () => true }) as unknown as Record<PropertyKey, unknown>;
   const basic = basicAuth({ verify: () => true }) as unknown as Record<PropertyKey, unknown>;
   const mtls = clientCertAuth() as unknown as Record<PropertyKey, unknown>;
-  const custom = markAuthHook({ async beforeHandle() { return undefined; } }) as unknown as Record<
-    PropertyKey,
-    unknown
-  >;
+  const custom = markAuthHook({
+    async beforeHandle() {
+      return undefined;
+    },
+  }) as unknown as Record<PropertyKey, unknown>;
   assert.equal(bearer[AUTH_HOOK_MARKER], true);
   assert.equal(basic[AUTH_HOOK_MARKER], true);
   assert.equal(mtls[AUTH_HOOK_MARKER], true);
@@ -61,7 +62,13 @@ test("route declaring auth: with a matching bearerAuth hook boots and enforces",
 
 test("route declaring auth: satisfied by a global markAuthHook boots", async () => {
   const app = new App({ logger: false, env: "production" });
-  app.use(markAuthHook({ async beforeHandle() { return undefined; } }));
+  app.use(
+    markAuthHook({
+      async beforeHandle() {
+        return undefined;
+      },
+    })
+  );
   app.route({
     method: "GET",
     path: "/secret",

@@ -22,9 +22,7 @@ export namespace StandardSchemaV1 {
     /** Name of the validator library (e.g. `"zod"`, `"valibot"`). */
     readonly vendor: string;
     /** Validates a value; may be sync or async. Returns `{ value }` on success or `{ issues }` on failure. */
-    readonly validate: (
-      value: unknown
-    ) => Result<Output> | Promise<Result<Output>>;
+    readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>;
     /** Type-only carrier for {@link InferInput}/{@link InferOutput}; never populated at runtime. */
     readonly types?: Types<Input, Output>;
   }
@@ -69,11 +67,13 @@ export namespace StandardSchemaV1 {
   }
 
   /** Infers the input (pre-validation) type of a Standard Schema validator. */
-  export type InferInput<S extends StandardSchemaV1> =
-    NonNullable<S["~standard"]["types"]>["input"];
+  export type InferInput<S extends StandardSchemaV1> = NonNullable<
+    S["~standard"]["types"]
+  >["input"];
   /** Infers the output (post-validation) type of a Standard Schema validator. */
-  export type InferOutput<S extends StandardSchemaV1> =
-    NonNullable<S["~standard"]["types"]>["output"];
+  export type InferOutput<S extends StandardSchemaV1> = NonNullable<
+    S["~standard"]["types"]
+  >["output"];
 }
 
 /**

@@ -146,7 +146,7 @@ export function extractBinNames(pkg: PackageJsonLike): readonly string[] {
   const bin = pkg.bin;
   if (typeof bin === "string") {
     const name = typeof pkg.name === "string" ? pkg.name : "";
-    const trimmed = name.startsWith("@") ? name.split("/")[1] ?? name : name;
+    const trimmed = name.startsWith("@") ? (name.split("/")[1] ?? name) : name;
     return trimmed ? [trimmed] : [];
   }
   if (bin && typeof bin === "object" && !Array.isArray(bin)) {
@@ -166,7 +166,7 @@ export function extractBinNames(pkg: PackageJsonLike): readonly string[] {
 export function classifyBinName(
   binName: string,
   enforceAllowlist: boolean,
-  packageName?: string,
+  packageName?: string
 ): BinViolation["reason"] | null {
   if (RESERVED_COMMANDS.has(binName)) {
     if (!enforceAllowlist) {
@@ -186,10 +186,7 @@ export function classifyBinName(
  * and yields the path of every `package.json` belonging to a
  * dependency. Depth is capped so a pathological tree cannot hang CI.
  */
-async function* walkManifests(
-  root: string,
-  depth = 0,
-): AsyncGenerator<string> {
+async function* walkManifests(root: string, depth = 0): AsyncGenerator<string> {
   if (depth > 8) return;
   let entries: Dirent<string>[];
   try {
@@ -224,7 +221,7 @@ async function* walkManifests(
 
 async function checkManifest(
   path: string,
-  enforceAllowlist: boolean,
+  enforceAllowlist: boolean
 ): Promise<readonly BinViolation[]> {
   let text: string;
   try {
@@ -244,8 +241,7 @@ async function checkManifest(
   const violations: BinViolation[] = [];
   for (const binName of names) {
     const reason = classifyBinName(binName, enforceAllowlist, pkgName);
-    if (reason)
-      violations.push({ manifest: path, packageName: pkgName, binName, reason });
+    if (reason) violations.push({ manifest: path, packageName: pkgName, binName, reason });
   }
   return violations;
 }
@@ -308,7 +304,7 @@ async function main(): Promise<void> {
   console.error(
     `verify-no-bin-shadowing: ${violations.length} forbidden ` +
       `bin entr${violations.length === 1 ? "y" : "ies"} detected ` +
-      "(Socket bin-script-confusion gate):",
+      "(Socket bin-script-confusion gate):"
   );
   for (const v of violations) {
     const why =
@@ -323,7 +319,7 @@ async function main(): Promise<void> {
       "inside every subsequent npm script, even with `--ignore-scripts`. " +
       "See https://socket.dev/blog/npm-bin-script-confusion. If a new bin " +
       "is genuinely required, add it to PUBLISHED_BIN_ALLOWLIST in " +
-      "scripts/verify-no-bin-shadowing.ts with a SECURITY.md review note.",
+      "scripts/verify-no-bin-shadowing.ts with a SECURITY.md review note."
   );
   process.exitCode = 1;
 }

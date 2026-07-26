@@ -30,11 +30,10 @@ async function genEd25519(): Promise<CryptoKeyPair> {
 }
 
 async function genEcdsaP256(): Promise<CryptoKeyPair> {
-  return (await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
+  return (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair;
 }
 
 // ---------- happy path: HMAC roundtrip ----------
@@ -78,12 +77,7 @@ test("signMessage + verifyMessage HMAC roundtrip succeeds", async () => {
     assert.equal(result.alg, "hmac-sha256");
     assert.equal(result.keyid, "svc-a");
     assert.equal(result.created, created);
-    assert.deepEqual(result.components, [
-      '"@method"',
-      '"@path"',
-      '"@authority"',
-      '"content-type"',
-    ]);
+    assert.deepEqual(result.components, ['"@method"', '"@path"', '"@authority"', '"content-type"']);
   }
 });
 
@@ -181,7 +175,7 @@ test("@query-param and @query derived components round-trip", async () => {
   const sig = await signMessage({
     method: "GET",
     url,
-    components: ['@query', '@query-param;name="q"'],
+    components: ["@query", '@query-param;name="q"'],
     alg: "hmac-sha256",
     key: HMAC_SECRET,
     created,
@@ -490,7 +484,7 @@ test("pinned key alg mismatching declared alg is rejected", async () => {
 test("empty algorithms allowlist throws", async () => {
   await assert.rejects(
     verifyMessage({
-    requiredComponents: ["@method", "@path"],
+      requiredComponents: ["@method", "@path"],
 
       method: "GET",
       url: "https://api.example.com/x",
@@ -498,7 +492,7 @@ test("empty algorithms allowlist throws", async () => {
       algorithms: [] as HttpSignatureAlgorithm[],
       resolveKey: () => HMAC_SECRET,
     }),
-    /non-empty `algorithms` allowlist/,
+    /non-empty `algorithms` allowlist/
   );
 });
 
@@ -633,8 +627,7 @@ test("ambiguous label without explicit selection is rejected", async () => {
     method: "GET",
     url: "https://api.example.com/x",
     headers: {
-      "signature-input":
-        'a=("@method");created=1, b=("@method");created=1',
+      "signature-input": 'a=("@method");created=1, b=("@method");created=1',
       signature: "a=:AAAA:, b=:BBBB:",
     },
     algorithms: ["hmac-sha256"],
@@ -685,7 +678,7 @@ test("raw HMAC secret shorter than 32 bytes throws", async () => {
       alg: "hmac-sha256",
       key: new Uint8Array(16),
     }),
-    /at least 32 bytes/,
+    /at least 32 bytes/
   );
 });
 
@@ -698,7 +691,7 @@ test("raw byte key with asymmetric alg throws", async () => {
       alg: "ed25519",
       key: new Uint8Array(32),
     }),
-    /only supported for hmac-sha256/,
+    /only supported for hmac-sha256/
   );
 });
 
@@ -712,7 +705,7 @@ test("non-printable keyid throws on serialization", async () => {
       key: HMAC_SECRET,
       keyid: "bad\nkeyid",
     }),
-    /non-printable-ASCII/,
+    /non-printable-ASCII/
   );
 });
 
@@ -755,7 +748,7 @@ test("httpSignatureAuth accepts a valid signature and stamps state", async () =>
         "signature-input": sig.signatureInput,
         signature: sig.signature,
       },
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { keyid: "svc-a" });
@@ -792,7 +785,7 @@ test("httpSignatureAuth rejects a forged signature with 401", async () => {
         "signature-input": sig.signatureInput,
         signature: sig.signature,
       },
-    }),
+    })
   );
   assert.equal(res.status, 401);
 });
@@ -866,7 +859,7 @@ test("rsa-pss-sha512 sign + verify roundtrip", async () => {
       hash: "SHA-512",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
   const created = 1_700_012_000;
   const sig = await signMessage({
@@ -902,7 +895,7 @@ test("rsa-v1_5-sha256 sign + verify roundtrip", async () => {
       hash: "SHA-256",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
   const created = 1_700_012_500;
   const sig = await signMessage({
@@ -938,7 +931,7 @@ test("signMessage refuses an undersized (1024-bit) RSA-PSS key", async () => {
       hash: "SHA-512",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
   const created = 1_700_014_000;
   await assert.rejects(
@@ -952,7 +945,7 @@ test("signMessage refuses an undersized (1024-bit) RSA-PSS key", async () => {
         created,
         now: fixedNow(created),
       }),
-    /modulus must be at least 2048 bits/,
+    /modulus must be at least 2048 bits/
   );
 });
 
@@ -968,7 +961,7 @@ test("verifyMessage refuses an undersized (1024-bit) RSA verify key", async () =
       hash: "SHA-256",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
   const weak = (await crypto.subtle.generateKey(
     {
@@ -978,7 +971,7 @@ test("verifyMessage refuses an undersized (1024-bit) RSA verify key", async () =
       hash: "SHA-256",
     },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
   const created = 1_700_014_500;
   const sig = await signMessage({
@@ -1007,11 +1000,10 @@ test("verifyMessage refuses an undersized (1024-bit) RSA verify key", async () =
 });
 
 test("ecdsa-p384-sha384 sign + verify roundtrip", async () => {
-  const pair = (await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-384" },
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
+  const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-384" }, true, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair;
   const created = 1_700_013_000;
   const sig = await signMessage({
     method: "GET",
@@ -1167,7 +1159,7 @@ test("@status on a non-response message fails to resolve", async () => {
       alg: "hmac-sha256",
       key: HMAC_SECRET,
     }),
-    /@status is only valid for responses/,
+    /@status is only valid for responses/
   );
 });
 
@@ -1180,7 +1172,7 @@ test("@signature-params cannot be a covered component", async () => {
       alg: "hmac-sha256",
       key: HMAC_SECRET,
     }),
-    /cannot be a covered component/,
+    /cannot be a covered component/
   );
 });
 
@@ -1193,7 +1185,7 @@ test("duplicate covered component is rejected at signing", async () => {
       alg: "hmac-sha256",
       key: HMAC_SECRET,
     }),
-    /duplicate covered component/,
+    /duplicate covered component/
   );
 });
 
@@ -1206,7 +1198,7 @@ test("@query-param missing from the query fails to resolve", async () => {
       alg: "hmac-sha256",
       key: HMAC_SECRET,
     }),
-    /is not present in the query/,
+    /is not present in the query/
   );
 });
 
@@ -1220,7 +1212,7 @@ test("uppercase field component name is rejected", async () => {
       alg: "hmac-sha256",
       key: HMAC_SECRET,
     }),
-    /must be lowercase/,
+    /must be lowercase/
   );
 });
 
@@ -1340,10 +1332,7 @@ test("invalid key material for verify is reported as invalid_key", async () => {
 });
 
 test("contentDigest rejects an unsupported algorithm", async () => {
-  await assert.rejects(
-    contentDigest("x", { algorithm: "md5" as any }),
-    /unsupported algorithm/,
-  );
+  await assert.rejects(contentDigest("x", { algorithm: "md5" as any }), /unsupported algorithm/);
 });
 
 test("verifyContentDigest accepts a multi-member header", async () => {
@@ -1423,6 +1412,6 @@ test("@query-param rejects duplicate parameter values (parameter pollution)", as
         created,
         now: fixedNow(created),
       }),
-    /appears 2 times|duplicate query parameters/i,
+    /appears 2 times|duplicate query parameters/i
   );
 });

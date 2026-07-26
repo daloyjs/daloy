@@ -35,7 +35,7 @@ app.get(
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 app.post(
@@ -62,7 +62,7 @@ app.post(
     }
     b.status = "checked-out";
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 app.post(
@@ -83,7 +83,7 @@ app.post(
     const created = { ...body, status: "available" as const };
     books.set(body.id, created);
     return { status: 201 as const, body: created };
-  },
+  }
 );
 
 app.get(
@@ -94,8 +94,10 @@ app.get(
     responses: { 500: { description: "Redacted internal failure" } },
   },
   async () => {
-    throw new InternalError("database DSN postgres://demo:secret@localhost/library leaked internally");
-  },
+    throw new InternalError(
+      "database DSN postgres://demo:secret@localhost/library leaked internally"
+    );
+  }
 );
 
 serve(app, { port: 3000 });

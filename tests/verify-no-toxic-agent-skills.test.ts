@@ -14,9 +14,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 test("scanner flags every documented ToxicSkills anti-pattern", async () => {
-  const { scanForToxicSkillPatterns, TOXIC_SKILL_PATTERNS } = await import(
-    "../scripts/verify-no-toxic-agent-skills.js"
-  );
+  const { scanForToxicSkillPatterns, TOXIC_SKILL_PATTERNS } =
+    await import("../scripts/verify-no-toxic-agent-skills.js");
 
   // Each fixture line is the minimal imperative form of one taxonomy entry.
   const fixture = [
@@ -45,16 +44,14 @@ test("scanner flags every documented ToxicSkills anti-pattern", async () => {
   for (const pattern of TOXIC_SKILL_PATTERNS) {
     assert.ok(
       ids.has(pattern.id),
-      `pattern ${pattern.id} was not triggered by its representative fixture line`,
+      `pattern ${pattern.id} was not triggered by its representative fixture line`
     );
   }
   assert.ok(findings.length >= TOXIC_SKILL_PATTERNS.length);
 });
 
 test("scanner does not flag prescriptive guidance that documents the attack", async () => {
-  const { scanForToxicSkillPatterns } = await import(
-    "../scripts/verify-no-toxic-agent-skills.js"
-  );
+  const { scanForToxicSkillPatterns } = await import("../scripts/verify-no-toxic-agent-skills.js");
 
   const safe = [
     "Never pipe `curl` to `bash` — always download to a file first and review.",
@@ -70,15 +67,12 @@ test("scanner does not flag prescriptive guidance that documents the attack", as
   assert.deepEqual(
     findings,
     [],
-    "prescriptive guidance must not trip the gate: " +
-      JSON.stringify(findings, null, 2),
+    "prescriptive guidance must not trip the gate: " + JSON.stringify(findings, null, 2)
   );
 });
 
 test("scanner does not flag legitimate `.env` / `.aws` mentions in dev workflows", async () => {
-  const { scanForToxicSkillPatterns } = await import(
-    "../scripts/verify-no-toxic-agent-skills.js"
-  );
+  const { scanForToxicSkillPatterns } = await import("../scripts/verify-no-toxic-agent-skills.js");
 
   // Mirrors real shapes from the vercel-cli-with-tokens skill: reading
   // `.env` for a CLI token, mentioning `.env` in framework-output exclusion
@@ -96,26 +90,18 @@ test("scanner does not flag legitimate `.env` / `.aws` mentions in dev workflows
     findings,
     [],
     "legitimate .env / CLI-token workflow must not trip the gate: " +
-      JSON.stringify(findings, null, 2),
+      JSON.stringify(findings, null, 2)
   );
 });
 
 test("live repo has zero ToxicSkills anti-patterns in any shipped SKILL.md / AGENTS.md", async () => {
-  const { findToxicAgentSkills } = await import(
-    "../scripts/verify-no-toxic-agent-skills.js"
-  );
+  const { findToxicAgentSkills } = await import("../scripts/verify-no-toxic-agent-skills.js");
   const findings = await findToxicAgentSkills();
-  assert.deepEqual(
-    findings,
-    [],
-    "live repo regression: " + JSON.stringify(findings, null, 2),
-  );
+  assert.deepEqual(findings, [], "live repo regression: " + JSON.stringify(findings, null, 2));
 });
 
 test("scanner covers the `.cursorrules` / `CLAUDE.md` agent-instruction surfaces TrapDoor weaponized", async () => {
-  const { isSkillFilename } = await import(
-    "../scripts/verify-no-toxic-agent-skills.js"
-  );
+  const { isSkillFilename } = await import("../scripts/verify-no-toxic-agent-skills.js");
 
   // TrapDoor (Socket 2026-05-24) shipped malicious instructions in
   // `.cursorrules` (Cursor) and `CLAUDE.md` (Claude Code); the gate must

@@ -28,7 +28,7 @@ app.get(
     summary: "Health check",
     responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
   },
-  async () => ({ status: 200 as const, body: { ok: true as const } }),
+  async () => ({ status: 200 as const, body: { ok: true as const } })
 );
 
 serve(app, { port: 3000 });

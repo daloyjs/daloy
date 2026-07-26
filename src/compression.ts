@@ -440,13 +440,11 @@ export function compression(opts: CompressionOptions = {}): Hooks {
     maxCompressibleBytes > 2 ** 31 - 1
   ) {
     throw new TypeError(
-      "compression(): `maxCompressibleBytes` must be a positive integer <= 2**31-1.",
+      "compression(): `maxCompressibleBytes` must be a positive integer <= 2**31-1."
     );
   }
   if (minimumSize > maxCompressibleBytes) {
-    throw new TypeError(
-      "compression(): `minimumSize` must not exceed `maxCompressibleBytes`.",
-    );
+    throw new TypeError("compression(): `minimumSize` must not exceed `maxCompressibleBytes`.");
   }
   const serverPreferred: readonly CompressionEncoding[] =
     opts.encodings && opts.encodings.length > 0

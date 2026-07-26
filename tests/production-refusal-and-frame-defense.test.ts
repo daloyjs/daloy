@@ -22,7 +22,7 @@ test("secureDefaults: false in production without acknowledgement refuses-to-con
         env: "production",
         secureDefaults: false,
       }),
-    /secureDefaults: false.*refused in production/,
+    /secureDefaults: false.*refused in production/
   );
 });
 
@@ -35,7 +35,7 @@ test("secureDefaults: false in production with acknowledgement is allowed", () =
         env: "production",
         secureDefaults: false,
         acknowledgeInsecureDefaults: true,
-      }),
+      })
   );
 });
 
@@ -47,7 +47,7 @@ test("secureDefaults: false in development is allowed without acknowledgement", 
         logger: false,
         env: "development",
         secureDefaults: false,
-      }),
+      })
   );
 });
 
@@ -63,9 +63,7 @@ test("prod trust-proxy guard refuses spoofable vendor client-IP headers", async 
     "x-real-ip",
     "x-forwarded-for",
   ]) {
-    const res = await app.fetch(
-      new Request("http://x/", { headers: { [header]: "1.2.3.4" } }),
-    );
+    const res = await app.fetch(new Request("http://x/", { headers: { [header]: "1.2.3.4" } }));
     assert.equal(res.status, 500, `expected ${header} to trip the trust-proxy guard`);
   }
   // A request with no forwarded/vendor header is not refused by the guard
@@ -136,7 +134,7 @@ test("createJwtSigner refuses HS256 secret < 32 bytes at construction", () => {
         key: shortKey,
         maxLifetimeSeconds: 60,
       }),
-    /weak_hs_secret|at least 32 bytes/,
+    /weak_hs_secret|at least 32 bytes/
   );
 });
 
@@ -156,7 +154,7 @@ test("createJwtVerifier refuses HS384 secret < 32 bytes", () => {
         algorithms: ["HS384"],
         key: shortKey,
       }),
-    /weak_hs_secret|at least 32 bytes/,
+    /weak_hs_secret|at least 32 bytes/
   );
 });
 
@@ -171,7 +169,7 @@ test("secureHeaders refuses frameOptions: false + contentSecurityPolicy: false",
         frameOptions: false,
         contentSecurityPolicy: false,
       }),
-    /refusing to construct with both frameOptions: false/,
+    /refusing to construct with both frameOptions: false/
   );
 });
 
@@ -182,7 +180,7 @@ test("secureHeaders refuses frameOptions: false + CSP string without frame-ances
         frameOptions: false,
         contentSecurityPolicy: "default-src 'self'",
       }),
-    /refusing to construct/,
+    /refusing to construct/
   );
 });
 
@@ -193,7 +191,7 @@ test("secureHeaders does not treat a frame-ancestors source token as a directive
         frameOptions: false,
         contentSecurityPolicy: "default-src frame-ancestors 'self'",
       }),
-    /refusing to construct/,
+    /refusing to construct/
   );
 });
 
@@ -202,7 +200,7 @@ test("secureHeaders allows frameOptions: false + CSP string WITH frame-ancestors
     secureHeaders({
       frameOptions: false,
       contentSecurityPolicy: "default-src 'self'; frame-ancestors 'none'",
-    }),
+    })
   );
 });
 
@@ -216,7 +214,7 @@ test("secureHeaders allows frameOptions: false + CSP directives WITH frame-ances
           "frame-ancestors": "'none'",
         },
       },
-    }),
+    })
   );
 });
 
@@ -227,7 +225,7 @@ test("secureHeaders refuses frameOptions: false + CSP directives without frame-a
         frameOptions: false,
         contentSecurityPolicy: { directives: { "default-src": "'self'" } },
       }),
-    /refusing to construct/,
+    /refusing to construct/
   );
 });
 
@@ -243,7 +241,7 @@ test("secureHeaders refuses frameOptions: false + CSP directives with empty fram
           },
         },
       }),
-    /refusing to construct/,
+    /refusing to construct/
   );
 });
 
@@ -275,7 +273,7 @@ function captureLogger() {
   };
   const envWarns = () =>
     records.filter(
-      (r) => (r.obj as { event?: string })?.event === "secure_defaults.env_indeterminate",
+      (r) => (r.obj as { event?: string })?.event === "secure_defaults.env_indeterminate"
     );
   return { logger, records, envWarns };
 }

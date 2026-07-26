@@ -1,9 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  App,
-  _resetCrashHandlersForTests,
-} from "../src/index.js";
+import { App, _resetCrashHandlersForTests } from "../src/index.js";
 
 // ---------- connection-draining shutdown ----------
 
@@ -175,17 +172,13 @@ test("installed crash handlers log fatal + call process.exit(1) on unhandledReje
       } as never,
     });
     const rejListeners = process.listeners("unhandledRejection");
-    const rejHandler = rejListeners[rejListeners.length - 1]! as (
-      reason: unknown,
-    ) => void;
+    const rejHandler = rejListeners[rejListeners.length - 1]! as (reason: unknown) => void;
     rejHandler(new Error("boom-rejection"));
     assert.equal(exitCode, 1);
     assert.equal(fatals.length, 1);
 
     const excListeners = process.listeners("uncaughtException");
-    const excHandler = excListeners[excListeners.length - 1]! as (
-      err: unknown,
-    ) => void;
+    const excHandler = excListeners[excListeners.length - 1]! as (err: unknown) => void;
     exitCode = undefined;
     excHandler(new Error("boom-uncaught"));
     assert.equal(exitCode, 1);
@@ -226,15 +219,11 @@ test("crash handlers still exit when the logger throws", () => {
       } as never,
     });
     const rejListeners = process.listeners("unhandledRejection");
-    const rejHandler = rejListeners[rejListeners.length - 1]! as (
-      reason: unknown,
-    ) => void;
+    const rejHandler = rejListeners[rejListeners.length - 1]! as (reason: unknown) => void;
     rejHandler(new Error("boom"));
     assert.equal(exitCode, 1);
     const excListeners = process.listeners("uncaughtException");
-    const excHandler = excListeners[excListeners.length - 1]! as (
-      err: unknown,
-    ) => void;
+    const excHandler = excListeners[excListeners.length - 1]! as (err: unknown) => void;
     exitCode = undefined;
     excHandler(new Error("boom"));
     assert.equal(exitCode, 1);
@@ -341,7 +330,7 @@ test("token-required probe rejects wrong token with 403", async () => {
   const res = await app.fetch(
     new Request("http://x/healthz", {
       headers: { authorization: "Bearer wrong" },
-    }),
+    })
   );
   assert.equal(res.status, 403);
 });
@@ -352,7 +341,7 @@ test("token-required probe accepts matching token", async () => {
   const res = await app.fetch(
     new Request("http://x/healthz", {
       headers: { authorization: "Bearer supersecret" },
-    }),
+    })
   );
   assert.equal(res.status, 200);
 });
@@ -399,21 +388,13 @@ test("token-required probe rate-limits missing Authorization attempts", async ()
 
 test("production without token refuses to register (unauthenticated probe)", () => {
   const app = new App({ env: "production", crashOnUnhandledRejection: false });
-  assert.throws(
-    () => app.healthcheck(),
-    /healthcheck\(\) refused in production/,
-  );
-  assert.throws(
-    () => app.readinesscheck(),
-    /readinesscheck\(\) refused in production/,
-  );
+  assert.throws(() => app.healthcheck(), /healthcheck\(\) refused in production/);
+  assert.throws(() => app.readinesscheck(), /readinesscheck\(\) refused in production/);
 });
 
 test("production with acknowledgeUnauthenticated: true allows registration", () => {
   const app = new App({ env: "production", crashOnUnhandledRejection: false });
-  assert.doesNotThrow(() =>
-    app.healthcheck({ acknowledgeUnauthenticated: true }),
-  );
+  assert.doesNotThrow(() => app.healthcheck({ acknowledgeUnauthenticated: true }));
 });
 
 test("production with secureDefaults: false also allows unauthenticated registration", () => {

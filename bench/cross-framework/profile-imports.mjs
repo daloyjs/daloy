@@ -68,12 +68,16 @@ for (const spec of all) rows.push(await median(spec));
 
 rows.sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0));
 console.error(banner("Per-module import cost", `${ITER} cold-process samples · median reported`));
-console.log("\n" + summary({
-  head: ["module", "median (ms)"],
-  rows: rows.map((r) => [
-    r.spec.replace(ROOT, "."),
-    r.error ? `ERR: ${r.error}` : r.ms.toFixed(1),
-  ]),
-  align: ["l", "r"],
-  highlight: (row) => row[0].includes("@daloyjs/core"),
-}) + "\n");
+console.log(
+  "\n" +
+    summary({
+      head: ["module", "median (ms)"],
+      rows: rows.map((r) => [
+        r.spec.replace(ROOT, "."),
+        r.error ? `ERR: ${r.error}` : r.ms.toFixed(1),
+      ]),
+      align: ["l", "r"],
+      highlight: (row) => row[0].includes("@daloyjs/core"),
+    }) +
+    "\n"
+);

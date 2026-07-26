@@ -21,7 +21,10 @@ test("root npmrc blocks install-time supply-chain attack paths", async () => {
 test("package.json keeps the lockfile verifier and no stale pnpm mirror", async () => {
   const packageJson = JSON.parse(await readWorkspaceFile("package.json"));
 
-  assert.equal(packageJson.scripts["verify:lockfile"], "node --import tsx scripts/verify-lockfile-sources.ts");
+  assert.equal(
+    packageJson.scripts["verify:lockfile"],
+    "node --import tsx scripts/verify-lockfile-sources.ts"
+  );
   assert.equal(packageJson.pnpm, undefined);
 });
 
@@ -57,13 +60,16 @@ test("lockfile does not contain git or non-registry tarball dependency sources",
       text: "specifier: github:owner/project",
     },
   ]);
-  assert.deepEqual(findForbiddenLockfileSources("resolution: {tarball: https://example.com/pkg.tgz}"), [
-    {
-      line: 1,
-      reason: "non-registry tarball source",
-      text: "resolution: {tarball: https://example.com/pkg.tgz}",
-    },
-  ]);
+  assert.deepEqual(
+    findForbiddenLockfileSources("resolution: {tarball: https://example.com/pkg.tgz}"),
+    [
+      {
+        line: 1,
+        reason: "non-registry tarball source",
+        text: "resolution: {tarball: https://example.com/pkg.tgz}",
+      },
+    ]
+  );
 });
 
 test("lockfile scanner rejects every forbidden git and tarball source with line numbers", () => {
@@ -164,10 +170,7 @@ test("lockfile scanner rejects every known-malicious Lazarus BeaverTail typosqua
   const findings = findForbiddenLockfileSources(lockfile);
   assert.equal(findings.length, 6, JSON.stringify(findings, null, 2));
   for (const finding of findings) {
-    assert.equal(
-      finding.reason,
-      "known-malicious package (Lazarus BeaverTail / InvisibleFerret)",
-    );
+    assert.equal(finding.reason, "known-malicious package (Lazarus BeaverTail / InvisibleFerret)");
   }
   assert.match(findings[0]!.text, /is-buffer-validator/);
   assert.match(findings[1]!.text, /yoojae-validator/);
@@ -210,7 +213,7 @@ test("lockfile scanner rejects every xuxingfeng destructive-payload May 2025 typ
   for (const finding of findings) {
     assert.equal(
       finding.reason,
-      "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)",
+      "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"
     );
   }
   assert.match(findings[0]!.text, /js-bomb/);
@@ -291,7 +294,7 @@ test("lockfile scanner rejects Beamglea phishing-CDN October 2025 `redirect-<id>
   for (const finding of findings) {
     assert.equal(
       finding.reason,
-      "known-malicious package (Beamglea phishing-CDN campaign, October 2025)",
+      "known-malicious package (Beamglea phishing-CDN campaign, October 2025)"
     );
   }
   assert.match(findings[0]!.text, /redirect-xs13nr/);
@@ -325,7 +328,8 @@ test("lockfile scanner allows benign `redirect-*` package names outside the Beam
   assert.deepEqual(findForbiddenLockfileSources(lockfile), []);
 });
 
-test("lockfile scanner rejects every Qix / DuckDB Sep 2025 crypto-clipper version", () => {  // Socket 2025-09-08 (https://socket.dev/blog/npm-author-qix-compromised-in-major-supply-chain-attack)
+test("lockfile scanner rejects every Qix / DuckDB Sep 2025 crypto-clipper version", () => {
+  // Socket 2025-09-08 (https://socket.dev/blog/npm-author-qix-compromised-in-major-supply-chain-attack)
   // and the Aikido DuckDB follow-up (https://www.aikido.dev/blog/duckdb-npm-packages-compromised):
   // the maintainer "Qix" was phished and trojanised versions of 19 foundational
   // packages were published with a browser crypto-clipper payload. The legit
@@ -359,7 +363,7 @@ test("lockfile scanner rejects every Qix / DuckDB Sep 2025 crypto-clipper versio
   for (const finding of findings) {
     assert.equal(
       finding.reason,
-      "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)",
+      "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)"
     );
   }
 });
@@ -399,7 +403,7 @@ test("lockfile scanner flags compromised versions even with pnpm peer-dep suffix
   assert.equal(findings.length, 1);
   assert.equal(
     findings[0]!.reason,
-    "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)",
+    "known-compromised version (Qix / DuckDB crypto-clipper, Sep 2025)"
   );
 });
 
@@ -426,7 +430,7 @@ test("lockfile scanner rejects every Snyk string-width-cjs lookalike (Oct 2024 T
   for (const finding of findings) {
     assert.equal(
       finding.reason,
-      "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)",
+      "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)"
     );
   }
   assert.match(findings[0]!.text, /string-width-cjs/);
@@ -476,7 +480,7 @@ test("lockfile scanner rejects npm package-aliasing specifiers (Snyk string-widt
 
   const findings = findForbiddenLockfileSources(lockfile);
   const aliasFindings = findings.filter(
-    (f) => f.reason === "npm package aliasing (lockfile-lint pattern)",
+    (f) => f.reason === "npm package aliasing (lockfile-lint pattern)"
   );
   assert.equal(aliasFindings.length, 2, JSON.stringify(findings, null, 2));
   assert.match(aliasFindings[0]!.text, /npm:string-width/);
@@ -563,14 +567,18 @@ test("all workflows avoid unsafe pull_request_target and zizmor is enforced", as
 
 test("release workflow isolates npm publish permissions", async () => {
   const workflow = await readWorkspaceFile(".github/workflows/release.yml");
-  const stagedPublishes = workflow.match(/npm stage publish \. --access public --provenance/g) ?? [];
+  const stagedPublishes =
+    workflow.match(/npm stage publish \. --access public --provenance/g) ?? [];
   const stagedPublishingCliInstalls =
     workflow.match(/npm install -g npm@11\.15\.0 --ignore-scripts --no-audit --no-fund/g) ?? [];
 
   assert.doesNotMatch(workflow, /^\s*pull_request:/m);
   assert.doesNotMatch(workflow, /^\s*pull_request_target:/m);
   assert.match(workflow, /permissions:\s*\{\}/);
-  assert.match(workflow, /environment:\s*\n\s+name:\s+\$\{\{ vars\.NPM_PUBLISH_ENVIRONMENT \|\| 'npm-publish' \}\}/);
+  assert.match(
+    workflow,
+    /environment:\s*\n\s+name:\s+\$\{\{ vars\.NPM_PUBLISH_ENVIRONMENT \|\| 'npm-publish' \}\}/
+  );
   assert.match(workflow, /id-token:\s*write/);
   assert.equal(stagedPublishes.length, 2);
   assert.equal(stagedPublishingCliInstalls.length, 2);

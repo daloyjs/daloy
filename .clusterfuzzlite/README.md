@@ -9,18 +9,18 @@ fuzzed. Scorecard detects fuzzing by the presence of
 ## What gets fuzzed
 
 Each `fuzz_*.js` target drives one pure parser that handles attacker-controlled
-input and asserts the function's documented contract. A *documented* rejection
+input and asserts the function's documented contract. A _documented_ rejection
 (e.g. `BadRequestError` on malformed input) is correct behavior and is swallowed
 via [`_guard.js`](./_guard.js); any other throw — or a hang — is a real finding.
 
-| Target | Function (module) | Invariant checked |
-|---|---|---|
-| `fuzz_safe_json` | `safeJsonParse` (`security.ts`) | only throws `BadRequestError`; never returns an object carrying an own `__proto__` / `constructor` / `prototype` key |
-| `fuzz_cookie` | `readRequestCookie` (`cookie.ts`) | never throws (returns `string \| null`) |
-| `fuzz_cursor` | `decodeCursor` (`pagination.ts`) | only throws `BadRequestError` |
-| `fuzz_cron` | `parseCron` (`scheduler.ts`) | only throws `CronParseError` |
-| `fuzz_ip` | `parseIp` (`ip-restriction.ts`) | never throws (returns `ParsedIp \| undefined`) |
-| `fuzz_headers` | `sanitizeHeaderName` / `sanitizeHeaderValue` (`security.ts`) | only throws `BadRequestError`; an accepted value never contains CR/LF/NUL |
+| Target           | Function (module)                                            | Invariant checked                                                                                                    |
+| ---------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `fuzz_safe_json` | `safeJsonParse` (`security.ts`)                              | only throws `BadRequestError`; never returns an object carrying an own `__proto__` / `constructor` / `prototype` key |
+| `fuzz_cookie`    | `readRequestCookie` (`cookie.ts`)                            | never throws (returns `string \| null`)                                                                              |
+| `fuzz_cursor`    | `decodeCursor` (`pagination.ts`)                             | only throws `BadRequestError`                                                                                        |
+| `fuzz_cron`      | `parseCron` (`scheduler.ts`)                                 | only throws `CronParseError`                                                                                         |
+| `fuzz_ip`        | `parseIp` (`ip-restriction.ts`)                              | never throws (returns `ParsedIp \| undefined`)                                                                       |
+| `fuzz_headers`   | `sanitizeHeaderName` / `sanitizeHeaderValue` (`security.ts`) | only throws `BadRequestError`; an accepted value never contains CR/LF/NUL                                            |
 
 ## Why CommonJS targets for an ESM package
 

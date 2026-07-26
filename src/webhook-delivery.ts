@@ -340,7 +340,7 @@ function randomId(): string {
  * @since 0.37.0
  */
 export function createWebhookSender(
-  options: WebhookSenderOptions,
+  options: WebhookSenderOptions
 ): (event: WebhookEvent) => Promise<WebhookDeliveryResult> {
   if (options.secret === undefined || options.secret === null || options.secret === "") {
     throw new Error("createWebhookSender(): a non-empty signing secret is required");
@@ -383,7 +383,7 @@ export function createWebhookSender(
   async function attemptOnce(
     url: string,
     headers: Record<string, string>,
-    body: Uint8Array,
+    body: Uint8Array
   ): Promise<{ response?: Response; error?: unknown }> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -456,11 +456,25 @@ export function createWebhookSender(
         lastError = undefined;
         if (response.ok) {
           options.onAttempt?.({ id, attempt, status: response.status, willRetry: false });
-          return { ok: true, id, eventType: event.eventType, attempts: attempt, status: response.status, response, deadLettered: false };
+          return {
+            ok: true,
+            id,
+            eventType: event.eventType,
+            attempts: attempt,
+            status: response.status,
+            response,
+            deadLettered: false,
+          };
         }
         const retryable = retryStatuses.has(response.status) && attempt < maxAttempts;
         const delayMs = retryable ? backoffFor(attempt, response) : undefined;
-        options.onAttempt?.({ id, attempt, status: response.status, willRetry: retryable, delayMs });
+        options.onAttempt?.({
+          id,
+          attempt,
+          status: response.status,
+          willRetry: retryable,
+          delayMs,
+        });
         if (!retryable) break;
         await sleep(delayMs!);
         continue;
@@ -491,7 +505,9 @@ export function createWebhookSender(
         contentType,
         attempts: madeAttempts,
         ...(lastStatus !== undefined ? { lastStatus } : {}),
-        ...(lastError !== undefined ? { lastError: lastError instanceof Error ? lastError.message : String(lastError) } : {}),
+        ...(lastError !== undefined
+          ? { lastError: lastError instanceof Error ? lastError.message : String(lastError) }
+          : {}),
         timestamp,
         failedAt: now(),
       });

@@ -116,7 +116,10 @@ test("loginThrottle() shares one login bucket across related routes", async () =
   });
 
   assert.equal((await app.fetch(new Request("http://x/login", { method: "POST" }))).status, 200);
-  assert.equal((await app.fetch(new Request("http://x/password-reset", { method: "POST" }))).status, 200);
+  assert.equal(
+    (await app.fetch(new Request("http://x/password-reset", { method: "POST" }))).status,
+    200
+  );
   const limited = await app.fetch(new Request("http://x/login", { method: "POST" }));
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("x-ratelimit-limit"), "2");
@@ -143,18 +146,26 @@ test("loginThrottle() does not trust proxy IP headers until opted in", async () 
   });
 
   assert.equal(
-    (await app.fetch(new Request("http://x/login", {
-      method: "POST",
-      headers: { "x-real-ip": "10.0.0.1" },
-    }))).status,
-    200,
+    (
+      await app.fetch(
+        new Request("http://x/login", {
+          method: "POST",
+          headers: { "x-real-ip": "10.0.0.1" },
+        })
+      )
+    ).status,
+    200
   );
   assert.equal(
-    (await app.fetch(new Request("http://x/login", {
-      method: "POST",
-      headers: { "x-real-ip": "10.0.0.2" },
-    }))).status,
-    429,
+    (
+      await app.fetch(
+        new Request("http://x/login", {
+          method: "POST",
+          headers: { "x-real-ip": "10.0.0.2" },
+        })
+      )
+    ).status,
+    429
   );
 });
 
@@ -176,18 +187,26 @@ test("loginThrottle() can key by trusted proxy headers", async () => {
   });
 
   assert.equal(
-    (await app.fetch(new Request("http://x/login", {
-      method: "POST",
-      headers: { "x-forwarded-for": "10.0.0.1" },
-    }))).status,
-    200,
+    (
+      await app.fetch(
+        new Request("http://x/login", {
+          method: "POST",
+          headers: { "x-forwarded-for": "10.0.0.1" },
+        })
+      )
+    ).status,
+    200
   );
   assert.equal(
-    (await app.fetch(new Request("http://x/login", {
-      method: "POST",
-      headers: { "x-forwarded-for": "10.0.0.2" },
-    }))).status,
-    200,
+    (
+      await app.fetch(
+        new Request("http://x/login", {
+          method: "POST",
+          headers: { "x-forwarded-for": "10.0.0.2" },
+        })
+      )
+    ).status,
+    200
   );
 });
 
@@ -209,7 +228,7 @@ test("auth schemes can require payload auth and refuse route-level opt-out", () 
         responses: { 204: { description: "ok" } },
         handler: () => ({ status: 204 as const, body: undefined }),
       }),
-    /requires payload authentication/,
+    /requires payload authentication/
   );
 });
 
@@ -293,7 +312,7 @@ test("every() short-circuits beforeHandle on first Response", async () => {
         beforeHandle: () => {
           bRan = true;
         },
-      },
+      }
     ),
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: { ok: true } }),
@@ -311,7 +330,7 @@ test("some() passes if any beforeHandle succeeds", async () => {
     hooks: some(
       bearerAuth({ validate: () => false }),
       // Always-pass dummy
-      { beforeHandle: () => {} },
+      { beforeHandle: () => {} }
     ),
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: { ok: true } }),
@@ -325,14 +344,11 @@ test("some() rethrows the first error when every layer fails", async () => {
   app.route({
     method: "GET",
     path: "/",
-    hooks: some(
-      bearerAuth({ validate: () => false }),
-      {
-        beforeHandle: () => {
-          throw new Error("nope");
-        },
+    hooks: some(bearerAuth({ validate: () => false }), {
+      beforeHandle: () => {
+        throw new Error("nope");
       },
-    ),
+    }),
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
@@ -369,7 +385,7 @@ test("some() with no beforeHandle layers is still a merge", async () => {
         onRequest: () => {
           ran++;
         },
-      },
+      }
     ),
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: { ok: true } }),
@@ -402,7 +418,7 @@ test("some() tries next layer when an earlier one returns a Response", async () 
         beforeHandle: () => {
           bRan++;
         },
-      },
+      }
     ),
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: { ok: true } }),
@@ -419,7 +435,7 @@ test("some() preserves the first Response when every layer denies", async () => 
     path: "/",
     hooks: some(
       { beforeHandle: () => new Response("first", { status: 401 }) },
-      { beforeHandle: () => new Response("second", { status: 403 }) },
+      { beforeHandle: () => new Response("second", { status: 403 }) }
     ),
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: { ok: true } }),
@@ -456,8 +472,8 @@ test("every() / merge composes onError + onResponse + onSend", async () => {
           events.push("b:send");
           return undefined;
         },
-      },
-    ),
+      }
+    )
   );
   app.route({
     method: "GET",
@@ -487,7 +503,7 @@ test("every() onError can short-circuit with a Response", async () => {
   app.use(
     every({
       onError: () => new Response("custom", { status: 599 }),
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -503,12 +519,7 @@ test("every() onError can short-circuit with a Response", async () => {
 
 test("except() skips beforeHandle for matching paths", async () => {
   const app = new App({ env: "development" });
-  app.use(
-    except(
-      ["/health", "/public/**", "/v1/*/meta"],
-      bearerAuth({ validate: () => false }),
-    ),
-  );
+  app.use(except(["/health", "/public/**", "/v1/*/meta"], bearerAuth({ validate: () => false })));
   app.route({
     method: "GET",
     path: "/health",
@@ -544,8 +555,8 @@ test("except() accepts a predicate function", async () => {
   app.use(
     except(
       (ctx) => ctx.request.headers.get("x-skip") === "1",
-      bearerAuth({ validate: () => false }),
-    ),
+      bearerAuth({ validate: () => false })
+    )
   );
   app.route({
     method: "GET",
@@ -555,7 +566,7 @@ test("except() accepts a predicate function", async () => {
   });
   assert.equal(
     (await app.fetch(new Request("http://x/", { headers: { "x-skip": "1" } }))).status,
-    200,
+    200
   );
   assert.equal((await app.fetch(new Request("http://x/"))).status, 401);
 });
@@ -580,10 +591,7 @@ test("except() also exempts early-rejection rate-limit accounting", async () => 
 });
 
 test("except() rejects path patterns that don't start with /", () => {
-  assert.throws(
-    () => except("health", { beforeHandle: () => {} }),
-    /must start with/,
-  );
+  assert.throws(() => except("health", { beforeHandle: () => {} }), /must start with/);
 });
 
 test("except() is a no-op when wrapped hooks have no beforeHandle", () => {
@@ -600,7 +608,7 @@ test("ipRestriction() allow-list permits matching IPv4 and rejects others", asyn
     ipRestriction({
       allow: ["10.0.0.0/8", "192.168.1.42"],
       trustProxyHeaders: true,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -609,15 +617,15 @@ test("ipRestriction() allow-list permits matching IPv4 and rejects others", asyn
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const ok = await app.fetch(
-    new Request("http://x/", { headers: { "x-forwarded-for": "10.1.2.3" } }),
+    new Request("http://x/", { headers: { "x-forwarded-for": "10.1.2.3" } })
   );
   assert.equal(ok.status, 200);
   const okExact = await app.fetch(
-    new Request("http://x/", { headers: { "x-forwarded-for": "192.168.1.42" } }),
+    new Request("http://x/", { headers: { "x-forwarded-for": "192.168.1.42" } })
   );
   assert.equal(okExact.status, 200);
   const blocked = await app.fetch(
-    new Request("http://x/", { headers: { "x-forwarded-for": "203.0.113.5" } }),
+    new Request("http://x/", { headers: { "x-forwarded-for": "203.0.113.5" } })
   );
   assert.equal(blocked.status, 403);
 });
@@ -629,7 +637,7 @@ test("ipRestriction() deny-list wins over allow", async () => {
       allow: ["10.0.0.0/8"],
       deny: ["10.6.6.0/24"],
       trustProxyHeaders: true,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -638,12 +646,14 @@ test("ipRestriction() deny-list wins over allow", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "10.1.2.3" } }))).status,
-    200,
+    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "10.1.2.3" } })))
+      .status,
+    200
   );
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "10.6.6.7" } }))).status,
-    403,
+    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "10.6.6.7" } })))
+      .status,
+    403
   );
 });
 
@@ -659,17 +669,22 @@ test("ipRestriction() supports IPv6 + IPv4-mapped IPv6", async () => {
   // ::1 loopback
   assert.equal(
     (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "::1" } }))).status,
-    200,
+    200
   );
   // IPv4-mapped IPv6 matching the 10/8 IPv4 allow
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "::ffff:10.0.0.5" } }))).status,
-    200,
+    (
+      await app.fetch(
+        new Request("http://x/", { headers: { "x-forwarded-for": "::ffff:10.0.0.5" } })
+      )
+    ).status,
+    200
   );
   // Random IPv6 not on the list
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "2001:db8::1" } }))).status,
-    403,
+    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "2001:db8::1" } })))
+      .status,
+    403
   );
 });
 
@@ -695,8 +710,9 @@ test("ipRestriction() rejects unparseable IP header content", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "not-an-ip" } }))).status,
-    403,
+    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "not-an-ip" } })))
+      .status,
+    403
   );
 });
 
@@ -706,7 +722,7 @@ test("ipRestriction() accepts a custom resolveIp", async () => {
     ipRestriction({
       allow: ["10.0.0.0/8"],
       resolveIp: (ctx) => ctx.request.headers.get("cf-connecting-ip") ?? undefined,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -715,12 +731,14 @@ test("ipRestriction() accepts a custom resolveIp", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "cf-connecting-ip": "10.0.0.1" } }))).status,
-    200,
+    (await app.fetch(new Request("http://x/", { headers: { "cf-connecting-ip": "10.0.0.1" } })))
+      .status,
+    200
   );
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "cf-connecting-ip": "1.2.3.4" } }))).status,
-    403,
+    (await app.fetch(new Request("http://x/", { headers: { "cf-connecting-ip": "1.2.3.4" } })))
+      .status,
+    403
   );
 });
 
@@ -735,7 +753,7 @@ test("ipRestriction() falls back to x-real-ip when x-forwarded-for absent", asyn
   });
   assert.equal(
     (await app.fetch(new Request("http://x/", { headers: { "x-real-ip": "10.0.0.9" } }))).status,
-    200,
+    200
   );
 });
 
@@ -765,8 +783,9 @@ test("ipRestriction() does not trust proxy headers unless opted in", async () =>
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   assert.equal(
-    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "10.0.0.1" } }))).status,
-    403,
+    (await app.fetch(new Request("http://x/", { headers: { "x-forwarded-for": "10.0.0.1" } })))
+      .status,
+    403
   );
 });
 
@@ -782,7 +801,7 @@ test("ipRestriction() honours custom message", async () => {
       allow: ["10.0.0.0/8"],
       trustProxyHeaders: true,
       message: "denied",
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -791,7 +810,7 @@ test("ipRestriction() honours custom message", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.fetch(
-    new Request("http://x/", { headers: { "x-forwarded-for": "1.2.3.4" } }),
+    new Request("http://x/", { headers: { "x-forwarded-for": "1.2.3.4" } })
   );
   assert.equal(res.status, 403);
   const body = await res.json();
@@ -813,14 +832,10 @@ test("internal: true returns 404 via public fetch and works via inject", async (
       return { status: 204 as const, body: undefined };
     },
   });
-  const publicRes = await app.fetch(
-    new Request("http://x/__admin/reindex", { method: "POST" }),
-  );
+  const publicRes = await app.fetch(new Request("http://x/__admin/reindex", { method: "POST" }));
   assert.equal(publicRes.status, 404);
   assert.equal(ran, 0);
-  const injectRes = await app.inject(
-    new Request("http://x/__admin/reindex", { method: "POST" }),
-  );
+  const injectRes = await app.inject(new Request("http://x/__admin/reindex", { method: "POST" }));
   assert.equal(injectRes.status, 204);
   assert.equal(ran, 1);
 });
@@ -834,9 +849,7 @@ test("internal: true does not leak via 405 / Allow header", async () => {
     responses: { 204: { description: "started" } },
     handler: () => ({ status: 204 as const, body: undefined }),
   });
-  const res = await app.fetch(
-    new Request("http://x/__admin/reindex", { method: "DELETE" }),
-  );
+  const res = await app.fetch(new Request("http://x/__admin/reindex", { method: "DELETE" }));
   assert.equal(res.status, 404);
   assert.equal(res.headers.get("allow"), null);
 });

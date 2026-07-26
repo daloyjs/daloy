@@ -1,4 +1,12 @@
-import { App, NotFoundError, bearerAuth, cors, rateLimit, requestId, secureHeaders } from "@daloyjs/core";
+import {
+  App,
+  NotFoundError,
+  bearerAuth,
+  cors,
+  rateLimit,
+  requestId,
+  secureHeaders,
+} from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { z } from "zod";
 
@@ -45,7 +53,7 @@ app.get(
     // FIX #5: throw a framework error → uniform problem+json handling.
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 app.post(
@@ -53,9 +61,9 @@ app.post(
   {
     operationId: "createBook",
     tags: ["Books"],
-    auth: { scheme: "bearer" },                                       // FIX: declare auth on op
+    auth: { scheme: "bearer" }, // FIX: declare auth on op
     hooks: bearerAuth({ validate: (token) => token === "demo-token" }),
-    request: { body: CreateBookSchema },                              // FIX: .strict() schema
+    request: { body: CreateBookSchema }, // FIX: .strict() schema
     responses: {
       201: { description: "Created", body: BookSchema },
       401: { description: "Unauthorized" },
@@ -64,7 +72,7 @@ app.post(
   async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
-  },
+  }
 );
 
 serve(app, { port: 3000 });

@@ -22,12 +22,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { App } from "../src/app.js";
-import {
-  cors,
-  bearerAuth,
-  csrf,
-  rateLimit,
-} from "../src/middleware.js";
+import { cors, bearerAuth, csrf, rateLimit } from "../src/middleware.js";
 import {
   UnauthorizedError,
   ForbiddenError,
@@ -51,8 +46,7 @@ test("runtime-parity: all static audits pass on the live source tree", async () 
   if (errors.length > 0) {
     const summary = errors
       .map(
-        (f) =>
-          `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}: ${f.message}`,
+        (f) => `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}: ${f.message}`
       )
       .join("\n");
     assert.fail(`Runtime-parity audit gates flagged ${errors.length} error(s):\n${summary}`);
@@ -95,7 +89,7 @@ test("runtime-parity: CSRF helper 403 response carries cache-control: no-store",
     csrf({
       cookieName: "daloy.csrf",
       cookieOptions: { secure: false },
-    }),
+    })
   );
   app.route({
     method: "POST",
@@ -129,9 +123,8 @@ test("runtime-parity: bearerAuth invalid token 403 carries cache-control: no-sto
   const app = new App({ secureDefaults: false, production: false });
   app.use(
     bearerAuth({
-      validate: (token) =>
-        token === "correct-token-with-sufficient-entropy-1234567890abcdef",
-    }),
+      validate: (token) => token === "correct-token-with-sufficient-entropy-1234567890abcdef",
+    })
   );
   app.route({
     method: "GET",
@@ -167,19 +160,14 @@ test("runtime-parity: cspReportRoute still accepts application/reports+json", as
   const res = await app.request("/__csp-report", {
     method: "POST",
     headers: { "content-type": "application/reports+json" },
-    body: JSON.stringify([
-      { type: "csp-violation", body: { effectiveDirective: "img-src" } },
-    ]),
+    body: JSON.stringify([{ type: "csp-violation", body: { effectiveDirective: "img-src" } }]),
   });
   assert.equal(res.status, 204);
 });
 
 test("runtime-parity: cspReportRoute refuses maxBodyBytes > 64 KiB at construction", () => {
   const app = new App({ secureDefaults: false, production: false });
-  assert.throws(
-    () => app.cspReportRoute({ maxBodyBytes: 1024 * 1024 }),
-    /maxBodyBytes/,
-  );
+  assert.throws(() => app.cspReportRoute({ maxBodyBytes: 1024 * 1024 }), /maxBodyBytes/);
 });
 
 test("runtime-parity: cspReportRoute refuses non-integer maxBodyBytes at construction", () => {
@@ -224,7 +212,7 @@ test("runtime-parity: cspReportRoute omits report body when logCspReportBodies: 
   assert.equal(
     payload.report,
     undefined,
-    "report body must be omitted when logCspReportBodies: false",
+    "report body must be omitted when logCspReportBodies: false"
   );
 });
 
@@ -291,13 +279,13 @@ test("runtime-parity: cspReportRoute logs body when logCspReportBodies: true", a
     (l) =>
       l.args[0] &&
       typeof l.args[0] === "object" &&
-      (l.args[0] as Record<string, unknown>).event === "csp.report",
+      (l.args[0] as Record<string, unknown>).event === "csp.report"
   );
   assert.ok(csp);
   const payload = csp.args[0] as Record<string, unknown>;
   assert.ok(
     payload.report !== undefined,
-    "report body must be present when logCspReportBodies: true",
+    "report body must be present when logCspReportBodies: true"
   );
 });
 
@@ -318,16 +306,13 @@ test("runtime-parity: cors() default allowMethods is [GET, HEAD, POST]", async (
     headers: { origin: "https://known.test" },
   });
   assert.equal(res.status, 204);
-  assert.equal(
-    res.headers.get("access-control-allow-methods"),
-    "GET, HEAD, POST",
-  );
+  assert.equal(res.headers.get("access-control-allow-methods"), "GET, HEAD, POST");
 });
 
 test("runtime-parity: cors() refuses methods: ['*'] at construction", () => {
   assert.throws(
     () => cors({ origin: "https://known.test", methods: ["*"] }),
-    /methods cannot include/,
+    /methods cannot include/
   );
 });
 
@@ -337,7 +322,7 @@ test("runtime-parity: cors() allows explicit PUT/PATCH/DELETE opt-in", async () 
     cors({
       origin: ["https://known.test"],
       methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
-    }),
+    })
   );
   app.route({
     method: "PUT",
@@ -353,7 +338,7 @@ test("runtime-parity: cors() allows explicit PUT/PATCH/DELETE opt-in", async () 
   assert.equal(res.status, 204);
   assert.equal(
     res.headers.get("access-control-allow-methods"),
-    "GET, HEAD, POST, PUT, PATCH, DELETE",
+    "GET, HEAD, POST, PUT, PATCH, DELETE"
   );
 });
 
@@ -369,7 +354,7 @@ test("runtime-parity: app.ws() refuses when secureHeaders() is mounted on a matc
       app.ws("/ws", {
         open() {},
       }),
-    /secureHeaders\(\).*WebSocket route/,
+    /secureHeaders\(\).*WebSocket route/
   );
 });
 
@@ -391,7 +376,7 @@ test("runtime-parity: app.ws() refuses when cors() is mounted on a matching path
       app.ws("/ws", {
         open() {},
       }),
-    /cors\(\).*WebSocket route/,
+    /cors\(\).*WebSocket route/
   );
 });
 
@@ -402,7 +387,7 @@ test("runtime-parity: app.ws() refuses unauthenticated production routes without
       app.ws("/ws", {
         open() {},
       }),
-    /beforeUpgrade.*acknowledgeUnauthenticated/s,
+    /beforeUpgrade.*acknowledgeUnauthenticated/s
   );
 });
 
@@ -442,7 +427,7 @@ test("runtime-parity: httpError({ res }) refuses Set-Cookie in production", () =
         production: true,
         secureDefaults: true,
       }),
-    MessageLeakError,
+    MessageLeakError
   );
 });
 
@@ -510,7 +495,7 @@ test("runtime-parity: httpError({ res }) refuses cache-control: public", () => {
         production: true,
         secureDefaults: true,
       }),
-    MessageLeakError,
+    MessageLeakError
   );
 });
 
@@ -546,9 +531,7 @@ test("runtime-parity: httpError({ res }) drops non-safe headers in dev without t
 });
 
 test("runtime-parity: checkCustomErrorResponseHeaders flags Server-Timing", () => {
-  const offending = checkCustomErrorResponseHeaders(
-    new Headers({ "server-timing": "db;dur=12" }),
-  );
+  const offending = checkCustomErrorResponseHeaders(new Headers({ "server-timing": "db;dur=12" }));
   assert.equal(offending.length, 1);
   assert.match(offending[0]!.reason, /Server-Timing/);
 });
@@ -580,11 +563,7 @@ test("runtime-parity: toResponse({ contextHeaders }) accepts HeadersInit as plai
 });
 
 test("runtime-parity: toResponse({ contextHeaders }) does not overwrite baked headers by case", () => {
-  const err = new HttpError(
-    401,
-    { title: "Unauthorized" },
-    { "Cache-Control": "no-store" },
-  );
+  const err = new HttpError(401, { title: "Unauthorized" }, { "Cache-Control": "no-store" });
   const res = err.toResponse({
     contextHeaders: { "cache-control": "public, max-age=60" },
   });
@@ -610,7 +589,7 @@ test("runtime-parity: topoSortExtensions throws when two extensions mutate the s
   ];
   assert.throws(
     () => topoSortExtensions(exts),
-    /Plugin extension header conflict.*"A".*"B".*"x-foo"/,
+    /Plugin extension header conflict.*"A".*"B".*"x-foo"/
   );
 });
 
@@ -631,7 +610,10 @@ test("runtime-parity: topoSortExtensions accepts conflicting headers when before
     },
   ];
   const out = topoSortExtensions(exts);
-  assert.deepEqual(out.map((e) => e.name), ["A", "B"]);
+  assert.deepEqual(
+    out.map((e) => e.name),
+    ["A", "B"]
+  );
 });
 
 test("runtime-parity: topoSortExtensions accepts non-overlapping responseHeaders without ordering", () => {

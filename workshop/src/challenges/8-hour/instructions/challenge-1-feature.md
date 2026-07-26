@@ -4,13 +4,13 @@ A full CRUD slice with the same conventions used everywhere else in the workshop
 
 ## Requirements
 
-| Method   | Path             | Auth   | Body                                  | Status |
-| -------- | ---------------- | ------ | ------------------------------------- | ------ |
-| `GET`    | `/authors`       | none   | —                                     | 200    |
-| `GET`    | `/authors/:id`   | none   | —                                     | 200/404 |
-| `POST`   | `/authors`       | bearer | `.strict()` (`id`, `name`, `birthYear?`) | 201/409 |
-| `PATCH`  | `/authors/:id`   | bearer | `.strict()` (`name?`, `birthYear?`)   | 200/404 |
-| `DELETE` | `/authors/:id`   | bearer | —                                     | 204/404 |
+| Method   | Path           | Auth   | Body                                     | Status  |
+| -------- | -------------- | ------ | ---------------------------------------- | ------- |
+| `GET`    | `/authors`     | none   | —                                        | 200     |
+| `GET`    | `/authors/:id` | none   | —                                        | 200/404 |
+| `POST`   | `/authors`     | bearer | `.strict()` (`id`, `name`, `birthYear?`) | 201/409 |
+| `PATCH`  | `/authors/:id` | bearer | `.strict()` (`name?`, `birthYear?`)      | 200/404 |
+| `DELETE` | `/authors/:id` | bearer | —                                        | 204/404 |
 
 - All write routes require `auth: { scheme: "bearer" }` + `hooks: bearerAuth({ validate })` with `timingSafeEqual`.
 - `DELETE` is soft delete (set `deleted: true`).

@@ -38,7 +38,7 @@ app.get(
   async () => {
     await new Promise((r) => setTimeout(r, 10_000)); // will hit 5s timeout
     return { status: 200 as const, body: { ok: true as const } };
-  },
+  }
 );
 
 app.post(
@@ -49,7 +49,7 @@ app.post(
     request: { body: z.object({ blob: z.string() }).strict() },
     responses: { 200: { description: "OK", body: z.object({ length: z.number() }) } },
   },
-  async ({ body }) => ({ status: 200 as const, body: { length: body.blob.length } }),
+  async ({ body }) => ({ status: 200 as const, body: { length: body.blob.length } })
 );
 
 // TODO: POST /password-reset with hooks: rateLimit({ windowMs: 60_000, max: 5 }).

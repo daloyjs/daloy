@@ -62,8 +62,12 @@ function runOne(file, extraArgs) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stderr = "";
-    child.stderr.on("data", (b) => { stderr += b.toString(); });
-    child.stdout.on("data", () => { /* swallow */ });
+    child.stderr.on("data", (b) => {
+      stderr += b.toString();
+    });
+    child.stdout.on("data", () => {
+      /* swallow */
+    });
     child.once("exit", (code) => {
       resolve({ file, code, ms: Date.now() - t0, stderr });
     });
@@ -71,7 +75,9 @@ function runOne(file, extraArgs) {
 }
 
 async function main() {
-  process.stderr.write(banner("Bench smoke test", "runs every script with minimal settings") + "\n\n");
+  process.stderr.write(
+    banner("Bench smoke test", "runs every script with minimal settings") + "\n\n"
+  );
   const results = [];
   for (const [file, extraArgs] of SCRIPTS) {
     process.stderr.write(`${c.gray(sym.bullet)} ${c.white(file.padEnd(22))} ${c.dim("…")} `);
@@ -80,13 +86,23 @@ async function main() {
     const status = r.code === 0 ? c.green("OK") : c.red("FAIL");
     process.stderr.write(`${status}  ${c.dim(`(${(r.ms / 1000).toFixed(1)}s)`)}\n`);
     if (r.code !== 0) {
-      process.stderr.write(c.red(r.stderr.split("\n").slice(-20).map((l) => `    ${l}`).join("\n")) + "\n");
+      process.stderr.write(
+        c.red(
+          r.stderr
+            .split("\n")
+            .slice(-20)
+            .map((l) => `    ${l}`)
+            .join("\n")
+        ) + "\n"
+      );
     }
   }
   const failed = results.filter((r) => r.code !== 0);
   if (failed.length > 0) {
     // Keep the smoke output around for debugging a failed run.
-    process.stderr.write("\n" + fail(`${failed.length}/${results.length} smoke runs FAILED.`) + "\n");
+    process.stderr.write(
+      "\n" + fail(`${failed.length}/${results.length} smoke runs FAILED.`) + "\n"
+    );
     process.stderr.write(c.dim(`Smoke results kept at ${SMOKE_RESULTS_DIR}\n`));
     process.exit(1);
   }
@@ -94,4 +110,7 @@ async function main() {
   process.stderr.write("\n" + ok(`All ${results.length} bench scripts smoked OK.`) + "\n");
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

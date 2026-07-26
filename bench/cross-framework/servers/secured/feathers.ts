@@ -29,7 +29,7 @@ app.use(
     duration: 60_000,
     max: Number.MAX_SAFE_INTEGER,
     id: (ctx) => ctx.ip,
-  }),
+  })
 );
 app.use(jwt({ secret: SECRET, algorithms: ["HS256"] }));
 app.use(bodyParser());

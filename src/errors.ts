@@ -94,17 +94,13 @@ export const SAFE_CUSTOM_ERROR_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
 export class MessageLeakError extends Error {
   /** The refused headers, each with its name and the reason it was disallowed. */
   readonly offendingHeaders: ReadonlyArray<{ name: string; reason: string }>;
-  constructor(
-    offendingHeaders: ReadonlyArray<{ name: string; reason: string }>,
-  ) {
-    const summary = offendingHeaders
-      .map((h) => `${h.name} (${h.reason})`)
-      .join(", ");
+  constructor(offendingHeaders: ReadonlyArray<{ name: string; reason: string }>) {
+    const summary = offendingHeaders.map((h) => `${h.name} (${h.reason})`).join(", ");
     super(
       `httpError({ res }): custom error response carries disallowed header(s): ${summary}. ` +
         "Only WWW-Authenticate, Proxy-Authenticate, Retry-After, Content-Type, " +
         "Content-Language, Content-Length, and Cache-Control (no-store|no-cache) " +
-        "are permitted on a custom error response.",
+        "are permitted on a custom error response."
     );
     this.name = "MessageLeakError";
     this.offendingHeaders = offendingHeaders;
@@ -120,7 +116,7 @@ export class MessageLeakError extends Error {
  *   means every header passed the safe-error-response allowlist.
  */
 export function checkCustomErrorResponseHeaders(
-  headers: Headers,
+  headers: Headers
 ): Array<{ name: string; reason: string }> {
   const offending: Array<{ name: string; reason: string }> = [];
   headers.forEach((value, name) => {
@@ -167,9 +163,11 @@ function isSafeCustomErrorHeaderValue(name: string, value: string): boolean {
   const lower = name.toLowerCase();
   return (
     SAFE_CUSTOM_ERROR_RESPONSE_HEADERS.has(lower) &&
-    !(lower === "cache-control" &&
+    !(
+      lower === "cache-control" &&
       value.trim().toLowerCase() !== "no-store" &&
-      value.trim().toLowerCase() !== "no-cache")
+      value.trim().toLowerCase() !== "no-cache"
+    )
   );
 }
 
@@ -321,8 +319,7 @@ export class HttpError extends Error {
    */
   toResponse(opts: ProblemRenderOptions = {}): Response {
     const isProd =
-      opts.production ??
-      (typeof process !== "undefined" && process.env?.NODE_ENV === "production");
+      opts.production ?? (typeof process !== "undefined" && process.env?.NODE_ENV === "production");
     const out: ProblemDetails = { ...this.problem };
     if (isProd && this.status >= 500) {
       delete out.detail; // do not leak internals
@@ -470,7 +467,7 @@ export class UnauthorizedError extends HttpError {
       },
       // Auth-failure responses must never be cached. `no-store`
       // already forbids both shared and private caches per RFC 9111 §5.2.2.5.
-      { "cache-control": "no-store" },
+      { "cache-control": "no-store" }
     );
     this.name = "UnauthorizedError";
   }
@@ -494,7 +491,7 @@ export class ForbiddenError extends HttpError {
         ...(detail ? { detail } : {}),
       },
       // Authorization-failure responses must never be cached.
-      { "cache-control": "no-store" },
+      { "cache-control": "no-store" }
     );
     this.name = "ForbiddenError";
   }

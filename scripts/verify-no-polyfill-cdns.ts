@@ -306,7 +306,7 @@ function isSkippedPath(relPosix: string): boolean {
 /** Scan a single file's text for forbidden CDN host references. */
 export function findForbiddenCdnReferences(
   file: string,
-  source: string,
+  source: string
 ): readonly ForbiddenCdnReference[] {
   const out: ForbiddenCdnReference[] = [];
   const lines = source.split(/\r?\n/);
@@ -347,9 +347,7 @@ async function main(): Promise<void> {
   try {
     await stat(REPO_ROOT);
   } catch (err) {
-    console.error(
-      `verify-no-polyfill-cdns: cannot stat repo root: ${(err as Error).message}`,
-    );
+    console.error(`verify-no-polyfill-cdns: cannot stat repo root: ${(err as Error).message}`);
     process.exitCode = 1;
     return;
   }
@@ -360,7 +358,7 @@ async function main(): Promise<void> {
     const findings = findForbiddenCdnReferences(rel, text);
     for (const f of findings) {
       console.error(
-        `${f.file}:${f.line}: forbidden hijacked-CDN host \`${f.host}\` (${f.reason}): ${f.text}`,
+        `${f.file}:${f.line}: forbidden hijacked-CDN host \`${f.host}\` (${f.reason}): ${f.text}`
       );
       total++;
     }
@@ -377,9 +375,9 @@ async function main(): Promise<void> {
         "Funnull-cluster aliases / C2 hosts. Replace with Cloudflare's mirror at " +
         "`cdnjs.cloudflare.com/polyfill/`, Fastly's mirror at `polyfill-fastly.io`, or — " +
         "preferred — a self-hosted bundle pinned to a known-good version with Subresource " +
-        "Integrity (SRI) `integrity=\"sha384-...\"` and `crossorigin=\"anonymous\"`. See " +
+        'Integrity (SRI) `integrity="sha384-..."` and `crossorigin="anonymous"`. See ' +
         "https://www.aikido.dev/blog/polyfill-io-supply-chain-attack-what-do-you-need-to-do and " +
-        "https://sansec.io/research/polyfill-supply-chain-attack.",
+        "https://sansec.io/research/polyfill-supply-chain-attack."
     );
     process.exitCode = 1;
   }

@@ -15,7 +15,9 @@ const safeFetch = fetchGuard({
 });
 
 function signSession(username: string): string {
-  const payload = Buffer.from(JSON.stringify({ sub: username, iat: Date.now() })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sub: username, iat: Date.now() })).toString(
+    "base64url"
+  );
   const sig = createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
@@ -41,7 +43,7 @@ function parseCookies(header: string | null): Record<string, string> {
     header.split(";").map((c) => {
       const [k, ...rest] = c.trim().split("=");
       return [k, decodeURIComponent(rest.join("="))];
-    }),
+    })
   );
 }
 
@@ -58,7 +60,10 @@ app.post(
     operationId: "login",
     tags: ["Auth"],
     request: { body: z.object({ username: z.string(), password: z.string() }).strict() },
-    responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) }, 401: { description: "Bad credentials" } },
+    responses: {
+      200: { description: "OK", body: z.object({ ok: z.literal(true) }) },
+      401: { description: "Bad credentials" },
+    },
   },
   async ({ body }) => {
     if (users.get(body.username) !== body.password) throw new UnauthorizedError("Bad credentials");
@@ -70,7 +75,7 @@ app.post(
         "set-cookie": `session=${token}; Path=/; HttpOnly; SameSite=Strict; Secure`,
       },
     };
-  },
+  }
 );
 
 app.post(
@@ -80,7 +85,10 @@ app.post(
     tags: ["Demo"],
     request: { body: z.object({ url: z.string().url() }).strict() },
     responses: {
-      200: { description: "OK", body: z.object({ status: z.number(), title: z.string().nullable() }) },
+      200: {
+        description: "OK",
+        body: z.object({ status: z.number(), title: z.string().nullable() }),
+      },
       400: { description: "URL rejected by fetchGuard" },
     },
   },
@@ -94,7 +102,7 @@ app.post(
     const text = await res.text();
     const m = text.match(/<title[^>]*>([^<]+)<\/title>/i);
     return { status: 200 as const, body: { status: res.status, title: m?.[1] ?? null } };
-  },
+  }
 );
 
 app.ws("/ws", {

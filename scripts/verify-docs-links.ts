@@ -209,7 +209,7 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
   const sitemapPaths = new Set(
     extractSitemapPaths(sitemapSource)
       .filter((p) => p.startsWith("/docs"))
-      .map(normalizeRoute),
+      .map(normalizeRoute)
   );
   for (const path of sitemapPaths) {
     if (!routeSet.has(path)) {
@@ -251,13 +251,11 @@ async function main(): Promise<void> {
   const problems = await scanDocsLinks();
   if (problems.length === 0) {
     console.log(
-      "verify-docs-links: all docs links, nav entries, sitemap entries, and anchors resolve.",
+      "verify-docs-links: all docs links, nav entries, sitemap entries, and anchors resolve."
     );
     return;
   }
-  console.error(
-    `verify-docs-links: found ${problems.length} docs link/nav/sitemap problem(s):\n`,
-  );
+  console.error(`verify-docs-links: found ${problems.length} docs link/nav/sitemap problem(s):\n`);
   for (const p of problems) {
     console.error(`  [${p.kind}] ${p.source}\n    -> ${p.target}: ${p.detail}`);
   }

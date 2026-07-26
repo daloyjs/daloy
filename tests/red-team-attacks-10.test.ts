@@ -121,19 +121,24 @@ const NOW = Math.floor(Date.now() / 1000);
 const subtle = (globalThis as unknown as { crypto: Crypto }).crypto.subtle;
 async function genRs256Pair(): Promise<CryptoKeyPair> {
   return (await subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
     true,
-    ["sign", "verify"],
+    ["sign", "verify"]
   )) as CryptoKeyPair;
 }
 
 /** Base64url-encode a JSON value (the JOSE segment encoding). */
 const seg = (obj: unknown) => Buffer.from(JSON.stringify(obj)).toString("base64url");
 /** Forge a raw JWT from attacker-controlled header + payload + (irrelevant) signature. */
-const forge = (header: object, payload: object, sig = "AAAA") => `${seg(header)}.${seg(payload)}.${sig}`;
+const forge = (header: object, payload: object, sig = "AAAA") =>
+  `${seg(header)}.${seg(payload)}.${sig}`;
 
-const rejectsWith = (code: string) => (e: unknown) =>
-  e instanceof JwtError && e.code === code;
+const rejectsWith = (code: string) => (e: unknown) => e instanceof JwtError && e.code === code;
 
 test("[jwt-matrix/alg-none] a forged alg:none token is refused (signature verification cannot be disabled)", async () => {
   const verifier = createJwtVerifier({ algorithms: ["HS256"], key: HS });
@@ -144,7 +149,7 @@ test("[jwt-matrix/alg-none] a forged alg:none token is refused (signature verifi
 test("[jwt-matrix/alg-none] alg:none cannot even be configured into the allowlist", () => {
   assert.throws(
     () => createJwtVerifier({ algorithms: ["none" as any], key: HS }),
-    rejectsWith("alg_none_refused"),
+    rejectsWith("alg_none_refused")
   );
 });
 
@@ -159,7 +164,11 @@ test("[jwt-matrix/missing-garbage-case] missing, unknown, and case-variant token
     forge({ alg: 256 as any }, payload), // non-string alg
   ];
   for (const token of forged) {
-    await assert.rejects(verifier.verify(token), rejectsWith("alg_not_allowed"), token.slice(0, 24));
+    await assert.rejects(
+      verifier.verify(token),
+      rejectsWith("alg_not_allowed"),
+      token.slice(0, 24)
+    );
   }
 });
 
@@ -196,7 +205,7 @@ test("[jwt-matrix/confused-deputy] HS* mixed with a JWKS-style key resolver is r
   // symmetric algorithm is the classic confused-deputy footgun.
   assert.throws(
     () => createJwtVerifier({ algorithms: ["HS256"], key: () => HS }),
-    rejectsWith("sym_with_jwk_refused"),
+    rejectsWith("sym_with_jwk_refused")
   );
 });
 
@@ -208,10 +217,22 @@ test("[jwt-matrix/confused-deputy] HS* mixed with a JWKS-style key resolver is r
 test("[timing/correctness] timingSafeEqual is correct for early/mid/late/length/unicode mismatches", () => {
   assert.equal(timingSafeEqual("secret-token", "secret-token"), true, "equal strings match");
   assert.equal(timingSafeEqual("Xecret-token", "secret-token"), false, "differ at position 0");
-  assert.equal(timingSafeEqual("secret-toketX", "secret-token"), false, "differ near the end / length");
-  assert.equal(timingSafeEqual("secret-toked", "secret-token"), false, "differ at last position, same length");
+  assert.equal(
+    timingSafeEqual("secret-toketX", "secret-token"),
+    false,
+    "differ near the end / length"
+  );
+  assert.equal(
+    timingSafeEqual("secret-toked", "secret-token"),
+    false,
+    "differ at last position, same length"
+  );
   assert.equal(timingSafeEqual("short", "secret-token"), false, "length mismatch (shorter)");
-  assert.equal(timingSafeEqual("secret-token-and-then-some", "secret-token"), false, "length mismatch (longer)");
+  assert.equal(
+    timingSafeEqual("secret-token-and-then-some", "secret-token"),
+    false,
+    "length mismatch (longer)"
+  );
   assert.equal(timingSafeEqual("", ""), true, "empty equals empty");
   assert.equal(timingSafeEqual("café", "cafe"), false, "unicode-sensitive");
 });
@@ -254,6 +275,6 @@ test("[timing/side-channel] equal-length candidates take ~the same time regardle
   const ratio = Math.max(early, late) / Math.min(early, late);
   assert.ok(
     ratio < 4,
-    `constant-time: early-vs-late timing within 4x (got ${ratio.toFixed(2)}; early=${early.toFixed(2)}ms late=${late.toFixed(2)}ms)`,
+    `constant-time: early-vs-late timing within 4x (got ${ratio.toFixed(2)}; early=${early.toFixed(2)}ms late=${late.toFixed(2)}ms)`
   );
 });

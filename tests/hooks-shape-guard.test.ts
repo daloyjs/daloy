@@ -23,18 +23,12 @@ function buildRoute(app: App, hooks?: unknown) {
 
 test("route hooks: an ARRAY is refused at registration (the silent-no-op footgun)", () => {
   const app = new App({ logger: false });
-  assert.throws(
-    () => buildRoute(app, [denyAll()]),
-    /must be a single Hooks object, not an array/,
-  );
+  assert.throws(() => buildRoute(app, [denyAll()]), /must be a single Hooks object, not an array/);
 });
 
 test("route hooks: an object with no recognized hook key is refused", () => {
   const app = new App({ logger: false });
-  assert.throws(
-    () => buildRoute(app, { foo: () => {} }),
-    /none of the recognized hook keys/,
-  );
+  assert.throws(() => buildRoute(app, { foo: () => {} }), /none of the recognized hook keys/);
 });
 
 test("route hooks: a single Hooks object is applied (auth denies, not 200)", async () => {
@@ -67,15 +61,12 @@ test("route hooks: an empty object {} is an explicit no-op and is allowed", asyn
 
 test("app.use(array) is refused (same footgun via use())", () => {
   const app = new App({ logger: false });
-  assert.throws(
-    () => app.use([denyAll()] as never),
-    /must be a single Hooks object, not an array/,
-  );
+  assert.throws(() => app.use([denyAll()] as never), /must be a single Hooks object, not an array/);
 });
 
 test("new App({ hooks: array }) is refused at construction", () => {
   assert.throws(
     () => new App({ logger: false, hooks: [denyAll()] as never }),
-    /must be a single Hooks object, not an array/,
+    /must be a single Hooks object, not an array/
   );
 });

@@ -48,12 +48,7 @@
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { fetchGuard } from "./fetch-guard.js";
-import {
-  compileCidrMatcher,
-  matchesMatcher,
-  parseIp,
-  type IpMatcher,
-} from "./ip-restriction.js";
+import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./ip-restriction.js";
 
 /**
  * A pluggable source of abusive IP / CIDR entries. Implementations return the
@@ -233,7 +228,7 @@ export function urlFeed(url: string, opts: UrlFeedOptions = {}): IpReputationFee
     async fetch(signal) {
       if (typeof doFetch !== "function") {
         throw new Error(
-          "urlFeed: no fetch implementation available on this runtime. Pass options.fetchImpl.",
+          "urlFeed: no fetch implementation available on this runtime. Pass options.fetchImpl."
         );
       }
       const res = await doFetch(url, {
@@ -308,8 +303,7 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
     throw new Error("ipReputation(): fetchTimeoutMs must be a positive integer.");
   }
   const message = opts.message ?? DEFAULT_MESSAGE;
-  const resolveIp =
-    opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
 
   // Last-known-good compiled denylist, one entry per feed so a single feed's
   // failed refresh doesn't drop the others.
@@ -371,8 +365,7 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
     }
   }
 
-  const ready =
-    opts.loadOnStart === false ? Promise.resolve() : refresh();
+  const ready = opts.loadOnStart === false ? Promise.resolve() : refresh();
 
   return {
     hooks: {

@@ -80,7 +80,7 @@ function tenantApp(opts: { require?: boolean } = {}) {
       resolve: tenantFromHeader("x-tenant-id"),
       allow: ["acme", "globex"],
       require: opts.require ?? false,
-    }),
+    })
   );
   app.use(responseCache({ ttlSeconds: 60, store: new MemoryResponseCacheStore() }));
   app.route({
@@ -146,7 +146,7 @@ test("F-4: a second hostname does not receive the first hostname's cached body",
   assert.deepEqual(
     await b.json(),
     { servedFor: "customer-b.example.com", calls: 2 },
-    "customer-b must be served its own response, not customer-a's",
+    "customer-b must be served its own response, not customer-a's"
   );
 });
 
@@ -191,7 +191,7 @@ test("F-5: a second tenant does not receive the first tenant's cached body", asy
   assert.deepEqual(
     await globex.json(),
     { secret: "GLOBEX-CONFIDENTIAL" },
-    "globex must never see acme's report",
+    "globex must never see acme's report"
   );
 });
 
@@ -219,7 +219,10 @@ test("F-5: a custom keyGenerator cannot widen the tenant partition", async () =>
   // A generator that deliberately returns one constant for every request would,
   // before the fix, collapse all tenants onto a single entry. The partition is
   // applied around the generator's output, so it cannot.
-  const SECRETS: Record<string, string> = { acme: "ACME-CONFIDENTIAL", globex: "GLOBEX-CONFIDENTIAL" };
+  const SECRETS: Record<string, string> = {
+    acme: "ACME-CONFIDENTIAL",
+    globex: "GLOBEX-CONFIDENTIAL",
+  };
   const app = new App({ env: "development", logger: false });
   app.use(tenancy({ resolve: tenantFromHeader("x-tenant-id"), allow: ["acme", "globex"] }));
   app.use(
@@ -227,7 +230,7 @@ test("F-5: a custom keyGenerator cannot widen the tenant partition", async () =>
       ttlSeconds: 60,
       store: new MemoryResponseCacheStore(),
       keyGenerator: () => "one-key-for-everything",
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -334,7 +337,7 @@ test("F-6: cookie caching can be opted into explicitly, per header", async () =>
   assert.equal(
     stranger.headers.get("x-cache"),
     "HIT",
-    "an explicit opt-in is honored — the operator declared this response shareable",
+    "an explicit opt-in is honored — the operator declared this response shareable"
   );
 });
 
@@ -382,7 +385,7 @@ test("F-6: a principal containing the key delimiter stays in its own partition",
       store: new MemoryResponseCacheStore(),
       keyGenerator: (ctx) => `GET ${new URL(ctx.request.url).pathname}`,
       principal: (ctx) => new URL(ctx.request.url).searchParams.get("u"),
-    }),
+    })
   );
   app.route({
     method: "GET",

@@ -32,7 +32,7 @@ app.get(
       200: { description: "Book found" },
     },
   },
-  async () => ({ status: 200 as const, body: { id: "?", title: "?" } }),
+  async () => ({ status: 200 as const, body: { id: "?", title: "?" } })
 );
 
 serve(app, { port: 3000 });

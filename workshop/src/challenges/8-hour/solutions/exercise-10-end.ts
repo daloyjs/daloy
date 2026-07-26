@@ -25,7 +25,7 @@ app.get(
   async () => {
     await new Promise((r) => setTimeout(r, 10_000));
     return { status: 200 as const, body: { ok: true as const } };
-  },
+  }
 );
 
 app.post(
@@ -36,7 +36,7 @@ app.post(
     request: { body: z.object({ blob: z.string() }).strict() },
     responses: { 200: { description: "OK", body: z.object({ length: z.number() }) } },
   },
-  async ({ body }) => ({ status: 200 as const, body: { length: body.blob.length } }),
+  async ({ body }) => ({ status: 200 as const, body: { length: body.blob.length } })
 );
 
 app.post(
@@ -51,7 +51,7 @@ app.post(
       429: { description: "Too many requests" },
     },
   },
-  async () => ({ status: 202 as const, body: undefined }),
+  async () => ({ status: 202 as const, body: undefined })
 );
 
 serve(app, { port: 3000 });

@@ -116,14 +116,13 @@ export function extractLicenseString(pkg: PackageJsonLike): string {
  */
 export function isLicenseAllowed(
   expression: string,
-  allowed: ReadonlySet<string> = ALLOWED_LICENSES,
+  allowed: ReadonlySet<string> = ALLOWED_LICENSES
 ): boolean {
   const expr = expression.trim();
   if (expr === "" || expr === "NOASSERTION" || expr === "UNLICENSED") return false;
   if (/^SEE\s+LICENSE/i.test(expr)) return false;
   // Strip a single outer pair of parentheses.
-  const inner =
-    expr.startsWith("(") && expr.endsWith(")") ? expr.slice(1, -1).trim() : expr;
+  const inner = expr.startsWith("(") && expr.endsWith(")") ? expr.slice(1, -1).trim() : expr;
   // Handle OR: pass if any branch is allowed.
   if (/\s+OR\s+/i.test(inner)) {
     return inner.split(/\s+OR\s+/i).some((b) => isLicenseAllowed(b, allowed));
@@ -139,7 +138,7 @@ export function isLicenseAllowed(
 
 export function evaluatePackage(
   pkg: PackageJsonLike,
-  allowed: ReadonlySet<string> = ALLOWED_LICENSES,
+  allowed: ReadonlySet<string> = ALLOWED_LICENSES
 ): LicenseOffender | null {
   const name = typeof pkg.name === "string" ? pkg.name : "<unknown>";
   const version = typeof pkg.version === "string" ? pkg.version : "<unknown>";
@@ -160,7 +159,7 @@ export function evaluatePackage(
  * directory deeper.
  */
 export async function* iteratePnpmManifests(
-  storeDir: string = PNPM_STORE_DIR,
+  storeDir: string = PNPM_STORE_DIR
 ): AsyncGenerator<PackageJsonLike> {
   let entries;
   try {
@@ -180,7 +179,7 @@ export async function* iteratePnpmManifests(
     for (const sub of inner) {
       const candidates = sub.name.startsWith("@")
         ? (await readdir(`${nm}/${sub.name}`, { withFileTypes: true })).map(
-            (i) => `${sub.name}/${i.name}`,
+            (i) => `${sub.name}/${i.name}`
           )
         : [sub.name];
       for (const rel of candidates) {
@@ -211,21 +210,21 @@ async function main(): Promise<void> {
   if (scanned === 0) {
     console.error(
       "verify-dep-licenses: no packages found under node_modules/.pnpm. " +
-        "Run `pnpm install --frozen-lockfile --ignore-scripts` first.",
+        "Run `pnpm install --frozen-lockfile --ignore-scripts` first."
     );
     process.exitCode = 1;
     return;
   }
   if (offenders.length === 0) {
     console.log(
-      `verify-dep-licenses: scanned ${scanned} resolved packages, all on the Daloy license allow-list.`,
+      `verify-dep-licenses: scanned ${scanned} resolved packages, all on the Daloy license allow-list.`
     );
     return;
   }
   console.error(
     `verify-dep-licenses: ${offenders.length} dependenc${
       offenders.length === 1 ? "y" : "ies"
-    } violate the Daloy license allow-list:`,
+    } violate the Daloy license allow-list:`
   );
   for (const o of offenders) {
     console.error(`  - ${o.name}@${o.version} :: ${o.reason}`);
@@ -234,7 +233,7 @@ async function main(): Promise<void> {
     "If a new dependency uses a license that is genuinely safe to ship with an " +
       "MIT framework, extend ALLOWED_LICENSES in scripts/verify-dep-licenses.ts " +
       "and add a SECURITY.md review note. Copyleft (GPL/AGPL/LGPL) and " +
-      "source-available (BUSL/SSPL/Commons-Clause) licenses are not accepted.",
+      "source-available (BUSL/SSPL/Commons-Clause) licenses are not accepted."
   );
   process.exitCode = 1;
 }

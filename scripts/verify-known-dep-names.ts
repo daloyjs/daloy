@@ -135,11 +135,7 @@ interface PackageJsonLike {
 
 export interface UnknownDependency {
   readonly source: string;
-  readonly block:
-    | "dependencies"
-    | "devDependencies"
-    | "peerDependencies"
-    | "optionalDependencies";
+  readonly block: "dependencies" | "devDependencies" | "peerDependencies" | "optionalDependencies";
   readonly name: string;
 }
 
@@ -151,11 +147,7 @@ export interface UnknownDependency {
  */
 export interface AliasedDependency {
   readonly source: string;
-  readonly block:
-    | "dependencies"
-    | "devDependencies"
-    | "peerDependencies"
-    | "optionalDependencies";
+  readonly block: "dependencies" | "devDependencies" | "peerDependencies" | "optionalDependencies";
   readonly name: string;
   readonly specifier: string;
 }
@@ -174,7 +166,7 @@ const DEP_BLOCKS = [
 export function findUnknownDependencyNames(
   source: string,
   pkg: PackageJsonLike,
-  allowlist: ReadonlySet<string> = ALLOWED_DEP_NAMES,
+  allowlist: ReadonlySet<string> = ALLOWED_DEP_NAMES
 ): readonly UnknownDependency[] {
   const out: UnknownDependency[] = [];
   for (const block of DEP_BLOCKS) {
@@ -216,7 +208,7 @@ export function findUnknownDependencyNames(
  */
 export function findAliasedDependencySpecifiers(
   source: string,
-  pkg: PackageJsonLike,
+  pkg: PackageJsonLike
 ): readonly AliasedDependency[] {
   const out: AliasedDependency[] = [];
   for (const block of DEP_BLOCKS) {
@@ -240,11 +232,7 @@ export function findAliasedDependencySpecifiers(
  */
 export interface NonRegistryDependency {
   readonly source: string;
-  readonly block:
-    | "dependencies"
-    | "devDependencies"
-    | "peerDependencies"
-    | "optionalDependencies";
+  readonly block: "dependencies" | "devDependencies" | "peerDependencies" | "optionalDependencies";
   readonly name: string;
   readonly specifier: string;
   readonly kind: "git" | "url";
@@ -301,7 +289,7 @@ const URL_SPECIFIER_PATTERN = /^https?:\/\//i;
  */
 export function findGitOrUrlDependencySpecifiers(
   source: string,
-  pkg: PackageJsonLike,
+  pkg: PackageJsonLike
 ): readonly NonRegistryDependency[] {
   const out: NonRegistryDependency[] = [];
   for (const block of DEP_BLOCKS) {
@@ -332,9 +320,7 @@ async function main(): Promise<void> {
     try {
       text = await readFile(url, "utf8");
     } catch (err) {
-      console.error(
-        `verify-known-dep-names: could not read ${rel} (${(err as Error).message})`,
-      );
+      console.error(`verify-known-dep-names: could not read ${rel} (${(err as Error).message})`);
       process.exitCode = 1;
       return;
     }
@@ -342,9 +328,7 @@ async function main(): Promise<void> {
     try {
       pkg = JSON.parse(text) as PackageJsonLike;
     } catch (err) {
-      console.error(
-        `verify-known-dep-names: ${rel} is not valid JSON (${(err as Error).message})`,
-      );
+      console.error(`verify-known-dep-names: ${rel} is not valid JSON (${(err as Error).message})`);
       process.exitCode = 1;
       return;
     }
@@ -357,7 +341,7 @@ async function main(): Promise<void> {
     console.error(
       `verify-known-dep-names: ${offending.length} dependency name${
         offending.length === 1 ? "" : "s"
-      } not on the slopsquatting allowlist:`,
+      } not on the slopsquatting allowlist:`
     );
     for (const v of offending) {
       console.error(`  - ${v.source} → ${v.block}["${v.name}"]`);
@@ -369,39 +353,35 @@ async function main(): Promise<void> {
         "`huggingface-cli` often *sound* plausible) and then add the exact " +
         "name to ALLOWED_DEP_NAMES in scripts/verify-known-dep-names.ts in " +
         "the same PR. See SECURITY.md § Slopsquatting / AI package " +
-        "hallucination for the threat model.",
+        "hallucination for the threat model."
     );
   }
   if (aliased.length > 0) {
     console.error(
       `verify-known-dep-names: ${aliased.length} npm-alias dependency specifier${
         aliased.length === 1 ? "" : "s"
-      } found (dependency-confusion-via-aliasing vector):`,
+      } found (dependency-confusion-via-aliasing vector):`
     );
     for (const v of aliased) {
-      console.error(
-        `  - ${v.source} → ${v.block}["${v.name}"] = "${v.specifier}"`,
-      );
+      console.error(`  - ${v.source} → ${v.block}["${v.name}"] = "${v.specifier}"`);
     }
     console.error(
-      "An `\"x\": \"npm:y@…\"` alias causes npmjs.com to list `x` as a dependency " +
+      'An `"x": "npm:y@…"` alias causes npmjs.com to list `x` as a dependency ' +
         "on the published package page even though `x` is not a real registry entry — " +
         "a documented dependency-confusion vector (Jain & Stathako, Snyk, Nov 2021). " +
         "Inline the real package name instead. If a legitimate aliased dep is " +
         "truly required, add an explicit allowlist entry in " +
-        "scripts/verify-known-dep-names.ts in the same PR.",
+        "scripts/verify-known-dep-names.ts in the same PR."
     );
   }
   if (nonRegistry.length > 0) {
     console.error(
       `verify-known-dep-names: ${nonRegistry.length} non-registry dependency specifier${
         nonRegistry.length === 1 ? "" : "s"
-      } found (Socket gitDependency / httpDependency vector):`,
+      } found (Socket gitDependency / httpDependency vector):`
     );
     for (const v of nonRegistry) {
-      console.error(
-        `  - ${v.source} → ${v.block}["${v.name}"] = "${v.specifier}" (${v.kind})`,
-      );
+      console.error(`  - ${v.source} → ${v.block}["${v.name}"] = "${v.specifier}" (${v.kind})`);
     }
     console.error(
       "Git and raw-URL specifiers are not immutable: tags / branches can be " +
@@ -410,7 +390,7 @@ async function main(): Promise<void> {
         "See https://socket.dev/alerts/gitDependency and " +
         "https://socket.dev/alerts/httpDependency. Replace with a versioned " +
         "registry specifier; if a fork is genuinely required, publish it under " +
-        "a scoped name and add that name to ALLOWED_DEP_NAMES instead.",
+        "a scoped name and add that name to ALLOWED_DEP_NAMES instead."
     );
   }
   process.exitCode = 1;
@@ -418,8 +398,7 @@ async function main(): Promise<void> {
 
 const invokedDirectly =
   process.argv[1] !== undefined &&
-  fileURLToPath(pathToFileURL(process.argv[1]).href) ===
-    fileURLToPath(import.meta.url);
+  fileURLToPath(pathToFileURL(process.argv[1]).href) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
   await main();

@@ -13,7 +13,12 @@ test("query and header schemas are validated and available to handlers", async (
       query: z.object({ q: z.string(), tag: z.array(z.string()) }) as any,
       headers: z.object({ "x-tenant": z.string() }) as any,
     },
-    responses: { 200: { description: "ok", body: z.object({ q: z.string(), tags: z.array(z.string()), tenant: z.string() }) as any } },
+    responses: {
+      200: {
+        description: "ok",
+        body: z.object({ q: z.string(), tags: z.array(z.string()), tenant: z.string() }) as any,
+      },
+    },
     handler: async ({ query, headers }) => ({
       status: 200 as const,
       body: { q: (query as any).q, tags: (query as any).tag, tenant: (headers as any)["x-tenant"] },
@@ -34,7 +39,9 @@ test("hooks run in order and afterHandle can transform handler output", async ()
   const events: string[] = [];
   const app = new App({ logger: false });
   app.use({
-    onRequest: () => { events.push("global:onRequest"); },
+    onRequest: () => {
+      events.push("global:onRequest");
+    },
     beforeHandle: (ctx) => {
       events.push("global:before");
       ctx.set.headers.set("x-global", "1");
@@ -51,9 +58,16 @@ test("hooks run in order and afterHandle can transform handler output", async ()
     method: "GET",
     path: "/hooks",
     operationId: "hooks",
-    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean(), global: z.boolean(), route: z.boolean() }) as any } },
+    responses: {
+      200: {
+        description: "ok",
+        body: z.object({ ok: z.boolean(), global: z.boolean(), route: z.boolean() }) as any,
+      },
+    },
     hooks: {
-      beforeHandle: () => { events.push("route:before"); },
+      beforeHandle: () => {
+        events.push("route:before");
+      },
       afterHandle: (_ctx, value: any) => {
         events.push("route:after");
         return { ...value, body: { ...value.body, route: true } };
@@ -69,7 +83,15 @@ test("hooks run in order and afterHandle can transform handler output", async ()
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("x-global"), "1");
   assert.deepEqual(await res.json(), { ok: true, global: true, route: true });
-  assert.deepEqual(events, ["global:onRequest", "global:before", "route:before", "handler", "global:after", "route:after", "global:onResponse:200"]);
+  assert.deepEqual(events, [
+    "global:onRequest",
+    "global:before",
+    "route:before",
+    "handler",
+    "global:after",
+    "route:after",
+    "global:onResponse:200",
+  ]);
 });
 
 test("onResponse runs for beforeHandle short-circuit responses", async () => {
@@ -127,28 +149,45 @@ test("route-level onError can replace error responses and still runs onResponse"
 test("groups and plugin registration merge prefix, tags, hooks, auth, and decorations", async () => {
   const app = new App({ logger: false });
   app.decorate("db", { name: "primary" });
-  app.group("/api", { tags: ["api"], hooks: { beforeHandle: (ctx) => ctx.set.headers.set("x-group", "yes") }, auth: { scheme: "bearer" } }, (api) => {
-    api.route({
-      method: "GET",
-      path: "/health",
-      operationId: "health",
-      responses: { 200: { description: "ok" } },
-      handler: async ({ state }) => ({ status: 200 as const, body: { db: (state.db as any).name } }),
-    });
-  });
-
-  app.register({
-    name: "books",
-    register(child) {
-      child.route({
-        method: "GET",
-        path: "/:id",
-        operationId: "getBook",
-        responses: { 200: { description: "ok" } },
-        handler: async ({ params }) => ({ status: 200 as const, body: { id: (params as any).id } }),
-      });
+  app.group(
+    "/api",
+    {
+      tags: ["api"],
+      hooks: { beforeHandle: (ctx) => ctx.set.headers.set("x-group", "yes") },
+      auth: { scheme: "bearer" },
     },
-  }, { prefix: "/books", tags: ["books"] });
+    (api) => {
+      api.route({
+        method: "GET",
+        path: "/health",
+        operationId: "health",
+        responses: { 200: { description: "ok" } },
+        handler: async ({ state }) => ({
+          status: 200 as const,
+          body: { db: (state.db as any).name },
+        }),
+      });
+    }
+  );
+
+  app.register(
+    {
+      name: "books",
+      register(child) {
+        child.route({
+          method: "GET",
+          path: "/:id",
+          operationId: "getBook",
+          responses: { 200: { description: "ok" } },
+          handler: async ({ params }) => ({
+            status: 200 as const,
+            body: { id: (params as any).id },
+          }),
+        });
+      },
+    },
+    { prefix: "/books", tags: ["books"] }
+  );
 
   assert.throws(() => app.register({ name: "books", register() {} }), /already registered/);
 
@@ -158,7 +197,11 @@ test("groups and plugin registration merge prefix, tags, hooks, auth, and decora
   assert.deepEqual(await health.json(), { db: "primary" });
 
   const routes = app.introspect();
-  assert.ok(routes.some((r) => r.path === "/api/health" && r.tags?.includes("api") && r.auth?.scheme === "bearer"));
+  assert.ok(
+    routes.some(
+      (r) => r.path === "/api/health" && r.tags?.includes("api") && r.auth?.scheme === "bearer"
+    )
+  );
   assert.ok(routes.some((r) => r.path === "/books/:id" && r.tags?.includes("books")));
 });
 
@@ -181,7 +224,7 @@ test("plugin decorations are scoped: visible to own routes, not to siblings or r
         handler: ({ state }) => ({ status: 200 as const, body: seen(state) }),
       });
     },
-    { prefix: "/a" },
+    { prefix: "/a" }
   );
 
   // Plugin B decorates a DIFFERENT key and reads both — it must not see A's.
@@ -196,7 +239,7 @@ test("plugin decorations are scoped: visible to own routes, not to siblings or r
         handler: ({ state }) => ({ status: 200 as const, body: seen(state) }),
       });
     },
-    { prefix: "/b" },
+    { prefix: "/b" }
   );
 
   // A root route registered after both plugins must not see either plugin's decoration.
@@ -231,7 +274,7 @@ test("app-level decorations flow inward to plugins and nested groups but stay is
         handler: ({ state }) => ({ status: 200 as const, body: { db: (state as any).db ?? null } }),
       });
     },
-    { prefix: "/plugin" },
+    { prefix: "/plugin" }
   );
 
   // Nested group: inner group inherits the outer group's decoration...
@@ -278,19 +321,22 @@ test("app-level decorations flow inward to plugins and nested groups but stay is
 
 test("async plugins are awaited by ready before their routes are available", async () => {
   const app = new App({ logger: false });
-  app.register({
-    name: "async-plugin",
-    async register(child) {
-      await Promise.resolve();
-      child.route({
-        method: "GET",
-        path: "/ready",
-        operationId: "ready",
-        responses: { 200: { description: "ok" } },
-        handler: async () => ({ status: 200 as const, body: { ready: true } }),
-      });
+  app.register(
+    {
+      name: "async-plugin",
+      async register(child) {
+        await Promise.resolve();
+        child.route({
+          method: "GET",
+          path: "/ready",
+          operationId: "ready",
+          responses: { 200: { description: "ok" } },
+          handler: async () => ({ status: 200 as const, body: { ready: true } }),
+        });
+      },
     },
-  }, { prefix: "/plugin" });
+    { prefix: "/plugin" }
+  );
 
   await app.ready();
   await app.ready();
@@ -303,11 +349,15 @@ test("onClose hooks registered by apps and plugins run once during shutdown", as
   const events: string[] = [];
   const app = new App({ logger: false });
 
-  app.onClose(() => { events.push("root"); });
+  app.onClose(() => {
+    events.push("root");
+  });
   app.register({
     name: "cleanup-plugin",
     register(child) {
-      child.onClose(async () => { events.push("plugin"); });
+      child.onClose(async () => {
+        events.push("plugin");
+      });
       child.route({
         method: "GET",
         path: "/ok",
@@ -384,7 +434,11 @@ test("explicit non-JSON content-type returns raw text instead of JSON-stringifie
     path: "/html",
     operationId: "html",
     responses: { 200: { description: "html" } },
-    handler: async () => ({ status: 200 as const, body: "<h1>ok</h1>", headers: { "content-type": "text/html" } }),
+    handler: async () => ({
+      status: 200 as const,
+      body: "<h1>ok</h1>",
+      headers: { "content-type": "text/html" },
+    }),
   });
 
   const res = await app.request("/html");

@@ -86,7 +86,7 @@ app.post(
     }
     books.set(body.id, body);
     return { status: 201 as const, body };
-  },
+  }
 );
 ```
 
@@ -130,12 +130,12 @@ Expected 4xx errors can carry useful client-facing `detail` in production. Inter
 
 ## Code-change cheat sheet
 
-| Step | Where               | Change                                                            |
-| ---- | ------------------- | ----------------------------------------------------------------- |
-| 1    | Top imports         | Add `NotFoundError`, `HttpError`                                  |
-| 1    | `GET` handler       | `throw new NotFoundError(...)` instead of manual 404 body         |
-| 2    | Top of file         | Add `CreateBookSchema` with `.strict()`                           |
-| 3    | New `app.post(...)` | Register `POST /books` with the schema and `HttpError(409, ...)`  |
+| Step | Where               | Change                                                           |
+| ---- | ------------------- | ---------------------------------------------------------------- |
+| 1    | Top imports         | Add `NotFoundError`, `HttpError`                                 |
+| 1    | `GET` handler       | `throw new NotFoundError(...)` instead of manual 404 body        |
+| 2    | Top of file         | Add `CreateBookSchema` with `.strict()`                          |
+| 3    | New `app.post(...)` | Register `POST /books` with the schema and `HttpError(409, ...)` |
 
 ---
 

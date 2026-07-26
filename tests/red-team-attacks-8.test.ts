@@ -29,7 +29,10 @@ test("[wstg/docs-xss] scalarHtml escapes a malicious title and specUrl (no tag/a
   assert.ok(!html.includes("<script>PWNED"), "no <script> breakout from the title");
   assert.ok(!html.includes("PWNED</script>"), "no </script> breakout");
   assert.ok(!html.includes(`"><script`), "no attribute breakout");
-  assert.ok(html.includes("PWNED"), "the value is still present (escaped), proving it was embedded");
+  assert.ok(
+    html.includes("PWNED"),
+    "the value is still present (escaped), proving it was embedded"
+  );
 });
 
 test("[wstg/docs-xss] redocHtml escapes a malicious title and specUrl", () => {
@@ -99,7 +102,10 @@ test("[wstg/xst] the TRACE method is not dispatchable (no Cross-Site Tracing)", 
   // The WHATWG Request constructor forbids TRACE/TRACK/CONNECT, so the request
   // is rejected before it can ever reach a handler — XST is not reachable. Use a
   // thunk so the assertion captures the (synchronous) constructor throw too.
-  await assert.rejects(async () => app.request("/r", { method: "TRACE" }), "TRACE must not be processable");
+  await assert.rejects(
+    async () => app.request("/r", { method: "TRACE" }),
+    "TRACE must not be processable"
+  );
 });
 
 // ===========================================================================

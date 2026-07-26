@@ -77,7 +77,7 @@ function stripCommentsAndStrings(line: string): string {
 
 export function findForbiddenWeakRandomCalls(
   file: string,
-  source: string,
+  source: string
 ): readonly ForbiddenWeakRandomCall[] {
   const out: ForbiddenWeakRandomCall[] = [];
   const lines = source.split(/\r?\n/);
@@ -138,8 +138,7 @@ async function main(): Promise<void> {
     return;
   }
   for await (const absolute of walk(SRC_ROOT)) {
-    const rel =
-      "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
+    const rel = "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
     const text = await readFile(absolute, "utf8");
     const findings = findForbiddenWeakRandomCalls(rel, text);
     for (const f of findings) {
@@ -155,7 +154,7 @@ async function main(): Promise<void> {
         "Replace with `crypto.randomUUID()` / `crypto.getRandomValues()`, " +
         "or — only for a documented runtime-gap fallback — opt in with " +
         "`// daloy-allow-weak-random: <reason>` on the same line. " +
-        "See https://www.aikido.dev/blog/python-security-vulnerabilities (item #10).",
+        "See https://www.aikido.dev/blog/python-security-vulnerabilities (item #10)."
     );
     process.exitCode = 1;
   }

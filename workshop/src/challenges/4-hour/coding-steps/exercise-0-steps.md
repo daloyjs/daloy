@@ -70,7 +70,7 @@ app.get(
       },
     },
   },
-  async () => ({ status: 200 as const, body: { status: "ok" as const } }),
+  async () => ({ status: 200 as const, body: { status: "ok" as const } })
 );
 ```
 
@@ -116,12 +116,12 @@ If `/docs` 404s, you forgot `docs: true`. If `/health` 404s but `/docs` works, y
 
 ## Code-change cheat sheet
 
-| Step | Where                    | Change                                                                    |
-| ---- | ------------------------ | ------------------------------------------------------------------------- |
-| 1    | `const app`              | Inspect `new App({ title, version, openapi, docs })`                      |
-| 2    | between `app` and `serve` | Inspect `app.get("/health", {...})` with a Zod response schema  |
-| 2a   | top of file               | Confirm `import { z } from "zod";` is present                            |
-| 3    | bottom                   | (no change — `serve(app, { port: 3000 })` was already there)              |
+| Step | Where                     | Change                                                         |
+| ---- | ------------------------- | -------------------------------------------------------------- |
+| 1    | `const app`               | Inspect `new App({ title, version, openapi, docs })`           |
+| 2    | between `app` and `serve` | Inspect `app.get("/health", {...})` with a Zod response schema |
+| 2a   | top of file               | Confirm `import { z } from "zod";` is present                  |
+| 3    | bottom                    | (no change — `serve(app, { port: 3000 })` was already there)   |
 
 ---
 

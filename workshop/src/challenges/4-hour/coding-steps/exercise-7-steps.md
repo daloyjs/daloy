@@ -51,7 +51,7 @@ serve(app, { port: 3000 });
 ```ts
 async function withServer<T>(fn: (baseUrl: string) => Promise<T>): Promise<T> {
   const app = buildApp();
-  const { port, close } = serve(app, { port: 0 });   // port 0 = OS-assigned
+  const { port, close } = serve(app, { port: 0 }); // port 0 = OS-assigned
   try {
     return await fn(`http://127.0.0.1:${port}`);
   } finally {
@@ -84,10 +84,10 @@ You should see three green checkmarks. If you break the handler (e.g. remove the
 
 ## Code-change cheat sheet
 
-| Step | Where                                  | Change                                                          |
-| ---- | -------------------------------------- | --------------------------------------------------------------- |
-| 1    | `exercise-7.ts` script block            | `for (const op of app.introspect()) { console.log(...) }`       |
-| 2    | `tests/exercise-7.test.ts` (provided)   | Read the three tests — confirm they exercise both paths and introspect |
+| Step | Where                                 | Change                                                                 |
+| ---- | ------------------------------------- | ---------------------------------------------------------------------- |
+| 1    | `exercise-7.ts` script block          | `for (const op of app.introspect()) { console.log(...) }`              |
+| 2    | `tests/exercise-7.test.ts` (provided) | Read the three tests — confirm they exercise both paths and introspect |
 
 ---
 

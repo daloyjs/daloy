@@ -173,15 +173,23 @@ async function benchOne(fw) {
       const totalErr = summary.errors.non2xx + summary.errors.errors + summary.errors.timeouts;
       const errBadge =
         totalErr > 0
-          ? c.red(`${sym.warn} non2xx=${summary.errors.non2xx} err=${summary.errors.errors} to=${summary.errors.timeouts}`)
+          ? c.red(
+              `${sym.warn} non2xx=${summary.errors.non2xx} err=${summary.errors.errors} to=${summary.errors.timeouts}`
+            )
           : "";
-      console.error(metricsLine(scenario.title, [
-        c.green(c.bold(fmt(summary.reqPerSec.median))) + c.dim(" req/s"),
-        metric("p50", summary.latency.p50.toFixed(2), { unit: "ms" }),
-        metric("p99", summary.latency.p99.toFixed(2), { unit: "ms" }),
-        metric("p99.9", summary.latency.p999.toFixed(2), { unit: "ms" }),
-        errBadge,
-      ].filter(Boolean), { labelWidth: 16 }));
+      console.error(
+        metricsLine(
+          scenario.title,
+          [
+            c.green(c.bold(fmt(summary.reqPerSec.median))) + c.dim(" req/s"),
+            metric("p50", summary.latency.p50.toFixed(2), { unit: "ms" }),
+            metric("p99", summary.latency.p99.toFixed(2), { unit: "ms" }),
+            metric("p99.9", summary.latency.p999.toFixed(2), { unit: "ms" }),
+            errBadge,
+          ].filter(Boolean),
+          { labelWidth: 16 }
+        )
+      );
     }
     return results;
   } finally {
@@ -203,8 +211,11 @@ function renderSummary(rows) {
   }
   return summary({
     head: [
-      "Framework", "GET /static logged req/s", "GET /users/:id logged req/s",
-      "POST /echo logged req/s", "p99 /static (ms)",
+      "Framework",
+      "GET /static logged req/s",
+      "GET /users/:id logged req/s",
+      "POST /echo logged req/s",
+      "p99 /static (ms)",
     ],
     rows: tableRows,
     highlight: (row) => row[0].includes("daloy"),
@@ -213,7 +224,10 @@ function renderSummary(rows) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
+  const targets = orderTargets(
+    FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)),
+    args.order
+  );
   const rows = [];
   for (const fw of targets) {
     try {
@@ -247,7 +261,11 @@ async function main() {
       2
     )
   );
-  console.error(info(`Wrote ${c.bold("results.logging.json")} ${c.dim(`(${ok.length}/${rows.length} frameworks OK)`)}`));
+  console.error(
+    info(
+      `Wrote ${c.bold("results.logging.json")} ${c.dim(`(${ok.length}/${rows.length} frameworks OK)`)}`
+    )
+  );
 }
 
 main().catch((err) => {

@@ -35,10 +35,12 @@ test("httpBasicScheme returns the spec object with optional description", () => 
 });
 
 test("apiKeyScheme validates inputs and emits the spec object", () => {
-  assert.deepEqual(
-    apiKeyScheme({ in: "header", name: "X-API-Key", description: "key" }),
-    { type: "apiKey", in: "header", name: "X-API-Key", description: "key" }
-  );
+  assert.deepEqual(apiKeyScheme({ in: "header", name: "X-API-Key", description: "key" }), {
+    type: "apiKey",
+    in: "header",
+    name: "X-API-Key",
+    description: "key",
+  });
   assert.deepEqual(apiKeyScheme({ in: "cookie", name: "sid" }), {
     type: "apiKey",
     in: "cookie",
@@ -49,22 +51,13 @@ test("apiKeyScheme validates inputs and emits the spec object", () => {
     in: "query",
     name: "k",
   });
-  assert.throws(
-    () => apiKeyScheme({ in: "body" as any, name: "x" }),
-    /must be one of/
-  );
+  assert.throws(() => apiKeyScheme({ in: "body" as any, name: "x" }), /must be one of/);
   assert.throws(() => apiKeyScheme({ in: "header", name: "" }), /non-empty string/);
 });
 
 test("apiKeyScheme rejects unsupported locations and non-string names", () => {
-  assert.throws(
-    () => apiKeyScheme({ in: "body" as any, name: "x" }),
-    /must be one of/,
-  );
-  assert.throws(
-    () => apiKeyScheme({ in: "query", name: null as any }),
-    /non-empty string/,
-  );
+  assert.throws(() => apiKeyScheme({ in: "body" as any, name: "x" }), /must be one of/);
+  assert.throws(() => apiKeyScheme({ in: "query", name: null as any }), /non-empty string/);
 });
 
 test("oauth2Scheme requires at least one flow and includes description when provided", () => {
@@ -88,7 +81,7 @@ test("oauth2Scheme rejects missing or empty flows", () => {
   assert.throws(() => oauth2Scheme({} as any), /at least one OAuth2 flow/);
   assert.throws(
     () => oauth2Scheme({ flows: { implicit: undefined } as any }),
-    /at least one OAuth2 flow/,
+    /at least one OAuth2 flow/
   );
 });
 
@@ -105,24 +98,20 @@ test("openIdConnectScheme validates the URL and emits the spec object", () => {
     }
   );
   assert.deepEqual(
-    openIdConnectScheme({ openIdConnectUrl: "https://issuer.example.com/.well-known/openid-configuration" }),
+    openIdConnectScheme({
+      openIdConnectUrl: "https://issuer.example.com/.well-known/openid-configuration",
+    }),
     {
       type: "openIdConnect",
       openIdConnectUrl: "https://issuer.example.com/.well-known/openid-configuration",
     }
   );
-  assert.throws(
-    () => openIdConnectScheme({ openIdConnectUrl: "" }),
-    /non-empty string/
-  );
+  assert.throws(() => openIdConnectScheme({ openIdConnectUrl: "" }), /non-empty string/);
 });
 
 test("openIdConnectScheme rejects missing or non-string discovery URLs", () => {
   assert.throws(() => openIdConnectScheme({} as any), /non-empty string/);
-  assert.throws(
-    () => openIdConnectScheme({ openIdConnectUrl: null as any }),
-    /non-empty string/,
-  );
+  assert.throws(() => openIdConnectScheme({ openIdConnectUrl: null as any }), /non-empty string/);
 });
 
 test("generateOpenAPI accepts builder-produced security schemes", () => {
@@ -355,18 +344,16 @@ test("webhook-level callbacks are emitted under the webhook operation", () => {
     },
   });
   const cb =
-    doc.webhooks.orderPlaced.post.callbacks.shipmentUpdate[
-      "{$request.body#/shipmentUrl}"
-    ].post;
+    doc.webhooks.orderPlaced.post.callbacks.shipmentUpdate["{$request.body#/shipmentUrl}"].post;
   assert.equal(cb.operationId, "onShipmentUpdate");
 });
 
 test("discriminator() builds the spec object and validates inputs", () => {
   assert.deepEqual(discriminator("kind"), { propertyName: "kind" });
-  assert.deepEqual(
-    discriminator("kind", { cat: "#/components/schemas/Cat" }),
-    { propertyName: "kind", mapping: { cat: "#/components/schemas/Cat" } }
-  );
+  assert.deepEqual(discriminator("kind", { cat: "#/components/schemas/Cat" }), {
+    propertyName: "kind",
+    mapping: { cat: "#/components/schemas/Cat" },
+  });
   assert.throws(() => discriminator(""), /non-empty string/);
   assert.throws(() => discriminator(123 as any), /non-empty string/);
 });
@@ -409,7 +396,14 @@ test("discriminatedUnion() validates by discriminator and emits oneOf+discrimina
   // member must be treated as unknown, NOT resolved to that member (which
   // would slip past the guard and throw a TypeError on `["~standard"]` →
   // unauthenticated 500 / error-log flood). Must return a clean issue.
-  for (const evil of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__", "isPrototypeOf"]) {
+  for (const evil of [
+    "constructor",
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+    "__proto__",
+    "isPrototypeOf",
+  ]) {
     const res = await validate(Animal, { kind: evil });
     assert.ok(res.issues, `expected issues for inherited key ${evil}`);
     assert.match(res.issues![0]!.message, /Unknown discriminator/, `for ${evil}`);
@@ -433,14 +427,8 @@ test("discriminatedUnion() validates by discriminator and emits oneOf+discrimina
 });
 
 test("discriminatedUnion() guards against bad configuration", () => {
-  assert.throws(
-    () => discriminatedUnion("", { a: z.object({}) }),
-    /non-empty string/
-  );
-  assert.throws(
-    () => discriminatedUnion("kind", {}),
-    /at least one variant/
-  );
+  assert.throws(() => discriminatedUnion("", { a: z.object({}) }), /non-empty string/);
+  assert.throws(() => discriminatedUnion("kind", {}), /at least one variant/);
 });
 
 test("discriminatedUnion() integrates with generateOpenAPI through .toJSONSchema()", () => {
@@ -459,13 +447,11 @@ test("discriminatedUnion() integrates with generateOpenAPI through .toJSONSchema
   });
 
   const doc: any = generateOpenAPI(app, { info: { title: "Z", version: "1" } });
-  const reqSchema =
-    doc.paths["/animals"].post.requestBody.content["application/json"].schema;
+  const reqSchema = doc.paths["/animals"].post.requestBody.content["application/json"].schema;
   assert.ok(Array.isArray(reqSchema.oneOf));
   assert.equal(reqSchema.discriminator.propertyName, "kind");
 
-  const respSchema =
-    doc.paths["/animals"].post.responses[201].content["application/json"].schema;
+  const respSchema = doc.paths["/animals"].post.responses[201].content["application/json"].schema;
   assert.ok(Array.isArray(respSchema.oneOf));
 });
 
@@ -504,9 +490,7 @@ test("openapiToYAML serializes a representative OpenAPI document", () => {
       "/users/{id}": {
         get: {
           summary: "Get user",
-          parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
-          ],
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: {
             "200": { description: "ok" },
           },
@@ -610,9 +594,7 @@ test("App.docs honours a custom openapiYamlPath", async () => {
   const yamlApp = new App({
     docs: { openapiYamlPath: "/swagger/v1/swagger.yaml" },
   });
-  const res = await yamlApp.fetch(
-    new Request("http://localhost/swagger/v1/swagger.yaml"),
-  );
+  const res = await yamlApp.fetch(new Request("http://localhost/swagger/v1/swagger.yaml"));
   assert.equal(res.status, 200);
   assert.match(res.headers.get("content-type") ?? "", /^text\/yaml/);
 });

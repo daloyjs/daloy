@@ -332,7 +332,8 @@ export function ndjsonResponse<T>(
 ): Response {
   const stream = ndjsonStream<T>(source, opts);
   const headers = new Headers(opts.headers);
-  if (!headers.has("content-type")) headers.set("content-type", "application/x-ndjson; charset=utf-8");
+  if (!headers.has("content-type"))
+    headers.set("content-type", "application/x-ndjson; charset=utf-8");
   if (!headers.has("cache-control")) headers.set("cache-control", "no-cache, no-transform");
   if (!headers.has("x-accel-buffering")) headers.set("x-accel-buffering", "no");
   return new Response(stream, { status: opts.status ?? 200, headers });

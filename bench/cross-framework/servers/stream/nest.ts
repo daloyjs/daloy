@@ -1,17 +1,8 @@
 // NestJS on @nestjs/platform-fastify — large streaming response via StreamableFile.
 import "reflect-metadata";
-import {
-  Controller,
-  Get,
-  Header,
-  Module,
-  StreamableFile,
-} from "@nestjs/common";
+import { Controller, Get, Header, Module, StreamableFile } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import {
-  FastifyAdapter,
-  type NestFastifyApplication,
-} from "@nestjs/platform-fastify";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Readable } from "node:stream";
 
 const CHUNK = Buffer.alloc(64 * 1024, 0x61);

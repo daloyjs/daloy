@@ -26,14 +26,14 @@ For the forward-looking plan and the full thematic release log, see
   no attacker sophistication — the leak fires on ordinary traffic, behind a
   perfectly normal-looking `x-cache: HIT`:
   - **The cache key omitted the request authority (F-4, HIGH).** The key was
-    `method + pathname + search`, but RFC 9111 §4 keys a cache on the *effective
-    request URI*, which includes the authority. Any one process serving several
+    `method + pathname + search`, but RFC 9111 §4 keys a cache on the _effective
+    request URI_, which includes the authority. Any one process serving several
     hostnames (vanity domains, subdomain-per-customer, staging beside
     production) shared a single entry across all of them. **Plain defaults — no
     opt-in and no misconfiguration required.**
   - **The resolved tenant was ignored (F-5, HIGH).** `tenancy()` resolved the
     tenant into `ctx.state`, then the cache keyed every tenant's response
-    identically. A second tenant — and a caller supplying *no tenant at all* —
+    identically. A second tenant — and a caller supplying _no tenant at all_ —
     received the first tenant's confidential body.
   - **Cookie identity was treated as anonymous (F-6, MEDIUM-HIGH).** The request
     `Cookie` header was never consulted (only response `Set-Cookie` was), so a
@@ -50,7 +50,7 @@ For the forward-looking plan and the full thematic release log, see
   whole response, those headers included, was stored under a key covering
   neither field. **Plain defaults, on the composition the docs recommend.**
   Confirmed over the wire: a caller from one allowed origin seeded the entry and
-  every later caller — including one sending no `Origin` — received *that*
+  every later caller — including one sending no `Origin` — received _that_
   origin's `Access-Control-Allow-Origin` with `x-cache: HIT`, so their browser
   rejected a response they were entitled to; a client that negotiated no
   compression received a gzip body (`1f8b` magic bytes); and a handler that
@@ -72,7 +72,7 @@ For the forward-looking plan and the full thematic release log, see
   storage. The origin `Date` is deliberately kept — RFC 9111 §4.2.3 computes age
   from it.
 - **`MemoryResponseCacheStore` is now bounded — F-9 (MEDIUM).** Its TSDoc
-  claimed the map "cannot grow without bound", but `set()` pruned only *expired*
+  claimed the map "cannot grow without bound", but `set()` pruned only _expired_
   entries, and nothing is expired inside the TTL. An unauthenticated attacker
   rotating a query string minted a fresh entry per request, each holding up to
   `maxBodyBytes` (default 1 MiB); 20,000 unexpired entries were retained against
@@ -99,10 +99,10 @@ For the forward-looking plan and the full thematic release log, see
 ### Added
 
 - **`responseCache({ principal })`** — identify the caller so credentialed
-  responses cache *per principal* instead of bypassing the cache entirely.
+  responses cache _per principal_ instead of bypassing the cache entirely.
   Return a stable id (user id, tenant, API-key fingerprint — never the raw
   credential), or `null` for anonymous. A `principal` that returns `null` for a
-  request that *does* carry credentials fails closed. This is what makes
+  request that _does_ carry credentials fails closed. This is what makes
   cookie-authenticated caching both possible and safe.
 - **`responseCache({ excludeHeaders })`** — extra response headers to drop
   before an entry is stored, on top of the built-in `Age` / hop-by-hop /
@@ -133,10 +133,10 @@ For the forward-looking plan and the full thematic release log, see
   content, opt in explicitly.
 - **BREAKING — `cacheAuthenticatedRequests` widened to
   `boolean | { authorization?: boolean; cookie?: boolean }`.** `true` now opts
-  in *both* credential headers rather than just `Authorization`; pass
+  in _both_ credential headers rather than just `Authorization`; pass
   `{ authorization: true }` to keep the old narrow meaning. Declaring a
   credential header in `varyHeaders` also counts as handling it.
-- **`keyGenerator` now derives the key *body* only.** The tenant/principal
+- **`keyGenerator` now derives the key _body_ only.** The tenant/principal
   partition is applied around whatever it returns, so a custom generator can no
   longer accidentally widen the partition — and the `tenantScope()`-based
   `responseCache` recipe previously documented for multitenancy is no longer
@@ -192,7 +192,7 @@ For the forward-looking plan and the full thematic release log, see
   that header outside any try/catch and discarded the promise, so one bad
   upgrade request became an unhandled rejection — fatal under the production
   crash-on-unhandledRejection posture. The upgrade path now answers `400 Bad
-  Request` and a call-site catch backstops any future throw.
+Request` and a call-site catch backstops any future throw.
 - **Lambda adapter answers malformed events with `400` problem+json.** An
   event whose host/path cannot form a valid URL previously threw out of the
   handler, which API Gateway surfaces as an opaque `502`.
@@ -304,8 +304,8 @@ inline — review them if you depend on the prior behavior.
   This closes an identity-only spoofing gap where a proxy forwards subject / SAN
   headers without proof the chain was validated. _Migration:_ if your terminator
   only forwards identity and you trust it, configure the verify header (`verify`
-  + `verifySuccessValue`), or set `requireVerified: false` with a strict
-  `behindProxy` posture.
+  - `verifySuccessValue`), or set `requireVerified: false` with a strict
+    `behindProxy` posture.
 - **Compression is bounded by response size.** `compression()` now leaves
   responses larger than `maxCompressibleBytes` (default `1_048_576` = 1 MiB)
   uncompressed instead of buffering an unbounded body into memory to compress

@@ -46,20 +46,22 @@ export interface DenoServerHandle {
  * @throws Error when the Deno runtime (`globalThis.Deno.serve`) is not detected.
  */
 export function serve(app: App, opts: DenoServeOptions = {}): DenoServerHandle {
-  const D = (globalThis as {
-    Deno?: {
-      serve?: unknown;
-      addSignalListener?: (sig: string, fn: () => void) => void;
-      removeSignalListener?: (sig: string, fn: () => void) => void;
-    };
-  }).Deno;
+  const D = (
+    globalThis as {
+      Deno?: {
+        serve?: unknown;
+        addSignalListener?: (sig: string, fn: () => void) => void;
+        removeSignalListener?: (sig: string, fn: () => void) => void;
+      };
+    }
+  ).Deno;
   const denoServe = D?.serve as
     | ((
         init: Record<string, unknown>,
         handler: (
           req: Request,
-          info?: { remoteAddr?: { hostname?: string; port?: number } },
-        ) => Response | Promise<Response>,
+          info?: { remoteAddr?: { hostname?: string; port?: number } }
+        ) => Response | Promise<Response>
       ) => { shutdown?: () => Promise<void> })
     | undefined;
   if (!denoServe) throw new Error("Deno runtime not detected");

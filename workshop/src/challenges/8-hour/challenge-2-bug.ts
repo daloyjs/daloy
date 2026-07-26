@@ -15,7 +15,16 @@
 //
 // Docs: https://daloyjs.dev/docs/security  ·  https://daloyjs.dev/docs/security/secure-defaults
 
-import { App, requestId, cors, rateLimit, createJwtVerifier, UnauthorizedError, HttpError, type Hooks } from "@daloyjs/core";
+import {
+  App,
+  requestId,
+  cors,
+  rateLimit,
+  createJwtVerifier,
+  UnauthorizedError,
+  HttpError,
+  type Hooks,
+} from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { z } from "zod";
 
@@ -27,13 +36,13 @@ const app = new App({
   version: "0.1.0",
   openapi: { info: { title: "Workshop API", version: "0.1.0" } },
   docs: true,
-  bodyLimitBytes: 50 * 1024 * 1024,                                  // 🐛 1
+  bodyLimitBytes: 50 * 1024 * 1024, // 🐛 1
   requestTimeoutMs: 5_000,
 });
 
 app.use(requestId());
 // 🐛 2: no secureHeaders middleware at all.
-app.use(cors({ origin: () => true, credentials: true }));            // 🐛 3 (reflects ANY origin + credentials)
+app.use(cors({ origin: () => true, credentials: true })); // 🐛 3 (reflects ANY origin + credentials)
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
 const jwtAuth: Hooks = {
@@ -59,15 +68,16 @@ app.post(
     responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
   },
   async ({ body }) => {
-    if (body.token === ADMIN_TOKEN) {                                 // 🐛 6
+    if (body.token === ADMIN_TOKEN) {
+      // 🐛 6
       return { status: 200 as const, body: { ok: true as const } };
     }
     throw new HttpError(401, {
       type: "about:blank",
       title: "Unauthorized",
-      detail: `Bad token ${body.token}; expected ${ADMIN_TOKEN}`,    // 🐛 7
+      detail: `Bad token ${body.token}; expected ${ADMIN_TOKEN}`, // 🐛 7
     });
-  },
+  }
 );
 
 app.post(
@@ -79,9 +89,9 @@ app.post(
     responses: { 200: { description: "OK", body: z.object({ status: z.number() }) } },
   },
   async ({ body }) => {
-    const res = await fetch(body.url);                                // 🐛 (bonus) — no SSRF guard
+    const res = await fetch(body.url); // 🐛 (bonus) — no SSRF guard
     return { status: 200 as const, body: { status: res.status } };
-  },
+  }
 );
 
 serve(app, { port: 3000 });

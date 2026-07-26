@@ -58,7 +58,12 @@ export interface LoadSheddingSnapshot {
 type EventLoopUtilization = { idle: number; active: number; utilization: number };
 
 interface PerfHooksAPI {
-  monitorEventLoopDelay?: (options?: { resolution?: number }) => { enable(): void; disable(): void; reset(): void; mean: number };
+  monitorEventLoopDelay?: (options?: { resolution?: number }) => {
+    enable(): void;
+    disable(): void;
+    reset(): void;
+    mean: number;
+  };
   performance?: { eventLoopUtilization?: (prev?: EventLoopUtilization) => EventLoopUtilization };
 }
 
@@ -96,10 +101,7 @@ export function loadShedding(opts: LoadSheddingOptions = {}): Hooks {
   const maxELU = opts.maxEventLoopUtilization ?? 0.98;
   const sampleMs = Math.max(100, opts.sampleIntervalMs ?? 1000);
   const retryAfter = opts.retryAfterSeconds ?? 10;
-  const healthCheckMs = Math.max(
-    100,
-    opts.healthCheckIntervalMs ?? sampleMs,
-  );
+  const healthCheckMs = Math.max(100, opts.healthCheckIntervalMs ?? sampleMs);
 
   const snapshot: LoadSheddingSnapshot = {
     eventLoopDelayMs: 0,
@@ -117,8 +119,7 @@ export function loadShedding(opts: LoadSheddingOptions = {}): Hooks {
   let timer: ReturnType<typeof setInterval> | undefined;
   let stopped = false;
 
-  const procRef =
-    typeof process !== "undefined" ? (process as NodeJS.Process) : undefined;
+  const procRef = typeof process !== "undefined" ? (process as NodeJS.Process) : undefined;
 
   const ensurePerf = (): Promise<void> => {
     if (perfPromise) return perfPromise;
@@ -215,7 +216,7 @@ export function loadShedding(opts: LoadSheddingOptions = {}): Hooks {
           title: "Service Unavailable",
           detail: `Load shedding: ${reason}`,
         },
-        { "retry-after": String(retryAfter) },
+        { "retry-after": String(retryAfter) }
       );
     },
   };
@@ -228,6 +229,4 @@ export function loadShedding(opts: LoadSheddingOptions = {}): Hooks {
  *
  * @internal
  */
-export const LOAD_SHEDDING_MARKER: unique symbol = Symbol.for(
-  "daloyjs.loadShedding",
-);
+export const LOAD_SHEDDING_MARKER: unique symbol = Symbol.for("daloyjs.loadShedding");

@@ -25,10 +25,7 @@ import {
   serializeClearCookie,
   serializeCookie,
 } from "../src/cookie.js";
-import {
-  TemporalClaimError,
-  assertTemporalClaims,
-} from "../src/time-claims.js";
+import { TemporalClaimError, assertTemporalClaims } from "../src/time-claims.js";
 import { session } from "../src/session.js";
 import { csrf } from "../src/middleware.js";
 import { findForbiddenRuntimeDependencies } from "../scripts/verify-no-runtime-deps.js";
@@ -58,22 +55,22 @@ test("assertCookieAttributes accepts a plain RFC 6265 cookie", () => {
       scope: "cookie",
       name: "session",
       attributes: { secure: true, path: "/", sameSite: "Lax", httpOnly: true },
-    }),
+    })
   );
 });
 
 test("assertCookieAttributes rejects malformed names", () => {
   assert.throws(
     () => assertCookieAttributes({ scope: "cookie", name: "bad name", attributes: {} }),
-    /cookie name/,
+    /cookie name/
   );
   assert.throws(
     () => assertCookieAttributes({ scope: "cookie", name: "bad;name", attributes: {} }),
-    /cookie name/,
+    /cookie name/
   );
   assert.throws(
     () => assertCookieAttributes({ scope: "cookie", name: "", attributes: {} }),
-    /cookie name/,
+    /cookie name/
   );
 });
 
@@ -85,7 +82,7 @@ test("assertCookieAttributes enforces __Host- contract", () => {
         name: "__Host-x",
         attributes: { secure: false, path: "/" },
       }),
-    /__Host-/,
+    /__Host-/
   );
   assert.throws(
     () =>
@@ -94,7 +91,7 @@ test("assertCookieAttributes enforces __Host- contract", () => {
         name: "__Host-x",
         attributes: { secure: true, path: "/api" },
       }),
-    /__Host-/,
+    /__Host-/
   );
   assert.throws(
     () =>
@@ -103,7 +100,7 @@ test("assertCookieAttributes enforces __Host- contract", () => {
         name: "__Host-x",
         attributes: { secure: true, path: "/", domain: "example.com" },
       }),
-    /__Host-/,
+    /__Host-/
   );
 });
 
@@ -115,14 +112,14 @@ test("assertCookieAttributes enforces __Secure- contract", () => {
         name: "__Secure-x",
         attributes: { secure: false },
       }),
-    /__Secure-/,
+    /__Secure-/
   );
   assert.doesNotThrow(() =>
     assertCookieAttributes({
       scope: "cookie",
       name: "__Secure-x",
       attributes: { secure: true },
-    }),
+    })
   );
 });
 
@@ -135,7 +132,7 @@ test("assertCookieAttributes refuses __Secure- without secure in production", ()
         attributes: { secure: false },
         isProduction: true,
       }),
-    /silently drop|production|HTTP/i,
+    /silently drop|production|HTTP/i
   );
 });
 
@@ -147,7 +144,7 @@ test("assertCookieAttributes enforces SameSite=None requires Secure", () => {
         name: "x",
         attributes: { sameSite: "None", secure: false },
       }),
-    /SameSite/i,
+    /SameSite/i
   );
 });
 
@@ -159,7 +156,7 @@ test("assertCookieAttributes enforces path starts with /", () => {
         name: "x",
         attributes: { path: "api" },
       }),
-    /path must start/,
+    /path must start/
   );
 });
 
@@ -183,14 +180,8 @@ test("serializeCookie round-trips through readRequestCookie", () => {
 });
 
 test("serializeCookie validates attributes through the shared cookie guard", () => {
-  assert.throws(
-    () => serializeCookie("bad;name", "value"),
-    /cookieName/,
-  );
-  assert.throws(
-    () => serializeCookie("__Secure-x", "value", { secure: false }),
-    /__Secure-/,
-  );
+  assert.throws(() => serializeCookie("bad;name", "value"), /cookieName/);
+  assert.throws(() => serializeCookie("__Secure-x", "value", { secure: false }), /__Secure-/);
 });
 
 test("serializeClearCookie emits Max-Age=0", () => {
@@ -211,21 +202,12 @@ test("readRequestCookie rejects duplicate cookies (cookie-tossing defense)", () 
   // that arrives in the same `Cookie` header alongside the legitimate
   // one. Browsers list path-specific cookies first, so a naive "first
   // wins" reader would authenticate as the attacker. We refuse both.
-  assert.equal(
-    readRequestCookie("sid=attacker; sid=legit", "sid"),
-    null,
-  );
-  assert.equal(
-    readRequestCookie("sid=legit; other=ok; sid=attacker", "sid"),
-    null,
-  );
+  assert.equal(readRequestCookie("sid=attacker; sid=legit", "sid"), null);
+  assert.equal(readRequestCookie("sid=legit; other=ok; sid=attacker", "sid"), null);
   // A single occurrence is still returned normally.
   assert.equal(readRequestCookie("sid=legit; other=ok", "sid"), "legit");
   // Duplicates of a *different* name do not poison unrelated reads.
-  assert.equal(
-    readRequestCookie("other=a; sid=legit; other=b", "sid"),
-    "legit",
-  );
+  assert.equal(readRequestCookie("other=a; sid=legit; other=b", "sid"), "legit");
 });
 
 // ---------- time-claims.ts ----------
@@ -233,10 +215,7 @@ test("readRequestCookie rejects duplicate cookies (cookie-tossing defense)", () 
 test("assertTemporalClaims accepts a valid token window", () => {
   const now = 1_700_000_000;
   assert.doesNotThrow(() =>
-    assertTemporalClaims(
-      { iat: now - 10, nbf: now - 5, exp: now + 60 },
-      { now },
-    ),
+    assertTemporalClaims({ iat: now - 10, nbf: now - 5, exp: now + 60 }, { now })
   );
 });
 
@@ -244,7 +223,7 @@ test("assertTemporalClaims rejects expired tokens", () => {
   const now = 1_700_000_000;
   assert.throws(
     () => assertTemporalClaims({ exp: now - 1 }, { now }),
-    (err) => err instanceof TemporalClaimError && err.code === "token_expired",
+    (err) => err instanceof TemporalClaimError && err.code === "token_expired"
   );
 });
 
@@ -252,7 +231,7 @@ test("assertTemporalClaims rejects nbf in future", () => {
   const now = 1_700_000_000;
   assert.throws(
     () => assertTemporalClaims({ nbf: now + 60 }, { now }),
-    (err) => err instanceof TemporalClaimError && err.code === "token_not_yet_valid",
+    (err) => err instanceof TemporalClaimError && err.code === "token_not_yet_valid"
   );
 });
 
@@ -260,7 +239,7 @@ test("assertTemporalClaims rejects iat in future", () => {
   const now = 1_700_000_000;
   assert.throws(
     () => assertTemporalClaims({ iat: now + 60 }, { now }),
-    (err) => err instanceof TemporalClaimError && err.code === "iat_in_future",
+    (err) => err instanceof TemporalClaimError && err.code === "iat_in_future"
   );
 });
 
@@ -268,28 +247,24 @@ test("assertTemporalClaims rejects non-finite numeric claims", () => {
   const now = 1_700_000_000;
   assert.throws(
     () => assertTemporalClaims({ exp: "soon" as unknown as number }, { now }),
-    (err) => err instanceof TemporalClaimError && err.code === "invalid_exp",
+    (err) => err instanceof TemporalClaimError && err.code === "invalid_exp"
   );
   assert.throws(
     () => assertTemporalClaims({ nbf: Number.NaN }, { now }),
-    (err) => err instanceof TemporalClaimError && err.code === "invalid_nbf",
+    (err) => err instanceof TemporalClaimError && err.code === "invalid_nbf"
   );
   assert.throws(
     () => assertTemporalClaims({ iat: Number.POSITIVE_INFINITY }, { now }),
-    (err) => err instanceof TemporalClaimError && err.code === "invalid_iat",
+    (err) => err instanceof TemporalClaimError && err.code === "invalid_iat"
   );
 });
 
 test("assertTemporalClaims honors clockSkewSeconds at both ends", () => {
   const now = 1_700_000_000;
   // exp just past, but inside skew window — accepted.
-  assert.doesNotThrow(() =>
-    assertTemporalClaims({ exp: now - 5 }, { now, clockSkewSeconds: 10 }),
-  );
+  assert.doesNotThrow(() => assertTemporalClaims({ exp: now - 5 }, { now, clockSkewSeconds: 10 }));
   // nbf just ahead, but inside skew window — accepted.
-  assert.doesNotThrow(() =>
-    assertTemporalClaims({ nbf: now + 5 }, { now, clockSkewSeconds: 10 }),
-  );
+  assert.doesNotThrow(() => assertTemporalClaims({ nbf: now + 5 }, { now, clockSkewSeconds: 10 }));
 });
 
 // ---------- __Secure- refuse-to-boot on session() and csrf() ----------
@@ -302,7 +277,7 @@ test('session() refuses "__Secure-" cookie name without secure:true', () => {
         cookieName: "__Secure-foo",
         cookieOptions: { secure: false },
       }),
-    /__Secure-/,
+    /__Secure-/
   );
 });
 
@@ -312,7 +287,7 @@ test('session() accepts "__Secure-" cookie when secure:true and path:/', () => {
       secret: "x".repeat(48),
       cookieName: "__Secure-foo",
       cookieOptions: { secure: true, path: "/" },
-    }),
+    })
   );
 });
 
@@ -323,7 +298,7 @@ test('csrf() refuses "__Secure-" cookie name without secure:true', () => {
         cookieName: "__Secure-foo",
         cookieOptions: { secure: false },
       }),
-    /__Secure-/,
+    /__Secure-/
   );
 });
 
@@ -341,9 +316,9 @@ test("verify-no-runtime-deps flags any non-empty dependencies block", () => {
 
 test("verify-secret-comparisons flags forbidden equality on header-derived values", () => {
   const sample = [
-    '// safe: comparing scheme name',
+    "// safe: comparing scheme name",
     'if (scheme === "Bearer") return true;',
-    '// safe: OpenAPI enum comparison, not a header-derived cookie secret',
+    "// safe: OpenAPI enum comparison, not a header-derived cookie secret",
     'if (options.in !== "header" && options.in !== "query" && options.in !== "cookie") fail();',
     "",
     "// unsafe: comparing the actual secret",
@@ -399,7 +374,12 @@ test("verify-secret-comparisons flags forbidden equality on header-derived value
 test("verify-secret-comparisons accepts the audited source files", async () => {
   const { readFile } = await import("node:fs/promises");
   const path = await import("node:path");
-  const files = ["src/session.ts", "src/security.ts", "src/security-schemes.ts", "src/middleware.ts"];
+  const files = [
+    "src/session.ts",
+    "src/security.ts",
+    "src/security-schemes.ts",
+    "src/middleware.ts",
+  ];
   let total = 0;
   for (const f of files) {
     const text = await readFile(path.resolve(process.cwd(), f), "utf8");
@@ -465,16 +445,14 @@ test("verify-no-unsafe-buffer accepts the live src/ tree", async () => {
   assert.equal(
     total,
     0,
-    "src/ must remain free of `new Buffer(...)` and `Buffer.allocUnsafe*`; see https://snyk.io/blog/exploiting-buffer/",
+    "src/ must remain free of `new Buffer(...)` and `Buffer.allocUnsafe*`; see https://snyk.io/blog/exploiting-buffer/"
   );
 });
 
 // ---------- verify-no-weak-random (Aikido Python Top 10 #10 gate) ----------
 
 test("verify-no-weak-random flags Math.random() without the allow marker", async () => {
-  const { findForbiddenWeakRandomCalls } = await import(
-    "../scripts/verify-no-weak-random.js"
-  );
+  const { findForbiddenWeakRandomCalls } = await import("../scripts/verify-no-weak-random.js");
   const sample = [
     "// non-crypto token mint -- should trip",
     "const tok = Math.random().toString(36).slice(2);",
@@ -490,9 +468,7 @@ test("verify-no-weak-random flags Math.random() without the allow marker", async
 });
 
 test("verify-no-weak-random ignores Math.random() inside comments, strings, and allow-marked lines", async () => {
-  const { findForbiddenWeakRandomCalls } = await import(
-    "../scripts/verify-no-weak-random.js"
-  );
+  const { findForbiddenWeakRandomCalls } = await import("../scripts/verify-no-weak-random.js");
   const sample = [
     "/* Block comment about Math.random() must not trip. */",
     'const msg = "do not call Math.random() here";',
@@ -506,9 +482,7 @@ test("verify-no-weak-random ignores Math.random() inside comments, strings, and 
 });
 
 test("verify-no-weak-random accepts the live src/ tree", async () => {
-  const { findForbiddenWeakRandomCalls } = await import(
-    "../scripts/verify-no-weak-random.js"
-  );
+  const { findForbiddenWeakRandomCalls } = await import("../scripts/verify-no-weak-random.js");
   const { readFile, readdir } = await import("node:fs/promises");
   const path = await import("node:path");
   const srcRoot = path.resolve(process.cwd(), "src");
@@ -528,16 +502,14 @@ test("verify-no-weak-random accepts the live src/ tree", async () => {
   assert.equal(
     total,
     0,
-    "src/ must remain free of `Math.random()` outside the allow-marked Web-Crypto fallback; see https://www.aikido.dev/blog/python-security-vulnerabilities (item #10)",
+    "src/ must remain free of `Math.random()` outside the allow-marked Web-Crypto fallback; see https://www.aikido.dev/blog/python-security-vulnerabilities (item #10)"
   );
 });
 
 // ---------- verify-no-remote-exec (Aikido BlokTrooper gate) ----------
 
 test("verify-no-remote-exec flags every documented BlokTrooper-class primitive", async () => {
-  const { findForbiddenRemoteExecCalls } = await import(
-    "../scripts/verify-no-remote-exec.js"
-  );
+  const { findForbiddenRemoteExecCalls } = await import("../scripts/verify-no-remote-exec.js");
   const sample = [
     "// safe: API references in prose should not trip the gate",
     'const note = "do not call eval() or new Function() in core";',
@@ -569,9 +541,7 @@ test("verify-no-remote-exec flags every documented BlokTrooper-class primitive",
 });
 
 test("verify-no-remote-exec ignores forbidden tokens inside comments and strings", async () => {
-  const { findForbiddenRemoteExecCalls } = await import(
-    "../scripts/verify-no-remote-exec.js"
-  );
+  const { findForbiddenRemoteExecCalls } = await import("../scripts/verify-no-remote-exec.js");
   const sample = [
     "/* This block comment mentions eval() and new Function() and must not trip. */",
     'const msg = "do not call eval() or new Function() here";',
@@ -585,9 +555,7 @@ test("verify-no-remote-exec ignores forbidden tokens inside comments and strings
 });
 
 test("verify-no-remote-exec accepts the live src/ tree", async () => {
-  const { findForbiddenRemoteExecCalls } = await import(
-    "../scripts/verify-no-remote-exec.js"
-  );
+  const { findForbiddenRemoteExecCalls } = await import("../scripts/verify-no-remote-exec.js");
   const { readFile, readdir } = await import("node:fs/promises");
   const path = await import("node:path");
   const srcRoot = path.resolve(process.cwd(), "src");
@@ -609,16 +577,15 @@ test("verify-no-remote-exec accepts the live src/ tree", async () => {
     0,
     "src/ must remain free of `node:child_process`, `node:vm`, bare `eval(...)`, " +
       "`new Function(...)`, and remote dynamic imports; see " +
-      "https://www.aikido.dev/blog/fast-draft-open-vsx-bloktrooper",
+      "https://www.aikido.dev/blog/fast-draft-open-vsx-bloktrooper"
   );
 });
 
 // ---------- verify-no-registry-exfiltration (Socket GemStuffer gate) ----------
 
 test("verify-no-registry-exfiltration flags every documented GemStuffer-class primitive", async () => {
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: TLS verification bypass (GemStuffer VERIFY_NONE)",
     "const agent = new Agent({ rejectUnauthorized: false });",
@@ -680,9 +647,8 @@ test("verify-no-registry-exfiltration flags every documented GemStuffer-class pr
 test("verify-no-registry-exfiltration flags every RATatouille / rand-user-agent tradecraft primitive", async () => {
   // RATatouille IOCs documented in
   // https://www.aikido.dev/blog/catching-a-rat-remote-access-trojian-rand-user-agent-supply-chain-compromise
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: aliased-require via global member assignment",
     "global.r = require;",
@@ -721,9 +687,8 @@ test("verify-no-registry-exfiltration flags every RATatouille / rand-user-agent 
 });
 
 test("verify-no-registry-exfiltration allowlists loopback / unspecified / localhost raw hosts", async () => {
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: loopback for local dev",
     'const dev = "http://127.0.0.1:3000/health";',
@@ -741,9 +706,8 @@ test("verify-no-registry-exfiltration allowlists loopback / unspecified / localh
 });
 
 test("verify-no-registry-exfiltration ignores forbidden tokens inside comments and code-only strings", async () => {
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "/* This block comment mentions rejectUnauthorized: false and HOME = '/tmp' and must not trip. */",
     "// also a line comment about NODE_TLS_REJECT_UNAUTHORIZED",
@@ -765,9 +729,8 @@ test("verify-no-registry-exfiltration flags the xrpl.js / Ripple SDK exfiltratio
   // to `https://0x9c.xyz` via a plain global `fetch` to a registered
   // domain — the raw-IPv4 gate does not catch this on its own, so the
   // exfil host is gated as a bare-literal IOC.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: xrpl.js seed-exfiltration host as a URL literal",
     'const c2 = "https://0x9c.xyz/xc";',
@@ -791,9 +754,8 @@ test("verify-no-registry-exfiltration flags AI-coding-agent credential-file read
   // exfiltrated it disguised as Sentry telemetry. `~/.claude/` is the
   // obvious sibling target (Anthropic Claude Code session/OAuth tokens).
   // Daloy core never reads an AI coding agent's credential directory.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: OpenAI Codex auth-token file (the codexui-android target)",
     'const codex = path.join(home, ".codex", "auth.json");',
@@ -822,9 +784,8 @@ test("verify-no-registry-exfiltration allowlists normal codec / cloud paths near
   // The `.codex` / `.claude` matchers are directory-scoped (`/.codex/`,
   // `/.claude/`) so substrings like `codex`, `claudeify`, or a `codecs`
   // path must NOT trip the gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: a variable merely named codex (no dotted dir)",
     "const codexParser = makeParser();",
@@ -844,9 +805,8 @@ test("verify-no-registry-exfiltration flags Telegram-bot SSH-backdoor IOCs", asy
   // appended attacker SSH public keys to `~/.ssh/authorized_keys`, used
   // `ipinfo.io/ip` to discover the victim's external IP, and POSTed it
   // (with the Unix username) to `solana.validator.blog`.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: the SSH key injection target file",
     'const target = path.join(home, ".ssh/authorized_keys");',
@@ -896,9 +856,8 @@ test("verify-no-registry-exfiltration flags 60-package Discord-webhook recon IOC
   // and `https.get("https://ipinfo.io/json", ...)`, then POSTed the
   // JSON blob to a `https://discord.com/api/webhooks/<id>/<token>`
   // exfiltration channel.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: ipinfo.io/json external IP/org discovery (60-pkg variant)",
     'const ext = "https://ipinfo.io/json";',
@@ -925,9 +884,8 @@ test("verify-no-registry-exfiltration flags Advcash reverse-shell IOCs", async (
   // callback. The IOC IP appears as a BARE literal (not in a URL),
   // and `/bin/sh` / `/bin/bash` / `cmd.exe` shell-name literals have
   // no legitimate use in `src/**`.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented Advcash reverse-shell C2 IP, bare literal",
     'const c2 = "65.109.184.223";',
@@ -966,9 +924,8 @@ test("verify-no-registry-exfiltration flags every Lazarus BeaverTail / Invisible
   // assigned to a variable for later string-concat into a URL, and the
   // browser-stealer / wallet-stealer file-path literals have no
   // legitimate use inside a backend HTTP framework's runtime source.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented BeaverTail C2 IP, bare literal",
     'const c2 = "172.86.84.38";',
@@ -1010,9 +967,8 @@ test("verify-no-registry-exfiltration flags xlsx-to-json-lh codebase-wiper IOCs"
   // `rmDir(projectRoot)` (fs.rmSync-shape recursive delete). None of
   // these primitives are caught by the upstream child_process / TLS /
   // raw-IPv4 / browser-stealer gates above on their own.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented C2 host literal",
     'const c2 = "https://informer-server.herokuapp.com";',
@@ -1024,16 +980,16 @@ test("verify-no-registry-exfiltration flags xlsx-to-json-lh codebase-wiper IOCs"
     'if (data.type === "remise a zero") wipe();',
     "",
     "// unsafe: recursive directory delete (sync)",
-    'fs.rmSync(projectRoot, { recursive: true, force: true });',
+    "fs.rmSync(projectRoot, { recursive: true, force: true });",
     "",
     "// unsafe: legacy rmdirSync",
-    'fs.rmdirSync(projectRoot, { recursive: true });',
+    "fs.rmdirSync(projectRoot, { recursive: true });",
     "",
     "// unsafe: promise-based fs.rm()",
-    'await fsp.rm(projectRoot, { recursive: true, force: true });',
+    "await fsp.rm(projectRoot, { recursive: true, force: true });",
     "",
     "// unsafe: unlinkSync",
-    'fs.unlinkSync(envFile);',
+    "fs.unlinkSync(envFile);",
     "",
     "// unsafe: destructured unlinkSync()",
     "unlinkSync(keyFile);",
@@ -1059,9 +1015,8 @@ test("verify-no-registry-exfiltration flags Vietnam-Telegram-ban Fastlane-typosq
   // to silently exfiltrate Telegram bot tokens, chat IDs, messages,
   // and attached files. The endpoint-substitution + opaque-Worker-relay
   // tradecraft translates verbatim to npm.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented exact-host C2 IOC",
     'const c2 = "rough-breeze-0c37.buidanhnam95.workers.dev";',
@@ -1090,9 +1045,8 @@ test("verify-no-registry-exfiltration ignores benign workers.dev mentions", asyn
   // Negative: the bare PSL suffix `workers.dev` (legitimately listed
   // in `src/subdomains.ts`) and doc-comment mentions of the IOC
   // hostname must NOT trip the Vietnam-Telegram-ban gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of `*.workers.dev` as a PSL entry",
     "// safe: doc-comment mention of the IOC host rough-breeze-0c37.buidanhnam95.workers.dev",
@@ -1118,9 +1072,8 @@ test("verify-no-registry-exfiltration flags @crypto-exploit BSC/Ethereum wallet-
   // and broadcast it via `web3.eth.sendSignedTransaction`. None of
   // the upstream child_process / TLS / postinstall gates catch this
   // on their own.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented attacker wallet address",
     'const drain = "0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02";',
@@ -1154,9 +1107,8 @@ test("verify-no-registry-exfiltration ignores benign wallet-drainer-shaped token
   // `signTransaction` as a property name in an object literal (no
   // call), and unrelated `sendSigned*`-prefixed identifiers must NOT
   // trip the wallet-drainer gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of the attacker wallet",
     "// IOC: 0x71448ec2D9c5fC4978F5A690D5CE11A8669C9D02 is the drainer wallet",
@@ -1182,9 +1134,8 @@ test("verify-no-registry-exfiltration flags surveillance-malware (dpsdatahub / n
   // dynamically constructed at runtime. None of the upstream
   // child_process / TLS / postinstall gates catch these in-process
   // primitives on their own.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: dpsdatahub invisible-iframe keylogger S3 host",
     'const iframeSrc = "https://dpsiframe.s3.eu-central-1.amazonaws.com/index.html";',
@@ -1215,9 +1166,8 @@ test("verify-no-registry-exfiltration ignores benign surveillance-malware-shaped
   // `hooks.slack.com` documentation host (no `/services/` path), and
   // unrelated `*.amazonaws.com` / `*.net` literals must NOT trip the
   // surveillance-malware gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of the dpsdatahub IOC host",
     "// IOC: dpsiframe.s3.eu-central-1.amazonaws.com is the keylogger iframe host",
@@ -1243,9 +1193,8 @@ test("verify-no-registry-exfiltration ignores benign deletion-shaped tokens", as
   // comparisons against `.rm`, non-destructive fs APIs, and mkdir
   // with `{ recursive: true }` (which is a totally legitimate
   // ensure-dir pattern) must NOT trip the wiper gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of the C2 host",
     "// the xlsx-to-json-lh malware C2 was informer-server.herokuapp.com",
@@ -1253,10 +1202,10 @@ test("verify-no-registry-exfiltration ignores benign deletion-shaped tokens", as
     "// safe: doc-comment mention of the trigger phrase remise à zéro",
     "",
     "// safe: non-destructive fs API (mkdir with recursive flag)",
-    'await fsp.mkdir(target, { recursive: true });',
+    "await fsp.mkdir(target, { recursive: true });",
     "",
     "// safe: non-destructive fs API (readdir)",
-    'await fsp.readdir(target);',
+    "await fsp.readdir(target);",
     "",
     "// safe: equality comparison on a method name (not a call)",
     "if (action.name === 'rmSync') skip();",
@@ -1269,9 +1218,8 @@ test("verify-no-registry-exfiltration ignores benign IP-shaped tokens", async ()
   // Negative: dotted-quad version strings, doc-comment mentions of
   // the IOC IP, and benign shell-name mentions inside line comments
   // must NOT trip the Advcash gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of the IOC IP",
     "// the Advcash C2 was 65.109.184.223 on port 8443",
@@ -1298,9 +1246,8 @@ test("verify-no-registry-exfiltration flags Toptal GitHub-org hijack IOCs", asyn
   // + the 24h release cooldown — this regression net catches a
   // separate vector where a malicious PR copies the payload as
   // string literals into `src/**` runtime code.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: generic webhook.site exfiltration drop",
     'const drop = "https://webhook.site/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";',
@@ -1330,9 +1277,8 @@ test("verify-no-registry-exfiltration ignores benign Toptal-shaped tokens", asyn
   // host that merely *contains* the substring `webhook` (e.g.
   // `webhooks.example.com` without `.site/`), and the bare word
   // `gh` / `rm` outside their attack-shape must NOT trip the gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of the IOC drop",
     "// the Toptal payload POSTed to https://webhook.site/fb5b4647-aff8-418c-99e7-ec830cc2024b",
@@ -1366,9 +1312,8 @@ test("verify-no-registry-exfiltration flags the react-login-page keylogger IOCs"
   //     subject to the Same-Origin Policy).
   // Both are DOM-only / browser-side primitives that have no place in
   // `@daloyjs/core`'s server-side `src/**` runtime source.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented C2 host + path for the reect-login-page keylogger",
     'const exfil = "https://adlinczewska.pl/beaut-login/keylog.php?c=" + keys;',
@@ -1391,9 +1336,8 @@ test("verify-no-registry-exfiltration ignores benign react-login-shaped tokens",
   // that merely *contains* the substring `adlinczewska` outside the
   // `/beaut-login` path, and an identifier like `newImage` (no space
   // and no `(` immediately after `Image`) must NOT trip the gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of the IOC host",
     "// the reect-login-page keylogger POSTed to adlinczewska.pl/beaut-login/keylog.php",
@@ -1419,9 +1363,8 @@ test("verify-no-registry-exfiltration flags the 11-Go-package obfuscated-loader 
   //     (Bash second-stage) or `/storage/bbb28ef04/fa31546b` (Win PE)
   //   - `wget -O - URL | /bin/bash` / `curl ... | sh` shell-pipe-eval
   //   - `certutil.exe -urlcache -split -f` Windows LOLBin download
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented C2 host for the 11-Go-package campaign",
     'const a = "https://monsoletter.icu/some/path";',
@@ -1460,9 +1403,8 @@ test("verify-no-registry-exfiltration flags the naya-flore / nvlore-hsc WhatsApp
   //   - `navaLinh/database` GitHub repo path (whitelist endpoint)
   //   - `seska.json` whitelist filename
   //   - `rm -rf *` shell-glob destruction primitive
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: documented C2 host for the WhatsApp kill-switch campaign",
     'const c2 = "https://api.verylinh.my.id/running";',
@@ -1471,10 +1413,10 @@ test("verify-no-registry-exfiltration flags the naya-flore / nvlore-hsc WhatsApp
     'const wl = "https://raw.githubusercontent.com/navaLinh/database/main/seska.json";',
     "",
     "// unsafe: rm -rf * shell-glob destruction primitive (variant 1)",
-    "const cmd1 = \"rm -rf *\";",
+    'const cmd1 = "rm -rf *";',
     "",
     "// unsafe: rm -fr * variant (flag order reversed)",
-    "const cmd2 = \"rm -fr * \";",
+    'const cmd2 = "rm -fr * ";',
   ].join("\n");
   const findings = findForbiddenRegistryExfilCalls("sample.ts", sample);
   // Lines: c2 (1), wl (1 — matches both navaLinh and seska.json on same line but only first
@@ -1494,9 +1436,8 @@ test("verify-no-registry-exfiltration ignores benign WhatsApp-kill-switch-shaped
   // `seska` substrings, unrelated `naval`/`navaLine` identifiers, and
   // `rm -rf <path>` with a real path (not the bare `*` glob) must NOT
   // trip the gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: doc-comment mention of the C2 host",
     "// the kill switch beaconed to api.verylinh.my.id/running",
@@ -1528,9 +1469,8 @@ test("verify-no-registry-exfiltration flags the Beamglea phishing-CDN October 20
   //   - the unique `nb830r6x` HTML meta-tag campaign identifier
   //   - the `beamglea.js` payload filename (campaign codename)
   //   - the `unpkg.com/redirect-<id>` CDN URL distribution shape
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// unsafe: one of the 7 documented phishing C2 hosts",
     'const c2a = "https://cfn.jackpotmastersdanske.com/TJImeEKD";',
@@ -1565,9 +1505,8 @@ test("verify-no-registry-exfiltration ignores benign Beamglea-shaped tokens", as
   // shorter `redirect-*` package names that don't match the campaign
   // pattern, hostnames that merely share a suffix string with an IOC,
   // and unrelated identifiers must NOT trip the gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: unrelated unpkg package (Swagger UI) is allowed",
     'const swagger = "https://unpkg.com/swagger-ui-dist@5/swagger-ui.css";',
@@ -1594,9 +1533,8 @@ test("verify-no-registry-exfiltration ignores benign 11-Go-package-shaped tokens
   // that share a prefix with the downloader binaries (`curlPipe`,
   // `wgetable`), and a doc-comment mention of `certutil` must NOT
   // trip the gate.
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const sample = [
     "// safe: unrelated `.icu` TLD, not one of the 7 documented IOC hosts",
     'const a = "https://example.icu/index";',
@@ -1619,9 +1557,8 @@ test("verify-no-registry-exfiltration ignores benign 11-Go-package-shaped tokens
 });
 
 test("verify-no-registry-exfiltration accepts the live src/ tree", async () => {
-  const { findForbiddenRegistryExfilCalls } = await import(
-    "../scripts/verify-no-registry-exfiltration.js"
-  );
+  const { findForbiddenRegistryExfilCalls } =
+    await import("../scripts/verify-no-registry-exfiltration.js");
   const { readFile, readdir } = await import("node:fs/promises");
   const path = await import("node:path");
   const srcRoot = path.resolve(process.cwd(), "src");
@@ -1643,7 +1580,7 @@ test("verify-no-registry-exfiltration accepts the live src/ tree", async () => {
     0,
     "src/ must remain free of TLS-verification bypasses, HOME mutations, host credential-file " +
       "references, and package-registry publish-API paths (GemStuffer class); see " +
-      "https://socket.dev/blog/gemstuffer",
+      "https://socket.dev/blog/gemstuffer"
   );
 });
 
@@ -1667,14 +1604,13 @@ test("verify-no-vulnerable-sandboxes flags every forbidden sandbox package acros
   assert.ok(findings.every((f) => f.file === "fake/package.json"));
   assert.ok(
     findings.some((f) => /bundledDependencies/.test(f.reason)),
-    "bundledDependencies entries should be reported",
+    "bundledDependencies entries should be reported"
   );
 });
 
 test("verify-no-vulnerable-sandboxes ignores benign package.json content", async () => {
-  const { findForbiddenSandboxesInPackageJson } = await import(
-    "../scripts/verify-no-vulnerable-sandboxes.js"
-  );
+  const { findForbiddenSandboxesInPackageJson } =
+    await import("../scripts/verify-no-vulnerable-sandboxes.js");
   const pkg = {
     name: "ok",
     dependencies: { zod: "^4.0.0", "isolated-vm": "^5.0.0" }, // isolated-vm is allowed
@@ -1686,9 +1622,8 @@ test("verify-no-vulnerable-sandboxes ignores benign package.json content", async
 });
 
 test("verify-no-vulnerable-sandboxes flags pnpm-9 lockfile snapshots of forbidden packages", async () => {
-  const { findForbiddenSandboxesInLockfile } = await import(
-    "../scripts/verify-no-vulnerable-sandboxes.js"
-  );
+  const { findForbiddenSandboxesInLockfile } =
+    await import("../scripts/verify-no-vulnerable-sandboxes.js");
   const lock = [
     "lockfileVersion: '9.0'",
     "",
@@ -1713,9 +1648,8 @@ test("verify-no-vulnerable-sandboxes flags pnpm-9 lockfile snapshots of forbidde
 });
 
 test("verify-no-vulnerable-sandboxes does not false-positive on benign lockfile substrings", async () => {
-  const { findForbiddenSandboxesInLockfile } = await import(
-    "../scripts/verify-no-vulnerable-sandboxes.js"
-  );
+  const { findForbiddenSandboxesInLockfile } =
+    await import("../scripts/verify-no-vulnerable-sandboxes.js");
   // `evm2-foo` and `static-evaluator` share substrings with forbidden
   // names but are *not* the forbidden packages themselves.
   const lock = [
@@ -1732,10 +1666,8 @@ test("verify-no-vulnerable-sandboxes does not false-positive on benign lockfile 
 });
 
 test("verify-no-vulnerable-sandboxes accepts the live tracked package.json + lockfile set", async () => {
-  const {
-    findForbiddenSandboxesInPackageJson,
-    findForbiddenSandboxesInLockfile,
-  } = await import("../scripts/verify-no-vulnerable-sandboxes.js");
+  const { findForbiddenSandboxesInPackageJson, findForbiddenSandboxesInLockfile } =
+    await import("../scripts/verify-no-vulnerable-sandboxes.js");
   const { readFile, readdir, stat } = await import("node:fs/promises");
   const path = await import("node:path");
   const root = process.cwd();
@@ -1770,7 +1702,7 @@ test("verify-no-vulnerable-sandboxes accepts the live tracked package.json + loc
     const rel = path.relative(root, absolute);
     total += findForbiddenSandboxesInPackageJson(
       rel,
-      parsed as Parameters<typeof findForbiddenSandboxesInPackageJson>[1],
+      parsed as Parameters<typeof findForbiddenSandboxesInPackageJson>[1]
     ).length;
   }
   const lockPath = path.join(root, "pnpm-lock.yaml");
@@ -1787,7 +1719,7 @@ test("verify-no-vulnerable-sandboxes accepts the live tracked package.json + loc
     total,
     0,
     "Daloy repo must not depend on `vm2` or related in-process JS sandboxes; see " +
-      "https://socket.dev/blog/free-certified-patches-for-critical-vm2-sandbox-escape",
+      "https://socket.dev/blog/free-certified-patches-for-critical-vm2-sandbox-escape"
   );
 });
 
@@ -1816,7 +1748,7 @@ test("verify-no-native-addons flags every forbidden toolchain package across eve
   for (const name of FORBIDDEN_NATIVE_ADDON_PACKAGES) {
     assert.ok(
       findings.some((f) => f.reason.includes(`\`${name}\``)),
-      `expected finding for ${name}`,
+      `expected finding for ${name}`
     );
   }
   assert.ok(findings.some((f) => /gypfile/.test(f.reason)));
@@ -1826,9 +1758,7 @@ test("verify-no-native-addons flags every forbidden toolchain package across eve
 });
 
 test("verify-no-native-addons ignores benign package.json content", async () => {
-  const { findNativeAddonsInPackageJson } = await import(
-    "../scripts/verify-no-native-addons.js"
-  );
+  const { findNativeAddonsInPackageJson } = await import("../scripts/verify-no-native-addons.js");
   const pkg = {
     name: "ok",
     dependencies: { zod: "^4.0.0" },
@@ -1842,9 +1772,7 @@ test("verify-no-native-addons ignores benign package.json content", async () => 
 });
 
 test("verify-no-native-addons flags pnpm-9 lockfile snapshots of toolchain packages", async () => {
-  const { findNativeAddonsInLockfile } = await import(
-    "../scripts/verify-no-native-addons.js"
-  );
+  const { findNativeAddonsInLockfile } = await import("../scripts/verify-no-native-addons.js");
   const lock = [
     "lockfileVersion: '9.0'",
     "snapshots:",
@@ -1864,9 +1792,7 @@ test("verify-no-native-addons flags pnpm-9 lockfile snapshots of toolchain packa
 });
 
 test("verify-no-native-addons does not false-positive on substrings in the lockfile", async () => {
-  const { findNativeAddonsInLockfile } = await import(
-    "../scripts/verify-no-native-addons.js"
-  );
+  const { findNativeAddonsInLockfile } = await import("../scripts/verify-no-native-addons.js");
   const lock = [
     "  bindings-foo@1.0.0:",
     "    resolution: {integrity: sha512-aaa}",
@@ -1917,7 +1843,7 @@ test("verify-no-native-addons accepts the live tracked package.json + lockfile s
     const rel = path.relative(root, absolute);
     total += findNativeAddonsInPackageJson(
       rel,
-      parsed as Parameters<typeof findNativeAddonsInPackageJson>[1],
+      parsed as Parameters<typeof findNativeAddonsInPackageJson>[1]
     ).length;
   }
   const lockPath = path.join(root, "pnpm-lock.yaml");
@@ -1934,7 +1860,7 @@ test("verify-no-native-addons accepts the live tracked package.json + lockfile s
     total,
     0,
     "Daloy repo must not depend on Node.js native-addon toolchain packages; see " +
-      "https://snyk.io/blog/nodejs-add-on-extensions/",
+      "https://snyk.io/blog/nodejs-add-on-extensions/"
   );
 });
 
@@ -1955,8 +1881,7 @@ test("scanFileContentForCredentials catches every documented secret pattern", ()
       // 2026 stateless installation-token format: a long `ghs_`-prefixed JWT
       // with two dots. The old `ghs_[A-Za-z0-9]{36}` shape would miss it.
       // https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/
-      line:
-        "GHS=ghs_" + "A".repeat(80) + "." + "B".repeat(300) + "." + "C".repeat(100),
+      line: "GHS=ghs_" + "A".repeat(80) + "." + "B".repeat(300) + "." + "C".repeat(100),
       expect: /GitHub server-to-server token/,
     },
     {
@@ -1991,7 +1916,7 @@ test("scanFileContentForCredentials catches every documented secret pattern", ()
     const hits = scanFileContentForCredentials(line);
     assert.ok(
       hits.some((h) => expect.test(h.detail)),
-      `pattern ${expect} should match ${line}`,
+      `pattern ${expect} should match ${line}`
     );
   }
 });
@@ -2022,7 +1947,7 @@ test("verify-no-leaked-credentials accepts the live publishable packages", async
       [...findings],
       [],
       `${pkg.name} must not ship any secret-shaped filename or credential-shaped string ` +
-        "(see https://snyk.io/blog/leaked-credentials-in-packages/)",
+        "(see https://snyk.io/blog/leaked-credentials-in-packages/)"
     );
   }
 });
@@ -2034,18 +1959,15 @@ test("findCredentialLeaks flags secret-shaped filenames added to a package", asy
   const dir = await mkdtemp(path.join(tmpdir(), "daloy-credleak-"));
   await writeFile(
     path.join(dir, "package.json"),
-    JSON.stringify({ name: "leaky", version: "0.0.0", files: ["dist"] }),
+    JSON.stringify({ name: "leaky", version: "0.0.0", files: ["dist"] })
   );
   await mkdir(path.join(dir, "dist"));
   await writeFile(path.join(dir, "dist", ".env"), "OPENAI_API_KEY=sk-redacted");
   await writeFile(
     path.join(dir, "dist", "ok.js"),
-    "export const ok = true; // " + "AKIA" + "ABCDEFGHIJKLMNOP",
+    "export const ok = true; // " + "AKIA" + "ABCDEFGHIJKLMNOP"
   );
-  const findings = await findCredentialLeaks(
-    { name: "leaky", packageDir: "." },
-    dir,
-  );
+  const findings = await findCredentialLeaks({ name: "leaky", packageDir: "." }, dir);
   // Both: the `.env` filename AND the AWS-key-shaped string in ok.js.
   assert.equal(findings.length, 2);
   assert.ok(findings.some((f) => f.kind === "filename" && /\.env/.test(f.file)));
@@ -2059,17 +1981,11 @@ test("findCredentialLeaks allows .env.example as a published placeholder", async
   const dir = await mkdtemp(path.join(tmpdir(), "daloy-credleak-ok-"));
   await writeFile(
     path.join(dir, "package.json"),
-    JSON.stringify({ name: "examples", version: "0.0.0", files: ["templates"] }),
+    JSON.stringify({ name: "examples", version: "0.0.0", files: ["templates"] })
   );
   await mkdir(path.join(dir, "templates"));
-  await writeFile(
-    path.join(dir, "templates", ".env.example"),
-    "OPENAI_API_KEY=your-key-here\n",
-  );
-  const findings = await findCredentialLeaks(
-    { name: "examples", packageDir: "." },
-    dir,
-  );
+  await writeFile(path.join(dir, "templates", ".env.example"), "OPENAI_API_KEY=your-key-here\n");
+  const findings = await findCredentialLeaks({ name: "examples", packageDir: "." }, dir);
   assert.deepEqual([...findings], []);
 });
 
@@ -2139,7 +2055,7 @@ test("verify-no-invisible-unicode accepts the live publishable packages", async 
       [...findings],
       [],
       `${pkg.name} must not ship any invisible-Unicode carrier ` +
-        "(see https://www.aikido.dev/blog/glassworm-returns-unicode-attack-github-npm-vscode)",
+        "(see https://www.aikido.dev/blog/glassworm-returns-unicode-attack-github-npm-vscode)"
     );
   }
 });
@@ -2147,11 +2063,7 @@ test("verify-no-invisible-unicode accepts the live publishable packages", async 
 test("verify-no-invisible-unicode accepts every in-repo source root", async () => {
   for (const root of ADDITIONAL_SOURCE_ROOTS) {
     const findings = await findInvisibleUnicodeInSourceRoot(root);
-    assert.deepEqual(
-      [...findings],
-      [],
-      `${root}/ must not contain any invisible-Unicode carrier`,
-    );
+    assert.deepEqual([...findings], [], `${root}/ must not contain any invisible-Unicode carrier`);
   }
 });
 
@@ -2162,17 +2074,14 @@ test("findInvisibleUnicodeInPackage flags a smuggled Tag character in a syntheti
   const dir = await mkdtemp(path.join(tmpdir(), "daloy-invunic-"));
   await writeFile(
     path.join(dir, "package.json"),
-    JSON.stringify({ name: "wormy", version: "0.0.0", files: ["dist"] }),
+    JSON.stringify({ name: "wormy", version: "0.0.0", files: ["dist"] })
   );
   await mkdir(path.join(dir, "dist"));
   await writeFile(
     path.join(dir, "dist", "index.js"),
-    "export const ok = true;" + String.fromCodePoint(0xe0041) + "\n",
+    "export const ok = true;" + String.fromCodePoint(0xe0041) + "\n"
   );
-  const findings = await findInvisibleUnicodeInPackage(
-    { name: "wormy", packageDir: "." },
-    dir,
-  );
+  const findings = await findInvisibleUnicodeInPackage({ name: "wormy", packageDir: "." }, dir);
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.codePoint, 0xe0041);
   assert.match(findings[0]!.detail, /Unicode Tag character/);
@@ -2181,16 +2090,12 @@ test("findInvisibleUnicodeInPackage flags a smuggled Tag character in a syntheti
 // ---------- verify-no-encoded-payloads (Socket Obfuscation 101 gate) ----------
 
 test("verify-no-encoded-payloads flags the documented obfuscation carrier shapes", async () => {
-  const { findEncodedPayloadLiterals } = await import(
-    "../scripts/verify-no-encoded-payloads.js"
-  );
+  const { findEncodedPayloadLiterals } = await import("../scripts/verify-no-encoded-payloads.js");
   // Build the offending strings at runtime so this very test file does
   // NOT itself contain the carrier shapes (which would trip the live-tree
   // assertion below).
-  const hexUrl =
-    "\\x68\\x74\\x74\\x70\\x73\\x3a\\x2f\\x2fexample.com";
-  const unicodeUrl =
-    "\\u0068\\u0074\\u0074\\u0070\\u0073\\u003a\\u002f\\u002fevil";
+  const hexUrl = "\\x68\\x74\\x74\\x70\\x73\\x3a\\x2f\\x2fexample.com";
+  const unicodeUrl = "\\u0068\\u0074\\u0074\\u0070\\u0073\\u003a\\u002f\\u002fevil";
   const opaqueBlob = "A".repeat(120) + "B".repeat(120);
   const sample = [
     "// safe: a normal URL literal must not trip the gate",
@@ -2213,9 +2118,7 @@ test("verify-no-encoded-payloads flags the documented obfuscation carrier shapes
 });
 
 test("verify-no-encoded-payloads ignores plain prose, real URLs, and short hashes", async () => {
-  const { findEncodedPayloadLiterals } = await import(
-    "../scripts/verify-no-encoded-payloads.js"
-  );
+  const { findEncodedPayloadLiterals } = await import("../scripts/verify-no-encoded-payloads.js");
   const sample = [
     'const url = "https://daloyjs.dev/docs/security/csrf";',
     'const msg = "Reject \\x00 NUL bytes in headers";',
@@ -2228,9 +2131,7 @@ test("verify-no-encoded-payloads ignores plain prose, real URLs, and short hashe
 });
 
 test("verify-no-encoded-payloads accepts the live src/ and scripts/ trees", async () => {
-  const { findEncodedPayloadLiterals } = await import(
-    "../scripts/verify-no-encoded-payloads.js"
-  );
+  const { findEncodedPayloadLiterals } = await import("../scripts/verify-no-encoded-payloads.js");
   const { readFile, readdir } = await import("node:fs/promises");
   const path = await import("node:path");
   async function* walk(dir: string): AsyncGenerator<string> {
@@ -2257,7 +2158,7 @@ test("verify-no-encoded-payloads accepts the live src/ and scripts/ trees", asyn
     total,
     0,
     "publishable source roots must remain free of `\\xXX` / `\\u00XX` escape runs and " +
-      "opaque base64 blobs; see https://socket.dev/blog/obfuscation-101-the-tricks-behind-malicious-code",
+      "opaque base64 blobs; see https://socket.dev/blog/obfuscation-101-the-tricks-behind-malicious-code"
   );
 });
 
@@ -2265,9 +2166,7 @@ test("verify-no-encoded-payloads accepts the live src/ and scripts/ trees", asyn
 // with regex" gate, https://snyk.io/blog/timing-out-synchronous-functions-with-regex/) ----------
 
 test("verify-no-redos-patterns flags nested unbounded quantifiers", async () => {
-  const { findReDosPatterns } = await import(
-    "../scripts/verify-no-redos-patterns.js"
-  );
+  const { findReDosPatterns } = await import("../scripts/verify-no-redos-patterns.js");
   const sample = [
     "// classic catastrophic-backtracking shape from the Snyk write-up",
     "const evil = /(a+)+$/;",
@@ -2284,13 +2183,8 @@ test("verify-no-redos-patterns flags nested unbounded quantifiers", async () => 
 });
 
 test("verify-no-redos-patterns flags overlapping alternation under unbounded quantifier", async () => {
-  const { findReDosPatterns } = await import(
-    "../scripts/verify-no-redos-patterns.js"
-  );
-  const sample = [
-    "const evil = /(a|aa)*/;",
-    "const evil2 = /(ab|abc|abcd)+/;",
-  ].join("\n");
+  const { findReDosPatterns } = await import("../scripts/verify-no-redos-patterns.js");
+  const sample = ["const evil = /(a|aa)*/;", "const evil2 = /(ab|abc|abcd)+/;"].join("\n");
   const findings = findReDosPatterns("sample.ts", sample);
   assert.equal(findings.length, 2);
   for (const f of findings) {
@@ -2299,9 +2193,7 @@ test("verify-no-redos-patterns flags overlapping alternation under unbounded qua
 });
 
 test("verify-no-redos-patterns ignores safe regexes and allow-marked lines", async () => {
-  const { findReDosPatterns } = await import(
-    "../scripts/verify-no-redos-patterns.js"
-  );
+  const { findReDosPatterns } = await import("../scripts/verify-no-redos-patterns.js");
   const sample = [
     "// anchored, single quantifier — safe",
     "const ok1 = /^[A-Za-z0-9_-]+$/;",
@@ -2313,7 +2205,7 @@ test("verify-no-redos-patterns ignores safe regexes and allow-marked lines", asy
     "const fine = /(a+)+$/; // daloy-allow-redos: only run against a 16-byte fixed prefix",
     "// inside a comment — must not trip",
     "// example from blog: /(a+)+$/ should be ignored when in a comment",
-    '// inside a string literal — must not trip',
+    "// inside a string literal — must not trip",
     'const msg = "the regex /(a+)+$/ is bad";',
   ].join("\n");
   const findings = findReDosPatterns("sample.ts", sample);
@@ -2321,9 +2213,7 @@ test("verify-no-redos-patterns ignores safe regexes and allow-marked lines", asy
 });
 
 test("verify-no-redos-patterns accepts the live src/ tree", async () => {
-  const { findReDosPatterns } = await import(
-    "../scripts/verify-no-redos-patterns.js"
-  );
+  const { findReDosPatterns } = await import("../scripts/verify-no-redos-patterns.js");
   const { readFile, readdir } = await import("node:fs/promises");
   const path = await import("node:path");
   const srcRoot = path.resolve(process.cwd(), "src");
@@ -2344,23 +2234,22 @@ test("verify-no-redos-patterns accepts the live src/ tree", async () => {
     total,
     0,
     "src/ must remain free of ReDoS-prone regex shapes; see " +
-      "https://snyk.io/blog/timing-out-synchronous-functions-with-regex/",
+      "https://snyk.io/blog/timing-out-synchronous-functions-with-regex/"
   );
 });
-
 
 test("assertTemporalClaims rejects token at exact exp (RFC 7519 boundary)", () => {
   const now = 1_700_000_000;
   assert.throws(
     () => assertTemporalClaims({ exp: now }, { now, clockSkewSeconds: 0 }),
-    (err) => err instanceof TemporalClaimError && err.code === "token_expired",
+    (err) => err instanceof TemporalClaimError && err.code === "token_expired"
   );
   // With skew, still valid until now reaches exp+skew.
   assert.doesNotThrow(() =>
-    assertTemporalClaims({ exp: now }, { now: now + 4, clockSkewSeconds: 5 }),
+    assertTemporalClaims({ exp: now }, { now: now + 4, clockSkewSeconds: 5 })
   );
   assert.throws(
     () => assertTemporalClaims({ exp: now }, { now: now + 5, clockSkewSeconds: 5 }),
-    (err) => err instanceof TemporalClaimError && err.code === "token_expired",
+    (err) => err instanceof TemporalClaimError && err.code === "token_expired"
   );
 });

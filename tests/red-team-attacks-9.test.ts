@@ -72,7 +72,7 @@ test("[info/fingerprint] no Server / X-Powered-By / runtime headers on 200, 404,
   assert.deepEqual(
     probes.map((r) => r.status),
     [200, 404, 405],
-    "the three probe statuses are as expected",
+    "the three probe statuses are as expected"
   );
   const leaky = ["server", "x-powered-by", "x-aspnet-version", "x-aspnetmvc-version", "x-runtime"];
   for (const res of probes) {
@@ -91,7 +91,7 @@ test("[info/errors] 404 / 405 bodies are RFC 9457 and leak no stack, file path, 
     assert.equal(
       res.headers.get("content-type"),
       "application/problem+json",
-      "errors are problem+json (RFC 9457)",
+      "errors are problem+json (RFC 9457)"
     );
     const text = await res.text();
     assert.ok(!/\/Users\/|\/home\/|[A-Za-z]:\\/.test(text), "no absolute filesystem path leaks");
@@ -127,7 +127,12 @@ const basic = (user: string, pass: string) =>
 
 test("[authn/enum] basicAuth gives a byte-identical 401 for an unknown user vs a known user with a wrong password", async () => {
   const app = new App({ env: "development", logger: false });
-  app.use(basicAuth({ realm: "api", verify: (u, p) => (u === "alice" && p === "s3cret-correct" ? { username: u } : false) }));
+  app.use(
+    basicAuth({
+      realm: "api",
+      verify: (u, p) => (u === "alice" && p === "s3cret-correct" ? { username: u } : false),
+    })
+  );
   app.route({
     method: "GET",
     path: "/vault",
@@ -136,20 +141,30 @@ test("[authn/enum] basicAuth gives a byte-identical 401 for an unknown user vs a
     handler: async () => ({ status: 200 as const, body: { ok: true } }),
   });
 
-  const unknownUser = await app.request("/vault", { headers: { authorization: basic("bob", "whatever") } });
-  const knownUserWrongPass = await app.request("/vault", { headers: { authorization: basic("alice", "WRONG") } });
+  const unknownUser = await app.request("/vault", {
+    headers: { authorization: basic("bob", "whatever") },
+  });
+  const knownUserWrongPass = await app.request("/vault", {
+    headers: { authorization: basic("alice", "WRONG") },
+  });
 
   assert.equal(unknownUser.status, 401);
   assert.equal(knownUserWrongPass.status, 401);
   // The whole observable response must be identical — no username oracle.
-  assert.equal(await unknownUser.text(), await knownUserWrongPass.text(), "identical bodies (no enumeration)");
+  assert.equal(
+    await unknownUser.text(),
+    await knownUserWrongPass.text(),
+    "identical bodies (no enumeration)"
+  );
   assert.equal(
     unknownUser.headers.get("www-authenticate"),
     knownUserWrongPass.headers.get("www-authenticate"),
-    "identical WWW-Authenticate challenge",
+    "identical WWW-Authenticate challenge"
   );
   // Sanity: the correct credentials DO get in (the guard isn't just always-401).
-  const good = await app.request("/vault", { headers: { authorization: basic("alice", "s3cret-correct") } });
+  const good = await app.request("/vault", {
+    headers: { authorization: basic("alice", "s3cret-correct") },
+  });
   assert.equal(good.status, 200);
 });
 
@@ -188,11 +203,15 @@ test("[authn/enum] bearerAuth returns a uniform 403 for any invalid token; missi
   assert.deepEqual(
     stripTrace(await opaque.json()),
     stripTrace(await jwtish.json()),
-    "invalid tokens are indistinguishable apart from the random trace id (no oracle)",
+    "invalid tokens are indistinguishable apart from the random trace id (no oracle)"
   );
 
   // Sanity: the valid token gets in.
-  assert.equal((await app.request("/api", { headers: { authorization: "Bearer the-one-valid-token" } })).status, 200);
+  assert.equal(
+    (await app.request("/api", { headers: { authorization: "Bearer the-one-valid-token" } }))
+      .status,
+    200
+  );
 });
 
 test("[authn/lockout] rate-limit throttles a credential brute-force before unlimited guessing", async () => {
@@ -210,13 +229,20 @@ test("[authn/lockout] rate-limit throttles a credential brute-force before unlim
 
   const statuses: number[] = [];
   for (let i = 0; i < 5; i++) {
-    statuses.push((await app.request("/login", { headers: { authorization: basic("alice", `guess-${i}`) } })).status);
+    statuses.push(
+      (await app.request("/login", { headers: { authorization: basic("alice", `guess-${i}`) } }))
+        .status
+    );
   }
   // First 3 hit the auth wall (401); attempts 4+ are shed by the limiter (429).
-  assert.deepEqual(statuses.slice(0, 3), [401, 401, 401], "first attempts reach the (failing) auth check");
+  assert.deepEqual(
+    statuses.slice(0, 3),
+    [401, 401, 401],
+    "first attempts reach the (failing) auth check"
+  );
   assert.ok(
     statuses.slice(3).every((s) => s === 429),
-    `brute force is throttled after the cap (got ${statuses.join(",")})`,
+    `brute force is throttled after the cap (got ${statuses.join(",")})`
   );
 });
 
@@ -271,7 +297,9 @@ test("[session/puzzling] data written under one session never leaks into another
     method: "GET",
     path: "/whoami",
     operationId: "whoami",
-    responses: { 200: { description: "ok", body: z.object({ role: z.string().nullable() }) as any } },
+    responses: {
+      200: { description: "ok", body: z.object({ role: z.string().nullable() }) as any },
+    },
     handler: async ({ state }: any) => ({
       status: 200 as const,
       body: { role: state.session.get("role") ?? null },
@@ -289,7 +317,9 @@ test("[session/puzzling] data written under one session never leaks into another
 
   // The victim, presenting their cookie, still sees their own data — proving
   // the role was bound to the session, not stored in shared global state.
-  const owner = await (await app.request("/whoami", { headers: { cookie: cookie!.split(";")[0]! } })).json();
+  const owner = await (
+    await app.request("/whoami", { headers: { cookie: cookie!.split(";")[0]! } })
+  ).json();
   assert.equal(owner.role, "admin", "the owning session still reads its own data");
 });
 
@@ -309,10 +339,13 @@ test("[inpv/xxe] an XML/SVG body carrying an external entity is rejected at cont
     handler: async () => ({ status: 200 as const, body: { ok: true } }),
   });
 
-  const xxe =
-    `<?xml version="1.0"?><!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]><foo>&xxe;</foo>`;
+  const xxe = `<?xml version="1.0"?><!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]><foo>&xxe;</foo>`;
   for (const ct of ["application/xml", "text/xml", "image/svg+xml"]) {
-    const res = await app.request("/items", { method: "POST", headers: { "content-type": ct }, body: xxe });
+    const res = await app.request("/items", {
+      method: "POST",
+      headers: { "content-type": ct },
+      body: xxe,
+    });
     assert.equal(res.status, 415, `${ct} is rejected as unsupported media type (never XML-parsed)`);
   }
 });
@@ -330,7 +363,11 @@ test("[inpv/log-injection] CRLF + ANSI escapes in a logged value cannot forge a 
   const line = lines[0]!;
   assert.ok(!line.includes("\n") && !line.includes("\r"), "no raw CR/LF can split the record");
   const parsed = JSON.parse(line); // a corrupted line would not be valid JSON
-  assert.equal(parsed.userAgent, hostile, "the payload survives intact as escaped data, not structure");
+  assert.equal(
+    parsed.userAgent,
+    hostile,
+    "the payload survives intact as escaped data, not structure"
+  );
   assert.equal(parsed.level, "info", "the attacker's forged level did not override the real one");
 });
 
@@ -344,7 +381,7 @@ test("[clnt/clickjacking] every response ships X-Frame-Options: DENY + CSP frame
   assert.equal(res.headers.get("x-frame-options"), "DENY", "framing is denied outright");
   assert.ok(
     (res.headers.get("content-security-policy") ?? "").includes("frame-ancestors 'none'"),
-    "CSP also forbids framing (defense in depth)",
+    "CSP also forbids framing (defense in depth)"
   );
   const hsts = res.headers.get("strict-transport-security") ?? "";
   assert.match(hsts, /max-age=\d{7,}/, "HSTS max-age is at least ~months (a year by default)");
@@ -356,7 +393,10 @@ test("[conf/host-injection] a forged Host / X-Forwarded-Host is not reflected in
     env: "development",
     logger: false,
     docs: true,
-    openapi: { info: { title: "API", version: "1.0.0" }, servers: [{ url: "https://api.example.com" }] },
+    openapi: {
+      info: { title: "API", version: "1.0.0" },
+      servers: [{ url: "https://api.example.com" }],
+    },
   });
   app.route({
     method: "GET",
@@ -374,11 +414,11 @@ test("[conf/host-injection] a forged Host / X-Forwarded-Host is not reflected in
   assert.deepEqual(
     spec.servers,
     [{ url: "https://api.example.com" }],
-    "the server list is the configured value, not the attacker's Host",
+    "the server list is the configured value, not the attacker's Host"
   );
   assert.ok(
     !JSON.stringify(spec).includes("evil.attacker.test"),
-    "the forged host is reflected nowhere in the spec (no cache/link poisoning sink)",
+    "the forged host is reflected nowhere in the spec (no cache/link poisoning sink)"
   );
 });
 
@@ -396,22 +436,48 @@ test("[clnt/cors-preflight] a disallowed origin's preflight leaks no CORS config
   const preflight = (origin: string) =>
     app.request("/d", {
       method: "OPTIONS",
-      headers: { origin, "access-control-request-method": "POST", "access-control-request-headers": "authorization" },
+      headers: {
+        origin,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization",
+      },
     });
 
   // Disallowed origin: no ACAO, no credentials, no methods/headers allowlist
   // (the API's accepted surface is NOT disclosed to an untrusted origin).
   const evil = await preflight("https://evil.example");
-  assert.equal(evil.headers.get("access-control-allow-origin"), null, "no ACAO for a disallowed origin");
+  assert.equal(
+    evil.headers.get("access-control-allow-origin"),
+    null,
+    "no ACAO for a disallowed origin"
+  );
   assert.equal(evil.headers.get("access-control-allow-credentials"), null, "no credentials grant");
-  assert.equal(evil.headers.get("access-control-allow-methods"), null, "method allowlist not leaked");
-  assert.equal(evil.headers.get("access-control-allow-headers"), null, "header allowlist not leaked");
-  assert.ok((evil.headers.get("vary") ?? "").includes("Origin"), "Vary: Origin prevents cache poisoning");
+  assert.equal(
+    evil.headers.get("access-control-allow-methods"),
+    null,
+    "method allowlist not leaked"
+  );
+  assert.equal(
+    evil.headers.get("access-control-allow-headers"),
+    null,
+    "header allowlist not leaked"
+  );
+  assert.ok(
+    (evil.headers.get("vary") ?? "").includes("Origin"),
+    "Vary: Origin prevents cache poisoning"
+  );
 
   // Allowed origin: the EXACT origin is echoed (never the wildcard, which is
   // illegal with credentials anyway), plus the credentials grant.
   const good = await preflight("https://good.example");
-  assert.equal(good.headers.get("access-control-allow-origin"), "https://good.example", "exact origin, not *");
+  assert.equal(
+    good.headers.get("access-control-allow-origin"),
+    "https://good.example",
+    "exact origin, not *"
+  );
   assert.equal(good.headers.get("access-control-allow-credentials"), "true");
-  assert.ok((good.headers.get("access-control-allow-methods") ?? "").length > 0, "methods advertised to a trusted origin");
+  assert.ok(
+    (good.headers.get("access-control-allow-methods") ?? "").length > 0,
+    "methods advertised to a trusted origin"
+  );
 });

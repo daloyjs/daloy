@@ -100,10 +100,9 @@ export async function runContractTests(
     }
 
     // Validate examples against schemas.
-    const responseEntries = Object.entries(r.responses) as Array<[
-      string,
-      import("./types.js").ResponseSpec | undefined
-    ]>;
+    const responseEntries = Object.entries(r.responses) as Array<
+      [string, import("./types.js").ResponseSpec | undefined]
+    >;
     for (const [status, spec] of responseEntries) {
       if (!spec) continue;
       if (spec.body && spec.examples) {
@@ -127,7 +126,9 @@ export async function runContractTests(
     if (meta?.examples) {
       for (const [name, ex] of Object.entries(meta.examples)) {
         if (ex.request) {
-          const checks: Array<[string, import("./schema.js").StandardSchemaV1 | undefined, unknown]> = [
+          const checks: Array<
+            [string, import("./schema.js").StandardSchemaV1 | undefined, unknown]
+          > = [
             ["request.body", r.request?.body, ex.request.body],
             ["request.query", r.request?.query, ex.request.query],
             ["request.params", r.request?.params, ex.request.params],

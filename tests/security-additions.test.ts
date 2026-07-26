@@ -1,12 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  App,
-  basicAuth,
-  csrf,
-  secureHeaders,
-  timingSafeEqual,
-} from "../src/index.js";
+import { App, basicAuth, csrf, secureHeaders, timingSafeEqual } from "../src/index.js";
 
 // ============================================================================
 // secureHeaders -- CSP nonce + Trusted Types
@@ -141,7 +135,7 @@ test("secureHeaders: CSP directives object form does not overwrite handler-set C
   app.use(
     secureHeaders({
       contentSecurityPolicy: { directives: { "default-src": "'self'" } },
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -365,7 +359,7 @@ test("csrf 'both' strategy: requires both fetch-metadata and double-submit cooki
 test("csrf: invalid strategy is rejected at construction time", () => {
   assert.throws(
     () => csrf({ strategy: "off" as never }),
-    /strategy must be "double-submit", "fetch-metadata", or "both"/,
+    /strategy must be "double-submit", "fetch-metadata", or "both"/
   );
 });
 
@@ -473,7 +467,8 @@ test("basicAuth: verify returning false produces 401", async () => {
 
 test("basicAuth: verify returning true sets ctx.state.user with username", async () => {
   const app = makeBasicApp({
-    verify: (username, password) => timingSafeEqual(username, "admin") && timingSafeEqual(password, "s3cret"),
+    verify: (username, password) =>
+      timingSafeEqual(username, "admin") && timingSafeEqual(password, "s3cret"),
   });
   const res = await app.request("/me", {
     headers: { authorization: basicHeader("admin", "s3cret") },
@@ -515,20 +510,20 @@ test("basicAuth: custom realm appears in challenge", async () => {
 test("basicAuth: realm with CRLF is rejected at construction time", () => {
   assert.throws(
     () => basicAuth({ verify: () => true, realm: 'evil"\r\nInjection: yes' }),
-    /must not contain quotes, CR, LF, or NUL bytes/,
+    /must not contain quotes, CR, LF, or NUL bytes/
   );
 });
 
 test("basicAuth: missing verify is rejected at construction time", () => {
   assert.throws(
     () => basicAuth(undefined as unknown as Parameters<typeof basicAuth>[0]),
-    /verify must be a function/,
+    /verify must be a function/
   );
 });
 
 test("basicAuth: invalid maxCredentialBytes is rejected at construction time", () => {
   assert.throws(
     () => basicAuth({ verify: () => true, maxCredentialBytes: 0 }),
-    /maxCredentialBytes must be a positive integer/,
+    /maxCredentialBytes must be a positive integer/
   );
 });

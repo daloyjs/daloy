@@ -59,11 +59,7 @@ export type {
   DiscriminatedUnionOptions,
 } from "./discriminator.js";
 
-export type {
-  CallbackDefinition,
-  CallbackMap,
-  CallbackOperation,
-} from "./types.js";
+export type { CallbackDefinition, CallbackMap, CallbackOperation } from "./types.js";
 
 /** OpenAPI [Info Object](https://spec.openapis.org/oas/v3.1.0#info-object) header fields. */
 export interface OpenAPIInfo {
@@ -218,7 +214,7 @@ export function generateOpenAPI(app: App, options: OpenAPIOptions): Record<strin
 }
 
 function normalizeSecuritySchemes(
-  schemes: SecuritySchemeMap | undefined,
+  schemes: SecuritySchemeMap | undefined
 ): SecuritySchemeMap | undefined {
   if (!schemes) return undefined;
   const out: SecuritySchemeMap = {};
@@ -228,21 +224,15 @@ function normalizeSecuritySchemes(
   return out;
 }
 
-type OperationLike =
-  | RouteDefinition<any, any, any, any>
-  | WebhookDefinition
-  | CallbackOperation;
+type OperationLike = RouteDefinition<any, any, any, any> | WebhookDefinition | CallbackOperation;
 
-function buildOperation(
-  route: OperationLike,
-  path?: string
-): Record<string, unknown> {
+function buildOperation(route: OperationLike, path?: string): Record<string, unknown> {
   const meta = (route as { meta?: RouteMeta }).meta;
   const mergedTags = mergeTags(route.tags, meta?.tags);
   const op: Record<string, unknown> = {
     ...(route.operationId ? { operationId: route.operationId } : {}),
-    ...(route.summary ?? meta?.summary ? { summary: route.summary ?? meta?.summary } : {}),
-    ...(route.description ?? meta?.description
+    ...((route.summary ?? meta?.summary) ? { summary: route.summary ?? meta?.summary } : {}),
+    ...((route.description ?? meta?.description)
       ? { description: route.description ?? meta?.description }
       : {}),
     ...(mergedTags.length ? { tags: mergedTags } : {}),
@@ -338,10 +328,9 @@ function buildOperation(
   }
 
   const responses: Record<string, unknown> = {};
-  const responseEntries = Object.entries(route.responses) as Array<[
-    string,
-    import("./types.js").ResponseSpec | undefined
-  ]>;
+  const responseEntries = Object.entries(route.responses) as Array<
+    [string, import("./types.js").ResponseSpec | undefined]
+  >;
   for (const [status, spec] of responseEntries) {
     if (!spec) continue;
     const metaResponseExamples = collectResponseExamples(meta, Number(status));
@@ -369,9 +358,7 @@ function buildOperation(
     op.security = [{ [route.auth.scheme]: route.auth.scopes ?? [] }];
   }
 
-  const callbacks = buildCallbacks(
-    (route as { callbacks?: CallbackMap }).callbacks
-  );
+  const callbacks = buildCallbacks((route as { callbacks?: CallbackMap }).callbacks);
   if (callbacks) op.callbacks = callbacks;
 
   if (meta?.extensions) {
@@ -400,7 +387,9 @@ function mergeTags(routeTags: string[] | undefined, metaTags: string[] | undefin
   return out;
 }
 
-function collectRequestBodyExamples(meta: RouteMeta | undefined): Record<string, unknown> | undefined {
+function collectRequestBodyExamples(
+  meta: RouteMeta | undefined
+): Record<string, unknown> | undefined {
   if (!meta?.examples) return undefined;
   const out: Record<string, unknown> = {};
   for (const [name, ex] of Object.entries(meta.examples)) {
@@ -645,4 +634,3 @@ export function openapiToYAML(doc: Record<string, unknown>): string {
   const result = yamlEmit(doc, "");
   return result.startsWith("\n") ? result.slice(1) : result;
 }
-

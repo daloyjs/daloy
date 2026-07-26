@@ -36,14 +36,7 @@
  * @since 0.36.0
  */
 
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const SENTINEL = "# daloyjs-pre-commit-secrets-hook v1";
@@ -95,9 +88,7 @@ function resolveGitDir(cwd: string): string | null {
 export function installPreCommitHook(opts: InstallOptions): InstallResult {
   const gitDir = resolveGitDir(opts.cwd);
   if (gitDir === null) {
-    throw new Error(
-      `hooks:install: not a git checkout (no .git directory at ${opts.cwd}).`,
-    );
+    throw new Error(`hooks:install: not a git checkout (no .git directory at ${opts.cwd}).`);
   }
   const hooksDir = resolve(gitDir, "hooks");
   mkdirSync(hooksDir, { recursive: true });
@@ -141,7 +132,7 @@ function main(): void {
     case "refused-existing":
       console.error(
         `hooks:install: refusing to overwrite existing ${result.hookPath}. ` +
-          "Re-run with --force to replace it, or move your hook aside first.",
+          "Re-run with --force to replace it, or move your hook aside first."
       );
       process.exitCode = 1;
       return;

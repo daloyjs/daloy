@@ -27,7 +27,7 @@ async function bench(label: string, iters: number, fn: () => Promise<unknown>): 
     maximumFractionDigits: 0,
   });
   console.log(
-    `${label.padEnd(48)} ${opsPerSec.padStart(12)} ops/sec  (${(t1 - t0).toFixed(1)}ms / ${iters} iters)`,
+    `${label.padEnd(48)} ${opsPerSec.padStart(12)} ops/sec  (${(t1 - t0).toFixed(1)}ms / ${iters} iters)`
   );
 }
 
@@ -69,7 +69,7 @@ function principalApp() {
     responseCache({
       ttlSeconds: 60,
       principal: (ctx) => ctx.request.headers.get("x-user-id"),
-    } as never) as never,
+    } as never) as never
   );
   app.get("/items", ROUTE as never, async () => PAYLOAD as never);
   return app;
@@ -92,28 +92,34 @@ const miss = missApp();
 
 // Warm each cache so the HIT benchmarks measure the hit path.
 await plain.request(new Request("http://a.example.com/items"));
-await tenant.request(new Request("http://a.example.com/items", { headers: { "x-tenant-id": "acme" } }));
-await principal.request(new Request("http://a.example.com/items", { headers: { "x-user-id": "u-1" } }));
+await tenant.request(
+  new Request("http://a.example.com/items", { headers: { "x-tenant-id": "acme" } })
+);
+await principal.request(
+  new Request("http://a.example.com/items", { headers: { "x-user-id": "u-1" } })
+);
 
 await bench("HIT — plain key", 200_000, () =>
-  plain.request(new Request("http://a.example.com/items")),
+  plain.request(new Request("http://a.example.com/items"))
 );
 await bench("HIT — tenant-partitioned key", 200_000, () =>
-  tenant.request(new Request("http://a.example.com/items", { headers: { "x-tenant-id": "acme" } })),
+  tenant.request(new Request("http://a.example.com/items", { headers: { "x-tenant-id": "acme" } }))
 );
 await bench("HIT — principal-partitioned key", 200_000, () =>
-  principal.request(new Request("http://a.example.com/items", { headers: { "x-user-id": "u-1" } })),
+  principal.request(new Request("http://a.example.com/items", { headers: { "x-user-id": "u-1" } }))
 );
 console.log("");
 // A fresh query string every iteration, so every request is a store-write miss.
 let n = 0;
 await bench("MISS — key build + body buffer + store", 100_000, () =>
-  miss.request(new Request(`http://a.example.com/items?q=${n++}`)),
+  miss.request(new Request(`http://a.example.com/items?q=${n++}`))
 );
 console.log("");
 await bench("BYPASS — Authorization-bearing request", 200_000, () =>
-  plain.request(new Request("http://a.example.com/items", { headers: { authorization: "Bearer t" } })),
+  plain.request(
+    new Request("http://a.example.com/items", { headers: { authorization: "Bearer t" } })
+  )
 );
 await bench("BYPASS — Cookie-bearing request", 200_000, () =>
-  plain.request(new Request("http://a.example.com/items", { headers: { cookie: "sid=abc" } })),
+  plain.request(new Request("http://a.example.com/items", { headers: { cookie: "sid=abc" } }))
 );

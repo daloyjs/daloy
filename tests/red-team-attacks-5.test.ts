@@ -42,7 +42,9 @@ function idemApp(opts: Parameters<typeof idempotency>[0] = {}) {
     path: "/me/charge",
     operationId: "charge",
     request: { body: z.object({ amount: z.number() }) as any },
-    responses: { 201: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any } },
+    responses: {
+      201: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any },
+    },
     handler: async ({ request }: any) => ({
       status: 201 as const,
       body: { owner: request.headers.get("authorization") ?? "anon", call: ++calls },
@@ -114,7 +116,9 @@ function cacheApp(opts: Parameters<typeof responseCache>[0] = {}) {
     method: "GET",
     path: "/me",
     operationId: "me",
-    responses: { 200: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any } },
+    responses: {
+      200: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any },
+    },
     handler: async ({ request }: any) => ({
       status: 200 as const,
       body: { owner: request.headers.get("authorization") ?? "anon", call: ++calls },
@@ -125,12 +129,18 @@ function cacheApp(opts: Parameters<typeof responseCache>[0] = {}) {
 
 test("[response-cache/x-tenant] an Authorization-bearing response is NOT served to another user", async () => {
   const app = cacheApp();
-  const a = await (await app.request("/me", { headers: { authorization: "Bearer USER_A" } })).json();
+  const a = await (
+    await app.request("/me", { headers: { authorization: "Bearer USER_A" } })
+  ).json();
   const res2 = await app.request("/me", { headers: { authorization: "Bearer USER_B" } });
   const b = await res2.json();
   assert.equal(a.owner, "Bearer USER_A");
   assert.equal(b.owner, "Bearer USER_B", "user B must never receive user A's cached response");
-  assert.notEqual(res2.headers.get("x-cache"), "HIT", "authenticated requests bypass the shared cache");
+  assert.notEqual(
+    res2.headers.get("x-cache"),
+    "HIT",
+    "authenticated requests bypass the shared cache"
+  );
 });
 
 test("[response-cache/x-tenant] unauthenticated/public responses are still cached", async () => {
@@ -143,10 +153,14 @@ test("[response-cache/x-tenant] unauthenticated/public responses are still cache
 
 test("[response-cache/x-tenant] explicit opt-in + vary on authorization isolates per principal", async () => {
   const app = cacheApp({ cacheAuthenticatedRequests: true, varyHeaders: ["authorization"] });
-  const a1 = await (await app.request("/me", { headers: { authorization: "Bearer USER_A" } })).json();
+  const a1 = await (
+    await app.request("/me", { headers: { authorization: "Bearer USER_A" } })
+  ).json();
   const a2res = await app.request("/me", { headers: { authorization: "Bearer USER_A" } });
   assert.equal(a2res.headers.get("x-cache"), "HIT", "same principal hits the opted-in cache");
   assert.deepEqual(await a2res.json(), a1);
-  const b = await (await app.request("/me", { headers: { authorization: "Bearer USER_B" } })).json();
+  const b = await (
+    await app.request("/me", { headers: { authorization: "Bearer USER_B" } })
+  ).json();
   assert.equal(b.owner, "Bearer USER_B", "vary on authorization keeps principals isolated");
 });

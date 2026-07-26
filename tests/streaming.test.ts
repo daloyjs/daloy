@@ -1,12 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  App,
-  ndjsonResponse,
-  ndjsonStream,
-  sseResponse,
-  sseStream,
-} from "../src/index.js";
+import { App, ndjsonResponse, ndjsonStream, sseResponse, sseStream } from "../src/index.js";
 
 const decoder = new TextDecoder();
 
@@ -115,7 +109,10 @@ test("sseStream aborts via AbortSignal and releases the iterator", async () => {
     {
       [Symbol.asyncIterator]() {
         return {
-          next: () => new Promise(() => {/* never resolves */}) as any,
+          next: () =>
+            new Promise(() => {
+              /* never resolves */
+            }) as any,
           return: async () => {
             returned = true;
             return { value: undefined, done: true };
@@ -160,7 +157,10 @@ test("sseStream emits keep-alive comments", async () => {
     seen.push(decoder.decode(r.value));
     if (seen.some((s) => s.includes(": keep-alive"))) break;
   }
-  assert.ok(seen.some((s) => s.includes(": keep-alive")), "saw a keep-alive frame");
+  assert.ok(
+    seen.some((s) => s.includes(": keep-alive")),
+    "saw a keep-alive frame"
+  );
   await reader.cancel();
 });
 
@@ -217,7 +217,10 @@ test("ndjsonStream aborts via signal and releases iterator", async () => {
     {
       [Symbol.asyncIterator]() {
         return {
-          next: () => new Promise(() => {/* hang */}) as any,
+          next: () =>
+            new Promise(() => {
+              /* hang */
+            }) as any,
           return: async () => {
             returned = true;
             return { value: undefined, done: true };

@@ -51,21 +51,21 @@ pnpm create daloy@latest my-api \
 
 ### Flags
 
-| Flag | Description |
-| --- | --- |
-| `--template <name>` | `node-basic` (default), `vercel`, `cloudflare-worker`, `bun-basic`, or `deno-basic`, `vercel`. |
-| `--package-manager <pm>` | `pnpm` (default), `npm`, `yarn`, or `bun`. Ignored for `deno-basic`. |
-| `--list-templates` | Print available templates with descriptions. |
-| `--install` / `--no-install` | Install dependencies after scaffolding. Defaults to **Y** for npm/yarn/bun and **N** for pnpm so you can review the hardened `.npmrc` / `pnpm-workspace.yaml` and aren't blocked by the 24h `minimumReleaseAge` embargo on the first run. |
-| `--git` / `--no-git` | Initialize a git repository. Defaults to interactive. |
-| `--minimal` | Strip the bookstore demo route and the built-in `/docs` + `/openapi.json` routes so only the framework bootstrap and `/healthz` ship. |
-| `--with-ci` / `--no-ci` | Add the hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, and lockfile-source verification bundle. **Defaults to Y** so scaffolded projects are secure by default. |
-| `--with-deploy` / `--no-deploy` | Add the starter `.github/workflows/deploy.yml`. Defaults to the same value as `--with-ci`, so you can keep CI but opt out of deploy scaffolding with `--no-deploy`. |
-| `--code-owner <owner>` | Replace the CODEOWNERS placeholder when `--with-ci` is used, for example `@acme/security`. |
-| `--force` | Overwrite an existing non-empty directory. |
-| `--yes` | Accept all defaults; never prompt. |
-| `--help` | Print usage and exit. |
-| `--version` | Print version and exit. |
+| Flag                            | Description                                                                                                                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--template <name>`             | `node-basic` (default), `vercel`, `cloudflare-worker`, `bun-basic`, or `deno-basic`, `vercel`.                                                                                                                                            |
+| `--package-manager <pm>`        | `pnpm` (default), `npm`, `yarn`, or `bun`. Ignored for `deno-basic`.                                                                                                                                                                      |
+| `--list-templates`              | Print available templates with descriptions.                                                                                                                                                                                              |
+| `--install` / `--no-install`    | Install dependencies after scaffolding. Defaults to **Y** for npm/yarn/bun and **N** for pnpm so you can review the hardened `.npmrc` / `pnpm-workspace.yaml` and aren't blocked by the 24h `minimumReleaseAge` embargo on the first run. |
+| `--git` / `--no-git`            | Initialize a git repository. Defaults to interactive.                                                                                                                                                                                     |
+| `--minimal`                     | Strip the bookstore demo route and the built-in `/docs` + `/openapi.json` routes so only the framework bootstrap and `/healthz` ship.                                                                                                     |
+| `--with-ci` / `--no-ci`         | Add the hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, and lockfile-source verification bundle. **Defaults to Y** so scaffolded projects are secure by default.                                                            |
+| `--with-deploy` / `--no-deploy` | Add the starter `.github/workflows/deploy.yml`. Defaults to the same value as `--with-ci`, so you can keep CI but opt out of deploy scaffolding with `--no-deploy`.                                                                       |
+| `--code-owner <owner>`          | Replace the CODEOWNERS placeholder when `--with-ci` is used, for example `@acme/security`.                                                                                                                                                |
+| `--force`                       | Overwrite an existing non-empty directory.                                                                                                                                                                                                |
+| `--yes`                         | Accept all defaults; never prompt.                                                                                                                                                                                                        |
+| `--help`                        | Print usage and exit.                                                                                                                                                                                                                     |
+| `--version`                     | Print version and exit.                                                                                                                                                                                                                   |
 
 ## Templates
 
@@ -184,7 +184,7 @@ For Node-style templates, the bundle adds the following.
 
 - `.github/workflows/vuln-scan.yml` — daily cron that runs the package
   manager's audit against the committed lockfile. Catches CVEs disclosed
-  *after* the last PR or push and provides SOC 2 CC7.1
+  _after_ the last PR or push and provides SOC 2 CC7.1
   ([continuous vulnerability management](https://www.aikido.dev/blog/a-guide-to-automating-technical-vulnerability-management-for-soc-2))
   evidence even when nobody is touching the repo.
 - `.github/workflows/osv-scan.yml` — a second, independent SCA source.

@@ -55,7 +55,7 @@ describe("behindProxy declarative model", () => {
     const res = await app.fetch(
       new Request("http://test/x", {
         headers: { "x-forwarded-for": "1.2.3.4" },
-      }),
+      })
     );
     assert.equal(res.status, 200);
   });
@@ -135,7 +135,7 @@ describe("subdomains PSL helper", () => {
       subdomains("api.example.com", {
         production: true,
         _snapshotDate: "not-a-date",
-      }),
+      })
     );
   });
   it("refuses stale PSL in production", () => {
@@ -144,7 +144,7 @@ describe("subdomains PSL helper", () => {
         production: true,
         _snapshotDate: "2020-01-01",
         _now: new Date("2026-05-20"),
-      }),
+      })
     );
   });
   it("accepts fresh PSL in production", () => {
@@ -156,12 +156,7 @@ describe("subdomains PSL helper", () => {
     assert.equal(r.baseDomain, "example.com");
   });
   it("PSL snapshot contains the documented preview-deploy entries", () => {
-    for (const entry of [
-      "vercel.app",
-      "workers.dev",
-      "github.io",
-      "s3.amazonaws.com",
-    ]) {
+    for (const entry of ["vercel.app", "workers.dev", "github.io", "s3.amazonaws.com"]) {
       assert.ok(PSL_PUBLIC_SUFFIXES.includes(entry), `missing ${entry}`);
     }
   });
@@ -188,7 +183,7 @@ describe("plugin dependencies / seed / stateful", () => {
         name: "rate-limit-cluster",
         dependencies: ["redis-connection"],
         register: () => {},
-      }),
+      })
     );
   });
   it("accepts dependencies that have been registered first", () => {
@@ -204,15 +199,11 @@ describe("plugin dependencies / seed / stateful", () => {
     const app = new App();
     app.register({ name: "metrics", seed: "a", register: () => {} });
     app.register({ name: "metrics", seed: "b", register: () => {} });
-    assert.throws(() =>
-      app.register({ name: "metrics", seed: "a", register: () => {} }),
-    );
+    assert.throws(() => app.register({ name: "metrics", seed: "a", register: () => {} }));
   });
   it("refuses anonymous stateful plugin in production", () => {
     const app = new App({ env: "production" });
-    assert.throws(() =>
-      app.register({ stateful: true, register: () => {} }),
-    );
+    assert.throws(() => app.register({ stateful: true, register: () => {} }));
   });
 });
 
@@ -223,14 +214,17 @@ describe("plugin extension ordering", () => {
       { name: "a", event: "onRequest", handler: () => {} },
       { name: "c", event: "onRequest", handler: () => {}, after: ["b"] },
     ]);
-    assert.deepEqual(out.map((e) => e.name), ["a", "b", "c"]);
+    assert.deepEqual(
+      out.map((e) => e.name),
+      ["a", "b", "c"]
+    );
   });
   it("detects cycles", () => {
     assert.throws(() =>
       topoSortExtensions([
         { name: "a", event: "onRequest", handler: () => {}, after: ["b"] },
         { name: "b", event: "onRequest", handler: () => {}, after: ["a"] },
-      ]),
+      ])
     );
   });
   it("refuses duplicate extension names", () => {
@@ -238,7 +232,7 @@ describe("plugin extension ordering", () => {
       topoSortExtensions([
         { name: "a", event: "onRequest", handler: () => {} },
         { name: "a", event: "onRequest", handler: () => {} },
-      ]),
+      ])
     );
   });
 });
@@ -271,9 +265,7 @@ describe("defineDependency", () => {
     assert.deepEqual(state.user, { id: 1 });
   });
   it("refuses self-cycle at construction", () => {
-    assert.throws(() =>
-      defineDependency({ name: "x", dependsOn: ["x"], resolve: () => 1 }),
-    );
+    assert.throws(() => defineDependency({ name: "x", dependsOn: ["x"], resolve: () => 1 }));
   });
   it("requires declared dependencies to have run first", async () => {
     const dep = defineDependency({

@@ -2,21 +2,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import {
-  fetchGuard,
-  SsrfBlockedError,
-} from "../src/index.js";
+import { fetchGuard, SsrfBlockedError } from "../src/index.js";
 
 // Helper: make a stub fetch that records call URLs and returns a 200.
-function recordingFetch(responses?: Array<{ status: number; headers?: Record<string, string>; body?: string }>) {
+function recordingFetch(
+  responses?: Array<{ status: number; headers?: Record<string, string>; body?: string }>
+) {
   const calls: string[] = [];
   let i = 0;
   const fn = (async (input: Request | string | URL) => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url;
+    const url =
+      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push(url);
     const r = responses?.[i++] ?? { status: 200 };
     return new Response(r.body ?? "ok", { status: r.status, headers: r.headers });
@@ -30,7 +26,7 @@ test("fetchGuard: blocks AWS/Azure metadata 169.254.169.254 (link-local literal)
   const guarded = fetchGuard();
   await assert.rejects(
     () => guarded("http://169.254.169.254/latest/meta-data/iam/security-credentials/"),
-    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed",
+    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed"
   );
 });
 
@@ -50,7 +46,7 @@ test("fetchGuard: rejects a credentialed URL with a typed SsrfBlockedError (not 
     }
     assert.ok(
       thrown instanceof SsrfBlockedError,
-      `expected SsrfBlockedError, got ${(thrown as Error)?.constructor?.name}`,
+      `expected SsrfBlockedError, got ${(thrown as Error)?.constructor?.name}`
     );
     assert.equal((thrown as SsrfBlockedError).reason, "credentials-in-url");
     assert.ok(!(thrown instanceof TypeError));
@@ -65,7 +61,7 @@ test("fetchGuard: blocks Alibaba metadata 100.100.100.200 (always-deny CGNAT)", 
   const guarded = fetchGuard();
   await assert.rejects(
     () => guarded("http://100.100.100.200/latest/meta-data/"),
-    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed",
+    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed"
   );
 });
 
@@ -73,24 +69,18 @@ test("fetchGuard: blocks Oracle Cloud metadata 192.0.0.192 (always-deny)", async
   const guarded = fetchGuard();
   await assert.rejects(
     () => guarded("http://192.0.0.192/opc/v2/instance/"),
-    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed",
+    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed"
   );
 });
 
 test("fetchGuard: blocks loopback IPv4 by default", async () => {
   const guarded = fetchGuard();
-  await assert.rejects(
-    () => guarded("http://127.0.0.1:8080/admin"),
-    SsrfBlockedError,
-  );
+  await assert.rejects(() => guarded("http://127.0.0.1:8080/admin"), SsrfBlockedError);
 });
 
 test("fetchGuard: blocks loopback IPv6 ::1 by default", async () => {
   const guarded = fetchGuard();
-  await assert.rejects(
-    () => guarded("http://[::1]/admin"),
-    SsrfBlockedError,
-  );
+  await assert.rejects(() => guarded("http://[::1]/admin"), SsrfBlockedError);
 });
 
 test("fetchGuard: blocks RFC1918 ranges by default (10/8, 172.16/12, 192.168/16)", async () => {
@@ -107,26 +97,25 @@ test("fetchGuard: blocks RFC1918 ranges by default (10/8, 172.16/12, 192.168/16)
 
 test("fetchGuard: blocks IPv4-mapped IPv6 against the underlying v4 address", async () => {
   const guarded = fetchGuard();
-  await assert.rejects(
-    () => guarded("http://[::ffff:169.254.169.254]/"),
-    SsrfBlockedError,
-  );
+  await assert.rejects(() => guarded("http://[::ffff:169.254.169.254]/"), SsrfBlockedError);
 });
 
 test("fetchGuard: blocks IPv6 link-local fe80::/10", async () => {
   const guarded = fetchGuard();
-  await assert.rejects(
-    () => guarded("http://[fe80::1]/"),
-    SsrfBlockedError,
-  );
+  await assert.rejects(() => guarded("http://[fe80::1]/"), SsrfBlockedError);
 });
 
 test("fetchGuard: rejects non-http(s) protocols", async () => {
   const guarded = fetchGuard();
-  for (const u of ["file:///etc/passwd", "ftp://example.com/", "gopher://example.com/", "data:text/plain;base64,QQ=="]) {
+  for (const u of [
+    "file:///etc/passwd",
+    "ftp://example.com/",
+    "gopher://example.com/",
+    "data:text/plain;base64,QQ==",
+  ]) {
     await assert.rejects(
       () => guarded(u),
-      (err: unknown) => err instanceof SsrfBlockedError && err.reason === "protocol-not-allowed",
+      (err: unknown) => err instanceof SsrfBlockedError && err.reason === "protocol-not-allowed"
     );
   }
 });
@@ -139,7 +128,7 @@ test("fetchGuard: blocks DNS names that resolve to a metadata IP", async () => {
   });
   await assert.rejects(
     () => guarded("http://attacker.example/"),
-    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed",
+    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed"
   );
   assert.equal(r.calls.length, 0, "no network call should have been issued");
 });
@@ -150,10 +139,7 @@ test("fetchGuard: blocks if ANY resolved address is internal (multi-record DNS r
     fetch: r.fn,
     resolve: async () => ["198.51.100.42", "127.0.0.1"],
   });
-  await assert.rejects(
-    () => guarded("http://hybrid.example/"),
-    SsrfBlockedError,
-  );
+  await assert.rejects(() => guarded("http://hybrid.example/"), SsrfBlockedError);
 });
 
 test("fetchGuard: allows public IPs through", async () => {
@@ -168,16 +154,14 @@ test("fetchGuard: allows public IPs through", async () => {
 });
 
 test("fetchGuard: re-validates redirects (302 -> metadata is blocked)", async () => {
-  const r = recordingFetch([
-    { status: 302, headers: { location: "http://169.254.169.254/" } },
-  ]);
+  const r = recordingFetch([{ status: 302, headers: { location: "http://169.254.169.254/" } }]);
   const guarded = fetchGuard({
     fetch: r.fn,
     resolve: async () => ["8.8.8.8"],
   });
   await assert.rejects(
     () => guarded("https://example.com/redirect"),
-    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed",
+    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed"
   );
 });
 
@@ -213,7 +197,7 @@ test("fetchGuard: refuses excessive redirect chains", async () => {
   });
   await assert.rejects(
     () => guarded("https://example.com/start"),
-    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "too-many-redirects",
+    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "too-many-redirects"
   );
 });
 
@@ -256,7 +240,7 @@ test("fetchGuard: denyAddresses beats overlapping allowAddresses", async () => {
     (e: unknown) =>
       e instanceof SsrfBlockedError &&
       e.reason === "address-not-allowed" &&
-      e.address === "10.6.6.6",
+      e.address === "10.6.6.6"
   );
 });
 
@@ -284,10 +268,8 @@ test("fetchGuard: allowAddresses cannot lift the cloud-metadata floor", async ()
     await assert.rejects(
       () => guarded(`http://target-${ip}.example.com/`),
       (e: unknown) =>
-        e instanceof SsrfBlockedError &&
-        e.reason === "address-not-allowed" &&
-        e.address === ip,
-      `expected cloud metadata IP ${ip} to remain blocked`,
+        e instanceof SsrfBlockedError && e.reason === "address-not-allowed" && e.address === ip,
+      `expected cloud metadata IP ${ip} to remain blocked`
     );
   }
 });
@@ -326,9 +308,7 @@ test("fetchGuard: 303 downgrades to GET and strips body headers", async () => {
 });
 
 test("fetchGuard: redirect: 'manual' returns 3xx directly without re-fetch", async () => {
-  const r = recordingFetch([
-    { status: 302, headers: { location: "http://169.254.169.254/" } },
-  ]);
+  const r = recordingFetch([{ status: 302, headers: { location: "http://169.254.169.254/" } }]);
   const guarded = fetchGuard({
     fetch: r.fn,
     resolve: async () => ["8.8.8.8"],
@@ -339,17 +319,12 @@ test("fetchGuard: redirect: 'manual' returns 3xx directly without re-fetch", asy
 });
 
 test("fetchGuard: redirect: 'error' throws on 3xx", async () => {
-  const r = recordingFetch([
-    { status: 302, headers: { location: "https://example.com/next" } },
-  ]);
+  const r = recordingFetch([{ status: 302, headers: { location: "https://example.com/next" } }]);
   const guarded = fetchGuard({
     fetch: r.fn,
     resolve: async () => ["8.8.8.8"],
   });
-  await assert.rejects(
-    () => guarded("https://example.com/", { redirect: "error" }),
-    TypeError,
-  );
+  await assert.rejects(() => guarded("https://example.com/", { redirect: "error" }), TypeError);
 });
 
 test("fetchGuard: SsrfBlockedError carries url + reason + address", async () => {
@@ -374,7 +349,7 @@ test("fetchGuard: DNS failures surface as dns-resolution-failed", async () => {
   });
   await assert.rejects(
     () => guarded("http://nonexistent.example.test/"),
-    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "dns-resolution-failed",
+    (err: unknown) => err instanceof SsrfBlockedError && err.reason === "dns-resolution-failed"
   );
 });
 
@@ -402,7 +377,7 @@ test("fetchGuard: re-encoded internal IPs (decimal/hex/octal/short) are normaliz
     await assert.rejects(
       () => guarded(u),
       (err: unknown) => err instanceof SsrfBlockedError && err.reason === "address-not-allowed",
-      `re-encoded internal IP must be blocked: ${u}`,
+      `re-encoded internal IP must be blocked: ${u}`
     );
   }
   assert.equal(calls.length, 0, "no encoded-internal request ever reached the underlying fetch");
@@ -461,7 +436,12 @@ async function startEchoServer() {
     const chunks: Buffer[] = [];
     req.on("data", (c) => chunks.push(c as Buffer));
     req.on("end", () => {
-      received.push({ host: req.headers.host, method: req.method, url: req.url, body: Buffer.concat(chunks).toString() });
+      received.push({
+        host: req.headers.host,
+        method: req.method,
+        url: req.url,
+        body: Buffer.concat(chunks).toString(),
+      });
       if (req.url === "/redir") {
         res.writeHead(302, { location: "/landing" });
         res.end();
@@ -496,14 +476,22 @@ async function startEchoServer() {
 test("fetchGuard({ pinDns }): http socket is pinned to the validated IP with the original Host preserved", async () => {
   const { server, port, received } = await startEchoServer();
   try {
-    const guard = fetchGuard({ pinDns: true, allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const guard = fetchGuard({
+      pinDns: true,
+      allowLoopback: true,
+      resolve: async () => ["127.0.0.1"],
+    });
     // `internal.svc.invalid` does not resolve in real DNS; success means the
     // socket used the validated IP, i.e. the rebinding window is closed.
     const res = await guard(`http://internal.svc.invalid:${port}/data`);
     assert.equal(res.status, 200);
     const json = (await res.json()) as { ok: boolean; host: string };
     assert.equal(json.ok, true);
-    assert.equal(json.host, `internal.svc.invalid:${port}`, "Host header carries the original authority, not the raw IP");
+    assert.equal(
+      json.host,
+      `internal.svc.invalid:${port}`,
+      "Host header carries the original authority, not the raw IP"
+    );
     assert.equal(received[0]?.url, "/data");
   } finally {
     server.close();
@@ -514,14 +502,18 @@ test("fetchGuard({ pinDns }): the deny check is never weakened — a host resolv
   const guard = fetchGuard({ pinDns: true, resolve: async () => ["169.254.169.254"] });
   await assert.rejects(
     () => guard("http://rebind.invalid/"),
-    (e: unknown) => e instanceof SsrfBlockedError && e.reason === "address-not-allowed",
+    (e: unknown) => e instanceof SsrfBlockedError && e.reason === "address-not-allowed"
   );
 });
 
 test("fetchGuard({ pinDns }): POST method + body are forwarded over the pinned socket", async () => {
   const { server, port, received } = await startEchoServer();
   try {
-    const guard = fetchGuard({ pinDns: true, allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const guard = fetchGuard({
+      pinDns: true,
+      allowLoopback: true,
+      resolve: async () => ["127.0.0.1"],
+    });
     const res = await guard(`http://api.invalid:${port}/submit`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -538,10 +530,17 @@ test("fetchGuard({ pinDns }): POST method + body are forwarded over the pinned s
 test("fetchGuard({ pinDns }): a pinned http redirect is followed with re-validation at each hop", async () => {
   const { server, port, received } = await startEchoServer();
   try {
-    const guard = fetchGuard({ pinDns: true, allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const guard = fetchGuard({
+      pinDns: true,
+      allowLoopback: true,
+      resolve: async () => ["127.0.0.1"],
+    });
     const res = await guard(`http://site.invalid:${port}/redir`);
     assert.equal(res.status, 200);
-    assert.deepEqual(received.map((r) => r.url), ["/redir", "/landing"]);
+    assert.deepEqual(
+      received.map((r) => r.url),
+      ["/redir", "/landing"]
+    );
   } finally {
     server.close();
   }
@@ -550,7 +549,11 @@ test("fetchGuard({ pinDns }): a pinned http redirect is followed with re-validat
 test("fetchGuard({ pinDns }): a HEAD request yields a null-body response", async () => {
   const { server, port } = await startEchoServer();
   try {
-    const guard = fetchGuard({ pinDns: true, allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const guard = fetchGuard({
+      pinDns: true,
+      allowLoopback: true,
+      resolve: async () => ["127.0.0.1"],
+    });
     const res = await guard(`http://h.invalid:${port}/`, { method: "HEAD" });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("x-marker"), "head");
@@ -576,13 +579,21 @@ test("fetchGuard({ pinDns }): https is intentionally NOT pinned — it uses the 
   const guard = fetchGuard({ pinDns: true, fetch: fn, resolve: async () => ["93.184.216.34"] });
   const res = await guard("https://example.com/");
   assert.equal(res.status, 200);
-  assert.equal(calls.length, 1, "the https path falls through to options.fetch, not the node:http pin");
+  assert.equal(
+    calls.length,
+    1,
+    "the https path falls through to options.fetch, not the node:http pin"
+  );
 });
 
 test("fetchGuard({ pinDns }): a 204 yields a null body, and multi-valued response headers survive", async () => {
   const { server, port } = await startEchoServer();
   try {
-    const guard = fetchGuard({ pinDns: true, allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const guard = fetchGuard({
+      pinDns: true,
+      allowLoopback: true,
+      resolve: async () => ["127.0.0.1"],
+    });
     const empty = await guard(`http://e.invalid:${port}/empty`);
     assert.equal(empty.status, 204);
     assert.equal(await empty.text(), "", "204 carries no body");

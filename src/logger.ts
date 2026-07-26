@@ -191,7 +191,7 @@ interface ResolvedRedaction {
 }
 
 function resolveRedaction(
-  opt: LoggerRedactionOptions | false | undefined,
+  opt: LoggerRedactionOptions | false | undefined
 ): ResolvedRedaction | null {
   if (opt === false) return null;
   const cfg = opt ?? {};
@@ -231,7 +231,7 @@ function redactString(value: string, cfg: ResolvedRedaction): string {
  */
 export function redactRecord(
   record: Record<string, unknown>,
-  cfg: ResolvedRedaction,
+  cfg: ResolvedRedaction
 ): Record<string, unknown> {
   walkRedact(record, cfg, 0, new WeakSet());
   return record;
@@ -241,7 +241,7 @@ function walkRedact(
   node: unknown,
   cfg: ResolvedRedaction,
   depth: number,
-  seen: WeakSet<object>,
+  seen: WeakSet<object>
 ): void {
   if (depth > cfg.maxDepth) return;
   if (node === null || typeof node !== "object") return;
@@ -429,9 +429,7 @@ export const SENSITIVE_URL_QUERY_KEY_PREFIXES: readonly string[] = Object.freeze
   "x-goog-",
 ]);
 
-const SENSITIVE_URL_QUERY_KEY_SET = new Set(
-  SENSITIVE_URL_QUERY_KEYS.map((k) => k.toLowerCase()),
-);
+const SENSITIVE_URL_QUERY_KEY_SET = new Set(SENSITIVE_URL_QUERY_KEYS.map((k) => k.toLowerCase()));
 
 /**
  * Whether a URL query-parameter name is treated as secret-bearing when a
@@ -474,11 +472,7 @@ function isSensitiveUrlQueryKey(lowerKey: string): boolean {
  * @since 1.0.0
  */
 export function sanitizeUrlForLog(url: string): string {
-  if (
-    url.indexOf("?") === -1 &&
-    url.indexOf("#") === -1 &&
-    url.indexOf("@") === -1
-  ) {
+  if (url.indexOf("?") === -1 && url.indexOf("#") === -1 && url.indexOf("@") === -1) {
     return url;
   }
   try {
@@ -490,8 +484,7 @@ export function sanitizeUrlForLog(url: string): string {
     for (const [key, value] of parsed.searchParams) {
       const lower = key.toLowerCase();
       const sensitiveKey = isSensitiveUrlQueryKey(lower);
-      const sensitiveValue =
-        JWT_LIKE_RE.test(value) || CREDENTIAL_LIKE_RE.test(value);
+      const sensitiveValue = JWT_LIKE_RE.test(value) || CREDENTIAL_LIKE_RE.test(value);
       CREDENTIAL_LIKE_RE.lastIndex = 0;
       safe.searchParams.append(key, sensitiveKey || sensitiveValue ? "[REDACTED]" : value);
     }

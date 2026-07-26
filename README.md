@@ -34,13 +34,13 @@ We are grateful to the following companies for supporting DaloyJS with free acce
 
 <div align="center" style="background-color: #f5f5f5; padding: 25px; border-radius: 10px; margin: 20px 0;">
 
-  <a href="https://snyk.io"><img src="https://github.com/user-attachments/assets/da58db43-67cc-45d4-ade5-bdaa7b041465" height="75" width="auto" alt="Snyk"></a>
-     
-  <a href="https://socket.dev"><img src="https://github.com/user-attachments/assets/7d2dde1f-6b60-4f20-b05b-80ace5ae6862" height="75" width="auto" alt="Socket"></a>
-     
-  <a href="https://www.aikido.dev"><img src="https://github.com/user-attachments/assets/67e62dd1-b907-4246-a0aa-95ef13fa491c" height="75" width="auto" alt="Aikido"></a>
-     
-  <a href="https://www.coderabbit.ai"><img src="https://github.com/user-attachments/assets/0d9d8e68-eb21-41ec-978c-337b66ee34b6" height="75" width="auto" alt="CodeRabbit"></a>
+<a href="https://snyk.io"><img src="https://github.com/user-attachments/assets/da58db43-67cc-45d4-ade5-bdaa7b041465" height="75" width="auto" alt="Snyk"></a>
+   
+<a href="https://socket.dev"><img src="https://github.com/user-attachments/assets/7d2dde1f-6b60-4f20-b05b-80ace5ae6862" height="75" width="auto" alt="Socket"></a>
+   
+<a href="https://www.aikido.dev"><img src="https://github.com/user-attachments/assets/67e62dd1-b907-4246-a0aa-95ef13fa491c" height="75" width="auto" alt="Aikido"></a>
+   
+<a href="https://www.coderabbit.ai"><img src="https://github.com/user-attachments/assets/0d9d8e68-eb21-41ec-978c-337b66ee34b6" height="75" width="auto" alt="CodeRabbit"></a>
 
 </div>
 
@@ -206,7 +206,7 @@ app.get(
   async ({ params }) => ({
     status: 200,
     body: { id: params.id, title: `Book ${params.id}` },
-  }),
+  })
 );
 
 serve(app, { port: 3000 });
@@ -539,7 +539,7 @@ const usersPlugin = {
         operationId: "me",
         responses: { 200: { description: "ok" } },
       },
-      async () => ({ status: 200, body: { user: "alice" } }),
+      async () => ({ status: 200, body: { user: "alice" } })
     );
   },
 };
@@ -656,7 +656,7 @@ The framework refuses to start (or to construct) when configuration is unsafe:
 - `requireScopes()` with RFC-6750 `WWW-Authenticate: Bearer` challenge and per-request scope aggregation.
 - `session()` with signed cookies and pluggable stores.
 - `idempotency()` with `Idempotency-Key` fingerprinting + byte-for-byte response replay, in-flight `409`, `422` on key reuse with a different payload, and a pluggable `IdempotencyStore` (in-memory default) at `@daloyjs/core/idempotency`.
-- `responseCache()` server-side body cache (cache-key + TTL with `s-maxage`/`max-age` orchestration, request `no-store`/`no-cache` directives, recursion-safe stale-while-revalidate, proactive `varyHeaders` keying, `X-Cache` HIT/MISS/STALE marker, pluggable `ResponseCacheStore` whose in-memory default is bounded on both entry count and retained bytes) at `@daloyjs/core/response-cache`. Never caches `Set-Cookie`, `private`/`no-store`/`no-cache`, or `Vary: *` responses, and strips `Age`/hop-by-hop/`X-Request-Id` from stored entries so a hit never replays another request's correlation id. **Fail-closed on every principal dimension (CWE-524):** the key is the full *effective request URI* including the authority (RFC 9111 §4), so hostnames never share entries; requests carrying `Authorization` **or** `Cookie` bypass the shared cache unless a `principal` names the caller (then each gets its own entry) or the header is explicitly declared shareable; a tenant resolved by `tenancy()` is folded into the key automatically — with a boot guard that refuses to start if the cache is mounted ahead of `tenancy()`; and the response's **own `Vary` header** is honoured as a secondary key (RFC 9111 §4.1), so the `Vary: Origin` written by `cors()` and the `Vary: Accept-Encoding` written by `compression()` keep one caller's allowed origin — or their gzipped bytes — from being served to the next, with each variant stored separately so they all stay warm. Complements `etag()`/`compression()`, which do not cache bodies.
+- `responseCache()` server-side body cache (cache-key + TTL with `s-maxage`/`max-age` orchestration, request `no-store`/`no-cache` directives, recursion-safe stale-while-revalidate, proactive `varyHeaders` keying, `X-Cache` HIT/MISS/STALE marker, pluggable `ResponseCacheStore` whose in-memory default is bounded on both entry count and retained bytes) at `@daloyjs/core/response-cache`. Never caches `Set-Cookie`, `private`/`no-store`/`no-cache`, or `Vary: *` responses, and strips `Age`/hop-by-hop/`X-Request-Id` from stored entries so a hit never replays another request's correlation id. **Fail-closed on every principal dimension (CWE-524):** the key is the full _effective request URI_ including the authority (RFC 9111 §4), so hostnames never share entries; requests carrying `Authorization` **or** `Cookie` bypass the shared cache unless a `principal` names the caller (then each gets its own entry) or the header is explicitly declared shareable; a tenant resolved by `tenancy()` is folded into the key automatically — with a boot guard that refuses to start if the cache is mounted ahead of `tenancy()`; and the response's **own `Vary` header** is honoured as a secondary key (RFC 9111 §4.1), so the `Vary: Origin` written by `cors()` and the `Vary: Accept-Encoding` written by `compression()` keep one caller's allowed origin — or their gzipped bytes — from being served to the next, with each variant stored separately so they all stay warm. Complements `etag()`/`compression()`, which do not cache bodies.
 - `paginationQuery()` / `encodeCursor()` / `decodeCursor()` / `buildPageLinks()` / `buildLinkHeader()` cursor-pagination helpers at `@daloyjs/core/pagination`: opaque base64url cursors (length-capped, prototype-pollution-safe decode → `400` on tamper), RFC 8288 `Link` header emission with CRLF / header-injection guards, and a Standard Schema that validates `cursor`/`limit` and auto-wires both into the OpenAPI spec + typed client via `toJSONSchema()`.
 - `app.metrics()` + `MetricsRegistry` / `httpMetrics()` Prometheus / OpenMetrics exposition at `@daloyjs/core/metrics`: dependency-free counters / gauges / histograms, RED instrumentation (`http_requests_total`, `http_request_duration_seconds`, `http_requests_in_flight`) plus process gauges, exposition-injection-safe name/label validation, a per-metric cardinality cap, and an opt-in `/metrics` route with the same hardened posture as `app.healthcheck()` (bearer token + `timingSafeEqual`, per-IP rate limit, refuse-to-boot unauthenticated in production). The repo ships an `examples/observability/` Docker Compose stack that starts a pre-configured Prometheus + Grafana pair (with an auto-provisioned RED + heatmap dashboard) against any local app via `docker compose -f examples/observability/docker-compose.yml up`.
 - `otelTracing()` OpenTelemetry-compatible distributed tracing at `@daloyjs/core/tracing`: a dependency-free `Hooks` bundle that opens one `SERVER` span per request, attaches HTTP semantic-convention attributes (`http.request.method`, `url.path`, `server.address` / `server.port`, `http.response.status_code`, …), records exceptions + escalates `5xx` to `ERROR`, guarantees a single `span.end()`, and exposes the live span on `ctx.state.otelSpan`. Bring any tracer matching the small `TracingTracer` interface (the real `@opentelemetry/api` SDK on Node, or a custom exporter on Workers/Deno) plus your own propagator via `contextFromRequest` for `traceparent` continuation — no OTel SDK is forced into your install. The `examples/observability/` stack also runs **Jaeger**, and `examples/otel-tracing-demo.ts` ships a ~120-line dependency-free OTLP/HTTP exporter that streams spans straight to it.

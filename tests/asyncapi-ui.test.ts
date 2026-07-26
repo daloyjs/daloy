@@ -68,10 +68,7 @@ test("asyncapi: true mounts an interactive UI loading the AsyncAPI standalone bu
   const html = await res.text();
   // Loads the AsyncAPI React standalone bundle + stylesheet from the CDN.
   assert.match(html, /@asyncapi\/react-component@3\.1\.4\/browser\/standalone/);
-  assert.match(
-    html,
-    /@asyncapi\/react-component@3\.1\.4\/styles\/default\.min\.css/,
-  );
+  assert.match(html, /@asyncapi\/react-component@3\.1\.4\/styles\/default\.min\.css/);
   // Renders against the served JSON document.
   assert.match(html, /AsyncApiStandalone\.render/);
   assert.match(html, /\/asyncapi\.json/);

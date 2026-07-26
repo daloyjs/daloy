@@ -30,10 +30,7 @@ test("parity: static grep audits all pass on the live source tree", async () => 
   const findings = await runParityAudits();
   if (findings.length > 0) {
     const summary = findings
-      .map(
-        (f) =>
-          `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}`,
-      )
+      .map((f) => `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}`)
       .join("\n");
     assert.fail(`Parity audit gates flagged ${findings.length} finding(s):\n${summary}`);
   }

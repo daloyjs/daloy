@@ -48,11 +48,13 @@ interface ForbiddenPattern {
 const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
   {
     re: /\bnew\s+Buffer\s*\(/,
-    reason: "deprecated `new Buffer(...)` constructor; use `Buffer.alloc(size)` or `Buffer.from(input)`",
+    reason:
+      "deprecated `new Buffer(...)` constructor; use `Buffer.alloc(size)` or `Buffer.from(input)`",
   },
   {
     re: /\bBuffer\.allocUnsafe(?:Slow)?\s*\(/,
-    reason: "`Buffer.allocUnsafe*` returns uninitialized memory; use `Buffer.alloc(size)` or `Uint8Array`",
+    reason:
+      "`Buffer.allocUnsafe*` returns uninitialized memory; use `Buffer.alloc(size)` or `Uint8Array`",
   },
 ];
 
@@ -77,7 +79,7 @@ function stripCommentsAndStrings(line: string): string {
 
 export function findForbiddenBufferCalls(
   file: string,
-  source: string,
+  source: string
 ): readonly ForbiddenBufferCall[] {
   const out: ForbiddenBufferCall[] = [];
   const lines = source.split(/\r?\n/);
@@ -128,15 +130,12 @@ async function main(): Promise<void> {
   try {
     await stat(SRC_ROOT);
   } catch (err) {
-    console.error(
-      `verify-no-unsafe-buffer: cannot stat src/: ${(err as Error).message}`,
-    );
+    console.error(`verify-no-unsafe-buffer: cannot stat src/: ${(err as Error).message}`);
     process.exitCode = 1;
     return;
   }
   for await (const absolute of walk(SRC_ROOT)) {
-    const rel =
-      "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
+    const rel = "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
     const text = await readFile(absolute, "utf8");
     const findings = findForbiddenBufferCalls(rel, text);
     for (const f of findings) {
@@ -149,7 +148,7 @@ async function main(): Promise<void> {
       `verify-no-unsafe-buffer: ${total} forbidden Buffer call${total === 1 ? "" : "s"} found. ` +
         "Replace `new Buffer(...)` / `Buffer.allocUnsafe*` with `Buffer.alloc(size)`, " +
         "`Buffer.from(input)`, or a plain `Uint8Array`. " +
-        "See https://snyk.io/blog/exploiting-buffer/.",
+        "See https://snyk.io/blog/exploiting-buffer/."
     );
     process.exitCode = 1;
   }

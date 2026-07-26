@@ -29,7 +29,7 @@ This is the same pattern adopted by other small, opinionated projects
 work) and is **not** a statement about the quality of any specific
 contributor or change.
 
-## What *is* open
+## What _is_ open
 
 The following channels are open to everyone and are genuinely useful:
 

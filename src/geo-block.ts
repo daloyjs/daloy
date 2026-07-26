@@ -39,10 +39,7 @@ import { ForbiddenError } from "./errors.js";
  *
  * @since 0.37.0
  */
-export type GeoBlockReason =
-  | "denied_country"
-  | "not_in_allowlist"
-  | "unknown_country";
+export type GeoBlockReason = "denied_country" | "not_in_allowlist" | "unknown_country";
 
 /**
  * The decision {@link geoBlock} reached for a request, passed to `onBlock` and
@@ -66,7 +63,7 @@ export interface GeoBlockDecision {
  * @since 0.37.0
  */
 export type CountryFromContext = (
-  ctx: BaseContext<any, any>,
+  ctx: BaseContext<any, any>
 ) => string | undefined | null | Promise<string | undefined | null>;
 
 /**
@@ -76,7 +73,7 @@ export type CountryFromContext = (
  * @since 0.37.0
  */
 export type CountryFromIp = (
-  ip: string,
+  ip: string
 ) => string | undefined | null | Promise<string | undefined | null>;
 
 /**
@@ -169,7 +166,7 @@ function normalizeConfiguredCode(input: string): string {
   if (!/^[A-Z0-9]{2}$/.test(code)) {
     throw new Error(
       `geoBlock(): invalid country code ${JSON.stringify(input)}; expected a ` +
-        "2-character ISO 3166-1 alpha-2 code.",
+        "2-character ISO 3166-1 alpha-2 code."
     );
   }
   return code;
@@ -227,22 +224,18 @@ function forwardedIpResolver(ctx: BaseContext<any, any>): string | undefined {
  */
 export function geoBlock(opts: GeoBlockOptions): Hooks {
   if (!opts.allow?.length && !opts.deny?.length) {
-    throw new Error(
-      'geoBlock(): at least one of "allow" or "deny" must be provided.',
-    );
+    throw new Error('geoBlock(): at least one of "allow" or "deny" must be provided.');
   }
   const hasLookup = typeof opts.lookupCountry === "function";
   const hasResolve = typeof opts.resolveCountry === "function";
   if (hasLookup === hasResolve) {
     throw new Error(
-      'geoBlock(): exactly one of "lookupCountry" or "resolveCountry" must ' +
-        "be provided.",
+      'geoBlock(): exactly one of "lookupCountry" or "resolveCountry" must ' + "be provided."
     );
   }
   if (opts.mode !== undefined && opts.mode !== "block" && opts.mode !== "log") {
     throw new Error(
-      `geoBlock(): invalid mode ${JSON.stringify(opts.mode)}; expected ` +
-        '"block" or "log".',
+      `geoBlock(): invalid mode ${JSON.stringify(opts.mode)}; expected ` + '"block" or "log".'
     );
   }
 
@@ -256,9 +249,7 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
   const onBlock = opts.onBlock;
   const lookupCountry = opts.lookupCountry;
   const resolveCountry = opts.resolveCountry;
-  const resolveIp =
-    opts.resolveIp ??
-    (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
 
   return {
     async beforeHandle(ctx) {
@@ -271,10 +262,7 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
         rawCountry = ip ? await lookupCountry!(ip) : undefined;
       }
 
-      const country =
-        rawCountry && rawCountry.trim()
-          ? rawCountry.trim().toUpperCase()
-          : undefined;
+      const country = rawCountry && rawCountry.trim() ? rawCountry.trim().toUpperCase() : undefined;
 
       let reason: GeoBlockReason | undefined;
       if (!country) {

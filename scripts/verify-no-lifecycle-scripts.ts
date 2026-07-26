@@ -59,14 +59,10 @@ interface PackageJsonLike {
   readonly scripts?: Record<string, unknown>;
 }
 
-export function findForbiddenLifecycleScripts(
-  packageJson: PackageJsonLike,
-): readonly string[] {
+export function findForbiddenLifecycleScripts(packageJson: PackageJsonLike): readonly string[] {
   const scripts = packageJson.scripts;
   if (!scripts || typeof scripts !== "object") return [];
-  return FORBIDDEN_HOOKS.filter((hook) =>
-    Object.prototype.hasOwnProperty.call(scripts, hook),
-  );
+  return FORBIDDEN_HOOKS.filter((hook) => Object.prototype.hasOwnProperty.call(scripts, hook));
 }
 
 async function main(): Promise<void> {
@@ -82,7 +78,7 @@ async function main(): Promise<void> {
     console.error(
       `verify-no-lifecycle-scripts: ${offending.length} forbidden ` +
         `install-time lifecycle script${offending.length === 1 ? "" : "s"} ` +
-        `in ${name} (${relPath}):`,
+        `in ${name} (${relPath}):`
     );
     for (const hook of offending) console.error(`  - ${hook}`);
   }
@@ -93,7 +89,7 @@ async function main(): Promise<void> {
       "for npm worm campaigns and are penalised by Aikido Package Health. If a " +
       "hook is unavoidable, add a SECURITY.md review note justifying it. " +
       "Maintainer-side `prepublishOnly` is fine — it never runs on a consumer's " +
-      "install.",
+      "install."
   );
   process.exitCode = 1;
 }

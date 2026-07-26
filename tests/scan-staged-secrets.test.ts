@@ -69,7 +69,7 @@ test("scanOneStagedFile is clean on ordinary source", async () => {
   await writeFile(
     join(dir, "ok.ts"),
     "export const greet = (name: string) => `hello, ${name}`;\n",
-    "utf8",
+    "utf8"
   );
   const findings = await scanOneStagedFile(dir, "ok.ts");
   assert.deepEqual(findings, []);
@@ -107,10 +107,7 @@ test("installPreCommitHook refuses to run outside a git checkout", () => {
   const dir = tmpdir();
   // Use a fresh subdir so the user's tmp isn't accidentally a git dir.
   const cwd = resolve(dir, `daloy-no-git-${Date.now()}`);
-  assert.throws(
-    () => installPreCommitHook({ cwd, force: false }),
-    /not a git checkout/,
-  );
+  assert.throws(() => installPreCommitHook({ cwd, force: false }), /not a git checkout/);
 });
 
 test("installPreCommitHook writes an executable pre-commit hook", async () => {

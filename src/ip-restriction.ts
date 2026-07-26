@@ -101,14 +101,11 @@ export interface IpMatcher {
  */
 export function ipRestriction(opts: IpRestrictionOptions): Hooks {
   if (!opts.allow?.length && !opts.deny?.length) {
-    throw new Error(
-      'ipRestriction(): at least one of "allow" or "deny" must be provided.',
-    );
+    throw new Error('ipRestriction(): at least one of "allow" or "deny" must be provided.');
   }
   const allow = (opts.allow ?? []).map(compileCidrMatcher);
   const deny = (opts.deny ?? []).map(compileCidrMatcher);
-  const resolveIp = opts.resolveIp ??
-    (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
   const message = opts.message ?? "IP address not permitted";
   return {
     beforeHandle(ctx) {
@@ -189,15 +186,11 @@ export function compileCidrMatcher(input: string): IpMatcher {
   let prefix = totalBits;
   if (prefixStr !== undefined) {
     if (!/^\d+$/.test(prefixStr)) {
-      throw new Error(
-        `ipRestriction(): invalid CIDR prefix in ${JSON.stringify(input)}.`,
-      );
+      throw new Error(`ipRestriction(): invalid CIDR prefix in ${JSON.stringify(input)}.`);
     }
     prefix = Number.parseInt(prefixStr, 10);
     if (!Number.isInteger(prefix) || prefix < 0 || prefix > totalBits) {
-      throw new Error(
-        `ipRestriction(): invalid CIDR prefix in ${JSON.stringify(input)}.`,
-      );
+      throw new Error(`ipRestriction(): invalid CIDR prefix in ${JSON.stringify(input)}.`);
     }
   }
   return { family: parsed.family, prefix, bytes: applyPrefixMask(parsed.bytes, prefix) };
@@ -267,11 +260,7 @@ function parseIPv6(input: string): ParsedIp | undefined {
     if (!v4) return undefined;
     const hi = (v4.bytes[0]! << 8) | v4.bytes[1]!;
     const lo = (v4.bytes[2]! << 8) | v4.bytes[3]!;
-    working =
-      working.slice(0, lastColon + 1) +
-      hi.toString(16) +
-      ":" +
-      lo.toString(16);
+    working = working.slice(0, lastColon + 1) + hi.toString(16) + ":" + lo.toString(16);
   }
   const parts = working.split("::");
   if (parts.length > 2) return undefined;
@@ -281,11 +270,7 @@ function parseIPv6(input: string): ParsedIp | undefined {
   if (explicit > 8) return undefined;
   if (parts.length === 1 && explicit !== 8) return undefined;
   const missing = parts.length === 2 ? 8 - explicit : 0;
-  const groups = [
-    ...headGroups,
-    ...Array.from({ length: missing }, () => "0"),
-    ...tailGroups,
-  ];
+  const groups = [...headGroups, ...Array.from({ length: missing }, () => "0"), ...tailGroups];
   if (groups.length !== 8) return undefined;
   const bytes = new Uint8Array(16);
   for (let index = 0; index < 8; index++) {

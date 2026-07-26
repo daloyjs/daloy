@@ -44,7 +44,7 @@ test("loadShedding healthCheck reason triggers 503 with Retry-After", async () =
       sampleIntervalMs: 100,
       healthCheckIntervalMs: 100,
       healthCheck: () => "downstream-db-down",
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -72,7 +72,7 @@ test("loadShedding healthCheck error becomes a shed reason", async () => {
       healthCheck: () => {
         throw new Error("boom");
       },
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -97,7 +97,7 @@ test("loadShedding healthCheck that throws a non-Error still reports a generic r
         // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw "nope";
       },
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -142,7 +142,7 @@ test("loadShedding rss threshold trips when heap is unlimited", async () => {
       maxEventLoopUtilization: 0,
       maxRssBytes: 1,
       sampleIntervalMs: 100,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -166,7 +166,7 @@ test("cspReportRoute accepts application/csp-report and returns 204", async () =
       method: "POST",
       headers: { "content-type": "application/csp-report" },
       body: JSON.stringify({ "csp-report": { "violated-directive": "img-src" } }),
-    }),
+    })
   );
   assert.equal(res.status, 204);
 });
@@ -189,7 +189,7 @@ test("cspReportRoute calls custom onReport sink", async () => {
         "user-agent": "Chrome/Probe",
       },
       body: JSON.stringify([{ type: "csp-violation" }]),
-    }),
+    })
   );
   assert.equal(res.status, 204);
   assert.equal(received.length, 1);
@@ -224,7 +224,7 @@ test("cspReportRoute swallows onReport sink errors", async () => {
       method: "POST",
       headers: { "content-type": "application/csp-report" },
       body: JSON.stringify({ ok: true }),
-    }),
+    })
   );
   assert.equal(res.status, 204);
   assert.equal(errs.length, 1);
@@ -238,7 +238,7 @@ test("cspReportRoute rejects wrong content-type with 415", async () => {
       method: "POST",
       headers: { "content-type": "text/plain" },
       body: "not json",
-    }),
+    })
   );
   assert.equal(res.status, 415);
 });
@@ -250,7 +250,7 @@ test("cspReportRoute rejects missing content-type with 415", async () => {
     new Request("http://x/__csp-report", {
       method: "POST",
       body: "{}",
-    }),
+    })
   );
   assert.equal(res.status, 415);
 });
@@ -263,7 +263,7 @@ test("cspReportRoute rejects oversized body with 413", async () => {
       method: "POST",
       headers: { "content-type": "application/csp-report" },
       body: JSON.stringify({ payload: "x".repeat(200) }),
-    }),
+    })
   );
   assert.equal(res.status, 413);
 });
@@ -276,7 +276,7 @@ test("cspReportRoute rejects invalid JSON with 400", async () => {
       method: "POST",
       headers: { "content-type": "application/csp-report" },
       body: "{not json",
-    }),
+    })
   );
   assert.equal(res.status, 400);
 });
@@ -289,7 +289,7 @@ test("cspReportRoute rejects empty body with 400", async () => {
       method: "POST",
       headers: { "content-type": "application/csp-report" },
       body: "",
-    }),
+    })
   );
   assert.equal(res.status, 400);
 });
@@ -306,14 +306,14 @@ test("cspReportRoute rate-limits per IP", async () => {
       method: "POST",
       headers,
       body: "{}",
-    }),
+    })
   );
   const b = await app.fetch(
     new Request("http://x/__csp-report", {
       method: "POST",
       headers,
       body: "{}",
-    }),
+    })
   );
   assert.equal(a.status, 204);
   assert.equal(b.status, 429);
@@ -328,7 +328,7 @@ test("cspReportRoute with rateLimit: false skips the limiter", async () => {
         method: "POST",
         headers: { "content-type": "application/csp-report" },
         body: "{}",
-      }),
+      })
     );
     assert.equal(res.status, 204);
   }
@@ -355,13 +355,10 @@ test("secureHeaders emits Reporting-Endpoints and Report-To when configured", as
   const res = await app.fetch(new Request("http://x/"));
   assert.match(
     res.headers.get("reporting-endpoints") ?? "",
-    /csp-endpoint="https:\/\/example\.test\/__csp-report"/,
+    /csp-endpoint="https:\/\/example\.test\/__csp-report"/
   );
   assert.match(res.headers.get("report-to") ?? "", /"csp-endpoint"/);
-  assert.match(
-    res.headers.get("content-security-policy") ?? "",
-    /report-to csp-endpoint/,
-  );
+  assert.match(res.headers.get("content-security-policy") ?? "", /report-to csp-endpoint/);
 });
 
 test("secureHeaders with reportTo and a directives object still appends report-to", () => {
@@ -392,22 +389,20 @@ test("secureHeaders ignores empty reportingEndpoints", async () => {
 test("disconnectStatusCode rejects values outside [400, 499]", () => {
   assert.throws(
     () => new App({ env: "development", disconnectStatusCode: 200 }),
-    /disconnectStatusCode/,
+    /disconnectStatusCode/
   );
   assert.throws(
     () => new App({ env: "development", disconnectStatusCode: 500 }),
-    /disconnectStatusCode/,
+    /disconnectStatusCode/
   );
   assert.throws(
     () => new App({ env: "development", disconnectStatusCode: 12.5 }),
-    /disconnectStatusCode/,
+    /disconnectStatusCode/
   );
 });
 
 test("disconnectStatusCode: 0 disables the rewrite", () => {
-  assert.doesNotThrow(
-    () => new App({ env: "development", disconnectStatusCode: 0 }),
-  );
+  assert.doesNotThrow(() => new App({ env: "development", disconnectStatusCode: 0 }));
 });
 
 test("aborted request gets disconnectStatusCode (default 499)", async () => {
@@ -528,7 +523,7 @@ test("defineConfig aggregates every schema issue", async () => {
       assert.ok(keys.includes("FOO"));
       assert.ok(keys.includes("PORT"));
       return true;
-    },
+    }
   );
   assert.equal(stderr.length, 1);
   assert.match(stderr[0]!, /defineConfig\(\): configuration is invalid/);
@@ -547,7 +542,7 @@ test("defineConfig single-issue summary uses singular grammar", async () => {
       assert.equal(err.issues.length, 1);
       assert.match(err.message, /\(1 issue\)/);
       return true;
-    },
+    }
   );
 });
 
@@ -595,7 +590,7 @@ test("defineConfig file source surfaces non-object payloads via ConfigValidation
         assert.ok(err instanceof ConfigValidationError);
         assert.match(err.message, /did not parse to an object/);
         return true;
-      },
+      }
     );
   } finally {
     await fs.unlink(tmp);
@@ -643,7 +638,7 @@ test("defineConfig file source surfaces filesystem errors as ConfigValidationErr
       assert.ok(err instanceof ConfigValidationError);
       assert.equal(err.issues[0]!.key, "<source>");
       return true;
-    },
+    }
   );
   assert.equal(stderr.length, 1);
 });
@@ -677,6 +672,6 @@ test("defineConfig wraps thrown non-Error from custom resolver", async () => {
       assert.ok(err instanceof ConfigValidationError);
       assert.match(err.issues[0]!.message, /failed to read source/);
       return true;
-    },
+    }
   );
 });

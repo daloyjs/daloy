@@ -91,7 +91,7 @@ export function assertCookieAttributes(input: {
   const { scope, name, attributes: a, isProduction = false } = input;
   if (typeof name !== "string" || !COOKIE_NAME_RE.test(name)) {
     throw new Error(
-      `${scope}: cookieName (cookie name) "${String(name)}" is not a valid cookie name (RFC 6265 token).`,
+      `${scope}: cookieName (cookie name) "${String(name)}" is not a valid cookie name (RFC 6265 token).`
     );
   }
   const sameSite = a.sameSite ?? "Strict";
@@ -121,7 +121,7 @@ export function assertCookieAttributes(input: {
   if (name.startsWith("__Host-")) {
     if (!secure || path !== "/" || a.domain) {
       throw new Error(
-        `${scope}: "__Host-" cookie names require secure: true, path: "/", and no domain.`,
+        `${scope}: "__Host-" cookie names require secure: true, path: "/", and no domain.`
       );
     }
   }
@@ -131,7 +131,7 @@ export function assertCookieAttributes(input: {
         `${scope}: "__Secure-" cookie names require secure: true. ` +
           (isProduction
             ? "Production refuse-to-boot: a browser will silently drop this cookie over HTTP."
-            : "Drop the prefix or pass secure: true."),
+            : "Drop the prefix or pass secure: true.")
       );
     }
   }
@@ -156,7 +156,7 @@ export function assertCookieAttributes(input: {
 export function serializeCookie(
   name: string,
   value: string,
-  attributes: CookieAttributes = {},
+  attributes: CookieAttributes = {}
 ): string {
   assertCookieAttributes({ scope: "serializeCookie()", name, attributes });
   const sameSite = attributes.sameSite ?? "Strict";

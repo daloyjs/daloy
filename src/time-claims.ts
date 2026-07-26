@@ -109,20 +109,20 @@ function isFiniteNumber(v: unknown): v is number {
  */
 export function assertTemporalClaims(
   claims: TemporalClaims,
-  opts: AssertTemporalClaimsOptions,
+  opts: AssertTemporalClaimsOptions
 ): void {
   const skew = opts.clockSkewSeconds ?? 0;
   if (!isFiniteNumber(skew) || skew < 0) {
     throw new TemporalClaimError(
       "invalid_clock_skew",
-      "clockSkewSeconds must be a non-negative finite number.",
+      "clockSkewSeconds must be a non-negative finite number."
     );
   }
   const now = opts.now;
   if (!isFiniteNumber(now)) {
     throw new TemporalClaimError(
       "invalid_clock_skew",
-      "now must be a finite number of unix seconds.",
+      "now must be a finite number of unix seconds."
     );
   }
   if (claims.exp !== undefined) {

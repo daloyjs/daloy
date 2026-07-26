@@ -60,7 +60,11 @@ interface Res {
   headers: Headers;
   text: string;
 }
-async function http(method: string, path: string, opts: { headers?: Record<string, string>; body?: string | Uint8Array } = {}): Promise<Res> {
+async function http(
+  method: string,
+  path: string,
+  opts: { headers?: Record<string, string>; body?: string | Uint8Array } = {}
+): Promise<Res> {
   const res = await fetch(BASE + path, {
     method,
     headers: opts.headers,
@@ -70,7 +74,11 @@ async function http(method: string, path: string, opts: { headers?: Record<strin
   return { status: res.status, headers: res.headers, text: await res.text() };
 }
 
-function rawSend(port: number, payload: string, waitMs = 1500): Promise<{ raw: string; statusLine: string; status: number }> {
+function rawSend(
+  port: number,
+  payload: string,
+  waitMs = 1500
+): Promise<{ raw: string; statusLine: string; status: number }> {
   return new Promise((resolve) => {
     const sock = net.connect(port, HOST);
     let buf = "";
@@ -113,7 +121,7 @@ function rudy(port: number, holdMs: number): Promise<{ closedByServer: boolean; 
     };
     sock.on("connect", () => {
       sock.write(
-        "POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: 2000\r\n\r\n{",
+        "POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: 2000\r\n\r\n{"
       );
       const iv = setInterval(() => {
         if (settled) return clearInterval(iv);
@@ -130,7 +138,10 @@ function rudy(port: number, holdMs: number): Promise<{ closedByServer: boolean; 
   });
 }
 
-function wsHandshake(port: number, origin?: string): Promise<{ status: number; statusLine: string }> {
+function wsHandshake(
+  port: number,
+  origin?: string
+): Promise<{ status: number; statusLine: string }> {
   const lines = [
     "GET /ws HTTP/1.1",
     `Host: 127.0.0.1:${port}`,
@@ -140,11 +151,15 @@ function wsHandshake(port: number, origin?: string): Promise<{ status: number; s
     "Sec-WebSocket-Version: 13",
   ];
   if (origin !== undefined) lines.push(`Origin: ${origin}`);
-  return rawSend(port, lines.join("\r\n") + "\r\n\r\n", 1500).then((r) => ({ status: r.status, statusLine: r.statusLine }));
+  return rawSend(port, lines.join("\r\n") + "\r\n\r\n", 1500).then((r) => ({
+    status: r.status,
+    statusLine: r.statusLine,
+  }));
 }
 
 const seg = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-const forgeJwt = (header: unknown, payload: unknown, sig = "AAAA") => `${seg(header)}.${seg(payload)}.${sig}`;
+const forgeJwt = (header: unknown, payload: unknown, sig = "AAAA") =>
+  `${seg(header)}.${seg(payload)}.${sig}`;
 const signJwt = (header: object, payload: object, key: string) => {
   const data = `${seg(header)}.${seg(payload)}`;
   const sig = createHmac("sha256", key).update(data).digest("base64url");
@@ -166,7 +181,9 @@ async function dosRudyAndKeepAlive(port: number) {
     title: "RUDY slow-POST body dribble",
     severity: "high",
     attack: "POST /sink, complete headers + Content-Length: 2000, then 1 byte / 400ms",
-    observed: r.closedByServer ? `server cut the stalled body after ${r.afterMs}ms` : `socket still open after ${r.afterMs}ms`,
+    observed: r.closedByServer
+      ? `server cut the stalled body after ${r.afterMs}ms`
+      : `socket still open after ${r.afterMs}ms`,
     verdict: r.closedByServer ? "DEFENDED" : "VULNERABLE",
   });
 
@@ -177,8 +194,8 @@ async function dosRudyAndKeepAlive(port: number) {
     Array.from({ length: 80 }, () =>
       http("GET", "/healthz").then(() => {
         /* fetch() pools; open raw holders below instead */
-      }),
-    ),
+      })
+    )
   );
   for (let i = 0; i < 80; i++) {
     const s = net.connect(port, HOST);
@@ -205,7 +222,9 @@ async function dosRudyAndKeepAlive(port: number) {
     title: "Idle keep-alive connection hoarding (80 held sockets)",
     severity: "medium",
     attack: "80 sockets send a full request then sit idle on keep-alive",
-    observed: alive ? "server still responsive while sockets held" : "TARGET STARVED — connection refused",
+    observed: alive
+      ? "server still responsive while sockets held"
+      : "TARGET STARVED — connection refused",
     verdict: alive ? "DEFENDED" : "VULNERABLE",
   });
 }
@@ -217,9 +236,13 @@ async function banEvasion() {
   // and never accumulates strikes.
   const codes: number[] = [];
   for (let i = 1; i <= 10; i++) {
-    codes.push((await http("GET", "/ab-login", { headers: { "x-forwarded-for": `10.66.0.${i}` } })).status);
+    codes.push(
+      (await http("GET", "/ab-login", { headers: { "x-forwarded-for": `10.66.0.${i}` } })).status
+    );
   }
-  const stillOpen = (await http("GET", "/ab-public", { headers: { "x-forwarded-for": "10.66.0.11" } })).status;
+  const stillOpen = (
+    await http("GET", "/ab-public", { headers: { "x-forwarded-for": "10.66.0.11" } })
+  ).status;
   const banned = codes.includes(429) || stillOpen === 429;
   record({
     category: cat,
@@ -244,7 +267,8 @@ async function verbTampering(port: number) {
     severity: "high",
     attack: "HEAD /admin (no Authorization) — classic auth-hook bypass",
     observed: `status ${head.status}`,
-    verdict: head.status === 401 || head.status === 404 || head.status === 405 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      head.status === 401 || head.status === 404 || head.status === 405 ? "DEFENDED" : "VULNERABLE",
   });
 
   for (const m of ["PROPFIND", "PURGE", "MKCOL", "ARBITRARY"]) {
@@ -323,7 +347,9 @@ async function jwtDeepDive() {
     ["x5u pointer injection", { alg: "HS256", x5u: "http://evil.example/cert.pem" }],
     ["kid SQLi", { alg: "HS256", kid: "k' UNION SELECT 'AAAA'--" }],
   ] as const) {
-    const r = await http("GET", "/admin", { headers: { authorization: `Bearer ${forgeJwt(header, payload)}` } });
+    const r = await http("GET", "/admin", {
+      headers: { authorization: `Bearer ${forgeJwt(header, payload)}` },
+    });
     record({
       category: cat,
       title: `JWT ${label}`,
@@ -355,9 +381,21 @@ async function jwtDeepDive() {
   if (userToken) {
     const [, payloadB64] = userToken.split(".");
     const weakList = [
-      "secret", "password", "123456", "changeme", "jwt-secret", "supersecret",
-      "your-256-bit-secret", "secretkey", "mysecret", "letmein", "admin",
-      "keyboard-cat", "correct-horse-battery", "shhhhh", "topsecret",
+      "secret",
+      "password",
+      "123456",
+      "changeme",
+      "jwt-secret",
+      "supersecret",
+      "your-256-bit-secret",
+      "secretkey",
+      "mysecret",
+      "letmein",
+      "admin",
+      "keyboard-cat",
+      "correct-horse-battery",
+      "shhhhh",
+      "topsecret",
     ];
     const [h, p, s] = userToken.split(".");
     for (const guess of weakList) {
@@ -375,7 +413,9 @@ async function jwtDeepDive() {
     title: "Offline dictionary attack on the HS256 secret (key recovery)",
     severity: "critical",
     attack: "Capture a live user token, HMAC it against a 15-entry weak-secret wordlist",
-    observed: cracked ? `SECRET CRACKED: "${cracked}" — full token forgery possible` : "no wordlist match; secret not in common-password space",
+    observed: cracked
+      ? `SECRET CRACKED: "${cracked}" — full token forgery possible`
+      : "no wordlist match; secret not in common-password space",
     verdict: cracked ? "VULNERABLE" : "DEFENDED",
   });
 
@@ -451,7 +491,10 @@ async function charsetAndEncodingSmuggling() {
     severity: "medium",
     attack: "POST /ingest with content-encoding: br and junk bytes",
     observed: `status ${br.status}`,
-    verdict: br.status === 400 || br.status === 413 || br.status === 415 || br.status === 422 ? "DEFENDED" : "INFO",
+    verdict:
+      br.status === 400 || br.status === 413 || br.status === 415 || br.status === 422
+        ? "DEFENDED"
+        : "INFO",
   });
 }
 
@@ -460,7 +503,10 @@ async function traversalRoundTwo(portB: number) {
 
   // Overlong (invalid) UTF-8 encoding of '.' — %c0%ae. Byte-level filters see
   // harmless bytes; a lenient decoder turns them into dot-segments.
-  const overlong = await rawSend(portB, "GET /public/%c0%ae%c0%ae/api/admin HTTP/1.1\r\nHost: t\r\n\r\n");
+  const overlong = await rawSend(
+    portB,
+    "GET /public/%c0%ae%c0%ae/api/admin HTTP/1.1\r\nHost: t\r\n\r\n"
+  );
   record({
     category: cat,
     title: "Overlong UTF-8 dot-segment traversal (%c0%ae%c0%ae)",
@@ -498,7 +544,9 @@ async function credentialSmuggling() {
     verdict: q.status === 401 ? "DEFENDED" : "VULNERABLE",
   });
 
-  const c = await http("GET", "/admin", { headers: { cookie: "token=forged; access_token=forged" } });
+  const c = await http("GET", "/admin", {
+    headers: { cookie: "token=forged; access_token=forged" },
+  });
   record({
     category: cat,
     title: "Bearer token smuggled in a Cookie",
@@ -519,7 +567,8 @@ async function credentialSmuggling() {
     severity: "medium",
     attack: "GET /admin with two Authorization headers",
     observed: `status ${dup.status}`,
-    verdict: dup.status === 401 || dup.status === 403 || dup.status === 400 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      dup.status === 401 || dup.status === 403 || dup.status === 400 ? "DEFENDED" : "VULNERABLE",
   });
 }
 
@@ -529,15 +578,24 @@ async function jsonShapeAbuse() {
   // Batch/array body against a strict object schema.
   const arr = await http("POST", "/items", {
     headers: { "content-type": "application/json" },
-    body: JSON.stringify([{ name: "a", price: 1 }, { name: "b", price: 2, isAdmin: true }]),
+    body: JSON.stringify([
+      { name: "a", price: 1 },
+      { name: "b", price: 2, isAdmin: true },
+    ]),
   });
   record({
     category: cat,
     title: "JSON batch (top-level array) against an object schema",
     severity: "medium",
     attack: "POST /items with [{…},{…,isAdmin:true}]",
-    observed: `status ${arr.status}` + (arr.text.includes("isAdmin") ? " — smuggled field echoed" : ""),
-    verdict: (arr.status === 400 || arr.status === 422) && !arr.text.includes("isAdmin") ? "DEFENDED" : arr.status < 300 && !arr.text.includes("isAdmin") ? "DEFENDED" : "VULNERABLE",
+    observed:
+      `status ${arr.status}` + (arr.text.includes("isAdmin") ? " — smuggled field echoed" : ""),
+    verdict:
+      (arr.status === 400 || arr.status === 422) && !arr.text.includes("isAdmin")
+        ? "DEFENDED"
+        : arr.status < 300 && !arr.text.includes("isAdmin")
+          ? "DEFENDED"
+          : "VULNERABLE",
   });
 
   // Wrapped object: {"body": {...}} / {"items": {...}} — envelope confusion.
@@ -585,8 +643,19 @@ async function wafEvasionFollowUps() {
       title: `WAF: ${label}`,
       severity: homoglyph ? "info" : "medium",
       attack: `GET /search?q=${q}`,
-      observed: `status ${r.status}` + (homoglyph && r.status === 200 ? " — evades the ASCII-only signature, but fullwidth SQL is not executable downstream" : ""),
-      verdict: r.status === 403 ? "DEFENDED" : homoglyph ? "INFO" : r.status === 200 ? "VULNERABLE" : "INFO",
+      observed:
+        `status ${r.status}` +
+        (homoglyph && r.status === 200
+          ? " — evades the ASCII-only signature, but fullwidth SQL is not executable downstream"
+          : ""),
+      verdict:
+        r.status === 403
+          ? "DEFENDED"
+          : homoglyph
+            ? "INFO"
+            : r.status === 200
+              ? "VULNERABLE"
+              : "INFO",
     });
   }
 }
@@ -641,18 +710,29 @@ function report(): number {
     else defended++;
   }
   console.log("\n" + "═".repeat(80));
-  console.log(`  BLACKHAT SUMMARY: ${defended} DEFENDED · ${vulnerable} VULNERABLE · ${info} INFO  (of ${findings.length} probes)`);
-  console.log(vulnerable ? "  VERDICT: weaknesses found — see 🔴 findings above." : "  VERDICT: no exploitable weakness in this campaign.");
+  console.log(
+    `  BLACKHAT SUMMARY: ${defended} DEFENDED · ${vulnerable} VULNERABLE · ${info} INFO  (of ${findings.length} probes)`
+  );
+  console.log(
+    vulnerable
+      ? "  VERDICT: weaknesses found — see 🔴 findings above."
+      : "  VERDICT: no exploitable weakness in this campaign."
+  );
   console.log("═".repeat(80));
   return vulnerable ? 1 : 0;
 }
 
 async function startTarget(): Promise<{ port: number; portB: number; kill: () => void }> {
   const targetPath = fileURLToPath(new URL("target.ts", import.meta.url));
-  const child = spawn("node", ["--import", "tsx", targetPath], { stdio: ["inherit", "pipe", "pipe"] });
+  const child = spawn("node", ["--import", "tsx", targetPath], {
+    stdio: ["inherit", "pipe", "pipe"],
+  });
   let stderr = "";
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("target did not announce readiness\n" + stderr)), 30_000);
+    const timer = setTimeout(
+      () => reject(new Error("target did not announce readiness\n" + stderr)),
+      30_000
+    );
     let buf = "";
     child.stdout!.on("data", (d) => {
       buf += d.toString();

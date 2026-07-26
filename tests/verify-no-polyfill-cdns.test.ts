@@ -12,9 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 test("verify-no-polyfill-cdns flags every documented Funnull / polyfill.io IOC host", async () => {
-  const { findForbiddenCdnReferences } = await import(
-    "../scripts/verify-no-polyfill-cdns.js"
-  );
+  const { findForbiddenCdnReferences } = await import("../scripts/verify-no-polyfill-cdns.js");
   const sample = [
     "// unsafe: original hijacked polyfill CDN",
     '<script src="https://cdn.polyfill.io/v3/polyfill.min.js"></script>',
@@ -59,15 +57,13 @@ test("verify-no-polyfill-cdns flags every documented Funnull / polyfill.io IOC h
     assert.match(
       f.reason,
       /Funnull|polyfill\.io|Sansec|Silent Push|Aikido/,
-      `finding for ${f.host} must cite the campaign`,
+      `finding for ${f.host} must cite the campaign`
     );
   }
 });
 
 test("verify-no-polyfill-cdns accepts safe CDN and mirror hosts", async () => {
-  const { findForbiddenCdnReferences } = await import(
-    "../scripts/verify-no-polyfill-cdns.js"
-  );
+  const { findForbiddenCdnReferences } = await import("../scripts/verify-no-polyfill-cdns.js");
   const sample = [
     "// safe: Cloudflare-operated polyfill mirror set up after the takedown",
     '<script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js"></script>',
@@ -76,7 +72,7 @@ test("verify-no-polyfill-cdns accepts safe CDN and mirror hosts", async () => {
     "// safe: pinned + SRI on a clean CDN — the recommended pattern",
     '<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.0" ' +
       'integrity="sha384-XXXXXX" crossorigin="anonymous"></script>',
-    "// safe: a doc page that mentions \"polyfill\" as a word but not the IOC host",
+    '// safe: a doc page that mentions "polyfill" as a word but not the IOC host',
     "// We have always avoided the polyfill keyword as a script tag.",
     "// safe: a hostname that ENDS in the IOC string but is not the IOC",
     '<script src="https://not-polyfill.io.example.test/x.js"></script>',
@@ -88,9 +84,7 @@ test("verify-no-polyfill-cdns accepts safe CDN and mirror hosts", async () => {
 });
 
 test("verify-no-polyfill-cdns matches host inside JSON / Markdown / TS contexts", async () => {
-  const { findForbiddenCdnReferences } = await import(
-    "../scripts/verify-no-polyfill-cdns.js"
-  );
+  const { findForbiddenCdnReferences } = await import("../scripts/verify-no-polyfill-cdns.js");
   const jsonSample = '{"src": "https://cdn.polyfill.io/v3/polyfill.min.js"}';
   const mdSample = "Load it from `https://polyfill.io/v3/polyfill.min.js` in your `<head>`.";
   const tsSample = 'const url = "https://bootcss.com/bootstrap.min.js";';
@@ -115,15 +109,13 @@ test("verify-no-polyfill-cdns accepts the live repository tree", async () => {
   // copies of this very test contain the IOC strings and trip the gate.
   const scriptUrl = new URL(
     "scripts/verify-no-polyfill-cdns.ts",
-    pathToFileURL(`${process.cwd()}/`),
+    pathToFileURL(`${process.cwd()}/`)
   );
   const scriptPath = fileURLToPath(scriptUrl);
   const exitCode: number = await new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      ["--import", "tsx", scriptPath],
-      { stdio: ["ignore", "pipe", "pipe"] },
-    );
+    const child = spawn(process.execPath, ["--import", "tsx", scriptPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
@@ -143,6 +135,6 @@ test("verify-no-polyfill-cdns accepts the live repository tree", async () => {
       "(`cdn.polyfill.io`, `polyfill.io`, `polyfill.com`, `polyfillcache.com`, " +
       "`polyfill-cdn.com`, `bootcss.com`, `bootcdn.net`, `staticfile.org`, " +
       "`staticfile.net`, `unionadjs.com`, `xhsbpza.com`); see Aikido 2024-06-27 and " +
-      "Sansec 2024-06-25.",
+      "Sansec 2024-06-25."
   );
 });

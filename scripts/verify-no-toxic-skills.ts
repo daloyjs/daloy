@@ -179,8 +179,7 @@ const DETECTORS: readonly Detector[] = [
     category: "hardcoded-secret",
     // Google API keys.
     re: /\bAIza[0-9A-Za-z_-]{35}\b/,
-    reason:
-      "hardcoded Google API key (`AIza…`) — ToxicSkills Secret detection row.",
+    reason: "hardcoded Google API key (`AIza…`) — ToxicSkills Secret detection row.",
   },
 ];
 
@@ -203,10 +202,7 @@ const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /** Repo-relative path prefixes that are skipped (use POSIX separators). */
-const SKIP_PATH_PREFIXES: readonly string[] = [
-  "tests/",
-  "otherdocs/",
-];
+const SKIP_PATH_PREFIXES: readonly string[] = ["tests/", "otherdocs/"];
 
 /** Repo-relative exact paths that are skipped. */
 const SKIP_EXACT_PATHS: ReadonlySet<string> = new Set([
@@ -242,10 +238,7 @@ function isSkippedPath(relPosix: string): boolean {
 }
 
 /** Scan a single agent-skill file's text for ToxicSkills CRITICAL patterns. */
-export function findToxicSkillPatterns(
-  file: string,
-  source: string,
-): readonly ToxicSkillFinding[] {
+export function findToxicSkillPatterns(file: string, source: string): readonly ToxicSkillFinding[] {
   const out: ToxicSkillFinding[] = [];
   const lines = source.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -282,9 +275,7 @@ async function main(): Promise<void> {
   try {
     await stat(REPO_ROOT);
   } catch (err) {
-    console.error(
-      `verify-no-toxic-skills: cannot stat repo root: ${(err as Error).message}`,
-    );
+    console.error(`verify-no-toxic-skills: cannot stat repo root: ${(err as Error).message}`);
     process.exitCode = 1;
     return;
   }
@@ -294,9 +285,7 @@ async function main(): Promise<void> {
     const text = await readFile(absolute, "utf8");
     const findings = findToxicSkillPatterns(rel, text);
     for (const f of findings) {
-      console.error(
-        `${f.file}:${f.line}: ToxicSkills ${f.category} (${f.reason}): ${f.text}`,
-      );
+      console.error(`${f.file}:${f.line}: ToxicSkills ${f.category} (${f.reason}): ${f.text}`);
       total++;
     }
   }
@@ -310,7 +299,7 @@ async function main(): Promise<void> {
         "decode base64 payloads, or embed credentials. Snyk Labs ToxicSkills (2026-02-05) found " +
         "13.4 % of ClawHub skills carried at least one CRITICAL issue and 76 carried active " +
         "malicious payloads — this gate keeps Daloy's published skills off that list. See " +
-        "`https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/`.",
+        "`https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/`."
     );
     process.exitCode = 1;
   }

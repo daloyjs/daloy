@@ -90,7 +90,7 @@ app.get(
   ({ state }) => {
     const tenant = state.tenant!; // guaranteed by tenancy({ require: true })
     return { status: 200 as const, body: { tenant, orders: ordersFor(tenant) } };
-  },
+  }
 );
 
 app.post(
@@ -108,10 +108,14 @@ app.post(
   },
   ({ body, state }) => {
     const tenant = state.tenant!;
-    const order: Order = { id: `ord-${ordersFor(tenant).length + 1}`, item: body.item, total: body.total };
+    const order: Order = {
+      id: `ord-${ordersFor(tenant).length + 1}`,
+      item: body.item,
+      total: body.total,
+    };
     ordersFor(tenant).push(order);
     return { status: 201 as const, body: order };
-  },
+  }
 );
 
 const PORT = 3003;

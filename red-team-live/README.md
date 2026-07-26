@@ -13,7 +13,7 @@ pnpm red-team:live
 - **`target.ts`** boots a realistic, idiomatically-secured daloyjs API on a
   real TCP port via the Node adapter's `serve()` (production env, WAF, CORS
   allowlist, rate-limited login, `fetchGuard`, `safeRedirect`, JWT-protected
-  admin route, response-body schemas). It is *not* deliberately weakened — the
+  admin route, response-body schemas). It is _not_ deliberately weakened — the
   point is to attack the **framework's defaults**.
 - **`run.ts`** is the attacker. It spawns `target.ts` as a **separate process**,
   waits for it to listen, then attacks it over the wire:
@@ -57,12 +57,12 @@ and is therefore covered only in-process (by `app.request()` and direct API
 calls), for example:
 
 - refuse-to-boot guards, weak-secret rejection, cookie-attribute asserts
-  (all throw at *construction*, never over the wire);
+  (all throw at _construction_, never over the wire);
 - `timingSafeEqual`, signed-value/HMAC primitives, WebSocket frame
   parse/encode, pagination cursor decode (pure library functions);
 - JWT temporal / issuer-audience / tampered-payload rejection (forging a
-  *validly signed* but expired/tampered token requires the server's secret,
-  which an external attacker does not have — the forgery-rejection path *is*
+  _validly signed_ but expired/tampered token requires the server's secret,
+  which an external attacker does not have — the forgery-rejection path _is_
   exercised live via `alg:none` and forged-signature tokens).
 
 ## Relationship to the unit suites

@@ -30,7 +30,7 @@ const ordersCreated = registry.counter("orders_created_total", "Total orders cre
 const orderValue = registry.histogram(
   "order_value_usd",
   "Distribution of order values in USD.",
-  [1, 5, 10, 25, 50, 100, 250, 500],
+  [1, 5, 10, 25, 50, 100, 250, 500]
 );
 
 const app = new App({ env: "development" });
@@ -50,7 +50,7 @@ app.get(
     summary: "Liveness probe",
     responses: { 200: { description: "OK", body: z.object({ status: z.string() }) } },
   },
-  () => ({ status: 200 as const, body: { status: "ok" } }),
+  () => ({ status: 200 as const, body: { status: "ok" } })
 );
 
 app.get(
@@ -73,7 +73,7 @@ app.get(
         { id: "ord-2", total: 129.0 },
       ],
     },
-  }),
+  })
 );
 
 app.post(
@@ -98,7 +98,7 @@ app.post(
       status: 201 as const,
       body: { id: `ord-${Date.now()}`, item: body.item, total: body.total },
     };
-  },
+  }
 );
 
 const PORT = 3001;

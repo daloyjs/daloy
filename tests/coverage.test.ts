@@ -53,13 +53,18 @@ test("readBodyLimited rejects invalid Content-Length", async () => {
   const req = new Request("http://t/", { method: "POST", headers: { "content-length": "abc" } });
   await assert.rejects(
     () => readBodyLimited(req, 1024),
-    (err: any) => err instanceof BadRequestError && /Invalid Content-Length/.test(err.problem?.detail ?? ""),
+    (err: any) =>
+      err instanceof BadRequestError && /Invalid Content-Length/.test(err.problem?.detail ?? "")
   );
 
-  const negative = new Request("http://t/", { method: "POST", headers: { "content-length": "-1" } });
+  const negative = new Request("http://t/", {
+    method: "POST",
+    headers: { "content-length": "-1" },
+  });
   await assert.rejects(
     () => readBodyLimited(negative, 1024),
-    (err: any) => err instanceof BadRequestError && /Invalid Content-Length/.test(err.problem?.detail ?? ""),
+    (err: any) =>
+      err instanceof BadRequestError && /Invalid Content-Length/.test(err.problem?.detail ?? "")
   );
 });
 
@@ -306,7 +311,11 @@ test("createLogger uses console.log fallback when stdout.write is missing", () =
 
 test("createLogger child merges bindings and emits every level method", () => {
   const lines: string[] = [];
-  const logger = createLogger({ level: "trace", bindings: { app: "daloy" }, write: (line) => lines.push(line) });
+  const logger = createLogger({
+    level: "trace",
+    bindings: { app: "daloy" },
+    write: (line) => lines.push(line),
+  });
   const child = logger.child({ route: "/health" });
 
   child.trace("trace");
@@ -317,7 +326,9 @@ test("createLogger child merges bindings and emits every level method", () => {
   child.fatal("fatal");
 
   assert.equal(lines.length, 6);
-  assert.ok(lines.every((line) => line.includes('"app":"daloy"') && line.includes('"route":"/health"')));
+  assert.ok(
+    lines.every((line) => line.includes('"app":"daloy"') && line.includes('"route":"/health"'))
+  );
   assert.ok(lines.some((line) => line.includes('"level":"fatal"')));
 });
 
@@ -456,7 +467,10 @@ test("cors preflight from an unknown origin omits allow-origin and still respond
     responses: { 200: { description: "ok" } },
     handler: async () => ({ status: 200 as const, body: undefined }),
   });
-  const res = await app.request("/pre", { method: "OPTIONS", headers: { origin: "https://unknown.test" } });
+  const res = await app.request("/pre", {
+    method: "OPTIONS",
+    headers: { origin: "https://unknown.test" },
+  });
   assert.equal(res.status, 204);
   assert.equal(res.headers.get("access-control-allow-origin"), null);
   // Disallowed origins must not learn the configured method/header
@@ -570,7 +584,10 @@ test("Router.add accepts operationIds on root and static routes", () => {
 
   assert.equal(router.find("GET", "/")?.handler, "root");
   assert.equal(router.find("POST", "/static")?.handler, "static");
-  assert.throws(() => router.add("PATCH", "/other", "duplicate", "staticOp"), /Duplicate operationId/);
+  assert.throws(
+    () => router.add("PATCH", "/other", "duplicate", "staticOp"),
+    /Duplicate operationId/
+  );
 });
 
 test("App rejects requests during graceful shutdown with 503", async () => {
@@ -628,7 +645,10 @@ test("App.request accepts string URLs, URL objects, and Request instances", asyn
     path: "/r",
     operationId: "r",
     responses: { 200: { description: "ok", body: z.object({ via: z.string() }) as any } },
-    handler: async ({ request }) => ({ status: 200 as const, body: { via: new URL(request.url).pathname } }),
+    handler: async ({ request }) => ({
+      status: 200 as const,
+      body: { via: new URL(request.url).pathname },
+    }),
   });
   const a = await app.request("/r");
   const b = await app.request(new URL("http://test.local/r"));
@@ -727,7 +747,7 @@ test("HttpError throwables pass through the app error boundary", async () => {
 
   const res = await app.request("/bad-request");
   assert.equal(res.status, 400);
-  assert.equal((await res.json() as any).detail, "bad input");
+  assert.equal(((await res.json()) as any).detail, "bad input");
 });
 
 test("handler returning an undeclared status surfaces as Internal Error", async () => {
@@ -743,7 +763,6 @@ test("handler returning an undeclared status surfaces as Internal Error", async 
   assert.equal(res.status, 500);
 });
 
-
 test("4xx errors are logged through the warning path", async () => {
   const warnings: unknown[] = [];
   const logger = {
@@ -752,7 +771,9 @@ test("4xx errors are logged through the warning path", async () => {
     trace() {},
     debug() {},
     info() {},
-    warn(fields: unknown) { warnings.push(fields); },
+    warn(fields: unknown) {
+      warnings.push(fields);
+    },
     error() {},
     fatal() {},
   };
@@ -815,7 +836,9 @@ test("form-urlencoded bodies are parsed into objects", async () => {
     path: "/form",
     operationId: "form",
     request: { body: z.object({ a: z.string(), b: z.string() }) as any },
-    responses: { 200: { description: "ok", body: z.object({ a: z.string(), b: z.string() }) as any } },
+    responses: {
+      200: { description: "ok", body: z.object({ a: z.string(), b: z.string() }) as any },
+    },
     handler: async ({ body }) => ({ status: 200 as const, body: body as any }),
   });
   const res = await app.request("/form", {
@@ -846,7 +869,10 @@ test("multipart/form-data bodies are accepted and large ones rejected by content
   // Force a content-length over the configured limit.
   const huge = await app.request("/upload", {
     method: "POST",
-    headers: { "content-type": "multipart/form-data; boundary=x", "content-length": String(10_000_000) },
+    headers: {
+      "content-type": "multipart/form-data; boundary=x",
+      "content-length": String(10_000_000),
+    },
     body: "----x--",
   });
   assert.equal(huge.status, 413);
@@ -890,15 +916,18 @@ test("unknown content-types fall through to text decoding", async () => {
 
 test("function-form plugin registration mounts routes", async () => {
   const app = new App({ logger: false });
-  app.register((child) => {
-    child.route({
-      method: "GET",
-      path: "/fn",
-      operationId: "fn",
-      responses: { 200: { description: "ok" } },
-      handler: async () => ({ status: 200 as const, body: { fn: true } }),
-    });
-  }, { prefix: "/p" });
+  app.register(
+    (child) => {
+      child.route({
+        method: "GET",
+        path: "/fn",
+        operationId: "fn",
+        responses: { 200: { description: "ok" } },
+        handler: async () => ({ status: 200 as const, body: { fn: true } }),
+      });
+    },
+    { prefix: "/p" }
+  );
   const res = await app.request("/p/fn");
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { fn: true });
@@ -906,20 +935,28 @@ test("function-form plugin registration mounts routes", async () => {
 
 test("group merges hooks and tags from nested groups", async () => {
   const app = new App({ logger: false });
-  app.group("/v1", { tags: ["v1"], hooks: { beforeHandle: (ctx) => ctx.set.headers.set("x-v1", "1") } }, (v1) => {
-    v1.group("/admin", { tags: ["admin"], hooks: { beforeHandle: (ctx) => ctx.set.headers.set("x-admin", "1") } }, (admin) => {
-      admin.route({
-        method: "GET",
-        path: "/ping",
-        operationId: "ping",
-        description: "Nested ping route",
-        deprecated: true,
-        request: { query: z.object({ verbose: z.string().optional() }) as any },
-        responses: { 200: { description: "ok" } },
-        handler: async () => ({ status: 200 as const, body: undefined }),
-      });
-    });
-  });
+  app.group(
+    "/v1",
+    { tags: ["v1"], hooks: { beforeHandle: (ctx) => ctx.set.headers.set("x-v1", "1") } },
+    (v1) => {
+      v1.group(
+        "/admin",
+        { tags: ["admin"], hooks: { beforeHandle: (ctx) => ctx.set.headers.set("x-admin", "1") } },
+        (admin) => {
+          admin.route({
+            method: "GET",
+            path: "/ping",
+            operationId: "ping",
+            description: "Nested ping route",
+            deprecated: true,
+            request: { query: z.object({ verbose: z.string().optional() }) as any },
+            responses: { 200: { description: "ok" } },
+            handler: async () => ({ status: 200 as const, body: undefined }),
+          });
+        }
+      );
+    }
+  );
   app.route({
     method: "GET",
     path: "/anonymous",
@@ -1044,7 +1081,10 @@ test("createClient skips routes without operationId", () => {
     responses: { 200: { description: "ok" } },
     handler: async () => ({ status: 200 as const, body: undefined }),
   });
-  const client = createClient(app, { baseUrl: "http://t/", fetch: async () => new Response("", { status: 200 }) });
+  const client = createClient(app, {
+    baseUrl: "http://t/",
+    fetch: async () => new Response("", { status: 200 }),
+  });
   assert.equal(typeof (client as any).named, "function");
   assert.equal((client as any).anon, undefined);
 });
@@ -1105,9 +1145,27 @@ test("contract tests detect duplicate operationIds, missing responses, and clean
   const app = new App({ logger: false });
   // duplicate operationId — routes registered without going through the router's strict check.
   (app as any).routes.push(
-    { method: "GET", path: "/d1", operationId: "dup", responses: { 200: { description: "ok" } }, handler: async () => ({}) },
-    { method: "GET", path: "/d2", operationId: "dup", responses: { 200: { description: "ok" } }, handler: async () => ({}) },
-    { method: "GET", path: "/no-responses", operationId: "noResp", responses: {}, handler: async () => ({}) }
+    {
+      method: "GET",
+      path: "/d1",
+      operationId: "dup",
+      responses: { 200: { description: "ok" } },
+      handler: async () => ({}),
+    },
+    {
+      method: "GET",
+      path: "/d2",
+      operationId: "dup",
+      responses: { 200: { description: "ok" } },
+      handler: async () => ({}),
+    },
+    {
+      method: "GET",
+      path: "/no-responses",
+      operationId: "noResp",
+      responses: {},
+      handler: async () => ({}),
+    }
   );
   const dupReport = await runContractTests(app);
   assert.equal(dupReport.ok, false);
@@ -1151,7 +1209,11 @@ test("bun adapter delegates fetch to app and produces a problem+json error respo
     handler: async () => ({ status: 200 as const, body: { ok: true } }),
   });
 
-  const captured: { fetch?: (r: Request) => Promise<Response>; error?: (e: Error) => Response; opts?: any } = {};
+  const captured: {
+    fetch?: (r: Request) => Promise<Response>;
+    error?: (e: Error) => Response;
+    opts?: any;
+  } = {};
   (globalThis as any).Bun = {
     serve(opts: any) {
       captured.fetch = opts.fetch;
@@ -1168,7 +1230,12 @@ test("bun adapter delegates fetch to app and produces a problem+json error respo
     },
   };
   try {
-    const handle = serveBun(app, { port: 1234, hostname: "127.0.0.1", maxRequestBodySize: 1024, handleSignals: false });
+    const handle = serveBun(app, {
+      port: 1234,
+      hostname: "127.0.0.1",
+      maxRequestBodySize: 1024,
+      handleSignals: false,
+    });
     assert.equal(handle.port, 1234);
     assert.equal(captured.opts.port, 1234);
     assert.equal(captured.opts.hostname, "127.0.0.1");
@@ -1298,7 +1365,11 @@ test("deno adapter delegates fetch and shuts down when stopped", async () => {
     handler: async () => ({ status: 200 as const, body: { ok: true } }),
   });
 
-  const captured: { handler?: (req: Request) => Promise<Response>; opts?: any; shutdownCalled?: boolean } = {};
+  const captured: {
+    handler?: (req: Request) => Promise<Response>;
+    opts?: any;
+    shutdownCalled?: boolean;
+  } = {};
   (globalThis as any).Deno = {
     serve(opts: any, handler: (req: Request) => Promise<Response>) {
       captured.opts = opts;

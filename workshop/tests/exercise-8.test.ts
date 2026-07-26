@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildApp, BookSchema } from "../src/challenges/8-hour/solutions/exercise-8-end.ts";
 
-async function withAppFetch<T>(fn: (fetchPath: (path: string, init?: RequestInit) => Promise<Response>) => Promise<T>): Promise<T> {
+async function withAppFetch<T>(
+  fn: (fetchPath: (path: string, init?: RequestInit) => Promise<Response>) => Promise<T>
+): Promise<T> {
   const app = buildApp();
   return fn((path, init) => app.fetch(new Request(new URL(path, "http://workshop.local"), init)));
 }

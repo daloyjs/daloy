@@ -26,11 +26,9 @@ export class ConfigValidationError extends Error {
   /** Every validation issue, as `{ key, message }` pairs (`key` is the dotted path, `"<root>"`/`"<source>"` for top-level failures). */
   readonly issues: ReadonlyArray<{ key: string; message: string }>;
   constructor(issues: ReadonlyArray<{ key: string; message: string }>) {
-    const summary = issues
-      .map((i) => `  - ${i.key || "<root>"}: ${i.message}`)
-      .join("\n");
+    const summary = issues.map((i) => `  - ${i.key || "<root>"}: ${i.message}`).join("\n");
     super(
-      `defineConfig(): configuration is invalid (${issues.length} issue${issues.length === 1 ? "" : "s"})\n${summary}`,
+      `defineConfig(): configuration is invalid (${issues.length} issue${issues.length === 1 ? "" : "s"})\n${summary}`
     );
     this.name = "ConfigValidationError";
     this.issues = issues;
@@ -74,10 +72,7 @@ export interface DefineConfigOptions<S extends StandardSchemaV1> {
 async function readSource(source: ConfigSource): Promise<Record<string, unknown>> {
   if (source === "env") {
     return readEnvObject(
-      (typeof process !== "undefined" ? process.env : {}) as Record<
-        string,
-        string | undefined
-      >,
+      (typeof process !== "undefined" ? process.env : {}) as Record<string, string | undefined>
     );
   }
   if (source.kind === "env") return readEnvObject(source.env);
@@ -141,7 +136,7 @@ function pathToKey(path: ReadonlyArray<PropertyKey | { key: PropertyKey }>): str
  * @since 0.20.0
  */
 export async function defineConfig<S extends StandardSchemaV1>(
-  opts: DefineConfigOptions<S>,
+  opts: DefineConfigOptions<S>
 ): Promise<StandardSchemaV1.InferOutput<S>> {
   const stderr =
     opts.stderr === false

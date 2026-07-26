@@ -19,19 +19,27 @@
 import { writeFileSync } from "node:fs";
 import autocannon from "autocannon";
 import {
-  resultsPath, orderTargets, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
+  resultsPath,
+  orderTargets,
+  machineInfo,
+  parseArgs,
+  startServer,
+  killServer,
+  waitForHealthy,
+  stats,
+  fmt,
+  warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",    file: "servers/stream/daloy.ts" },
-  { name: "hono",     file: "servers/stream/hono.ts" },
-  { name: "fastify",  file: "servers/stream/fastify.ts" },
-  { name: "express",  file: "servers/stream/express.ts" },
-  { name: "koa",      file: "servers/stream/koa.ts" },
-  { name: "nest",     file: "servers/stream/nest.ts" },
-  { name: "elysia",   file: "servers/stream/elysia.ts" },
+  { name: "daloy", file: "servers/stream/daloy.ts" },
+  { name: "hono", file: "servers/stream/hono.ts" },
+  { name: "fastify", file: "servers/stream/fastify.ts" },
+  { name: "express", file: "servers/stream/express.ts" },
+  { name: "koa", file: "servers/stream/koa.ts" },
+  { name: "nest", file: "servers/stream/nest.ts" },
+  { name: "elysia", file: "servers/stream/elysia.ts" },
   { name: "feathers", file: "servers/stream/feathers.ts" },
 ];
 
@@ -46,14 +54,21 @@ const EXPECTED_BYTES = 160 * 64 * 1024; // 10 MiB — must match every fixture
 
 function runAutocannon(duration) {
   return new Promise((resolve, reject) => {
-    const instance = autocannon({
-      url: `http://127.0.0.1:${PORT}/stream`,
-      method: "GET",
-      connections: CONNECTIONS,
-      pipelining: 1,
-      duration,
-    }, (err, result) => err ? reject(err) : resolve(result));
-    autocannon.track(instance, { renderProgressBar: false, renderResultsTable: false, renderLatencyTable: false });
+    const instance = autocannon(
+      {
+        url: `http://127.0.0.1:${PORT}/stream`,
+        method: "GET",
+        connections: CONNECTIONS,
+        pipelining: 1,
+        duration,
+      },
+      (err, result) => (err ? reject(err) : resolve(result))
+    );
+    autocannon.track(instance, {
+      renderProgressBar: false,
+      renderResultsTable: false,
+      renderLatencyTable: false,
+    });
   });
 }
 
@@ -69,7 +84,7 @@ async function benchOne(fw) {
     const preBytes = (await pre.arrayBuffer()).byteLength;
     if (pre.status !== 200 || preBytes !== EXPECTED_BYTES) {
       throw new Error(
-        `preflight failed: GET /stream → ${pre.status} with ${preBytes} bytes (expected ${EXPECTED_BYTES})`,
+        `preflight failed: GET /stream → ${pre.status} with ${preBytes} bytes (expected ${EXPECTED_BYTES})`
       );
     }
     await runAutocannon(WARMUP);
@@ -86,11 +101,17 @@ async function benchOne(fw) {
     const rps = stats(samples.map((s) => s.reqPerSec));
     const tput = stats(samples.map((s) => s.throughputMBps));
     const p99 = samples.reduce((a, s) => a + s.p99, 0) / samples.length;
-    console.error(metricsLine("stream", [
-      c.green(c.bold(fmt(rps.median))) + c.dim(" req/s"),
-      c.cyan(tput.median.toFixed(1)) + c.dim(" MiB/s"),
-      metric("p99", p99.toFixed(2), { unit: "ms" }),
-    ], { labelWidth: 8 }));
+    console.error(
+      metricsLine(
+        "stream",
+        [
+          c.green(c.bold(fmt(rps.median))) + c.dim(" req/s"),
+          c.cyan(tput.median.toFixed(1)) + c.dim(" MiB/s"),
+          metric("p99", p99.toFixed(2), { unit: "ms" }),
+        ],
+        { labelWidth: 8 }
+      )
+    );
     return { reqPerSec: rps, throughputMBps: tput, p99, samples };
   } finally {
     await killServer(child);
@@ -99,7 +120,10 @@ async function benchOne(fw) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
+  const targets = orderTargets(
+    FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)),
+    args.order
+  );
   const rows = [];
   for (const fw of targets) {
     try {
@@ -121,21 +145,37 @@ async function main() {
       r.p99.toFixed(2),
     ]);
   }
-  console.log("\n" + summary({
-    head: ["Framework", "req/s (median)", "MiB/s (median)", "p99 (ms)"],
-    rows: tableRows,
-    highlight: (row) => row[0].includes("daloy"),
-  }) + "\n");
+  console.log(
+    "\n" +
+      summary({
+        head: ["Framework", "req/s (median)", "MiB/s (median)", "p99 (ms)"],
+        rows: tableRows,
+        highlight: (row) => row[0].includes("daloy"),
+      }) +
+      "\n"
+  );
 
   writeFileSync(
     resultsPath("results.streaming.json"),
-    JSON.stringify({
-      ranAt: new Date().toISOString(),
-      machine: machineInfo(),
-      config: { duration: DURATION, warmup: WARMUP, iterations: ITERATIONS, connections: CONNECTIONS },
-      rows,
-    }, null, 2),
+    JSON.stringify(
+      {
+        ranAt: new Date().toISOString(),
+        machine: machineInfo(),
+        config: {
+          duration: DURATION,
+          warmup: WARMUP,
+          iterations: ITERATIONS,
+          connections: CONNECTIONS,
+        },
+        rows,
+      },
+      null,
+      2
+    )
   );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

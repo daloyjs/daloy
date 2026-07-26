@@ -45,7 +45,7 @@ app.get(
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 app.post(
@@ -67,7 +67,7 @@ app.post(
     //   a custom `type` URI such as "https://daloyjs.dev/errors/already-checked-out".
     b.status = "checked-out";
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 // TODO: POST /books → already wired via 4-hour pattern, HttpError(409) on duplicate.

@@ -22,9 +22,9 @@ Reuse `AuthorSchema` for every response body. Make the create/patch bodies separ
 ## Step 2 — State + auth helper
 
 ```ts
-const authors = new Map<string, z.infer<typeof AuthorSchema>>([ /* seed */ ]);
+const authors = new Map<string, z.infer<typeof AuthorSchema>>([/* seed */]);
 
-const auth = bearerAuth({ validate: async (t) => eq(t, BEARER) });   // eq uses timingSafeEqual
+const auth = bearerAuth({ validate: async (t) => eq(t, BEARER) }); // eq uses timingSafeEqual
 ```
 
 ## Step 3 — Five routes

@@ -217,7 +217,7 @@ export function isSkillFilename(basename: string): boolean {
 function isSkippedDir(relPath: string): boolean {
   const posixPath = relPath.split(sep).join("/");
   return SKIP_DIR_PREFIXES.some(
-    (p) => posixPath === p.replace(/\/$/, "") || posixPath.startsWith(p),
+    (p) => posixPath === p.replace(/\/$/, "") || posixPath.startsWith(p)
   );
 }
 
@@ -253,15 +253,14 @@ async function* walkAgentFiles(root: string): AsyncIterable<string> {
  * matches the well-known prohibition verbs at the start of the
  * effective sentence segment.
  */
-const PROSE_NEGATION = /\b(?:never|do not|don't|avoid|refuse to|must not|should not|shouldn't|forbidden|prohibited)\b/i;
+const PROSE_NEGATION =
+  /\b(?:never|do not|don't|avoid|refuse to|must not|should not|shouldn't|forbidden|prohibited)\b/i;
 
 /**
  * Pure scanner: given a file's textual content, return every line that
  * matches a ToxicSkills anti-pattern signature. Exposed for tests.
  */
-export function scanForToxicSkillPatterns(
-  source: string,
-): readonly Omit<ToxicFinding, "file">[] {
+export function scanForToxicSkillPatterns(source: string): readonly Omit<ToxicFinding, "file">[] {
   const out: Omit<ToxicFinding, "file">[] = [];
   const lines = source.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -286,7 +285,7 @@ export function scanForToxicSkillPatterns(
 }
 
 export async function findToxicAgentSkills(
-  rootDir: string = REPO_ROOT,
+  rootDir: string = REPO_ROOT
 ): Promise<readonly ToxicFinding[]> {
   const findings: ToxicFinding[] = [];
   for await (const file of walkAgentFiles(rootDir)) {
@@ -320,7 +319,7 @@ async function main(): Promise<void> {
         "private keys / cloud credentials, override the host's system " +
         "prompt, decode-then-execute an obfuscated payload, or query the " +
         "cloud Instance Metadata Service. See " +
-        "https://snyk.io/blog/snyk-tessl-partnership/.",
+        "https://snyk.io/blog/snyk-tessl-partnership/."
     );
     process.exitCode = 1;
   }

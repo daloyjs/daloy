@@ -47,28 +47,40 @@ function statusOfThrow(fn: () => unknown): number {
 }
 
 test("decodeCursor rejects an empty cursor with a 400", () => {
-  assert.equal(statusOfThrow(() => decodeCursor("")), 400);
+  assert.equal(
+    statusOfThrow(() => decodeCursor("")),
+    400
+  );
 });
 
 test("decodeCursor rejects an over-long cursor", () => {
   const huge = "a".repeat(MAX_CURSOR_LENGTH + 1);
-  assert.equal(statusOfThrow(() => decodeCursor(huge)), 400);
+  assert.equal(
+    statusOfThrow(() => decodeCursor(huge)),
+    400
+  );
 });
 
 test("decodeCursor rejects a malformed (non-base64url) cursor", () => {
-  assert.equal(statusOfThrow(() => decodeCursor("not base64!!")), 400);
+  assert.equal(
+    statusOfThrow(() => decodeCursor("not base64!!")),
+    400
+  );
 });
 
 test("decodeCursor rejects base64url that is not valid JSON", () => {
   // "hello" base64url-encoded is not JSON.
   const notJson = Buffer.from("hello").toString("base64url");
-  assert.equal(statusOfThrow(() => decodeCursor(notJson)), 400);
+  assert.equal(
+    statusOfThrow(() => decodeCursor(notJson)),
+    400
+  );
 });
 
 test("decodeCursor strips prototype-pollution keys", () => {
   // Hand-craft a cursor whose JSON contains __proto__.
   const malicious = Buffer.from(
-    JSON.stringify({ id: 1, __proto__: { admin: true }, nested: { constructor: "x", ok: 2 } }),
+    JSON.stringify({ id: 1, __proto__: { admin: true }, nested: { constructor: "x", ok: 2 } })
   ).toString("base64url");
   const decoded = decodeCursor<Record<string, unknown>>(malicious);
   assert.equal(({} as Record<string, unknown>).admin, undefined);
@@ -85,7 +97,7 @@ test("buildLinkHeader serializes rel and title", () => {
   ]);
   assert.equal(
     header,
-    '<https://api.test/books?cursor=abc>; rel="next", <https://api.test/books>; rel="first"; title="First page"',
+    '<https://api.test/books?cursor=abc>; rel="next", <https://api.test/books>; rel="first"; title="First page"'
   );
 });
 
@@ -96,22 +108,22 @@ test("buildLinkHeader returns empty string for no links", () => {
 test("buildLinkHeader rejects header-injection in the URL", () => {
   assert.throws(
     () => buildLinkHeader([{ url: "https://api.test/\r\nSet-Cookie: x=1", rel: "next" }]),
-    /forbidden characters/,
+    /forbidden characters/
   );
   assert.throws(
     () => buildLinkHeader([{ url: "https://api.test/<script>", rel: "next" }]),
-    /forbidden characters/,
+    /forbidden characters/
   );
 });
 
 test("buildLinkHeader rejects injection in rel and title", () => {
   assert.throws(
     () => buildLinkHeader([{ url: "https://api.test/", rel: 'next"; rel="evil' }]),
-    /forbidden characters/,
+    /forbidden characters/
   );
   assert.throws(
     () => buildLinkHeader([{ url: "https://api.test/", rel: "next", title: 'a"b' }]),
-    /forbidden characters/,
+    /forbidden characters/
   );
 });
 
@@ -213,7 +225,7 @@ test("paginationQuery rejects invalid bounds", () => {
   assert.throws(() => paginationQuery({ minLimit: 10, maxLimit: 5 }), /must not exceed/);
   assert.throws(
     () => paginationQuery({ minLimit: 5, maxLimit: 10, defaultLimit: 1 }),
-    /within \[minLimit, maxLimit\]/,
+    /within \[minLimit, maxLimit\]/
   );
 });
 

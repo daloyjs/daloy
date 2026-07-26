@@ -185,7 +185,9 @@ export function isSkillFilename(basename: string): boolean {
 
 function isSkippedDir(relPath: string): boolean {
   const posixPath = relPath.split(sep).join("/");
-  return SKIP_DIR_PREFIXES.some((p) => posixPath === p.replace(/\/$/, "") || posixPath.startsWith(p));
+  return SKIP_DIR_PREFIXES.some(
+    (p) => posixPath === p.replace(/\/$/, "") || posixPath.startsWith(p)
+  );
 }
 
 async function* walkAgentFiles(root: string): AsyncIterable<string> {
@@ -237,7 +239,7 @@ export function scanForLeakySkillPatterns(source: string): readonly Omit<LeakyFi
 }
 
 export async function findLeakyAgentSkills(
-  rootDir: string = REPO_ROOT,
+  rootDir: string = REPO_ROOT
 ): Promise<readonly LeakyFinding[]> {
   const findings: LeakyFinding[] = [];
   for await (const file of walkAgentFiles(rootDir)) {
@@ -269,7 +271,7 @@ async function main(): Promise<void> {
         "agent-instruction files. Rewrite the instruction so the secret " +
         "stays in a tool-side env var (process.env / .env) and is never " +
         "named, repeated, or persisted by the LLM. See " +
-        "https://snyk.io/blog/openclaw-skills-credential-leaks-research/.",
+        "https://snyk.io/blog/openclaw-skills-credential-leaks-research/."
     );
     process.exitCode = 1;
   }

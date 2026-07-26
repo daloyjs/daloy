@@ -106,7 +106,7 @@ const DEP_BUCKETS = [
  */
 export function findNativeAddonsInPackageJson(
   file: string,
-  pkg: PackageJsonLike,
+  pkg: PackageJsonLike
 ): readonly NativeAddonFinding[] {
   const out: NativeAddonFinding[] = [];
   for (const bucket of DEP_BUCKETS) {
@@ -124,10 +124,7 @@ export function findNativeAddonsInPackageJson(
   const bundled = pkg.bundledDependencies ?? pkg.bundleDependencies;
   if (Array.isArray(bundled)) {
     for (const name of bundled) {
-      if (
-        typeof name === "string" &&
-        FORBIDDEN_NATIVE_ADDON_PACKAGES.includes(name)
-      ) {
+      if (typeof name === "string" && FORBIDDEN_NATIVE_ADDON_PACKAGES.includes(name)) {
         out.push({
           file,
           reason: `\`${name}\` listed in \`bundledDependencies\` (Node.js native-addon toolchain)`,
@@ -138,8 +135,7 @@ export function findNativeAddonsInPackageJson(
   if (pkg.gypfile === true) {
     out.push({
       file,
-      reason:
-        '`"gypfile": true` opts the package into `node-gyp rebuild` at install time',
+      reason: '`"gypfile": true` opts the package into `node-gyp rebuild` at install time',
     });
   }
   if (pkg.binary && typeof pkg.binary === "object") {
@@ -189,10 +185,7 @@ async function main(): Promise<void> {
   const findings: NativeAddonFinding[] = [];
 
   for await (const file of walkRepo(REPO_ROOT)) {
-    const rel = relative(fileURLToPath(REPO_ROOT), file.absolute).replaceAll(
-      "\\",
-      "/",
-    );
+    const rel = relative(fileURLToPath(REPO_ROOT), file.absolute).replaceAll("\\", "/");
     if (file.name === "package.json") {
       const text = await readFile(file.absolute, "utf8");
       let parsed: PackageJsonLike;
@@ -222,9 +215,7 @@ async function main(): Promise<void> {
     const stats = await stat(lockfilePath);
     if (stats.isFile()) {
       const lock = await readFile(lockfilePath, "utf8");
-      findings.push(
-        ...findNativeAddonsInLockfile("pnpm-lock.yaml", lock),
-      );
+      findings.push(...findNativeAddonsInLockfile("pnpm-lock.yaml", lock));
     }
   } catch {
     /* no lockfile is not this gate's problem */
@@ -233,7 +224,7 @@ async function main(): Promise<void> {
   if (findings.length === 0) return;
   console.error(
     `verify-no-native-addons: ${findings.length} native-addon ` +
-      `finding${findings.length === 1 ? "" : "s"}:`,
+      `finding${findings.length === 1 ? "" : "s"}:`
   );
   for (const f of findings) {
     console.error(`  - ${f.file}: ${f.reason}`);
@@ -245,7 +236,7 @@ async function main(): Promise<void> {
       "cannot defend against (see https://snyk.io/blog/nodejs-add-on-extensions/). " +
       "`@daloyjs/core` and `create-daloy` therefore ship zero native " +
       "dependencies. If a future feature genuinely needs one, justify the " +
-      "addition in SECURITY.md and extend the allowlist in this gate.",
+      "addition in SECURITY.md and extend the allowlist in this gate."
   );
   process.exitCode = 1;
 }
@@ -260,15 +251,13 @@ async function main(): Promise<void> {
  */
 export function findNativeAddonsInLockfile(
   file: string,
-  source: string,
+  source: string
 ): readonly NativeAddonFinding[] {
   const out: NativeAddonFinding[] = [];
   const lines = source.split(/\r?\n/);
   for (const name of FORBIDDEN_NATIVE_ADDON_PACKAGES) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(
-      String.raw`(?:^|[\s'"/])` + escaped + String.raw`@\d`,
-    );
+    const re = new RegExp(String.raw`(?:^|[\s'"/])` + escaped + String.raw`@\d`);
     for (let i = 0; i < lines.length; i++) {
       if (re.test(lines[i]!)) {
         out.push({

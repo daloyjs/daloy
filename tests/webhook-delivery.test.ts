@@ -19,7 +19,8 @@ function scriptedTransport(steps: Step[]): {
   const requests: Array<{ url: string; init: RequestInit }> = [];
   let i = 0;
   const fn = (async (input: Request | string | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const url =
+      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     requests.push({ url, init: init ?? {} });
     const step = steps[Math.min(i++, steps.length - 1)];
     return step!(url, init ?? {});
@@ -45,9 +46,17 @@ const noSleep = async (): Promise<void> => undefined;
 
 test("createWebhookSender: delivers a signed POST a receiver can verify", async () => {
   const { fetch: transport, requests } = scriptedTransport([ok()]);
-  const send = createWebhookSender({ secret: SECRET, fetch: transport, now: () => 1_700_000_000_000 });
+  const send = createWebhookSender({
+    secret: SECRET,
+    fetch: transport,
+    now: () => 1_700_000_000_000,
+  });
 
-  const result = await send({ url: "https://hooks.example.com/x", eventType: "invoice.paid", payload: { id: "in_1" } });
+  const result = await send({
+    url: "https://hooks.example.com/x",
+    eventType: "invoice.paid",
+    payload: { id: "in_1" },
+  });
 
   assert.equal(result.ok, true);
   assert.equal(result.attempts, 1);
@@ -88,10 +97,16 @@ test("createWebhookSender: uses the supplied idempotency id", async () => {
 test("createWebhookSender: a string payload is sent verbatim, bytes as octet-stream", async () => {
   const { fetch: transport, requests } = scriptedTransport([ok(), ok()]);
   const send = createWebhookSender({ secret: SECRET, fetch: transport });
-  await send({ url: "https://h/", payload: "{\"raw\":true}" });
+  await send({ url: "https://h/", payload: '{"raw":true}' });
   await send({ url: "https://h/", payload: new Uint8Array([1, 2, 3]) });
-  assert.equal(new Headers(requests[0]!.init.headers as HeadersInit).get("content-type"), "application/json");
-  assert.equal(new Headers(requests[1]!.init.headers as HeadersInit).get("content-type"), "application/octet-stream");
+  assert.equal(
+    new Headers(requests[0]!.init.headers as HeadersInit).get("content-type"),
+    "application/json"
+  );
+  assert.equal(
+    new Headers(requests[1]!.init.headers as HeadersInit).get("content-type"),
+    "application/octet-stream"
+  );
 });
 
 test("createWebhookSender: caller headers cannot clobber signature headers", async () => {
@@ -127,7 +142,9 @@ test("createWebhookSender: retries a 503 then succeeds, signature stable across 
   assert.equal(seen[0]?.willRetry, true);
   assert.equal(seen[2]?.willRetry, false);
   // Same id + signature on every attempt (receiver can dedupe).
-  const sigs = requests.map((r) => new Headers(r.init.headers as HeadersInit).get("webhook-signature"));
+  const sigs = requests.map((r) =>
+    new Headers(r.init.headers as HeadersInit).get("webhook-signature")
+  );
   assert.equal(new Set(sigs).size, 1);
   const ids = requests.map((r) => new Headers(r.init.headers as HeadersInit).get("webhook-id"));
   assert.deepEqual(ids, ["evt_1", "evt_1", "evt_1"]);
@@ -135,7 +152,12 @@ test("createWebhookSender: retries a 503 then succeeds, signature stable across 
 
 test("createWebhookSender: retries a network error", async () => {
   const { fetch: transport } = scriptedTransport([netError(), ok()]);
-  const send = createWebhookSender({ secret: SECRET, fetch: transport, sleep: noSleep, jitter: false });
+  const send = createWebhookSender({
+    secret: SECRET,
+    fetch: transport,
+    sleep: noSleep,
+    jitter: false,
+  });
   const result = await send({ url: "https://h/", payload: {} });
   assert.equal(result.ok, true);
   assert.equal(result.attempts, 2);
@@ -197,7 +219,13 @@ test("createWebhookSender: dead-letters after exhausting all attempts", async ()
 test("createWebhookSender: dead-letters a network failure with lastError set", async () => {
   const sink = new MemoryWebhookDeadLetterSink();
   const { fetch: transport } = scriptedTransport([netError()]);
-  const send = createWebhookSender({ secret: SECRET, fetch: transport, maxAttempts: 2, sleep: noSleep, deadLetter: sink });
+  const send = createWebhookSender({
+    secret: SECRET,
+    fetch: transport,
+    maxAttempts: 2,
+    sleep: noSleep,
+    deadLetter: sink,
+  });
   const result = await send({ url: "https://h/", payload: {} });
   assert.equal(result.deadLettered, true);
   assert.equal(sink.list()[0]?.lastError, "connection reset");
@@ -205,7 +233,12 @@ test("createWebhookSender: dead-letters a network failure with lastError set", a
 
 test("createWebhookSender: without a sink, failure reports deadLettered:false", async () => {
   const { fetch: transport } = scriptedTransport([status(500)]);
-  const send = createWebhookSender({ secret: SECRET, fetch: transport, maxAttempts: 1, sleep: noSleep });
+  const send = createWebhookSender({
+    secret: SECRET,
+    fetch: transport,
+    maxAttempts: 1,
+    sleep: noSleep,
+  });
   const result = await send({ url: "https://h/", payload: {} });
   assert.equal(result.ok, false);
   assert.equal(result.deadLettered, false);
@@ -214,10 +247,21 @@ test("createWebhookSender: without a sink, failure reports deadLettered:false", 
 test("MemoryWebhookDeadLetterSink: drain empties and returns, ring buffer caps size", () => {
   const sink = new MemoryWebhookDeadLetterSink(2);
   for (let i = 0; i < 3; i++) {
-    sink.add({ id: String(i), url: "https://h/", payload: new Uint8Array(), contentType: "application/json", attempts: 1, timestamp: 0, failedAt: 0 });
+    sink.add({
+      id: String(i),
+      url: "https://h/",
+      payload: new Uint8Array(),
+      contentType: "application/json",
+      attempts: 1,
+      timestamp: 0,
+      failedAt: 0,
+    });
   }
   assert.equal(sink.size, 2); // oldest evicted
-  assert.deepEqual(sink.list().map((l) => l.id), ["1", "2"]);
+  assert.deepEqual(
+    sink.list().map((l) => l.id),
+    ["1", "2"]
+  );
   const drained = sink.drain();
   assert.equal(drained.length, 2);
   assert.equal(sink.size, 0);
@@ -233,7 +277,12 @@ test("MemoryWebhookDeadLetterSink: rejects invalid capacity", () => {
 test("createWebhookSender: default transport refuses SSRF targets, dead-letters once", async () => {
   const sink = new MemoryWebhookDeadLetterSink();
   // No fetch override → defaults to fetchGuard(), which blocks 169.254.169.254.
-  const send = createWebhookSender({ secret: SECRET, maxAttempts: 4, sleep: noSleep, deadLetter: sink });
+  const send = createWebhookSender({
+    secret: SECRET,
+    maxAttempts: 4,
+    sleep: noSleep,
+    deadLetter: sink,
+  });
   const result = await send({ url: "http://169.254.169.254/latest/meta-data/", payload: {} });
   assert.equal(result.ok, false);
   assert.equal(result.attempts, 1); // SSRF refusal is permanent, not retried
@@ -255,7 +304,12 @@ test("createWebhookSender: a stalled attempt is aborted and retried", async () =
       });
     });
   const { fetch: transport } = scriptedTransport([stall, ok()]);
-  const send = createWebhookSender({ secret: SECRET, fetch: transport, timeoutMs: 10, sleep: noSleep });
+  const send = createWebhookSender({
+    secret: SECRET,
+    fetch: transport,
+    timeoutMs: 10,
+    sleep: noSleep,
+  });
   const result = await send({ url: "https://h/", payload: {} });
   assert.equal(result.ok, true);
   assert.equal(result.attempts, 2);

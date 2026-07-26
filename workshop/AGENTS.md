@@ -18,16 +18,16 @@ Do not collapse these layers into a single file when adding new exercises. Senio
 
 ## Tech Stack
 
-| Category    | Technology         | Version    |
-| ----------- | ------------------ | ---------- |
-| Scaffolder  | create-daloy       | 1.0.0-rc.5  |
-| Framework   | @daloyjs/core      | ^1.0.0-rc.5 |
-| Runtime     | Node.js            | >= 24.0.0  |
-| Language    | TypeScript         | ^6.0.3     |
-| Validator   | Zod                | ^4         |
-| Codegen     | @hey-api/openapi-ts | ^0.99.0   |
-| Dev runner  | node --watch (native type stripping) | n/a |
-| Test runner | node:test (built-in) | n/a      |
+| Category    | Technology                           | Version     |
+| ----------- | ------------------------------------ | ----------- |
+| Scaffolder  | create-daloy                         | 1.0.0-rc.5  |
+| Framework   | @daloyjs/core                        | ^1.0.0-rc.5 |
+| Runtime     | Node.js                              | >= 24.0.0   |
+| Language    | TypeScript                           | ^6.0.3      |
+| Validator   | Zod                                  | ^4          |
+| Codegen     | @hey-api/openapi-ts                  | ^0.99.0     |
+| Dev runner  | node --watch (native type stripping) | n/a         |
+| Test runner | node:test (built-in)                 | n/a         |
 
 ## Setup Commands
 
@@ -103,7 +103,7 @@ import { App, NotFoundError } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { z } from "zod";
 
-const app = new App({ /* … */ });
+const app = new App({/* … */});
 
 // app.use(...)
 // app.get(path, contract, handler)

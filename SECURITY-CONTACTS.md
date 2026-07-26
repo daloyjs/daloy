@@ -27,6 +27,7 @@ move retired contacts to the **Off-boarded** section with the date.
 ### Active
 
 <!-- BEGIN ACTIVE -->
+
 - handle: daloyjs-bot
   role: release-automation
   scopes: [approve-npm-publish]
@@ -42,6 +43,7 @@ move retired contacts to the **Off-boarded** section with the date.
   scopes: [approve-npm-publish, coordinate-disclosure]
   pgp: null
   added: 2026-06-21
+
 <!-- END ACTIVE -->
 
 ### Off-boarded
@@ -72,7 +74,6 @@ at least once per quarter with a simulated report. The exercise verifies that:
    email and triggering a standard password reset. A lapsed-domain finding
    blocks the next publish until the affected contact rotates their
    recovery address.
-
 
 > `_<date>_ — quarterly disclosure exercise completed. Findings: <short summary>.`
 

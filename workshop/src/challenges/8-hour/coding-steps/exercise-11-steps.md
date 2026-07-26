@@ -21,7 +21,9 @@ The defaults are already strict — private IPv4 and IPv6 ranges blocked, plus l
 
 ```ts
 function signSession(username: string): string {
-  const payload = Buffer.from(JSON.stringify({ sub: username, iat: Date.now() })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sub: username, iat: Date.now() })).toString(
+    "base64url"
+  );
   const sig = createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
@@ -60,8 +62,12 @@ app.ws("/ws", {
     ctx.state.sub = claims.sub;
     return undefined;
   },
-  open(conn, ctx) { conn.send(`hello ${ctx.state.sub}`); },
-  message(conn, msg) { conn.send(`echo: ${msg}`); },
+  open(conn, ctx) {
+    conn.send(`hello ${ctx.state.sub}`);
+  },
+  message(conn, msg) {
+    conn.send(`echo: ${msg}`);
+  },
 });
 ```
 

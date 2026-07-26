@@ -14,9 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 test("flags the VS Code folderOpen auto-run task (Miasma .vscode/tasks.json)", async () => {
-  const { scanConfigFile } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { scanConfigFile } = await import("../scripts/verify-no-agent-config-autorun.js");
   const tasks = JSON.stringify({
     version: "2.0.0",
     tasks: [
@@ -35,9 +33,7 @@ test("flags the VS Code folderOpen auto-run task (Miasma .vscode/tasks.json)", a
 });
 
 test("flags Claude Code / Gemini CLI SessionStart command hooks", async () => {
-  const { scanConfigFile } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { scanConfigFile } = await import("../scripts/verify-no-agent-config-autorun.js");
   const settings = JSON.stringify({
     hooks: {
       SessionStart: [
@@ -54,9 +50,7 @@ test("flags Claude Code / Gemini CLI SessionStart command hooks", async () => {
 });
 
 test("flags a Cursor always-apply rule that tells the agent to run a script", async () => {
-  const { scanConfigFile } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { scanConfigFile } = await import("../scripts/verify-no-agent-config-autorun.js");
   const mdc = [
     "---",
     "description: Project setup",
@@ -73,9 +67,7 @@ test("flags a Cursor always-apply rule that tells the agent to run a script", as
 });
 
 test("flags a package.json test-script hijack pointed at a config-dir entrypoint", async () => {
-  const { scanConfigFile } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { scanConfigFile } = await import("../scripts/verify-no-agent-config-autorun.js");
   const pkg = JSON.stringify({
     name: "demo",
     scripts: {
@@ -90,36 +82,30 @@ test("flags a package.json test-script hijack pointed at a config-dir entrypoint
 });
 
 test("flags a loose executable dropper placed directly under .github/", async () => {
-  const { scanConfigFile } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { scanConfigFile } = await import("../scripts/verify-no-agent-config-autorun.js");
   const findings = scanConfigFile(".github/setup.js", "/* dropper body */");
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.id, "github-root-dropper");
 });
 
 test("matches the `_`-prefixed template dotfile convention", async () => {
-  const { isConfigSurface } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { isConfigSurface } = await import("../scripts/verify-no-agent-config-autorun.js");
   assert.equal(
     isConfigSurface("packages/create-daloy/templates/node-basic/_vscode/tasks.json"),
-    true,
+    true
   );
   assert.equal(
     isConfigSurface("packages/create-daloy/templates/node-basic/_claude/settings.json"),
-    true,
+    true
   );
   assert.equal(
     isConfigSurface("packages/create-daloy/templates/node-basic/_github/setup.js"),
-    true,
+    true
   );
 });
 
 test("does NOT flag benign editor / agent config files", async () => {
-  const { scanConfigFile } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { scanConfigFile } = await import("../scripts/verify-no-agent-config-autorun.js");
 
   // A normal VS Code task that runs on demand, not on folder open.
   const tasks = JSON.stringify({
@@ -154,12 +140,10 @@ test("does NOT flag benign editor / agent config files", async () => {
 });
 
 test("JSONC comments do not hide the folderOpen wiring", async () => {
-  const { scanVscodeTasks } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { scanVscodeTasks } = await import("../scripts/verify-no-agent-config-autorun.js");
   const jsonc = [
     "{",
-    '  // VS Code tasks',
+    "  // VS Code tasks",
     '  "version": "2.0.0",',
     '  "tasks": [',
     "    {",
@@ -176,21 +160,13 @@ test("JSONC comments do not hide the folderOpen wiring", async () => {
 });
 
 test("stripJsonComments preserves // and /* */ sequences inside strings", async () => {
-  const { stripJsonComments } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { stripJsonComments } = await import("../scripts/verify-no-agent-config-autorun.js");
   const src = '{ "url": "https://example.com/a", "glob": "/* not a comment */" }';
   assert.equal(stripJsonComments(src), src);
 });
 
 test("live repo ships zero auto-run config-injection wiring", async () => {
-  const { findAgentConfigAutorun } = await import(
-    "../scripts/verify-no-agent-config-autorun.js"
-  );
+  const { findAgentConfigAutorun } = await import("../scripts/verify-no-agent-config-autorun.js");
   const findings = await findAgentConfigAutorun();
-  assert.deepEqual(
-    findings,
-    [],
-    "live repo regression: " + JSON.stringify(findings, null, 2),
-  );
+  assert.deepEqual(findings, [], "live repo regression: " + JSON.stringify(findings, null, 2));
 });

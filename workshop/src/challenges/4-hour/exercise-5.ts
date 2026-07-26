@@ -39,7 +39,7 @@ app.get(
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 const { port, close } = serve(app, { port: 3000 });

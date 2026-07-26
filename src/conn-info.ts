@@ -44,10 +44,7 @@ import type { BaseContext } from "./types.js";
  * @since 0.24.0
  */
 export type BehindProxyConfig =
-  | "none"
-  | "loopback"
-  | { readonly hops: number }
-  | { readonly cidrs: readonly string[] };
+  "none" | "loopback" | { readonly hops: number } | { readonly cidrs: readonly string[] };
 
 /**
  * Per-request connection metadata. Populated lazily — never enumerate
@@ -98,8 +95,7 @@ export function setConnInfo(request: Request, info: ConnInfo): void {
  */
 export function getConnInfo(request: Request): ConnInfo | undefined {
   return (request as unknown as Record<PropertyKey, unknown>)[CONN_INFO_SYMBOL] as
-    | ConnInfo
-    | undefined;
+    ConnInfo | undefined;
 }
 
 /**
@@ -117,9 +113,7 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
   if (typeof cfg === "object" && cfg !== null) {
     if ("hops" in cfg) {
       if (!Number.isInteger(cfg.hops) || cfg.hops < 0 || cfg.hops > 64) {
-        throw new Error(
-          `behindProxy.hops must be an integer in [0, 64]; got ${String(cfg.hops)}.`,
-        );
+        throw new Error(`behindProxy.hops must be an integer in [0, 64]; got ${String(cfg.hops)}.`);
       }
       return;
     }
@@ -136,7 +130,7 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
     }
   }
   throw new Error(
-    `behindProxy must be "none" | "loopback" | { hops } | { cidrs }; got ${typeof cfg}.`,
+    `behindProxy must be "none" | "loopback" | { hops } | { cidrs }; got ${typeof cfg}.`
   );
 }
 
@@ -153,10 +147,7 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
  *   is too short or `hops < 1`.
  * @internal
  */
-export function pickForwardedForByHops(
-  header: string | null,
-  hops: number,
-): string | undefined {
+export function pickForwardedForByHops(header: string | null, hops: number): string | undefined {
   if (!header || hops < 1) return undefined;
   const parts = header
     .split(",")
@@ -182,7 +173,7 @@ export function pickForwardedForByHops(
  */
 export function resolveClientIp(
   request: Request,
-  cfg: BehindProxyConfig | undefined,
+  cfg: BehindProxyConfig | undefined
 ): string | undefined {
   const conn = getConnInfo(request);
   const peer = conn?.remoteAddress;

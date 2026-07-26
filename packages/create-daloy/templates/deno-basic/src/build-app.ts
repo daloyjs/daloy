@@ -1,11 +1,5 @@
 import { z } from "zod";
-import {
-  App,
-  NotFoundError,
-  rateLimit,
-  requestId,
-  secureHeaders,
-} from "@daloyjs/core";
+import { App, NotFoundError, rateLimit, requestId, secureHeaders } from "@daloyjs/core";
 
 /**
  * Build the application as a pure factory.
@@ -47,9 +41,7 @@ export function buildApp(): App {
       // the connect-src 'self' CSP on every platform (Deno Deploy, etc.).
       // Never hardcode a URL here: a localhost default breaks "Try it" once
       // deployed. Set PUBLIC_URL to pin an absolute base URL (e.g. for codegen).
-      ...(Deno.env.get("PUBLIC_URL")
-        ? { servers: [{ url: Deno.env.get("PUBLIC_URL")! }] }
-        : {}),
+      ...(Deno.env.get("PUBLIC_URL") ? { servers: [{ url: Deno.env.get("PUBLIC_URL")! }] } : {}),
     },
     docs: true,
     // daloy-minimal:strip-end docs
@@ -74,7 +66,7 @@ export function buildApp(): App {
     async () => ({
       status: 200 as const,
       body: { ok: true as const, runtime: "deno" as const },
-    }),
+    })
   );
 
   // daloy-minimal:strip-start books
@@ -99,7 +91,7 @@ export function buildApp(): App {
       const book = books.get(params.id);
       if (!book) throw new NotFoundError(`Book ${params.id} not found`);
       return { status: 200 as const, body: book };
-    },
+    }
   );
   // daloy-minimal:strip-end books
 

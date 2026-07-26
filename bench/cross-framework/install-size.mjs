@@ -25,7 +25,14 @@
 //   node install-size.mjs
 //   node install-size.mjs --only=daloy
 
-import { readFileSync, readdirSync, statSync, writeFileSync, existsSync, realpathSync } from "node:fs";
+import {
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+  existsSync,
+  realpathSync,
+} from "node:fs";
 import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -33,26 +40,59 @@ import { resultsPath, ROOT, machineInfo, parseArgs, fmt } from "./lib/common.mjs
 import { c, summary, fail, metric, metricsLine } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",    variant: "minimal",       pkgs: ["@daloyjs/core"] },
-  { name: "daloy",    variant: "secure parity", pkgs: ["@daloyjs/core"] },
-  { name: "hono",     variant: "minimal",       pkgs: ["hono", "@hono/node-server"] },
+  { name: "daloy", variant: "minimal", pkgs: ["@daloyjs/core"] },
+  { name: "daloy", variant: "secure parity", pkgs: ["@daloyjs/core"] },
+  { name: "hono", variant: "minimal", pkgs: ["hono", "@hono/node-server"] },
   // hono's secure-headers / cors / jwt middleware live inside the `hono`
   // package itself (subpath imports), so the install footprint is the same.
-  { name: "hono",     variant: "secure parity", pkgs: ["hono", "@hono/node-server"] },
-  { name: "fastify",  variant: "minimal",       pkgs: ["fastify"] },
-  { name: "fastify",  variant: "secure parity", pkgs: ["fastify", "@fastify/helmet", "@fastify/cors", "@fastify/rate-limit", "@fastify/jwt"] },
-  { name: "express",  variant: "minimal",       pkgs: ["express"] },
-  { name: "express",  variant: "secure parity", pkgs: ["express", "helmet", "cors", "express-rate-limit", "jsonwebtoken"] },
-  { name: "koa",      variant: "minimal",       pkgs: ["koa", "@koa/router"] },
-  { name: "koa",      variant: "secure parity", pkgs: ["koa", "@koa/router", "koa-helmet", "@koa/cors", "koa-ratelimit", "koa-jwt"] },
-  { name: "nest",     variant: "minimal",       pkgs: ["@nestjs/core", "@nestjs/common", "@nestjs/platform-fastify"] },
-  { name: "nest",     variant: "secure parity", pkgs: ["@nestjs/core", "@nestjs/common", "@nestjs/platform-fastify", "@fastify/helmet", "@fastify/cors", "@fastify/rate-limit", "@nestjs/jwt", "@nestjs/throttler"] },
-  { name: "elysia",   variant: "minimal",       pkgs: ["elysia", "@elysiajs/node"] },
-  { name: "elysia",   variant: "secure parity", pkgs: ["elysia", "@elysiajs/node", "@elysiajs/cors", "@elysiajs/jwt"] },
+  { name: "hono", variant: "secure parity", pkgs: ["hono", "@hono/node-server"] },
+  { name: "fastify", variant: "minimal", pkgs: ["fastify"] },
+  {
+    name: "fastify",
+    variant: "secure parity",
+    pkgs: ["fastify", "@fastify/helmet", "@fastify/cors", "@fastify/rate-limit", "@fastify/jwt"],
+  },
+  { name: "express", variant: "minimal", pkgs: ["express"] },
+  {
+    name: "express",
+    variant: "secure parity",
+    pkgs: ["express", "helmet", "cors", "express-rate-limit", "jsonwebtoken"],
+  },
+  { name: "koa", variant: "minimal", pkgs: ["koa", "@koa/router"] },
+  {
+    name: "koa",
+    variant: "secure parity",
+    pkgs: ["koa", "@koa/router", "koa-helmet", "@koa/cors", "koa-ratelimit", "koa-jwt"],
+  },
+  {
+    name: "nest",
+    variant: "minimal",
+    pkgs: ["@nestjs/core", "@nestjs/common", "@nestjs/platform-fastify"],
+  },
+  {
+    name: "nest",
+    variant: "secure parity",
+    pkgs: [
+      "@nestjs/core",
+      "@nestjs/common",
+      "@nestjs/platform-fastify",
+      "@fastify/helmet",
+      "@fastify/cors",
+      "@fastify/rate-limit",
+      "@nestjs/jwt",
+      "@nestjs/throttler",
+    ],
+  },
+  { name: "elysia", variant: "minimal", pkgs: ["elysia", "@elysiajs/node"] },
+  {
+    name: "elysia",
+    variant: "secure parity",
+    pkgs: ["elysia", "@elysiajs/node", "@elysiajs/cors", "@elysiajs/jwt"],
+  },
   // Feathers measured minimal-only — parity middleware (helmet/jwt/etc.)
   // for the koa transport wasn't installed in this folder; add a secure
   // variant when those deps land if you want it on the chart.
-  { name: "feathers", variant: "minimal",       pkgs: ["@feathersjs/feathers", "@feathersjs/koa"] },
+  { name: "feathers", variant: "minimal", pkgs: ["@feathersjs/feathers", "@feathersjs/koa"] },
 ];
 
 const args = parseArgs(process.argv);
@@ -97,7 +137,11 @@ function measurePacked(pkgRoot) {
   const parsed = JSON.parse(out);
   const info = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
   if (!info?.unpackedSize) throw new Error(`unexpected npm pack --json output in ${pkgRoot}`);
-  return { bytes: info.unpackedSize, files: info.entryCount ?? info.files?.length ?? 0, tarballBytes: info.size };
+  return {
+    bytes: info.unpackedSize,
+    files: info.entryCount ?? info.files?.length ?? 0,
+    tarballBytes: info.size,
+  };
 }
 
 // pnpm-aware: resolve a dependency from a specific parent package's location
@@ -119,16 +163,27 @@ function walkSize(dir, seen = new Set()) {
   let bytes = 0;
   let files = 0;
   let entries;
-  try { entries = readdirSync(dir, { withFileTypes: true }); }
-  catch { return { bytes, files }; }
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return { bytes, files };
+  }
   for (const e of entries) {
     const p = path.join(dir, e.name);
     let real;
-    try { real = realpathSync(p); } catch { continue; }
+    try {
+      real = realpathSync(p);
+    } catch {
+      continue;
+    }
     if (seen.has(real)) continue;
     seen.add(real);
     let st;
-    try { st = statSync(real); } catch { continue; }
+    try {
+      st = statSync(real);
+    } catch {
+      continue;
+    }
     if (st.isDirectory()) {
       const sub = walkSize(real, seen);
       bytes += sub.bytes;
@@ -144,13 +199,16 @@ function walkSize(dir, seen = new Set()) {
 function collectDeps(pkgRoot, allDeps = new Map(), depth = 0) {
   if (depth > 50) return allDeps; // safety bound
   let pkg;
-  try { pkg = JSON.parse(readFileSync(path.join(pkgRoot, "package.json"), "utf8")); }
-  catch { return allDeps; }
+  try {
+    pkg = JSON.parse(readFileSync(path.join(pkgRoot, "package.json"), "utf8"));
+  } catch {
+    return allDeps;
+  }
   // Skip optional peer deps: npm/pnpm don't install them automatically, so
   // counting them inflates the footprint for consumers who don't opt in.
   const peerMeta = pkg.peerDependenciesMeta ?? {};
   const requiredPeers = Object.fromEntries(
-    Object.entries(pkg.peerDependencies ?? {}).filter(([n]) => !peerMeta[n]?.optional),
+    Object.entries(pkg.peerDependencies ?? {}).filter(([n]) => !peerMeta[n]?.optional)
   );
   const deps = { ...(pkg.dependencies ?? {}), ...requiredPeers };
   for (const name of Object.keys(deps)) {
@@ -171,7 +229,12 @@ function measure(pkgNames) {
     const root = findPackageRoot(name);
     if (!root) throw new Error(`package ${name} not found under ${ROOT}/node_modules`);
     const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-    roots.push({ name, root, version: pkg.version, directDeps: Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.peerDependencies ?? {}) }) });
+    roots.push({
+      name,
+      root,
+      version: pkg.version,
+      directDeps: Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.peerDependencies ?? {}) }),
+    });
   }
   const transitive = new Map();
   for (const r of roots) collectDeps(r.root, transitive);
@@ -238,13 +301,21 @@ async function main() {
     try {
       const r = measure(fw.pkgs);
       rows.push({ framework: fw.name, variant: fw.variant ?? null, ...r });
-      console.error(metricsLine(label(fw), [
-        c.dim(`v${r.version}`),
-        metric("own", `${(r.ownBytes / 1024).toFixed(1)} KiB / ${r.ownFiles} files`),
-        metric("total", `${(r.totalBytes / 1024).toFixed(1)} KiB / ${r.totalFiles} files`, { color: c.cyan }),
-        metric("deps", `${r.directDepCount} direct / ${r.transitiveDepCount} transitive`),
-        r.measuredViaPack ? c.dim("(npm pack)") : "",
-      ].filter(Boolean), { labelWidth: 24 }));
+      console.error(
+        metricsLine(
+          label(fw),
+          [
+            c.dim(`v${r.version}`),
+            metric("own", `${(r.ownBytes / 1024).toFixed(1)} KiB / ${r.ownFiles} files`),
+            metric("total", `${(r.totalBytes / 1024).toFixed(1)} KiB / ${r.totalFiles} files`, {
+              color: c.cyan,
+            }),
+            metric("deps", `${r.directDepCount} direct / ${r.transitiveDepCount} transitive`),
+            r.measuredViaPack ? c.dim("(npm pack)") : "",
+          ].filter(Boolean),
+          { labelWidth: 24 }
+        )
+      );
     } catch (err) {
       console.error("  " + fail(`${label(fw)}: ${err.message}`));
       rows.push({ framework: fw.name, variant: fw.variant ?? null, error: err.message });
@@ -268,8 +339,8 @@ async function main() {
   const notes = [
     "",
     "Notes:",
-    "  - \"minimal\"       = framework's core packages only (router/runtime).",
-    "  - \"secure parity\" = framework + middleware needed to match Daloy's",
+    '  - "minimal"       = framework\'s core packages only (router/runtime).',
+    '  - "secure parity" = framework + middleware needed to match Daloy\'s',
     "                       secure-by-default posture (helmet/secure-headers,",
     "                       CORS, rate-limit, HS256 JWT verify).",
     "    Daloy's two rows are identical because those guards ship in",
@@ -281,16 +352,33 @@ async function main() {
     "    websockets, microservices) are skipped — pnpm/npm don't install them",
     "    automatically and a minimal app doesn't pull them in.",
   ];
-  console.log("\n" + summary({
-    head: ["Framework", "own (KiB)", "own files", "total (KiB)", "total files", "direct deps", "transitive deps"],
-    rows: tableRows,
-    highlight: (row) => row[0].includes("daloy"),
-  }) + "\n" + c.dim(notes.join("\n")) + "\n");
+  console.log(
+    "\n" +
+      summary({
+        head: [
+          "Framework",
+          "own (KiB)",
+          "own files",
+          "total (KiB)",
+          "total files",
+          "direct deps",
+          "transitive deps",
+        ],
+        rows: tableRows,
+        highlight: (row) => row[0].includes("daloy"),
+      }) +
+      "\n" +
+      c.dim(notes.join("\n")) +
+      "\n"
+  );
 
   writeFileSync(
     resultsPath("results.install-size.json"),
-    JSON.stringify({ ranAt: new Date().toISOString(), machine: machineInfo(), rows }, null, 2),
+    JSON.stringify({ ranAt: new Date().toISOString(), machine: machineInfo(), rows }, null, 2)
   );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

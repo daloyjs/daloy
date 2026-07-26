@@ -66,10 +66,13 @@ const signer = createJwtSigner({ alg: "HS256", key: JWT_SECRET, maxLifetimeSecon
 const verifier = createJwtVerifier({ algorithms: ["HS256"], key: JWT_SECRET });
 
 const problem = (status: number, title: string, detail?: string) =>
-  new Response(JSON.stringify({ type: "about:blank", title, status, ...(detail ? { detail } : {}) }), {
-    status,
-    headers: { "content-type": "application/problem+json", "cache-control": "no-store" },
-  });
+  new Response(
+    JSON.stringify({ type: "about:blank", title, status, ...(detail ? { detail } : {}) }),
+    {
+      status,
+      headers: { "content-type": "application/problem+json", "cache-control": "no-store" },
+    }
+  );
 
 /** Route guard: verify a Bearer JWT and require the `admin` scope. */
 function requireAdmin() {
@@ -118,7 +121,7 @@ app.use(
     deny: ["ZZ"],
     trustProxyHeaders: true,
     lookupCountry: (ip) => ({ "203.0.113.7": "ZZ" })[ip],
-  }),
+  })
 );
 
 // ---- public ----
@@ -172,13 +175,21 @@ app.route({
   operationId: "getUser",
   request: { params: z.object({ id: z.string() }) as any },
   responses: {
-    200: { description: "ok", body: z.object({ id: z.string(), name: z.string(), email: z.string() }) as any },
+    200: {
+      description: "ok",
+      body: z.object({ id: z.string(), name: z.string(), email: z.string() }) as any,
+    },
   },
   handler: async ({ params }: any) => ({
     status: 200 as const,
     // The handler carelessly returns a sensitive field; the response-body
     // schema is a FILTER, so it must never reach the client (OWASP API3).
-    body: { id: params.id, name: "User " + params.id, email: `u${params.id}@x.test`, passwordHash: "$2b$10$LEAKED" } as any,
+    body: {
+      id: params.id,
+      name: "User " + params.id,
+      email: `u${params.id}@x.test`,
+      passwordHash: "$2b$10$LEAKED",
+    } as any,
   }),
 });
 
@@ -188,8 +199,13 @@ app.route({
   path: "/items",
   operationId: "createItem",
   request: { body: z.object({ name: z.string(), price: z.number() }).strict() as any },
-  responses: { 201: { description: "created", body: z.object({ name: z.string(), price: z.number() }) as any } },
-  handler: async ({ body }: any) => ({ status: 201 as const, body: { name: body.name, price: body.price } }),
+  responses: {
+    201: { description: "created", body: z.object({ name: z.string(), price: z.number() }) as any },
+  },
+  handler: async ({ body }: any) => ({
+    status: 201 as const,
+    body: { name: body.name, price: body.price },
+  }),
 });
 
 // ---- search (WAF + typed query → injection target) ----
@@ -239,9 +255,13 @@ app.route({
   responses: { 303: { description: "redirect" }, 400: { description: "open redirect blocked" } },
   handler: async ({ query }: any) => {
     try {
-      return safeRedirect(query.to, { allowedPaths: ["/*"], allowedOrigins: ["https://app.example.com"] });
+      return safeRedirect(query.to, {
+        allowedPaths: ["/*"],
+        allowedOrigins: ["https://app.example.com"],
+      });
     } catch (e) {
-      if (e instanceof OpenRedirectBlockedError) return problem(400, "Bad Request", "open redirect blocked");
+      if (e instanceof OpenRedirectBlockedError)
+        return problem(400, "Bad Request", "open redirect blocked");
       throw e;
     }
   },
@@ -267,7 +287,12 @@ app.route({
   method: "POST",
   path: "/csrf-act",
   operationId: "csrfAct",
-  hooks: csrf({ cookieName: "csrf", headerName: "x-csrf-token", generator: () => "tok", cookieOptions: { secure: false } }),
+  hooks: csrf({
+    cookieName: "csrf",
+    headerName: "x-csrf-token",
+    generator: () => "tok",
+    cookieOptions: { secure: false },
+  }),
   responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
   handler: async () => ({ status: 200 as const, body: { ok: true } }),
 });
@@ -296,7 +321,9 @@ app.route({
   // `.finite()`/`.safe()` are deliberately omitted here — both are no-ops or
   // wrong for money in v4 (`.safe()` now means `.int()`).
   request: { body: z.object({ amount: z.number().positive().max(1_000_000) }) as any },
-  responses: { 201: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any } },
+  responses: {
+    201: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any },
+  },
   handler: async ({ request }: any) => ({
     status: 201 as const,
     body: { owner: request.headers.get("authorization") ?? "anon", call: ++payCalls },
@@ -321,7 +348,10 @@ app.route({
   method: "GET",
   path: "/basic-vault",
   operationId: "basicVault",
-  hooks: basicAuth({ realm: "api", verify: (u, p) => (u === "alice" && p === "s3cret-correct" ? { username: u } : false) }),
+  hooks: basicAuth({
+    realm: "api",
+    verify: (u, p) => (u === "alice" && p === "s3cret-correct" ? { username: u } : false),
+  }),
   responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
   handler: async () => ({ status: 200 as const, body: { ok: true } }),
 });
@@ -350,7 +380,10 @@ app.route({
   operationId: "wide",
   request: { body: z.record(z.string(), z.string()) as any },
   responses: { 200: { description: "ok", body: z.object({ n: z.number() }) as any } },
-  handler: async ({ body }: any) => ({ status: 200 as const, body: { n: Object.keys(body).length } }),
+  handler: async ({ body }: any) => ({
+    status: 200 as const,
+    body: { n: Object.keys(body).length },
+  }),
 });
 
 // ---- mTLS (spoofed client-cert header target) ----
@@ -388,7 +421,11 @@ app.route({
   method: "POST",
   path: "/upload",
   operationId: "upload",
-  request: { body: multipartObject({ avatar: fileField({ accept: ["image/png"], magicBytes: true }) }) as any },
+  request: {
+    body: multipartObject({
+      avatar: fileField({ accept: ["image/png"], magicBytes: true }),
+    }) as any,
+  },
   responses: { 201: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
   handler: async () => ({ status: 201 as const, body: { ok: true } }),
 });
@@ -442,7 +479,9 @@ let readyA = handle.server.listening;
 let readyB = handleB.server.listening;
 const announce = () => {
   if (readyA && readyB) {
-    process.stdout.write(`RED_TEAM_TARGET_READY ${portOf(handle.server)} ${portOf(handleB.server)}\n`);
+    process.stdout.write(
+      `RED_TEAM_TARGET_READY ${portOf(handle.server)} ${portOf(handleB.server)}\n`
+    );
   }
 };
 if (readyA) announce();

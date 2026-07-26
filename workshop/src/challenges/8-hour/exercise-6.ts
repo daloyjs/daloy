@@ -8,7 +8,13 @@
 //
 // Docs: https://daloyjs.dev/docs/security/secure-defaults  ·  https://daloyjs.dev/docs/jwt
 
-import { App, createJwtSigner, createJwtVerifier, UnauthorizedError, type Hooks } from "@daloyjs/core";
+import {
+  App,
+  createJwtSigner,
+  createJwtVerifier,
+  UnauthorizedError,
+  type Hooks,
+} from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 import { z } from "zod";
 

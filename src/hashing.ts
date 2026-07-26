@@ -23,7 +23,11 @@
  * @since 0.15.0
  */
 
-import { randomBytes, scrypt as scryptCb, timingSafeEqual as nodeTimingSafeEqual } from "node:crypto";
+import {
+  randomBytes,
+  scrypt as scryptCb,
+  timingSafeEqual as nodeTimingSafeEqual,
+} from "node:crypto";
 
 // OWASP-aligned scrypt parameters (Password Storage Cheat Sheet, 2024).
 const SCRYPT_N = 1 << 17; // 131072
@@ -49,7 +53,7 @@ function scryptAsync(password: Buffer, salt: Buffer, keylen: number): Promise<Bu
       (err, key) => {
         if (err) reject(err);
         else resolve(key);
-      },
+      }
     );
   });
 }
@@ -129,7 +133,8 @@ function parsePhc(s: string): ParsedHash | null {
   if (N !== SCRYPT_N || r !== SCRYPT_R || p !== SCRYPT_P) return null;
   const salt = fromBase64(parts[3] ?? "");
   const hash = fromBase64(parts[4] ?? "");
-  if (!salt || !hash || salt.length !== SCRYPT_SALTLEN || hash.length !== SCRYPT_KEYLEN) return null;
+  if (!salt || !hash || salt.length !== SCRYPT_SALTLEN || hash.length !== SCRYPT_KEYLEN)
+    return null;
   return { N, r, p, salt, hash };
 }
 
@@ -144,10 +149,7 @@ function parsePhc(s: string): ParsedHash | null {
  * @returns `true` when the password matches, `false` otherwise.
  * @since 0.15.0
  */
-export async function passwordVerify(
-  password: string,
-  storedHash: string,
-): Promise<boolean> {
+export async function passwordVerify(password: string, storedHash: string): Promise<boolean> {
   if (typeof password !== "string" || password.length === 0) return false;
   if (Buffer.byteLength(password, "utf8") > MAX_PASSWORD_BYTES) return false;
   const parsed = parsePhc(storedHash);
@@ -163,7 +165,7 @@ export async function passwordVerify(
         (err, key) => {
           if (err) reject(err);
           else resolve(key);
-        },
+        }
       );
     });
   } catch {

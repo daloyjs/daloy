@@ -53,7 +53,11 @@ test("typed client replaces params, appends array query values, merges headers, 
     "content-type": "application/json",
   });
   assert.equal(seenInit?.body, JSON.stringify({ title: "Dune" }));
-  assert.deepEqual(result, { status: 200, body: { ok: true }, headers: { "content-type": "application/json", "x-result": "yes" } });
+  assert.deepEqual(result, {
+    status: 200,
+    body: { ok: true },
+    headers: { "content-type": "application/json", "x-result": "yes" },
+  });
 });
 
 test("typed client sets scalar query values and skips undefined ones", async () => {
@@ -63,7 +67,11 @@ test("typed client sets scalar query values and skips undefined ones", async () 
     path: "/search",
     operationId: "searchBooks",
     request: {
-      query: z.object({ q: z.string(), page: z.number().optional(), cursor: z.string().optional() }) as any,
+      query: z.object({
+        q: z.string(),
+        page: z.number().optional(),
+        cursor: z.string().optional(),
+      }) as any,
     },
     responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
     handler: async () => ({ status: 200 as const, body: { ok: true } }),
@@ -104,7 +112,8 @@ test("typed client preserves non-JSON response bodies as text", async () => {
   });
   const client: any = createClient(app, {
     baseUrl: "https://api.example.com",
-    fetch: async () => new Response("hello", { status: 200, headers: { "content-type": "text/plain" } }),
+    fetch: async () =>
+      new Response("hello", { status: 200, headers: { "content-type": "text/plain" } }),
   });
 
   const result = await client.plain({ params: {} } as any);
@@ -124,10 +133,11 @@ test("typed client preserves malformed JSON response bodies as text", async () =
   });
   const client: any = createClient(app, {
     baseUrl: "https://api.example.com",
-    fetch: async () => new Response("{not-json", {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }),
+    fetch: async () =>
+      new Response("{not-json", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
   });
 
   const result = await client.brokenJson({ params: {} } as any);
@@ -216,7 +226,9 @@ test("OpenAPI includes metadata, parameters, request body, responses, and securi
   assert.ok(op.parameters.some((p: any) => p.name === "preview" && p.in === "query"));
   assert.ok(op.requestBody.content["application/json"].schema);
   assert.equal(op.responses[201].description, "Created");
-  assert.deepEqual(op.responses[201].content["application/json"].examples, { sample: { id: "r1", rating: 5 } });
+  assert.deepEqual(op.responses[201].content["application/json"].examples, {
+    sample: { id: "r1", rating: 5 },
+  });
   assert.equal(op.responses[401].description, "Unauthorized");
   assert.ok(doc.components.schemas.Problem);
 });

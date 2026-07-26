@@ -5,42 +5,26 @@ import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  buildCycloneDx,
-  buildSpdx,
-  deriveMetadata,
-} from "../scripts/generate-sbom.ts";
+import { buildCycloneDx, buildSpdx, deriveMetadata } from "../scripts/generate-sbom.ts";
 import { verifyTarget } from "../scripts/verify-sbom.ts";
 
 const FIXED_DATE = new Date("2026-05-21T00:00:00Z");
 const REPO_ROOT = pathToFileURL(`${process.cwd()}/`);
 
 test("deriveMetadata throws when package.json is missing required fields", () => {
-  assert.throws(
-    () => deriveMetadata({}),
-    /must declare a non-empty `name`/,
-  );
+  assert.throws(() => deriveMetadata({}), /must declare a non-empty `name`/);
   assert.throws(
     () => deriveMetadata({ name: "@daloyjs/core" }),
-    /must declare a non-empty `version`/,
+    /must declare a non-empty `version`/
   );
 });
 
 test("deriveMetadata produces deterministic serialNumber from (name, version, timestamp)", () => {
-  const meta1 = deriveMetadata(
-    { name: "@daloyjs/core", version: "0.33.0" },
-    { now: FIXED_DATE },
-  );
-  const meta2 = deriveMetadata(
-    { name: "@daloyjs/core", version: "0.33.0" },
-    { now: FIXED_DATE },
-  );
+  const meta1 = deriveMetadata({ name: "@daloyjs/core", version: "0.33.0" }, { now: FIXED_DATE });
+  const meta2 = deriveMetadata({ name: "@daloyjs/core", version: "0.33.0" }, { now: FIXED_DATE });
   assert.equal(meta1.serialNumber, meta2.serialNumber);
   assert.match(meta1.serialNumber, /^urn:uuid:[0-9a-f-]{36}$/);
-  const meta3 = deriveMetadata(
-    { name: "@daloyjs/core", version: "0.34.0" },
-    { now: FIXED_DATE },
-  );
+  const meta3 = deriveMetadata({ name: "@daloyjs/core", version: "0.34.0" }, { now: FIXED_DATE });
   assert.notEqual(meta1.serialNumber, meta3.serialNumber);
 });
 
@@ -51,7 +35,7 @@ test("deriveMetadata normalises repository.url and strips git+ / .git suffix", (
       version: "0.33.0",
       repository: { url: "git+https://github.com/daloyjs/daloy.git" },
     },
-    { now: FIXED_DATE },
+    { now: FIXED_DATE }
   );
   assert.equal(meta.repository, "https://github.com/daloyjs/daloy");
 });
@@ -69,7 +53,9 @@ test("buildCycloneDx emits CycloneDX 1.5 with zero components for zero-runtime-d
   assert.equal(cdx.bomFormat, "CycloneDX");
   assert.equal(cdx.specVersion, "1.5");
   assert.deepEqual(cdx.components, []);
-  const metadataComponent = (cdx.metadata as { component: { name: string; version: string; swid: { tagId: string } } }).component;
+  const metadataComponent = (
+    cdx.metadata as { component: { name: string; version: string; swid: { tagId: string } } }
+  ).component;
   assert.equal(metadataComponent.name, "@daloyjs/core");
   assert.equal(metadataComponent.version, "0.33.0");
   assert.match(metadataComponent.swid.tagId, /^swidtag-[a-z0-9-]+-0\.33\.0$/);
@@ -124,7 +110,7 @@ test("buildCycloneDx omits distribution externalReference for non-publishable pa
   };
   assert.equal(
     cdx.metadata.component.externalReferences.find((r) => r.type === "distribution"),
-    undefined,
+    undefined
   );
 });
 
@@ -211,7 +197,7 @@ test("verifyTarget fails when CycloneDX SBOM is missing", async () => {
       assert.equal(result.ok, false);
       assert.ok(
         result.issues.some((i) => i.includes("CycloneDX SBOM missing")),
-        result.issues.join("\n"),
+        result.issues.join("\n")
       );
     } finally {
       process.chdir(cwd);
@@ -233,10 +219,7 @@ test("verifyTarget fails when SBOM has unexpected runtime components", async () 
     await writeFile(join(dir, "package.json"), JSON.stringify(pkg));
     // SBOM declares a runtime dep that package.json does NOT — this is the
     // exact "SBOM claims more than the manifest" mismatch the gate catches.
-    await writeFile(
-      join(dir, "sbom.cdx.json"),
-      JSON.stringify(buildCycloneDx(dirtyPkg, meta)),
-    );
+    await writeFile(join(dir, "sbom.cdx.json"), JSON.stringify(buildCycloneDx(dirtyPkg, meta)));
     await writeFile(join(dir, "sbom.spdx.json"), JSON.stringify(buildSpdx(pkg, meta)));
     const cwd = process.cwd();
     process.chdir(dir);
@@ -250,7 +233,7 @@ test("verifyTarget fails when SBOM has unexpected runtime components", async () 
       assert.equal(result.ok, false);
       assert.ok(
         result.issues.some((i) => i.includes("expected zero runtime components")),
-        result.issues.join("\n"),
+        result.issues.join("\n")
       );
     } finally {
       process.chdir(cwd);
@@ -281,7 +264,7 @@ test("verifyTarget fails when SBOM version drifts from package.json", async () =
       assert.equal(result.ok, false);
       assert.ok(
         result.issues.some((i) => i.includes("does not match package.json#version")),
-        result.issues.join("\n"),
+        result.issues.join("\n")
       );
     } finally {
       process.chdir(cwd);
@@ -293,12 +276,8 @@ test("verifyTarget fails when SBOM version drifts from package.json", async () =
 
 test("the in-repo SBOMs are present and match the current published manifests", async () => {
   // This locks the invariant that `pnpm gen:sbom` ran before commit.
-  const coreCdx = JSON.parse(
-    await readFile(new URL("dist/sbom.cdx.json", REPO_ROOT), "utf8"),
-  );
-  const corePkg = JSON.parse(
-    await readFile(new URL("package.json", REPO_ROOT), "utf8"),
-  );
+  const coreCdx = JSON.parse(await readFile(new URL("dist/sbom.cdx.json", REPO_ROOT), "utf8"));
+  const corePkg = JSON.parse(await readFile(new URL("package.json", REPO_ROOT), "utf8"));
   assert.equal(coreCdx.bomFormat, "CycloneDX");
   assert.equal(coreCdx.specVersion, "1.5");
   assert.equal(coreCdx.metadata.component.name, corePkg.name);
@@ -306,16 +285,10 @@ test("the in-repo SBOMs are present and match the current published manifests", 
   assert.deepEqual(coreCdx.components, []);
 
   const createDaloyCdx = JSON.parse(
-    await readFile(
-      new URL("packages/create-daloy/sbom.cdx.json", REPO_ROOT),
-      "utf8",
-    ),
+    await readFile(new URL("packages/create-daloy/sbom.cdx.json", REPO_ROOT), "utf8")
   );
   const createDaloyPkg = JSON.parse(
-    await readFile(
-      new URL("packages/create-daloy/package.json", REPO_ROOT),
-      "utf8",
-    ),
+    await readFile(new URL("packages/create-daloy/package.json", REPO_ROOT), "utf8")
   );
   assert.equal(createDaloyCdx.metadata.component.name, createDaloyPkg.name);
   assert.equal(createDaloyCdx.metadata.component.version, createDaloyPkg.version);

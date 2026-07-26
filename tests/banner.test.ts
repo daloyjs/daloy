@@ -1,9 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  formatStartupBanner,
-  printStartupBanner,
-} from "../src/banner.js";
+import { formatStartupBanner, printStartupBanner } from "../src/banner.js";
 
 function strip(s: string): string {
   return s.replace(/\u001b\[[0-9;]*m/g, "");
@@ -53,36 +50,38 @@ test("formatStartupBanner: Unicode + color renders gradient-style glyphs and ANS
 });
 
 test("formatStartupBanner: omits version and runtime segments when not provided", () => {
-  const out = strip(formatStartupBanner({
-    url: "http://localhost:8080",
-    color: false,
-    ascii: true,
-  }));
+  const out = strip(
+    formatStartupBanner({
+      url: "http://localhost:8080",
+      color: false,
+      ascii: true,
+    })
+  );
   assert.ok(!/v\d/.test(out));
   assert.ok(!/Node\.js|Bun|Deno/.test(out));
   assert.match(out, /DaloyJS/);
 });
 
 test("formatStartupBanner: does not produce ragged rows for long URLs", () => {
-  const out = strip(formatStartupBanner({
-    url: `http://localhost:3000/${"very-long-segment/".repeat(20)}`,
-    links: [],
-    color: false,
-    ascii: true,
-  }));
+  const out = strip(
+    formatStartupBanner({
+      url: `http://localhost:3000/${"very-long-segment/".repeat(20)}`,
+      links: [],
+      color: false,
+      ascii: true,
+    })
+  );
   const widths = new Set(out.split("\n").map((line) => line.length));
   assert.equal(widths.size, 1, `expected uniform line widths, got ${[...widths].join(",")}`);
 });
 
 test("printStartupBanner: propagates writer errors", () => {
   assert.throws(
-    () => printStartupBanner(
-      { url: "http://localhost:3000", color: false, ascii: true },
-      () => {
+    () =>
+      printStartupBanner({ url: "http://localhost:3000", color: false, ascii: true }, () => {
         throw new Error("writer failed");
-      },
-    ),
-    /writer failed/,
+      }),
+    /writer failed/
   );
 });
 
@@ -103,8 +102,10 @@ test("detectColor: NO_COLOR forces color off, FORCE_COLOR forces it on", () => {
     const off2 = formatStartupBanner({ url: "http://x", ascii: true });
     assert.ok(!off2.includes("\u001b["), "FORCE_COLOR=0 should not force color");
   } finally {
-    if (prev.NO_COLOR === undefined) delete process.env.NO_COLOR; else process.env.NO_COLOR = prev.NO_COLOR;
-    if (prev.FORCE_COLOR === undefined) delete process.env.FORCE_COLOR; else process.env.FORCE_COLOR = prev.FORCE_COLOR;
+    if (prev.NO_COLOR === undefined) delete process.env.NO_COLOR;
+    else process.env.NO_COLOR = prev.NO_COLOR;
+    if (prev.FORCE_COLOR === undefined) delete process.env.FORCE_COLOR;
+    else process.env.FORCE_COLOR = prev.FORCE_COLOR;
   }
 });
 
@@ -159,7 +160,8 @@ test("detectAscii: DALOY_ASCII forces ASCII glyphs, platform Unicode hints keep 
     assert.ok(fallback.includes("+"));
   } finally {
     for (const [k, v] of Object.entries(prev)) {
-      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
     }
   }
 });
@@ -173,7 +175,7 @@ test("printStartupBanner: writes to the supplied writer with leading/trailing ne
       color: false,
       ascii: true,
     },
-    (s) => chunks.push(s),
+    (s) => chunks.push(s)
   );
   const out = chunks.join("");
   assert.ok(out.startsWith("\n"));
@@ -213,7 +215,7 @@ test("formatStartupBanner survives a permission-restricted env (Deno --allow-env
       get(_t, prop) {
         throw new Error(`NotCapable: Requires env access to "${String(prop)}"`);
       },
-    },
+    }
   );
   try {
     Object.defineProperty(process, "env", { value: throwingEnv, configurable: true });

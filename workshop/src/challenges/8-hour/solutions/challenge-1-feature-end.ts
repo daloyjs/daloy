@@ -5,7 +5,8 @@ import { z } from "zod";
 
 const BEARER = "workshop-token";
 function eq(a: string, b: string) {
-  const ab = Buffer.from(a), bb = Buffer.from(b);
+  const ab = Buffer.from(a),
+    bb = Buffer.from(b);
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
 const auth = bearerAuth({ validate: async (t) => eq(t, BEARER) });
@@ -51,7 +52,9 @@ app.get(
   {
     operationId: "listAuthors",
     tags: ["Authors"],
-    request: { query: z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).strict() },
+    request: {
+      query: z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).strict(),
+    },
     responses: {
       200: {
         description: "OK",
@@ -62,7 +65,7 @@ app.get(
   async ({ query }) => {
     const items = [...authors.values()].filter((a) => !a.deleted).slice(0, query.limit);
     return { status: 200 as const, body: { items, total: items.length } };
-  },
+  }
 );
 
 app.get(
@@ -87,7 +90,7 @@ app.get(
     const a = authors.get(params.id);
     if (!a || a.deleted) throw new NotFoundError(`No author ${params.id}`);
     return { status: 200 as const, body: a };
-  },
+  }
 );
 
 app.post(
@@ -98,7 +101,10 @@ app.post(
     auth: { scheme: "bearer" },
     hooks: auth,
     request: { body: CreateAuthorBody },
-    responses: { 201: { description: "Created", body: AuthorSchema }, 409: { description: "Duplicate" } },
+    responses: {
+      201: { description: "Created", body: AuthorSchema },
+      409: { description: "Duplicate" },
+    },
   },
   async ({ body }) => {
     if (authors.has(body.id) && !authors.get(body.id)!.deleted) {
@@ -107,7 +113,7 @@ app.post(
     const a: Author = { ...body, deleted: false };
     authors.set(body.id, a);
     return { status: 201 as const, body: a };
-  },
+  }
 );
 
 app.patch(
@@ -118,7 +124,10 @@ app.patch(
     auth: { scheme: "bearer" },
     hooks: auth,
     request: { params: z.object({ id: z.string().min(1) }), body: PatchAuthorBody },
-    responses: { 200: { description: "OK", body: AuthorSchema }, 404: { description: "Not found" } },
+    responses: {
+      200: { description: "OK", body: AuthorSchema },
+      404: { description: "Not found" },
+    },
   },
   async ({ params, body }) => {
     const a = authors.get(params.id);
@@ -126,7 +135,7 @@ app.patch(
     const updated = { ...a, ...body };
     authors.set(params.id, updated);
     return { status: 200 as const, body: updated };
-  },
+  }
 );
 
 app.delete(
@@ -144,7 +153,7 @@ app.delete(
     if (!a || a.deleted) throw new NotFoundError(`No author ${params.id}`);
     a.deleted = true;
     return { status: 204 as const, body: undefined };
-  },
+  }
 );
 
 serve(app, { port: 3000 });

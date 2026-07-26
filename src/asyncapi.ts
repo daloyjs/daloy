@@ -103,7 +103,7 @@ function pathToKey(path: string): string {
         .map((part, j) =>
           i === 0 && j === 0
             ? part.charAt(0).toLowerCase() + part.slice(1)
-            : part.charAt(0).toUpperCase() + part.slice(1),
+            : part.charAt(0).toUpperCase() + part.slice(1)
         )
         .join("");
     })
@@ -159,10 +159,7 @@ function extractParams(path: string): string[] {
  * @returns A JSON-serializable AsyncAPI 3.0 document.
  * @since 0.37.0
  */
-export function generateAsyncAPI(
-  app: App,
-  options: AsyncAPIOptions,
-): Record<string, unknown> {
+export function generateAsyncAPI(app: App, options: AsyncAPIOptions): Record<string, unknown> {
   const channels: Record<string, unknown> = {};
   const operations: Record<string, unknown> = {};
   const messages: Record<string, unknown> = {};

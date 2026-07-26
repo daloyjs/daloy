@@ -41,7 +41,9 @@ interface FastlyFetchEvent {
  * @throws Error when `globalThis.addEventListener` is missing (not a Fastly Compute runtime).
  */
 export function installFastlyListener(app: App): void {
-  const g = globalThis as { addEventListener?: (type: string, listener: (event: FastlyFetchEvent) => void) => void };
+  const g = globalThis as {
+    addEventListener?: (type: string, listener: (event: FastlyFetchEvent) => void) => void;
+  };
   if (typeof g.addEventListener !== "function") {
     throw new Error("Fastly Compute runtime not detected: globalThis.addEventListener is missing");
   }

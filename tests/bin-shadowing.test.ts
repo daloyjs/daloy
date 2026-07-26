@@ -14,28 +14,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  classifyBinName,
-  extractBinNames,
-} from "../scripts/verify-no-bin-shadowing.js";
+import { classifyBinName, extractBinNames } from "../scripts/verify-no-bin-shadowing.js";
 
 test("extractBinNames returns keys of an object-form bin", () => {
-  assert.deepEqual(
-    extractBinNames({ name: "@daloyjs/core", bin: { daloy: "bin/daloy.mjs" } }),
-    ["daloy"],
-  );
+  assert.deepEqual(extractBinNames({ name: "@daloyjs/core", bin: { daloy: "bin/daloy.mjs" } }), [
+    "daloy",
+  ]);
 });
 
 test("extractBinNames derives bin name from package name when bin is a string", () => {
-  assert.deepEqual(extractBinNames({ name: "create-daloy", bin: "x.mjs" }), [
-    "create-daloy",
-  ]);
+  assert.deepEqual(extractBinNames({ name: "create-daloy", bin: "x.mjs" }), ["create-daloy"]);
 });
 
 test("extractBinNames strips the @scope/ prefix for string-form bins", () => {
-  assert.deepEqual(extractBinNames({ name: "@daloyjs/core", bin: "x.mjs" }), [
-    "core",
-  ]);
+  assert.deepEqual(extractBinNames({ name: "@daloyjs/core", bin: "x.mjs" }), ["core"]);
 });
 
 test("extractBinNames returns [] when bin is missing or malformed", () => {
@@ -49,12 +41,12 @@ test("classifyBinName flags reserved system commands regardless of allowlist", (
     assert.equal(
       classifyBinName(reserved, false),
       "reserved",
-      `expected ${reserved} to be flagged as reserved`,
+      `expected ${reserved} to be flagged as reserved`
     );
     assert.equal(
       classifyBinName(reserved, true),
       "reserved",
-      `expected ${reserved} to be flagged as reserved under allowlist mode`,
+      `expected ${reserved} to be flagged as reserved under allowlist mode`
     );
   }
 });

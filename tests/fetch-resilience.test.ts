@@ -39,7 +39,10 @@ function netError(): Step {
 }
 
 // Sleep stub: resolves immediately, records the requested delays.
-function recordingSleep(): { sleep: (ms: number, s?: AbortSignal) => Promise<void>; delays: number[] } {
+function recordingSleep(): {
+  sleep: (ms: number, s?: AbortSignal) => Promise<void>;
+  delays: number[];
+} {
   const delays: number[] = [];
   return {
     delays,
@@ -170,7 +173,8 @@ test("resilientFetch: onRetry hook fires with attempt + delay", async () => {
     jitter: false,
     sleep,
     circuitBreaker: false,
-    onRetry: (ctx, delay) => seen.push({ attempt: ctx.attempt, status: ctx.response?.status, delay }),
+    onRetry: (ctx, delay) =>
+      seen.push({ attempt: ctx.attempt, status: ctx.response?.status, delay }),
   });
   await f("https://example.com/");
   assert.equal(seen.length, 1);
@@ -293,7 +297,11 @@ test("CircuitBreaker: a success resets the consecutive-failure count", async () 
 
 test("CircuitBreaker: half-open failure re-opens the circuit", async () => {
   let clock = 0;
-  const breaker = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 100, now: () => clock });
+  const breaker = new CircuitBreaker({
+    failureThreshold: 1,
+    resetTimeoutMs: 100,
+    now: () => clock,
+  });
   await assert.rejects(() => breaker.execute(() => Promise.reject(new Error("x"))));
   assert.equal(breaker.state, "open");
   clock = 100; // → half-open
@@ -355,14 +363,17 @@ test("CircuitBreaker: successThreshold requires multiple half-open successes", a
 // ── validation ──────────────────────────────────────────────────────
 
 test("resilientFetch: rejects invalid timeoutMs and retries", () => {
-  assert.throws(() => resilientFetch({ timeoutMs: -1, fetch: scriptedFetch([ok()]).fn }), RangeError);
+  assert.throws(
+    () => resilientFetch({ timeoutMs: -1, fetch: scriptedFetch([ok()]).fn }),
+    RangeError
+  );
   assert.throws(() => resilientFetch({ retries: -1, fetch: scriptedFetch([ok()]).fn }), RangeError);
 });
 
 test("resilientFetch: throws when no fetch is available", () => {
   assert.throws(
     () => resilientFetch({ fetch: 123 as unknown as typeof fetch }),
-    /no global fetch available/,
+    /no global fetch available/
   );
 });
 
@@ -374,7 +385,7 @@ test("resilientFetch: SSRF refusal from fetchGuard bubbles, is not retried", asy
   const f = resilientFetch({ fetch: guarded, retries: 3, sleep });
   await assert.rejects(
     () => f("http://169.254.169.254/latest/meta-data/"),
-    (err: unknown) => err instanceof SsrfBlockedError,
+    (err: unknown) => err instanceof SsrfBlockedError
   );
   assert.deepEqual(delays, []); // refusal is terminal, never retried
 });

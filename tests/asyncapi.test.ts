@@ -15,11 +15,7 @@ import assert from "node:assert/strict";
 
 import { App } from "../src/app.js";
 import { runCli, type CliIO } from "../src/cli.js";
-import {
-  generateAsyncAPI,
-  asyncapiToYAML,
-  type AsyncAPIOptions,
-} from "../src/asyncapi.js";
+import { generateAsyncAPI, asyncapiToYAML, type AsyncAPIOptions } from "../src/asyncapi.js";
 
 const INFO: AsyncAPIOptions = { info: { title: "Realtime API", version: "1.0.0" } };
 

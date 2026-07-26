@@ -93,8 +93,7 @@ export const FORBIDDEN_CLASSES: readonly ForbiddenClass[] = Object.freeze([
   },
   {
     name: "Bidi override control (Trojan Source, U+202A–U+202E/U+2066–U+2069)",
-    test: (cp) =>
-      (cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069),
+    test: (cp) => (cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069),
   },
 ]);
 
@@ -104,20 +103,19 @@ export const FORBIDDEN_CLASSES: readonly ForbiddenClass[] = Object.freeze([
  * scanner itself recognising literal samples, because PUA is sometimes
  * used by typographic fixtures.
  */
-export const PUA_RANGES: readonly { name: string; low: number; high: number }[] =
-  Object.freeze([
-    { name: "Private Use Area (BMP, U+E000–U+F8FF)", low: 0xe000, high: 0xf8ff },
-    {
-      name: "Supplementary Private Use Area-A (U+F0000–U+FFFFD)",
-      low: 0xf0000,
-      high: 0xffffd,
-    },
-    {
-      name: "Supplementary Private Use Area-B (U+100000–U+10FFFD)",
-      low: 0x100000,
-      high: 0x10fffd,
-    },
-  ]);
+export const PUA_RANGES: readonly { name: string; low: number; high: number }[] = Object.freeze([
+  { name: "Private Use Area (BMP, U+E000–U+F8FF)", low: 0xe000, high: 0xf8ff },
+  {
+    name: "Supplementary Private Use Area-A (U+F0000–U+FFFFD)",
+    low: 0xf0000,
+    high: 0xffffd,
+  },
+  {
+    name: "Supplementary Private Use Area-B (U+100000–U+10FFFD)",
+    low: 0x100000,
+    high: 0x10fffd,
+  },
+]);
 
 /**
  * Binary file extensions skipped by the content scanner. Same list as
@@ -168,7 +166,7 @@ function isBinary(path: string): boolean {
  */
 export function scanFileForInvisibleUnicode(
   source: string,
-  scanPua: boolean,
+  scanPua: boolean
 ): readonly { line: number; column: number; codePoint: number; detail: string }[] {
   const out: { line: number; column: number; codePoint: number; detail: string }[] = [];
   let line = 1;
@@ -251,7 +249,7 @@ async function scanOnePath(
   baseDir: string,
   file: string,
   scanPua: boolean,
-  findings: InvisibleUnicodeFinding[],
+  findings: InvisibleUnicodeFinding[]
 ): Promise<void> {
   const rel = posix.normalize(relative(baseDir, file).split(/[\\/]/g).join("/"));
   if (isBinary(rel)) return;
@@ -281,7 +279,7 @@ async function scanOnePath(
  */
 export async function findInvisibleUnicodeInPackage(
   pkg: PublishablePackage,
-  rootDir: string = REPO_ROOT,
+  rootDir: string = REPO_ROOT
 ): Promise<readonly InvisibleUnicodeFinding[]> {
   const pkgDir = resolve(rootDir, pkg.packageDir);
   const pkgJsonPath = join(pkgDir, "package.json");
@@ -293,9 +291,7 @@ export async function findInvisibleUnicodeInPackage(
   }
   const manifest = JSON.parse(pkgJsonText) as { files?: unknown };
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
-    throw new Error(
-      `${pkg.name}: package.json must declare a non-empty "files" whitelist`,
-    );
+    throw new Error(`${pkg.name}: package.json must declare a non-empty "files" whitelist`);
   }
 
   const findings: InvisibleUnicodeFinding[] = [];
@@ -316,7 +312,7 @@ export async function findInvisibleUnicodeInPackage(
  */
 export async function findInvisibleUnicodeInSourceRoot(
   sourceRoot: string,
-  rootDir: string = REPO_ROOT,
+  rootDir: string = REPO_ROOT
 ): Promise<readonly InvisibleUnicodeFinding[]> {
   const baseDir = resolve(rootDir, sourceRoot);
   const findings: InvisibleUnicodeFinding[] = [];
@@ -339,9 +335,7 @@ async function main(): Promise<void> {
     }
     for (const f of findings) {
       const cp = "U+" + f.codePoint.toString(16).toUpperCase().padStart(4, "0");
-      console.error(
-        `${f.source} ${f.file}:${f.line}:${f.column}: ${f.detail} (${cp})`,
-      );
+      console.error(`${f.source} ${f.file}:${f.line}:${f.column}: ${f.detail} (${cp})`);
       total++;
     }
   }
@@ -349,9 +343,7 @@ async function main(): Promise<void> {
     const findings = await findInvisibleUnicodeInSourceRoot(root);
     for (const f of findings) {
       const cp = "U+" + f.codePoint.toString(16).toUpperCase().padStart(4, "0");
-      console.error(
-        `${f.source}/${f.file}:${f.line}:${f.column}: ${f.detail} (${cp})`,
-      );
+      console.error(`${f.source}/${f.file}:${f.line}:${f.column}: ${f.detail} (${cp})`);
       total++;
     }
   }
@@ -359,7 +351,7 @@ async function main(): Promise<void> {
     console.error(
       `verify-no-invisible-unicode: ${total} invisible-Unicode finding${total === 1 ? "" : "s"} ` +
         "detected. Remove the carrier character(s) before release " +
-        "(see https://www.aikido.dev/blog/glassworm-returns-unicode-attack-github-npm-vscode).",
+        "(see https://www.aikido.dev/blog/glassworm-returns-unicode-attack-github-npm-vscode)."
     );
     process.exitCode = 1;
   }

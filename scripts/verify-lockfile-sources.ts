@@ -73,12 +73,30 @@ const KNOWN_MALICIOUS_PACKAGES: ReadonlyMap<string, ForbiddenLockfileSource["rea
   // or `quill-image-resize-module` package.
   ["js-bomb", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
   ["js-hood", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
-  ["vite-plugin-bomb", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
-  ["vite-plugin-bomb-extend", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
-  ["vite-plugin-react-extend", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
-  ["vite-plugin-vue-extend", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
-  ["vue-plugin-bomb", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
-  ["quill-image-downloader", "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)"],
+  [
+    "vite-plugin-bomb",
+    "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)",
+  ],
+  [
+    "vite-plugin-bomb-extend",
+    "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)",
+  ],
+  [
+    "vite-plugin-react-extend",
+    "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)",
+  ],
+  [
+    "vite-plugin-vue-extend",
+    "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)",
+  ],
+  [
+    "vue-plugin-bomb",
+    "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)",
+  ],
+  [
+    "quill-image-downloader",
+    "known-malicious package (xuxingfeng destructive-payload campaign, May 2025)",
+  ],
   // naya-flore / nvlore-hsc WhatsApp remote-kill-switch campaign
   // (Socket 2025-08-06,
   // https://socket.dev/blog/malicious-npm-packages-target-whatsapp-developers-with-remote-kill-switch)
@@ -92,17 +110,38 @@ const KNOWN_MALICIOUS_PACKAGES: ReadonlyMap<string, ForbiddenLockfileSource["rea
   // write-up — pin all seven by exact name so any future PR that
   // pulls one in (direct or transitive) is rejected at CI before
   // merge.
-  ["naya-flore", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
-  ["nvlore-hsc", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  [
+    "naya-flore",
+    "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)",
+  ],
+  [
+    "nvlore-hsc",
+    "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)",
+  ],
   // The five sibling packages below are author-IOCs from the same
   // `nayflore` npm account — currently benign per Socket but treated
   // as malicious here so a future weaponised republish is rejected at
   // CI before merge.
-  ["nouku-search", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
-  ["very-nay", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
-  ["naya-clone", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
-  ["node-smsk", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
-  ["@veryflore/disc", "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)"],
+  [
+    "nouku-search",
+    "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)",
+  ],
+  [
+    "very-nay",
+    "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)",
+  ],
+  [
+    "naya-clone",
+    "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)",
+  ],
+  [
+    "node-smsk",
+    "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)",
+  ],
+  [
+    "@veryflore/disc",
+    "known-malicious package (naya-flore WhatsApp remote-kill-switch campaign, August 2025)",
+  ],
   // string-width-cjs / strip-ansi-cjs / wrap-ansi-cjs lookalike campaign
   // (Snyk 2024-10-03,
   // https://snyk.io/blog/supply-chain-string-width-cjs-npm/) — three
@@ -118,10 +157,22 @@ const KNOWN_MALICIOUS_PACKAGES: ReadonlyMap<string, ForbiddenLockfileSource["rea
   // PR (direct or transitive) that pulls one in is rejected at CI before
   // merge. The related `clazz-transformer` (typosquat of
   // `class-transformer`) is included for the same reason.
-  ["string-width-cjs", "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)"],
-  ["strip-ansi-cjs", "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)"],
-  ["wrap-ansi-cjs", "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)"],
-  ["clazz-transformer", "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)"],
+  [
+    "string-width-cjs",
+    "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)",
+  ],
+  [
+    "strip-ansi-cjs",
+    "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)",
+  ],
+  [
+    "wrap-ansi-cjs",
+    "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)",
+  ],
+  [
+    "clazz-transformer",
+    "known-malicious package (string-width-cjs lookalike / Tea-token farming campaign, October 2024)",
+  ],
   // Beamglea phishing-CDN campaign (Socket 2025-10-09,
   // https://socket.dev/blog/175-malicious-npm-packages-host-phishing-infrastructure)
   // — one outlier name that does NOT match the campaign's
@@ -129,7 +180,10 @@ const KNOWN_MALICIOUS_PACKAGES: ReadonlyMap<string, ForbiddenLockfileSource["rea
   // {@link BEAMGLEA_NAME_RE} below). The other 174 packages
   // (`redirect-04g1my`, `redirect-0g91q6`, ... `redirect-zoju4g`)
   // are matched by the regex so we do not have to enumerate them.
-  ["redirect-homer-flajpt", "known-malicious package (Beamglea phishing-CDN campaign, October 2025)"],
+  [
+    "redirect-homer-flajpt",
+    "known-malicious package (Beamglea phishing-CDN campaign, October 2025)",
+  ],
 ]);
 
 /**
@@ -240,15 +294,13 @@ function isCompromisedNameVersion(name: string, version: string): boolean {
  * package entry. We grep all three shapes.
  */
 function findMaliciousPackageOnLine(
-  line: string,
+  line: string
 ): { name: string; reason: ForbiddenLockfileSource["reason"] } | null {
   const trimmed = line.trim();
   // Pattern A: pnpm v9 lockfile key — `'name@version':` or `name@version:`
   //            with optional leading slash for v6 compatibility.
   const keyMatch =
-    /^['"]?\/?(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)@[^:'"]+['"]?\s*:/i.exec(
-      trimmed,
-    );
+    /^['"]?\/?(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)@[^:'"]+['"]?\s*:/i.exec(trimmed);
   if (keyMatch) {
     const name = keyMatch[1]!;
     const reason = KNOWN_MALICIOUS_PACKAGES.get(name);
@@ -256,8 +308,8 @@ function findMaliciousPackageOnLine(
     if (BEAMGLEA_NAME_RE.test(name)) return { name, reason: BEAMGLEA_REASON };
   }
   // Pattern B: explicit `name: <name>` field inside a package entry.
-  const nameField = /^name:\s*['"]?(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)['"]?\s*$/i
-    .exec(trimmed);
+  const nameField =
+    /^name:\s*['"]?(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)['"]?\s*$/i.exec(trimmed);
   if (nameField) {
     const name = nameField[1]!;
     const reason = KNOWN_MALICIOUS_PACKAGES.get(name);
@@ -266,8 +318,9 @@ function findMaliciousPackageOnLine(
   }
   // Pattern C: a dependency-map entry like `is-buffer-validator: 1.0.0`
   //            under `dependencies:` / `devDependencies:` / `specifiers:`.
-  const depEntry =
-    /^(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?):\s*[\^~]?[\d.]+/i.exec(trimmed);
+  const depEntry = /^(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?):\s*[\^~]?[\d.]+/i.exec(
+    trimmed
+  );
   if (depEntry) {
     const name = depEntry[1]!;
     const reason = KNOWN_MALICIOUS_PACKAGES.get(name);
@@ -290,7 +343,7 @@ function findCompromisedVersionOnLine(line: string): string | null {
   // appends for cross-version disambiguation.
   const keyMatch =
     /^['"]?\/?(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)@([^:'"]+)['"]?\s*:/i.exec(
-      trimmed,
+      trimmed
     );
   if (keyMatch) {
     const name = keyMatch[1]!;
@@ -301,7 +354,7 @@ function findCompromisedVersionOnLine(line: string): string | null {
   // `dependencies:` / `devDependencies:` / `specifiers:`.
   const depEntry =
     /^(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?):\s*['"]?[\^~]?([\d.]+(?:[-+][\w.-]+)?)['"]?\s*$/i.exec(
-      trimmed,
+      trimmed
     );
   if (depEntry) {
     const name = depEntry[1]!;
@@ -387,7 +440,7 @@ async function main(): Promise<void> {
     const findings = findForbiddenLockfileSources(lockfile);
     for (const finding of findings) {
       console.error(
-        `${rel.replace(/^\.\.\//, "")} ${finding.reason} on line ${finding.line}: ${finding.text}`,
+        `${rel.replace(/^\.\.\//, "")} ${finding.reason} on line ${finding.line}: ${finding.text}`
       );
     }
     total += findings.length;

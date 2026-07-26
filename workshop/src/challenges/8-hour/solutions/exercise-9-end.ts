@@ -24,13 +24,13 @@ app.use(
         "form-action": ["'self'"],
       },
     },
-  }),
+  })
 );
 app.use(
   cors({
     origin: ["https://app.example.com", "http://localhost:5173"],
     credentials: true,
-  }),
+  })
 );
 
 function parseCookies(header: string | null): Record<string, string> {
@@ -39,7 +39,7 @@ function parseCookies(header: string | null): Record<string, string> {
     header.split(";").map((c) => {
       const [k, ...rest] = c.trim().split("=");
       return [k, decodeURIComponent(rest.join("="))];
-    }),
+    })
   );
 }
 
@@ -76,7 +76,7 @@ app.get(
         "set-cookie": `csrf=${token}; Path=/; SameSite=Strict`,
       },
     };
-  },
+  }
 );
 
 app.post(
@@ -88,7 +88,7 @@ app.post(
     request: { body: z.object({ name: z.string().min(1) }).strict() },
     responses: { 200: { description: "OK", body: z.object({ ok: z.literal(true) }) } },
   },
-  async () => ({ status: 200 as const, body: { ok: true as const } }),
+  async () => ({ status: 200 as const, body: { ok: true as const } })
 );
 
 serve(app, { port: 3000 });

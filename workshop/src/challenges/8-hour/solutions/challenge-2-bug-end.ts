@@ -17,7 +17,8 @@ import { z } from "zod";
 const JWT_KEY = new TextEncoder().encode("workshop-secret-must-be-at-least-32-bytes");
 const ADMIN_TOKEN = "admin";
 function eq(a: string, b: string) {
-  const ab = Buffer.from(a), bb = Buffer.from(b);
+  const ab = Buffer.from(a),
+    bb = Buffer.from(b);
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
 const verifier = createJwtVerifier({ algorithms: ["HS256"], key: JWT_KEY });
@@ -28,17 +29,17 @@ const app = new App({
   version: "0.1.0",
   openapi: { info: { title: "Workshop API", version: "0.1.0" } },
   docs: true,
-  bodyLimitBytes: 64 * 1024,            // ✅ 1: back to a reasonable cap
+  bodyLimitBytes: 64 * 1024, // ✅ 1: back to a reasonable cap
   requestTimeoutMs: 5_000,
 });
 
 app.use(requestId());
-app.use(secureHeaders());                // ✅ 2: reinstated
+app.use(secureHeaders()); // ✅ 2: reinstated
 app.use(
   cors({
     origin: ["https://app.example.com", "http://localhost:5173"], // ✅ 3: explicit
     credentials: true,
-  }),
+  })
 );
 app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
@@ -70,11 +71,12 @@ app.post(
     },
   },
   async ({ body }) => {
-    if (!eq(body.token, ADMIN_TOKEN)) {                                 // ✅ 6
+    if (!eq(body.token, ADMIN_TOKEN)) {
+      // ✅ 6
       throw new UnauthorizedError("Unauthorized");
     }
     return { status: 200 as const, body: { ok: true as const } };
-  },
+  }
 );
 
 app.post(
@@ -95,7 +97,7 @@ app.post(
     } catch (e) {
       throw new BadRequestError((e as Error).message);
     }
-  },
+  }
 );
 
 serve(app, { port: 3000 });

@@ -97,7 +97,9 @@ Or a function form for multiple legitimate origins. Never `*` with credentials.
 ```ts
 return {
   status: 404 as const,
-  body: { error: `Lookup failed in books.get() at /app/src/books.ts:42 for id=${params.id}` } as any,
+  body: {
+    error: `Lookup failed in books.get() at /app/src/books.ts:42 for id=${params.id}`,
+  } as any,
 };
 ```
 

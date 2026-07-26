@@ -28,7 +28,7 @@ test("every scanned package.json has zero unknown top-level dep names", async ()
       [],
       `unexpected slopsquatting-allowlist violations in ${rel}: ${offending
         .map((v) => `${v.block}["${v.name}"]`)
-        .join(", ")}`,
+        .join(", ")}`
     );
   }
 });
@@ -58,10 +58,12 @@ test("flags hallucinated names across every dep block", () => {
     optionalDependencies: { "hallucinated-d": "1" },
   });
   assert.equal(out.length, 4);
-  assert.deepEqual(
-    out.map((v) => v.block).sort(),
-    ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"],
-  );
+  assert.deepEqual(out.map((v) => v.block).sort(), [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+  ]);
 });
 
 test("does not flag a name that is on the allowlist (zod)", () => {
@@ -75,7 +77,7 @@ test("respects an explicit allowlist override (pure function)", () => {
   const out = findUnknownDependencyNames(
     "fake.json",
     { dependencies: { "made-up": "1" } },
-    new Set(["made-up"]),
+    new Set(["made-up"])
   );
   assert.deepEqual(out, []);
 });
@@ -86,7 +88,7 @@ test("ignores absent dep blocks and non-object dep blocks", () => {
     findUnknownDependencyNames("a.json", {
       dependencies: null as unknown as Record<string, unknown>,
     }),
-    [],
+    []
   );
 });
 
@@ -106,7 +108,7 @@ test("every scanned package.json has zero npm-alias dep specifiers", async () =>
       [],
       `unexpected npm-alias dependency specifiers in ${rel}: ${aliased
         .map((v) => `${v.block}["${v.name}"]="${v.specifier}"`)
-        .join(", ")}`,
+        .join(", ")}`
     );
   }
 });
@@ -131,10 +133,12 @@ test("flags npm:-aliased specs across every dep block", () => {
     optionalDependencies: { d: "npm:real-d@1" },
   });
   assert.equal(out.length, 4);
-  assert.deepEqual(
-    out.map((v) => v.block).sort(),
-    ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"],
-  );
+  assert.deepEqual(out.map((v) => v.block).sort(), [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+  ]);
 });
 
 test("does not flag normal semver / range / tag / file: / git+ specifiers", () => {
@@ -175,7 +179,7 @@ test("every scanned package.json has zero git/url dep specifiers", async () => {
       [],
       `unexpected non-registry dep specifiers in ${rel}: ${nonRegistry
         .map((v) => `${v.block}["${v.name}"]="${v.specifier}"`)
-        .join(", ")}`,
+        .join(", ")}`
     );
   }
 });

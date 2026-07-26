@@ -14,9 +14,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 test("scanner flags every documented OpenClaw 'leaky skill' anti-pattern", async () => {
-  const { scanForLeakySkillPatterns, LEAKY_SKILL_PATTERNS } = await import(
-    "../scripts/verify-no-leaky-agent-skills.js"
-  );
+  const { scanForLeakySkillPatterns, LEAKY_SKILL_PATTERNS } =
+    await import("../scripts/verify-no-leaky-agent-skills.js");
 
   // Each fixture line is the *minimal* OpenClaw-style instruction.
   const fixture = [
@@ -47,7 +46,7 @@ test("scanner flags every documented OpenClaw 'leaky skill' anti-pattern", async
   for (const pattern of LEAKY_SKILL_PATTERNS) {
     assert.ok(
       ids.has(pattern.id),
-      `pattern ${pattern.id} was not triggered by its representative fixture line`,
+      `pattern ${pattern.id} was not triggered by its representative fixture line`
     );
   }
   // No silent dedup: every line above should fire at least once.
@@ -55,9 +54,7 @@ test("scanner flags every documented OpenClaw 'leaky skill' anti-pattern", async
 });
 
 test("scanner does not flag prescriptive security guidance about secrets", async () => {
-  const { scanForLeakySkillPatterns } = await import(
-    "../scripts/verify-no-leaky-agent-skills.js"
-  );
+  const { scanForLeakySkillPatterns } = await import("../scripts/verify-no-leaky-agent-skills.js");
 
   const safe = [
     "Never log secrets. Filter `authorization`, `cookie`, and any header that may contain tokens.",
@@ -73,26 +70,18 @@ test("scanner does not flag prescriptive security guidance about secrets", async
   assert.deepEqual(
     findings,
     [],
-    "prescriptive guidance must not trip the gate: " + JSON.stringify(findings, null, 2),
+    "prescriptive guidance must not trip the gate: " + JSON.stringify(findings, null, 2)
   );
 });
 
 test("live repo has zero leaky-skill anti-patterns in any shipped SKILL.md / AGENTS.md", async () => {
-  const { findLeakyAgentSkills } = await import(
-    "../scripts/verify-no-leaky-agent-skills.js"
-  );
+  const { findLeakyAgentSkills } = await import("../scripts/verify-no-leaky-agent-skills.js");
   const findings = await findLeakyAgentSkills();
-  assert.deepEqual(
-    findings,
-    [],
-    "live repo regression: " + JSON.stringify(findings, null, 2),
-  );
+  assert.deepEqual(findings, [], "live repo regression: " + JSON.stringify(findings, null, 2));
 });
 
 test("scanner covers the `.cursorrules` / `CLAUDE.md` agent-instruction surfaces TrapDoor weaponized", async () => {
-  const { isSkillFilename } = await import(
-    "../scripts/verify-no-leaky-agent-skills.js"
-  );
+  const { isSkillFilename } = await import("../scripts/verify-no-leaky-agent-skills.js");
 
   // TrapDoor (Socket 2026-05-24) shipped malicious instructions in
   // `.cursorrules` (Cursor) and `CLAUDE.md` (Claude Code); the leak gate

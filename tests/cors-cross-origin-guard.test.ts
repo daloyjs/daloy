@@ -79,7 +79,7 @@ test("User-installed secureHeaders replaces the auto-installed instance", async 
       hsts: false,
       frameOptions: "SAMEORIGIN",
       noSniff: false,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -97,10 +97,7 @@ test("User-installed secureHeaders replaces the auto-installed instance", async 
 
 test("secureHeaders() and cors() hooks carry their markers", () => {
   const sh = secureHeaders();
-  assert.equal(
-    (sh as Record<PropertyKey, unknown>)[SECURE_HEADERS_MARKER],
-    true,
-  );
+  assert.equal((sh as Record<PropertyKey, unknown>)[SECURE_HEADERS_MARKER], true);
   const c = cors({ origin: "*" });
   assert.equal((c as Record<PropertyKey, unknown>)[CORS_HOOK_MARKER], true);
   const allows = (c as Record<PropertyKey, unknown>)[CORS_ORIGIN_ALLOW_MARKER];
@@ -112,7 +109,7 @@ test("secureHeaders() and cors() hooks carry their markers", () => {
 
 function newApp(
   opts?: ConstructorParameters<typeof App>[0],
-  beforeRoutes?: ReturnType<typeof cors>,
+  beforeRoutes?: ReturnType<typeof cors>
 ) {
   const app = new App({ logger: false, secureHeaders: false, ...opts });
   if (beforeRoutes) app.use(beforeRoutes);

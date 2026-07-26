@@ -241,13 +241,13 @@ export function assertSafeEntryPath(entry: string, context: string): void {
   }
   if (entry.includes("\0") || /[\r\n]/.test(entry)) {
     throw new Error(
-      `${context}: entry path must not contain NUL bytes or newlines (got: ${JSON.stringify(entry)}).`,
+      `${context}: entry path must not contain NUL bytes or newlines (got: ${JSON.stringify(entry)}).`
     );
   }
   if (entry.startsWith("-")) {
     throw new Error(
       `${context}: entry path must not start with "-" — runtimes parse leading dashes as flags ` +
-        `(got: ${JSON.stringify(entry)}). Prefix the path with "./" to disambiguate.`,
+        `(got: ${JSON.stringify(entry)}). Prefix the path with "./" to disambiguate.`
     );
   }
 }
@@ -299,7 +299,10 @@ export function normalizeEntryArg(entry: string): string {
  * @throws Error via {@link assertSafeEntryPath} when the entry path is unsafe.
  * @since 0.3.0
  */
-export function buildDevCommand(runtime: DevRuntime, entry: string): { command: string; args: string[] } {
+export function buildDevCommand(
+  runtime: DevRuntime,
+  entry: string
+): { command: string; args: string[] } {
   assertSafeEntryPath(entry, "daloy dev");
   const safe = normalizeEntryArg(entry);
   switch (runtime) {
@@ -365,7 +368,13 @@ export function parseArgs(argv: readonly string[]): { command: string; opts: Cli
   };
   let command = "inspect";
   let i = 0;
-  if (argv[0] === "inspect" || argv[0] === "dev" || argv[0] === "help" || argv[0] === "doctor" || argv[0] === "diff") {
+  if (
+    argv[0] === "inspect" ||
+    argv[0] === "dev" ||
+    argv[0] === "help" ||
+    argv[0] === "doctor" ||
+    argv[0] === "diff"
+  ) {
     command = argv[0];
     i = 1;
   }
@@ -557,7 +566,7 @@ function filterRoutes(routes: IntrospectedRoute[], opts: CliOptions): Introspect
     .filter(
       (r) =>
         (!opts.method || r.method === opts.method) &&
-        (!opts.tag || effectiveTags(r).includes(opts.tag)),
+        (!opts.tag || effectiveTags(r).includes(opts.tag))
     )
     .map((r) => {
       const tags = effectiveTags(r);
@@ -701,7 +710,8 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
   const isProd =
     (o.env as string) === "production" ||
     o.production === true ||
-    (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV === "production";
+    (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV ===
+      "production";
 
   if (opts.noAuditDefaults !== true) {
     if (isProd && o.trustProxy === undefined && o.behindProxy === undefined) {
@@ -852,8 +862,7 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
       findings.push({
         level: "warn",
         code: "audit.jsonMaxDepth.disabled",
-        message:
-          "jsonMaxDepth is 0 — deep nesting DoS protection is disabled.",
+        message: "jsonMaxDepth is 0 — deep nesting DoS protection is disabled.",
       });
     } else if (typeof jsonMaxDepth === "number" && jsonMaxDepth > 200) {
       findings.push({
@@ -928,9 +937,11 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
     // the handler returns, so a stray `passwordHash` or spread ORM row would
     // leak. Advisory (warn) because a route may legitimately return no body.
     const routes =
-      (app as unknown as {
-        routes?: readonly { method: string; path: string; responses: Record<number, unknown> }[];
-      }).routes ?? [];
+      (
+        app as unknown as {
+          routes?: readonly { method: string; path: string; responses: Record<number, unknown> }[];
+        }
+      ).routes ?? [];
     const missingBody = findRoutesMissingResponseBodySchema(routes as any);
     if (missingBody.length > 0) {
       const sample = missingBody
@@ -951,7 +962,8 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
   }
 
   if (opts.auditSecrets === true) {
-    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+    const env =
+      (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
     const weak = new Set(["changeme", "secret", "password", "your-secret", "it-is-very-secret"]);
     for (const [key, val] of Object.entries(env)) {
       if (!val) continue;
@@ -989,9 +1001,7 @@ async function runDoctor(opts: CliOptions, io: CliIO): Promise<CliResult> {
 
 async function runDev(opts: CliOptions, io: CliIO): Promise<CliResult> {
   if (!io.spawn) {
-    io.stderr(
-      "daloy dev requires a spawn-capable host (use the bundled bin/daloy.mjs CLI).\n"
-    );
+    io.stderr("daloy dev requires a spawn-capable host (use the bundled bin/daloy.mjs CLI).\n");
     return { exitCode: 2 };
   }
   let entry: string;
@@ -1039,10 +1049,8 @@ export function buildAiDump(app: App, opts: CliOptions): Record<string, unknown>
       method: def.method,
       path: def.path,
       ...(def.operationId ? { operationId: def.operationId } : {}),
-      ...(def.summary ?? meta?.summary
-        ? { summary: def.summary ?? meta?.summary }
-        : {}),
-      ...(def.description ?? meta?.description
+      ...((def.summary ?? meta?.summary) ? { summary: def.summary ?? meta?.summary } : {}),
+      ...((def.description ?? meta?.description)
         ? { description: def.description ?? meta?.description }
         : {}),
       tags: dedupeTags(def.tags, meta?.tags),
@@ -1086,9 +1094,7 @@ function aiRequest(req: RouteDefinition["request"]): Record<string, unknown> {
   return out;
 }
 
-function aiResponses(
-  responses: RouteDefinition["responses"]
-): Record<string, unknown> {
+function aiResponses(responses: RouteDefinition["responses"]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [status, spec] of Object.entries(responses)) {
     if (!spec) continue;

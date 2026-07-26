@@ -44,9 +44,9 @@ This is intentionally not a beginner Node course. The exercises move quickly fro
 
 Two versions of the same senior-level curriculum:
 
-| Track  | Use When                              | Skills Unlocked                                                                                                |
-| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 4-hour | You need the compressed essentials    | Contract-first routes, validation, errors, security middleware, auth, codegen, runtime portability, testing    |
+| Track  | Use When                              | Skills Unlocked                                                                                                   |
+| ------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 4-hour | You need the compressed essentials    | Contract-first routes, validation, errors, security middleware, auth, codegen, runtime portability, testing       |
 | 8-hour | You want the full hands-on experience | Everything in 4-hour plus JWT/JWK, sessions, WebSocket, CSRF/CORS, fetchGuard SSRF, OpenAPI tuning, observability |
 
 See [WORKSHOP_SCHEDULE.md](./WORKSHOP_SCHEDULE.md) for the full breakdown.
@@ -100,31 +100,31 @@ The `coding-steps/` files include mental models, before → after snippets, a co
 
 ## Useful Commands
 
-| Command                 | Purpose                                                              |
-| ----------------------- | -------------------------------------------------------------------- |
-| `pnpm install`          | Install dependencies (`@daloyjs/core@^1.0.0-rc.5`, `zod`)           |
-| `pnpm dev:4:N`          | Run 4-hour exercise N with `node --watch` on port 3000               |
-| `pnpm dev:8:N`          | Run 8-hour exercise N with `node --watch` on port 3000               |
-| `pnpm dev:sol:4:N`      | Run the 4-hour reference solution for exercise N                     |
-| `pnpm dev:sol:8:N`      | Run the 8-hour reference solution for exercise N                     |
-| `pnpm typecheck`        | TypeScript check across all exercises                                |
-| `pnpm gen`              | Regenerate the typed fetch SDK from a running exercise's OpenAPI doc |
-| `pnpm test`             | Run contract tests (4-hour exercise 7 + 8-hour exercise 8 solutions) |
+| Command            | Purpose                                                              |
+| ------------------ | -------------------------------------------------------------------- |
+| `pnpm install`     | Install dependencies (`@daloyjs/core@^1.0.0-rc.5`, `zod`)            |
+| `pnpm dev:4:N`     | Run 4-hour exercise N with `node --watch` on port 3000               |
+| `pnpm dev:8:N`     | Run 8-hour exercise N with `node --watch` on port 3000               |
+| `pnpm dev:sol:4:N` | Run the 4-hour reference solution for exercise N                     |
+| `pnpm dev:sol:8:N` | Run the 8-hour reference solution for exercise N                     |
+| `pnpm typecheck`   | TypeScript check across all exercises                                |
+| `pnpm gen`         | Regenerate the typed fetch SDK from a running exercise's OpenAPI doc |
+| `pnpm test`        | Run contract tests (4-hour exercise 7 + 8-hour exercise 8 solutions) |
 
 ## Why DaloyJS Is the Pitch
 
 This workshop is designed to make the framework's value concrete, not theoretical. By the end you should be able to answer all of these from memory:
 
-| Concern                              | Express / Fastify / Hono              | DaloyJS                                                              |
-| ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------- |
+| Concern                              | Express / Fastify / Hono              | DaloyJS                                                                              |
+| ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------ |
 | Single source of truth for contracts | Multiple plugins, drift-prone         | One `app.get(path, contract, handler)` drives validation, types, OpenAPI, and client |
-| Runtime portability                  | Node-only / Bun-only / Workers-only   | Web-standard core + adapters for Node, Bun, Deno, Vercel, Workers    |
-| OpenAPI                              | Plugin afterthought, manual sync      | First-class, auto-generated 3.1 spec, one-line `docs: true`          |
-| Typed client                         | Hand-written or separate codegen step | `pnpm gen` emits a Hey API typed fetch SDK from the live spec        |
-| Validation                           | Pick a library, glue it yourself      | Standard Schema — Zod / Valibot / ArkType / TypeBox, no lock-in      |
-| Errors                               | Ad-hoc JSON                           | RFC 9457 problem+json with consistent shapes and 5xx prod redaction   |
-| Security defaults                    | "Bring your own helmet"               | secureHeaders, rateLimit, requestId, fetchGuard, JWT allowlists      |
-| Supply chain                         | `npm install` runs arbitrary scripts  | `ignore-scripts=true`, 24h release-age, zero runtime deps in core    |
+| Runtime portability                  | Node-only / Bun-only / Workers-only   | Web-standard core + adapters for Node, Bun, Deno, Vercel, Workers                    |
+| OpenAPI                              | Plugin afterthought, manual sync      | First-class, auto-generated 3.1 spec, one-line `docs: true`                          |
+| Typed client                         | Hand-written or separate codegen step | `pnpm gen` emits a Hey API typed fetch SDK from the live spec                        |
+| Validation                           | Pick a library, glue it yourself      | Standard Schema — Zod / Valibot / ArkType / TypeBox, no lock-in                      |
+| Errors                               | Ad-hoc JSON                           | RFC 9457 problem+json with consistent shapes and 5xx prod redaction                  |
+| Security defaults                    | "Bring your own helmet"               | secureHeaders, rateLimit, requestId, fetchGuard, JWT allowlists                      |
+| Supply chain                         | `npm install` runs arbitrary scripts  | `ignore-scripts=true`, 24h release-age, zero runtime deps in core                    |
 
 ## Where to Learn More
 

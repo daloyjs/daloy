@@ -35,7 +35,7 @@ app.ws("/ws", {
   acknowledgeUnauthenticated: true,
   meta: {
     summary: "Echo channel",
-    description: "Echoes any text/binary message; reply to \"ping\" with a PING.",
+    description: 'Echoes any text/binary message; reply to "ping" with a PING.',
   },
 
   open(conn) {

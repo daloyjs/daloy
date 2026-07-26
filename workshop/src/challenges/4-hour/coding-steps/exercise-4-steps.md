@@ -99,11 +99,11 @@ Then open `http://localhost:3000/docs`. You should see a lock icon on `createBoo
 
 ## Code-change cheat sheet
 
-| Step | Where                 | Change                                                                              |
-| ---- | --------------------- | ----------------------------------------------------------------------------------- |
-| 1    | `new App({ openapi })` | Add `securitySchemes: { bearer: { type: "http", scheme: "bearer" } }`              |
-| 2    | `POST /books` route    | Add `auth: { scheme: "bearer" }` and `hooks: bearerAuth({ validate })`              |
-| 3    | `responses`            | (no change — `401: { description: "Unauthorized" }` was already there)              |
+| Step | Where                  | Change                                                                 |
+| ---- | ---------------------- | ---------------------------------------------------------------------- |
+| 1    | `new App({ openapi })` | Add `securitySchemes: { bearer: { type: "http", scheme: "bearer" } }`  |
+| 2    | `POST /books` route    | Add `auth: { scheme: "bearer" }` and `hooks: bearerAuth({ validate })` |
+| 3    | `responses`            | (no change — `401: { description: "Unauthorized" }` was already there) |
 
 ---
 

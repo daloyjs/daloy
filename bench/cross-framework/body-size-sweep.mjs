@@ -18,19 +18,27 @@
 import { writeFileSync } from "node:fs";
 import autocannon from "autocannon";
 import {
-  resultsPath, orderTargets, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, stats, fmt, warnBenchEnvironment,
+  resultsPath,
+  orderTargets,
+  machineInfo,
+  parseArgs,
+  startServer,
+  killServer,
+  waitForHealthy,
+  stats,
+  fmt,
+  warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine, sym } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",    file: "servers/echo-bytes/daloy.ts" },
-  { name: "hono",     file: "servers/echo-bytes/hono.ts" },
-  { name: "fastify",  file: "servers/echo-bytes/fastify.ts" },
-  { name: "express",  file: "servers/echo-bytes/express.ts" },
-  { name: "koa",      file: "servers/echo-bytes/koa.ts" },
-  { name: "nest",     file: "servers/echo-bytes/nest.ts" },
-  { name: "elysia",   file: "servers/echo-bytes/elysia.ts" },
+  { name: "daloy", file: "servers/echo-bytes/daloy.ts" },
+  { name: "hono", file: "servers/echo-bytes/hono.ts" },
+  { name: "fastify", file: "servers/echo-bytes/fastify.ts" },
+  { name: "express", file: "servers/echo-bytes/express.ts" },
+  { name: "koa", file: "servers/echo-bytes/koa.ts" },
+  { name: "nest", file: "servers/echo-bytes/nest.ts" },
+  { name: "elysia", file: "servers/echo-bytes/elysia.ts" },
   { name: "feathers", file: "servers/echo-bytes/feathers.ts" },
 ];
 
@@ -43,12 +51,12 @@ const CONNECTIONS = Number(process.env.CONNECTIONS ?? 100);
 const PORT = 3520;
 
 const SIZES = [
-  { id: "100B",    bytes: 100 },
-  { id: "1KiB",    bytes: 1024 },
-  { id: "16KiB",   bytes: 16 * 1024 },
-  { id: "256KiB",  bytes: 256 * 1024 },
-  { id: "1MiB",    bytes: 1024 * 1024 },
-  { id: "4MiB",    bytes: 4 * 1024 * 1024 },
+  { id: "100B", bytes: 100 },
+  { id: "1KiB", bytes: 1024 },
+  { id: "16KiB", bytes: 16 * 1024 },
+  { id: "256KiB", bytes: 256 * 1024 },
+  { id: "1MiB", bytes: 1024 * 1024 },
+  { id: "4MiB", bytes: 4 * 1024 * 1024 },
 ];
 
 function makeBody(bytes) {
@@ -58,16 +66,23 @@ function makeBody(bytes) {
 
 function runAutocannon({ duration, connections, body }) {
   return new Promise((resolve, reject) => {
-    const instance = autocannon({
-      url: `http://127.0.0.1:${PORT}/echo-bytes`,
-      method: "POST",
-      headers: { "content-type": "application/octet-stream" },
-      body,
-      connections,
-      pipelining: 1,
-      duration,
-    }, (err, result) => err ? reject(err) : resolve(result));
-    autocannon.track(instance, { renderProgressBar: false, renderResultsTable: false, renderLatencyTable: false });
+    const instance = autocannon(
+      {
+        url: `http://127.0.0.1:${PORT}/echo-bytes`,
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body,
+        connections,
+        pipelining: 1,
+        duration,
+      },
+      (err, result) => (err ? reject(err) : resolve(result))
+    );
+    autocannon.track(instance, {
+      renderProgressBar: false,
+      renderResultsTable: false,
+      renderLatencyTable: false,
+    });
   });
 }
 
@@ -108,12 +123,18 @@ async function benchOne(fw) {
         errors: samples.reduce((a, s) => a + s.non2xx + s.errors, 0),
         samples,
       };
-      console.error(metricsLine(sz.id, [
-        c.green(c.bold(fmt(rps.median))) + c.dim(" req/s"),
-        c.cyan(upload.median.toFixed(1)) + c.dim(" up-MiB/s"),
-        metric("p99", out[sz.id].p99.toFixed(2), { unit: "ms" }),
-        out[sz.id].errors ? c.red(`${sym.warn} ${out[sz.id].errors} errors`) : "",
-      ].filter(Boolean), { labelWidth: 8 }));
+      console.error(
+        metricsLine(
+          sz.id,
+          [
+            c.green(c.bold(fmt(rps.median))) + c.dim(" req/s"),
+            c.cyan(upload.median.toFixed(1)) + c.dim(" up-MiB/s"),
+            metric("p99", out[sz.id].p99.toFixed(2), { unit: "ms" }),
+            out[sz.id].errors ? c.red(`${sym.warn} ${out[sz.id].errors} errors`) : "",
+          ].filter(Boolean),
+          { labelWidth: 8 }
+        )
+      );
     }
     return out;
   } finally {
@@ -123,7 +144,10 @@ async function benchOne(fw) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
+  const targets = orderTargets(
+    FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)),
+    args.order
+  );
   const rows = [];
   for (const fw of targets) {
     try {
@@ -152,22 +176,46 @@ async function main() {
       ]);
     }
   }
-  console.log("\n" + summary({
-    head: ["Framework", "size", "req/s (median)", "upload MiB/s (median)", "p99 (ms)", "errors"],
-    rows: tableRows,
-    align: ["l", "l", "r", "r", "r", "r"],
-    highlight: (row) => row[0].includes("daloy"),
-  }) + "\n");
+  console.log(
+    "\n" +
+      summary({
+        head: [
+          "Framework",
+          "size",
+          "req/s (median)",
+          "upload MiB/s (median)",
+          "p99 (ms)",
+          "errors",
+        ],
+        rows: tableRows,
+        align: ["l", "l", "r", "r", "r", "r"],
+        highlight: (row) => row[0].includes("daloy"),
+      }) +
+      "\n"
+  );
 
   writeFileSync(
     resultsPath("results.body-size.json"),
-    JSON.stringify({
-      ranAt: new Date().toISOString(),
-      machine: machineInfo(),
-      config: { duration: DURATION, warmup: WARMUP, iterations: ITERATIONS, connections: CONNECTIONS, sizes: SIZES },
-      rows,
-    }, null, 2),
+    JSON.stringify(
+      {
+        ranAt: new Date().toISOString(),
+        machine: machineInfo(),
+        config: {
+          duration: DURATION,
+          warmup: WARMUP,
+          iterations: ITERATIONS,
+          connections: CONNECTIONS,
+          sizes: SIZES,
+        },
+        rows,
+      },
+      null,
+      2
+    )
   );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -197,8 +197,7 @@ export function scanVscodeTasks(raw: string): readonly Omit<AutorunFinding, "fil
     out.push({
       id: "vscode-folderopen-task",
       detail: 'task wired to "runOn": "folderOpen"',
-      why:
-        "A VS Code task with `runOptions.runOn: \"folderOpen\"` auto-executes its `command` the instant the folder is opened — no agent and no user action required. This is the Miasma worm's VS Code launcher (SafeDep 2026-06-05). A committed/shipped config must never carry it.",
+      why: 'A VS Code task with `runOptions.runOn: "folderOpen"` auto-executes its `command` the instant the folder is opened — no agent and no user action required. This is the Miasma worm\'s VS Code launcher (SafeDep 2026-06-05). A committed/shipped config must never carry it.',
     });
   }
   return out;
@@ -232,8 +231,7 @@ export function scanAgentHooks(raw: string): readonly Omit<AutorunFinding, "file
     out.push({
       id: "agent-session-command-hook",
       detail,
-      why:
-        "A Claude Code / Gemini CLI `\"type\": \"command\"` hook auto-runs a shell command when an agent session opens in the project (\"a SessionStart hook is a postinstall for your editor\"). This is the Miasma worm's Claude/Gemini launcher (SafeDep 2026-06-05). Repo-committed agent settings must not wire command hooks.",
+      why: 'A Claude Code / Gemini CLI `"type": "command"` hook auto-runs a shell command when an agent session opens in the project ("a SessionStart hook is a postinstall for your editor"). This is the Miasma worm\'s Claude/Gemini launcher (SafeDep 2026-06-05). Repo-committed agent settings must not wire command hooks.',
     });
   }
   return out;
@@ -260,8 +258,7 @@ export function scanCursorRule(raw: string): readonly Omit<AutorunFinding, "file
     out.push({
       id: "cursor-alwaysapply-exec",
       detail: `alwaysApply rule instructs: ${m[0].trim().slice(0, 160)}`,
-      why:
-        "A Cursor `.mdc` rule with `alwaysApply: true` is injected into every agent turn. Pairing it with a \"run this script\" instruction is a prompt injection that ships in the repo — the Miasma worm's Cursor launcher (SafeDep 2026-06-05). An always-applied rule must not tell the agent to execute a command/script.",
+      why: 'A Cursor `.mdc` rule with `alwaysApply: true` is injected into every agent turn. Pairing it with a "run this script" instruction is a prompt injection that ships in the repo — the Miasma worm\'s Cursor launcher (SafeDep 2026-06-05). An always-applied rule must not tell the agent to execute a command/script.',
     });
   }
   return out;
@@ -279,9 +276,7 @@ export function scanCursorRule(raw: string): readonly Omit<AutorunFinding, "file
  * @param raw - Raw `package.json` source.
  * @returns Findings (without the `file` field) for each hijacked script.
  */
-export function scanPackageJsonScripts(
-  raw: string,
-): readonly Omit<AutorunFinding, "file">[] {
+export function scanPackageJsonScripts(raw: string): readonly Omit<AutorunFinding, "file">[] {
   const out: Omit<AutorunFinding, "file">[] = [];
   const entrypointRe =
     /[._](?:github|vscode|idea|claude|gemini|cursor)\/[^\s"';|&]*\.(?:c|m)?[jt]sx?\b/i;
@@ -300,8 +295,7 @@ export function scanPackageJsonScripts(
         out.push({
           id: "npm-script-config-entrypoint",
           detail: `script "${name}" runs a config-dir entrypoint: ${value.slice(0, 160)}`,
-          why:
-            "A package.json script that executes a JS/TS file from a config directory (.github/.vscode/.claude/.gemini/.cursor) is the Miasma worm's script hijack (`\"test\": \"node .github/setup.js\"`) — it detonates on `npm test` and in CI. Run only files from normal source dirs (`scripts/`, `src/`, `bin/`).",
+          why: 'A package.json script that executes a JS/TS file from a config directory (.github/.vscode/.claude/.gemini/.cursor) is the Miasma worm\'s script hijack (`"test": "node .github/setup.js"`) — it detonates on `npm test` and in CI. Run only files from normal source dirs (`scripts/`, `src/`, `bin/`).',
         });
       }
     }
@@ -312,8 +306,7 @@ export function scanPackageJsonScripts(
     out.push({
       id: "npm-script-config-entrypoint",
       detail: "a script references a config-dir entrypoint (unparseable package.json)",
-      why:
-        "A package.json script appears to execute a JS/TS file from a config directory (.github/.vscode/.claude/.gemini/.cursor) — the Miasma worm's script-hijack vector. Run only files from normal source dirs (`scripts/`, `src/`, `bin/`).",
+      why: "A package.json script appears to execute a JS/TS file from a config directory (.github/.vscode/.claude/.gemini/.cursor) — the Miasma worm's script-hijack vector. Run only files from normal source dirs (`scripts/`, `src/`, `bin/`).",
     });
   }
   return out;
@@ -372,8 +365,7 @@ export function scanConfigFile(relPosix: string, raw: string): readonly AutorunF
     hits.push({
       id: "github-root-dropper",
       detail: "loose executable script placed directly under .github/",
-      why:
-        "The `.github/` directory holds config, issue/PR templates, and `workflows/` — never a loose top-level `*.js`/`*.ts` entrypoint. A standalone script here matches the Miasma `.github/setup.js` dropper IoC (SafeDep 2026-06-05). Move legitimate scripts to `scripts/` or `.github/actions/<name>/`.",
+      why: "The `.github/` directory holds config, issue/PR templates, and `workflows/` — never a loose top-level `*.js`/`*.ts` entrypoint. A standalone script here matches the Miasma `.github/setup.js` dropper IoC (SafeDep 2026-06-05). Move legitimate scripts to `scripts/` or `.github/actions/<name>/`.",
     });
   }
   return hits.map((h) => ({ file: relPosix, ...h }));
@@ -417,7 +409,7 @@ async function* walkConfigFiles(root: string): AsyncIterable<string> {
  * @returns All findings across every scanned config surface.
  */
 export async function findAgentConfigAutorun(
-  rootDir: string = REPO_ROOT,
+  rootDir: string = REPO_ROOT
 ): Promise<readonly AutorunFinding[]> {
   const findings: AutorunFinding[] = [];
   for await (const file of walkConfigFiles(rootDir)) {
@@ -452,7 +444,7 @@ async function main(): Promise<void> {
         "auto-run trigger (VS Code folderOpen task, Claude/Gemini command " +
         "hook, Cursor always-apply rule, hijacked npm script, or a loose " +
         ".github/ dropper). This is the Miasma worm's detonation surface — " +
-        "see https://safedep.io/miasma-worm-ai-coding-agent-config-injection/.",
+        "see https://safedep.io/miasma-worm-ai-coding-agent-config-injection/."
     );
     process.exitCode = 1;
   }

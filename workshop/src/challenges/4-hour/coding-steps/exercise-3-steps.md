@@ -54,8 +54,8 @@ const app = new App({
   version: "0.1.0",
   openapi: { info: { title: "Workshop API", version: "0.1.0" } },
   docs: true,
-  bodyLimitBytes: 64 * 1024,    // 64 KB — generous for a JSON API
-  requestTimeoutMs: 5_000,       // 5 seconds — anything slower is a real bug
+  bodyLimitBytes: 64 * 1024, // 64 KB — generous for a JSON API
+  requestTimeoutMs: 5_000, // 5 seconds — anything slower is a real bug
 });
 ```
 
@@ -154,11 +154,11 @@ Each rejection comes back as `application/problem+json` with a proper `status`, 
 
 ## Code-change cheat sheet
 
-| Step | Where             | Change                                                                |
-| ---- | ----------------- | --------------------------------------------------------------------- |
-| 1    | `new App({...})`   | Add `bodyLimitBytes: 64 * 1024, requestTimeoutMs: 5_000`             |
-| 2    | Imports           | Add `requestId, secureHeaders, cors, rateLimit`                        |
-| 3    | Below `const app` | Four `app.use(...)` calls in the documented order                      |
+| Step | Where             | Change                                                   |
+| ---- | ----------------- | -------------------------------------------------------- |
+| 1    | `new App({...})`  | Add `bodyLimitBytes: 64 * 1024, requestTimeoutMs: 5_000` |
+| 2    | Imports           | Add `requestId, secureHeaders, cors, rateLimit`          |
+| 3    | Below `const app` | Four `app.use(...)` calls in the documented order        |
 
 ---
 

@@ -88,9 +88,7 @@ function isCommentLine(trimmed: string): boolean {
  * surface. Closes the security-middleware-ordering bug class that
  * minimalist async-middleware frameworks ship as advertised features.
  */
-async function auditMutableRequestUrl(
-  files: readonly string[],
-): Promise<readonly Finding[]> {
+async function auditMutableRequestUrl(files: readonly string[]): Promise<readonly Finding[]> {
   const out: Finding[] = [];
   const RE = /\bset\s+(url|path|method)\s*\(/;
   for (const rel of files) {
@@ -122,15 +120,12 @@ async function auditMutableRequestUrl(
  * Item 10: response-bypass escape hatch audit. No public field on `ctx` /
  * `Context` may switch off framework response handling.
  */
-async function auditResponseBypass(
-  files: readonly string[],
-): Promise<readonly Finding[]> {
+async function auditResponseBypass(files: readonly string[]): Promise<readonly Finding[]> {
   const out: Finding[] = [];
   // Match `respond` as a property declaration / assignment on a Context-shaped
   // object (`ctx.respond`, `context.respond`, `respond:` in a Context type)
   // followed by an assignment or a boolean type.
-  const RE =
-    /\b(?:ctx|context|c|state)\.respond\s*=|\brespond\s*:\s*(?:boolean|false|true)\b/;
+  const RE = /\b(?:ctx|context|c|state)\.respond\s*=|\brespond\s*:\s*(?:boolean|false|true)\b/;
   for (const rel of files) {
     const src = await readSrc(rel);
     const lines = src.split(/\r?\n/);
@@ -165,9 +160,7 @@ async function auditResponseBypass(
  * allowlisted because they compare the Referer against a same-origin
  * allowlist; they never redirect to it.
  */
-async function auditOpenRedirectReferer(
-  files: readonly string[],
-): Promise<readonly Finding[]> {
+async function auditOpenRedirectReferer(files: readonly string[]): Promise<readonly Finding[]> {
   const out: Finding[] = [];
   for (const rel of files) {
     const src = await readSrc(rel);
@@ -233,11 +226,7 @@ async function auditEncryptedCookieCrypto(): Promise<readonly Finding[]> {
   // Third-party crypto reach: anything not WebCrypto / node:crypto / a
   // first-party module under `./` or `../`.
   const IMPORT_RE = /^\s*import\s+[^;]*?from\s+["']([^"']+)["']/;
-  const ALLOWED_IMPORT_PREFIXES = [
-    "./",
-    "../",
-    "node:",
-  ];
+  const ALLOWED_IMPORT_PREFIXES = ["./", "../", "node:"];
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
     const trimmed = raw.trim();
@@ -377,9 +366,7 @@ export async function runParityAudits(): Promise<readonly Finding[]> {
 async function main(): Promise<void> {
   const findings = await runParityAudits();
   if (findings.length === 0) {
-    console.log(
-      "verify-parity-audits: all static gates passed (items 9, 10, 11, 15, 17, 19).",
-    );
+    console.log("verify-parity-audits: all static gates passed (items 9, 10, 11, 15, 17, 19).");
     return;
   }
   for (const f of findings) {
@@ -388,7 +375,7 @@ async function main(): Promise<void> {
     console.error(`    ${f.message}`);
   }
   console.error(
-    `verify-parity-audits: ${findings.length} finding${findings.length === 1 ? "" : "s"}.`,
+    `verify-parity-audits: ${findings.length} finding${findings.length === 1 ? "" : "s"}.`
   );
   process.exitCode = 1;
 }

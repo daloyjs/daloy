@@ -37,7 +37,12 @@ function sessionApp() {
     method: "GET",
     path: "/whoami",
     operationId: "whoami",
-    responses: { 200: { description: "ok", body: z.object({ id: z.string(), user: z.string().nullable() }) as any } },
+    responses: {
+      200: {
+        description: "ok",
+        body: z.object({ id: z.string(), user: z.string().nullable() }) as any,
+      },
+    },
     handler: async ({ state }: any) => ({
       status: 200 as const,
       body: { id: state.session.id, user: (state.session.get("user") as string) ?? null },
@@ -53,7 +58,11 @@ test("[session/fixation] a forged session cookie is rejected; a fresh id is issu
     headers: { cookie: "__Host-daloy.sid=attacker-fixed-id.deadbeefbadsignature" },
   });
   const json = await res.json();
-  assert.notEqual(json.id, "attacker-fixed-id", "the attacker-chosen id must NOT become the session id");
+  assert.notEqual(
+    json.id,
+    "attacker-fixed-id",
+    "the attacker-chosen id must NOT become the session id"
+  );
   assert.equal(json.user, null, "no session data is adopted from an unsigned cookie");
 });
 
@@ -64,7 +73,9 @@ test("[session/fixation] regenerate() rotates the id (the fixation-defense primi
     method: "POST",
     path: "/login",
     operationId: "login",
-    responses: { 200: { description: "ok", body: z.object({ before: z.string(), after: z.string() }) as any } },
+    responses: {
+      200: { description: "ok", body: z.object({ before: z.string(), after: z.string() }) as any },
+    },
     handler: async ({ state }: any) => {
       const before = state.session.id;
       state.session.set("user", "bob"); // privilege change
@@ -90,7 +101,11 @@ test("[session/cookie-tossing] session cookie ships __Host- + HttpOnly + Secure 
   });
   const res = await app.request("/set", { method: "POST" });
   const sc = res.headers.get("set-cookie") ?? "";
-  assert.match(sc, /^__Host-daloy\.sid=/, "the __Host- prefix forbids a subdomain from tossing the cookie");
+  assert.match(
+    sc,
+    /^__Host-daloy\.sid=/,
+    "the __Host- prefix forbids a subdomain from tossing the cookie"
+  );
   assert.match(sc, /HttpOnly/i);
   assert.match(sc, /Secure/i);
   assert.match(sc, /SameSite=/i);
@@ -116,12 +131,20 @@ function compressionApp() {
 test("[breach] a public response IS compressed, but a credentialed one is NOT", async () => {
   const app = compressionApp();
   const pub = await app.request("/data", { headers: { "accept-encoding": "gzip" } });
-  assert.equal(pub.headers.get("content-encoding"), "gzip", "public, compressible responses are compressed");
+  assert.equal(
+    pub.headers.get("content-encoding"),
+    "gzip",
+    "public, compressible responses are compressed"
+  );
 
   const authed = await app.request("/data", {
     headers: { "accept-encoding": "gzip", authorization: "Bearer secret-token" },
   });
-  assert.equal(authed.headers.get("content-encoding"), null, "Authorization-bearing responses skip compression (BREACH)");
+  assert.equal(
+    authed.headers.get("content-encoding"),
+    null,
+    "Authorization-bearing responses skip compression (BREACH)"
+  );
 });
 
 test("[breach] a request carrying a session cookie skips compression", async () => {
@@ -129,7 +152,11 @@ test("[breach] a request carrying a session cookie skips compression", async () 
   const res = await app.request("/data", {
     headers: { "accept-encoding": "gzip", cookie: "__Host-daloy.sid=abc.def" },
   });
-  assert.equal(res.headers.get("content-encoding"), null, "session-cookie requests skip compression (BREACH)");
+  assert.equal(
+    res.headers.get("content-encoding"),
+    null,
+    "session-cookie requests skip compression (BREACH)"
+  );
 });
 
 // ===========================================================================
@@ -147,7 +174,10 @@ test("[multipart/dos] AppOptions.multipart.maxFileBytes rejects an oversized upl
     handler: async () => ({ status: 201 as const, body: { ok: true } }),
   });
   const fd = new FormData();
-  fd.append("file", new File([new Uint8Array(1024)], "big.bin", { type: "application/octet-stream" }));
+  fd.append(
+    "file",
+    new File([new Uint8Array(1024)], "big.bin", { type: "application/octet-stream" })
+  );
   const res = await app.request("/up", { method: "POST", body: fd });
   assert.equal(res.status, 413);
 });
@@ -174,7 +204,10 @@ test("[waf] single-percent-encoded SQLi/XSS in the query is decoded and blocked 
   const app = wafApp();
   // encodeURIComponent yields single-encoding; the WAF decodes and matches.
   assert.equal((await app.request(`/q?x=${encodeURIComponent("' OR 1=1")}`)).status, 403);
-  assert.equal((await app.request(`/q?x=${encodeURIComponent("<script>alert(1)</script>")}`)).status, 403);
+  assert.equal(
+    (await app.request(`/q?x=${encodeURIComponent("<script>alert(1)</script>")}`)).status,
+    403
+  );
 });
 
 test("[waf] double-encoded SQLi/XSS payloads are blocked after the second decode pass", async () => {
@@ -184,6 +217,6 @@ test("[waf] double-encoded SQLi/XSS payloads are blocked after the second decode
   assert.equal((await app.request("/q?x=%2527%2520OR%25201%253D1")).status, 403);
   assert.equal(
     (await app.request("/q?x=%253Cscript%253Ealert%25281%2529%253C%252Fscript%253E")).status,
-    403,
+    403
   );
 });

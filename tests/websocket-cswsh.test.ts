@@ -29,7 +29,7 @@ test("CSWSH: production app.ws() refuses route without Origin policy or acknowle
         },
         open() {},
       }),
-    /CSWSH|allowedOrigins|acknowledgeCrossOriginUpgrade/s,
+    /CSWSH|allowedOrigins|acknowledgeCrossOriginUpgrade/s
   );
 });
 
@@ -66,7 +66,7 @@ test("CSWSH: app.ws() refuses invalid allowedOrigins runtime values", () => {
         },
         open() {},
       }),
-    /allowedOrigins.*same-origin.*array.*predicate/s,
+    /allowedOrigins.*same-origin.*array.*predicate/s
   );
 });
 
@@ -118,10 +118,7 @@ test("CSWSH: checkWebSocketOrigin([...]) accepts allowlisted origin", () => {
   const req = makeRequest("https://api.example.com/ws", {
     origin: "https://app.example.com",
   });
-  assert.deepEqual(
-    checkWebSocketOrigin(req, ["https://app.example.com"]),
-    { ok: true },
-  );
+  assert.deepEqual(checkWebSocketOrigin(req, ["https://app.example.com"]), { ok: true });
 });
 
 test("CSWSH: checkWebSocketOrigin([...]) rejects non-allowlisted origin", () => {
@@ -135,17 +132,14 @@ test("CSWSH: checkWebSocketOrigin([...]) rejects non-allowlisted origin", () => 
 
 test("CSWSH: checkWebSocketOrigin([...]) allows missing Origin (non-browser client)", () => {
   const req = makeRequest("https://api.example.com/ws");
-  assert.deepEqual(
-    checkWebSocketOrigin(req, ["https://app.example.com"]),
-    { ok: true },
-  );
+  assert.deepEqual(checkWebSocketOrigin(req, ["https://app.example.com"]), { ok: true });
 });
 
 test("CSWSH: checkWebSocketOrigin(predicate) gives full control", () => {
   const req = makeRequest("https://api.example.com/ws", { origin: "null" });
   assert.deepEqual(
     checkWebSocketOrigin(req, (origin) => origin === "null"),
-    { ok: true },
+    { ok: true }
   );
   const blocked = checkWebSocketOrigin(req, (origin) => origin !== "null");
   assert.equal(blocked.ok, false);
@@ -155,7 +149,7 @@ test("CSWSH: checkWebSocketOrigin(predicate) can require Origin be present", () 
   const reqMissing = makeRequest("https://api.example.com/ws");
   const result = checkWebSocketOrigin(
     reqMissing,
-    (origin) => origin !== null && origin === "https://app.example.com",
+    (origin) => origin !== null && origin === "https://app.example.com"
   );
   assert.equal(result.ok, false);
 });
@@ -197,7 +191,7 @@ import { serve as serveNode } from "../src/adapters/node.js";
 async function rawUpgrade(
   port: number,
   path: string,
-  extraHeaders: Record<string, string>,
+  extraHeaders: Record<string, string>
 ): Promise<number> {
   return await new Promise<number>((resolve, reject) => {
     const headers: Record<string, string> = {
@@ -274,4 +268,3 @@ test("CSWSH: Node adapter allows allowlisted origin upgrade through to beforeUpg
     await handle.close();
   }
 });
-

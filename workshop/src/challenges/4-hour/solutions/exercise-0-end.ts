@@ -21,7 +21,7 @@ app.get(
       },
     },
   },
-  async () => ({ status: 200 as const, body: { status: "ok" as const } }),
+  async () => ({ status: 200 as const, body: { status: "ok" as const } })
 );
 
 serve(app, { port: 3000 });

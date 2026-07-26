@@ -204,8 +204,14 @@ test("allow function validator gates tenants", async () => {
     resolve: tenantFromHeader("x-tenant-id"),
     allow: (id) => id.startsWith("ok-"),
   });
-  assert.equal((await app.request("http://x/whoami", { headers: { "x-tenant-id": "ok-1" } })).status, 200);
-  assert.equal((await app.request("http://x/whoami", { headers: { "x-tenant-id": "no-1" } })).status, 404);
+  assert.equal(
+    (await app.request("http://x/whoami", { headers: { "x-tenant-id": "ok-1" } })).status,
+    200
+  );
+  assert.equal(
+    (await app.request("http://x/whoami", { headers: { "x-tenant-id": "no-1" } })).status,
+    404
+  );
 });
 
 test("default normalizer lowercases and trims a valid id", async () => {
@@ -229,7 +235,10 @@ test("custom normalize can reshape the id", async () => {
   const app = whoamiApp({
     resolve: tenantFromHeader("x-tenant-id"),
     normalize: (raw) => {
-      const n = raw.trim().toLowerCase().replace(/^tenant-/, "");
+      const n = raw
+        .trim()
+        .toLowerCase()
+        .replace(/^tenant-/, "");
       return /^[a-z0-9]+$/.test(n) ? n : undefined;
     },
   });
@@ -268,7 +277,7 @@ test("tenancy throws when given no resolvers", () => {
 test("tenancy throws on a malformed allowlist entry", () => {
   assert.throws(
     () => tenancy({ resolve: tenantFromHeader("x-tenant-id"), allow: ["acme", "Bad Tenant!"] }),
-    /not a valid tenant id/,
+    /not a valid tenant id/
   );
 });
 
@@ -287,7 +296,10 @@ test("tenantScope falls back when no tenant is present", () => {
 });
 
 test("tenantScope honors a custom stateKey", () => {
-  assert.equal(tenantScope({ stateKey: "org" })({ state: { org: "globex" } } as any), "tenant:globex");
+  assert.equal(
+    tenantScope({ stateKey: "org" })({ state: { org: "globex" } } as any),
+    "tenant:globex"
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -309,8 +321,7 @@ test("tenantScope isolates rate-limit buckets per tenant", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
 
-  const hit = (tenant: string) =>
-    app.request("http://x/x", { headers: { "x-tenant-id": tenant } });
+  const hit = (tenant: string) => app.request("http://x/x", { headers: { "x-tenant-id": tenant } });
 
   // acme burns through its budget of 2.
   assert.equal((await hit("acme")).status, 200);

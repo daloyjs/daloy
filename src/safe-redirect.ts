@@ -269,7 +269,11 @@ export function safeRedirect(target: string, options: SafeRedirectOptions = {}):
     // target (no protocol-relative, no backslash confusion, no controls).
     // Do not widen Location emission beyond what classify() would accept.
     const fallbackResult = classify(options.fallback, ["/*"], []);
-    if (!fallbackResult.ok || !options.fallback.startsWith("/") || options.fallback.startsWith("//")) {
+    if (
+      !fallbackResult.ok ||
+      !options.fallback.startsWith("/") ||
+      options.fallback.startsWith("//")
+    ) {
       throw new TypeError(
         `safeRedirect: fallback must be a safe same-origin path starting with "/"; got ${options.fallback}`
       );

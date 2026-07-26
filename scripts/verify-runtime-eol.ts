@@ -230,7 +230,7 @@ export function evaluateFindings(
   endorsed: ReadonlyMap<number, readonly string[]>,
   feed: readonly NodeEolCycle[],
   now: Date,
-  warnDays: number = EOL_WARN_DAYS,
+  warnDays: number = EOL_WARN_DAYS
 ): EolFinding[] {
   const out: EolFinding[] = [];
   for (const [major, sources] of endorsed) {
@@ -285,9 +285,7 @@ async function main(): Promise<void> {
   const cwd = process.cwd();
   const endorsed = await collectEndorsedVersions(cwd);
   if (endorsed.length === 0) {
-    process.stderr.write(
-      "verify-runtime-eol: no Node engines/pins found — nothing to check.\n",
-    );
+    process.stderr.write("verify-runtime-eol: no Node engines/pins found — nothing to check.\n");
     process.exit(0);
   }
   const grouped = groupBySource(endorsed);
@@ -306,9 +304,7 @@ async function main(): Promise<void> {
 
   if (findings.length === 0) {
     const majors = [...grouped.keys()].sort((a, b) => a - b).join(", ");
-    process.stdout.write(
-      `verify-runtime-eol: OK — Node major(s) ${majors} are within support.\n`,
-    );
+    process.stdout.write(`verify-runtime-eol: OK — Node major(s) ${majors} are within support.\n`);
     process.exit(0);
     return;
   }
@@ -323,13 +319,13 @@ async function main(): Promise<void> {
 
   if (eolCount > 0 || (strict && warnCount > 0)) {
     process.stderr.write(
-      `verify-runtime-eol: FAIL — ${eolCount} EOL major(s), ${warnCount} approaching-EOL major(s).\n`,
+      `verify-runtime-eol: FAIL — ${eolCount} EOL major(s), ${warnCount} approaching-EOL major(s).\n`
     );
     process.exit(1);
     return;
   }
   process.stdout.write(
-    `verify-runtime-eol: OK with ${warnCount} warning(s) (non-blocking; pass --strict to fail).\n`,
+    `verify-runtime-eol: OK with ${warnCount} warning(s) (non-blocking; pass --strict to fail).\n`
   );
 }
 

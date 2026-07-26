@@ -347,7 +347,12 @@ function label(fw) {
 }
 
 async function bundleOne(fw) {
-  const tmp = mkdtempSync(path.join(os.tmpdir(), `bench-bundle-${fw.name}-${(fw.variant ?? "default").replace(/\s+/g, "-")}-`));
+  const tmp = mkdtempSync(
+    path.join(
+      os.tmpdir(),
+      `bench-bundle-${fw.name}-${(fw.variant ?? "default").replace(/\s+/g, "-")}-`
+    )
+  );
   try {
     const entry = path.join(tmp, "entry.ts");
     const outfile = path.join(tmp, "out.mjs");
@@ -388,7 +393,9 @@ async function bundleOne(fw) {
       gzipped: gzipSync(bytes, { level: 9 }).length,
     };
   } finally {
-    try { rmSync(tmp, { recursive: true, force: true }); } catch {}
+    try {
+      rmSync(tmp, { recursive: true, force: true });
+    } catch {}
   }
 }
 
@@ -399,10 +406,16 @@ async function main() {
     try {
       const r = await bundleOne(fw);
       rows.push({ framework: fw.name, variant: fw.variant ?? null, ...r });
-      console.error(metricsLine(label(fw), [
-        metric("raw", (r.raw / 1024).toFixed(1), { unit: " KiB" }),
-        metric("gz", (r.gzipped / 1024).toFixed(1), { unit: " KiB", color: c.cyan }),
-      ], { labelWidth: 24 }));
+      console.error(
+        metricsLine(
+          label(fw),
+          [
+            metric("raw", (r.raw / 1024).toFixed(1), { unit: " KiB" }),
+            metric("gz", (r.gzipped / 1024).toFixed(1), { unit: " KiB", color: c.cyan }),
+          ],
+          { labelWidth: 24 }
+        )
+      );
     } catch (err) {
       console.error("  " + fail(`${label(fw)}: ${err.message}`));
       rows.push({ framework: fw.name, variant: fw.variant ?? null, error: err.message });
@@ -418,8 +431,8 @@ async function main() {
   const notes = [
     "",
     "Notes:",
-    "  - \"minimal\"       = framework's documented hello-world (bare router).",
-    "  - \"secure parity\" = same hello-world + request-id, secure headers,",
+    '  - "minimal"       = framework\'s documented hello-world (bare router).',
+    '  - "secure parity" = same hello-world + request-id, secure headers,',
     "                       CORS allowlist, rate-limit hook, HS256 JWT verify.",
     "    Daloy ships those guards in core; every other framework here requires",
     "    opt-in middleware (helmet/secure-headers, cors, a rate limiter, JWT).",
@@ -430,16 +443,25 @@ async function main() {
     "    microservices, platform-express) are marked external — they aren't installed",
     "    by a minimal nest app and shouldn't be counted in its bundle.",
   ];
-  console.log("\n" + summary({
-    head: ["Framework", "raw (KiB)", "gzipped (KiB)"],
-    rows: tableRows,
-    highlight: (row) => row[0].includes("daloy"),
-  }) + "\n" + c.dim(notes.join("\n")) + "\n");
+  console.log(
+    "\n" +
+      summary({
+        head: ["Framework", "raw (KiB)", "gzipped (KiB)"],
+        rows: tableRows,
+        highlight: (row) => row[0].includes("daloy"),
+      }) +
+      "\n" +
+      c.dim(notes.join("\n")) +
+      "\n"
+  );
 
   writeFileSync(
     resultsPath("results.bundle-size.json"),
-    JSON.stringify({ ranAt: new Date().toISOString(), machine: machineInfo(), rows }, null, 2),
+    JSON.stringify({ ranAt: new Date().toISOString(), machine: machineInfo(), rows }, null, 2)
   );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

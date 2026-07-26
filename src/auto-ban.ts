@@ -299,7 +299,7 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   if (!opts.keyGenerator && !opts.trustProxyHeaders) {
     throw new Error(
       "autoBan(): provide keyGenerator or set trustProxyHeaders so clients can be identified; " +
-        "otherwise every caller shares one bucket and a single offender would ban everyone.",
+        "otherwise every caller shares one bucket and a single offender would ban everyone."
     );
   }
   const keyOf = opts.keyGenerator ?? forwardedKey;
@@ -358,9 +358,7 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
 
       if (strikes >= maxStrikes) {
         banCount += 1;
-        const duration = escalate
-          ? Math.min(maxBanMs, banMs * 2 ** (banCount - 1))
-          : banMs;
+        const duration = escalate ? Math.min(maxBanMs, banMs * 2 ** (banCount - 1)) : banMs;
         bannedUntilMs = now + duration;
         strikes = 0;
         opts.onBan?.({ key, banCount, banDurationMs: duration, bannedUntilMs });

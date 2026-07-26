@@ -10,12 +10,12 @@ You are editing [`exercise-1.ts`](../exercise-1.ts). Reference: [`solutions/exer
 
 `app.get(path, {...}, handler)` (and its sibling shorthands `app.post`, `app.put`, `app.patch`, `app.delete`, `app.head`) has four contract slots that map 1:1 to OpenAPI:
 
-| Slot                  | What it does at runtime                                          | What it does in the spec               |
-| --------------------- | ---------------------------------------------------------------- | -------------------------------------- |
-| `request.params`      | Validates the path parameters before your handler runs.          | Path parameters with schema.           |
-| `request.query`       | Validates the query string.                                      | Query parameters with schema.          |
-| `request.body`        | Validates the parsed body.                                       | Request body with schema.              |
-| `responses[code].body` | Narrows the return type, validates the response on the way out. | Response body with schema + examples.  |
+| Slot                   | What it does at runtime                                         | What it does in the spec              |
+| ---------------------- | --------------------------------------------------------------- | ------------------------------------- |
+| `request.params`       | Validates the path parameters before your handler runs.         | Path parameters with schema.          |
+| `request.query`        | Validates the query string.                                     | Query parameters with schema.         |
+| `request.body`         | Validates the parsed body.                                      | Request body with schema.             |
+| `responses[code].body` | Narrows the return type, validates the response on the way out. | Response body with schema + examples. |
 
 You will fill in **`request.params`**, **`responses[200].body`**, and **`responses[404].body`** in this exercise. Order matters because the response narrowing depends on the param being typed first.
 
@@ -133,12 +133,12 @@ The OpenAPI op should now have a `parameters` array (your path param), a `200` r
 
 ## Code-change cheat sheet
 
-| Step | Where             | Change                                                                       |
-| ---- | ----------------- | ---------------------------------------------------------------------------- |
-| 1    | Top of file        | Add `BookSchema` and `ProblemSchema`                                         |
-| 2    | `app.get(...)`   | Add `request: { params: z.object({ id: z.string().min(1) }) }`               |
-| 3    | `responses`        | Add `body: BookSchema, examples: { default }` to 200, add full 404 entry      |
-| 4    | `handler`          | Look up the book, return 404 problem body if missing, else 200 with the book |
+| Step | Where          | Change                                                                       |
+| ---- | -------------- | ---------------------------------------------------------------------------- |
+| 1    | Top of file    | Add `BookSchema` and `ProblemSchema`                                         |
+| 2    | `app.get(...)` | Add `request: { params: z.object({ id: z.string().min(1) }) }`               |
+| 3    | `responses`    | Add `body: BookSchema, examples: { default }` to 200, add full 404 entry     |
+| 4    | `handler`      | Look up the book, return 404 problem body if missing, else 200 with the book |
 
 ---
 

@@ -23,13 +23,16 @@ export function buildApp(): App {
       operationId: "getBookById",
       tags: ["Books"],
       request: { params: z.object({ id: z.string().min(1) }) },
-      responses: { 200: { description: "OK", body: BookSchema }, 404: { description: "Not found" } },
+      responses: {
+        200: { description: "OK", body: BookSchema },
+        404: { description: "Not found" },
+      },
     },
     async ({ params }) => {
       const b = books.get(params.id);
       if (!b) throw new NotFoundError(`No book with id ${params.id}`);
       return { status: 200 as const, body: b };
-    },
+    }
   );
 
   app.post(
@@ -43,7 +46,7 @@ export function buildApp(): App {
     async ({ body }) => {
       books.set(body.id, body);
       return { status: 201 as const, body };
-    },
+    }
   );
 
   return app;
@@ -59,7 +62,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // In a real test file you'd boot serve(app, { port: 0 }) and pass that port to
   // the generated client. Here we use the in-process client for instant iteration.
   const client = createClient(app, { baseUrl: "http://localhost:3000" }) as {
-    getBookById(input: { params: { id: string } }): Promise<{ status: number; body: unknown; headers: Record<string, string> }>;
+    getBookById(input: {
+      params: { id: string };
+    }): Promise<{ status: number; body: unknown; headers: Record<string, string> }>;
   };
 
   setTimeout(async () => {

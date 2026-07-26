@@ -99,11 +99,14 @@ Vercel bundles the `api/` functions at deploy time and resolves `.ts` directly, 
 
 - `@daloyjs/core/vercel` with starter security middleware: `secureHeaders` and `requestId`.
 - Smaller serverless-friendly body and timeout limits in the generated app.
+
 <!-- daloy-minimal:strip-start books -->
+
 - A health route and a contract-first `/books/:id` route with Zod validation.
   <!-- daloy-minimal:strip-end books -->
   <!-- daloy-minimal:strip-start docs -->
 - A Scalar API reference UI at `/docs`, plus live OpenAPI 3.1 specs at `/openapi.json` and `/openapi.yaml`.
+
 <!-- daloy-minimal:strip-end docs -->
 
 ## Authentication (OAuth2 / OpenID Connect)

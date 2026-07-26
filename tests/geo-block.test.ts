@@ -7,7 +7,7 @@ import { App, geoBlock, type GeoBlockDecision } from "../src/index.js";
 /** App with a `geoBlock()` guard plus a single `/` route returning 200. */
 function appWith(
   hooks: ReturnType<typeof geoBlock>,
-  onState?: (state: Record<string, unknown>) => void,
+  onState?: (state: Record<string, unknown>) => void
 ): App {
   const app = new App({ env: "development" });
   app.use(hooks);
@@ -33,10 +33,7 @@ function req(ip?: string, country?: string): Request {
 // ---------- construction validation (unhappy) ----------
 
 test("geoBlock() requires at least one of allow or deny", () => {
-  assert.throws(
-    () => geoBlock({ lookupCountry: () => "US" }),
-    /at least one of/,
-  );
+  assert.throws(() => geoBlock({ lookupCountry: () => "US" }), /at least one of/);
 });
 
 test("geoBlock() requires exactly one resolution strategy (neither)", () => {
@@ -51,7 +48,7 @@ test("geoBlock() requires exactly one resolution strategy (both)", () => {
         lookupCountry: () => "US",
         resolveCountry: () => "US",
       }),
-    /exactly one of/,
+    /exactly one of/
   );
 });
 
@@ -64,14 +61,14 @@ test("geoBlock() rejects an invalid mode", () => {
         // @ts-expect-error intentionally invalid
         mode: "warn",
       }),
-    /invalid mode/,
+    /invalid mode/
   );
 });
 
 test("geoBlock() rejects a malformed country code", () => {
   assert.throws(
     () => geoBlock({ allow: ["USA"], resolveCountry: () => "US" }),
-    /invalid country code/,
+    /invalid country code/
   );
 });
 
@@ -79,8 +76,7 @@ test("geoBlock() rejects a malformed country code", () => {
 
 test("deny list blocks a listed country and allows others", async () => {
   const app = appWith(
-    geoBlock({ deny: ["KP", "IR"], resolveCountry: (c) =>
-      c.request.headers.get("cf-ipcountry") }),
+    geoBlock({ deny: ["KP", "IR"], resolveCountry: (c) => c.request.headers.get("cf-ipcountry") })
   );
 
   const blocked = await app.fetch(req(undefined, "KP"));
@@ -91,9 +87,7 @@ test("deny list blocks a listed country and allows others", async () => {
 });
 
 test("deny match is case-insensitive", async () => {
-  const app = appWith(
-    geoBlock({ deny: ["kp"], resolveCountry: () => "Kp" }),
-  );
+  const app = appWith(geoBlock({ deny: ["kp"], resolveCountry: () => "Kp" }));
   const res = await app.fetch(req());
   assert.equal(res.status, 403);
 });
@@ -105,7 +99,7 @@ test("allow list permits only listed countries", async () => {
     geoBlock({
       allow: ["US", "CA", "GB"],
       resolveCountry: (c) => c.request.headers.get("cf-ipcountry"),
-    }),
+    })
   );
 
   assert.equal((await app.fetch(req(undefined, "US"))).status, 200);
@@ -113,25 +107,19 @@ test("allow list permits only listed countries", async () => {
 });
 
 test("deny wins over allow on conflict", async () => {
-  const app = appWith(
-    geoBlock({ allow: ["US"], deny: ["US"], resolveCountry: () => "US" }),
-  );
+  const app = appWith(geoBlock({ allow: ["US"], deny: ["US"], resolveCountry: () => "US" }));
   assert.equal((await app.fetch(req())).status, 403);
 });
 
 // ---------- unknown country handling ----------
 
 test("allow list fails closed on an unknown country", async () => {
-  const app = appWith(
-    geoBlock({ allow: ["US"], resolveCountry: () => undefined }),
-  );
+  const app = appWith(geoBlock({ allow: ["US"], resolveCountry: () => undefined }));
   assert.equal((await app.fetch(req())).status, 403);
 });
 
 test("deny-only fails open on an unknown country", async () => {
-  const app = appWith(
-    geoBlock({ deny: ["KP"], resolveCountry: () => undefined }),
-  );
+  const app = appWith(geoBlock({ deny: ["KP"], resolveCountry: () => undefined }));
   assert.equal((await app.fetch(req())).status, 200);
 });
 
@@ -141,7 +129,7 @@ test("allowUnknownCountry override lets unknowns through an allow list", async (
       allow: ["US"],
       allowUnknownCountry: true,
       resolveCountry: () => "",
-    }),
+    })
   );
   assert.equal((await app.fetch(req())).status, 200);
 });
@@ -152,7 +140,7 @@ test("allowUnknownCountry:false blocks unknowns on a deny-only list", async () =
       deny: ["KP"],
       allowUnknownCountry: false,
       resolveCountry: () => null,
-    }),
+    })
   );
   assert.equal((await app.fetch(req())).status, 403);
 });
@@ -166,7 +154,7 @@ test("lookupCountry maps the forwarded IP to a country", async () => {
       deny: ["KP"],
       trustProxyHeaders: true,
       lookupCountry: (ip) => table[ip],
-    }),
+    })
   );
   assert.equal((await app.fetch(req("203.0.113.7"))).status, 403);
   assert.equal((await app.fetch(req("8.8.8.8"))).status, 200);
@@ -174,9 +162,7 @@ test("lookupCountry maps the forwarded IP to a country", async () => {
 
 test("lookupCountry fails closed when no IP can be resolved (default resolver)", async () => {
   // No trustProxyHeaders + no custom resolveIp => IP is undefined => unknown.
-  const app = appWith(
-    geoBlock({ allow: ["US"], lookupCountry: () => "US" }),
-  );
+  const app = appWith(geoBlock({ allow: ["US"], lookupCountry: () => "US" }));
   // allow-list + unknown country (no IP) => blocked.
   assert.equal((await app.fetch(req("8.8.8.8"))).status, 403);
 });
@@ -187,7 +173,7 @@ test("custom resolveIp overrides the default IP source", async () => {
       deny: ["KP"],
       resolveIp: () => "203.0.113.7",
       lookupCountry: (ip) => (ip === "203.0.113.7" ? "KP" : "US"),
-    }),
+    })
   );
   assert.equal((await app.fetch(req())).status, 403);
 });
@@ -197,9 +183,8 @@ test("async lookupCountry is awaited", async () => {
     geoBlock({
       deny: ["KP"],
       trustProxyHeaders: true,
-      lookupCountry: async (ip) =>
-        ip === "203.0.113.7" ? "KP" : "US",
-    }),
+      lookupCountry: async (ip) => (ip === "203.0.113.7" ? "KP" : "US"),
+    })
   );
   assert.equal((await app.fetch(req("203.0.113.7"))).status, 403);
 });
@@ -214,7 +199,7 @@ test('mode "log" lets blocked requests through but reports them', async () => {
       mode: "log",
       resolveCountry: () => "KP",
       onBlock: (d) => seen.push(d),
-    }),
+    })
   );
   const res = await app.fetch(req());
   assert.equal(res.status, 200);
@@ -231,7 +216,7 @@ test("onBlock reports not_in_allowlist with the resolved country", async () => {
       mode: "log",
       resolveCountry: () => "FR",
       onBlock: (d) => seen.push(d),
-    }),
+    })
   );
   await app.fetch(req());
   assert.equal(seen[0]!.reason, "not_in_allowlist");
@@ -247,7 +232,7 @@ test("onBlock reports unknown_country and the resolved IP", async () => {
       trustProxyHeaders: true,
       lookupCountry: () => undefined,
       onBlock: (d) => seen.push(d),
-    }),
+    })
   );
   await app.fetch(req("203.0.113.7"));
   assert.equal(seen[0]!.reason, "unknown_country");
@@ -259,12 +244,9 @@ test("onBlock reports unknown_country and the resolved IP", async () => {
 
 test("allowed requests expose the resolved country on ctx.state.geo", async () => {
   let captured: Record<string, unknown> | undefined;
-  const app = appWith(
-    geoBlock({ deny: ["KP"], resolveCountry: () => "us" }),
-    (state) => {
-      captured = state;
-    },
-  );
+  const app = appWith(geoBlock({ deny: ["KP"], resolveCountry: () => "us" }), (state) => {
+    captured = state;
+  });
   await app.fetch(req());
   assert.deepEqual(captured!.geo, { country: "US" });
 });
@@ -279,7 +261,7 @@ test("a custom stateKey is honored", async () => {
     }),
     (state) => {
       captured = state;
-    },
+    }
   );
   await app.fetch(req());
   assert.deepEqual(captured!.region, { country: "CA" });
@@ -291,7 +273,7 @@ test("x-real-ip is used as a fallback when x-forwarded-for is absent", async () 
       deny: ["KP"],
       trustProxyHeaders: true,
       lookupCountry: (ip) => (ip === "203.0.113.9" ? "KP" : "US"),
-    }),
+    })
   );
   const r = new Request("http://x/", {
     headers: { "x-real-ip": "203.0.113.9" },

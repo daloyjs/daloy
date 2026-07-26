@@ -67,10 +67,10 @@ export interface RedisRateLimitStoreOptions {
    */
   prefix?: string;
   /**
-  * Called when the underlying Redis call throws. The default behavior is
-  * fail-open, which allows the request and reports it as the first hit in a
-  * fresh local window. Override to fail-closed or to wire into your
-  * structured logger.
+   * Called when the underlying Redis call throws. The default behavior is
+   * fail-open, which allows the request and reports it as the first hit in a
+   * fresh local window. Override to fail-closed or to wire into your
+   * structured logger.
    */
   onError?: (err: unknown) => "fail-open" | "fail-closed";
 }
@@ -132,8 +132,7 @@ export function redisRateLimitStore(opts: RedisRateLimitStoreOptions): RateLimit
       const fullKey = prefix + key;
       try {
         const result = (await opts.client.eval(SCRIPT, [fullKey], [String(windowMs)])) as
-          | [unknown, unknown]
-          | readonly unknown[];
+          [unknown, unknown] | readonly unknown[];
         const count = toNumber(result?.[0]);
         const ttl = toNumber(result?.[1]);
         return { count, resetMs: Date.now() + ttl };
@@ -177,10 +176,7 @@ export function ioredisAdapter(client: IoredisLike): RedisCommands {
  */
 export interface NodeRedisLike {
   /** node-redis v4+ `EVAL`: script plus a `{ keys, arguments }` options object. */
-  eval(
-    script: string,
-    options: { keys: string[]; arguments: string[] }
-  ): Promise<unknown>;
+  eval(script: string, options: { keys: string[]; arguments: string[] }): Promise<unknown>;
 }
 
 /**

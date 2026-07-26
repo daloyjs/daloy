@@ -10,7 +10,6 @@
     "gen:client": "openapi-ts",
     "gen": "pnpm gen:openapi && pnpm gen:client",
     "test": "node --test tests/**/*.test.ts",
-
     "dev:4:0": "node --watch src/challenges/4-hour/exercise-0.ts",
     "dev:4:1": "node --watch src/challenges/4-hour/exercise-1.ts",
     "dev:4:2": "node --watch src/challenges/4-hour/exercise-2.ts",
@@ -20,7 +19,6 @@
     "dev:4:6": "node --watch src/challenges/4-hour/exercise-6.ts",
     "dev:4:7": "node --watch src/challenges/4-hour/exercise-7.ts",
     "dev:4:bug": "node --watch src/challenges/4-hour/challenge-2-bug.ts",
-
     "dev:sol:4:0": "node --watch src/challenges/4-hour/solutions/exercise-0-end.ts",
     "dev:sol:4:1": "node --watch src/challenges/4-hour/solutions/exercise-1-end.ts",
     "dev:sol:4:2": "node --watch src/challenges/4-hour/solutions/exercise-2-end.ts",
@@ -30,7 +28,6 @@
     "dev:sol:4:6": "node --watch src/challenges/4-hour/solutions/exercise-6-end.ts",
     "dev:sol:4:7": "node --watch src/challenges/4-hour/solutions/exercise-7-end.ts",
     "dev:sol:4:bug": "node --watch src/challenges/4-hour/solutions/challenge-2-bug-end.ts",
-
     "dev:8:0": "node --watch src/challenges/8-hour/exercise-0.ts",
     "dev:8:1": "node --watch src/challenges/8-hour/exercise-1.ts",
     "dev:8:2": "node --watch src/challenges/8-hour/exercise-2.ts",
@@ -45,7 +42,6 @@
     "dev:8:11": "node --watch src/challenges/8-hour/exercise-11.ts",
     "dev:8:feature": "node --watch src/challenges/8-hour/challenge-1-feature.ts",
     "dev:8:bug": "node --watch src/challenges/8-hour/challenge-2-bug.ts",
-
     "dev:sol:8:0": "node --watch src/challenges/8-hour/solutions/exercise-0-end.ts",
     "dev:sol:8:1": "node --watch src/challenges/8-hour/solutions/exercise-1-end.ts",
     "dev:sol:8:2": "node --watch src/challenges/8-hour/solutions/exercise-2-end.ts",

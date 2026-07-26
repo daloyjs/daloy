@@ -10,23 +10,23 @@ Build a single resource API: **`/orders`**. Use whatever validator you like (Zod
 
 ### Routes
 
-| Method | Path           | Purpose                                              | Auth     | Notes                                              |
-| ------ | -------------- | ---------------------------------------------------- | -------- | -------------------------------------------------- |
-| GET    | `/orders`      | List orders. Supports `?status=pending\|paid\|cancelled` and `?limit=` (1–100, default 20) | None     | Returns `{ items: Order[], total: number }`        |
-| GET    | `/orders/:id`  | Fetch one order                                      | None     | 404 problem+json on miss                           |
-| POST   | `/orders`      | Create a new order                                   | Bearer   | `.strict()` body, 201 returns the created order    |
-| PATCH  | `/orders/:id/cancel` | Cancel an order                                | Bearer   | 409 if already paid                                |
+| Method | Path                 | Purpose                                                                                    | Auth   | Notes                                           |
+| ------ | -------------------- | ------------------------------------------------------------------------------------------ | ------ | ----------------------------------------------- |
+| GET    | `/orders`            | List orders. Supports `?status=pending\|paid\|cancelled` and `?limit=` (1–100, default 20) | None   | Returns `{ items: Order[], total: number }`     |
+| GET    | `/orders/:id`        | Fetch one order                                                                            | None   | 404 problem+json on miss                        |
+| POST   | `/orders`            | Create a new order                                                                         | Bearer | `.strict()` body, 201 returns the created order |
+| PATCH  | `/orders/:id/cancel` | Cancel an order                                                                            | Bearer | 409 if already paid                             |
 
 ### Schema
 
 ```ts
 type Order = {
-  id: string;              // uuid
-  customerEmail: string;   // email
-  amountCents: number;     // ≥ 1, integer
+  id: string; // uuid
+  customerEmail: string; // email
+  amountCents: number; // ≥ 1, integer
   currency: "USD" | "EUR" | "GBP";
   status: "pending" | "paid" | "cancelled";
-  createdAt: string;       // ISO 8601
+  createdAt: string; // ISO 8601
 };
 ```
 
@@ -59,14 +59,14 @@ This is self-paced — there is no submission. Push the result to your own fork 
 
 ## When to Reach for Documentation
 
-| If you're stuck on…       | Read                                                       |
-| -------------------------- | ---------------------------------------------------------- |
-| Schema design              | <https://daloyjs.dev/docs/validation>                      |
-| Error types and shape      | <https://daloyjs.dev/docs/errors>                          |
-| Middleware order           | <https://daloyjs.dev/docs/security>                        |
-| Auth wiring                | <https://daloyjs.dev/docs/auth>                            |
-| OpenAPI examples           | <https://daloyjs.dev/docs/openapi>                         |
-| Hey API codegen            | <https://daloyjs.dev/docs/clients>                         |
-| Adapter swap               | <https://daloyjs.dev/docs/adapters>                        |
-| Testing patterns           | <https://daloyjs.dev/docs/testing>                         |
-| Full reference example     | <https://daloyjs.dev/docs/tutorials/bookstore>             |
+| If you're stuck on…    | Read                                           |
+| ---------------------- | ---------------------------------------------- |
+| Schema design          | <https://daloyjs.dev/docs/validation>          |
+| Error types and shape  | <https://daloyjs.dev/docs/errors>              |
+| Middleware order       | <https://daloyjs.dev/docs/security>            |
+| Auth wiring            | <https://daloyjs.dev/docs/auth>                |
+| OpenAPI examples       | <https://daloyjs.dev/docs/openapi>             |
+| Hey API codegen        | <https://daloyjs.dev/docs/clients>             |
+| Adapter swap           | <https://daloyjs.dev/docs/adapters>            |
+| Testing patterns       | <https://daloyjs.dev/docs/testing>             |
+| Full reference example | <https://daloyjs.dev/docs/tutorials/bookstore> |

@@ -34,7 +34,7 @@ app.get(
     const b = books.get(params.id);
     if (!b) throw new NotFoundError(`No book with id ${params.id}`);
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 app.post(
@@ -53,7 +53,7 @@ app.post(
   async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
-  },
+  }
 );
 
 serve(app, { port: 3000 });

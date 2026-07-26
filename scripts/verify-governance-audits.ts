@@ -75,11 +75,7 @@ function parseUtcDate(y: number, mo: number, d: number): Date | null {
   const ts = Date.UTC(y, mo - 1, d);
   if (!Number.isFinite(ts)) return null;
   const date = new Date(ts);
-  if (
-    date.getUTCFullYear() !== y ||
-    date.getUTCMonth() !== mo - 1 ||
-    date.getUTCDate() !== d
-  ) {
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) {
     return null;
   }
   return date;
@@ -93,9 +89,7 @@ function parseUtcDate(y: number, mo: number, d: number): Date | null {
  * anywhere in the file.
  */
 export function parseSecurityContacts(text: string): ParsedContacts {
-  const activeBlockMatch = text.match(
-    /<!--\s*BEGIN ACTIVE\s*-->([\s\S]*?)<!--\s*END ACTIVE\s*-->/,
-  );
+  const activeBlockMatch = text.match(/<!--\s*BEGIN ACTIVE\s*-->([\s\S]*?)<!--\s*END ACTIVE\s*-->/);
   const active: string[] = [];
   if (activeBlockMatch && activeBlockMatch[1]) {
     const handleRe = /^\s*-\s*handle:\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*$/gm;
@@ -105,9 +99,7 @@ export function parseSecurityContacts(text: string): ParsedContacts {
     }
   }
   let lastExercise: Date | null = null;
-  const dateMatch = text.match(
-    /<!--\s*last-exercise:\s*(\d{4})-(\d{2})-(\d{2})\s*-->/,
-  );
+  const dateMatch = text.match(/<!--\s*last-exercise:\s*(\d{4})-(\d{2})-(\d{2})\s*-->/);
   if (dateMatch) {
     const y = Number(dateMatch[1]);
     const mo = Number(dateMatch[2]);
@@ -131,7 +123,7 @@ export function daysBetween(later: Date, earlier: Date): number {
  */
 export function auditSecurityContactsText(
   text: string,
-  now: Date = new Date(),
+  now: Date = new Date()
 ): readonly Finding[] {
   const out: Finding[] = [];
   const parsed = parseSecurityContacts(text);
@@ -200,9 +192,7 @@ export function auditSecurityContactsText(
 /**
  * Item 1: recurring security-disclosure exercise rotation file.
  */
-export async function auditSecurityContacts(
-  now: Date = new Date(),
-): Promise<readonly Finding[]> {
+export async function auditSecurityContacts(now: Date = new Date()): Promise<readonly Finding[]> {
   const out: Finding[] = [];
   let text: string;
   try {
@@ -358,19 +348,14 @@ interface WorkflowFile {
  * @returns Findings for missing top-level permissions, missing harden-runner,
  * unpinned third-party actions, or checkout credentials left on disk.
  */
-export function auditWorkflowGovernanceText(
-  file: string,
-  text: string,
-): readonly Finding[] {
+export function auditWorkflowGovernanceText(file: string, text: string): readonly Finding[] {
   const out: Finding[] = [];
   const lines = text.split(/\r?\n/);
   // Top-level `permissions:` declaration must exist (an empty `{}` or a
   // narrow per-scope opt-in are both acceptable; the failure mode is a
   // workflow with NO top-level permissions block, which inherits the
   // GITHUB_TOKEN's broad default).
-  const hasTopLevelPerms = lines.some((l) =>
-    /^permissions\s*:/.test(l),
-  );
+  const hasTopLevelPerms = lines.some((l) => /^permissions\s*:/.test(l));
   if (!hasTopLevelPerms) {
     out.push({
       audit: "6. governance-floor",
@@ -508,9 +493,7 @@ export async function auditGovernanceFloor(): Promise<readonly Finding[]> {
  * Top-level orchestrator. Runs every audit, reports findings to stderr,
  * exits non-zero on any finding.
  */
-export async function runGovernanceAudits(
-  now: Date = new Date(),
-): Promise<readonly Finding[]> {
+export async function runGovernanceAudits(now: Date = new Date()): Promise<readonly Finding[]> {
   const all: Finding[] = [];
   all.push(...(await auditSecurityContacts(now)));
   all.push(...(await auditRuntimeDeps()));
@@ -533,7 +516,7 @@ async function main(): Promise<void> {
     console.log(
       warnings.length === 0
         ? "verify-governance-audits: all static gates passed (items 1, 2/3, 4, 5, 6)."
-        : `verify-governance-audits: all static gates passed with ${warnings.length} warning${warnings.length === 1 ? "" : "s"} (items 1, 2/3, 4, 5, 6).`,
+        : `verify-governance-audits: all static gates passed with ${warnings.length} warning${warnings.length === 1 ? "" : "s"} (items 1, 2/3, 4, 5, 6).`
     );
     return;
   }
@@ -546,7 +529,7 @@ async function main(): Promise<void> {
     `verify-governance-audits: ${errors.length} error${errors.length === 1 ? "" : "s"}` +
       (warnings.length === 0
         ? "."
-        : ` and ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`),
+        : ` and ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`)
   );
   process.exitCode = 1;
 }

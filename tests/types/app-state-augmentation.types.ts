@@ -24,9 +24,7 @@ declare module "../../src/types.js" {
 type Expect<T extends true> = T;
 /** Structural equality check between two types. */
 type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-    ? true
-    : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 /** Detects the `any` type (only `any` absorbs the impossible `0 extends 1`). */
 type IsAny<T> = 0 extends 1 & T ? true : false;
 

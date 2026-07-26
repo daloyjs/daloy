@@ -36,7 +36,15 @@ interface Res {
   headers: Headers;
   text: string;
 }
-async function http(method: string, path: string, opts: { headers?: Record<string, string>; body?: string | Uint8Array; redirect?: RequestRedirect } = {}): Promise<Res> {
+async function http(
+  method: string,
+  path: string,
+  opts: {
+    headers?: Record<string, string>;
+    body?: string | Uint8Array;
+    redirect?: RequestRedirect;
+  } = {}
+): Promise<Res> {
   const res = await fetch(BASE + path, {
     method,
     headers: opts.headers,
@@ -46,19 +54,27 @@ async function http(method: string, path: string, opts: { headers?: Record<strin
   return { status: res.status, headers: res.headers, text: await res.text() };
 }
 
-function rawSend(port: number, payload: string | Buffer, waitMs = 1500): Promise<{ raw: string; statusLine: string; status: number }> {
+function rawSend(
+  port: number,
+  payload: string | Buffer,
+  waitMs = 1500
+): Promise<{ raw: string; statusLine: string; status: number }> {
   return new Promise((resolve) => {
     const sock = net.connect(port, HOST);
     let buf = "";
     const finish = () => {
-      try { sock.destroy(); } catch {}
+      try {
+        sock.destroy();
+      } catch {}
       const statusLine = buf.split("\r\n")[0] ?? "";
       const m = /HTTP\/\d\.\d\s+(\d{3})/.exec(statusLine);
       resolve({ raw: buf, statusLine, status: m ? Number(m[1]) : 0 });
     };
     sock.setTimeout(waitMs);
     sock.on("connect", () => sock.write(payload));
-    sock.on("data", (d) => { buf += d.toString("latin1"); });
+    sock.on("data", (d) => {
+      buf += d.toString("latin1");
+    });
     sock.on("timeout", finish);
     sock.on("close", finish);
     sock.on("error", finish);
@@ -66,7 +82,8 @@ function rawSend(port: number, payload: string | Buffer, waitMs = 1500): Promise
 }
 
 const seg = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-const forgeJwt = (header: object, payload: object, sig = "AAAA") => `${seg(header)}.${seg(payload)}.${sig}`;
+const forgeJwt = (header: object, payload: object, sig = "AAAA") =>
+  `${seg(header)}.${seg(payload)}.${sig}`;
 
 // ---------------------------------------------------------------------------
 // WAF evasion / injection bypasses
@@ -82,7 +99,7 @@ async function wafEvasion() {
     ["SQLi with block comment", "'/**/OR/**/1=1"],
     ["SQLi lowercase or", "' or '1'='1"],
     ["NoSQL array syntax", '{"name":{"$in":[null]}}'],
-    ["XSS without script tag", '<img src=x onerror=alert(1)>'],
+    ["XSS without script tag", "<img src=x onerror=alert(1)>"],
     ["XSS encoded", "%3Cimg%20src%3Dx%20onerror%3Dalert%281%29%3E"],
     ["CMDi newline", "\ncat /etc/passwd"],
     ["CMDi backtick", "`whoami`"],
@@ -176,7 +193,8 @@ async function ssrfBypass() {
     title: "fetchGuard pinDns defaults on (Node http: rebinding closed)",
     severity: "info",
     attack: "Inspect target.ts: fetchGuard() with no options on Node",
-    observed: "fetchGuard() uses defaults; pinDns auto-enables on Node for http: (https: residual remains)",
+    observed:
+      "fetchGuard() uses defaults; pinDns auto-enables on Node for http: (https: residual remains)",
     verdict: "DEFENDED",
   });
 }
@@ -189,7 +207,11 @@ async function jwtBypass() {
   const cat = "JWT bypass variants";
 
   // Empty signature with alg HS256.
-  const emptySig = forgeJwt({ alg: "HS256", typ: "JWT" }, { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) + 600 }, "");
+  const emptySig = forgeJwt(
+    { alg: "HS256", typ: "JWT" },
+    { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) + 600 },
+    ""
+  );
   const r1 = await http("GET", "/admin", { headers: { authorization: `Bearer ${emptySig}` } });
   record({
     category: cat,
@@ -213,7 +235,10 @@ async function jwtBypass() {
   });
 
   // Expired token.
-  const expired = forgeJwt({ alg: "HS256", typ: "JWT" }, { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) - 60 });
+  const expired = forgeJwt(
+    { alg: "HS256", typ: "JWT" },
+    { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) - 60 }
+  );
   const r3 = await http("GET", "/admin", { headers: { authorization: `Bearer ${expired}` } });
   record({
     category: cat,
@@ -225,7 +250,10 @@ async function jwtBypass() {
   });
 
   // kid header injection / path traversal.
-  const kidTraversal = forgeJwt({ alg: "HS256", typ: "JWT", kid: "../../../etc/passwd" }, { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) + 600 });
+  const kidTraversal = forgeJwt(
+    { alg: "HS256", typ: "JWT", kid: "../../../etc/passwd" },
+    { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) + 600 }
+  );
   const r4 = await http("GET", "/admin", { headers: { authorization: `Bearer ${kidTraversal}` } });
   record({
     category: cat,
@@ -270,7 +298,12 @@ async function pathBypass() {
       severity: "critical",
       attack: `GET ${p}`,
       observed: `status ${status}`,
-      verdict: status === 401 || status === 403 || status === 404 ? "DEFENDED" : status === 200 ? "VULNERABLE" : "INFO",
+      verdict:
+        status === 401 || status === 403 || status === 404
+          ? "DEFENDED"
+          : status === 200
+            ? "VULNERABLE"
+            : "INFO",
     });
   }
 }
@@ -294,7 +327,10 @@ async function wireLevel(port: number) {
   });
 
   // Line folding (RFC 2616 obsolete).
-  const folded = await rawSend(port, "GET /healthz HTTP/1.1\r\nHost: t\r\nX-Fold: first\r\n second\r\n\r\n");
+  const folded = await rawSend(
+    port,
+    "GET /healthz HTTP/1.1\r\nHost: t\r\nX-Fold: first\r\n second\r\n\r\n"
+  );
   record({
     category: cat,
     title: "Header line folding",
@@ -305,7 +341,10 @@ async function wireLevel(port: number) {
   });
 
   // Chunked encoding with chunk extensions.
-  const chunkedExt = await rawSend(port, "POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n5;ext=val\r\n{\"a\":\r\n0\r\n\r\n");
+  const chunkedExt = await rawSend(
+    port,
+    'POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n5;ext=val\r\n{"a":\r\n0\r\n\r\n'
+  );
   record({
     category: cat,
     title: "Chunked encoding with chunk extensions",
@@ -316,7 +355,10 @@ async function wireLevel(port: number) {
   });
 
   // Invalid Content-Length (non-numeric).
-  const badCl = await rawSend(port, "POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: abc\r\n\r\n{}");
+  const badCl = await rawSend(
+    port,
+    "POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: abc\r\n\r\n{}"
+  );
   record({
     category: cat,
     title: "Invalid non-numeric Content-Length",
@@ -327,7 +369,10 @@ async function wireLevel(port: number) {
   });
 
   // Negative Content-Length.
-  const negCl = await rawSend(port, "POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: -1\r\n\r\n{}");
+  const negCl = await rawSend(
+    port,
+    "POST /sink HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: -1\r\n\r\n{}"
+  );
   record({
     category: cat,
     title: "Negative Content-Length",
@@ -411,8 +456,8 @@ async function dosVectors() {
       http("POST", "/login", {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ user: "alice", pass: "wrong" }),
-      }),
-    ),
+      })
+    )
   );
   const okCount = burst.filter((r) => r.status === 401).length;
   const throttledCount = burst.filter((r) => r.status === 429).length;
@@ -428,14 +473,20 @@ async function dosVectors() {
   // Very long JSON key (parser / memory stress). 422 means the schema rejected it.
   const longKey = JSON.stringify({ ["k".repeat(100_000)]: "v" });
   const t0 = Date.now();
-  const r1 = await http("POST", "/sink", { headers: { "content-type": "application/json" }, body: longKey });
+  const r1 = await http("POST", "/sink", {
+    headers: { "content-type": "application/json" },
+    body: longKey,
+  });
   record({
     category: cat,
     title: "Very long JSON object key",
     severity: "medium",
     attack: "POST /sink with 100k-character key",
     observed: `status ${r1.status} in ${Date.now() - t0}ms`,
-    verdict: r1.status === 400 || r1.status === 413 || r1.status === 422 ? "DEFENDED" : "LIKELY-VULNERABLE",
+    verdict:
+      r1.status === 400 || r1.status === 413 || r1.status === 422
+        ? "DEFENDED"
+        : "LIKELY-VULNERABLE",
   });
 
   // NaN / Infinity in numeric route.
@@ -509,7 +560,10 @@ async function cacheAndHostAbuse() {
   });
 
   // Host header with null byte.
-  const hostNull = await rawSend(Number(BASE.split(":").pop()), "GET /healthz HTTP/1.1\r\nHost: 127.0.0.1\x00evil.com\r\n\r\n");
+  const hostNull = await rawSend(
+    Number(BASE.split(":").pop()),
+    "GET /healthz HTTP/1.1\r\nHost: 127.0.0.1\x00evil.com\r\n\r\n"
+  );
   record({
     category: cat,
     title: "Null byte in Host header",
@@ -574,7 +628,12 @@ async function multipartBypass() {
     severity: "high",
     attack: 'POST /upload with filename="../../../etc/passwd"',
     observed: `status ${r1.status}`,
-    verdict: r1.status === 400 || r1.status === 422 || r1.status === 403 ? "DEFENDED" : r1.status === 201 ? "VULNERABLE" : "INFO",
+    verdict:
+      r1.status === 400 || r1.status === 422 || r1.status === 403
+        ? "DEFENDED"
+        : r1.status === 201
+          ? "VULNERABLE"
+          : "INFO",
   });
 
   // Missing boundary.
@@ -603,7 +662,8 @@ function report(): number {
     if (!byCat.has(f.category)) byCat.set(f.category, []);
     byCat.get(f.category)!.push(f);
   }
-  const icon = (v: Verdict) => (v === "DEFENDED" ? "✅" : v === "VULNERABLE" ? "🚨" : v === "LIKELY-VULNERABLE" ? "⚠️" : "ℹ️ ");
+  const icon = (v: Verdict) =>
+    v === "DEFENDED" ? "✅" : v === "VULNERABLE" ? "🚨" : v === "LIKELY-VULNERABLE" ? "⚠️" : "ℹ️ ";
 
   const line = "═".repeat(78);
   console.log("\n" + line);
@@ -625,7 +685,9 @@ function report(): number {
   const def = findings.filter((f) => f.verdict === "DEFENDED");
   const info = findings.filter((f) => f.verdict === "INFO");
   console.log("\n" + line);
-  console.log(`  SUMMARY: ${def.length} DEFENDED · ${vuln.length} VULNERABLE · ${likely.length} LIKELY-VULNERABLE · ${info.length} INFO  (of ${findings.length} probes)`);
+  console.log(
+    `  SUMMARY: ${def.length} DEFENDED · ${vuln.length} VULNERABLE · ${likely.length} LIKELY-VULNERABLE · ${info.length} INFO  (of ${findings.length} probes)`
+  );
   if (vuln.length === 0 && likely.length === 0) {
     console.log("  VERDICT: No exploitable weakness found.");
   } else {
@@ -660,7 +722,9 @@ function startTarget(): Promise<{ port: number; portB: number; kill: () => void 
         resolve({ port: Number(m[1]), portB: Number(m[2]), kill: () => child.kill("SIGKILL") });
       }
     });
-    child.stderr.on("data", (d) => { stderr += d.toString(); });
+    child.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
     child.on("exit", (code) => {
       clearTimeout(timer);
       reject(new Error(`target exited early (code ${code})\n${stderr}`));
@@ -688,7 +752,9 @@ async function main() {
     await multipartBypass();
   } finally {
     let alive = false;
-    try { alive = (await http("GET", "/healthz")).status === 200; } catch {}
+    try {
+      alive = (await http("GET", "/healthz")).status === 200;
+    } catch {}
     record({
       category: "Resilience",
       title: "Target process survived the custom engagement",

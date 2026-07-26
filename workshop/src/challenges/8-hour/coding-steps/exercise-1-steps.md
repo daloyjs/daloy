@@ -55,11 +55,11 @@ Open `/docs`. The 200 response section now has an "Example" dropdown.
 
 ## Code-change cheat sheet
 
-| Step | Where           | Change                                                                  |
-| ---- | --------------- | ----------------------------------------------------------------------- |
-| 1    | Body of file    | Register `GET /books/:id` per 4-hour exercise 1                          |
-| 2    | Above `request` | Add `summary` and `description`                                          |
-| 3    | `responses.200` | Replace single example with `{ foundation, dune }` named examples        |
+| Step | Where           | Change                                                            |
+| ---- | --------------- | ----------------------------------------------------------------- |
+| 1    | Body of file    | Register `GET /books/:id` per 4-hour exercise 1                   |
+| 2    | Above `request` | Add `summary` and `description`                                   |
+| 3    | `responses.200` | Replace single example with `{ foundation, dune }` named examples |
 
 ## Common mistakes
 

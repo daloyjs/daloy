@@ -66,30 +66,24 @@ test("concurrencyLimit() requires a positive maxConcurrent", () => {
 });
 
 test("concurrencyLimit() rejects a negative maxQueue", () => {
-  assert.throws(
-    () => concurrencyLimit({ maxConcurrent: 1, maxQueue: -1 }),
-    /maxQueue/,
-  );
+  assert.throws(() => concurrencyLimit({ maxConcurrent: 1, maxQueue: -1 }), /maxQueue/);
 });
 
 test("concurrencyLimit() rejects a negative queueTimeoutMs", () => {
-  assert.throws(
-    () => concurrencyLimit({ maxConcurrent: 1, queueTimeoutMs: -5 }),
-    /queueTimeoutMs/,
-  );
+  assert.throws(() => concurrencyLimit({ maxConcurrent: 1, queueTimeoutMs: -5 }), /queueTimeoutMs/);
 });
 
 test("concurrencyLimit() rejects a negative retryAfterSeconds", () => {
   assert.throws(
     () => concurrencyLimit({ maxConcurrent: 1, retryAfterSeconds: -1 }),
-    /retryAfterSeconds/,
+    /retryAfterSeconds/
   );
 });
 
 test('scope "client" requires an identity source', () => {
   assert.throws(
     () => concurrencyLimit({ maxConcurrent: 1, scope: "client" }),
-    /scope "client" requires/,
+    /scope "client" requires/
   );
 });
 
@@ -137,7 +131,7 @@ test("queue-full rejection fires onReject with reason and counts", async () => {
   const rejections: ConcurrencyRejection[] = [];
   const app = appWith(
     { maxConcurrent: 1, maxQueue: 0, onReject: (r) => rejections.push(r) },
-    () => gate.promise,
+    () => gate.promise
   );
 
   const p1 = app.fetch(req());
@@ -162,7 +156,7 @@ test("queue-timeout rejects a waiter that waits too long", async () => {
       queueTimeoutMs: 30,
       onReject: (r) => rejections.push(r),
     },
-    () => gate.promise,
+    () => gate.promise
   );
 
   const p1 = app.fetch(req()); // holds the slot past the timeout
@@ -177,10 +171,7 @@ test("queue-timeout rejects a waiter that waits too long", async () => {
 
 test("retryAfterSeconds: 0 omits the Retry-After header", async () => {
   const gate = deferred();
-  const app = appWith(
-    { maxConcurrent: 1, retryAfterSeconds: 0 },
-    () => gate.promise,
-  );
+  const app = appWith({ maxConcurrent: 1, retryAfterSeconds: 0 }, () => gate.promise);
   const p1 = app.fetch(req());
   await new Promise((r) => setTimeout(r, 10));
   const r2 = await app.fetch(req());
@@ -222,7 +213,7 @@ test('scope "client" isolates budgets per client identity', async () => {
   const gate = deferred();
   const app = appWith(
     { maxConcurrent: 1, scope: "client", trustProxyHeaders: true },
-    () => gate.promise,
+    () => gate.promise
   );
 
   const a1 = app.fetch(req("/slow", "10.0.0.1"));
@@ -241,7 +232,7 @@ test('scope "client" fails open when identity is unresolved', async () => {
   const gate = deferred();
   const app = appWith(
     { maxConcurrent: 1, scope: "client", trustProxyHeaders: true },
-    () => gate.promise,
+    () => gate.promise
   );
   // No x-forwarded-for -> undefined key -> not limited -> all admitted.
   const p1 = app.fetch(req("/slow"));
@@ -257,10 +248,9 @@ test("custom scope function can skip limiting by returning undefined", async () 
   const app = appWith(
     {
       maxConcurrent: 1,
-      scope: (ctx) =>
-        ctx.request.headers.get("x-tenant") ?? undefined,
+      scope: (ctx) => ctx.request.headers.get("x-tenant") ?? undefined,
     },
-    () => gate.promise,
+    () => gate.promise
   );
   // No tenant header -> undefined -> unlimited.
   const p1 = app.fetch(req("/slow"));

@@ -5,20 +5,22 @@
 ## Step 1 — Tight `secureHeaders` with CSP
 
 ```ts
-app.use(secureHeaders({
-  contentSecurityPolicy: {
-    directives: {
-      "default-src": ["'self'"],
-      "script-src":  ["'self'"],
-      "style-src":   ["'self'", "'unsafe-inline'"],
-      "img-src":     ["'self'", "data:"],
-      "connect-src": ["'self'"],
-      "frame-ancestors": ["'none'"],
-      "base-uri":    ["'self'"],
-      "form-action": ["'self'"],
+app.use(
+  secureHeaders({
+    contentSecurityPolicy: {
+      directives: {
+        "default-src": ["'self'"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:"],
+        "connect-src": ["'self'"],
+        "frame-ancestors": ["'none'"],
+        "base-uri": ["'self'"],
+        "form-action": ["'self'"],
+      },
     },
-  },
-}));
+  })
+);
 ```
 
 **Why `'unsafe-inline'` on `style-src` only:** Scalar (the `/docs` renderer) injects style tags. Allowing it for styles is low-risk; allowing it for `script-src` is catastrophic. The rest of the policy stays strict.
@@ -26,10 +28,12 @@ app.use(secureHeaders({
 ## Step 2 — Explicit CORS origin list
 
 ```ts
-app.use(cors({
-  origin: ["https://app.example.com", "http://localhost:5173"],
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: ["https://app.example.com", "http://localhost:5173"],
+    credentials: true,
+  })
+);
 ```
 
 **Why a list and not a wildcard:** combining `credentials: true` with `origin: "*"` is rejected by browsers and is also genuinely unsafe (it lets any origin send authenticated requests). Enumerate the real origins.

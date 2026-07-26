@@ -4,7 +4,10 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 const VALID_ADMIN_TOKEN = "admin-token";
-const VALID_API_KEYS = new Map([["partner-a", "team-blue"], ["partner-b", "team-red"]]);
+const VALID_API_KEYS = new Map([
+  ["partner-a", "team-blue"],
+  ["partner-b", "team-red"],
+]);
 
 function constantTimeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -45,12 +48,16 @@ app.post(
     auth: { scheme: "bearer" },
     hooks: bearerAuth({ validate: async (token) => constantTimeEqual(token, VALID_ADMIN_TOKEN) }),
     request: { body: z.object({ id: z.string().min(1), title: z.string().min(1) }).strict() },
-    responses: { 201: { description: "Created", body: BookSchema }, 401: { description: "Missing token" }, 403: { description: "Bad token" } },
+    responses: {
+      201: { description: "Created", body: BookSchema },
+      401: { description: "Missing token" },
+      403: { description: "Bad token" },
+    },
   },
   async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
-  },
+  }
 );
 
 app.get(
@@ -66,7 +73,7 @@ app.get(
       403: { description: "Bad key" },
     },
   },
-  async () => ({ status: 200 as const, body: { items: [...books.values()] } }),
+  async () => ({ status: 200 as const, body: { items: [...books.values()] } })
 );
 
 serve(app, { port: 3000 });

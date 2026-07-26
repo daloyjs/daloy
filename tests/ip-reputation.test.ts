@@ -11,7 +11,10 @@ import {
 // ---------- helpers ----------
 
 /** Feed that yields a fixed list, recording how many times it was fetched. */
-function staticFeed(name: string, entries: readonly string[]): IpReputationFeed & {
+function staticFeed(
+  name: string,
+  entries: readonly string[]
+): IpReputationFeed & {
   calls: number;
 } {
   return {
@@ -53,21 +56,21 @@ test("ipReputation() rejects an invalid mode", () => {
   assert.throws(
     // @ts-expect-error intentionally invalid
     () => ipReputation({ feeds: [staticFeed("f", [])], mode: "warn" }),
-    /mode must be/,
+    /mode must be/
   );
 });
 
 test("ipReputation() rejects a negative refreshIntervalMs", () => {
   assert.throws(
     () => ipReputation({ feeds: [staticFeed("f", [])], refreshIntervalMs: -1 }),
-    /refreshIntervalMs/,
+    /refreshIntervalMs/
   );
 });
 
 test("ipReputation() rejects a non-positive fetchTimeoutMs", () => {
   assert.throws(
     () => ipReputation({ feeds: [staticFeed("f", [])], fetchTimeoutMs: 0 }),
-    /fetchTimeoutMs/,
+    /fetchTimeoutMs/
   );
 });
 
@@ -285,8 +288,7 @@ test("urlFeed parses newline + Spamhaus-DROP-style lists, skips comments", async
     "// trailing comment style",
     "10.0.0.0/8",
   ].join("\n");
-  const fetchImpl = (async () =>
-    new Response(body, { status: 200 })) as unknown as typeof fetch;
+  const fetchImpl = (async () => new Response(body, { status: 200 })) as unknown as typeof fetch;
   const feed = urlFeed("https://example.test/drop.txt", {
     name: "drop",
     fetchImpl,
@@ -297,8 +299,7 @@ test("urlFeed parses newline + Spamhaus-DROP-style lists, skips comments", async
 });
 
 test("urlFeed throws on a non-OK response", async () => {
-  const fetchImpl = (async () =>
-    new Response("nope", { status: 503 })) as unknown as typeof fetch;
+  const fetchImpl = (async () => new Response("nope", { status: 503 })) as unknown as typeof fetch;
   const feed = urlFeed("https://example.test/drop.txt", { fetchImpl });
   await assert.rejects(() => feed.fetch(), /responded 503/);
 });

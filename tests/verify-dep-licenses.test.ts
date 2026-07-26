@@ -19,15 +19,12 @@ test("extractLicenseString reads legacy {type} object", () => {
 test("extractLicenseString reads legacy licenses[] array", () => {
   assert.equal(
     extractLicenseString({ licenses: [{ type: "MIT" }, { type: "Apache-2.0" }] }),
-    "(MIT OR Apache-2.0)",
+    "(MIT OR Apache-2.0)"
   );
 });
 
 test("extractLicenseString reads legacy licenses[] of strings", () => {
-  assert.equal(
-    extractLicenseString({ licenses: ["MIT", "ISC"] }),
-    "(MIT OR ISC)",
-  );
+  assert.equal(extractLicenseString({ licenses: ["MIT", "ISC"] }), "(MIT OR ISC)");
 });
 
 test("extractLicenseString returns NOASSERTION for missing/empty/null", () => {
@@ -83,10 +80,7 @@ test("isLicenseAllowed rejects 'SEE LICENSE IN ...' (not machine-verifiable)", (
 });
 
 test("evaluatePackage returns null for an allowed package", () => {
-  assert.equal(
-    evaluatePackage({ name: "foo", version: "1.0.0", license: "MIT" }),
-    null,
-  );
+  assert.equal(evaluatePackage({ name: "foo", version: "1.0.0", license: "MIT" }), null);
 });
 
 test("evaluatePackage flags missing license field", () => {
@@ -114,14 +108,10 @@ test("evaluatePackage honours a custom allow-list", () => {
   // Caller can tighten or loosen; here we tighten to MIT-only.
   const tightened = new Set(["MIT"]);
   assert.equal(
-    evaluatePackage({ name: "p", version: "1.0.0", license: "Apache-2.0" }, tightened)
-      ?.reason,
-    "license 'Apache-2.0' is not on the Daloy allow-list",
+    evaluatePackage({ name: "p", version: "1.0.0", license: "Apache-2.0" }, tightened)?.reason,
+    "license 'Apache-2.0' is not on the Daloy allow-list"
   );
-  assert.equal(
-    evaluatePackage({ name: "p", version: "1.0.0", license: "MIT" }, tightened),
-    null,
-  );
+  assert.equal(evaluatePackage({ name: "p", version: "1.0.0", license: "MIT" }, tightened), null);
 });
 
 test("ALLOWED_LICENSES contains the permissive OSI core", () => {
@@ -150,6 +140,6 @@ test("iteratePnpmManifests yields every installed dep with an allowed license (r
   assert.equal(
     offenders,
     0,
-    "real dev-dependency closure has a non-allow-listed license; see scripts/verify-dep-licenses.ts",
+    "real dev-dependency closure has a non-allow-listed license; see scripts/verify-dep-licenses.ts"
   );
 });

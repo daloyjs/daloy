@@ -87,8 +87,7 @@ const HEX_ESCAPE_RUN_RE = /(?:\\x[0-9a-fA-F]{2}){4,}/;
  * sequences for non-ASCII characters (e.g. `\u2603` for a snowman in a
  * test fixture).
  */
-const UNICODE_ESCAPE_RUN_RE =
-  /(?:\\u00[2-7][0-9a-fA-F]){4,}|(?:\\u\{0{0,4}[2-7][0-9a-fA-F]\}){4,}/;
+const UNICODE_ESCAPE_RUN_RE = /(?:\\u00[2-7][0-9a-fA-F]){4,}|(?:\\u\{0{0,4}[2-7][0-9a-fA-F]\}){4,}/;
 
 /**
  * 200+ char body of base64 / base64url alphabet, no whitespace. The
@@ -100,7 +99,7 @@ const STRING_LITERAL_RE = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|`((?:\\.|[^`\
 
 export function findEncodedPayloadLiterals(
   file: string,
-  source: string,
+  source: string
 ): readonly EncodedPayloadFinding[] {
   const out: EncodedPayloadFinding[] = [];
   const lines = source.split(/\r?\n/);
@@ -185,7 +184,7 @@ async function main(): Promise<void> {
       const findings = findEncodedPayloadLiterals(rel, text);
       for (const f of findings) {
         console.error(
-          `${f.file}:${f.line}: forbidden encoded-payload literal (${f.reason}): ${f.text}`,
+          `${f.file}:${f.line}: forbidden encoded-payload literal (${f.reason}): ${f.text}`
         );
         total++;
       }
@@ -198,7 +197,7 @@ async function main(): Promise<void> {
         "`\\xXX` / `\\u00XX` escape runs or opaque 200+ char base64 blobs — the visible-but-unreadable " +
         "carrier shapes catalogued by Socket's Obfuscation 101 write-up " +
         "(https://socket.dev/blog/obfuscation-101-the-tricks-behind-malicious-code). " +
-        "Write URLs and commands as plain text, and keep crypto test vectors under `tests/`.",
+        "Write URLs and commands as plain text, and keep crypto test vectors under `tests/`."
     );
     process.exitCode = 1;
   }

@@ -56,12 +56,7 @@
  */
 
 import type { BaseContext, Hooks, PreBodyContext } from "./types.js";
-import {
-  BadRequestError,
-  ForbiddenError,
-  NotFoundError,
-  UnauthorizedError,
-} from "./errors.js";
+import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors.js";
 import { subdomains } from "./subdomains.js";
 
 /**
@@ -72,7 +67,7 @@ import { subdomains } from "./subdomains.js";
  * @since 0.42.0
  */
 export type TenantResolver = (
-  ctx: BaseContext<any, any>,
+  ctx: BaseContext<any, any>
 ) => string | null | undefined | Promise<string | null | undefined>;
 
 /**
@@ -312,7 +307,9 @@ export interface TenancyOptions {
    * rejected with {@link invalidStatus}. Array entries are validated against
    * the normalizer at construction time (a malformed entry throws).
    */
-  allow?: readonly string[] | ((tenantId: string, ctx: BaseContext<any, any>) => boolean | Promise<boolean>);
+  allow?:
+    | readonly string[]
+    | ((tenantId: string, ctx: BaseContext<any, any>) => boolean | Promise<boolean>);
   /**
    * Normalize/validate a raw resolved id. Return `undefined` to reject it.
    * Default {@link defaultTenantNormalize} (trim + lowercase + strict charset).
@@ -373,7 +370,7 @@ export function tenancy(opts: TenancyOptions): Hooks {
       const n = normalize(entry);
       if (n === undefined) {
         throw new Error(
-          `tenancy(): allowlist entry ${JSON.stringify(entry)} is not a valid tenant id.`,
+          `tenancy(): allowlist entry ${JSON.stringify(entry)} is not a valid tenant id.`
         );
       }
       allowSet.add(n);
@@ -469,7 +466,7 @@ export interface TenantScopeOptions {
  * @since 0.42.0
  */
 export function tenantScope(
-  opts: TenantScopeOptions = {},
+  opts: TenantScopeOptions = {}
 ): (ctx: BaseContext<any, any> | PreBodyContext<any>) => string {
   const stateKey = opts.stateKey ?? "tenant";
   const fallback = opts.fallback ?? "tenant:unknown";

@@ -95,10 +95,7 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
           port: number;
           url?: URL;
           stop: (force?: boolean) => void;
-          upgrade?: (
-            req: Request,
-            opts?: { data?: unknown; headers?: HeadersInit },
-          ) => boolean;
+          upgrade?: (req: Request, opts?: { data?: unknown; headers?: HeadersInit }) => boolean;
         };
       };
     }
@@ -111,10 +108,7 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
   // Fulfil the conn-info contract with the immediate TCP peer from Bun's
   // native `server.requestIP()`, so `getConnInfo` / `resolveClientIp` /
   // `behindProxy` work on Bun. Never derived from spoofable headers.
-  const tagConnInfo = (
-    req: Request,
-    server: BunRequestIPServer | undefined,
-  ): void => {
+  const tagConnInfo = (req: Request, server: BunRequestIPServer | undefined): void => {
     const ip = server?.requestIP?.(req);
     if (ip) {
       setConnInfo(req, {
@@ -130,11 +124,8 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
       ? (
           req: Request,
           server: BunRequestIPServer & {
-            upgrade: (
-              req: Request,
-              opts?: { data?: unknown; headers?: HeadersInit },
-            ) => boolean;
-          },
+            upgrade: (req: Request, opts?: { data?: unknown; headers?: HeadersInit }) => boolean;
+          }
         ) => {
           tagConnInfo(req, server);
           if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
@@ -162,7 +153,7 @@ export function serve(app: App, opts: BunServeOptions = {}): BunServerHandle {
         {
           status: 500,
           headers: { "content-type": "application/problem+json" },
-        },
+        }
       );
     },
   };
@@ -217,10 +208,7 @@ interface BunRequestIPServer {
 // ---------- WebSocket integration ----------
 
 interface BunWebSocketServer {
-  upgrade(
-    req: Request,
-    opts?: { data?: unknown; headers?: HeadersInit },
-  ): boolean;
+  upgrade(req: Request, opts?: { data?: unknown; headers?: HeadersInit }): boolean;
 }
 
 interface BunNativeWebSocket {
@@ -251,7 +239,7 @@ interface BunUpgradeData {
 async function tryBunUpgrade(
   app: App,
   req: Request,
-  server: BunWebSocketServer,
+  server: BunWebSocketServer
 ): Promise<Response | undefined> {
   const url = new URL(req.url);
   const match = app.webSocketRoutes.find(url.pathname);
@@ -309,33 +297,23 @@ function buildBunWebSocketConfig(app: App) {
     open(ws: BunNativeWebSocket) {
       const data = ws.data as BunUpgradeData | undefined;
       if (!data) return;
-      const conn = new BunWebSocketConnection(
-        ws,
-        data.protocol,
-        data.options ?? runtimeOptions,
-      );
+      const conn = new BunWebSocketConnection(ws, data.protocol, data.options ?? runtimeOptions);
       data.conn = conn;
       invokeBunHandler(
         app,
         data,
         "WebSocket open() handler failed",
         () => data.handler.open?.(conn, data.ctx),
-        true,
+        true
       );
     },
-    message(
-      ws: BunNativeWebSocket,
-      msg: string | Buffer | Uint8Array | ArrayBuffer,
-    ) {
+    message(ws: BunNativeWebSocket, msg: string | Buffer | Uint8Array | ArrayBuffer) {
       const data = ws.data as BunUpgradeData | undefined;
       if (!data?.conn) return;
       const isBinary = typeof msg !== "string";
       const options = data.options ?? runtimeOptions;
       if (payloadByteLength(msg) > options.maxPayloadLength) {
-        data.conn.close(
-          WS_CLOSE_CODE.MESSAGE_TOO_BIG,
-          "maxPayloadLength exceeded",
-        );
+        data.conn.close(WS_CLOSE_CODE.MESSAGE_TOO_BIG, "maxPayloadLength exceeded");
         return;
       }
       invokeBunHandler(
@@ -343,7 +321,7 @@ function buildBunWebSocketConfig(app: App) {
         data,
         "WebSocket message() handler failed",
         () => data.handler.message?.(data.conn!, msg as any, isBinary),
-        true,
+        true
       );
     },
     close(ws: BunNativeWebSocket, code: number, reason: string) {
@@ -351,18 +329,14 @@ function buildBunWebSocketConfig(app: App) {
       if (!data?.conn) return;
       data.conn._markClosed();
       invokeBunHandler(app, data, "WebSocket close() handler threw", () =>
-        data.handler.close?.(
-          data.conn!,
-          code ?? WS_CLOSE_CODE.NO_STATUS_RECEIVED,
-          reason ?? "",
-        ),
+        data.handler.close?.(data.conn!, code ?? WS_CLOSE_CODE.NO_STATUS_RECEIVED, reason ?? "")
       );
     },
     drain(ws: BunNativeWebSocket) {
       const data = ws.data as BunUpgradeData | undefined;
       if (!data?.conn) return;
       invokeBunHandler(app, data, "WebSocket drain() handler threw", () =>
-        data.handler.drain?.(data.conn!),
+        data.handler.drain?.(data.conn!)
       );
     },
   };
@@ -376,7 +350,7 @@ class BunWebSocketConnection implements WebSocketConnection {
   constructor(
     private ws: BunNativeWebSocket,
     readonly protocol: string,
-    private options: NormalizedWebSocketOptions,
+    private options: NormalizedWebSocketOptions
   ) {}
 
   get binaryType(): "arraybuffer" | "nodebuffer" {
@@ -401,13 +375,10 @@ class BunWebSocketConnection implements WebSocketConnection {
     } else if (ArrayBuffer.isView(data)) {
       sent = this.ws.send(
         new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-        this.options.perMessageDeflate,
+        this.options.perMessageDeflate
       );
     } else {
-      sent = this.ws.send(
-        new Uint8Array(data as ArrayBufferLike),
-        this.options.perMessageDeflate,
-      );
+      sent = this.ws.send(new Uint8Array(data as ArrayBufferLike), this.options.perMessageDeflate);
     }
     void sent;
     if (
@@ -447,13 +418,13 @@ function invokeBunHandler(
   data: BunUpgradeData,
   label: string,
   run: () => void | Promise<void> | undefined,
-  notifyError = false,
+  notifyError = false
 ): void {
   try {
     const result = run();
     if (result && typeof (result as Promise<void>).then === "function") {
       void (result as Promise<void>).catch((err) =>
-        reportBunHandlerFailure(app, data, label, err, notifyError),
+        reportBunHandlerFailure(app, data, label, err, notifyError)
       );
     }
   } catch (err) {
@@ -466,37 +437,32 @@ function reportBunHandlerFailure(
   data: BunUpgradeData,
   label: string,
   err: unknown,
-  notifyError: boolean,
+  notifyError: boolean
 ): void {
   app.log.error({ err }, label);
   if (notifyError && data.conn) {
     invokeBunHandler(app, data, "WebSocket error() handler threw", () =>
-      data.handler.error?.(data.conn!, err),
+      data.handler.error?.(data.conn!, err)
     );
   }
 }
 
 function validateControlPayload(
-  data: string | ArrayBufferLike | ArrayBufferView | undefined,
+  data: string | ArrayBufferLike | ArrayBufferView | undefined
 ): void {
-  if (
-    data !== undefined &&
-    encodeSendPayload(data).payload.length > WS_MAX_CONTROL_PAYLOAD
-  ) {
+  if (data !== undefined && encodeSendPayload(data).payload.length > WS_MAX_CONTROL_PAYLOAD) {
     throw new WebSocketProtocolError("Control frame payload exceeds 125 bytes");
   }
 }
 
-function payloadByteLength(
-  data: string | Buffer | Uint8Array | ArrayBuffer,
-): number {
+function payloadByteLength(data: string | Buffer | Uint8Array | ArrayBuffer): number {
   if (typeof data === "string") return new TextEncoder().encode(data).byteLength;
   if (data instanceof ArrayBuffer) return data.byteLength;
   return data.byteLength;
 }
 
 function toBunBinary(
-  data: string | ArrayBufferLike | ArrayBufferView | undefined,
+  data: string | ArrayBufferLike | ArrayBufferView | undefined
 ): string | Uint8Array | undefined {
   if (data === undefined) return undefined;
   if (typeof data === "string") return data;

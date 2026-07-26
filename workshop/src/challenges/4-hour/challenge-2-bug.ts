@@ -32,8 +32,8 @@ const app = new App({
     securitySchemes: { bearer: { type: "http", scheme: "none" as any } },
   },
   docs: true,
-  bodyLimitBytes: 0,        // ← suspicious
-  requestTimeoutMs: 0,      // ← suspicious
+  bodyLimitBytes: 0, // ← suspicious
+  requestTimeoutMs: 0, // ← suspicious
 });
 
 // REGRESSION #3: secureHeaders removed entirely. "It was breaking the local CORS test."
@@ -63,7 +63,7 @@ app.get(
       };
     }
     return { status: 200 as const, body: b };
-  },
+  }
 );
 
 app.post(
@@ -81,7 +81,7 @@ app.post(
   async ({ body }) => {
     books.set(body.id, body);
     return { status: 201 as const, body };
-  },
+  }
 );
 
 serve(app, { port: 3000 });

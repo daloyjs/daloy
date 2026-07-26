@@ -67,24 +67,21 @@ test("safeRedirect: falls back when target is rejected", () => {
 test("safeRedirect: refuses protocol-relative `//evil.com`", () => {
   assert.throws(
     () => safeRedirect("//evil.com", { allowedPaths: ["/"] }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "protocol-relative",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "protocol-relative"
   );
 });
 
 test("safeRedirect: refuses `/\\evil.com` backslash bypass", () => {
   assert.throws(
     () => safeRedirect("/\\evil.com", { allowedPaths: ["/"] }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "backslash-path",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "backslash-path"
   );
 });
 
 test("safeRedirect: refuses backslashes embedded in same-origin paths", () => {
   assert.throws(
     () => safeRedirect("/foo\\bar", { allowedPaths: ["/*"] }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "backslash-path",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "backslash-path"
   );
 });
 
@@ -92,8 +89,7 @@ test("safeRedirect: refuses encoded backslash paths before wildcard matching", (
   for (const target of ["/%5cevil.com", "/%5C%5Cevil.com", "/foo%5cbar"]) {
     assert.throws(
       () => safeRedirect(target, { allowedPaths: ["/*"] }),
-      (err: unknown) =>
-        err instanceof OpenRedirectBlockedError && err.reason === "backslash-path",
+      (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "backslash-path"
     );
   }
 });
@@ -103,18 +99,16 @@ test("safeRedirect: refuses encoded protocol-relative paths before wildcard matc
     assert.throws(
       () => safeRedirect(target, { allowedPaths: ["/*"] }),
       (err: unknown) =>
-        err instanceof OpenRedirectBlockedError && err.reason === "protocol-relative",
+        err instanceof OpenRedirectBlockedError && err.reason === "protocol-relative"
     );
   }
 });
 
 test("safeRedirect: refuses CR/LF response-splitting payloads", () => {
   assert.throws(
-    () =>
-      safeRedirect("/ok\r\nSet-Cookie: pwn=1", { allowedPaths: ["/*"] }),
+    () => safeRedirect("/ok\r\nSet-Cookie: pwn=1", { allowedPaths: ["/*"] }),
     (err: unknown) =>
-      err instanceof OpenRedirectBlockedError &&
-      err.reason === "invalid-control-characters",
+      err instanceof OpenRedirectBlockedError && err.reason === "invalid-control-characters"
   );
 });
 
@@ -134,7 +128,7 @@ test("safeRedirect: refuses non-Latin1 same-origin paths with a typed error (not
     }
     assert.ok(
       thrown instanceof OpenRedirectBlockedError,
-      `expected OpenRedirectBlockedError, got ${(thrown as Error)?.constructor?.name}`,
+      `expected OpenRedirectBlockedError, got ${(thrown as Error)?.constructor?.name}`
     );
     assert.equal((thrown as OpenRedirectBlockedError).reason, "non-latin1-target");
     assert.ok(!(thrown instanceof TypeError));
@@ -151,8 +145,7 @@ test("safeRedirect: still allows ordinary Latin-1 (ASCII) same-origin paths", ()
 test("safeRedirect: refuses `javascript:` even if origin allowlist is empty", () => {
   assert.throws(
     () => safeRedirect("javascript:alert(1)", { allowedOrigins: [] }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "scheme-not-allowed",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "scheme-not-allowed"
   );
 });
 
@@ -162,32 +155,28 @@ test("safeRedirect: refuses absolute URLs whose origin is not allowlisted", () =
       safeRedirect("https://evil.com/path", {
         allowedOrigins: ["https://app.example.com"],
       }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "origin-not-allowed",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "origin-not-allowed"
   );
 });
 
 test("safeRedirect: refuses a same-origin path not in allowedPaths", () => {
   assert.throws(
     () => safeRedirect("/admin", { allowedPaths: ["/dashboard"] }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "path-not-allowed",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "path-not-allowed"
   );
 });
 
 test("safeRedirect: refuses empty target", () => {
   assert.throws(
     () => safeRedirect("", { allowedPaths: ["/*"] }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "empty-target",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "empty-target"
   );
 });
 
 test("safeRedirect: refuses unparseable absolute targets", () => {
   assert.throws(
     () => safeRedirect("http://", { allowedOrigins: ["https://app.example.com"] }),
-    (err: unknown) =>
-      err instanceof OpenRedirectBlockedError && err.reason === "parse-failed",
+    (err: unknown) => err instanceof OpenRedirectBlockedError && err.reason === "parse-failed"
   );
 });
 
@@ -198,15 +187,12 @@ test("safeRedirect: refuses non-redirect status codes", () => {
         allowedPaths: ["/x"],
         status: 200 as unknown as 303,
       }),
-    /not a redirect status/,
+    /not a redirect status/
   );
 });
 
 test("safeRedirect: refuses allowedPaths entries that don't start with `/`", () => {
-  assert.throws(
-    () => safeRedirect("/x", { allowedPaths: ["dashboard"] }),
-    /must start with "\/"/,
-  );
+  assert.throws(() => safeRedirect("/x", { allowedPaths: ["dashboard"] }), /must start with "\/"/);
 });
 
 test("safeRedirect: refuses allowedOrigins entries with a path component", () => {
@@ -216,14 +202,14 @@ test("safeRedirect: refuses allowedOrigins entries with a path component", () =>
         allowedPaths: ["/x"],
         allowedOrigins: ["https://app.example.com/with/path"],
       }),
-    /bare origin/,
+    /bare origin/
   );
 });
 
 test("safeRedirect: refuses allowedOrigins entries that aren't valid URLs", () => {
   assert.throws(
     () => safeRedirect("/x", { allowedPaths: ["/x"], allowedOrigins: ["not a url"] }),
-    /not a valid URL/,
+    /not a valid URL/
   );
 });
 
@@ -234,7 +220,7 @@ test("safeRedirect: refuses fallback that isn't a same-origin path", () => {
         allowedOrigins: ["https://app.example.com"],
         fallback: "https://evil.com",
       }),
-    /fallback must be a safe same-origin path/,
+    /fallback must be a safe same-origin path/
   );
 });
 
@@ -245,7 +231,7 @@ test("safeRedirect: refuses protocol-relative fallback", () => {
         allowedOrigins: ["https://app.example.com"],
         fallback: "//evil.com",
       }),
-    /fallback must be a safe same-origin path/,
+    /fallback must be a safe same-origin path/
   );
 });
 
@@ -268,6 +254,6 @@ test("safeRedirect rejects backslash fallback the same as a primary target", () 
         allowedPaths: ["/*"],
         fallback: "/\\evil.example",
       }),
-    /fallback must be a safe same-origin path/,
+    /fallback must be a safe same-origin path/
   );
 });

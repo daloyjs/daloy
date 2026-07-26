@@ -91,18 +91,19 @@ export async function verifyTarget(target: SbomTarget): Promise<CheckResult> {
     if (cdx.specVersion !== "1.5") {
       issues.push(`${target.cycloneDx}: specVersion is not "1.5"`);
     }
-    const metadataComponent = (cdx.metadata as { component?: { name?: string; version?: string } } | undefined)
-      ?.component;
+    const metadataComponent = (
+      cdx.metadata as { component?: { name?: string; version?: string } } | undefined
+    )?.component;
     if (metadataComponent?.name !== expectedName) {
       issues.push(
         `${target.cycloneDx}: metadata.component.name (${metadataComponent?.name ?? "<missing>"}) ` +
-          `does not match package.json#name (${expectedName})`,
+          `does not match package.json#name (${expectedName})`
       );
     }
     if (metadataComponent?.version !== expectedVersion) {
       issues.push(
         `${target.cycloneDx}: metadata.component.version (${metadataComponent?.version ?? "<missing>"}) ` +
-          `does not match package.json#version (${expectedVersion})`,
+          `does not match package.json#version (${expectedVersion})`
       );
     }
     const components = Array.isArray(cdx.components) ? cdx.components : [];
@@ -113,7 +114,7 @@ export async function verifyTarget(target: SbomTarget): Promise<CheckResult> {
     if (target.requireZeroComponents && components.length !== 0) {
       issues.push(
         `${target.cycloneDx}: expected zero runtime components (zero-runtime-deps invariant), ` +
-          `found ${components.length}: ${componentNames.join(", ")}`,
+          `found ${components.length}: ${componentNames.join(", ")}`
       );
     }
     const cdxNamesEqual =
@@ -122,7 +123,7 @@ export async function verifyTarget(target: SbomTarget): Promise<CheckResult> {
     if (!cdxNamesEqual) {
       issues.push(
         `${target.cycloneDx}: components do not match package.json#dependencies ` +
-          `(SBOM: [${componentNames.join(", ")}], manifest: [${expectedRuntimeDeps.join(", ")}])`,
+          `(SBOM: [${componentNames.join(", ")}], manifest: [${expectedRuntimeDeps.join(", ")}])`
       );
     }
   }
@@ -138,26 +139,23 @@ export async function verifyTarget(target: SbomTarget): Promise<CheckResult> {
       issues.push(`${target.spdx}: dataLicense is not "CC0-1.0"`);
     }
     const packages = Array.isArray(spdx.packages) ? spdx.packages : [];
-    const rootPkg = packages.find(
-      (p) => (p as { name?: unknown }).name === expectedName,
-    ) as { versionInfo?: unknown } | undefined;
+    const rootPkg = packages.find((p) => (p as { name?: unknown }).name === expectedName) as
+      { versionInfo?: unknown } | undefined;
     if (!rootPkg) {
       issues.push(`${target.spdx}: no package entry for ${expectedName}`);
     } else if (rootPkg.versionInfo !== expectedVersion) {
       issues.push(
         `${target.spdx}: versionInfo for ${expectedName} (${String(rootPkg.versionInfo)}) ` +
-          `does not match package.json#version (${expectedVersion})`,
+          `does not match package.json#version (${expectedVersion})`
       );
     }
-    const depPackages = packages.filter(
-      (p) => (p as { name?: unknown }).name !== expectedName,
-    );
+    const depPackages = packages.filter((p) => (p as { name?: unknown }).name !== expectedName);
     if (target.requireZeroComponents && depPackages.length !== 0) {
       const names = depPackages
         .map((p) => (p as { name?: unknown }).name)
         .filter((n): n is string => typeof n === "string");
       issues.push(
-        `${target.spdx}: expected zero dependency packages, found ${depPackages.length}: ${names.join(", ")}`,
+        `${target.spdx}: expected zero dependency packages, found ${depPackages.length}: ${names.join(", ")}`
       );
     }
   }
@@ -166,7 +164,7 @@ export async function verifyTarget(target: SbomTarget): Promise<CheckResult> {
 }
 
 export async function verifyAll(
-  targets: readonly SbomTarget[] = DEFAULT_TARGETS,
+  targets: readonly SbomTarget[] = DEFAULT_TARGETS
 ): Promise<CheckResult> {
   const allIssues: string[] = [];
   for (const target of targets) {

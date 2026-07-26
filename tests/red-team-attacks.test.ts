@@ -170,7 +170,10 @@ test("[dos] header-count flood is rejected with 431", async () => {
 test("[dos] assertHeaderCountWithinLimit enforces the cap and 0 disables it", () => {
   const flood = new Headers();
   for (let i = 0; i <= DEFAULT_MAX_HEADER_COUNT; i++) flood.set(`x-${i}`, "1");
-  assert.throws(() => assertHeaderCountWithinLimit(flood, DEFAULT_MAX_HEADER_COUNT), RequestHeaderFieldsTooLargeError);
+  assert.throws(
+    () => assertHeaderCountWithinLimit(flood, DEFAULT_MAX_HEADER_COUNT),
+    RequestHeaderFieldsTooLargeError
+  );
   assert.doesNotThrow(() => assertHeaderCountWithinLimit(flood, 0));
 });
 
@@ -192,13 +195,15 @@ test("[smuggling] duplicate Transfer-Encoding (comma-coalesced) is rejected", ()
   h.append("transfer-encoding", "chunked");
   h.append("transfer-encoding", "gzip");
   assert.throws(() => assertNoDuplicateSingletonHeaders(h), BadRequestError);
-  assert.doesNotThrow(() => assertNoDuplicateSingletonHeaders(new Headers({ "content-length": "10" })));
+  assert.doesNotThrow(() =>
+    assertNoDuplicateSingletonHeaders(new Headers({ "content-length": "10" }))
+  );
 });
 
 test("[smuggling] reserved-prefix check is case-insensitive", () => {
   assert.throws(
     () => assertNoReservedInternalHeaders(new Headers({ "X-Daloy-Internal-Dispatch": "1" })),
-    BadRequestError,
+    BadRequestError
   );
 });
 
@@ -221,14 +226,14 @@ test("[header-injection] illegal header NAME is refused", () => {
 test('[jwt] alg "none" is refused at signer construction', () => {
   assert.throws(
     () => createJwtSigner({ alg: "none" as any, key: HS, maxLifetimeSeconds: 60 }),
-    (e: any) => e instanceof JwtError && e.code === "alg_none_refused",
+    (e: any) => e instanceof JwtError && e.code === "alg_none_refused"
   );
 });
 
 test('[jwt] alg "none" cannot appear in a verifier allowlist', () => {
   assert.throws(
     () => createJwtVerifier({ algorithms: ["none" as any], key: HS }),
-    (e: any) => e instanceof JwtError && e.code === "alg_none_refused",
+    (e: any) => e instanceof JwtError && e.code === "alg_none_refused"
   );
 });
 
@@ -242,13 +247,17 @@ test("[jwt] algorithm-confusion: HS256 token rejected by an RS256-only verifier"
   const signer = createJwtSigner({ alg: "HS256", key: HS, maxLifetimeSeconds: 3600 });
   const token = await signer.sign({ sub: "user", iat: NOW, exp: NOW + 600 });
   const verifier = createJwtVerifier({ algorithms: ["RS256"], key: HS });
-  await assert.rejects(verifier.verify(token), (e: any) => e instanceof JwtError && e.code === "alg_not_allowed");
+  await assert.rejects(
+    verifier.verify(token),
+    (e: any) => e instanceof JwtError && e.code === "alg_not_allowed"
+  );
 });
 
 test("[jwt] symmetric algorithm + JWK key source is refused (confused deputy)", () => {
   assert.throws(
-    () => createJwtVerifier({ algorithms: ["HS256"], key: { kty: "RSA", n: "abc", e: "AQAB" } as any }),
-    (e: any) => e instanceof JwtError && e.code === "sym_with_jwk_refused",
+    () =>
+      createJwtVerifier({ algorithms: ["HS256"], key: { kty: "RSA", n: "abc", e: "AQAB" } as any }),
+    (e: any) => e instanceof JwtError && e.code === "sym_with_jwk_refused"
   );
 });
 
@@ -268,13 +277,20 @@ test("[jwt] a tampered PAYLOAD breaks signature verification", async () => {
   const evilPayload = b64url({ sub: "user", role: "admin", iat: NOW, exp: NOW + 600 });
   const forged = `${parts[0]}.${evilPayload}.${parts[2]}`;
   const verifier = createJwtVerifier({ algorithms: ["HS256"], key: HS });
-  await assert.rejects(verifier.verify(forged), (e: any) => e instanceof JwtError && e.code === "invalid_signature");
+  await assert.rejects(
+    verifier.verify(forged),
+    (e: any) => e instanceof JwtError && e.code === "invalid_signature"
+  );
 });
 
 test("[jwt] expired token is rejected on verify", async () => {
   const signer = createJwtSigner({ alg: "HS256", key: HS, maxLifetimeSeconds: 3600 });
   const token = await signer.sign({ sub: "user", iat: NOW, exp: NOW + 60 });
-  const verifier = createJwtVerifier({ algorithms: ["HS256"], key: HS, now: () => NOW + 1_000_000 });
+  const verifier = createJwtVerifier({
+    algorithms: ["HS256"],
+    key: HS,
+    now: () => NOW + 1_000_000,
+  });
   await assert.rejects(verifier.verify(token), (e: any) => e instanceof JwtError);
 });
 
@@ -289,20 +305,26 @@ test("[jwt] issuing a token longer than maxLifetimeSeconds is refused", async ()
   const signer = createJwtSigner({ alg: "HS256", key: HS, maxLifetimeSeconds: 60 });
   await assert.rejects(
     signer.sign({ sub: "user", iat: NOW, exp: NOW + 3600 }),
-    (e: any) => e instanceof JwtError && e.code === "exp_exceeds_max_lifetime",
+    (e: any) => e instanceof JwtError && e.code === "exp_exceeds_max_lifetime"
   );
 });
 
 test("[jwt] weak HS secret (<32 bytes) is refused at construction", () => {
   assert.throws(
     () => createJwtSigner({ alg: "HS256", key: new Uint8Array(16), maxLifetimeSeconds: 60 }),
-    (e: any) => e instanceof JwtError && e.code === "weak_hs_secret",
+    (e: any) => e instanceof JwtError && e.code === "weak_hs_secret"
   );
 });
 
 test("[jwt] issuer / audience mismatch is rejected", async () => {
   const signer = createJwtSigner({ alg: "HS256", key: HS, maxLifetimeSeconds: 3600 });
-  const token = await signer.sign({ sub: "u", iss: "evil", aud: "wrong", iat: NOW, exp: NOW + 600 });
+  const token = await signer.sign({
+    sub: "u",
+    iss: "evil",
+    aud: "wrong",
+    iat: NOW,
+    exp: NOW + 600,
+  });
   const verifier = createJwtVerifier({
     algorithms: ["HS256"],
     key: HS,
@@ -359,7 +381,7 @@ test("[ssrf] non-http(s) schemes (file:, gopher:) are refused before any network
   const guard = fetchGuard({ fetch: okFetch });
   await assert.rejects(
     guard("file:///etc/passwd"),
-    (e: any) => e instanceof SsrfBlockedError && e.reason === "protocol-not-allowed",
+    (e: any) => e instanceof SsrfBlockedError && e.reason === "protocol-not-allowed"
   );
   await assert.rejects(guard("gopher://127.0.0.1:6379/"), SsrfBlockedError);
 });
@@ -368,7 +390,10 @@ test("[ssrf] a 302 redirect to the metadata IP is blocked at the hop", async () 
   const fetchStub = (async (req: Request) => {
     const u = new URL(req.url);
     if (u.hostname === "8.8.8.8") {
-      return new Response(null, { status: 302, headers: { location: "http://169.254.169.254/latest/meta-data/" } });
+      return new Response(null, {
+        status: 302,
+        headers: { location: "http://169.254.169.254/latest/meta-data/" },
+      });
     }
     return new Response("ok");
   }) as unknown as typeof fetch;
@@ -377,7 +402,11 @@ test("[ssrf] a 302 redirect to the metadata IP is blocked at the hop", async () 
 });
 
 test("[ssrf] denyAddresses wins over allowAddresses", async () => {
-  const guard = fetchGuard({ fetch: okFetch, allowAddresses: ["8.8.8.8"], denyAddresses: ["8.8.8.8"] });
+  const guard = fetchGuard({
+    fetch: okFetch,
+    allowAddresses: ["8.8.8.8"],
+    denyAddresses: ["8.8.8.8"],
+  });
   await assert.rejects(guard("http://8.8.8.8/"), SsrfBlockedError);
 });
 
@@ -387,20 +416,27 @@ test("[ssrf] denyAddresses wins over allowAddresses", async () => {
 
 test("[open-redirect] external origin not on the allowlist is refused", () => {
   assert.throws(
-    () => safeRedirect("https://evil.example/phish", { allowedOrigins: ["https://app.example.com"] }),
-    OpenRedirectBlockedError,
+    () =>
+      safeRedirect("https://evil.example/phish", { allowedOrigins: ["https://app.example.com"] }),
+    OpenRedirectBlockedError
   );
 });
 
 test("[open-redirect] protocol-relative //evil.com and /\\evil.com are refused", () => {
-  assert.throws(() => safeRedirect("//evil.com", { allowedPaths: ["/"] }), OpenRedirectBlockedError);
-  assert.throws(() => safeRedirect("/\\evil.com", { allowedPaths: ["/"] }), OpenRedirectBlockedError);
+  assert.throws(
+    () => safeRedirect("//evil.com", { allowedPaths: ["/"] }),
+    OpenRedirectBlockedError
+  );
+  assert.throws(
+    () => safeRedirect("/\\evil.com", { allowedPaths: ["/"] }),
+    OpenRedirectBlockedError
+  );
 });
 
 test("[open-redirect] javascript:/data: schemes are always refused", () => {
   assert.throws(
     () => safeRedirect("javascript:alert(1)", { allowedOrigins: ["https://app.example.com"] }),
-    OpenRedirectBlockedError,
+    OpenRedirectBlockedError
   );
 });
 
@@ -417,7 +453,7 @@ test("[open-redirect] an allowlisted same-origin path is permitted", () => {
 test("[nosql] {password:{$ne:null}} auth-bypass payload is rejected", () => {
   assert.throws(
     () => assertNoMongoOperators({ username: "admin", password: { $ne: null } }),
-    BadRequestError,
+    BadRequestError
   );
 });
 
@@ -432,7 +468,14 @@ test("[nosql] operator keys nested inside arrays are detected", () => {
 // ===========================================================================
 
 test("[path-traversal] assertSafeRelativePath blocks every escape vector", () => {
-  for (const bad of ["../etc/passwd", "/etc/passwd", "a/../../etc", "foo\\bar", "C:\\win", "x\0y"]) {
+  for (const bad of [
+    "../etc/passwd",
+    "/etc/passwd",
+    "a/../../etc",
+    "foo\\bar",
+    "C:\\win",
+    "x\0y",
+  ]) {
     assert.throws(() => assertSafeRelativePath(bad), BadRequestError, bad);
   }
   assert.equal(assertSafeRelativePath("uploads/2024/file.png"), "uploads/2024/file.png");
@@ -466,10 +509,21 @@ test("[webhook] valid signature verifies; tampered payload / wrong secret fail",
   const sig = await signWebhookPayload({ payload, secret });
   assert.equal(await verifyWebhookSignature({ payload, signature: sig, secret }), true);
   assert.equal(
-    await verifyWebhookSignature({ payload: payload.replace("100", "999"), signature: sig, secret }),
-    false,
+    await verifyWebhookSignature({
+      payload: payload.replace("100", "999"),
+      signature: sig,
+      secret,
+    }),
+    false
   );
-  assert.equal(await verifyWebhookSignature({ payload, signature: sig, secret: "wrong-secret-wrong-secret-xxxxxx" }), false);
+  assert.equal(
+    await verifyWebhookSignature({
+      payload,
+      signature: sig,
+      secret: "wrong-secret-wrong-secret-xxxxxx",
+    }),
+    false
+  );
   assert.equal(await verifyWebhookSignature({ payload, signature: "garbage", secret }), false);
 });
 
@@ -529,7 +583,14 @@ test("[rate-limit] requests beyond max are rejected with 429 + Retry-After", asy
 
 function csrfApp() {
   const app = new App({ logger: false });
-  app.use(csrf({ cookieName: "csrf", headerName: "x-csrf-token", generator: () => "tok", cookieOptions: { secure: false } }));
+  app.use(
+    csrf({
+      cookieName: "csrf",
+      headerName: "x-csrf-token",
+      generator: () => "tok",
+      cookieOptions: { secure: false },
+    })
+  );
   app.route({
     method: "POST",
     path: "/act",
@@ -584,7 +645,9 @@ test("[waf] SQL-injection in the query string is blocked with 403", async () => 
 });
 
 test("[waf] reflected-XSS payload in the query string is blocked with 403", async () => {
-  const res = await wafApp().request(`/search?q=${encodeURIComponent("<script>alert(document.cookie)</script>")}`);
+  const res = await wafApp().request(
+    `/search?q=${encodeURIComponent("<script>alert(document.cookie)</script>")}`
+  );
   assert.equal(res.status, 403);
 });
 
@@ -635,7 +698,12 @@ test("[mass-assignment] extra request keys are stripped before the handler sees 
     path: "/user",
     operationId: "createUser",
     request: { body: z.object({ name: z.string() }) as any }, // intentionally NOT .strict()
-    responses: { 200: { description: "ok", body: z.object({ received: z.record(z.string(), z.unknown()) }) as any } },
+    responses: {
+      200: {
+        description: "ok",
+        body: z.object({ received: z.record(z.string(), z.unknown()) }) as any,
+      },
+    },
     handler: async ({ body }: any) => ({ status: 200 as const, body: { received: body } }),
   });
   const res = await app.request("/user", {
@@ -679,11 +747,15 @@ test("[error-redaction] 5xx hides detail in prod, shows in dev; 4xx always shows
   assert.equal(prodRes.status, 500);
   assert.equal(prodJson.detail, undefined, "5xx detail must be redacted in production");
 
-  const devRes = new InternalError("postgres://admin:hunter2@10.0.0.1/db leaked").toResponse({ production: false });
+  const devRes = new InternalError("postgres://admin:hunter2@10.0.0.1/db leaked").toResponse({
+    production: false,
+  });
   const devJson = await devRes.json();
   assert.ok((devJson.detail ?? "").includes("postgres://"), "5xx detail is visible in development");
 
-  const badReq = new BadRequestError("the 'email' field is malformed").toResponse({ production: true });
+  const badReq = new BadRequestError("the 'email' field is malformed").toResponse({
+    production: true,
+  });
   const badJson = await badReq.json();
   assert.equal(badReq.status, 400);
   assert.ok((badJson.detail ?? "").includes("email"), "4xx detail is preserved even in production");
@@ -703,7 +775,11 @@ test("[error-redaction] an unhandled handler exception returns a redacted 500 in
   const res = await app.request("/boom");
   const json = await res.json();
   assert.equal(res.status, 500);
-  assert.equal(json.detail, undefined, "raw exception message must NOT leak to the client in production");
+  assert.equal(
+    json.detail,
+    undefined,
+    "raw exception message must NOT leak to the client in production"
+  );
   assert.ok(!JSON.stringify(json).includes("secret-token"));
 });
 
@@ -732,7 +808,9 @@ test("[secret-guard] well-known weak / short / repeated secrets are refused", ()
   }
   assert.throws(() => assertStrongSecret("short", "session")); // < 32 bytes
   assert.throws(() => assertStrongSecret("a".repeat(40), "session")); // single repeated char
-  assert.doesNotThrow(() => assertStrongSecret("Gjk29fmZ2pQ1xR7tLwY8vBn4cD6hS0aE5uI3oP9kM1nXz", "session"));
+  assert.doesNotThrow(() =>
+    assertStrongSecret("Gjk29fmZ2pQ1xR7tLwY8vBn4cD6hS0aE5uI3oP9kM1nXz", "session")
+  );
 });
 
 // ===========================================================================
@@ -774,9 +852,7 @@ test("[response-exposure] stripping also applies on async response validators", 
         description: "ok",
         // An async (Promise-returning) refinement keeps the validator on the
         // async branch of the serializer, which must strip too.
-        body: z
-          .object({ id: z.string() })
-          .refine(async () => true, "ok") as any,
+        body: z.object({ id: z.string() }).refine(async () => true, "ok") as any,
       },
     },
     handler: async () => ({
@@ -797,11 +873,20 @@ test("[response-exposure] .passthrough() is honored — opt-in extra fields are 
     method: "GET",
     path: "/passthrough",
     operationId: "passthrough",
-    responses: { 200: { description: "ok", body: z.object({ id: z.string() }).passthrough() as any } },
-    handler: async () => ({ status: 200 as const, body: { id: "1", extra: "kept-on-purpose" } as any }),
+    responses: {
+      200: { description: "ok", body: z.object({ id: z.string() }).passthrough() as any },
+    },
+    handler: async () => ({
+      status: 200 as const,
+      body: { id: "1", extra: "kept-on-purpose" } as any,
+    }),
   });
   const json = await (await app.request("/passthrough")).json();
-  assert.equal(json.extra, "kept-on-purpose", "passthrough opt-in must preserve declared-as-allowed extras");
+  assert.equal(
+    json.extra,
+    "kept-on-purpose",
+    "passthrough opt-in must preserve declared-as-allowed extras"
+  );
 });
 
 test("[response-exposure] a .strict() response schema rejects undeclared fields with 500", async () => {

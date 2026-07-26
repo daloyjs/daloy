@@ -45,14 +45,14 @@ for i in $(seq 1 65); do curl -s -o /dev/null -w "%{http_code}\n" http://localho
 
 Every entry in the stack closes a class of vulnerability:
 
-| Middleware     | What it prevents                                                                  |
-| -------------- | --------------------------------------------------------------------------------- |
-| `requestId`    | Hours of debugging — correlate logs to a specific request without re-deploying.   |
-| `secureHeaders` | Clickjacking, MIME-sniffing, mixed-content downgrades, leaky `Referer`s.         |
-| `cors`         | Cross-origin token theft when a careless `Access-Control-Allow-Origin: *` ships. |
-| `rateLimit`    | Credential-stuffing and scrape-bot floods.                                       |
-| `bodyLimitBytes` | Memory-exhaustion DoS via gigantic JSON payloads.                              |
-| `requestTimeoutMs` | Hung-handler resource exhaustion (slowloris-style on the app tier).          |
+| Middleware         | What it prevents                                                                 |
+| ------------------ | -------------------------------------------------------------------------------- |
+| `requestId`        | Hours of debugging — correlate logs to a specific request without re-deploying.  |
+| `secureHeaders`    | Clickjacking, MIME-sniffing, mixed-content downgrades, leaky `Referer`s.         |
+| `cors`             | Cross-origin token theft when a careless `Access-Control-Allow-Origin: *` ships. |
+| `rateLimit`        | Credential-stuffing and scrape-bot floods.                                       |
+| `bodyLimitBytes`   | Memory-exhaustion DoS via gigantic JSON payloads.                                |
+| `requestTimeoutMs` | Hung-handler resource exhaustion (slowloris-style on the app tier).              |
 
 The framework's posture is **bad defaults are bugs**. If a default blocks a legitimate use case, narrow the scope (per-route override) rather than disabling it globally.
 

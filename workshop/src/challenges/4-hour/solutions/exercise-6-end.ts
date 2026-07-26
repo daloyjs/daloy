@@ -19,7 +19,7 @@ export function buildApp(): App {
     async () => ({
       status: 200 as const,
       body: { runtime: detectRuntime() },
-    }),
+    })
   );
 
   return app;

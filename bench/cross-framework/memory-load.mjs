@@ -14,22 +14,30 @@ import { setTimeout as wait } from "node:timers/promises";
 import { spawn } from "node:child_process";
 import autocannon from "autocannon";
 import {
-  resultsPath, orderTargets, machineInfo, parseArgs,
-  startServer, killServer, waitForHealthy, httpRequest, fmt, warnBenchEnvironment,
+  resultsPath,
+  orderTargets,
+  machineInfo,
+  parseArgs,
+  startServer,
+  killServer,
+  waitForHealthy,
+  httpRequest,
+  fmt,
+  warnBenchEnvironment,
 } from "./lib/common.mjs";
 import { c, section, summary, fail, metric, metricsLine } from "./lib/format.mjs";
 
 const FRAMEWORKS = [
-  { name: "daloy",          file: "servers/throughput/daloy.ts" },
-  { name: "daloy-nozod",    file: "servers/throughput/daloy-nozod.ts" },
-  { name: "hono",           file: "servers/throughput/hono.ts" },
+  { name: "daloy", file: "servers/throughput/daloy.ts" },
+  { name: "daloy-nozod", file: "servers/throughput/daloy-nozod.ts" },
+  { name: "hono", file: "servers/throughput/hono.ts" },
   { name: "hono-validated", file: "servers/throughput/hono-validated.ts" },
-  { name: "fastify",        file: "servers/throughput/fastify.ts" },
-  { name: "express",        file: "servers/throughput/express.ts" },
-  { name: "koa",            file: "servers/throughput/koa.ts" },
-  { name: "nest",           file: "servers/throughput/nest.ts" },
-  { name: "elysia",         file: "servers/throughput/elysia.ts" },
-  { name: "feathers",       file: "servers/throughput/feathers.ts" },
+  { name: "fastify", file: "servers/throughput/fastify.ts" },
+  { name: "express", file: "servers/throughput/express.ts" },
+  { name: "koa", file: "servers/throughput/koa.ts" },
+  { name: "nest", file: "servers/throughput/nest.ts" },
+  { name: "elysia", file: "servers/throughput/elysia.ts" },
+  { name: "feathers", file: "servers/throughput/feathers.ts" },
 ];
 
 const args = parseArgs(process.argv);
@@ -53,7 +61,9 @@ function rssOfPid(pid) {
     }
     const ch = spawn(cmd, argv, { stdio: ["ignore", "pipe", "ignore"] });
     let out = "";
-    ch.stdout.on("data", (b) => { out += b.toString(); });
+    ch.stdout.on("data", (b) => {
+      out += b.toString();
+    });
     ch.once("exit", () => {
       if (process.platform === "win32") {
         // CSV: "name","pid","sessionName","sessionNo","memUsage". The memUsage
@@ -91,15 +101,24 @@ async function sampleSeries(pid, durationMs) {
 const ECHO_BODY = JSON.stringify({ name: "alice" });
 
 function startLoad() {
-  const instance = autocannon({
-    url: `http://127.0.0.1:${PORT}/echo`,
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: ECHO_BODY,
-    connections: CONNECTIONS,
-    duration: DURATION + 5, // a touch longer than our sampling window
-  }, () => { /* swallow */ });
-  autocannon.track(instance, { renderProgressBar: false, renderResultsTable: false, renderLatencyTable: false });
+  const instance = autocannon(
+    {
+      url: `http://127.0.0.1:${PORT}/echo`,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: ECHO_BODY,
+      connections: CONNECTIONS,
+      duration: DURATION + 5, // a touch longer than our sampling window
+    },
+    () => {
+      /* swallow */
+    }
+  );
+  autocannon.track(instance, {
+    renderProgressBar: false,
+    renderResultsTable: false,
+    renderLatencyTable: false,
+  });
   return instance;
 }
 
@@ -114,12 +133,20 @@ async function preflightEcho() {
     body: ECHO_BODY,
   });
   if (r.status !== 200) {
-    throw new Error(`preflight POST /echo: status ${r.status} (expected 200). Body: ${r.body.slice(0, 200)}`);
+    throw new Error(
+      `preflight POST /echo: status ${r.status} (expected 200). Body: ${r.body.slice(0, 200)}`
+    );
   }
   let ok = false;
-  try { ok = JSON.parse(r.body).name === "alice"; } catch { /* ok stays false */ }
+  try {
+    ok = JSON.parse(r.body).name === "alice";
+  } catch {
+    /* ok stays false */
+  }
   if (!ok) {
-    throw new Error(`preflight POST /echo: body did not echo {"name":"alice"}. Got: ${r.body.slice(0, 200)}`);
+    throw new Error(
+      `preflight POST /echo: body did not echo {"name":"alice"}. Got: ${r.body.slice(0, 200)}`
+    );
   }
 }
 
@@ -140,7 +167,9 @@ async function benchOne(fw) {
     // 2) Under load.
     const load = startLoad();
     const loadSamples = await sampleSeries(child.pid, DURATION * 1_000);
-    try { load.stop(); } catch {}
+    try {
+      load.stop();
+    } catch {}
 
     // 3) Settle.
     await wait(5_000);
@@ -151,15 +180,30 @@ async function benchOne(fw) {
     const growth = settleRss - idleRss;
 
     const MiB = (b) => (b / 1024 / 1024).toFixed(1);
-    console.error(metricsLine("RSS", [
-      metric("idle", MiB(idleRss), { unit: " MiB" }),
-      metric("load-avg", MiB(loadAvgRss), { unit: " MiB" }),
-      metric("peak", MiB(peakRss), { unit: " MiB", color: c.yellow }),
-      metric("settle", MiB(settleRss), { unit: " MiB" }),
-      metric("growth", MiB(growth), { unit: " MiB", color: growth > 0 ? c.yellow : c.green }),
-    ], { labelWidth: 6 }));
+    console.error(
+      metricsLine(
+        "RSS",
+        [
+          metric("idle", MiB(idleRss), { unit: " MiB" }),
+          metric("load-avg", MiB(loadAvgRss), { unit: " MiB" }),
+          metric("peak", MiB(peakRss), { unit: " MiB", color: c.yellow }),
+          metric("settle", MiB(settleRss), { unit: " MiB" }),
+          metric("growth", MiB(growth), { unit: " MiB", color: growth > 0 ? c.yellow : c.green }),
+        ],
+        { labelWidth: 6 }
+      )
+    );
 
-    return { idleRss, loadAvgRss, peakRss, settleRss, growth, idleSamples, loadSamples, settleSamples };
+    return {
+      idleRss,
+      loadAvgRss,
+      peakRss,
+      settleRss,
+      growth,
+      idleSamples,
+      loadSamples,
+      settleSamples,
+    };
   } finally {
     await killServer(child);
   }
@@ -167,7 +211,10 @@ async function benchOne(fw) {
 
 async function main() {
   warnBenchEnvironment({ maxConnections: CONNECTIONS });
-  const targets = orderTargets(FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)), args.order);
+  const targets = orderTargets(
+    FRAMEWORKS.filter((f) => !ONLY || ONLY.has(f.name)),
+    args.order
+  );
   const rows = [];
   for (const fw of targets) {
     try {
@@ -192,21 +239,43 @@ async function main() {
       MiB(r.growth),
     ]);
   }
-  console.log("\n" + summary({
-    head: ["Framework", "idle (MiB)", "load avg (MiB)", "peak (MiB)", "settle (MiB)", "growth (MiB)"],
-    rows: tableRows,
-    highlight: (row) => row[0].includes("daloy"),
-  }) + "\n");
+  console.log(
+    "\n" +
+      summary({
+        head: [
+          "Framework",
+          "idle (MiB)",
+          "load avg (MiB)",
+          "peak (MiB)",
+          "settle (MiB)",
+          "growth (MiB)",
+        ],
+        rows: tableRows,
+        highlight: (row) => row[0].includes("daloy"),
+      }) +
+      "\n"
+  );
 
   writeFileSync(
     resultsPath("results.memory-load.json"),
-    JSON.stringify({
-      ranAt: new Date().toISOString(),
-      machine: machineInfo(),
-      config: { duration: DURATION, connections: CONNECTIONS, sampleIntervalMs: SAMPLE_INTERVAL_MS },
-      rows,
-    }, null, 2),
+    JSON.stringify(
+      {
+        ranAt: new Date().toISOString(),
+        machine: machineInfo(),
+        config: {
+          duration: DURATION,
+          connections: CONNECTIONS,
+          sampleIntervalMs: SAMPLE_INTERVAL_MS,
+        },
+        rows,
+      },
+      null,
+      2
+    )
   );
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

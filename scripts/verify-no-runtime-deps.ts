@@ -26,9 +26,7 @@ interface PackageJsonLike {
   readonly dependencies?: Record<string, unknown>;
 }
 
-export function findForbiddenRuntimeDependencies(
-  packageJson: PackageJsonLike,
-): readonly string[] {
+export function findForbiddenRuntimeDependencies(packageJson: PackageJsonLike): readonly string[] {
   const deps = packageJson.dependencies;
   if (!deps || typeof deps !== "object") return [];
   return Object.keys(deps);
@@ -41,13 +39,13 @@ async function main(): Promise<void> {
   if (offending.length === 0) return;
   console.error(
     `verify-no-runtime-deps: ${offending.length} forbidden runtime ` +
-      `dependenc${offending.length === 1 ? "y" : "ies"} in @daloyjs/core/package.json:`,
+      `dependenc${offending.length === 1 ? "y" : "ies"} in @daloyjs/core/package.json:`
   );
   for (const dep of offending) console.error(`  - ${dep}`);
   console.error(
     "Move adapter bindings to peerDependencies, validators to peerDependencies, " +
       "and build/test tools to devDependencies. If a runtime dep is unavoidable, " +
-      "add a SECURITY.md review note justifying the addition.",
+      "add a SECURITY.md review note justifying the addition."
   );
   process.exitCode = 1;
 }

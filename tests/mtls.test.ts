@@ -49,10 +49,7 @@ test("parseForwardedClientCert parses an Envoy XFCC element", () => {
   assert.equal(cert.subjectDN, "CN=svc-a,OU=payments,O=acme");
   assert.equal(cert.subjectCN, "svc-a");
   assert.equal(cert.fingerprint256, "49B4D7C...");
-  assert.deepEqual(cert.subjectAltNames, [
-    "URI:spiffe://acme/svc-a",
-    "DNS:svc-a.internal",
-  ]);
+  assert.deepEqual(cert.subjectAltNames, ["URI:spiffe://acme/svc-a", "DNS:svc-a.internal"]);
   assert.equal(cert.verified, true);
 });
 
@@ -93,7 +90,7 @@ test("normalizePeerCertificate maps a Node peer-certificate object", () => {
       serialNumber: "0A1B2C",
       subjectaltname: "DNS:svc-a.internal, IP Address:10.0.0.7, URI:spiffe://acme/svc-a",
     },
-    true,
+    true
   );
   assert.ok(cert);
   assert.equal(cert.subjectCN, "svc-a");
@@ -118,7 +115,7 @@ test("normalizePeerCertificate returns undefined for the empty cert object", () 
 test("normalizePeerCertificate handles multi-valued DN entries", () => {
   const cert = normalizePeerCertificate(
     { subject: { CN: "svc-a", OU: ["payments", "eng"] } },
-    false,
+    false
   );
   assert.ok(cert);
   assert.equal(cert.subjectDN, "CN=svc-a,OU=payments,OU=eng");
@@ -181,7 +178,9 @@ test("clientCertAuth enforces a subject-CN allow-list", async () => {
 test("clientCertAuth enforces issuer-CN, fingerprint, and SAN allow-lists", async () => {
   const okApp = guardedApp({
     allowIssuerCNs: ["acme-internal-ca"],
-    allowFingerprints: ["aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"],
+    allowFingerprints: [
+      "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99",
+    ],
     allowSANs: ["spiffe://acme/svc-a"],
   });
   const req = new Request("http://x/");
@@ -294,7 +293,7 @@ test("clientCertAuth reads an Envoy XFCC header", async () => {
       headers: {
         "x-forwarded-client-cert": 'Hash=abc;Subject="CN=svc-a,O=acme";URI=spiffe://acme/svc-a',
       },
-    }),
+    })
   );
   assert.equal(res.status, 200);
 });
@@ -318,7 +317,7 @@ test("clientCertAuth reads nginx-style structured headers", async () => {
         "x-ssl-client-fingerprint": "AABBCC",
         "x-ssl-client-verify": "SUCCESS",
       },
-    }),
+    })
   );
   assert.equal(ok.status, 200);
 
@@ -330,7 +329,7 @@ test("clientCertAuth reads nginx-style structured headers", async () => {
         "x-ssl-client-i-dn": "CN=acme-internal-ca,O=acme",
         "x-ssl-client-verify": "FAILED:certificate has expired",
       },
-    }),
+    })
   );
   assert.equal(failed.status, 403);
 });
@@ -341,17 +340,14 @@ test("clientCertAuth returns 401 when the configured header is absent", async ()
 });
 
 test("clientCertAuth rejects an empty structured header config", () => {
-  assert.throws(
-    () => clientCertAuth({ header: { format: "structured" } }),
-    /at least one of/,
-  );
+  assert.throws(() => clientCertAuth({ header: { format: "structured" } }), /at least one of/);
 });
 
 test("clientCertAuth rejects an unknown header format", () => {
   assert.throws(
     // @ts-expect-error intentionally invalid
     () => clientCertAuth({ header: { format: "bogus" } }),
-    /xfcc.*structured/,
+    /xfcc.*structured/
   );
 });
 
@@ -374,7 +370,7 @@ test("clientCertAuth structured headers without verify header are unverified by 
   const res = await app.fetch(
     new Request("http://x/", {
       headers: { "x-ssl-client-s-dn": "CN=attacker" },
-    }),
+    })
   );
   assert.equal(res.status, 403, "identity-only headers must not satisfy requireVerified");
 });

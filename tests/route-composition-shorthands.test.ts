@@ -31,11 +31,10 @@ test("registerRoutes composes independently defined contracts", async () => {
 
 test("HTTP shorthands infer stable operation ids from method and path", async () => {
   const app = new App({ logger: false })
-    .get(
-      "/",
-      { responses: { 200: { body: z.object({ hello: z.string() }) } } },
-      () => ({ status: 200, body: { hello: "world" } })
-    )
+    .get("/", { responses: { 200: { body: z.object({ hello: z.string() }) } } }, () => ({
+      status: 200,
+      body: { hello: "world" },
+    }))
     .get(
       "/book-items/:item_id",
       { responses: { 200: { body: z.object({ ok: z.boolean() }) } } },

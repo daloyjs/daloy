@@ -237,13 +237,12 @@ async function main(): Promise<void> {
     return;
   }
   for await (const absolute of walk(SRC_ROOT)) {
-    const rel =
-      "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
+    const rel = "src/" + relative(fileURLToPath(SRC_ROOT), absolute).replaceAll("\\", "/");
     const text = await readFile(absolute, "utf8");
     const findings = findReDosPatterns(rel, text);
     for (const f of findings) {
       console.error(
-        `${f.file}:${f.line}: ReDoS-prone regex (${f.reason}): /${f.pattern}/ — ${f.text}`,
+        `${f.file}:${f.line}: ReDoS-prone regex (${f.reason}): /${f.pattern}/ — ${f.text}`
       );
       total++;
     }
@@ -257,7 +256,7 @@ async function main(): Promise<void> {
         "or — only with a documented justification — opt in with " +
         "`// daloy-allow-redos: <reason>` on the same line. " +
         "See https://snyk.io/blog/timing-out-synchronous-functions-with-regex/ " +
-        "and the OWASP ReDoS cheat sheet.",
+        "and the OWASP ReDoS cheat sheet."
     );
     process.exitCode = 1;
   }

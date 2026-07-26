@@ -171,7 +171,7 @@ export function formatStartupBanner(options: StartupBannerOptions): string {
  */
 export function printStartupBanner(
   options: StartupBannerOptions,
-  write: (s: string) => void = (s) => process.stdout.write(s),
+  write: (s: string) => void = (s) => process.stdout.write(s)
 ): void {
   write(`\n${formatStartupBanner(options)}\n\n`);
 }

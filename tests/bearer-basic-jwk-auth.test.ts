@@ -1,14 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  App,
-  basicAuth,
-  bearerAuth,
-  createJwtSigner,
-  jwk,
-  type JwkSet,
-} from "../src/index.js";
+import { App, basicAuth, bearerAuth, createJwtSigner, jwk, type JwkSet } from "../src/index.js";
 
 // ============================================================
 // bearerAuth — verify() revalidation hook
@@ -32,12 +25,9 @@ test("bearerAuth: 401 challenge carries cache-control: no-store", async () => {
 test("bearerAuth: refuses missing validate and header-breaking realm", () => {
   assert.throws(
     () => bearerAuth(undefined as unknown as Parameters<typeof bearerAuth>[0]),
-    /validate/,
+    /validate/
   );
-  assert.throws(
-    () => bearerAuth({ validate: () => true, realm: 'bad"\r\n' }),
-    /realm/,
-  );
+  assert.throws(() => bearerAuth({ validate: () => true, realm: 'bad"\r\n' }), /realm/);
 });
 
 test("bearerAuth: verify hook accepts when returns true / void / undefined", async () => {
@@ -47,7 +37,7 @@ test("bearerAuth: verify hook accepts when returns true / void / undefined", asy
       bearerAuth({
         validate: () => true,
         verify: async () => result,
-      }),
+      })
     );
     app.route({
       method: "GET",
@@ -56,7 +46,7 @@ test("bearerAuth: verify hook accepts when returns true / void / undefined", asy
       handler: () => ({ status: 200 as const, body: { ok: true } }),
     });
     const res = await app.request(
-      new Request("http://x/", { headers: { authorization: "Bearer abc" } }),
+      new Request("http://x/", { headers: { authorization: "Bearer abc" } })
     );
     assert.equal(res.status, 200);
   }
@@ -68,7 +58,7 @@ test("bearerAuth: verify hook returning false rejects with 403", async () => {
     bearerAuth({
       validate: () => true,
       verify: () => false,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -77,7 +67,7 @@ test("bearerAuth: verify hook returning false rejects with 403", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: "Bearer abc" } }),
+    new Request("http://x/", { headers: { authorization: "Bearer abc" } })
   );
   assert.equal(res.status, 403);
 });
@@ -92,7 +82,7 @@ test("bearerAuth: validate rejection still wins before verify runs", async () =>
         verifyCalled = true;
         return true;
       },
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -101,7 +91,7 @@ test("bearerAuth: validate rejection still wins before verify runs", async () =>
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: "Bearer abc" } }),
+    new Request("http://x/", { headers: { authorization: "Bearer abc" } })
   );
   assert.equal(res.status, 403);
   assert.equal(verifyCalled, false);
@@ -125,7 +115,7 @@ test("basicAuth: onAuthSuccess fires after verify and after default user stamp",
         });
         (ctx.state as Record<string, unknown>).extra = "yes";
       },
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -137,9 +127,7 @@ test("basicAuth: onAuthSuccess fires after verify and after default user stamp",
     }),
   });
   const auth = `Basic ${Buffer.from("alice:p1").toString("base64")}`;
-  const res = await app.request(
-    new Request("http://x/", { headers: { authorization: auth } }),
-  );
+  const res = await app.request(new Request("http://x/", { headers: { authorization: auth } }));
   assert.equal(res.status, 200);
   assert.equal(seen.length, 1);
   assert.equal(seen[0]!.user, "alice");
@@ -172,64 +160,52 @@ test("jwk: refuses missing options", () => {
 
 test("jwk: refuses empty/missing algorithms allowlist", () => {
   assert.throws(() => jwk({ jwks: { keys: [] }, algorithms: [] as never }));
-  assert.throws(() =>
-    jwk({ jwks: { keys: [] }, algorithms: undefined as unknown as never }),
-  );
+  assert.throws(() => jwk({ jwks: { keys: [] }, algorithms: undefined as unknown as never }));
 });
 
 test("jwk: refuses symmetric HS* algorithms outright", () => {
   assert.throws(
     () => jwk({ jwks: { keys: [] }, algorithms: ["HS256" as never] }),
-    /asymmetric|HS\*/,
+    /asymmetric|HS\*/
   );
 });
 
 test("jwk: refuses unknown algorithm", () => {
-  assert.throws(
-    () => jwk({ jwks: { keys: [] }, algorithms: ["RS999" as never] }),
-  );
+  assert.throws(() => jwk({ jwks: { keys: [] }, algorithms: ["RS999" as never] }));
 });
 
 test("jwk: refuses plaintext http:// JWKS URL", () => {
-  assert.throws(
-    () => jwk({ jwks: "http://idp/keys.json", algorithms: ["RS256"] }),
-    /https:\/\//,
-  );
+  assert.throws(() => jwk({ jwks: "http://idp/keys.json", algorithms: ["RS256"] }), /https:\/\//);
 });
 
 test("jwk: refuses non-JwkSet jwks option", () => {
-  assert.throws(
-    () => jwk({ jwks: 42 as unknown as JwkSet, algorithms: ["RS256"] }),
-  );
+  assert.throws(() => jwk({ jwks: 42 as unknown as JwkSet, algorithms: ["RS256"] }));
 });
 
 test("jwk: refuses invalid realm characters", () => {
-  assert.throws(
-    () =>
-      jwk({
-        jwks: { keys: [] },
-        algorithms: ["RS256"],
-        realm: 'bad"\r\n',
-      }),
+  assert.throws(() =>
+    jwk({
+      jwks: { keys: [] },
+      algorithms: ["RS256"],
+      realm: 'bad"\r\n',
+    })
   );
 });
 
 test("jwk: refuses negative fetchTtlSeconds", () => {
-  assert.throws(
-    () =>
-      jwk({
-        jwks: { keys: [] },
-        algorithms: ["RS256"],
-        fetchTtlSeconds: -1,
-      }),
+  assert.throws(() =>
+    jwk({
+      jwks: { keys: [] },
+      algorithms: ["RS256"],
+      fetchTtlSeconds: -1,
+    })
   );
-  assert.throws(
-    () =>
-      jwk({
-        jwks: { keys: [] },
-        algorithms: ["RS256"],
-        fetchTtlSeconds: Number.POSITIVE_INFINITY,
-      }),
+  assert.throws(() =>
+    jwk({
+      jwks: { keys: [] },
+      algorithms: ["RS256"],
+      fetchTtlSeconds: Number.POSITIVE_INFINITY,
+    })
   );
 });
 
@@ -238,11 +214,10 @@ test("jwk: refuses negative fetchTtlSeconds", () => {
 // ============================================================
 
 async function genEs256Pair(): Promise<CryptoKeyPair> {
-  return (await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
+  return (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair;
 }
 
 async function publicJwkFor(pair: CryptoKeyPair, kid: string, alg: string): Promise<JsonWebKey> {
@@ -283,7 +258,7 @@ test("jwk: verifies ES256 token through static JWKS, stamps user + scopes", asyn
       algorithms: ["ES256"],
       issuer: "https://issuer",
       audience: "books",
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -295,7 +270,7 @@ test("jwk: verifies ES256 token through static JWKS, stamps user + scopes", asyn
     }),
   });
   const res = await app.request(
-    new Request("http://x/me", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/me", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 200);
   const body = (await res.json()) as { user: { sub: string; scopes: string[] } };
@@ -342,7 +317,7 @@ test("jwk: token without kid → 401 invalid_token", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 401);
   const wa = res.headers.get("www-authenticate") ?? "";
@@ -371,7 +346,7 @@ test("jwk: kid not in JWKS → 401 invalid_token", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 401);
 });
@@ -398,12 +373,18 @@ test("jwk: attacker-controlled kid text is sanitized from WWW-Authenticate", asy
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 401);
   const challenge = res.headers.get("www-authenticate") ?? "";
   assert.ok(challenge.includes('error="invalid_token"'));
-  assert.ok(!/["\r\n\\]/.test(challenge.replace('Bearer realm="api", error="invalid_token", error_description="', "").slice(0, -1)));
+  assert.ok(
+    !/["\r\n\\]/.test(
+      challenge
+        .replace('Bearer realm="api", error="invalid_token", error_description="', "")
+        .slice(0, -1)
+    )
+  );
 });
 
 test("jwk: token alg ≠ JWK alg → 401 invalid_token", async () => {
@@ -429,7 +410,7 @@ test("jwk: token alg ≠ JWK alg → 401 invalid_token", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 401);
 });
@@ -457,7 +438,7 @@ test("jwk: per-request verify() returning false → 403", async () => {
         seenSub = payload.sub;
         return payload.sub !== "u-revoked";
       },
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -466,7 +447,7 @@ test("jwk: per-request verify() returning false → 403", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 403);
   assert.equal(seenSub, "u-revoked");
@@ -496,7 +477,7 @@ test("jwk: per-request verify() returning void/true accepts", async () => {
       jwks: { keys: [pub] },
       algorithms: ["ES256"],
       verify: () => undefined,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -510,7 +491,7 @@ test("jwk: per-request verify() returning void/true accepts", async () => {
     }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 200);
   const body = (await res.json()) as { scopes: string[] };
@@ -547,7 +528,7 @@ test("jwk: 'scopes' array claim is normalized to deduped scope list", async () =
     }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 200);
   const body = (await res.json()) as { user: { scopes: string[] } };
@@ -579,7 +560,7 @@ test("jwk: no scope claim → scopes is empty array", async () => {
     }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 200);
   const body = (await res.json()) as { user: { scopes: string[] } };
@@ -612,7 +593,7 @@ test("jwk: accepts a JWKS resolver function", async () => {
         return { keys: [pub] };
       },
       algorithms: ["ES256"],
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -621,7 +602,7 @@ test("jwk: accepts a JWKS resolver function", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } }),
+    new Request("http://x/", { headers: { authorization: `Bearer ${token}` } })
   );
   assert.equal(res.status, 200);
   assert.ok(calls >= 1);
@@ -631,9 +612,9 @@ test("jwk: resolver returning a non-JwkSet rejects requests", async () => {
   const app = new App();
   app.use(
     jwk({
-      jwks: () => ({ notKeys: true } as unknown as JwkSet),
+      jwks: () => ({ notKeys: true }) as unknown as JwkSet,
       algorithms: ["RS256"],
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -642,7 +623,7 @@ test("jwk: resolver returning a non-JwkSet rejects requests", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: "Bearer x.y.z" } }),
+    new Request("http://x/", { headers: { authorization: "Bearer x.y.z" } })
   );
   assert.equal(res.status, 401);
 });
@@ -675,7 +656,7 @@ test("jwk: https URL is fetched, cached for TTL, and serves verification", async
       algorithms: ["ES256"],
       fetch: fakeFetch,
       fetchTtlSeconds: 60,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -685,9 +666,7 @@ test("jwk: https URL is fetched, cached for TTL, and serves verification", async
   });
   const auth = `Bearer ${token}`;
   for (let i = 0; i < 3; i++) {
-    const res = await app.request(
-      new Request("http://x/", { headers: { authorization: auth } }),
-    );
+    const res = await app.request(new Request("http://x/", { headers: { authorization: auth } }));
     assert.equal(res.status, 200, `request ${i} should be 200`);
   }
   assert.equal(fetchCalls, 1);
@@ -701,7 +680,7 @@ test("jwk: https URL fetch returning non-2xx → request fails 401", async () =>
       jwks: "https://issuer/keys",
       algorithms: ["ES256"],
       fetch: fakeFetch,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -710,7 +689,7 @@ test("jwk: https URL fetch returning non-2xx → request fails 401", async () =>
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: "Bearer a.b.c" } }),
+    new Request("http://x/", { headers: { authorization: "Bearer a.b.c" } })
   );
   assert.equal(res.status, 401);
 });
@@ -726,7 +705,7 @@ test("jwk: https URL fetch returning malformed JSON → 401", async () => {
       jwks: "https://issuer/keys",
       algorithms: ["ES256"],
       fetch: fakeFetch,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -735,7 +714,7 @@ test("jwk: https URL fetch returning malformed JSON → 401", async () => {
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const res = await app.request(
-    new Request("http://x/", { headers: { authorization: "Bearer a.b.c" } }),
+    new Request("http://x/", { headers: { authorization: "Bearer a.b.c" } })
   );
   assert.equal(res.status, 401);
 });
@@ -769,7 +748,7 @@ test("jwk: concurrent requests share a single in-flight JWKS fetch", async () =>
       algorithms: ["ES256"],
       fetch: fakeFetch,
       fetchTtlSeconds: 60,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -780,8 +759,8 @@ test("jwk: concurrent requests share a single in-flight JWKS fetch", async () =>
   const auth = `Bearer ${token}`;
   const results = await Promise.all(
     Array.from({ length: 5 }, () =>
-      app.request(new Request("http://x/", { headers: { authorization: auth } })),
-    ),
+      app.request(new Request("http://x/", { headers: { authorization: auth } }))
+    )
   );
   for (const r of results) assert.equal(r.status, 200);
   assert.equal(fetchCalls, 1);
@@ -795,7 +774,7 @@ test("jwk: refuses negative maxStaleSeconds", () => {
         algorithms: ["RS256"],
         maxStaleSeconds: -1,
       }),
-    /maxStaleSeconds/,
+    /maxStaleSeconds/
   );
 });
 
@@ -834,7 +813,7 @@ test("jwk: serves last-good JWKS when a TTL-expiry refresh fails (stale-while-er
       // "expired" yet still within the stale window.
       fetchTtlSeconds: 0,
       maxStaleSeconds: 3600,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -846,9 +825,7 @@ test("jwk: serves last-good JWKS when a TTL-expiry refresh fails (stale-while-er
   // First request seeds the cache; subsequent requests hit the failing
   // refresh but must keep validating from the stale-but-valid JWKS.
   for (let i = 0; i < 3; i++) {
-    const res = await app.request(
-      new Request("http://x/", { headers: { authorization: auth } }),
-    );
+    const res = await app.request(new Request("http://x/", { headers: { authorization: auth } }));
     assert.equal(res.status, 200, `request ${i} should stay 200 on stale JWKS`);
   }
   assert.ok(fetchCalls >= 2, "later refreshes should have been attempted");
@@ -886,7 +863,7 @@ test("jwk: maxStaleSeconds=0 fails closed the moment a refresh fails", async () 
       fetch: fakeFetch,
       fetchTtlSeconds: 0,
       maxStaleSeconds: 0,
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -895,12 +872,8 @@ test("jwk: maxStaleSeconds=0 fails closed the moment a refresh fails", async () 
     handler: () => ({ status: 200 as const, body: { ok: true } }),
   });
   const auth = `Bearer ${token}`;
-  const first = await app.request(
-    new Request("http://x/", { headers: { authorization: auth } }),
-  );
+  const first = await app.request(new Request("http://x/", { headers: { authorization: auth } }));
   assert.equal(first.status, 200, "first request seeds cache and succeeds");
-  const second = await app.request(
-    new Request("http://x/", { headers: { authorization: auth } }),
-  );
+  const second = await app.request(new Request("http://x/", { headers: { authorization: auth } }));
   assert.equal(second.status, 401, "stale disabled → failed refresh rejects");
 });

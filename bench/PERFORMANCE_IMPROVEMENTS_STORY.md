@@ -14,12 +14,12 @@ Node 24 baseline.
 **DaloyJS performance is acceptable.** It is not a “slow framework”; the
 default matrix measures a different product than bare Hono/Fastify:
 
-| Posture                                                                 | What it does                                                                                                                       | Relative cost (this re-run, Node 26.4.0)                                                                                                                                 |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Full defaults** (`daloy`)                                             | Zod request + response validation, auto `secureHeaders`, cross-origin write guard, header smuggling / reserved-prefix / count caps | ~16% fewer req/s than `daloy-bare` on GET; ~30% behind bare Fastify/Hono on GET; **~17% ahead of bare Hono** on JSON echo                                                |
-| **Apple-to-apple** (`daloy-bare`, `preset: "internal-service"`, no Zod) | Router + dispatch only                                                                                                             | ~21% behind Fastify / ~17% behind Hono on GET; solid second tier on POST /echo among focused matrix                                                                      |
-| **Secured production stack**                                            | Request ID + headers + CORS + rate limit + HS256 JWT                                                                               | **~12% behind Fastify** on GET; **~32% ahead of Hono** on GET and **~62% ahead** on echo                                                                                 |
-| **In-process router**                                                   | `Router.find()` only                                                                                                               | ~28M static lookups/s on Node 26 — not the bottleneck                                                                                                                    |
+| Posture                                                                 | What it does                                                                                                                       | Relative cost (this re-run, Node 26.4.0)                                                                                  |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Full defaults** (`daloy`)                                             | Zod request + response validation, auto `secureHeaders`, cross-origin write guard, header smuggling / reserved-prefix / count caps | ~16% fewer req/s than `daloy-bare` on GET; ~30% behind bare Fastify/Hono on GET; **~17% ahead of bare Hono** on JSON echo |
+| **Apple-to-apple** (`daloy-bare`, `preset: "internal-service"`, no Zod) | Router + dispatch only                                                                                                             | ~21% behind Fastify / ~17% behind Hono on GET; solid second tier on POST /echo among focused matrix                       |
+| **Secured production stack**                                            | Request ID + headers + CORS + rate limit + HS256 JWT                                                                               | **~12% behind Fastify** on GET; **~32% ahead of Hono** on GET and **~62% ahead** on echo                                  |
+| **In-process router**                                                   | `Router.find()` only                                                                                                               | ~28M static lookups/s on Node 26 — not the bottleneck                                                                     |
 
 > **Caveat:** the relative-cost column above comes from the 2026-07-18
 > **Node 26.4.0 spot-check**, which is off the repo's Node 24 (`.nvmrc`)
@@ -42,12 +42,12 @@ See “Safe future optimisations” below if chasing more later.
 On-baseline (`.nvmrc`) cross-framework run. **Prefer these numbers for any
 external claim** until a fresh Node 24 re-run replaces them.
 
-| Framework        | GET /static     | GET /users/:id  | POST /echo      |
-| ---------------- | --------------: | --------------: | --------------: |
-| hono             | 55,905 ±1,354   | 55,987 ±760     | 22,709 ±98      |
-| hono-validated   | 56,627 ±233     | 54,499 ±800     | 22,652 ±130     |
-| fastify          | 51,766 ±1,639   | 51,834 ±806     | 32,911 ±93      |
-| **daloy-bare**   | **51,619 ±959** | **51,046 ±799** | **42,365 ±202** |
+| Framework        |       GET /static |  GET /users/:id |      POST /echo |
+| ---------------- | ----------------: | --------------: | --------------: |
+| hono             |     55,905 ±1,354 |     55,987 ±760 |      22,709 ±98 |
+| hono-validated   |       56,627 ±233 |     54,499 ±800 |     22,652 ±130 |
+| fastify          |     51,766 ±1,639 |     51,834 ±806 |      32,911 ±93 |
+| **daloy-bare**   |   **51,619 ±959** | **51,046 ±799** | **42,365 ±202** |
 | **daloy** (full) | **41,229 ±1,009** | **40,815 ±241** | **33,118 ±174** |
 
 On Node 24, bare Daloy was **tied with Fastify** on GET (CI overlap) and
@@ -67,16 +67,16 @@ row (omitted here) is not comparable.
 
 ### In-process micro (`pnpm bench*`, Node 26.4.0)
 
-| Bench                            |                                                                                                         Result |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------: |
-| Router static lookup             |                                                                     ~28.5M ops/s median (seven rotated rounds) |
-| Router dynamic 4-segment         |                                                                                             ~2.2M ops/s median |
-| Router miss                      |                                                                                             ~8.2M ops/s median |
-| Serverless first fetch           |                                              ~2.5–3.2 ms median; every scenario sample runs in a fresh process |
-| Serverless warm fetch            |                                                                                               ~21–22 µs median |
-| Serverless import `dist/app.js`  |                                                                                               ~18.2 ms median |
-| JSON body limits ON vs OFF (e2e) | ~2.3% overhead (median of 5 rounds; per-round spread ~1.6–4.7%) |
-| JSON safe parse typical (limited vs unlimited) | ~10% overhead for key/depth caps on a typical body |
+| Bench                                          |                                                            Result |
+| ---------------------------------------------- | ----------------------------------------------------------------: |
+| Router static lookup                           |                        ~28.5M ops/s median (seven rotated rounds) |
+| Router dynamic 4-segment                       |                                                ~2.2M ops/s median |
+| Router miss                                    |                                                ~8.2M ops/s median |
+| Serverless first fetch                         | ~2.5–3.2 ms median; every scenario sample runs in a fresh process |
+| Serverless warm fetch                          |                                                  ~21–22 µs median |
+| Serverless import `dist/app.js`                |                                                   ~18.2 ms median |
+| JSON body limits ON vs OFF (e2e)               |   ~2.3% overhead (median of 5 rounds; per-round spread ~1.6–4.7%) |
+| JSON safe parse typical (limited vs unlimited) |                ~10% overhead for key/depth caps on a typical body |
 
 ### In-process dispatch ablation (dist `App.fetch`, no HTTP)
 
@@ -86,14 +86,14 @@ iters, interleaved configs, raw samples + provenance in
 
 **Grok 4.5 re-run** (dist, Node 26.4.0, git clean, loadAvg ~5):
 
-| Config                          |                      GET /static |
-| ------------------------------- | -------------------------------: |
-| Full defaults + response schema |                     **~155k ops/s** |
-| `validateResponses: false`      |                        ~157k ops/s |
-| `preset: "internal-service"`    |                        ~206k ops/s |
-| Bare async handler              |                        ~207k ops/s |
-| Bare sync handler               |                        ~237k ops/s |
-| `secureDefaults: false`         |                        ~203k ops/s |
+| Config                          |     GET /static |
+| ------------------------------- | --------------: |
+| Full defaults + response schema | **~155k ops/s** |
+| `validateResponses: false`      |     ~157k ops/s |
+| `preset: "internal-service"`    |     ~206k ops/s |
+| Bare async handler              |     ~207k ops/s |
+| Bare sync handler               |     ~237k ops/s |
+| `secureDefaults: false`         |     ~203k ops/s |
 
 Handler-supplied `x-frame-options: SAMEORIGIN` still wins over auto DENY; CSP
 and the rest of the baseline still apply (verified in ablation + unit tests).
@@ -108,14 +108,14 @@ guards (`internal-service` / `secureDefaults: false`) recovers ~+33%.
 **Grok 4.5 focused run** on Node 26.4.0, 100 connections, 5×5s, 10s warmup,
 AC power, loadAvg ~4.5 at start. Headline is mean req/s with 95% CI:
 
-| Framework        | GET /static     | GET /users/:id  | POST /echo      |
-| ---------------- | --------------: | --------------: | --------------: |
-| fastify          | 65,567 ±789     | 65,467 ±1,159   | 57,434 ±321     |
-| hono-validated   | 62,755 ±740     | 61,703 ±518     | 28,988 ±98      |
-| hono             | 62,375 ±1,766   | 62,847 ±377     | 29,132 ±114     |
+| Framework        |       GET /static |  GET /users/:id |      POST /echo |
+| ---------------- | ----------------: | --------------: | --------------: |
+| fastify          |       65,567 ±789 |   65,467 ±1,159 |     57,434 ±321 |
+| hono-validated   |       62,755 ±740 |     61,703 ±518 |      28,988 ±98 |
+| hono             |     62,375 ±1,766 |     62,847 ±377 |     29,132 ±114 |
 | **daloy-bare**   | **51,948 ±1,351** | **52,284 ±237** | **41,885 ±163** |
-| **daloy** (full) | **43,700 ±425** | **41,145 ±733** | **34,033 ±147** |
-| daloy-nozod\*    | 39,207 ±930     | 38,397 ±99      | 32,928 ±288     |
+| **daloy** (full) |   **43,700 ±425** | **41,145 ±733** | **34,033 ±147** |
+| daloy-nozod\*    |       39,207 ±930 |      38,397 ±99 |     32,928 ±288 |
 
 \* **`daloy-nozod` in this table still used default info logger** (see
 methodology fix below). After `logger: false`, a short re-check put
@@ -124,11 +124,11 @@ methodology fix below). After `logger: false`, a short re-check put
 
 **Secured stack** (request ID, headers, CORS, rate limit, HS256 JWT) same day:
 
-| Framework | GET /static   | GET /users/:id | POST /echo    |
-| --------- | ------------: | -------------: | ------------: |
-| fastify   | 30,844 ±44    | 30,541 ±312    | 28,925 ±139   |
+| Framework |    GET /static |  GET /users/:id |      POST /echo |
+| --------- | -------------: | --------------: | --------------: |
+| fastify   |     30,844 ±44 |     30,541 ±312 |     28,925 ±139 |
 | **daloy** | **26,972 ±93** | **26,460 ±161** | **24,144 ±214** |
-| hono      | 20,441 ±647   | 20,686 ±120    | 14,887 ±85    |
+| hono      |    20,441 ±647 |     20,686 ±120 |      14,887 ±85 |
 
 Do not call the Fastify comparison full behavioral parity until it uses the
 same Zod request and response schemas. Hono secured rows also carry matched
@@ -184,18 +184,18 @@ Earlier hot-path work (still load-bearing — do not regress):
 
 ### Gaps fixed / found this re-run
 
-| Gap                                                                  | Why it matters                                                                                                                        | Status |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `throughput/daloy-nozod.ts` used default info logger                 | Per-request `logger.child()` made nozod **slower** than full-contract `daloy` (`logger: false`), confounded “validation cost”         | **Fixed 2026-07-18** — both use `logger: false`; short re-check shows CI overlap |
-| `stream/daloy.ts` same logger mismatch                               | Streaming story mixed logger cost into framework cost                                                                                 | **Fixed 2026-07-18** |
-| Secured-stack runner only checked readiness                           | A fast but semantically wrong endpoint could have been timed                                                                         | **Fixed 2026-07-19** — all three endpoints now require an expected 200 JSON body before sampling |
-| Ablation numbers not reproducible                                    | Tables without raw samples                                                                                                            | **Fixed earlier:** `pnpm bench:ablation` |
-| Throughput servers used `async` for pure sync work                   | ~15% self-inflicted                                                                                                                   | **Fixed earlier** |
-| Orange-to-apple still easy to misread                                | Marketing tables quote bare routers vs full Daloy                                                                                     | Keep leading with uncertainty groups + variants |
-| No pin of “quiet machine” gate                                       | High loadAvg makes ±10% noise                                                                                                         | **Fixed earlier:** warn when `loadAvg[0] > cpuCount` |
-| Shell not on `.nvmrc` Node                                           | This re-run used system Node 26 while docs say Node 24 baseline — absolute and relative numbers shift                                 | Always `nvm use` / record `machine.node`; do not mix Node majors when comparing |
-| Multi-runtime not in matrix                                          | Bun/Deno numbers differ                                                                                                               | Optional scheduled Bun pass still open |
-| Router micro-bench in root README                                    | Not comparable to HTTP                                                                                                                | Keep disclaimer; prefer cross-framework for claims |
+| Gap                                                  | Why it matters                                                                                                                | Status                                                                                           |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `throughput/daloy-nozod.ts` used default info logger | Per-request `logger.child()` made nozod **slower** than full-contract `daloy` (`logger: false`), confounded “validation cost” | **Fixed 2026-07-18** — both use `logger: false`; short re-check shows CI overlap                 |
+| `stream/daloy.ts` same logger mismatch               | Streaming story mixed logger cost into framework cost                                                                         | **Fixed 2026-07-18**                                                                             |
+| Secured-stack runner only checked readiness          | A fast but semantically wrong endpoint could have been timed                                                                  | **Fixed 2026-07-19** — all three endpoints now require an expected 200 JSON body before sampling |
+| Ablation numbers not reproducible                    | Tables without raw samples                                                                                                    | **Fixed earlier:** `pnpm bench:ablation`                                                         |
+| Throughput servers used `async` for pure sync work   | ~15% self-inflicted                                                                                                           | **Fixed earlier**                                                                                |
+| Orange-to-apple still easy to misread                | Marketing tables quote bare routers vs full Daloy                                                                             | Keep leading with uncertainty groups + variants                                                  |
+| No pin of “quiet machine” gate                       | High loadAvg makes ±10% noise                                                                                                 | **Fixed earlier:** warn when `loadAvg[0] > cpuCount`                                             |
+| Shell not on `.nvmrc` Node                           | This re-run used system Node 26 while docs say Node 24 baseline — absolute and relative numbers shift                         | Always `nvm use` / record `machine.node`; do not mix Node majors when comparing                  |
+| Multi-runtime not in matrix                          | Bun/Deno numbers differ                                                                                                       | Optional scheduled Bun pass still open                                                           |
+| Router micro-bench in root README                    | Not comparable to HTTP                                                                                                        | Keep disclaimer; prefer cross-framework for claims                                               |
 
 ### Remaining methodology improvements (nice-to-have)
 

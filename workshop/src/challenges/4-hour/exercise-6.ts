@@ -31,7 +31,7 @@ app.get(
   async () => ({
     status: 200 as const,
     body: { runtime: process.versions.bun ? "Bun" : "Node.js" },
-  }),
+  })
 );
 
 serveNode(app, { port: 3000 });

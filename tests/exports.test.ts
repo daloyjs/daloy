@@ -31,20 +31,16 @@ test("package.json and jsr.json advertise the same export subpaths", () => {
   assert.deepEqual(
     Object.keys(pkgExports).sort(),
     Object.keys(jsrExports).sort(),
-    "package.json and jsr.json export maps have drifted out of parity",
+    "package.json and jsr.json export maps have drifted out of parity"
   );
 });
 
 test("every jsr export resolves to an existing source file", () => {
   for (const [subpath, src] of Object.entries(jsrExports)) {
-    assert.equal(
-      typeof src,
-      "string",
-      `jsr export "${subpath}" must map to a source path`,
-    );
+    assert.equal(typeof src, "string", `jsr export "${subpath}" must map to a source path`);
     assert.ok(
       existsSync(path.join(REPO_ROOT, src as string)),
-      `jsr export "${subpath}" -> ${String(src)} does not exist on disk`,
+      `jsr export "${subpath}" -> ${String(src)} does not exist on disk`
     );
   }
 });

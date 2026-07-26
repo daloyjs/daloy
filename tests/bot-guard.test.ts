@@ -39,7 +39,7 @@ function req(ua: string | null, ip?: string): Request {
 /** Static DNS fixture: ip → PTR hostnames, hostname → forward IPs. */
 function fixtureResolver(
   ptr: Record<string, string[]>,
-  fwd: Record<string, string[]>,
+  fwd: Record<string, string[]>
 ): BotResolver {
   return {
     async reverse(ip) {
@@ -59,16 +59,11 @@ test("botGuard() rejects an invalid mode", () => {
 });
 
 test("botGuard() requires an IP source when verifiedBots is set", () => {
-  assert.throws(
-    () => botGuard({ verifiedBots: WELL_KNOWN_BOTS }),
-    /requires a client-IP source/,
-  );
+  assert.throws(() => botGuard({ verifiedBots: WELL_KNOWN_BOTS }), /requires a client-IP source/);
 });
 
 test("botGuard() accepts verifiedBots with trustProxyHeaders", () => {
-  assert.doesNotThrow(() =>
-    botGuard({ verifiedBots: WELL_KNOWN_BOTS, trustProxyHeaders: true }),
-  );
+  assert.doesNotThrow(() => botGuard({ verifiedBots: WELL_KNOWN_BOTS, trustProxyHeaders: true }));
 });
 
 // ---------- empty / blocked user agents ----------
@@ -103,13 +98,12 @@ test("botGuard() allowlist bypasses every other rule", async () => {
 
 // ---------- declared-crawler verification ----------
 
-const GOOGLE_UA =
-  "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+const GOOGLE_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
 test("botGuard() lets a genuine Googlebot through (reverse + forward confirm)", async () => {
   const resolver = fixtureResolver(
     { "66.249.66.1": ["crawl-66-249-66-1.googlebot.com"] },
-    { "crawl-66-249-66-1.googlebot.com": ["66.249.66.1"] },
+    { "crawl-66-249-66-1.googlebot.com": ["66.249.66.1"] }
   );
   const app = appWith({
     trustProxyHeaders: true,
@@ -122,7 +116,7 @@ test("botGuard() lets a genuine Googlebot through (reverse + forward confirm)", 
 test("botGuard() blocks a spoofed Googlebot whose PTR is not on an allowed domain", async () => {
   const resolver = fixtureResolver(
     { "1.2.3.4": ["host.evil.example"] },
-    { "host.evil.example": ["1.2.3.4"] },
+    { "host.evil.example": ["1.2.3.4"] }
   );
   const app = appWith({
     trustProxyHeaders: true,
@@ -135,7 +129,7 @@ test("botGuard() blocks a spoofed Googlebot whose PTR is not on an allowed domai
 test("botGuard() blocks a spoofed Googlebot that fails forward-confirm", async () => {
   const resolver = fixtureResolver(
     { "1.2.3.4": ["crawl.googlebot.com"] },
-    { "crawl.googlebot.com": ["9.9.9.9"] }, // forward IP differs
+    { "crawl.googlebot.com": ["9.9.9.9"] } // forward IP differs
   );
   const app = appWith({
     trustProxyHeaders: true,
@@ -230,7 +224,7 @@ test("botGuard() log mode never blocks but reports events", async () => {
   assert.equal((await app.fetch(req(""))).status, 200);
   assert.deepEqual(
     events.map((e) => e.reason),
-    ["blocked-user-agent", "empty-user-agent"],
+    ["blocked-user-agent", "empty-user-agent"]
   );
 });
 
@@ -256,7 +250,7 @@ test("botGuard() reports a spoofed-bot event with bot name and ip", async () => 
 test("botGuard() does not let evilgooglebot.com satisfy .googlebot.com", async () => {
   const resolver = fixtureResolver(
     { "1.2.3.4": ["host.evilgooglebot.com"] },
-    { "host.evilgooglebot.com": ["1.2.3.4"] },
+    { "host.evilgooglebot.com": ["1.2.3.4"] }
   );
   const app = appWith({ trustProxyHeaders: true, verifiedBots: [GOOGLEBOT], resolver });
   assert.equal((await app.fetch(req(GOOGLE_UA, "1.2.3.4"))).status, 403);
@@ -270,7 +264,7 @@ test("default BotResolver forward-resolves loopback via node:dns", async () => {
   const addrs = await resolver.forward("localhost");
   assert.ok(
     addrs.some((a) => a === "127.0.0.1" || a === "::1"),
-    `expected a loopback address, got ${JSON.stringify(addrs)}`,
+    `expected a loopback address, got ${JSON.stringify(addrs)}`
   );
   // reverse() should run without throwing for a loopback IP; the PTR value is
   // environment-dependent, so we only assert it returns an array.
@@ -289,7 +283,7 @@ test("botGuard blockedUserAgents with /g regex is consistent across requests", a
   });
   for (let i = 0; i < 5; i++) {
     const res = await app.fetch(
-      new Request("http://x/", { headers: { "user-agent": "sqlmap/1.0" } }),
+      new Request("http://x/", { headers: { "user-agent": "sqlmap/1.0" } })
     );
     assert.equal(res.status, 403, `request ${i + 1} must stay blocked`);
   }

@@ -28,7 +28,10 @@ function makeApp(opts: IdempotencyOptions = {}) {
     operationId: "pay",
     request: { body: z.object({ amount: z.number() }).optional() as any },
     responses: {
-      201: { description: "created", body: z.object({ id: z.number(), amount: z.number() }) as any },
+      201: {
+        description: "created",
+        body: z.object({ id: z.number(), amount: z.number() }) as any,
+      },
     },
     handler: async ({ body }) => {
       state.calls++;
@@ -274,21 +277,32 @@ test("MemoryIdempotencyStore treats expired records as missing", () => {
   store.complete(
     "k",
     { fingerprint: "fp", status: "completed", createdAt: past - 1000, expiresAt: past },
-    1000,
+    1000
   );
   // The expired record is dropped on access, so the key can be reserved again.
-  assert.equal(store.reserve("k", {
-    fingerprint: "fp2",
-    status: "in-flight",
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 1000,
-  }, 1000), null);
+  assert.equal(
+    store.reserve(
+      "k",
+      {
+        fingerprint: "fp2",
+        status: "in-flight",
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 1000,
+      },
+      1000
+    ),
+    null
+  );
 });
 
 test("MemoryIdempotencyStore.release drops a reservation", () => {
   const store = new MemoryIdempotencyStore();
   const now = Date.now();
-  store.reserve("k", { fingerprint: "fp", status: "in-flight", createdAt: now, expiresAt: now + 1000 }, 1000);
+  store.reserve(
+    "k",
+    { fingerprint: "fp", status: "in-flight", createdAt: now, expiresAt: now + 1000 },
+    1000
+  );
   store.release("k");
   assert.equal(store.size(), 0);
   store.clear();

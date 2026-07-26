@@ -15,9 +15,7 @@
 import type { BaseContext, Hooks } from "./types.js";
 
 /** Symbol stamped on hooks returned by {@link defineDependency}. */
-export const DEPENDENCY_MARKER: unique symbol = Symbol.for(
-  "daloyjs.dependency.marker",
-);
+export const DEPENDENCY_MARKER: unique symbol = Symbol.for("daloyjs.dependency.marker");
 
 /** Per-request cache of dependency results, keyed by dependency name. */
 const RESULTS_KEY: unique symbol = Symbol.for("daloyjs.dependency.results");
@@ -58,18 +56,16 @@ export interface DependencyHooks extends Hooks {
  * @throws {Error} When `name` is empty or the dependency declares itself in `dependsOn` (cycle).
  * @since 0.24.0
  */
-export function defineDependency<
-  TName extends string,
-  TValue,
-  TStateKey extends string = TName,
->(opts: DependencyOptions<TName, TValue, TStateKey>): DependencyHooks {
+export function defineDependency<TName extends string, TValue, TStateKey extends string = TName>(
+  opts: DependencyOptions<TName, TValue, TStateKey>
+): DependencyHooks {
   if (typeof opts.name !== "string" || opts.name.length === 0) {
     throw new Error("defineDependency(): name is required and must be a non-empty string.");
   }
   const dependsOn = opts.dependsOn ?? [];
   if (dependsOn.includes(opts.name)) {
     throw new Error(
-      `defineDependency(): dependency "${opts.name}" declares itself as a dependency (cycle).`,
+      `defineDependency(): dependency "${opts.name}" declares itself as a dependency (cycle).`
     );
   }
   const stateKey = opts.stateKey ?? opts.name;
@@ -95,7 +91,7 @@ export function defineDependency<
       for (const dep of dependsOn) {
         if (!cache.has(dep)) {
           throw new Error(
-            `defineDependency(): "${opts.name}" requires "${dep}" to be composed first.`,
+            `defineDependency(): "${opts.name}" requires "${dep}" to be composed first.`
           );
         }
       }

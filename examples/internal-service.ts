@@ -73,7 +73,7 @@ app.get(
   async ({ params }) => ({
     status: 200 as const,
     body: { id: params.id, name: `User ${params.id}` },
-  }),
+  })
 );
 
 // --- Operator-facing posture introspection -----------------------------------
@@ -119,7 +119,7 @@ app.get(
         production: p.production,
       },
     };
-  },
+  }
 );
 
 const port = Number(process.env.PORT ?? 3001);

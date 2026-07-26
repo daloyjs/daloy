@@ -8,9 +8,7 @@ const WORKFLOWS_DIR = new URL(".github/workflows/", pathToFileURL(`${process.cwd
 
 test("every shipped workflow has zero `uses:` violations", async () => {
   const entries = await readdir(WORKFLOWS_DIR, { withFileTypes: true });
-  const files = entries
-    .filter((e) => e.isFile() && /\.ya?ml$/.test(e.name))
-    .map((e) => e.name);
+  const files = entries.filter((e) => e.isFile() && /\.ya?ml$/.test(e.name)).map((e) => e.name);
   assert.ok(files.length > 0, "expected at least one workflow file");
   for (const name of files) {
     const text = await readFile(new URL(name, WORKFLOWS_DIR), "utf8");
@@ -20,7 +18,7 @@ test("every shipped workflow has zero `uses:` violations", async () => {
       [],
       `unexpected verify-actions-pinned violations in ${name}: ${violations
         .map((v) => `${v.line}: ${v.reason}`)
-        .join(", ")}`,
+        .join(", ")}`
     );
   }
 });

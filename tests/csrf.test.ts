@@ -87,7 +87,7 @@ test("csrf supports a custom header name and ignoreMethods", async () => {
     csrf({
       headerName: "X-XSRF-TOKEN",
       ignoreMethods: ["GET"],
-    }),
+    })
   );
   app.route({
     method: "PUT",
@@ -141,7 +141,7 @@ test("csrf supports a custom token generator and a non-prefixed cookie name", as
         maxAgeSeconds: 3600,
         partitioned: true,
       },
-    }),
+    })
   );
   app.route({
     method: "GET",
@@ -155,13 +155,15 @@ test("csrf supports a custom token generator and a non-prefixed cookie name", as
   const setCookie = res.headers.get("set-cookie")!;
   assert.equal(
     setCookie,
-    "csrf=gen-1; Path=/api; SameSite=Strict; Domain=example.com; Max-Age=3600; Partitioned",
+    "csrf=gen-1; Path=/api; SameSite=Strict; Domain=example.com; Max-Age=3600; Partitioned"
   );
 });
 
 test("csrf percent-encodes generated cookie values", async () => {
   const app = new App({ logger: false });
-  app.use(csrf({ cookieName: "csrf", generator: () => "hello world", cookieOptions: { secure: false } }));
+  app.use(
+    csrf({ cookieName: "csrf", generator: () => "hello world", cookieOptions: { secure: false } })
+  );
   app.route({
     method: "GET",
     path: "/anything",
@@ -183,7 +185,7 @@ test("csrf throws when __Host- cookie name is misconfigured", () => {
 test("csrf throws when SameSite=None is used without Secure", () => {
   assert.throws(
     () => csrf({ cookieName: "csrf", cookieOptions: { sameSite: "None", secure: false } }),
-    /sameSite: "None" requires secure: true/,
+    /sameSite: "None" requires secure: true/
   );
 });
 
@@ -192,13 +194,28 @@ test("csrf validates cookie and header options up front", () => {
   assert.throws(() => csrf({ headerName: "bad header" }), /Bad Request/);
   assert.throws(
     () => csrf({ cookieName: "csrf", cookieOptions: { sameSite: "Loose" as "Lax" } }),
-    /sameSite must be/,
+    /sameSite must be/
   );
-  assert.throws(() => csrf({ cookieName: "csrf", cookieOptions: { path: "api" } }), /path must start/);
-  assert.throws(() => csrf({ cookieName: "csrf", cookieOptions: { path: "/api;v=1" } }), /path contains/);
-  assert.throws(() => csrf({ cookieName: "csrf", cookieOptions: { domain: "example.com\r\n" } }), /domain contains/);
-  assert.throws(() => csrf({ cookieName: "csrf", cookieOptions: { maxAgeSeconds: -1 } }), /maxAgeSeconds/);
-  assert.throws(() => csrf({ cookieName: "csrf", cookieOptions: { maxAgeSeconds: 1.5 } }), /maxAgeSeconds/);
+  assert.throws(
+    () => csrf({ cookieName: "csrf", cookieOptions: { path: "api" } }),
+    /path must start/
+  );
+  assert.throws(
+    () => csrf({ cookieName: "csrf", cookieOptions: { path: "/api;v=1" } }),
+    /path contains/
+  );
+  assert.throws(
+    () => csrf({ cookieName: "csrf", cookieOptions: { domain: "example.com\r\n" } }),
+    /domain contains/
+  );
+  assert.throws(
+    () => csrf({ cookieName: "csrf", cookieOptions: { maxAgeSeconds: -1 } }),
+    /maxAgeSeconds/
+  );
+  assert.throws(
+    () => csrf({ cookieName: "csrf", cookieOptions: { maxAgeSeconds: 1.5 } }),
+    /maxAgeSeconds/
+  );
 });
 
 test("csrf rejects an empty generated token", async () => {
@@ -239,7 +256,10 @@ test("csrf can use crypto.randomUUID when getRandomValues is unavailable", async
   try {
     const app = makeApp();
     const res = await app.request("/form");
-    assert.match(res.headers.get("set-cookie")!, /^__Host-daloy\.csrf=00000000111122223333444444444444;/);
+    assert.match(
+      res.headers.get("set-cookie")!,
+      /^__Host-daloy\.csrf=00000000111122223333444444444444;/
+    );
   } finally {
     Object.defineProperty(globalThis, "crypto", {
       value: realCrypto,

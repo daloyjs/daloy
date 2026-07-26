@@ -1,28 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fc from "fast-check";
-import {
-  isForbiddenObjectKey,
-  safeJsonParse,
-  sanitizeHeaderValue,
-} from "../src/index.js";
-import {
-  sanitizeFilename,
-  assertSafeRelativePath,
-  sanitizeHeaderName,
-} from "../src/security.js";
-import {
-  parseIp,
-  compileCidrMatcher,
-  matchesMatcher,
-} from "../src/ip-restriction.js";
+import { isForbiddenObjectKey, safeJsonParse, sanitizeHeaderValue } from "../src/index.js";
+import { sanitizeFilename, assertSafeRelativePath, sanitizeHeaderName } from "../src/security.js";
+import { parseIp, compileCidrMatcher, matchesMatcher } from "../src/ip-restriction.js";
 
 const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
 
 const octet = fc.integer({ min: 0, max: 255 });
-const ipv4 = fc
-  .tuple(octet, octet, octet, octet)
-  .map(([a, b, c, d]) => `${a}.${b}.${c}.${d}`);
+const ipv4 = fc.tuple(octet, octet, octet, octet).map(([a, b, c, d]) => `${a}.${b}.${c}.${d}`);
 const safeSegment = fc
   .array(fc.constantFrom(..."abcXYZ012_-".split("")), { minLength: 1, maxLength: 8 })
   .map((cs) => cs.join(""));
@@ -51,11 +37,9 @@ test("fuzz: safeJsonParse strips dangerous object keys at any depth", () => {
 
   fc.assert(
     fc.property(
-      fc.dictionary(
-        fc.constantFrom("__proto__", "constructor", "prototype", "ok"),
-        jsonSafeValue,
-        { maxKeys: 4 }
-      ),
+      fc.dictionary(fc.constantFrom("__proto__", "constructor", "prototype", "ok"), jsonSafeValue, {
+        maxKeys: 4,
+      }),
       (obj) => {
         const parsed = safeJsonParse(JSON.stringify(obj));
         if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
@@ -122,20 +106,13 @@ test("fuzz: an IPv4 always matches its own /32 and the /0 supernet, never a fore
 
 test("fuzz: /24 containment — same first three octets match, a neighbouring /24 does not", () => {
   fc.assert(
-    fc.property(
-      octet,
-      octet,
-      fc.integer({ min: 0, max: 254 }),
-      octet,
-      octet,
-      (a, b, c, d1, d2) => {
-        const net = compileCidrMatcher(`${a}.${b}.${c}.0/24`);
-        assert.equal(matchesMatcher(parseIp(`${a}.${b}.${c}.${d1}`)!, net), true);
-        assert.equal(matchesMatcher(parseIp(`${a}.${b}.${c}.${d2}`)!, net), true);
-        // c <= 254, so c+1 is a valid, different third octet → outside the /24.
-        assert.equal(matchesMatcher(parseIp(`${a}.${b}.${c + 1}.${d1}`)!, net), false);
-      }
-    ),
+    fc.property(octet, octet, fc.integer({ min: 0, max: 254 }), octet, octet, (a, b, c, d1, d2) => {
+      const net = compileCidrMatcher(`${a}.${b}.${c}.0/24`);
+      assert.equal(matchesMatcher(parseIp(`${a}.${b}.${c}.${d1}`)!, net), true);
+      assert.equal(matchesMatcher(parseIp(`${a}.${b}.${c}.${d2}`)!, net), true);
+      // c <= 254, so c+1 is a valid, different third octet → outside the /24.
+      assert.equal(matchesMatcher(parseIp(`${a}.${b}.${c + 1}.${d1}`)!, net), false);
+    }),
     { numRuns: 400 }
   );
 });

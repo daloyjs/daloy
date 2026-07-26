@@ -111,7 +111,11 @@ test("[signed-value] a tampered signature fails verification (returns null)", as
   assert.equal(await verifySignedValue(signed, SECRET32), "session-id-123");
 
   const tampered = signed.slice(0, -1) + (signed.endsWith("A") ? "B" : "A");
-  assert.equal(await verifySignedValue(tampered, SECRET32), null, "flipped signature byte must not verify");
+  assert.equal(
+    await verifySignedValue(tampered, SECRET32),
+    null,
+    "flipped signature byte must not verify"
+  );
 });
 
 test("[signed-value] swapping the payload but keeping the signature fails", async () => {
@@ -125,7 +129,10 @@ test("[signed-value] a wrong secret never verifies; rotation array still accepts
   const signed = await signValue("session-id-123", SECRET32);
   assert.equal(await verifySignedValue(signed, "wrong-secret-wrong-secret-wrong!"), null);
   // Secret rotation: the old secret remains valid while listed in the array.
-  assert.equal(await verifySignedValue(signed, ["new-secret-new-secret-new-secret", SECRET32]), "session-id-123");
+  assert.equal(
+    await verifySignedValue(signed, ["new-secret-new-secret-new-secret", SECRET32]),
+    "session-id-123"
+  );
 });
 
 // ===========================================================================
@@ -135,7 +142,7 @@ test("[signed-value] a wrong secret never verifies; rotation array still accepts
 test("[cookie] insecure attribute combinations are refused", () => {
   // __Host- prefix without Secure.
   assert.throws(() =>
-    assertCookieAttributes({ scope: "test", name: "__Host-sid", attributes: { secure: false } }),
+    assertCookieAttributes({ scope: "test", name: "__Host-sid", attributes: { secure: false } })
   );
   // __Host- prefix with a Domain (forbidden by the prefix spec).
   assert.throws(() =>
@@ -143,15 +150,23 @@ test("[cookie] insecure attribute combinations are refused", () => {
       scope: "test",
       name: "__Host-sid",
       attributes: { secure: true, path: "/", domain: "example.com" },
-    }),
+    })
   );
   // SameSite=None without Secure (browsers reject it; we refuse to emit it).
   assert.throws(() =>
-    assertCookieAttributes({ scope: "test", name: "sid", attributes: { sameSite: "None", secure: false } }),
+    assertCookieAttributes({
+      scope: "test",
+      name: "sid",
+      attributes: { sameSite: "None", secure: false },
+    })
   );
   // A correct __Host- cookie is accepted.
   assert.doesNotThrow(() =>
-    assertCookieAttributes({ scope: "test", name: "__Host-sid", attributes: { secure: true, path: "/" } }),
+    assertCookieAttributes({
+      scope: "test",
+      name: "__Host-sid",
+      attributes: { secure: true, path: "/" },
+    })
   );
 });
 
@@ -272,8 +287,9 @@ test("[basic-auth] missing/wrong/oversize credentials → 401; correct → 200",
   const app = new App({ logger: false });
   app.use(
     basicAuth({
-      verify: (u, p) => timingSafeEqual(u, "admin") && timingSafeEqual(p, "s3cr3t-passphrase-value"),
-    }),
+      verify: (u, p) =>
+        timingSafeEqual(u, "admin") && timingSafeEqual(p, "s3cr3t-passphrase-value"),
+    })
   );
   app.route({
     method: "GET",
@@ -284,19 +300,26 @@ test("[basic-auth] missing/wrong/oversize credentials → 401; correct → 200",
   });
   assert.equal((await app.request("/admin")).status, 401);
   assert.equal(
-    (await app.request("/admin", { headers: { authorization: `Basic ${b64("admin:wrong")}` } })).status,
-    401,
+    (await app.request("/admin", { headers: { authorization: `Basic ${b64("admin:wrong")}` } }))
+      .status,
+    401
   );
   // Oversize credential is rejected before verify() runs.
   assert.equal(
-    (await app.request("/admin", { headers: { authorization: `Basic ${b64("admin:" + "x".repeat(5000))}` } }))
-      .status,
-    401,
+    (
+      await app.request("/admin", {
+        headers: { authorization: `Basic ${b64("admin:" + "x".repeat(5000))}` },
+      })
+    ).status,
+    401
   );
   assert.equal(
-    (await app.request("/admin", { headers: { authorization: `Basic ${b64("admin:s3cr3t-passphrase-value")}` } }))
-      .status,
-    200,
+    (
+      await app.request("/admin", {
+        headers: { authorization: `Basic ${b64("admin:s3cr3t-passphrase-value")}` },
+      })
+    ).status,
+    200
   );
 });
 
@@ -339,13 +362,21 @@ test("[fetch-metadata] a cross-site state-changing request is rejected (403)", a
   });
   const blocked = await app.request("/transfer", {
     method: "POST",
-    headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" },
+    headers: {
+      "sec-fetch-site": "cross-site",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-dest": "empty",
+    },
   });
   assert.equal(blocked.status, 403);
 
   const same = await app.request("/transfer", {
     method: "POST",
-    headers: { "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" },
+    headers: {
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-dest": "empty",
+    },
   });
   assert.equal(same.status, 200);
 });
@@ -357,7 +388,7 @@ test("[fetch-metadata] a cross-site state-changing request is rejected (403)", a
 test("[websocket] oversize control frames are refused on encode and parse", () => {
   assert.throws(
     () => encodeFrame({ opcode: WS_OPCODE.PING, payload: new Uint8Array(200) }),
-    WebSocketProtocolError,
+    WebSocketProtocolError
   );
   // A CLOSE frame claiming a >125 control payload (len marker 126) is rejected.
   assert.throws(() => parseFrame(new Uint8Array([0x88, 0x7e, 0x00, 0x00])), WebSocketProtocolError);
@@ -377,7 +408,9 @@ test("[websocket] cross-origin handshake (CSWSH) is rejected by same-origin / al
   assert.equal(checkWebSocketOrigin(evil, "same-origin").ok, false);
   assert.equal(checkWebSocketOrigin(evil, ["https://trusted.example"]).ok, false);
 
-  const trusted = new Request("http://api.local/ws", { headers: { origin: "https://trusted.example" } });
+  const trusted = new Request("http://api.local/ws", {
+    headers: { origin: "https://trusted.example" },
+  });
   assert.equal(checkWebSocketOrigin(trusted, ["https://trusted.example"]).ok, true);
 });
 
@@ -419,14 +452,26 @@ test("[idempotency] replay returns the cached response; reusing a key with a new
   });
 
   const h = (k: string) => ({ "content-type": "application/json", "idempotency-key": k });
-  const first = await app.request("/pay", { method: "POST", headers: h("k1"), body: '{"amount":100}' });
+  const first = await app.request("/pay", {
+    method: "POST",
+    headers: h("k1"),
+    body: '{"amount":100}',
+  });
   assert.equal(first.status, 201);
 
-  const replay = await app.request("/pay", { method: "POST", headers: h("k1"), body: '{"amount":100}' });
+  const replay = await app.request("/pay", {
+    method: "POST",
+    headers: h("k1"),
+    body: '{"amount":100}',
+  });
   assert.equal(replay.status, 201);
   assert.ok(replay.headers.get("idempotency-replayed"), "replay must be flagged");
 
-  const reuse = await app.request("/pay", { method: "POST", headers: h("k1"), body: '{"amount":999}' });
+  const reuse = await app.request("/pay", {
+    method: "POST",
+    headers: h("k1"),
+    body: '{"amount":999}',
+  });
   assert.equal(reuse.status, 422, "same key + different body must be refused");
 });
 
@@ -503,7 +548,7 @@ test("[refuse-to-boot] secureDefaults:false is refused in production without ack
         secureDefaults: false,
         acknowledgeInsecureDefaults: true,
         crashOnUnhandledRejection: false,
-      } as any),
+      } as any)
   );
 });
 

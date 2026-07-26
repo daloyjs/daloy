@@ -9,11 +9,9 @@ const app = new Elysia({ adapter: node() });
 
 app.get("/health", () => ({ ok: true }));
 
-app.post(
-  "/echo-bytes",
-  ({ body }) => ({ received: (body as ArrayBuffer)?.byteLength ?? 0 }),
-  { type: "arrayBuffer" },
-);
+app.post("/echo-bytes", ({ body }) => ({ received: (body as ArrayBuffer)?.byteLength ?? 0 }), {
+  type: "arrayBuffer",
+});
 
 const port = Number(process.env.PORT ?? 3000);
 app.listen({ port, hostname: "127.0.0.1" }, () => {

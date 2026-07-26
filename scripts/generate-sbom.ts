@@ -108,7 +108,7 @@ function normaliseAuthor(author: unknown): string {
 
 export function deriveMetadata(
   pkg: PackageJsonLike,
-  options: { readonly now?: Date } = {},
+  options: { readonly now?: Date } = {}
 ): SbomMetadata {
   const name = asString(pkg.name);
   if (!name) {
@@ -128,11 +128,10 @@ export function deriveMetadata(
   // Deterministic serial number per (name, version, timestamp).
   // CycloneDX requires the form `urn:uuid:` + RFC 4122 UUID; we build a
   // version-5-style UUID from a SHA-256 of the deterministic inputs.
-  const hash = createHash("sha256")
-    .update(`${name}@${version}|${timestamp}`)
-    .digest("hex");
+  const hash = createHash("sha256").update(`${name}@${version}|${timestamp}`).digest("hex");
   const serialNumber = `urn:uuid:${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-${(
-    (Number.parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8
+    (Number.parseInt(hash.slice(16, 17), 16) & 0x3) |
+    0x8
   ).toString(16)}${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
   return {
     name,
@@ -147,10 +146,7 @@ export function deriveMetadata(
   };
 }
 
-export function buildCycloneDx(
-  pkg: PackageJsonLike,
-  meta: SbomMetadata,
-): Record<string, unknown> {
+export function buildCycloneDx(pkg: PackageJsonLike, meta: SbomMetadata): Record<string, unknown> {
   // Runtime components are derived from the `dependencies` block only.
   // `devDependencies` and `peerDependencies` are intentionally excluded
   // because they are not shipped in the published tarball. For
@@ -158,8 +154,8 @@ export function buildCycloneDx(
   // `pnpm verify:no-runtime-deps`).
   const runtimeDeps = pkg.dependencies ?? {};
   const components: Array<Record<string, unknown>> = [];
-  for (const [depName, depVersion] of Object.entries(runtimeDeps).sort(
-    ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0),
+  for (const [depName, depVersion] of Object.entries(runtimeDeps).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0
   )) {
     components.push({
       type: "library",
@@ -235,10 +231,7 @@ export function buildCycloneDx(
   };
 }
 
-export function buildSpdx(
-  pkg: PackageJsonLike,
-  meta: SbomMetadata,
-): Record<string, unknown> {
+export function buildSpdx(pkg: PackageJsonLike, meta: SbomMetadata): Record<string, unknown> {
   const runtimeDeps = pkg.dependencies ?? {};
   const documentNamespace = `${meta.repository || meta.homepage || "https://daloyjs.dev"}/sbom/${meta.name}-${meta.version}-${meta.serialNumber.slice("urn:uuid:".length)}`;
   const rootSpdxId = `SPDXRef-Package-${meta.name.replace(/[^A-Za-z0-9.-]+/g, "-")}`;
@@ -269,11 +262,11 @@ export function buildSpdx(
       relatedSpdxElement: rootSpdxId,
     },
   ];
-  for (const [depName, depVersion] of Object.entries(runtimeDeps).sort(
-    ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0),
+  for (const [depName, depVersion] of Object.entries(runtimeDeps).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0
   )) {
     const depSpdxId = `SPDXRef-Package-${depName.replace(/[^A-Za-z0-9.-]+/g, "-")}-${asString(
-      depVersion,
+      depVersion
     ).replace(/[^A-Za-z0-9.-]+/g, "-")}`;
     packages.push({
       SPDXID: depSpdxId,
@@ -350,7 +343,7 @@ async function main(): Promise<void> {
   const { packageJson, outCycloneDx, outSpdx } = parseArgs(process.argv.slice(2));
   if (!outCycloneDx && !outSpdx) {
     process.stderr.write(
-      "generate-sbom: at least one of --out-cyclonedx or --out-spdx is required\n",
+      "generate-sbom: at least one of --out-cyclonedx or --out-spdx is required\n"
     );
     process.exit(2);
   }

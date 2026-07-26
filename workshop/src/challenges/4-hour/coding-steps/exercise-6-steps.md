@@ -47,7 +47,7 @@ export function buildApp(): App {
     async () => ({
       status: 200 as const,
       body: { runtime: detectRuntime() },
-    }),
+    })
   );
 
   return app;
@@ -120,11 +120,11 @@ curl -s http://localhost:3000/health
 
 ## Code-change cheat sheet
 
-| Step | Where         | Change                                                                |
-| ---- | ------------- | --------------------------------------------------------------------- |
-| 1    | Mid-file      | Wrap the App construction in `export function buildApp(): App { ... }` |
-| 1a   | Mid-file      | Add `detectRuntime()` and use it in the `/health` handler              |
-| 2    | Bottom        | Replace `serveNode(app, ...)` with a dynamic adapter pick              |
+| Step | Where    | Change                                                                 |
+| ---- | -------- | ---------------------------------------------------------------------- |
+| 1    | Mid-file | Wrap the App construction in `export function buildApp(): App { ... }` |
+| 1a   | Mid-file | Add `detectRuntime()` and use it in the `/health` handler              |
+| 2    | Bottom   | Replace `serveNode(app, ...)` with a dynamic adapter pick              |
 
 ---
 

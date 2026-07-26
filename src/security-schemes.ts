@@ -181,15 +181,11 @@ export interface OpenIdConnectScheme extends RequirePayloadAuthExtension {
 
 /** Union of every concrete security scheme this module can build. */
 export type SecurityScheme =
-  | HttpBearerScheme
-  | HttpBasicScheme
-  | ApiKeyScheme
-  | OAuth2Scheme
-  | OpenIdConnectScheme;
+  HttpBearerScheme | HttpBasicScheme | ApiKeyScheme | OAuth2Scheme | OpenIdConnectScheme;
 
 function markRequirePayloadAuth<T extends RequirePayloadAuthExtension>(
   scheme: T,
-  options: { requirePayloadAuth?: boolean },
+  options: { requirePayloadAuth?: boolean }
 ): T {
   if (options.requirePayloadAuth === true) {
     (scheme as Record<string, unknown>)[REQUIRE_PAYLOAD_AUTH_EXTENSION] = true;
@@ -208,10 +204,7 @@ function markRequirePayloadAuth<T extends RequirePayloadAuthExtension>(
 export function securitySchemeRequiresPayloadAuth(scheme: unknown): boolean {
   if (!scheme || typeof scheme !== "object") return false;
   const record = scheme as Record<string, unknown>;
-  return (
-    record[REQUIRE_PAYLOAD_AUTH_EXTENSION] === true ||
-    record.requirePayloadAuth === true
-  );
+  return record[REQUIRE_PAYLOAD_AUTH_EXTENSION] === true || record.requirePayloadAuth === true;
 }
 
 /**
@@ -354,13 +347,9 @@ export function oauth2Scheme(options: OAuth2SchemeOptions): OAuth2Scheme {
  * @throws {TypeError} When `openIdConnectUrl` is missing or empty.
  * @since 0.1.0
  */
-export function openIdConnectScheme(
-  options: OpenIdConnectSchemeOptions
-): OpenIdConnectScheme {
+export function openIdConnectScheme(options: OpenIdConnectSchemeOptions): OpenIdConnectScheme {
   if (typeof options.openIdConnectUrl !== "string" || options.openIdConnectUrl.length === 0) {
-    throw new TypeError(
-      `openIdConnectScheme: "openIdConnectUrl" must be a non-empty string`
-    );
+    throw new TypeError(`openIdConnectScheme: "openIdConnectUrl" must be a non-empty string`);
   }
   const scheme: OpenIdConnectScheme = {
     type: "openIdConnect",

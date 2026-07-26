@@ -14,7 +14,10 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 const VALID_ADMIN_TOKEN = "admin-token";
-const VALID_API_KEYS = new Map([["partner-a", "team-blue"], ["partner-b", "team-red"]]);
+const VALID_API_KEYS = new Map([
+  ["partner-a", "team-blue"],
+  ["partner-b", "team-red"],
+]);
 
 const app = new App({
   title: "Workshop API",

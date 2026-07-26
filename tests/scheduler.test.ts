@@ -159,7 +159,7 @@ test("Scheduler.runNow: a throwing handler is counted and reported", async () =>
     { name: "boom", intervalMs: 1000, onError: (_e, info) => (captured = info) },
     () => {
       throw new Error("kaboom");
-    },
+    }
   );
   await scheduler.runNow("boom");
   const state = scheduler.getState("boom")!;
@@ -200,7 +200,7 @@ test("Scheduler: a per-run timeout aborts the handler", async () => {
     ({ signal }) =>
       new Promise<void>((_resolve, reject) => {
         signal.addEventListener("abort", () => reject(new Error("aborted")));
-      }),
+      })
   );
   const p = scheduler.runNow("hang");
   await flush();
@@ -220,11 +220,14 @@ test("Scheduler.define: rejects invalid definitions", () => {
   assert.throws(() => s.define({ name: "x" }, () => {}), RangeError); // neither schedule
   assert.throws(
     () => s.define({ name: "x", intervalMs: 100, cron: "* * * * *" }, () => {}),
-    RangeError,
+    RangeError
   ); // both
   assert.throws(() => s.define({ name: "x", intervalMs: 0 }, () => {}), RangeError);
   assert.throws(() => s.define({ name: "x", intervalMs: -5 }, () => {}), RangeError);
-  assert.throws(() => s.define({ name: "x", intervalMs: 100, timeoutMs: -1 }, () => {}), RangeError);
+  assert.throws(
+    () => s.define({ name: "x", intervalMs: 100, timeoutMs: -1 }, () => {}),
+    RangeError
+  );
   assert.throws(() => s.define({ name: "x", cron: "not valid" }, () => {}), CronParseError);
   s.define({ name: "dup", intervalMs: 100 }, () => {});
   assert.throws(() => s.define({ name: "dup", intervalMs: 100 }, () => {}), RangeError);

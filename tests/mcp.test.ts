@@ -272,7 +272,12 @@ test("validateMcpInput enforces the supported JSON Schema subset", () => {
   assert.match(validateMcpInput({ type: "number", maximum: 10 }, 20)[0]!, /above maximum/);
 
   // array items + bounds, and additionalProperties as a subschema.
-  const arrSchema: McpJsonSchema = { type: "array", items: { type: "number" }, minItems: 1, maxItems: 2 };
+  const arrSchema: McpJsonSchema = {
+    type: "array",
+    items: { type: "number" },
+    minItems: 1,
+    maxItems: 2,
+  };
   assert.deepEqual(validateMcpInput(arrSchema, [1, 2]), []);
   assert.match(validateMcpInput(arrSchema, [])[0]!, /minItems/);
   assert.match(validateMcpInput(arrSchema, [1, 2, 3])[0]!, /maxItems/);
@@ -284,7 +289,9 @@ test("validateMcpInput enforces the supported JSON Schema subset", () => {
   // Nested required propagates a pathed error.
   const nested: McpJsonSchema = {
     type: "object",
-    properties: { inner: { type: "object", properties: { n: { type: "integer" } }, required: ["n"] } },
+    properties: {
+      inner: { type: "object", properties: { n: { type: "integer" } }, required: ["n"] },
+    },
     required: ["inner"],
   };
   assert.deepEqual(validateMcpInput(nested, { inner: { n: 3 } }), []);
@@ -307,7 +314,7 @@ test("validateMcpInput caps the error count and recursion depth", () => {
     deepValue = { x: deepValue };
   }
   assert.ok(
-    validateMcpInput(deepSchema, deepValue).some((e) => /maximum validation depth/.test(e)),
+    validateMcpInput(deepSchema, deepValue).some((e) => /maximum validation depth/.test(e))
   );
 });
 
@@ -834,11 +841,19 @@ test("createMcpHandler honors allowedOrigins and rejects opaque 'null' by defaul
     { origin: "https://APP.example.com" }
   );
   assert.equal(allowed.status, 200, "allowlisted origins compare case-insensitively");
-  const opaqueAllowed = await post(open, { jsonrpc: "2.0", id: 2, method: "ping" }, { origin: "null" });
+  const opaqueAllowed = await post(
+    open,
+    { jsonrpc: "2.0", id: 2, method: "ping" },
+    { origin: "null" }
+  );
   assert.equal(opaqueAllowed.status, 200);
 
   const strict = createTestHandler();
-  const opaqueRejected = await post(strict, { jsonrpc: "2.0", id: 3, method: "ping" }, { origin: "null" });
+  const opaqueRejected = await post(
+    strict,
+    { jsonrpc: "2.0", id: 3, method: "ping" },
+    { origin: "null" }
+  );
   assert.equal(opaqueRejected.status, 403, "opaque origins are rejected unless allowlisted");
 });
 
@@ -870,7 +885,8 @@ function createTemplateHandler(): McpHandler {
         description: "Read one record by table and id.",
         mimeType: "application/json",
         read: (uri, variables) => {
-          if (variables.table !== "books") throw new McpToolError(`Unknown table: ${variables.table}`);
+          if (variables.table !== "books")
+            throw new McpToolError(`Unknown table: ${variables.table}`);
           return { uri, mimeType: "application/json", text: JSON.stringify(variables) };
         },
       },
@@ -938,12 +954,19 @@ test("createMcpHandler refuses duplicate, unterminated, and operator URI templat
     /must be unique/
   );
   assert.throws(
-    () => createMcpHandler({ ...base, resourceTemplates: [{ uriTemplate: "a://{id", name: "a", read }] }),
+    () =>
+      createMcpHandler({
+        ...base,
+        resourceTemplates: [{ uriTemplate: "a://{id", name: "a", read }],
+      }),
     /unterminated/
   );
   assert.throws(
     () =>
-      createMcpHandler({ ...base, resourceTemplates: [{ uriTemplate: "a://{+path}", name: "a", read }] }),
+      createMcpHandler({
+        ...base,
+        resourceTemplates: [{ uriTemplate: "a://{+path}", name: "a", read }],
+      }),
     /unsupported expression/
   );
 });
@@ -954,7 +977,12 @@ test("createMcpHandler refuses duplicate, unterminated, and operator URI templat
 
 test("createMcpHandler rejects unknown pagination cursors on every list method", async () => {
   const handler = createTestHandler();
-  for (const method of ["tools/list", "resources/list", "resources/templates/list", "prompts/list"]) {
+  for (const method of [
+    "tools/list",
+    "resources/list",
+    "resources/templates/list",
+    "prompts/list",
+  ]) {
     const { json } = await rpc(handler, {
       jsonrpc: "2.0",
       id: 1,
@@ -1066,7 +1094,12 @@ test("createMcpHandler assumes protocol 2025-03-26 for headerless non-initialize
 
   await rpc(
     handler,
-    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "version_echo", arguments: {} } },
+    {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "version_echo", arguments: {} },
+    },
     { "mcp-protocol-version": "2025-11-25" }
   );
   assert.equal(seen[1], "2025-11-25", "the header wins when present");

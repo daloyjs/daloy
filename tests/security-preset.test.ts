@@ -181,7 +181,7 @@ test("internal-service preset: per-knob override re-enables secureHeaders", asyn
   assert.ok(
     res.headers.get("x-frame-options") !== null ||
       res.headers.get("strict-transport-security") !== null,
-    "explicit secureHeaders:{} should win over preset default of false",
+    "explicit secureHeaders:{} should win over preset default of false"
   );
   const posture = app.getSecurityPosture();
   assert.equal(posture.secureHeaders, true);
@@ -225,7 +225,7 @@ test("default app (no preset): secureHeaders ARE installed", async () => {
   assert.equal(res.status, 200);
   assert.ok(
     res.headers.get("x-frame-options") !== null,
-    "default posture must auto-install secureHeaders",
+    "default posture must auto-install secureHeaders"
   );
 });
 

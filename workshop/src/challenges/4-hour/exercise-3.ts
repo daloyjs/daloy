@@ -38,7 +38,7 @@ app.get(
   async () => {
     await new Promise((r) => setTimeout(r, 10_000)); // exceeds requestTimeoutMs once you set it
     return { status: 200 as const, body: { ok: true as const } };
-  },
+  }
 );
 
 app.post(
@@ -49,7 +49,7 @@ app.post(
     request: { body: z.object({ payload: z.string() }).strict() },
     responses: { 200: { description: "Echoed", body: z.object({ payload: z.string() }) } },
   },
-  async ({ body }) => ({ status: 200 as const, body }),
+  async ({ body }) => ({ status: 200 as const, body })
 );
 
 serve(app, { port: 3000 });

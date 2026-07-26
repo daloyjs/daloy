@@ -98,11 +98,11 @@ If you want to close the loop, you can replace the in-process `createClient` wit
 
 ## Code-change cheat sheet
 
-| Step | Where             | Change                                                              |
-| ---- | ----------------- | ------------------------------------------------------------------- |
-| 1    | Imports           | Add `createClient` to the `@daloyjs/core` import                    |
+| Step | Where              | Change                                                               |
+| ---- | ------------------ | -------------------------------------------------------------------- |
+| 1    | Imports            | Add `createClient` to the `@daloyjs/core` import                     |
 | 2    | After `serve(...)` | Add the in-process client smoke-test (200 + 404 calls, then `close`) |
-| 3    | (no edit)         | Run `pnpm gen` in another terminal and inspect `generated/client/`  |
+| 3    | (no edit)          | Run `pnpm gen` in another terminal and inspect `generated/client/`   |
 
 ---
 

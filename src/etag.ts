@@ -57,7 +57,10 @@ async function sha1Hex(bytes: Uint8Array): Promise<string> {
 
 function inmMatches(headerValue: string, candidate: string): boolean {
   // RFC 7232 §3.2: comma-separated list of entity tags or `*`.
-  const list = headerValue.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  const list = headerValue
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   if (list.length === 0) return false;
   for (const tag of list) {
     if (tag === "*") return true;
@@ -109,7 +112,14 @@ export function etag(opts: ETagOptions = {}): Hooks {
       const inm = ctx?.request?.headers.get("if-none-match");
       if (inm && inmMatches(inm, value)) {
         const stripped = new Headers();
-        for (const allow of ["cache-control", "content-location", "date", "etag", "expires", "vary"]) {
+        for (const allow of [
+          "cache-control",
+          "content-location",
+          "date",
+          "etag",
+          "expires",
+          "vary",
+        ]) {
           const v = headers.get(allow);
           if (v !== null) stripped.set(allow, v);
         }

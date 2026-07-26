@@ -84,7 +84,7 @@ const COMPARISON_RE =
 
 export function findForbiddenSecretComparisons(
   file: string,
-  source: string,
+  source: string
 ): readonly ForbiddenComparison[] {
   const out: ForbiddenComparison[] = [];
   const lines = source.split(/\r?\n/);
@@ -94,7 +94,7 @@ export function findForbiddenSecretComparisons(
     if (trimmed.length === 0) continue;
     if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) continue;
     if (!COMPARISON_RE.test(trimmed)) continue;
-    const withoutStrings = trimmed.replace(STRING_LITERAL_RE, "\"\"");
+    const withoutStrings = trimmed.replace(STRING_LITERAL_RE, '""');
     if (
       !DIRECT_HEADER_READ_RE.test(trimmed) &&
       !HEADER_DERIVED_TOKENS.some((re) => re.test(withoutStrings))
@@ -130,7 +130,7 @@ async function main(): Promise<void> {
         "`.includes()` / `.indexOf()` / `.localeCompare()` against header-derived " +
         "values with `timingSafeEqual()` — these short-circuit on the first " +
         "differing byte and leak secrets via remote timing channels " +
-        "(see https://snyk.io/blog/node-js-timing-attack-ccc-ctf/).",
+        "(see https://snyk.io/blog/node-js-timing-attack-ccc-ctf/)."
     );
     process.exitCode = 1;
   }

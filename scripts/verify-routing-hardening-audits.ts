@@ -63,9 +63,7 @@ const SRC_ROOT = new URL("src/", REPO_ROOT);
 
 async function listSrcFiles(): Promise<readonly string[]> {
   const entries = await readdir(SRC_ROOT, { withFileTypes: true });
-  return entries
-    .filter((e) => e.isFile() && e.name.endsWith(".ts"))
-    .map((e) => e.name);
+  return entries.filter((e) => e.isFile() && e.name.endsWith(".ts")).map((e) => e.name);
 }
 
 async function readSrc(name: string): Promise<string> {
@@ -281,8 +279,7 @@ export async function auditHttpMethodAllowlist(): Promise<readonly Finding[]> {
   }
   // Forbid a runtime `addHttpMethod()` export.
   const files = await listSrcFiles();
-  const forbiddenAdd =
-    /\bexport\s+(?:function|const|class)\s+addHttpMethod\b/;
+  const forbiddenAdd = /\bexport\s+(?:function|const|class)\s+addHttpMethod\b/;
   for (const name of files) {
     const fileText = await readSrc(name);
     const lines = fileText.split(/\r?\n/);
@@ -317,7 +314,7 @@ export async function auditDrainingConnectionClose(): Promise<readonly Finding[]
   // Must contain the exact draining branch on the fetch arrow.
   if (
     !/if\s*\(\s*this\.draining\s*&&\s*!response\.headers\.has\("connection"\)\s*\)\s*\{[\s\S]{0,200}?response\.headers\.set\("connection",\s*"close"\)/m.test(
-      text,
+      text
     )
   ) {
     out.push({
@@ -362,7 +359,7 @@ async function main(): Promise<void> {
     console.log(
       warnings.length === 0
         ? "verify-routing-hardening-audits: all static gates passed (items 1, 2, 3, 4, 5)."
-        : `verify-routing-hardening-audits: all static gates passed with ${warnings.length} warning${warnings.length === 1 ? "" : "s"} (items 1, 2, 3, 4, 5).`,
+        : `verify-routing-hardening-audits: all static gates passed with ${warnings.length} warning${warnings.length === 1 ? "" : "s"} (items 1, 2, 3, 4, 5).`
     );
     return;
   }
@@ -375,7 +372,7 @@ async function main(): Promise<void> {
     `verify-routing-hardening-audits: ${errors.length} error${errors.length === 1 ? "" : "s"}` +
       (warnings.length === 0
         ? "."
-        : ` and ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`),
+        : ` and ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`)
   );
   process.exitCode = 1;
 }

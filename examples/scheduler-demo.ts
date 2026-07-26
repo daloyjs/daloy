@@ -16,13 +16,10 @@ import { App, nextCronRun, parseCron } from "../src/index.ts";
 const app = new App({ env: "development" });
 
 let ticks = 0;
-app.cron(
-  { name: "heartbeat", intervalMs: 1000, runOnStart: true },
-  ({ name, runCount }) => {
-    ticks++;
-    console.log(`[tick] ${name} run #${runCount} (total ${ticks})`);
-  },
-);
+app.cron({ name: "heartbeat", intervalMs: 1000, runOnStart: true }, ({ name, runCount }) => {
+  ticks++;
+  console.log(`[tick] ${name} run #${runCount} (total ${ticks})`);
+});
 
 let cronRuns = 0;
 app.cron(
@@ -33,13 +30,19 @@ app.cron(
   ({ name }) => {
     cronRuns++;
     console.log(`[cron] ${name} fired (run #${cronRuns})`);
-  },
+  }
 );
 
 console.log("=== standalone cron helpers ===");
 console.log("parseCron('*/15 * * * *') minute set:", [...parseCron("*/15 * * * *").minute]);
-console.log("nextCronRun('@hourly', 2026-06-18T10:30:00Z):", nextCronRun("@hourly", new Date("2026-06-18T10:30:00Z")).toISOString());
-console.log("nextCronRun('0 9 * * 1' NY tz):", nextCronRun("0 9 * * 1", new Date("2026-06-18T12:00:00Z"), "America/New_York").toISOString());
+console.log(
+  "nextCronRun('@hourly', 2026-06-18T10:30:00Z):",
+  nextCronRun("@hourly", new Date("2026-06-18T10:30:00Z")).toISOString()
+);
+console.log(
+  "nextCronRun('0 9 * * 1' NY tz):",
+  nextCronRun("0 9 * * 1", new Date("2026-06-18T12:00:00Z"), "America/New_York").toISOString()
+);
 
 console.log("\n=== registered tasks ===");
 console.log(app.scheduledTasks?.list());
@@ -56,7 +59,9 @@ async function main() {
 
   console.log("\n=== graceful drain via app.close() ===");
   await app.close();
-  console.log(`closed cleanly — heartbeat ticked ${ticks}x, minutely fired ${cronRuns}x (auto + runNow)`);
+  console.log(
+    `closed cleanly — heartbeat ticked ${ticks}x, minutely fired ${cronRuns}x (auto + runNow)`
+  );
   process.exit(0);
 }
 

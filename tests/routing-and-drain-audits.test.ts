@@ -37,8 +37,7 @@ test("routing-hardening: all static audits pass on the live source tree", async 
   if (errors.length > 0) {
     const summary = errors
       .map(
-        (f) =>
-          `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}: ${f.message}`,
+        (f) => `[${f.audit}] ${f.file}${f.line > 0 ? `:${f.line}` : ""} - ${f.text}: ${f.message}`
       )
       .join("\n");
     assert.fail(`Routing-hardening audit gates flagged ${errors.length} error(s):\n${summary}`);
@@ -64,7 +63,7 @@ test("routing-hardening: `/foo;bar` and `/foo` are distinct routes (no semicolon
   assert.equal(
     semicolon.status,
     404,
-    "`/foo;admin=true` must NOT be routed to `/foo` (semicolon is a literal path character).",
+    "`/foo;admin=true` must NOT be routed to `/foo` (semicolon is a literal path character)."
   );
 });
 
@@ -83,7 +82,7 @@ test("routing-hardening: a route registered with a literal `;` in its path is ma
   assert.equal(
     plain.status,
     404,
-    "`/users/42` must NOT match a route registered as `/users/42;admin=true`.",
+    "`/users/42` must NOT match a route registered as `/users/42;admin=true`."
   );
 });
 
@@ -95,7 +94,7 @@ test("routing-hardening: App does not expose a `setErrorHandler` method", () => 
     (app as unknown as Record<string, unknown>).setErrorHandler,
     undefined,
     "App must not expose a `setErrorHandler()` method. Error handlers " +
-      "compose through `use({ onError })` Hook bundles.",
+      "compose through `use({ onError })` Hook bundles."
   );
 });
 
@@ -111,7 +110,7 @@ test("routing-hardening: App does not expose a standalone `onError` method", () 
     typeof proto.onError,
     "undefined",
     "App.prototype.onError must NOT be a method - error handlers " +
-      "compose through `use({ onError })` Hook bundles.",
+      "compose through `use({ onError })` Hook bundles."
   );
 });
 
@@ -139,13 +138,12 @@ test("routing-hardening: requestId() ignores client-supplied X-Request-ID by def
   assert.notEqual(
     observed,
     attacker,
-    "audit item 6: requestId() must NOT honor client-supplied " +
-      "`X-Request-ID` by default.",
+    "audit item 6: requestId() must NOT honor client-supplied " + "`X-Request-ID` by default."
   );
   assert.equal(
     res.headers.get("x-request-id"),
     observed,
-    "The response header must reflect the framework-generated id.",
+    "The response header must reflect the framework-generated id."
   );
 });
 
@@ -168,11 +166,7 @@ test("routing-hardening: requestId({ trustIncoming: true }) accepts a valid clie
     headers: { "x-request-id": clientId },
   });
   assert.equal(res.status, 200);
-  assert.equal(
-    observed,
-    clientId,
-    "Opt-in trust must accept a valid client header.",
-  );
+  assert.equal(observed, clientId, "Opt-in trust must accept a valid client header.");
 });
 
 // ---------- item 4: HttpMethod allowlist ----------
@@ -192,7 +186,7 @@ test("routing-hardening: registering a route with a non-canonical HTTP method is
       }),
     /TRACE|method/i,
     "audit item 11: route registration must refuse non-canonical " +
-      "HTTP methods at runtime (TRACE, CONNECT, WebDAV verbs, etc.).",
+      "HTTP methods at runtime (TRACE, CONNECT, WebDAV verbs, etc.)."
   );
 });
 
@@ -213,7 +207,7 @@ test("routing-hardening: responses produced while draining carry `Connection: cl
   assert.equal(
     before.headers.get("connection"),
     null,
-    "Non-draining responses must NOT advertise `Connection: close`.",
+    "Non-draining responses must NOT advertise `Connection: close`."
   );
   // Start the drain - close() flips the `draining` flag immediately.
   const closing = app.close(100);
@@ -222,7 +216,6 @@ test("routing-hardening: responses produced while draining carry `Connection: cl
   assert.equal(
     during.headers.get("connection"),
     "close",
-    "audit item 17: every response produced while draining must " +
-      "carry `Connection: close`.",
+    "audit item 17: every response produced while draining must " + "carry `Connection: close`."
   );
 });

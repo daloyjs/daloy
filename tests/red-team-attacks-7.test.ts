@@ -17,7 +17,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
-import { App, createJwtVerifier, JwtError, idempotency, MemoryIdempotencyStore } from "../src/index.js";
+import {
+  App,
+  createJwtVerifier,
+  JwtError,
+  idempotency,
+  MemoryIdempotencyStore,
+} from "../src/index.js";
 
 const b64url = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
 
@@ -35,7 +41,11 @@ test("[R/recon] docs, OpenAPI, Redoc, and Scalar are not exposed in production",
     handler: async () => ({ status: 200 as const, body: { ok: true } }),
   });
   for (const p of ["/docs", "/openapi.json", "/redoc", "/scalar"]) {
-    assert.equal((await app.request(p)).status, 404, `${p} must not leak the API surface in production`);
+    assert.equal(
+      (await app.request(p)).status,
+      404,
+      `${p} must not leak the API surface in production`
+    );
   }
 });
 
@@ -47,7 +57,9 @@ test("[R/exfil] a thrown error never leaks the stack, file paths, or secrets to 
     operationId: "boom",
     responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
     handler: async () => {
-      throw new Error("/srv/app/secret/db.ts:42 connection=postgres://admin:HUNTER2@10.0.0.1 token=SECRET123");
+      throw new Error(
+        "/srv/app/secret/db.ts:42 connection=postgres://admin:HUNTER2@10.0.0.1 token=SECRET123"
+      );
     },
   });
   const res = await app.request("/boom");
@@ -88,7 +100,10 @@ test("[C/slowloris] a handler exceeding requestTimeoutMs is cut off with 408", a
   const res = await app.request("/slow");
   const dt = performance.now() - t0;
   assert.equal(res.status, 408);
-  assert.ok(dt < 2000, `the request must be cut off near the timeout, not after the full handler delay (${dt.toFixed(0)}ms)`);
+  assert.ok(
+    dt < 2000,
+    `the request must be cut off near the timeout, not after the full handler delay (${dt.toFixed(0)}ms)`
+  );
 });
 
 test("[C/stack-bomb] a deeply-nested JSON body is rejected (400) without hanging or crashing", async () => {
@@ -123,7 +138,10 @@ test("[C/hash-flood] an excessively wide JSON object (50k keys) is rejected quic
     operationId: "wide",
     request: { body: z.record(z.string(), z.string()) as any },
     responses: { 200: { description: "ok", body: z.object({ n: z.number() }) as any } },
-    handler: async ({ body }: any) => ({ status: 200 as const, body: { n: Object.keys(body).length } }),
+    handler: async ({ body }: any) => ({
+      status: 200 as const,
+      body: { n: Object.keys(body).length },
+    }),
   });
   const obj: Record<string, string> = {};
   for (let i = 0; i < 50_000; i++) obj["k" + i] = "v";
@@ -176,7 +194,11 @@ test("[N/no-exec] the published entrypoint exposes no dynamic code-execution pri
   for (const [name, value] of Object.entries(mod)) {
     if (typeof value !== "function") continue;
     assert.notEqual(value as unknown, eval, `export ${name} must not be eval`);
-    assert.notEqual(value as unknown, Function, `export ${name} must not be the Function constructor`);
+    assert.notEqual(
+      value as unknown,
+      Function,
+      `export ${name} must not be the Function constructor`
+    );
   }
   // The framework is ESM and ships zero runtime deps, so there is no
   // require()/child_process bridge reachable from a handler's request input.

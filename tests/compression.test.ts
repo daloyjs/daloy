@@ -73,7 +73,7 @@ test("compression: gzip-compresses large GET text bodies", async () => {
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip, deflate" },
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-encoding"), "gzip");
@@ -91,7 +91,7 @@ test("compression: prefers brotli when client and runtime support it", async () 
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "br;q=1.0, gzip;q=0.5" },
-    }),
+    })
   );
   // Node 24 ships brotli in CompressionStream; if it ever regresses
   // the test still asserts a valid choice is made.
@@ -104,7 +104,7 @@ test("compression: respects q=0 to disable an encoding", async () => {
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip;q=0, deflate" },
-    }),
+    })
   );
   // gzip is disabled by q=0; the middleware should pick deflate (br is
   // also fine if supported and not explicitly disabled — but the client
@@ -116,7 +116,7 @@ test("compression: respects q=0 to disable an encoding", async () => {
 test("compression: wildcard accept-encoding accepts the server's preferred", async () => {
   const app = appWithCompression();
   const res = await app.fetch(
-    new Request("http://x/text", { headers: { "accept-encoding": "*" } }),
+    new Request("http://x/text", { headers: { "accept-encoding": "*" } })
   );
   const enc = res.headers.get("content-encoding");
   assert.ok(enc === "br" || enc === "gzip" || enc === "deflate");
@@ -131,9 +131,7 @@ test("compression: no Accept-Encoding header → no compression, still Vary", as
 
 test("compression: empty Accept-Encoding → no compression", async () => {
   const app = appWithCompression();
-  const res = await app.fetch(
-    new Request("http://x/text", { headers: { "accept-encoding": "" } }),
-  );
+  const res = await app.fetch(new Request("http://x/text", { headers: { "accept-encoding": "" } }));
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
 });
@@ -143,7 +141,7 @@ test("compression: unknown encoding token in Accept-Encoding is ignored", async 
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "compress, identity;q=0.5, , ;q=foo" },
-    }),
+    })
   );
   // No supported encoding the client asked for → no Content-Encoding.
   assert.equal(res.headers.get("content-encoding"), null);
@@ -155,7 +153,7 @@ test("compression: invalid q values are ignored (default q=1)", async () => {
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip;q=banana" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), "gzip");
 });
@@ -165,7 +163,7 @@ test("compression: q values outside [0,1] are ignored (default q=1)", async () =
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip;q=2.5" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), "gzip");
 });
@@ -178,7 +176,7 @@ test("compression: BREACH guard — Authorization header skips", async () => {
         "accept-encoding": "gzip",
         authorization: "Bearer secret",
       },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -192,7 +190,7 @@ test("compression: BREACH guard — session cookie skips", async () => {
         "accept-encoding": "gzip",
         cookie: "my_session_id=abc",
       },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -203,7 +201,7 @@ test("compression: BREACH guard — CSRF cookie skips", async () => {
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip", cookie: "X-CSRF-Token=abc" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -214,7 +212,7 @@ test("compression: BREACH guard — XSRF cookie skips", async () => {
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip", cookie: "XSRF-TOKEN=abc" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -225,7 +223,7 @@ test("compression: BREACH guard — __Host-* cookie skips", async () => {
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip", cookie: "__Host-id=abc" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -236,7 +234,7 @@ test("compression: BREACH guard — custom authCookieNames opt-in", async () => 
   const res = await app.fetch(
     new Request("http://x/text", {
       headers: { "accept-encoding": "gzip", cookie: "my-app-auth=foo" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -260,9 +258,7 @@ test("compression: BREACH guard — Set-Cookie on response skips", async () => {
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
 });
@@ -285,9 +281,7 @@ test("compression: skips when Content-Encoding already set", async () => {
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("content-encoding"), "identity");
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
 });
@@ -295,7 +289,7 @@ test("compression: skips when Content-Encoding already set", async () => {
 test("compression: skips bodies smaller than minimumSize", async () => {
   const app = appWithCompression();
   const res = await app.fetch(
-    new Request("http://x/tiny", { headers: { "accept-encoding": "gzip" } }),
+    new Request("http://x/tiny", { headers: { "accept-encoding": "gzip" } })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   // Vary IS still emitted (negotiation surface) — runtime support detected,
@@ -308,7 +302,7 @@ test("compression: skips already-compressed content types (image/png) + emits Va
   const res = await app.fetch(
     new Request("http://x/binary", {
       headers: { "accept-encoding": "gzip" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -319,7 +313,7 @@ test("compression: SVG IS compressed even though prefix is image/", async () => 
   const res = await app.fetch(
     new Request("http://x/svg", {
       headers: { "accept-encoding": "gzip" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), "gzip");
 });
@@ -330,7 +324,7 @@ test("compression: skips non-GET/HEAD methods", async () => {
     new Request("http://x/post", {
       method: "POST",
       headers: { "accept-encoding": "gzip", origin: "http://x" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -342,7 +336,7 @@ test("compression: HEAD request — encoded headers, empty body", async () => {
     new Request("http://x/text", {
       method: "HEAD",
       headers: { "accept-encoding": "gzip" },
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-encoding"), "gzip");
@@ -363,9 +357,7 @@ test("compression: skips non-2xx", async () => {
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("content-encoding"), null);
 });
 
@@ -387,9 +379,7 @@ test("compression: existing strong ETag is downgraded to weak after compression"
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("content-encoding"), "gzip");
   assert.equal(res.headers.get("etag"), 'W/"abc123"');
 });
@@ -412,9 +402,7 @@ test("compression: existing weak ETag is left alone", async () => {
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("etag"), 'W/"already-weak"');
 });
 
@@ -436,9 +424,7 @@ test("compression: appends to existing Vary header without duplicating", async (
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   const vary = res.headers.get("vary") ?? "";
   assert.match(vary, /Cookie/);
   assert.match(vary, /Accept-Encoding/);
@@ -462,9 +448,7 @@ test("compression: Vary: * is left alone", async () => {
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("vary"), "*");
 });
 
@@ -486,9 +470,7 @@ test("compression: Vary already includes Accept-Encoding (case-insensitive) is n
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("vary"), "accept-encoding");
 });
 
@@ -498,63 +480,33 @@ test("compression: stamps the hook marker symbol", () => {
 });
 
 test("compression: refuses unknown encoding at construction", () => {
-  assert.throws(
-    () => compression({ encodings: ["bogus" as never] }),
-    /unknown encoding/,
-  );
+  assert.throws(() => compression({ encodings: ["bogus" as never] }), /unknown encoding/);
 });
 
 test("compression: refuses non-finite minimumSize", () => {
-  assert.throws(
-    () => compression({ minimumSize: Number.NaN }),
-    /minimumSize/,
-  );
+  assert.throws(() => compression({ minimumSize: Number.NaN }), /minimumSize/);
   assert.throws(() => compression({ minimumSize: -1 }), /minimumSize/);
   assert.throws(() => compression({ minimumSize: 1.5 }), /minimumSize/);
-  assert.throws(
-    () => compression({ minimumSize: 2 ** 32 }),
-    /minimumSize/,
-  );
+  assert.throws(() => compression({ minimumSize: 2 ** 32 }), /minimumSize/);
 });
 
 test("compression: rejects infinite minimumSize", () => {
-  assert.throws(
-    () => compression({ minimumSize: Number.POSITIVE_INFINITY }),
-    /minimumSize/,
-  );
+  assert.throws(() => compression({ minimumSize: Number.POSITIVE_INFINITY }), /minimumSize/);
 });
 
 test("compression: rejects non-string option tokens", () => {
-  assert.throws(
-    () => compression({ excludeContentTypes: [123 as never] }),
-    /excludeContentTypes/,
-  );
-  assert.throws(
-    () => compression({ authCookieNames: [null as never] }),
-    /authCookieNames/,
-  );
+  assert.throws(() => compression({ excludeContentTypes: [123 as never] }), /excludeContentTypes/);
+  assert.throws(() => compression({ authCookieNames: [null as never] }), /authCookieNames/);
 });
 
 test("compression: refuses compressLevel knob", () => {
-  assert.throws(
-    () => compression({ compressLevel: 9 as never }),
-    /compressLevel/,
-  );
-  assert.throws(
-    () => compression({ compressLevel: 6 as never }),
-    /compressLevel/,
-  );
+  assert.throws(() => compression({ compressLevel: 9 as never }), /compressLevel/);
+  assert.throws(() => compression({ compressLevel: 6 as never }), /compressLevel/);
 });
 
 test("compression: refuses empty option tokens", () => {
-  assert.throws(
-    () => compression({ excludeContentTypes: [""] }),
-    /excludeContentTypes/,
-  );
-  assert.throws(
-    () => compression({ authCookieNames: ["  "] }),
-    /authCookieNames/,
-  );
+  assert.throws(() => compression({ excludeContentTypes: [""] }), /excludeContentTypes/);
+  assert.throws(() => compression({ authCookieNames: ["  "] }), /authCookieNames/);
 });
 
 test("compression: explicit encodings list narrows preference", async () => {
@@ -573,7 +525,7 @@ test("compression: explicit encodings list narrows preference", async () => {
   const res = await app.fetch(
     new Request("http://x/", {
       headers: { "accept-encoding": "br, gzip, deflate" },
-    }),
+    })
   );
   assert.equal(res.headers.get("content-encoding"), "deflate");
 });
@@ -591,9 +543,7 @@ test("compression: extra excludeContentTypes skips a custom type", async () => {
       body: LARGE_TEXT,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("content-encoding"), null);
 });
 
@@ -610,9 +560,7 @@ test("compression: skips application/gzip as already compressed", async () => {
       body: new Uint8Array(2048).fill(7),
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("content-encoding"), null);
   assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
 });
@@ -627,7 +575,7 @@ test("compression: missing CompressionStream → silent no-op + Vary", async () 
     const res = await app.fetch(
       new Request("http://x/text", {
         headers: { "accept-encoding": "gzip" },
-      }),
+      })
     );
     assert.equal(res.headers.get("content-encoding"), null);
     assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
@@ -650,9 +598,7 @@ test("compression: response with no content-type is still considered for compres
       body: new TextEncoder().encode(LARGE_TEXT),
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   assert.equal(res.headers.get("content-encoding"), "gzip");
 });
 
@@ -670,9 +616,7 @@ test("compression: response with empty content-type token is not blocked", async
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: LARGE_TEXT }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   // An empty type token should not match any deny prefix.
   assert.equal(res.headers.get("content-encoding"), "gzip");
 });
@@ -695,9 +639,7 @@ test("compression: small high-entropy body that grows under gzip is skipped", as
       body: random,
     }),
   });
-  const res = await app.fetch(
-    new Request("http://x/", { headers: { "accept-encoding": "gzip" } }),
-  );
+  const res = await app.fetch(new Request("http://x/", { headers: { "accept-encoding": "gzip" } }));
   // Either the gzipped body is larger (skip) OR the runtime chose not to
   // compress at all — either way, no broken response.
   const enc = res.headers.get("content-encoding");
@@ -724,7 +666,7 @@ test("compression: skips bodies larger than maxCompressibleBytes without hanging
     }),
   });
   const res = await app.fetch(
-    new Request("http://x/big", { headers: { "accept-encoding": "gzip" } }),
+    new Request("http://x/big", { headers: { "accept-encoding": "gzip" } })
   );
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-encoding"), null, "oversize body must not be compressed");

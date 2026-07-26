@@ -782,8 +782,7 @@ export function rotateSession(opts: RotateSessionOptions = {}): Hooks {
     },
     async afterHandle(ctx, result) {
       const snapshot = (ctx.state as Record<string, unknown>)[ROTATE_SESSION_SNAPSHOT_KEY] as
-        | RotateSessionSnapshot
-        | undefined;
+        RotateSessionSnapshot | undefined;
       if (!snapshot) return result;
       const sessionCtx = sessionFromContext(ctx);
       if (sessionCtx.id !== snapshot.id) return result;

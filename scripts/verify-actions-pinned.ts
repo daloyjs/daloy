@@ -95,10 +95,7 @@ export interface UsesViolation {
  * not SHA-pinned, references a denied action, or interpolates an
  * expression.
  */
-export function findUnpinnedActions(
-  file: string,
-  text: string,
-): readonly UsesViolation[] {
+export function findUnpinnedActions(file: string, text: string): readonly UsesViolation[] {
   const violations: UsesViolation[] = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -144,8 +141,7 @@ export function findUnpinnedActions(
     // matching, since `tj-actions/changed-files/foo` is still
     // `tj-actions/changed-files`.
     const segments = actionPath.split("/");
-    const ownerRepo =
-      segments.length >= 2 ? `${segments[0]}/${segments[1]}` : actionPath;
+    const ownerRepo = segments.length >= 2 ? `${segments[0]}/${segments[1]}` : actionPath;
     const denyReason = DENIED_ACTIONS.get(ownerRepo);
     if (denyReason !== undefined) {
       violations.push({
@@ -196,7 +192,7 @@ async function main(): Promise<void> {
       "action by 40-character commit SHA, must not be on the known-compromised " +
       "deny-list, and must not interpolate a `${{ … }}` expression. See " +
       "https://socket.dev/blog/github-actions-supply-chain-attack-puts-thousands-of-projects-at-risk " +
-      "for why mutable tags are unsafe (CVE-2025-30066).",
+      "for why mutable tags are unsafe (CVE-2025-30066)."
   );
   process.exitCode = 1;
 }

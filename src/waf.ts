@@ -56,12 +56,7 @@ import { readRemoteAddress } from "./conn-info.js";
 export type WafRuleId = "sqli" | "xss" | "nosqli" | "cmdi";
 
 /** The four built-in rule categories, in stable order. */
-const ALL_RULE_IDS: readonly WafRuleId[] = Object.freeze([
-  "sqli",
-  "xss",
-  "nosqli",
-  "cmdi",
-]);
+const ALL_RULE_IDS: readonly WafRuleId[] = Object.freeze(["sqli", "xss", "nosqli", "cmdi"]);
 
 /** Default anomaly score contributed by each rule when it matches. */
 const DEFAULT_RULE_SCORE = 5;
@@ -288,7 +283,7 @@ interface ResolvedRule {
 function assertPositiveInteger(value: number, label: string): void {
   if (!Number.isInteger(value) || value <= 0) {
     throw new TypeError(
-      `waf(): \`${label}\` must be a positive integer, received ${String(value)}`,
+      `waf(): \`${label}\` must be a positive integer, received ${String(value)}`
     );
   }
 }
@@ -298,7 +293,7 @@ function assertPositiveInteger(value: number, label: string): void {
  * overrides and validating any custom scores.
  */
 function resolveRules(
-  overrides: Partial<Record<WafRuleId, boolean | WafRuleConfig>> | undefined,
+  overrides: Partial<Record<WafRuleId, boolean | WafRuleConfig>> | undefined
 ): ResolvedRule[] {
   const resolved: ResolvedRule[] = [];
   for (const ruleId of ALL_RULE_IDS) {
@@ -314,7 +309,7 @@ function resolveRules(
       if (override.score !== undefined) {
         if (!Number.isFinite(override.score) || override.score <= 0) {
           throw new TypeError(
-            `waf(): \`rules.${ruleId}.score\` must be a positive number, received ${String(override.score)}`,
+            `waf(): \`rules.${ruleId}.score\` must be a positive number, received ${String(override.score)}`
           );
         }
         score = override.score;
@@ -440,7 +435,7 @@ function scanValueVariants(
   location: WafInspectionLocation,
   rules: readonly ResolvedRule[],
   scored: Map<WafRuleId, WafMatch>,
-  maxValueLength: number,
+  maxValueLength: number
 ): void {
   for (const variant of inspectionVariants(value, maxValueLength)) {
     scanValue(variant, location, rules, scored);
@@ -449,18 +444,13 @@ function scanValueVariants(
   }
 }
 
-
 /**
  * Collect up to `maxNodes` string values from a parsed body value (object /
  * array / scalar), each truncated to `maxValueLength`. Depth and node count are
  * bounded so a hostile payload cannot turn inspection into CPU-DoS. Prototype
  * keys are never followed (only own enumerable properties are walked).
  */
-function collectBodyStrings(
-  root: unknown,
-  maxNodes: number,
-  maxValueLength: number,
-): string[] {
+function collectBodyStrings(root: unknown, maxNodes: number, maxValueLength: number): string[] {
   const out: string[] = [];
   const stack: unknown[] = [root];
   let visited = 0;
@@ -491,7 +481,7 @@ function scanValue(
   value: string,
   location: WafInspectionLocation,
   rules: readonly ResolvedRule[],
-  scored: Map<WafRuleId, WafMatch>,
+  scored: Map<WafRuleId, WafMatch>
 ): void {
   for (const rule of rules) {
     if (scored.has(rule.ruleId)) continue;
@@ -539,14 +529,12 @@ function scanValue(
 export function waf(opts: WafOptions = {}): Hooks {
   const mode: WafMode = opts.mode ?? "block";
   if (mode !== "block" && mode !== "log") {
-    throw new TypeError(
-      `waf(): \`mode\` must be "block" or "log", received ${String(mode)}`,
-    );
+    throw new TypeError(`waf(): \`mode\` must be "block" or "log", received ${String(mode)}`);
   }
   const blockThreshold = opts.blockThreshold ?? DEFAULT_BLOCK_THRESHOLD;
   if (!Number.isFinite(blockThreshold) || blockThreshold <= 0) {
     throw new TypeError(
-      `waf(): \`blockThreshold\` must be a positive number, received ${String(blockThreshold)}`,
+      `waf(): \`blockThreshold\` must be a positive number, received ${String(blockThreshold)}`
     );
   }
   const maxValueLength = opts.maxValueLength ?? DEFAULT_MAX_VALUE_LENGTH;
@@ -560,9 +548,7 @@ export function waf(opts: WafOptions = {}): Hooks {
   const inspectPath = opts.inspect?.path ?? true;
   const inspectQuery = opts.inspect?.query ?? true;
   const inspectBody = opts.inspect?.body ?? true;
-  const headerAllowlist = (opts.inspect?.headers ?? []).map((h) =>
-    h.toLowerCase(),
-  );
+  const headerAllowlist = (opts.inspect?.headers ?? []).map((h) => h.toLowerCase());
   const onMatch = opts.onMatch;
 
   return {

@@ -103,7 +103,7 @@ app.use(
     // A request claiming to be Googlebot/Bingbot from a residential proxy fails
     // reverse-DNS forward-confirm → treated as spoofed → 403.
     verifiedBots: WELL_KNOWN_BOTS,
-  }),
+  })
 );
 
 // --- 3. Optional region scoping ----------------------------------------------
@@ -138,7 +138,7 @@ app.use(
     max: 120,
     trustProxyHeaders: true,
     keyGenerator: identityKey,
-  }),
+  })
 );
 
 // --- 5. Escalating auto-ban for repeat offenders -----------------------------
@@ -153,7 +153,7 @@ app.use(
       // eslint-disable-next-line no-console
       console.warn(`[auto-ban] banned ${e.key} until ${new Date(e.bannedUntilMs).toISOString()}`);
     },
-  }),
+  })
 );
 
 // --- Business route ----------------------------------------------------------
@@ -166,7 +166,7 @@ app.get(
       200: { description: "OK", body: z.object({ ok: z.literal(true) }) },
     },
   },
-  async () => ({ status: 200 as const, body: { ok: true as const } }),
+  async () => ({ status: 200 as const, body: { ok: true as const } })
 );
 
 const port = Number(process.env.PORT ?? 3002);

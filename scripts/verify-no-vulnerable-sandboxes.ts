@@ -120,7 +120,7 @@ const DEP_BUCKETS = [
  */
 export function findForbiddenSandboxesInPackageJson(
   file: string,
-  pkg: PackageJsonLike,
+  pkg: PackageJsonLike
 ): readonly SandboxFinding[] {
   const out: SandboxFinding[] = [];
   for (const bucket of DEP_BUCKETS) {
@@ -162,7 +162,7 @@ export function findForbiddenSandboxesInPackageJson(
  */
 export function findForbiddenSandboxesInLockfile(
   file: string,
-  source: string,
+  source: string
 ): readonly SandboxFinding[] {
   const out: SandboxFinding[] = [];
   const lines = source.split(/\r?\n/);
@@ -170,9 +170,7 @@ export function findForbiddenSandboxesInLockfile(
     // Match either bare-name keys (`'/vm2@3.10.4':`) or the modern
     // pnpm-9 form (`vm2@3.10.4:`) anywhere in the file.
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(
-      String.raw`(?:^|[\s'"/])` + escaped + String.raw`@\d`,
-    );
+    const re = new RegExp(String.raw`(?:^|[\s'"/])` + escaped + String.raw`@\d`);
     for (let i = 0; i < lines.length; i++) {
       if (re.test(lines[i]!)) {
         out.push({
@@ -230,10 +228,7 @@ async function main(): Promise<void> {
       // other tooling complain.
       continue;
     }
-    const rel = relative(fileURLToPath(REPO_ROOT), absolute).replaceAll(
-      "\\",
-      "/",
-    );
+    const rel = relative(fileURLToPath(REPO_ROOT), absolute).replaceAll("\\", "/");
     findings.push(...findForbiddenSandboxesInPackageJson(rel, parsed));
   }
 
@@ -242,9 +237,7 @@ async function main(): Promise<void> {
     const stats = await stat(lockfilePath);
     if (stats.isFile()) {
       const lock = await readFile(lockfilePath, "utf8");
-      findings.push(
-        ...findForbiddenSandboxesInLockfile("pnpm-lock.yaml", lock),
-      );
+      findings.push(...findForbiddenSandboxesInLockfile("pnpm-lock.yaml", lock));
     }
   } catch {
     // No lockfile is unusual for this repo but not this gate's job to
@@ -254,7 +247,7 @@ async function main(): Promise<void> {
   if (findings.length === 0) return;
   console.error(
     `verify-no-vulnerable-sandboxes: ${findings.length} forbidden sandbox ` +
-      `dependenc${findings.length === 1 ? "y" : "ies"} found:`,
+      `dependenc${findings.length === 1 ? "y" : "ies"} found:`
   );
   for (const f of findings) {
     console.error(`  - ${f.file}: ${f.reason}`);
@@ -266,7 +259,7 @@ async function main(): Promise<void> {
       "For untrusted code execution use real isolation (separate process, container, " +
       "or a fresh `isolated-vm` isolate) instead of an in-process JS sandbox. " +
       "For deserialization, use `JSON.parse` (or Daloy's `safeJsonParse`) — never " +
-      "a library that revives functions from strings.",
+      "a library that revives functions from strings."
   );
   process.exitCode = 1;
 }

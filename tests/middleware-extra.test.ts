@@ -1,6 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { App, bearerAuth, cors, fetchMetadata, rateLimit, requestId, secureHeaders, timing } from "../src/index.js";
+import {
+  App,
+  bearerAuth,
+  cors,
+  fetchMetadata,
+  rateLimit,
+  requestId,
+  secureHeaders,
+  timing,
+} from "../src/index.js";
 
 test("requestId can trust a valid incoming id and rejects invalid incoming ids", async () => {
   const app = new App({ logger: false });
@@ -21,8 +30,10 @@ test("requestId can trust a valid incoming id and rejects invalid incoming ids",
   const rejectedRequest = new Request("http://test.local/id");
   Object.defineProperty(rejectedRequest, "headers", {
     value: {
-      get: (name: string) => (name.toLowerCase() === "x-request-id" ? "bad value with spaces" : null),
-      forEach: (fn: (value: string, key: string) => void) => fn("bad value with spaces", "x-request-id"),
+      get: (name: string) =>
+        name.toLowerCase() === "x-request-id" ? "bad value with spaces" : null,
+      forEach: (fn: (value: string, key: string) => void) =>
+        fn("bad value with spaces", "x-request-id"),
     },
   });
   const rejected = await app.fetch(rejectedRequest);
@@ -31,7 +42,13 @@ test("requestId can trust a valid incoming id and rejects invalid incoming ids",
 
 test("cors rejects disallowed origins and never emits credentials with wildcard unless configured", async () => {
   const app = new App({ logger: false });
-  app.use(cors({ origin: (origin) => origin.endsWith(".example.com"), credentials: true, exposedHeaders: ["x-total"] }));
+  app.use(
+    cors({
+      origin: (origin) => origin.endsWith(".example.com"),
+      credentials: true,
+      exposedHeaders: ["x-total"],
+    })
+  );
   app.route({
     method: "GET",
     path: "/cors",
@@ -163,11 +180,11 @@ test("cors throws when origin '*' is combined with credentials: true", () => {
   // construction prevents silently broken auth in production.
   assert.throws(
     () => cors({ origin: "*", credentials: true }),
-    /origin: "\*" cannot be combined with credentials: true/,
+    /origin: "\*" cannot be combined with credentials: true/
   );
   assert.throws(
     () => cors({ origin: ["*", "https://app.example.com"], credentials: true }),
-    /origin: "\*" cannot be combined with credentials: true/,
+    /origin: "\*" cannot be combined with credentials: true/
   );
   // Wildcard alone is still allowed.
   assert.doesNotThrow(() => cors({ origin: "*" }));
@@ -178,18 +195,20 @@ test("cors throws when origin '*' is combined with credentials: true", () => {
 test("rateLimit supports custom stores and can suppress Retry-After", async () => {
   const hits: string[] = [];
   const app = new App({ logger: false });
-  app.use(rateLimit({
-    windowMs: 1000,
-    max: 0,
-    retryAfter: false,
-    keyGenerator: () => "custom-key",
-    store: {
-      async hit(key, windowMs) {
-        hits.push(`${key}:${windowMs}`);
-        return { count: 1, resetMs: Date.now() + windowMs };
+  app.use(
+    rateLimit({
+      windowMs: 1000,
+      max: 0,
+      retryAfter: false,
+      keyGenerator: () => "custom-key",
+      store: {
+        async hit(key, windowMs) {
+          hits.push(`${key}:${windowMs}`);
+          return { count: 1, resetMs: Date.now() + windowMs };
+        },
       },
-    },
-  }));
+    })
+  );
   app.route({
     method: "GET",
     path: "/limited",
@@ -223,17 +242,19 @@ test("rateLimit ignores spoofable proxy headers unless trustProxyHeaders is enab
 
 test("secureHeaders respects disabled and overridden options", async () => {
   const app = new App({ logger: false });
-  app.use(secureHeaders({
-    contentSecurityPolicy: "default-src 'none'",
-    hsts: false,
-    frameOptions: "SAMEORIGIN",
-    referrerPolicy: false,
-    permissionsPolicy: false,
-    crossOriginOpenerPolicy: false,
-    crossOriginResourcePolicy: false,
-    noSniff: false,
-    xssProtection: true,
-  }));
+  app.use(
+    secureHeaders({
+      contentSecurityPolicy: "default-src 'none'",
+      hsts: false,
+      frameOptions: "SAMEORIGIN",
+      referrerPolicy: false,
+      permissionsPolicy: false,
+      crossOriginOpenerPolicy: false,
+      crossOriginResourcePolicy: false,
+      noSniff: false,
+      xssProtection: true,
+    })
+  );
   app.route({
     method: "GET",
     path: "/headers",
@@ -328,13 +349,21 @@ test("fetchMetadata allows same-origin and rejects cross-site no-cors", async ()
 
   // Same-origin browser request — allowed.
   const same = await app.request("/api/data", {
-    headers: { "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" },
+    headers: {
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-dest": "empty",
+    },
   });
   assert.equal(same.status, 200);
 
   // Cross-site no-cors fetch to a non-embed destination — rejected.
   const cross = await app.request("/api/data", {
-    headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors", "sec-fetch-dest": "empty" },
+    headers: {
+      "sec-fetch-site": "cross-site",
+      "sec-fetch-mode": "no-cors",
+      "sec-fetch-dest": "empty",
+    },
   });
   assert.equal(cross.status, 403);
 });
@@ -408,4 +437,3 @@ test("fetchMetadata honors allowedOrigins for cross-site requests", async () => 
   });
   assert.equal(blocked.status, 403);
 });
-

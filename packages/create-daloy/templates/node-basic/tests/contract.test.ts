@@ -18,7 +18,7 @@ test("the app's OpenAPI contract is internally consistent", async () => {
     true,
     `contract issues:\n${report.issues
       .map((i) => `  [${i.level}] ${i.route}: ${i.message}`)
-      .join("\n")}`,
+      .join("\n")}`
   );
 });
 

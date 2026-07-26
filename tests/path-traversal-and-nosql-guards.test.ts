@@ -115,7 +115,7 @@ test("assertNoMongoOperators: throws on the auth-bypass payload", () => {
   // makes Mongo return any user with a non-null password.
   assert.throws(
     () => assertNoMongoOperators({ username: "victim", password: { $ne: null } }),
-    BadRequestError,
+    BadRequestError
   );
 });
 

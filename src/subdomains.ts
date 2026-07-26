@@ -154,10 +154,7 @@ export interface SubdomainsResult {
  * @throws {Error} On an empty hostname, a host outside a declared `baseDomain`, or a stale PSL snapshot in production.
  * @since 0.24.0
  */
-export function subdomains(
-  hostname: string,
-  opts: SubdomainsOptions = {},
-): SubdomainsResult {
+export function subdomains(hostname: string, opts: SubdomainsOptions = {}): SubdomainsResult {
   if (typeof hostname !== "string" || hostname.length === 0) {
     throw new Error("subdomains(): hostname must be a non-empty string.");
   }
@@ -176,7 +173,7 @@ export function subdomains(
     if (ageDays > MAX_SNAPSHOT_AGE_DAYS) {
       throw new Error(
         `subdomains(): bundled Public Suffix List snapshot is ${Math.round(ageDays)} days old ` +
-          `(threshold ${MAX_SNAPSHOT_AGE_DAYS} days). Refresh PSL_PUBLIC_SUFFIXES or upgrade @daloyjs/core.`,
+          `(threshold ${MAX_SNAPSHOT_AGE_DAYS} days). Refresh PSL_PUBLIC_SUFFIXES or upgrade @daloyjs/core.`
       );
     }
   }
@@ -185,16 +182,13 @@ export function subdomains(
     const base = opts.baseDomain.toLowerCase();
     if (host !== base && !host.endsWith(`.${base}`)) {
       throw new Error(
-        `subdomains(): host ${JSON.stringify(hostname)} is not under declared baseDomain ${JSON.stringify(opts.baseDomain)}.`,
+        `subdomains(): host ${JSON.stringify(hostname)} is not under declared baseDomain ${JSON.stringify(opts.baseDomain)}.`
       );
     }
     return resultFor(host, base);
   }
 
-  const suffixes = new Set<string>([
-    ...PSL_PUBLIC_SUFFIXES,
-    ...(opts.extraSuffixes ?? []),
-  ]);
+  const suffixes = new Set<string>([...PSL_PUBLIC_SUFFIXES, ...(opts.extraSuffixes ?? [])]);
 
   const labels = host.split(".");
   // Walk from the longest suffix candidate down to the shortest so the

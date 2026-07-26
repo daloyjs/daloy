@@ -103,12 +103,9 @@ const ENC = new TextEncoder();
 // ---------------------------------------------------------------------------
 
 function getCrypto(): Crypto {
-  const c: Crypto | undefined = (globalThis as unknown as { crypto?: Crypto })
-    .crypto;
+  const c: Crypto | undefined = (globalThis as unknown as { crypto?: Crypto }).crypto;
   if (!c?.subtle) {
-    throw new Error(
-      "http-signatures: WebCrypto SubtleCrypto API is unavailable on this runtime.",
-    );
+    throw new Error("http-signatures: WebCrypto SubtleCrypto API is unavailable on this runtime.");
   }
   return c;
 }
@@ -219,7 +216,7 @@ function assertRsaModulusFloor(alg: HttpSignatureAlgorithm, key: CryptoKey): voi
   if (typeof modulusLength !== "number" || !Number.isFinite(modulusLength)) return;
   if (modulusLength < MIN_RSA_KEY_BITS) {
     throw new TypeError(
-      `http-signatures: ${alg} key modulus must be at least ${MIN_RSA_KEY_BITS} bits (NIST SP 800-131A); got ${modulusLength}.`,
+      `http-signatures: ${alg} key modulus must be at least ${MIN_RSA_KEY_BITS} bits (NIST SP 800-131A); got ${modulusLength}.`
     );
   }
 }
@@ -227,7 +224,7 @@ function assertRsaModulusFloor(alg: HttpSignatureAlgorithm, key: CryptoKey): voi
 async function importKey(
   alg: HttpSignatureAlgorithm,
   material: HttpSignatureKeyMaterial,
-  usage: "sign" | "verify",
+  usage: "sign" | "verify"
 ): Promise<CryptoKey> {
   const spec = algSpec(alg);
   const c = getCrypto();
@@ -238,26 +235,18 @@ async function importKey(
   if (material instanceof Uint8Array) {
     if (!spec.symmetric) {
       throw new TypeError(
-        `http-signatures: raw byte keys are only supported for hmac-sha256; got ${alg}.`,
+        `http-signatures: raw byte keys are only supported for hmac-sha256; got ${alg}.`
       );
     }
     if (material.byteLength < MIN_HMAC_KEY_BYTES) {
       throw new TypeError(
-        `http-signatures: hmac-sha256 secret must be at least ${MIN_HMAC_KEY_BYTES} bytes (RFC 7518 §3.2); got ${material.byteLength}.`,
+        `http-signatures: hmac-sha256 secret must be at least ${MIN_HMAC_KEY_BYTES} bytes (RFC 7518 §3.2); got ${material.byteLength}.`
       );
     }
-    return c.subtle.importKey(
-      "raw",
-      material as BufferSource,
-      spec.importParams,
-      false,
-      [usage],
-    );
+    return c.subtle.importKey("raw", material as BufferSource, spec.importParams, false, [usage]);
   }
   if (isJsonWebKey(material)) {
-    const key = await c.subtle.importKey("jwk", material, spec.importParams, false, [
-      usage,
-    ]);
+    const key = await c.subtle.importKey("jwk", material, spec.importParams, false, [usage]);
     assertRsaModulusFloor(alg, key);
     return key;
   }
@@ -292,7 +281,7 @@ function serializeSfString(s: string): string {
     const code = s.charCodeAt(i);
     if (code < 0x20 || code > 0x7e) {
       throw new TypeError(
-        `http-signatures: value contains a non-printable-ASCII character and cannot be serialized as a structured-field string: ${JSON.stringify(s)}`,
+        `http-signatures: value contains a non-printable-ASCII character and cannot be serialized as a structured-field string: ${JSON.stringify(s)}`
       );
     }
   }
@@ -306,10 +295,7 @@ function serializeComponentId(c: ComponentId): string {
   return out;
 }
 
-function serializeSignatureInput(
-  components: ComponentId[],
-  params: SignatureParams,
-): string {
+function serializeSignatureInput(components: ComponentId[], params: SignatureParams): string {
   let out = `(${components.map(serializeComponentId).join(" ")})`;
   if (params.created !== undefined) out += `;created=${params.created}`;
   if (params.expires !== undefined) out += `;expires=${params.expires}`;
@@ -370,7 +356,7 @@ function readKey(src: string, start: number): [string, number] {
 /** Parse `;key=value` / `;key` params starting at `;`. */
 function readParams(
   src: string,
-  start: number,
+  start: number
 ): [Record<string, string | number | boolean>, number] {
   const params: Record<string, string | number | boolean> = Object.create(null);
   let i = start;
@@ -403,9 +389,7 @@ function readParams(
   return [params, i];
 }
 
-function toSignatureParams(
-  raw: Record<string, string | number | boolean>,
-): SignatureParams {
+function toSignatureParams(raw: Record<string, string | number | boolean>): SignatureParams {
   const out: SignatureParams = {};
   if (typeof raw.created === "number") out.created = raw.created;
   if (typeof raw.expires === "number") out.expires = raw.expires;
@@ -507,9 +491,7 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
   }
   if (name.startsWith("@")) {
     if (c.req) {
-      throw new ComponentError(
-        `the ;req parameter is not supported on ${name} in this context`,
-      );
+      throw new ComponentError(`the ;req parameter is not supported on ${name} in this context`);
     }
     switch (name) {
       case "@method":
@@ -533,7 +515,7 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
         const values = msg.url.searchParams.getAll(c.paramName);
         if (values.length === 0) {
           throw new ComponentError(
-            `@query-param;name="${c.paramName}" is not present in the query`,
+            `@query-param;name="${c.paramName}" is not present in the query`
           );
         }
         // Reject multi-value params: signing only the first value while an app
@@ -544,7 +526,7 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
           throw new ComponentError(
             `@query-param;name="${c.paramName}" appears ${values.length} times; ` +
               "duplicate query parameters are not supported (parameter pollution risk). " +
-              "Cover `@query` or `@target-uri` instead, or send a single value.",
+              "Cover `@query` or `@target-uri` instead, or send a single value."
           );
         }
         return values[0]!;
@@ -563,9 +545,7 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
     throw new ComponentError(`field component name must be lowercase: ${name}`);
   }
   if (c.req) {
-    throw new ComponentError(
-      "the ;req parameter is not supported in this context",
-    );
+    throw new ComponentError("the ;req parameter is not supported in this context");
   }
   const value = msg.headers.get(name);
   if (value === null) {
@@ -577,7 +557,7 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
 function buildSignatureBase(
   components: ComponentId[],
   signatureParamsValue: string,
-  msg: MessageContext,
+  msg: MessageContext
 ): string {
   const seen = new Set<string>();
   let base = "";
@@ -700,14 +680,10 @@ function parseComponentSpec(spec: string): ComponentId {
  *   header is missing) or WebCrypto is unavailable.
  * @since 0.37.0
  */
-export async function signMessage(
-  opts: SignMessageOptions,
-): Promise<MessageSignature> {
+export async function signMessage(opts: SignMessageOptions): Promise<MessageSignature> {
   const label = opts.label ?? DEFAULT_SIGNATURE_LABEL;
   const url = opts.url instanceof URL ? opts.url : new URL(opts.url);
-  const components = (opts.components ?? ["@method", "@target-uri"]).map(
-    parseComponentSpec,
-  );
+  const components = (opts.components ?? ["@method", "@target-uri"]).map(parseComponentSpec);
   const nowSeconds = Math.floor((opts.now ?? Date.now)() / 1000);
   const params: SignatureParams = {
     created: opts.created ?? nowSeconds,
@@ -729,11 +705,7 @@ export async function signMessage(
   const key = await importKey(opts.alg, opts.key, "sign");
   const spec = algSpec(opts.alg);
   const sig = new Uint8Array(
-    await getCrypto().subtle.sign(
-      spec.signParams,
-      key,
-      ENC.encode(base) as BufferSource,
-    ),
+    await getCrypto().subtle.sign(spec.signParams, key, ENC.encode(base) as BufferSource)
   );
   return {
     signatureInput: `${label}=${signatureParamsValue}`,
@@ -749,10 +721,7 @@ export async function signMessage(
  *
  * @since 0.37.0
  */
-export type SignRequestOptions = Omit<
-  SignMessageOptions,
-  "method" | "url" | "headers" | "status"
->;
+export type SignRequestOptions = Omit<SignMessageOptions, "method" | "url" | "headers" | "status">;
 
 /**
  * Sign an outbound {@link Request} and return a new `Request` with the
@@ -766,10 +735,7 @@ export type SignRequestOptions = Omit<
  * @returns A new `Request` carrying the signature headers.
  * @since 0.37.0
  */
-export async function signRequest(
-  request: Request,
-  opts: SignRequestOptions,
-): Promise<Request> {
+export async function signRequest(request: Request, opts: SignRequestOptions): Promise<Request> {
   const sig = await signMessage({
     ...opts,
     method: request.method,
@@ -855,7 +821,7 @@ export interface VerifyMessageOptions {
    * algorithm-confusion). Return `undefined` to reject an unknown key.
    */
   resolveKey: (
-    info: KeyResolutionInfo,
+    info: KeyResolutionInfo
   ) =>
     | HttpSignatureKey
     | HttpSignatureKeyMaterial
@@ -906,12 +872,10 @@ function fail(reason: string): VerifyFailure {
  *   there is no implicit "accept any" mode.
  * @since 0.37.0
  */
-export async function verifyMessage(
-  opts: VerifyMessageOptions,
-): Promise<VerifyResult> {
+export async function verifyMessage(opts: VerifyMessageOptions): Promise<VerifyResult> {
   if (!Array.isArray(opts.algorithms) || opts.algorithms.length === 0) {
     throw new TypeError(
-      "verifyMessage(): an explicit, non-empty `algorithms` allowlist is required.",
+      "verifyMessage(): an explicit, non-empty `algorithms` allowlist is required."
     );
   }
   const headers = toHeaders(opts.headers);
@@ -994,11 +958,7 @@ export async function verifyMessage(
   if (resolved === undefined) return fail("key_not_found");
   let keyMaterial: HttpSignatureKeyMaterial;
   let pinnedAlg: HttpSignatureAlgorithm | undefined;
-  if (
-    resolved instanceof Uint8Array ||
-    isCryptoKey(resolved) ||
-    isJsonWebKey(resolved)
-  ) {
+  if (resolved instanceof Uint8Array || isCryptoKey(resolved) || isJsonWebKey(resolved)) {
     keyMaterial = resolved;
   } else {
     keyMaterial = resolved.key;
@@ -1039,7 +999,7 @@ export async function verifyMessage(
       spec.signParams,
       key,
       provided as BufferSource,
-      ENC.encode(base) as BufferSource,
+      ENC.encode(base) as BufferSource
     );
   } catch {
     return fail("verify_threw");
@@ -1071,7 +1031,7 @@ export async function verifyMessage(
  */
 export function verifyRequest(
   request: Request,
-  opts: Omit<VerifyMessageOptions, "method" | "url" | "headers" | "status">,
+  opts: Omit<VerifyMessageOptions, "method" | "url" | "headers" | "status">
 ): Promise<VerifyResult> {
   return verifyMessage({
     ...opts,
@@ -1091,8 +1051,10 @@ export function verifyRequest(
  *
  * @since 0.37.0
  */
-export interface HttpSignatureAuthOptions
-  extends Omit<VerifyMessageOptions, "method" | "url" | "headers" | "status"> {
+export interface HttpSignatureAuthOptions extends Omit<
+  VerifyMessageOptions,
+  "method" | "url" | "headers" | "status"
+> {
   /** Detail surfaced on the 401 problem+json response. */
   message?: string;
   /** `ctx.state` key the {@link VerifySuccess} is stamped on. Default `"httpSignature"`. */
@@ -1168,7 +1130,7 @@ function toBytes(body: Uint8Array | string): Uint8Array {
  */
 export async function contentDigest(
   body: Uint8Array | string,
-  opts: { algorithm?: ContentDigestAlgorithm } = {},
+  opts: { algorithm?: ContentDigestAlgorithm } = {}
 ): Promise<string> {
   const algorithm = opts.algorithm ?? "sha-256";
   const hash = CONTENT_DIGEST_HASH[algorithm];
@@ -1176,7 +1138,7 @@ export async function contentDigest(
     throw new TypeError(`contentDigest(): unsupported algorithm ${algorithm}`);
   }
   const digest = new Uint8Array(
-    await getCrypto().subtle.digest(hash, toBytes(body) as BufferSource),
+    await getCrypto().subtle.digest(hash, toBytes(body) as BufferSource)
   );
   return `${algorithm}=:${bytesToBase64(digest)}:`;
 }
@@ -1194,7 +1156,7 @@ export async function contentDigest(
  */
 export async function verifyContentDigest(
   header: string,
-  body: Uint8Array | string,
+  body: Uint8Array | string
 ): Promise<boolean> {
   if (typeof header !== "string" || header.length > MAX_HEADER_LENGTH) {
     return false;
@@ -1208,10 +1170,7 @@ export async function verifyContentDigest(
     const expected = base64ToBytes(m[2]!);
     if (!expected) return false;
     const digest = new Uint8Array(
-      await getCrypto().subtle.digest(
-        CONTENT_DIGEST_HASH[algorithm],
-        bodyBytes as BufferSource,
-      ),
+      await getCrypto().subtle.digest(CONTENT_DIGEST_HASH[algorithm], bodyBytes as BufferSource)
     );
     if (digest.length !== expected.length) return false;
     let diff = 0;

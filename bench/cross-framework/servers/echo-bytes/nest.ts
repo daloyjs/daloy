@@ -4,10 +4,7 @@
 import "reflect-metadata";
 import { Controller, Get, Post, Req, Module } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import {
-  FastifyAdapter,
-  type NestFastifyApplication,
-} from "@nestjs/platform-fastify";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 
 const BODY_LIMIT = 8 * 1024 * 1024;
 
@@ -29,13 +26,15 @@ class AppModule {}
 
 async function bootstrap() {
   const adapter = new FastifyAdapter({ logger: false, bodyLimit: BODY_LIMIT });
-  adapter.getInstance().addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_req: unknown, body: Buffer, done: (err: Error | null, body?: Buffer) => void) => {
-      done(null, body);
-    },
-  );
+  adapter
+    .getInstance()
+    .addContentTypeParser(
+      "application/octet-stream",
+      { parseAs: "buffer" },
+      (_req: unknown, body: Buffer, done: (err: Error | null, body?: Buffer) => void) => {
+        done(null, body);
+      }
+    );
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
     logger: false,
   });

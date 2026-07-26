@@ -50,7 +50,11 @@ interface Res {
   headers: Headers;
   text: string;
 }
-async function http(method: string, path: string, opts: { headers?: Record<string, string>; body?: string } = {}): Promise<Res> {
+async function http(
+  method: string,
+  path: string,
+  opts: { headers?: Record<string, string>; body?: string } = {}
+): Promise<Res> {
   const res = await fetch(BASE + path, {
     method,
     headers: opts.headers,
@@ -61,7 +65,11 @@ async function http(method: string, path: string, opts: { headers?: Record<strin
 }
 
 /** Send raw bytes over a TCP socket and collect the response (latin1, framing-preserving). */
-function rawSend(port: number, payload: string, waitMs = 1500): Promise<{ raw: string; statusLine: string; status: number }> {
+function rawSend(
+  port: number,
+  payload: string,
+  waitMs = 1500
+): Promise<{ raw: string; statusLine: string; status: number }> {
   return new Promise((resolve) => {
     const sock = net.connect(port, HOST);
     let buf = "";
@@ -87,7 +95,10 @@ function rawSend(port: number, payload: string, waitMs = 1500): Promise<{ raw: s
 }
 
 /** Open a connection, dribble a partial request, and report whether the server cut us off. */
-function slowloris(port: number, holdMs: number): Promise<{ closedByServer: boolean; afterMs: number }> {
+function slowloris(
+  port: number,
+  holdMs: number
+): Promise<{ closedByServer: boolean; afterMs: number }> {
   return new Promise((resolve) => {
     const sock = net.connect(port, HOST);
     const t0 = Date.now();
@@ -123,7 +134,10 @@ function slowloris(port: number, holdMs: number): Promise<{ closedByServer: bool
 }
 
 /** Perform a raw WebSocket upgrade handshake with an optional (spoofable) Origin. */
-function wsHandshake(port: number, origin?: string): Promise<{ status: number; statusLine: string }> {
+function wsHandshake(
+  port: number,
+  origin?: string
+): Promise<{ status: number; statusLine: string }> {
   const lines = [
     "GET /ws HTTP/1.1",
     `Host: 127.0.0.1:${port}`,
@@ -133,12 +147,16 @@ function wsHandshake(port: number, origin?: string): Promise<{ status: number; s
     "Sec-WebSocket-Version: 13",
   ];
   if (origin) lines.push(`Origin: ${origin}`);
-  return rawSend(port, lines.join("\r\n") + "\r\n\r\n", 1500).then((r) => ({ status: r.status, statusLine: r.statusLine }));
+  return rawSend(port, lines.join("\r\n") + "\r\n\r\n", 1500).then((r) => ({
+    status: r.status,
+    statusLine: r.statusLine,
+  }));
 }
 
 // A forged JWT with an attacker-chosen header/payload (signature is irrelevant for alg attacks).
 const seg = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
-const forgeJwt = (header: object, payload: object, sig = "AAAA") => `${seg(header)}.${seg(payload)}.${sig}`;
+const forgeJwt = (header: object, payload: object, sig = "AAAA") =>
+  `${seg(header)}.${seg(payload)}.${sig}`;
 
 // ---------------------------------------------------------------------------
 // Campaigns
@@ -147,7 +165,9 @@ const forgeJwt = (header: object, payload: object, sig = "AAAA") => `${seg(heade
 async function reconAndFingerprint() {
   const cat = "Recon / Information Gathering";
   const ok = await http("GET", "/healthz");
-  const leaks = ["server", "x-powered-by", "x-aspnet-version", "x-runtime"].filter((h) => ok.headers.get(h));
+  const leaks = ["server", "x-powered-by", "x-aspnet-version", "x-runtime"].filter((h) =>
+    ok.headers.get(h)
+  );
   record({
     category: cat,
     title: "Framework / server fingerprinting headers",
@@ -189,19 +209,26 @@ async function authAndJwt() {
     title: "JWT alg:none forgery (admin escalation)",
     severity: "critical",
     attack: `GET /admin with forged {alg:"none", scopes:["admin"]} token`,
-    observed: `status ${noneRes.status}` + (noneRes.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : ""),
-    verdict: noneRes.status >= 400 && !noneRes.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
+    observed:
+      `status ${noneRes.status}` + (noneRes.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : ""),
+    verdict:
+      noneRes.status >= 400 && !noneRes.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
   });
 
-  const fakeSig = forgeJwt({ alg: "HS256", typ: "JWT" }, { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) + 600 });
+  const fakeSig = forgeJwt(
+    { alg: "HS256", typ: "JWT" },
+    { sub: "alice", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) + 600 }
+  );
   const fakeRes = await http("GET", "/admin", { headers: { authorization: `Bearer ${fakeSig}` } });
   record({
     category: cat,
     title: "JWT forged-signature admin token",
     severity: "critical",
     attack: "GET /admin with HS256 token signed by an attacker-guessed key",
-    observed: `status ${fakeRes.status}` + (fakeRes.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : ""),
-    verdict: fakeRes.status >= 400 && !fakeRes.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
+    observed:
+      `status ${fakeRes.status}` + (fakeRes.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : ""),
+    verdict:
+      fakeRes.status >= 400 && !fakeRes.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
   });
 
   // Log in legitimately, then try to reach /admin with a user-scoped token.
@@ -215,14 +242,22 @@ async function authAndJwt() {
   } catch {
     /* ignore */
   }
-  const escalate = userToken ? await http("GET", "/admin", { headers: { authorization: `Bearer ${userToken}` } }) : null;
+  const escalate = userToken
+    ? await http("GET", "/admin", { headers: { authorization: `Bearer ${userToken}` } })
+    : null;
   record({
     category: cat,
     title: "Horizontal→vertical privilege escalation (user token → admin)",
     severity: "high",
     attack: "POST /login as alice (scopes:[user]) then GET /admin with that token",
-    observed: escalate ? `login ${login.status}, /admin ${escalate.status}` + (escalate.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : "") : "login failed",
-    verdict: escalate && escalate.status === 403 && !escalate.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
+    observed: escalate
+      ? `login ${login.status}, /admin ${escalate.status}` +
+        (escalate.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : "")
+      : "login failed",
+    verdict:
+      escalate && escalate.status === 403 && !escalate.text.includes("TOP-SECRET")
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 
   // Brute force the login.
@@ -290,7 +325,10 @@ async function injection() {
     severity: "high",
     attack: `POST /items {"name":{"$ne":null},...}`,
     observed: `status ${nosql.status}`,
-    verdict: nosql.status === 422 || nosql.status === 403 || nosql.status === 400 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      nosql.status === 422 || nosql.status === 403 || nosql.status === 400
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 }
 
@@ -313,7 +351,12 @@ async function ssrfAndRedirect() {
       verdict: r.status === 403 ? "DEFENDED" : "VULNERABLE",
     });
   }
-  const redirects = ["//evil.example", "https://evil.example", "/\\evil.example", "javascript:alert(1)"];
+  const redirects = [
+    "//evil.example",
+    "https://evil.example",
+    "/\\evil.example",
+    "javascript:alert(1)",
+  ];
   for (const t of redirects) {
     const r = await http("GET", `/go?to=${encodeURIComponent(t)}`);
     const loc = r.headers.get("location") ?? "";
@@ -352,7 +395,8 @@ async function dataExposureAndMassAssignment() {
     severity: "high",
     attack: `POST /items {name, price, role:"admin", isAdmin:true}`,
     observed: `status ${ma.status}` + (/admin/i.test(ma.text) ? " — extra field echoed!" : ""),
-    verdict: ma.status === 422 || (ma.status < 300 && !/admin/i.test(ma.text)) ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      ma.status === 422 || (ma.status < 300 && !/admin/i.test(ma.text)) ? "DEFENDED" : "VULNERABLE",
   });
 
   const proto = await http("POST", "/items", {
@@ -366,7 +410,11 @@ async function dataExposureAndMassAssignment() {
     severity: "critical",
     attack: `POST /items with __proto__ / constructor.prototype payload`,
     observed: `status ${proto.status}, server healthy afterward: ${stillHealthy}`,
-    verdict: stillHealthy && (proto.status === 422 || (proto.status < 300 && !proto.text.includes("polluted"))) ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      stillHealthy &&
+      (proto.status === 422 || (proto.status < 300 && !proto.text.includes("polluted")))
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 }
 
@@ -383,9 +431,14 @@ async function corsAbuse() {
     verdict: acao === null ? "DEFENDED" : "VULNERABLE",
   });
   const pf = await http("OPTIONS", "/users/1", {
-    headers: { origin: "https://evil.example", "access-control-request-method": "DELETE", "access-control-request-headers": "authorization" },
+    headers: {
+      origin: "https://evil.example",
+      "access-control-request-method": "DELETE",
+      "access-control-request-headers": "authorization",
+    },
   });
-  const leaksConfig = pf.headers.get("access-control-allow-methods") || pf.headers.get("access-control-allow-origin");
+  const leaksConfig =
+    pf.headers.get("access-control-allow-methods") || pf.headers.get("access-control-allow-origin");
   record({
     category: cat,
     title: "CORS preflight config disclosure to untrusted origin",
@@ -401,7 +454,7 @@ async function wireLevel(port: number) {
 
   const dupCl = await rawSend(
     port,
-    "POST /items HTTP/1.1\r\nHost: t\r\nContent-Length: 6\r\nContent-Length: 5\r\nContent-Type: application/json\r\n\r\n{}\r\n\r\n",
+    "POST /items HTTP/1.1\r\nHost: t\r\nContent-Length: 6\r\nContent-Length: 5\r\nContent-Type: application/json\r\n\r\n{}\r\n\r\n"
   );
   record({
     category: cat,
@@ -414,7 +467,7 @@ async function wireLevel(port: number) {
 
   const teCl = await rawSend(
     port,
-    "POST /items HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nContent-Length: 4\r\n\r\n0\r\n\r\n",
+    "POST /items HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nContent-Length: 4\r\n\r\n0\r\n\r\n"
   );
   record({
     category: cat,
@@ -427,7 +480,7 @@ async function wireLevel(port: number) {
 
   const internal = await rawSend(
     port,
-    "GET /healthz HTTP/1.1\r\nHost: t\r\nx-daloy-internal-user: admin\r\n\r\n",
+    "GET /healthz HTTP/1.1\r\nHost: t\r\nx-daloy-internal-user: admin\r\n\r\n"
   );
   record({
     category: cat,
@@ -439,7 +492,10 @@ async function wireLevel(port: number) {
   });
 
   // The real amplification bound is the 16 KiB header BYTE cap, not the count.
-  const bigHeaders = "GET /healthz HTTP/1.1\r\nHost: t\r\n" + Array.from({ length: 60 }, (_, i) => `X-Flood-${i}: ${"A".repeat(400)}`).join("\r\n") + "\r\n\r\n";
+  const bigHeaders =
+    "GET /healthz HTTP/1.1\r\nHost: t\r\n" +
+    Array.from({ length: 60 }, (_, i) => `X-Flood-${i}: ${"A".repeat(400)}`).join("\r\n") +
+    "\r\n\r\n";
   const floodRes = await rawSend(port, bigHeaders);
   record({
     category: cat,
@@ -447,12 +503,18 @@ async function wireLevel(port: number) {
     severity: "high",
     attack: "Raw GET with ~24 KiB of header fields (cap is 16 KiB)",
     observed: `response: ${floodRes.statusLine || "(connection dropped)"}`,
-    verdict: floodRes.status === 431 || floodRes.status === 400 || floodRes.status === 0 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      floodRes.status === 431 || floodRes.status === 400 || floodRes.status === 0
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
   // Count-only flood (many tiny headers): Node drops headers past
   // maxHeadersCount silently rather than emitting 431 — bounded, not an
   // amplification vector, so this is informational, not a finding.
-  const countFlood = "GET /healthz HTTP/1.1\r\nHost: t\r\n" + Array.from({ length: 500 }, (_, i) => `X-C${i}: v`).join("\r\n") + "\r\n\r\n";
+  const countFlood =
+    "GET /healthz HTTP/1.1\r\nHost: t\r\n" +
+    Array.from({ length: 500 }, (_, i) => `X-C${i}: v`).join("\r\n") +
+    "\r\n\r\n";
   const countRes = await rawSend(port, countFlood);
   record({
     category: cat,
@@ -466,7 +528,7 @@ async function wireLevel(port: number) {
   const bigBody = await rawSend(
     port,
     "POST /items HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: 1073741824\r\n\r\n{}",
-    1500,
+    1500
   );
   record({
     category: cat,
@@ -474,7 +536,10 @@ async function wireLevel(port: number) {
     severity: "high",
     attack: "Raw POST advertising a 1 GiB Content-Length",
     observed: `response: ${bigBody.statusLine || "(connection dropped)"}`,
-    verdict: bigBody.status === 413 || bigBody.status === 400 || bigBody.status === 0 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      bigBody.status === 413 || bigBody.status === 400 || bigBody.status === 0
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 
   const slow = await slowloris(port, 4000);
@@ -483,13 +548,19 @@ async function wireLevel(port: number) {
     title: "Slowloris (slow-header connection starvation)",
     severity: "high",
     attack: "Open socket, dribble headers, never finish the request",
-    observed: slow.closedByServer ? `server closed the stalled socket after ${slow.afterMs}ms` : `socket still open after ${slow.afterMs}ms`,
+    observed: slow.closedByServer
+      ? `server closed the stalled socket after ${slow.afterMs}ms`
+      : `socket still open after ${slow.afterMs}ms`,
     verdict: slow.closedByServer ? "DEFENDED" : "VULNERABLE",
   });
 
   // CRLF response splitting via a reflected response header.
-  const split = await http("GET", `/echo-header?v=${encodeURIComponent("safe\r\nSet-Cookie: admin=1\r\nX-Injected: pwned")}`);
-  const injected = split.headers.get("set-cookie") === "admin=1" || split.headers.get("x-injected") === "pwned";
+  const split = await http(
+    "GET",
+    `/echo-header?v=${encodeURIComponent("safe\r\nSet-Cookie: admin=1\r\nX-Injected: pwned")}`
+  );
+  const injected =
+    split.headers.get("set-cookie") === "admin=1" || split.headers.get("x-injected") === "pwned";
   record({
     category: cat,
     title: "CRLF response splitting via reflected header",
@@ -605,8 +676,8 @@ async function rapidResetAndChurn(port: number) {
           });
           s.on("error", close);
           setTimeout(close, 500);
-        }),
-    ),
+        })
+    )
   );
   let alive = false;
   try {
@@ -628,7 +699,10 @@ async function protocolAndParsing(port: number) {
   const cat = "Protocol / parsing abuse";
 
   // TRACE (Cross-Site Tracing) over a raw socket — must not echo the request.
-  const trace = await rawSend(port, "TRACE /healthz HTTP/1.1\r\nHost: t\r\nX-Marker: SECRETVALUE\r\n\r\n");
+  const trace = await rawSend(
+    port,
+    "TRACE /healthz HTTP/1.1\r\nHost: t\r\nX-Marker: SECRETVALUE\r\n\r\n"
+  );
   record({
     category: cat,
     title: "HTTP verb tampering — TRACE / Cross-Site Tracing (XST)",
@@ -639,7 +713,9 @@ async function protocolAndParsing(port: number) {
   });
 
   // Method-override smuggling — GET must not become DELETE.
-  const mo = await http("GET", "/resource", { headers: { "x-http-method-override": "DELETE", "x-method-override": "DELETE" } });
+  const mo = await http("GET", "/resource", {
+    headers: { "x-http-method-override": "DELETE", "x-method-override": "DELETE" },
+  });
   record({
     category: cat,
     title: "HTTP method-override smuggling (GET → DELETE)",
@@ -661,7 +737,10 @@ async function protocolAndParsing(port: number) {
   });
 
   // Content-type confusion — a JSON route must reject text/plain.
-  const ct = await http("POST", "/items", { headers: { "content-type": "text/plain" }, body: "name=x&price=1" });
+  const ct = await http("POST", "/items", {
+    headers: { "content-type": "text/plain" },
+    body: "name=x&price=1",
+  });
   record({
     category: cat,
     title: "Content-type confusion on a JSON body route",
@@ -691,14 +770,20 @@ async function protocolAndParsing(port: number) {
   const wide: Record<string, string> = {};
   for (let i = 0; i < 50_000; i++) wide["k" + i] = "v";
   const t1 = Date.now();
-  const flood = await http("POST", "/wide", { headers: { "content-type": "application/json" }, body: JSON.stringify(wide) });
+  const flood = await http("POST", "/wide", {
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(wide),
+  });
   record({
     category: cat,
     title: "Hash-flood (50k-key JSON object)",
     severity: "medium",
     attack: "POST /wide with 50,000 keys",
     observed: `status ${flood.status} in ${Date.now() - t1}ms`,
-    verdict: (flood.status === 200 || flood.status === 400) && Date.now() - t1 < 3000 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      (flood.status === 200 || flood.status === 400) && Date.now() - t1 < 3000
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 
   // Request-id entropy — many live ids must be unique, unguessable UUIDs.
@@ -721,7 +806,9 @@ async function protocolAndParsing(port: number) {
 
   // Clickjacking / HSTS posture on a live response.
   const h = (await http("GET", "/healthz")).headers;
-  const framed = h.get("x-frame-options") === "DENY" && (h.get("content-security-policy") ?? "").includes("frame-ancestors 'none'");
+  const framed =
+    h.get("x-frame-options") === "DENY" &&
+    (h.get("content-security-policy") ?? "").includes("frame-ancestors 'none'");
   const hsts = /max-age=\d{7,}/.test(h.get("strict-transport-security") ?? "");
   record({
     category: cat,
@@ -738,7 +825,9 @@ async function statefulMiddleware() {
 
   // CSRF double-submit.
   const noToken = await http("POST", "/csrf-act");
-  const matched = await http("POST", "/csrf-act", { headers: { cookie: "csrf=tok", "x-csrf-token": "tok" } });
+  const matched = await http("POST", "/csrf-act", {
+    headers: { cookie: "csrf=tok", "x-csrf-token": "tok" },
+  });
   record({
     category: cat,
     title: "CSRF (state-changing POST without a valid token)",
@@ -767,7 +856,10 @@ async function statefulMiddleware() {
 
   // Idempotency: replay + cross-tenant isolation.
   const pay = (key: string, auth: string, amount = 10) =>
-    http("POST", "/pay", { headers: { "content-type": "application/json", "idempotency-key": key, authorization: auth }, body: JSON.stringify({ amount }) });
+    http("POST", "/pay", {
+      headers: { "content-type": "application/json", "idempotency-key": key, authorization: auth },
+      body: JSON.stringify({ amount }),
+    });
   const a1 = await pay("k1", "Bearer USER_A");
   const replay = await pay("k1", "Bearer USER_A");
   const reuse = await pay("k1", "Bearer USER_A", 999); // same key, different body
@@ -781,7 +873,10 @@ async function statefulMiddleware() {
     attack: "Replay a key; reuse with a new body; reuse another user's key",
     observed: `replayed=${replay.headers.get("idempotency-replayed")}, key+newbody=${reuse.status}, B-got-own=${bOwner !== aOwner}`,
     verdict:
-      replay.headers.get("idempotency-replayed") && reuse.status === 422 && bOwner !== aOwner && bOwner === "Bearer USER_B"
+      replay.headers.get("idempotency-replayed") &&
+      reuse.status === 422 &&
+      bOwner !== aOwner &&
+      bOwner === "Bearer USER_B"
         ? "DEFENDED"
         : "VULNERABLE",
   });
@@ -825,7 +920,8 @@ async function accessControlFeeds() {
   // autoBan: three 401s from one IP trip a ban on an otherwise-valid route.
   const atk = { "x-forwarded-for": "6.6.6.6" };
   const strikes: number[] = [];
-  for (let i = 0; i < 3; i++) strikes.push((await http("GET", "/ab-login", { headers: atk })).status);
+  for (let i = 0; i < 3; i++)
+    strikes.push((await http("GET", "/ab-login", { headers: atk })).status);
   const banned = await http("GET", "/ab-public", { headers: atk });
   const innocent = await http("GET", "/ab-public", { headers: { "x-forwarded-for": "9.9.9.9" } });
   record({
@@ -839,20 +935,34 @@ async function accessControlFeeds() {
 
   // basic-auth account enumeration: unknown user vs known-user-wrong-password.
   const basic = (u: string, p: string) => `Basic ${Buffer.from(`${u}:${p}`).toString("base64")}`;
-  const unknown = await http("GET", "/basic-vault", { headers: { authorization: basic("bob", "x") } });
-  const wrongPass = await http("GET", "/basic-vault", { headers: { authorization: basic("alice", "WRONG") } });
-  const good = await http("GET", "/basic-vault", { headers: { authorization: basic("alice", "s3cret-correct") } });
+  const unknown = await http("GET", "/basic-vault", {
+    headers: { authorization: basic("bob", "x") },
+  });
+  const wrongPass = await http("GET", "/basic-vault", {
+    headers: { authorization: basic("alice", "WRONG") },
+  });
+  const good = await http("GET", "/basic-vault", {
+    headers: { authorization: basic("alice", "s3cret-correct") },
+  });
   record({
     category: cat,
     title: "Account enumeration via basic-auth response differences",
     severity: "medium",
     attack: "Compare 401s for an unknown user vs a known user with a wrong password",
     observed: `unknown=${unknown.status}, wrong-pass=${wrongPass.status}, identical=${unknown.text === wrongPass.text}, good=${good.status}`,
-    verdict: unknown.status === 401 && wrongPass.status === 401 && unknown.text === wrongPass.text && good.status === 200 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      unknown.status === 401 &&
+      wrongPass.status === 401 &&
+      unknown.text === wrongPass.text &&
+      good.status === 200
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 
   // mTLS: a spoofed client-cert header must be ignored when not configured.
-  const mtls = await http("GET", "/mtls", { headers: { "x-forwarded-client-cert": 'Subject="CN=admin";Hash=deadbeef' } });
+  const mtls = await http("GET", "/mtls", {
+    headers: { "x-forwarded-client-cert": 'Subject="CN=admin";Hash=deadbeef' },
+  });
   record({
     category: cat,
     title: "Spoofed mTLS client-cert header (XFCC)",
@@ -886,7 +996,9 @@ async function exceptPathConfusion() {
     title: "Path-traversal auth bypass through an except() exemption",
     severity: "critical",
     attack: "GET /public/../api/admin (and encoded variants) to collapse past the guard",
-    observed: bypassed ? "a traversal reached the protected handler!" : "every traversal stayed blocked",
+    observed: bypassed
+      ? "a traversal reached the protected handler!"
+      : "every traversal stayed blocked",
     verdict: bypassed ? "VULNERABLE" : "DEFENDED",
   });
 }
@@ -911,7 +1023,7 @@ async function unorthodoxAttacks(port: number, portB: number) {
   // intermediaries free to choose different request authorities.
   const multiHost = await rawSend(
     port,
-    "GET /healthz HTTP/1.1\r\nHost: attacker.com\r\nHost: target.com\r\n\r\n",
+    "GET /healthz HTTP/1.1\r\nHost: attacker.com\r\nHost: target.com\r\n\r\n"
   );
   record({
     category: cat,
@@ -926,7 +1038,7 @@ async function unorthodoxAttacks(port: number, portB: number) {
   // than many small headers and must hit the configured byte limit.
   const longHeader = await rawSend(
     port,
-    `GET /healthz HTTP/1.1\r\nHost: t\r\nX-Long: ${"A".repeat(20_000)}\r\n\r\n`,
+    `GET /healthz HTTP/1.1\r\nHost: t\r\nX-Long: ${"A".repeat(20_000)}\r\n\r\n`
   );
   record({
     category: cat,
@@ -958,7 +1070,7 @@ async function unorthodoxAttacks(port: number, portB: number) {
   // must route by pathname without treating the target authority as trusted.
   const absolute = await rawSend(
     port,
-    `GET http://${HOST}:${port}/healthz HTTP/1.1\r\nHost: ${HOST}:${port}\r\nUser-Agent: redteam-absolute-uri/1.0\r\n\r\n`,
+    `GET http://${HOST}:${port}/healthz HTTP/1.1\r\nHost: ${HOST}:${port}\r\nUser-Agent: redteam-absolute-uri/1.0\r\n\r\n`
   );
   record({
     category: cat,
@@ -986,7 +1098,10 @@ async function unorthodoxAttacks(port: number, portB: number) {
     severity: "medium",
     attack: "POST /sink Content-Type: application/json with form body",
     observed: `status ${ctConfusion.status}`,
-    verdict: ctConfusion.status === 400 || ctConfusion.status === 415 || ctConfusion.status === 422 ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      ctConfusion.status === 400 || ctConfusion.status === 415 || ctConfusion.status === 422
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 
   // Windows-style separators must not collapse through the router or except()
@@ -1011,7 +1126,7 @@ async function unorthodoxAttacks(port: number, portB: number) {
   // rejected as a client error rather than surfacing as a framework 500.
   const invalidPortSuffix = await rawSend(
     port,
-    `GET /healthz HTTP/1.1\r\nHost: ${HOST}:${port}.\r\nUser-Agent: redteam-invalid-port/1.0\r\n\r\n`,
+    `GET /healthz HTTP/1.1\r\nHost: ${HOST}:${port}.\r\nUser-Agent: redteam-invalid-port/1.0\r\n\r\n`
   );
   record({
     category: cat,
@@ -1055,7 +1170,9 @@ function report(): number {
   const def = findings.filter((f) => f.verdict === "DEFENDED");
   const info = findings.filter((f) => f.verdict === "INFO");
   console.log("\n" + line);
-  console.log(`  SUMMARY: ${def.length} DEFENDED · ${vuln.length} VULNERABLE · ${info.length} INFO  (of ${findings.length} probes)`);
+  console.log(
+    `  SUMMARY: ${def.length} DEFENDED · ${vuln.length} VULNERABLE · ${info.length} INFO  (of ${findings.length} probes)`
+  );
   if (vuln.length === 0) {
     console.log("  VERDICT: No exploitable weakness found. The framework held the line.");
   } else {

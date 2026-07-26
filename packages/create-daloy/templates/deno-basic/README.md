@@ -65,9 +65,13 @@ deno task hooks:install   # points core.hooksPath at .githooks
 
 - `@daloyjs/core` (loaded via `jsr:` specifiers in `deno.json`).
 - Starter security middleware: `secureHeaders`, `requestId`, and `rateLimit`.
+
 <!-- daloy-minimal:strip-start books -->
+
 - A health route and contract-first `/books/:id` route with Zod validation.
+
 <!-- daloy-minimal:strip-end books -->
+
 - Minimal permissions: `--allow-net --allow-env --allow-read` for `dev`.
 
 ## Authentication (OAuth2 / OpenID Connect)

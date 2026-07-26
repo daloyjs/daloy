@@ -18,7 +18,7 @@ app.get(
       200: { description: "OK", body: z.object({ status: z.literal("ok") }) },
     },
   },
-  async () => ({ status: 200 as const, body: { status: "ok" as const } }),
+  async () => ({ status: 200 as const, body: { status: "ok" as const } })
 );
 
 console.log("Registered routes:");

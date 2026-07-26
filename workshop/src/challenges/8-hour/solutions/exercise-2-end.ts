@@ -54,7 +54,7 @@ app.get(
       status: 200 as const,
       body: { items: filtered.slice(0, query.limit), total: filtered.length },
     };
-  },
+  }
 );
 
 app.post(
@@ -71,7 +71,10 @@ app.post(
   async ({ headers, body }) => {
     const key = headers["idempotency-key"];
     if (seenIdempotencyKeys.has(key)) {
-      throw new HttpError(409, { title: "Conflict", detail: "This idempotency-key was already used" });
+      throw new HttpError(409, {
+        title: "Conflict",
+        detail: "This idempotency-key was already used",
+      });
     }
     if (books.has(body.id)) {
       throw new HttpError(409, { title: "Conflict", detail: `Book ${body.id} already exists` });
@@ -79,7 +82,7 @@ app.post(
     seenIdempotencyKeys.add(key);
     books.set(body.id, body);
     return { status: 201 as const, body };
-  },
+  }
 );
 
 serve(app, { port: 3000 });

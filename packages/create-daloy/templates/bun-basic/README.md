@@ -71,9 +71,13 @@ Do not use `.js` here — that's the Node NodeNext convention and will not resol
 ## What's included
 
 - `@daloyjs/core` with starter security middleware: `secureHeaders`, `requestId`, and `rateLimit`.
+
 <!-- daloy-minimal:strip-start books -->
+
 - A health route and contract-first `/books/:id` route with Zod validation.
+
 <!-- daloy-minimal:strip-end books -->
+
 - Hot reload via `bun --hot`.
 - Hey API codegen wired to `bun run gen:openapi` + `bun run gen:client`.
 

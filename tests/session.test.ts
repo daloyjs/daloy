@@ -22,7 +22,7 @@ declare module "../src/index.js" {
 
 function makeApp(
   opts: Partial<Parameters<typeof session>[0]> = {},
-  cookieName: string | undefined = "__Host-daloy.sid",
+  cookieName: string | undefined = "__Host-daloy.sid"
 ) {
   const app = new App({ logger: false });
   const store = opts.store ?? new MemorySessionStore();
@@ -161,7 +161,10 @@ test("session issues a fresh signed cookie on first request", async () => {
   assert.equal(res.status, 200);
   const sc = res.headers.get("set-cookie");
   assert.ok(sc, "expected set-cookie");
-  assert.match(sc!, /^__Host-daloy\.sid=[A-Za-z0-9_\-%.]+\.[A-Za-z0-9_\-%]+; Path=\/; SameSite=Lax; Secure; HttpOnly$/);
+  assert.match(
+    sc!,
+    /^__Host-daloy\.sid=[A-Za-z0-9_\-%.]+\.[A-Za-z0-9_\-%]+; Path=\/; SameSite=Lax; Secure; HttpOnly$/
+  );
   const body = (await res.json()) as { id: string; name: null };
   assert.equal(body.name, null);
   assert.ok(body.id.length > 0);
@@ -171,7 +174,9 @@ test("session persists data across requests via cookie", async () => {
   const { app } = makeApp();
   const r1 = await app.request("/login", { method: "POST" });
   const cookie = readCookie(r1)!;
-  const r2 = await app.request("/me", { headers: { cookie: `__Host-daloy.sid=${encodeURIComponent(cookie)}` } });
+  const r2 = await app.request("/me", {
+    headers: { cookie: `__Host-daloy.sid=${encodeURIComponent(cookie)}` },
+  });
   const body = (await r2.json()) as { id: string; name: string };
   assert.equal(body.name, "alice");
 });
@@ -441,7 +446,10 @@ test("session: custom store returning an expired record is treated as no session
 
 test("session: stored record with missing data field is replaced with empty object", async () => {
   const store: SessionStore = {
-    get: () => ({ data: null as unknown as Record<string, unknown>, expiresAt: Date.now() + 60_000 }),
+    get: () => ({
+      data: null as unknown as Record<string, unknown>,
+      expiresAt: Date.now() + 60_000,
+    }),
     set: () => {},
     destroy: () => {},
   };
@@ -473,15 +481,15 @@ test("session validates options at construction time", () => {
   assert.throws(() => session({ secret: SECRET, ttlSeconds: 1.5 }), /ttlSeconds/);
   assert.throws(
     () => session({ secret: SECRET, cookieName: "bad name" }),
-    /not a valid cookie name/,
+    /not a valid cookie name/
   );
   assert.throws(
     () => session({ secret: SECRET, cookieOptions: { sameSite: "Bogus" as "Lax" } }),
-    /sameSite must be/,
+    /sameSite must be/
   );
   assert.throws(
     () => session({ secret: SECRET, cookieOptions: { path: "no-slash" } }),
-    /path must start/,
+    /path must start/
   );
   assert.throws(
     () =>
@@ -490,7 +498,7 @@ test("session validates options at construction time", () => {
         cookieName: "non-host",
         cookieOptions: { path: "/api;injected" },
       }),
-    /path contains an invalid character/,
+    /path contains an invalid character/
   );
   assert.throws(
     () =>
@@ -499,11 +507,11 @@ test("session validates options at construction time", () => {
         cookieName: "non-host",
         cookieOptions: { domain: "evil\nexample.com" },
       }),
-    /domain contains an invalid character/,
+    /domain contains an invalid character/
   );
   assert.throws(
     () => session({ secret: SECRET, cookieOptions: { maxAgeSeconds: -1 } }),
-    /maxAgeSeconds must be/,
+    /maxAgeSeconds must be/
   );
   assert.throws(
     () =>
@@ -512,7 +520,7 @@ test("session validates options at construction time", () => {
         cookieName: "non-host",
         cookieOptions: { sameSite: "None", secure: false },
       }),
-    /sameSite: "None" requires secure/,
+    /sameSite: "None" requires secure/
   );
   assert.throws(
     () =>
@@ -520,12 +528,12 @@ test("session validates options at construction time", () => {
         secret: SECRET,
         cookieOptions: { secure: false },
       }),
-    /__Host-/,
+    /__Host-/
   );
   // Empty secret array.
   assert.throws(
     () => session({ secret: [] as unknown as string[] }),
-    /at least one secret|at least 16/,
+    /at least one secret|at least 16/
   );
 });
 
@@ -547,7 +555,7 @@ test("session non-host cookie with domain + Max-Age + Partitioned + SameSite=Non
         partitioned: true,
         httpOnly: false,
       },
-    }),
+    })
   );
   app.route({
     method: "POST",
@@ -670,7 +678,7 @@ test("rotateSession() rotates automatically when watched privilege data changes"
       store,
       saveUninitialized: true,
       generator: () => ids.shift() ?? `sid-${Date.now()}`,
-    }),
+    })
   );
   app.use(rotateSession({ watch: "role" }));
   app.route({
@@ -714,7 +722,7 @@ test("rotateSession() skips when the handler already regenerated", async () => {
       secret: SECRET,
       saveUninitialized: true,
       generator: () => ids.shift() ?? "fallback",
-    }),
+    })
   );
   app.use(rotateSession({ watch: (ctx) => ctx.state.session.get("role") }));
   app.route({
@@ -745,7 +753,6 @@ test("rotateSession() requires session() to be mounted first", async () => {
   const res = await app.request("/x");
   assert.equal(res.status, 500);
 });
-
 
 test("session: requests without a session cookie at all skip lookup", async () => {
   const { app } = makeApp();
@@ -841,7 +848,7 @@ test("session nested object mutations mark dirty and persist across requests", a
       store,
       cookieOptions: { secure: false },
       cookieName: "sid",
-    }),
+    })
   );
   app.route({
     method: "POST",
@@ -869,17 +876,13 @@ test("session nested object mutations mark dirty and persist across requests", a
     }),
   });
 
-  const first = await app.fetch(
-    new Request("http://x/profile", { method: "POST" }),
-  );
+  const first = await app.fetch(new Request("http://x/profile", { method: "POST" }));
   assert.equal(first.status, 200);
   const setCookie = first.headers.get("set-cookie");
   assert.ok(setCookie, "session cookie must be issued after nested write");
   const cookie = setCookie.split(";")[0]!;
 
-  const second = await app.fetch(
-    new Request("http://x/profile", { headers: { cookie } }),
-  );
+  const second = await app.fetch(new Request("http://x/profile", { headers: { cookie } }));
   assert.equal(second.status, 200);
   const body = (await second.json()) as { profile: { name: string; roles: string[] } };
   assert.equal(body.profile.name, "alice");
@@ -896,7 +899,7 @@ test("session deep-clones on load so request nested data is not the store object
       cookieOptions: { secure: false },
       cookieName: "sid2",
       saveUninitialized: true,
-    }),
+    })
   );
   app.route({
     method: "POST",
@@ -933,9 +936,7 @@ test("session deep-clones on load so request nested data is not the store object
       };
     },
   });
-  const again = await app.fetch(
-    new Request("http://x/nest", { headers: { cookie } }),
-  );
+  const again = await app.fetch(new Request("http://x/nest", { headers: { cookie } }));
   const body = (await again.json()) as { bag: { n: number }; distinct: boolean };
   assert.equal(body.distinct, true);
   assert.equal(body.bag.n, 1, "request clone must not see post-load store mutation");
@@ -951,7 +952,7 @@ test("session nested reads return a stable proxy identity within a request", asy
       cookieOptions: { secure: false },
       cookieName: "sid3",
       saveUninitialized: true,
-    }),
+    })
   );
   let identityHeld = false;
   let arrayIdentityHeld = false;
@@ -966,8 +967,7 @@ test("session nested reads return a stable proxy identity within a request", asy
       // object identity holds (regression: a fresh proxy per read broke `===`).
       identityHeld = state.session.data.user === state.session.data.user;
       const roles = (state.session.data.user as { roles: string[] }).roles;
-      arrayIdentityHeld =
-        roles === (state.session.data.user as { roles: string[] }).roles;
+      arrayIdentityHeld = roles === (state.session.data.user as { roles: string[] }).roles;
       // Exotic objects are returned unwrapped, so their methods still work.
       state.session.data.when = new Date(0);
       const when = state.session.data.when as Date;
@@ -999,7 +999,7 @@ test("session clone preserves Date values across a store round-trip (no JSON cor
       cookieOptions: { secure: false },
       cookieName: "sid4",
       saveUninitialized: true,
-    }),
+    })
   );
   app.route({
     method: "POST",

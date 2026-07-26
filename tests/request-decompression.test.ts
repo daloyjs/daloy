@@ -13,9 +13,7 @@ import {
 
 // ---------- compression helpers (build fixtures with the web-standard API) ----------
 
-async function drain(
-  readable: ReadableStream<Uint8Array>,
-): Promise<Uint8Array> {
+async function drain(readable: ReadableStream<Uint8Array>): Promise<Uint8Array> {
   const reader = readable.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -36,10 +34,7 @@ async function drain(
   return out;
 }
 
-async function compress(
-  bytes: Uint8Array,
-  format: "gzip" | "deflate",
-): Promise<Uint8Array> {
+async function compress(bytes: Uint8Array, format: "gzip" | "deflate"): Promise<Uint8Array> {
   const cs = new (globalThis as any).CompressionStream(format);
   const writer = cs.writable.getWriter();
   void writer.write(bytes);
@@ -78,18 +73,9 @@ function echoApp(opts: Parameters<typeof requestDecompression>[0]) {
 // ---------- construction validation (unhappy paths) ----------
 
 test("requestDecompression() requires a positive maxDecompressedBytes", () => {
-  assert.throws(
-    () => requestDecompression({ maxDecompressedBytes: 0 }),
-    /maxDecompressedBytes/,
-  );
-  assert.throws(
-    () => requestDecompression({ maxDecompressedBytes: -1 }),
-    /maxDecompressedBytes/,
-  );
-  assert.throws(
-    () => requestDecompression({ maxDecompressedBytes: 1.5 }),
-    /maxDecompressedBytes/,
-  );
+  assert.throws(() => requestDecompression({ maxDecompressedBytes: 0 }), /maxDecompressedBytes/);
+  assert.throws(() => requestDecompression({ maxDecompressedBytes: -1 }), /maxDecompressedBytes/);
+  assert.throws(() => requestDecompression({ maxDecompressedBytes: 1.5 }), /maxDecompressedBytes/);
 });
 
 test("requestDecompression() rejects a non-positive maxCompressedBytes", () => {
@@ -99,14 +85,14 @@ test("requestDecompression() rejects a non-positive maxCompressedBytes", () => {
         maxDecompressedBytes: 1024,
         maxCompressedBytes: 0,
       }),
-    /maxCompressedBytes/,
+    /maxCompressedBytes/
   );
 });
 
 test("requestDecompression() rejects a maxRatio below 1", () => {
   assert.throws(
     () => requestDecompression({ maxDecompressedBytes: 1024, maxRatio: 0.5 }),
-    /maxRatio/,
+    /maxRatio/
   );
   assert.throws(
     () =>
@@ -114,14 +100,14 @@ test("requestDecompression() rejects a maxRatio below 1", () => {
         maxDecompressedBytes: 1024,
         maxRatio: Number.POSITIVE_INFINITY,
       }),
-    /maxRatio/,
+    /maxRatio/
   );
 });
 
 test("requestDecompression() rejects an empty encodings list", () => {
   assert.throws(
     () => requestDecompression({ maxDecompressedBytes: 1024, encodings: [] }),
-    /at least one encoding/,
+    /at least one encoding/
   );
 });
 
@@ -132,7 +118,7 @@ test("requestDecompression() rejects an unsupported encoding", () => {
         maxDecompressedBytes: 1024,
         encodings: ["br" as any],
       }),
-    /unsupported encoding/,
+    /unsupported encoding/
   );
 });
 
@@ -146,7 +132,7 @@ test("inflates a gzip JSON body and feeds schema validation", async () => {
       method: "POST",
       headers: { "content-type": "application/json", "content-encoding": "gzip" },
       body: body as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { value: "hello" });
@@ -158,10 +144,7 @@ test("inflates a deflate JSON body", async () => {
     maxRatio: 1000,
     encodings: ["deflate"],
   });
-  const body = await compress(
-    enc.encode(JSON.stringify({ value: "deflated" })),
-    "deflate",
-  );
+  const body = await compress(enc.encode(JSON.stringify({ value: "deflated" })), "deflate");
   const res = await app.fetch(
     new Request("http://x/echo", {
       method: "POST",
@@ -170,7 +153,7 @@ test("inflates a deflate JSON body", async () => {
         "content-encoding": "deflate",
       },
       body: body as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { value: "deflated" });
@@ -183,7 +166,7 @@ test("passes through an uncompressed body untouched", async () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ value: "plain" }),
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { value: "plain" });
@@ -199,7 +182,7 @@ test("treats Content-Encoding: identity as a pass-through", async () => {
         "content-encoding": "identity",
       },
       body: JSON.stringify({ value: "identity" }),
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { value: "identity" });
@@ -224,7 +207,7 @@ test("a handler reading the raw body sees the inflated bytes", async () => {
       method: "POST",
       headers: { "content-encoding": "gzip" },
       body: (await compress(payload, "gzip")) as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { length: 5000 });
@@ -239,7 +222,7 @@ test("rejects an unknown Content-Encoding with 415", async () => {
       method: "POST",
       headers: { "content-type": "application/json", "content-encoding": "br" },
       body: "anything",
-    }),
+    })
   );
   assert.equal(res.status, 415);
   assert.match(res.headers.get("accept-encoding") ?? "", /gzip/);
@@ -256,7 +239,7 @@ test("rejects a layered Content-Encoding (gzip, gzip) with 415", async () => {
         "content-encoding": "gzip, gzip",
       },
       body: body as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 415);
 });
@@ -273,7 +256,7 @@ test("rejects a body that exceeds maxCompressedBytes with 413", async () => {
       method: "POST",
       headers: { "content-type": "application/json", "content-encoding": "gzip" },
       body: body as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 413);
 });
@@ -293,7 +276,7 @@ test("aborts a decompression bomb on the absolute cap with 413", async () => {
       method: "POST",
       headers: { "content-type": "application/json", "content-encoding": "gzip" },
       body: body as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 413);
   assert.equal(bombInfo.reason, "absolute");
@@ -315,7 +298,7 @@ test("aborts a decompression bomb on the ratio cap with 413", async () => {
       method: "POST",
       headers: { "content-type": "application/json", "content-encoding": "gzip" },
       body: body as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 413);
   assert.equal(bombInfo.reason, "ratio");
@@ -328,7 +311,7 @@ test("rejects a malformed compressed body with 400", async () => {
       method: "POST",
       headers: { "content-type": "application/json", "content-encoding": "gzip" },
       body: enc.encode("not a real gzip stream") as BodyInit,
-    }),
+    })
   );
   assert.equal(res.status, 400);
 });
@@ -359,8 +342,7 @@ test("decompressRequestBody throws DecompressionBombError on the ratio cap", asy
         maxDecompressedBytes: 10 * 1024 * 1024,
         maxRatio: 2,
       }),
-    (err: unknown) =>
-      err instanceof DecompressionBombError && err.info.reason === "ratio",
+    (err: unknown) => err instanceof DecompressionBombError && err.info.reason === "ratio"
   );
 });
 
@@ -370,7 +352,7 @@ test("decompressRequestBody throws MalformedCompressedBodyError on junk input", 
       decompressRequestBody(enc.encode("definitely not gzip"), "gzip", {
         maxDecompressedBytes: 1024,
       }),
-    MalformedCompressedBodyError,
+    MalformedCompressedBodyError
   );
 });
 
@@ -380,7 +362,7 @@ test("decompressRequestBody validates its caps", async () => {
       decompressRequestBody(new Uint8Array(1), "gzip", {
         maxDecompressedBytes: 0,
       }),
-    /maxDecompressedBytes/,
+    /maxDecompressedBytes/
   );
 });
 

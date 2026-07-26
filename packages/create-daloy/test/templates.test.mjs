@@ -36,7 +36,7 @@ test("choiceInputMode prefers the controlling TTY when a wrapper hides raw mode 
 
   assert.equal(
     choiceInputMode({ stdinIsTTY: true, hasRawMode: true, platform: "darwin" }),
-    "stdin",
+    "stdin"
   );
   assert.equal(
     choiceInputMode({
@@ -44,15 +44,12 @@ test("choiceInputMode prefers the controlling TTY when a wrapper hides raw mode 
       hasRawMode: false,
       platform: "darwin",
     }),
-    "tty",
+    "tty"
   );
-  assert.equal(
-    choiceInputMode({ stdinIsTTY: true, hasRawMode: false, platform: "linux" }),
-    "tty",
-  );
+  assert.equal(choiceInputMode({ stdinIsTTY: true, hasRawMode: false, platform: "linux" }), "tty");
   assert.equal(
     choiceInputMode({ stdinIsTTY: true, hasRawMode: false, platform: "win32" }),
-    "numbered",
+    "numbered"
   );
   assert.equal(
     choiceInputMode({
@@ -60,16 +57,14 @@ test("choiceInputMode prefers the controlling TTY when a wrapper hides raw mode 
       hasRawMode: false,
       platform: "linux",
     }),
-    "tty",
+    "tty"
   );
 });
 
 async function importCliModule() {
   process.env.DALOY_TEST_IMPORT = "1";
   try {
-    return await import(
-      `file://${path.join(pkgRoot, "bin/create-daloy.mjs")}?test=${Date.now()}`
-    );
+    return await import(`file://${path.join(pkgRoot, "bin/create-daloy.mjs")}?test=${Date.now()}`);
   } finally {
     delete process.env.DALOY_TEST_IMPORT;
   }
@@ -87,7 +82,8 @@ test("parseMajorVersion extracts the leading major version, NaN on garbage", asy
 });
 
 test("checkNodeVersion enforces the Node >= 24 floor and fails open on garbage", async () => {
-  const { checkNodeVersion, MIN_NODE_MAJOR, MIN_NPM_MAJOR, MIN_PNPM_MAJOR } = await importCliModule();
+  const { checkNodeVersion, MIN_NODE_MAJOR, MIN_NPM_MAJOR, MIN_PNPM_MAJOR } =
+    await importCliModule();
   assert.equal(MIN_NODE_MAJOR, 24);
   assert.equal(MIN_NPM_MAJOR, 12);
   assert.equal(MIN_PNPM_MAJOR, 11);
@@ -116,7 +112,7 @@ test("scaffolding on a supported Node does not trip the version preflight", asyn
         "--no-git",
         "--yes",
       ],
-      { cwd: tmpDir },
+      { cwd: tmpDir }
     );
     assert.equal(exitCode, 0);
     assert.doesNotMatch(output, /needs Node\.js/i);
@@ -129,33 +125,27 @@ test("requiredTools maps each template + package manager to the CLIs it needs", 
   const { requiredTools } = await importCliModule();
 
   // Node-flavored templates need Node plus the chosen package manager.
-  assert.deepEqual(
-    requiredTools({ template: "node-basic", packageManager: "pnpm" }),
-    ["node", "pnpm"],
-  );
-  assert.deepEqual(
-    requiredTools({ template: "vercel", packageManager: "npm" }),
-    ["node", "npm"],
-  );
-  assert.deepEqual(
-    requiredTools({ template: "cloudflare-worker", packageManager: "yarn" }),
-    ["node", "yarn"],
-  );
+  assert.deepEqual(requiredTools({ template: "node-basic", packageManager: "pnpm" }), [
+    "node",
+    "pnpm",
+  ]);
+  assert.deepEqual(requiredTools({ template: "vercel", packageManager: "npm" }), ["node", "npm"]);
+  assert.deepEqual(requiredTools({ template: "cloudflare-worker", packageManager: "yarn" }), [
+    "node",
+    "yarn",
+  ]);
 
   // The Bun template targets the Bun runtime; Bun-as-package-manager dedupes.
-  assert.deepEqual(
-    requiredTools({ template: "bun-basic", packageManager: "bun" }),
-    ["bun"],
-  );
-  assert.deepEqual(
-    requiredTools({ template: "bun-basic", packageManager: "pnpm" }),
-    ["bun", "pnpm"],
-  );
+  assert.deepEqual(requiredTools({ template: "bun-basic", packageManager: "bun" }), ["bun"]);
+  assert.deepEqual(requiredTools({ template: "bun-basic", packageManager: "pnpm" }), [
+    "bun",
+    "pnpm",
+  ]);
 
   // Runtime-only templates (deno) drive the runtime directly: no npm manager.
   assert.deepEqual(
     requiredTools({ template: "deno-basic", packageManager: "pnpm", skipPackageManager: true }),
-    ["deno"],
+    ["deno"]
   );
 });
 
@@ -163,23 +153,16 @@ test("missingToolGuides returns only uninstalled tools, each with an install lin
   const { missingToolGuides } = await importCliModule();
 
   // Happy path: everything installed → nothing to surface.
-  assert.deepEqual(
-    await missingToolGuides(["node", "pnpm"], () => true),
-    [],
-  );
+  assert.deepEqual(await missingToolGuides(["node", "pnpm"], () => true), []);
 
   // Unhappy path: pnpm missing → it (and only it) comes back with a guide.
   const installed = new Set(["node"]);
   const missing = await missingToolGuides(["node", "pnpm"], (tool) => installed.has(tool));
-  assert.deepEqual(missing, [
-    { tool: "pnpm", label: "pnpm", url: "https://pnpm.io/installation" },
-  ]);
+  assert.deepEqual(missing, [{ tool: "pnpm", label: "pnpm", url: "https://pnpm.io/installation" }]);
 
   // The predicate may be async (mirrors the real PATH probe).
   const asyncMissing = await missingToolGuides(["bun"], async () => false);
-  assert.deepEqual(asyncMissing, [
-    { tool: "bun", label: "Bun", url: "https://bun.sh" },
-  ]);
+  assert.deepEqual(asyncMissing, [{ tool: "bun", label: "Bun", url: "https://bun.sh" }]);
 
   // Unknown tool names are skipped rather than crashing on a missing guide.
   assert.deepEqual(await missingToolGuides(["totally-made-up"], () => false), []);
@@ -198,23 +181,14 @@ test("isToolInstalled finds a real binary and rejects a bogus one", async () => 
 test("node-basic health route preserves literal true type", async () => {
   const source = await readFile(
     path.join(pkgRoot, "templates/node-basic/src/build-app.ts"),
-    "utf8",
+    "utf8"
   );
-  assert.match(
-    source,
-    /body:\s*\{ ok: true as const, uptime: process\.uptime\(\) \}/,
-  );
+  assert.match(source, /body:\s*\{ ok: true as const, uptime: process\.uptime\(\) \}/);
 });
 
 test("vercel template preserves the literal true type on the Node.js handler", async () => {
-  const source = await readFile(
-    path.join(pkgRoot, "templates/vercel/api/index.ts"),
-    "utf8",
-  );
-  assert.match(
-    source,
-    /body:\s*\{ ok: true as const, runtime: "vercel" as const \}/,
-  );
+  const source = await readFile(path.join(pkgRoot, "templates/vercel/api/index.ts"), "utf8");
+  assert.match(source, /body:\s*\{ ok: true as const, runtime: "vercel" as const \}/);
   // The template targets Vercel's Node.js runtime: it exports the `{ fetch }`
   // shape via toFetchHandler and must NOT pin the deprecated Edge runtime.
   assert.match(source, /export default toFetchHandler\(app\)/);
@@ -230,7 +204,7 @@ test("vercel template preserves the literal true type on the Node.js handler", a
 test("node-basic template opts into the auto-mounted /docs and /openapi.json", async () => {
   const source = await readFile(
     path.join(pkgRoot, "templates/node-basic/src/build-app.ts"),
-    "utf8",
+    "utf8"
   );
   // The framework auto-mounts /docs and /openapi.json when `docs: true` is
   // set on the App constructor. info.title / info.version are auto-filled
@@ -243,7 +217,7 @@ test("node-basic template opts into the auto-mounted /docs and /openapi.json", a
 test("node-basic separates buildApp() from server boot so codegen has no side effects", async () => {
   const buildApp = await readFile(
     path.join(pkgRoot, "templates/node-basic/src/build-app.ts"),
-    "utf8",
+    "utf8"
   );
   // Factory must be exported and must NOT import the serve() entrypoint —
   // importing `@daloyjs/core/node` here would let codegen accidentally pull
@@ -251,16 +225,13 @@ test("node-basic separates buildApp() from server boot so codegen has no side ef
   assert.match(buildApp, /export\s+function\s+buildApp\s*\(/);
   assert.doesNotMatch(buildApp, /from\s+"@daloyjs\/core\/node"/);
 
-  const indexFile = await readFile(
-    path.join(pkgRoot, "templates/node-basic/src/index.ts"),
-    "utf8",
-  );
+  const indexFile = await readFile(path.join(pkgRoot, "templates/node-basic/src/index.ts"), "utf8");
   assert.match(indexFile, /from\s+"\.\/build-app\.ts"/);
   assert.match(indexFile, /\bserve\s*\(\s*app\b/);
 
   const dump = await readFile(
     path.join(pkgRoot, "templates/node-basic/scripts/dump-openapi.ts"),
-    "utf8",
+    "utf8"
   );
   // dump-openapi must use the factory, not import the server entrypoint
   // (that would boot the HTTP listener as a side effect of codegen).
@@ -268,32 +239,19 @@ test("node-basic separates buildApp() from server boot so codegen has no side ef
   assert.doesNotMatch(dump, /from\s+"\.\.\/src\/index\.ts"/);
 
   const tsconfig = JSON.parse(
-    await readFile(
-      path.join(pkgRoot, "templates/node-basic/tsconfig.json"),
-      "utf8",
-    ),
+    await readFile(path.join(pkgRoot, "templates/node-basic/tsconfig.json"), "utf8")
   );
   const buildTsconfig = JSON.parse(
-    await readFile(
-      path.join(pkgRoot, "templates/node-basic/tsconfig.build.json"),
-      "utf8",
-    ),
+    await readFile(path.join(pkgRoot, "templates/node-basic/tsconfig.build.json"), "utf8")
   );
   const pkg = JSON.parse(
-    await readFile(
-      path.join(pkgRoot, "templates/node-basic/package.json"),
-      "utf8",
-    ),
+    await readFile(path.join(pkgRoot, "templates/node-basic/package.json"), "utf8")
   );
   // The OpenAPI dump script lives under `scripts/`; keep it inside the
   // project's tsconfig so editors load the Node type context for
   // `node:fs/promises` and `process`. Keep tests in the editor/typecheck
   // project too so scaffolded test files also get the Node globals.
-  assert.deepEqual(tsconfig.include, [
-    "src/**/*",
-    "scripts/**/*",
-    "tests/**/*",
-  ]);
+  assert.deepEqual(tsconfig.include, ["src/**/*", "scripts/**/*", "tests/**/*"]);
   // Once scripts/tests are part of the program, `rootDir` must widen beyond
   // `src` so TypeScript does not fail with TS6059.
   assert.equal(tsconfig.compilerOptions.rootDir, ".");
@@ -315,10 +273,7 @@ test("node-basic separates buildApp() from server boot so codegen has no side ef
 });
 
 test("vercel template opts into the auto-mounted /docs and /openapi.json", async () => {
-  const source = await readFile(
-    path.join(pkgRoot, "templates/vercel/api/index.ts"),
-    "utf8",
-  );
+  const source = await readFile(path.join(pkgRoot, "templates/vercel/api/index.ts"), "utf8");
   assert.match(source, /docs:\s*true/);
   assert.match(source, /openapi:\s*\{/);
   assert.match(source, /info:\s*\{\s*title:\s*"My Daloy Vercel API"/);
@@ -335,18 +290,11 @@ test("vercel template routes all paths to a single api/index.ts via a rewrite", 
   await access(path.join(pkgRootVercel, "api/index.ts"));
   await assert.rejects(access(path.join(pkgRootVercel, "api/[...path].ts")));
 
-  const vercelJson = JSON.parse(
-    await readFile(path.join(pkgRootVercel, "vercel.json"), "utf8"),
-  );
+  const vercelJson = JSON.parse(await readFile(path.join(pkgRootVercel, "vercel.json"), "utf8"));
+  assert.ok(Array.isArray(vercelJson.rewrites), "vercel.json must declare a rewrites array");
   assert.ok(
-    Array.isArray(vercelJson.rewrites),
-    "vercel.json must declare a rewrites array",
-  );
-  assert.ok(
-    vercelJson.rewrites.some(
-      (r) => r?.source === "/(.*)" && r?.destination === "/api",
-    ),
-    "vercel.json must rewrite every path to /api so DaloyJS routes at the root",
+    vercelJson.rewrites.some((r) => r?.source === "/(.*)" && r?.destination === "/api"),
+    "vercel.json must rewrite every path to /api so DaloyJS routes at the root"
   );
 });
 
@@ -357,7 +305,7 @@ test("cloudflare-worker template configures the proxy posture and docs", async (
   // hop, and enables docs for parity with the other templates.
   const source = await readFile(
     path.join(pkgRoot, "templates/cloudflare-worker/src/index.ts"),
-    "utf8",
+    "utf8"
   );
   assert.match(source, /behindProxy:\s*\{\s*hops:\s*1\s*\}/);
   assert.match(source, /docs:\s*true/);
@@ -382,15 +330,13 @@ test("every template ships at least one runnable example test", async () => {
     const testFiles = entries.filter((f) => match.test(f));
     assert.ok(
       testFiles.length > 0,
-      `${template} must ship at least one ${match} file under tests/ — its test script would otherwise find nothing to run`,
+      `${template} must ship at least one ${match} file under tests/ — its test script would otherwise find nothing to run`
     );
     // Each example test must cover an unhappy path, not just the happy one.
-    const bodies = await Promise.all(
-      testFiles.map((f) => readFile(path.join(dir, f), "utf8")),
-    );
+    const bodies = await Promise.all(testFiles.map((f) => readFile(path.join(dir, f), "utf8")));
     assert.ok(
       bodies.some((b) => /404/.test(b)),
-      `${template} example tests must include an unhappy-path (e.g. 404) assertion`,
+      `${template} example tests must include an unhappy-path (e.g. 404) assertion`
     );
   }
 });
@@ -413,12 +359,12 @@ test("every template ships a contract-gate test wired to runContractTests", asyn
     assert.match(
       body,
       /from "@daloyjs\/core\/contract"/,
-      `${template} contract test must import the contract runner from @daloyjs/core/contract`,
+      `${template} contract test must import the contract runner from @daloyjs/core/contract`
     );
     assert.match(
       body,
       /runContractTests\(/,
-      `${template} contract test must invoke runContractTests`,
+      `${template} contract test must invoke runContractTests`
     );
     // Happy path asserts ok===true; the unhappy path asserts ok===false against
     // a deliberately broken app, proving the gate can actually fail. Match all
@@ -427,12 +373,12 @@ test("every template ships a contract-gate test wired to runContractTests", asyn
     assert.match(
       body,
       /(assert(?:Equals|\.equal)\(\s*report\.ok,\s*true|expect\(report\.ok\)\.toBe\(true\))/,
-      `${template} contract test must assert the real app's contract is ok`,
+      `${template} contract test must assert the real app's contract is ok`
     );
     assert.match(
       body,
       /(assert(?:Equals|\.equal)\(\s*report\.ok,\s*false|expect\(report\.ok\)\.toBe\(false\))/,
-      `${template} contract test must include an unhappy path proving the gate rejects a broken contract`,
+      `${template} contract test must include an unhappy path proving the gate rejects a broken contract`
     );
   }
 });
@@ -442,7 +388,7 @@ test("cloudflare-worker exports its App instance so the contract test can load i
   // needs the underlying `app`, so the entry must also export it by name.
   const body = await readFile(
     path.join(pkgRoot, "templates/cloudflare-worker/src/index.ts"),
-    "utf8",
+    "utf8"
   );
   assert.match(body, /export\s*\{\s*app\s*\}/, "cloudflare-worker must export its App instance");
 });
@@ -451,11 +397,11 @@ test("deno-basic maps the @daloyjs/core/contract subpath in its import map", asy
   // Deno resolves bare specifiers through deno.json `imports`; the contract
   // subpath isn't reachable without an explicit entry.
   const deno = JSON.parse(
-    await readFile(path.join(pkgRoot, "templates/deno-basic/deno.json"), "utf8"),
+    await readFile(path.join(pkgRoot, "templates/deno-basic/deno.json"), "utf8")
   );
   assert.ok(
     deno.imports["@daloyjs/core/contract"],
-    "deno.json must map @daloyjs/core/contract for the contract test",
+    "deno.json must map @daloyjs/core/contract for the contract test"
   );
 });
 
@@ -469,7 +415,10 @@ test("every template ships an opt-in pre-push contract-gate hook", async () => {
     { template: "vercel", contains: "inspect --check api/index.ts" },
     { template: "cloudflare-worker", contains: "inspect --check src/index.ts" },
     { template: "bun-basic", contains: "bun test tests/contract.test.ts" },
-    { template: "deno-basic", contains: "deno test --allow-net --allow-env tests/contract_test.ts" },
+    {
+      template: "deno-basic",
+      contains: "deno test --allow-net --allow-env tests/contract_test.ts",
+    },
   ];
   for (const { template, contains } of cases) {
     const hookPath = path.join(pkgRoot, "templates", template, "_githooks/pre-push");
@@ -477,13 +426,13 @@ test("every template ships an opt-in pre-push contract-gate hook", async () => {
     assert.match(
       hook,
       /daloyjs-pre-push-contract-hook v1/,
-      `${template} pre-push hook must carry the version sentinel`,
+      `${template} pre-push hook must carry the version sentinel`
     );
     assert.ok(hook.includes(contains), `${template} pre-push hook must run: ${contains}`);
     assert.match(
       hook,
       /exit 0/,
-      `${template} pre-push hook must skip gracefully (exit 0) when tooling is missing`,
+      `${template} pre-push hook must skip gracefully (exit 0) when tooling is missing`
     );
     // The template hook is the source of executability for the scaffold copy.
     const mode = (await stat(hookPath)).mode;
@@ -493,15 +442,19 @@ test("every template ships an opt-in pre-push contract-gate hook", async () => {
 
 test("every template exposes contract + hooks:install via its task runner", async () => {
   for (const t of ["node-basic", "bun-basic", "vercel", "cloudflare-worker"]) {
-    const pkg = JSON.parse(await readFile(path.join(pkgRoot, "templates", t, "package.json"), "utf8"));
+    const pkg = JSON.parse(
+      await readFile(path.join(pkgRoot, "templates", t, "package.json"), "utf8")
+    );
     assert.ok(pkg.scripts.contract, `${t} must expose a "contract" script`);
     assert.equal(
       pkg.scripts["hooks:install"],
       "git config core.hooksPath .githooks",
-      `${t} "hooks:install" must point core.hooksPath at .githooks`,
+      `${t} "hooks:install" must point core.hooksPath at .githooks`
     );
   }
-  const deno = JSON.parse(await readFile(path.join(pkgRoot, "templates/deno-basic/deno.json"), "utf8"));
+  const deno = JSON.parse(
+    await readFile(path.join(pkgRoot, "templates/deno-basic/deno.json"), "utf8")
+  );
   assert.ok(deno.tasks.contract, "deno-basic must expose a contract task");
   assert.equal(deno.tasks["hooks:install"], "git config core.hooksPath .githooks");
 });
@@ -527,7 +480,7 @@ test("scaffolded projects keep the pre-push hook executable", async () => {
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -543,29 +496,23 @@ test("scaffolded projects keep the pre-push hook executable", async () => {
 });
 
 test("every template ships a hardened _Dockerfile and _dockerignore", async () => {
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-    "deno-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic", "deno-basic"];
 
   for (const template of templates) {
     const dockerfile = await readFile(
       path.join(pkgRoot, "templates", template, "_Dockerfile"),
-      "utf8",
+      "utf8"
     );
     const dockerignore = await readFile(
       path.join(pkgRoot, "templates", template, "_dockerignore"),
-      "utf8",
+      "utf8"
     );
 
     // BuildKit syntax pin enables reproducible, modern builder features.
     assert.match(
       dockerfile,
       /^#\s*syntax=docker\/dockerfile:/m,
-      `${template} Dockerfile must pin the BuildKit syntax`,
+      `${template} Dockerfile must pin the BuildKit syntax`
     );
     // Base image must flow through an ARG so consumers can pin to an
     // immutable @sha256 digest at build time. The container-scan workflow
@@ -573,24 +520,24 @@ test("every template ships a hardened _Dockerfile and _dockerignore", async () =
     assert.match(
       dockerfile,
       /^ARG\s+(NODE_IMAGE|BUN_IMAGE|DENO_IMAGE)=/m,
-      `${template} Dockerfile must accept a base-image ARG for digest pinning`,
+      `${template} Dockerfile must accept a base-image ARG for digest pinning`
     );
     assert.match(
       dockerfile,
       /^FROM\s+\$\{(NODE_IMAGE|BUN_IMAGE|DENO_IMAGE)\}/m,
-      `${template} Dockerfile must consume the base image via the ARG`,
+      `${template} Dockerfile must consume the base image via the ARG`
     );
     // Non-root runtime user is non-negotiable.
     assert.match(
       dockerfile,
       /^USER\s+(app|bun|deno)\b/m,
-      `${template} Dockerfile must drop to a non-root user`,
+      `${template} Dockerfile must drop to a non-root user`
     );
     // STOPSIGNAL lets the framework's graceful-shutdown drain fire.
     assert.match(
       dockerfile,
       /^STOPSIGNAL\s+SIGTERM\b/m,
-      `${template} Dockerfile must set STOPSIGNAL SIGTERM`,
+      `${template} Dockerfile must set STOPSIGNAL SIGTERM`
     );
     // HEALTHCHECK must be present and must hit the local loopback (not a
     // remote host) so a compromised DNS does not turn the healthcheck
@@ -598,36 +545,36 @@ test("every template ships a hardened _Dockerfile and _dockerignore", async () =
     assert.match(
       dockerfile,
       /^HEALTHCHECK\s/m,
-      `${template} Dockerfile must declare a HEALTHCHECK`,
+      `${template} Dockerfile must declare a HEALTHCHECK`
     );
     assert.match(
       dockerfile,
       /http:\/\/127\.0\.0\.1:/,
-      `${template} HEALTHCHECK must target 127.0.0.1`,
+      `${template} HEALTHCHECK must target 127.0.0.1`
     );
     assert.match(
       dockerfile,
       /\/healthz/,
-      `${template} HEALTHCHECK must use the scaffolded health route`,
+      `${template} HEALTHCHECK must use the scaffolded health route`
     );
     assert.doesNotMatch(
       dockerfile,
       /\/readyz/,
-      `${template} Dockerfile must not reference an unmounted readiness route`,
+      `${template} Dockerfile must not reference an unmounted readiness route`
     );
     // No curl, no bash extras — keeps the runtime surface minimal and
     // denies attackers a convenient exfiltration / dropper tool.
     assert.doesNotMatch(
       dockerfile,
       /\bapk\s+add\b[^\n]*\bcurl\b/,
-      `${template} Dockerfile must not install curl in the runner`,
+      `${template} Dockerfile must not install curl in the runner`
     );
     // Lockfile-frozen, lifecycle-script-free dependency install matches
     // the .npmrc supply-chain defaults.
     assert.match(
       dockerfile,
       /(--frozen-lockfile|deno cache|--cached-only)/,
-      `${template} Dockerfile must use a reproducible dependency install`,
+      `${template} Dockerfile must use a reproducible dependency install`
     );
     // Deno's capability model: the runtime CMD must boot the scaffolded app.
     // `--no-lock` avoids a NotCapable crash reading a deno.lock that the
@@ -638,35 +585,27 @@ test("every template ships a hardened _Dockerfile and _dockerignore", async () =
       assert.match(
         dockerfile,
         /--no-lock/,
-        "deno Dockerfile runtime CMD must pass --no-lock (deno.lock is not copied into the runtime stage)",
+        "deno Dockerfile runtime CMD must pass --no-lock (deno.lock is not copied into the runtime stage)"
       );
       assert.match(
         dockerfile,
         /--allow-env=[^"]*\bTRUST_PROXY_HOPS\b/,
-        "deno Dockerfile --allow-env must grant TRUST_PROXY_HOPS (read in src/build-app.ts)",
+        "deno Dockerfile --allow-env must grant TRUST_PROXY_HOPS (read in src/build-app.ts)"
       );
       assert.match(
         dockerfile,
         /--allow-env=[^"]*\bPUBLIC_URL\b/,
-        "deno Dockerfile --allow-env must grant PUBLIC_URL (read in src/build-app.ts)",
+        "deno Dockerfile --allow-env must grant PUBLIC_URL (read in src/build-app.ts)"
       );
     }
     // .dockerignore must keep secrets, VCS metadata, and CI config out
     // of the build context.
-    assert.match(
-      dockerignore,
-      /^\.git$/m,
-      `${template} .dockerignore must exclude .git`,
-    );
-    assert.match(
-      dockerignore,
-      /^\.env$/m,
-      `${template} .dockerignore must exclude .env`,
-    );
+    assert.match(dockerignore, /^\.git$/m, `${template} .dockerignore must exclude .git`);
+    assert.match(dockerignore, /^\.env$/m, `${template} .dockerignore must exclude .env`);
     assert.doesNotMatch(
       dockerignore,
       /^(pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lock|bun\.lockb|deno\.lock)$/m,
-      `${template} .dockerignore must keep lockfiles in the build context`,
+      `${template} .dockerignore must keep lockfiles in the build context`
     );
     if (template === "deno-basic") {
       assert.match(dockerignore, /^\.deno\/$/m);
@@ -677,42 +616,34 @@ test("every template ships a hardened _Dockerfile and _dockerignore", async () =
 });
 
 test("pnpm templates ship hardened supply-chain .npmrc defaults", async () => {
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic"];
 
   for (const template of templates) {
-    const source = await readFile(
-      path.join(pkgRoot, "templates", template, "_npmrc"),
-      "utf8",
-    );
+    const source = await readFile(path.join(pkgRoot, "templates", template, "_npmrc"), "utf8");
     assert.match(
       source,
       /^ignore-scripts=true$/m,
-      `${template} should block dependency lifecycle scripts`,
+      `${template} should block dependency lifecycle scripts`
     );
     assert.match(
       source,
       /^minimum-release-age=1440$/m,
-      `${template} should wait 24h before fresh package installs`,
+      `${template} should wait 24h before fresh package installs`
     );
     assert.match(
       source,
       /^verify-store-integrity=true$/m,
-      `${template} should verify pnpm store integrity`,
+      `${template} should verify pnpm store integrity`
     );
     assert.match(
       source,
       /^prefer-frozen-lockfile=true$/m,
-      `${template} should prefer reproducible installs`,
+      `${template} should prefer reproducible installs`
     );
     assert.match(
       source,
       /^strict-peer-dependencies=true$/m,
-      `${template} should fail closed on peer dependency drift`,
+      `${template} should fail closed on peer dependency drift`
     );
   }
 });
@@ -729,24 +660,16 @@ test("pnpm templates ship a local SCA `audit` script", async () => {
   // therefore expose an out-of-the-box `audit` script so a developer can
   // run a production-tree SCA scan with a single command from their
   // editor's task runner.
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic"];
 
   for (const template of templates) {
     const pkg = JSON.parse(
-      await readFile(
-        path.join(pkgRoot, "templates", template, "package.json"),
-        "utf8",
-      ),
+      await readFile(path.join(pkgRoot, "templates", template, "package.json"), "utf8")
     );
     assert.equal(
       pkg.scripts.audit,
       "pnpm audit --prod",
-      `${template} should ship an \`audit\` script for local SCA scans`,
+      `${template} should ship an \`audit\` script for local SCA scans`
     );
   }
 });
@@ -756,30 +679,14 @@ test("templates do not hardcode package-manager engine floors (injected per mana
   // picked that manager. Templates must not ship them in `engines`, or
   // projects on other managers would inherit an irrelevant constraint. The
   // CLI injects each floor only when the user picks the matching manager.
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic"];
 
   for (const template of templates) {
     const pkg = JSON.parse(
-      await readFile(
-        path.join(pkgRoot, "templates", template, "package.json"),
-        "utf8",
-      ),
+      await readFile(path.join(pkgRoot, "templates", template, "package.json"), "utf8")
     );
-    assert.equal(
-      pkg.engines?.npm,
-      undefined,
-      `${template} should not hardcode engines.npm`,
-    );
-    assert.equal(
-      pkg.engines?.pnpm,
-      undefined,
-      `${template} should not hardcode engines.pnpm`,
-    );
+    assert.equal(pkg.engines?.npm, undefined, `${template} should not hardcode engines.npm`);
+    assert.equal(pkg.engines?.pnpm, undefined, `${template} should not hardcode engines.pnpm`);
   }
 });
 
@@ -802,31 +709,24 @@ test("npm scaffolds get an engines.npm >= 12 floor; pnpm scaffolds get engines.p
             "--no-git",
             "--yes",
           ],
-          { cwd: tmpDir, stdio: "ignore" },
+          { cwd: tmpDir, stdio: "ignore" }
         );
         proc.on("exit", (code) => resolve(code ?? 1));
         proc.on("error", () => resolve(1));
       });
       assert.equal(exitCode, 0);
       const pkg = JSON.parse(
-        await readFile(
-          path.join(tmpDir, projectName, "package.json"),
-          "utf8",
-        ),
+        await readFile(path.join(tmpDir, projectName, "package.json"), "utf8")
       );
       if (packageManager === "npm") {
         assert.equal(pkg.engines?.npm, ">=12.0.0");
-        assert.equal(
-          pkg.engines?.pnpm,
-          undefined,
-          "npm scaffolds must not inherit the pnpm floor",
-        );
+        assert.equal(pkg.engines?.pnpm, undefined, "npm scaffolds must not inherit the pnpm floor");
       } else {
         assert.equal(pkg.engines?.npm, undefined);
         assert.equal(
           pkg.engines?.pnpm,
           ">=11.0.0",
-          "pnpm scaffolds must pin the pnpm >= 11 floor (older pnpm silently ignores minimumReleaseAge)",
+          "pnpm scaffolds must pin the pnpm >= 11 floor (older pnpm silently ignores minimumReleaseAge)"
         );
       }
     } finally {
@@ -836,27 +736,22 @@ test("npm scaffolds get an engines.npm >= 12 floor; pnpm scaffolds get engines.p
 });
 
 test("pnpm templates ship workspace-level supply-chain defaults", async () => {
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic"];
 
   for (const template of templates) {
     const source = await readFile(
       path.join(pkgRoot, "templates", template, "pnpm-workspace.yaml"),
-      "utf8",
+      "utf8"
     );
     assert.match(
       source,
       /^minimumReleaseAge:\s*1440$/m,
-      `${template} pnpm-workspace.yaml should wait 24h before fresh package installs`,
+      `${template} pnpm-workspace.yaml should wait 24h before fresh package installs`
     );
     assert.match(
       source,
       /^blockExoticSubdeps:\s*true$/m,
-      `${template} pnpm-workspace.yaml should block exotic subdependency sources`,
+      `${template} pnpm-workspace.yaml should block exotic subdependency sources`
     );
   }
 });
@@ -879,23 +774,17 @@ test("pnpm scaffolds keep hardened .npmrc", async () => {
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    const npmrc = await readFile(
-      path.join(tmpDir, projectName, ".npmrc"),
-      "utf8",
-    );
+    const npmrc = await readFile(path.join(tmpDir, projectName, ".npmrc"), "utf8");
     assert.match(npmrc, /^ignore-scripts=true$/m);
     assert.match(npmrc, /^minimum-release-age=1440$/m);
 
-    const workspace = await readFile(
-      path.join(tmpDir, projectName, "pnpm-workspace.yaml"),
-      "utf8",
-    );
+    const workspace = await readFile(path.join(tmpDir, projectName, "pnpm-workspace.yaml"), "utf8");
     assert.match(workspace, /^minimumReleaseAge:\s*1440$/m);
     assert.match(workspace, /^blockExoticSubdeps:\s*true$/m);
   } finally {
@@ -921,7 +810,7 @@ test("npm scaffolds ship an engine-strict .npmrc without pnpm-specific keys", as
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -929,17 +818,12 @@ test("npm scaffolds ship an engine-strict .npmrc without pnpm-specific keys", as
     assert.equal(exitCode, 0);
     // npm scaffolds keep a minimal npm-native .npmrc that enforces the
     // npm >= 12 engine floor, but must NOT inherit the pnpm-only hardening keys.
-    const npmrc = await readFile(
-      path.join(tmpDir, projectName, ".npmrc"),
-      "utf8",
-    );
+    const npmrc = await readFile(path.join(tmpDir, projectName, ".npmrc"), "utf8");
     assert.match(npmrc, /^engine-strict=true$/m);
     assert.doesNotMatch(npmrc, /minimum-release-age/);
     assert.doesNotMatch(npmrc, /verify-store-integrity/);
     assert.doesNotMatch(npmrc, /ignore-scripts/);
-    await assert.rejects(
-      access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")),
-    );
+    await assert.rejects(access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")));
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -964,16 +848,14 @@ test("yarn and bun scaffolds keep no pnpm-specific .npmrc or pnpm-workspace.yaml
             "--no-git",
             "--yes",
           ],
-          { cwd: tmpDir, stdio: "ignore" },
+          { cwd: tmpDir, stdio: "ignore" }
         );
         proc.on("exit", (code) => resolve(code ?? 1));
         proc.on("error", () => resolve(1));
       });
       assert.equal(exitCode, 0);
       await assert.rejects(access(path.join(tmpDir, projectName, ".npmrc")));
-      await assert.rejects(
-        access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")),
-      );
+      await assert.rejects(access(path.join(tmpDir, projectName, "pnpm-workspace.yaml")));
     } finally {
       await rm(tmpDir, { recursive: true, force: true });
     }
@@ -998,7 +880,7 @@ test("dot project target scaffolds into the current directory", async () => {
         "--no-deploy",
         "--yes",
       ],
-      { cwd: projectDir },
+      { cwd: projectDir }
     );
     assert.equal(result.exitCode, 0, result.output);
 
@@ -1031,7 +913,7 @@ test("dot project target still rejects a non-empty current directory without for
         "--no-deploy",
         "--yes",
       ],
-      { cwd: projectDir },
+      { cwd: projectDir }
     );
 
     assert.equal(result.exitCode, 1, result.output);
@@ -1063,7 +945,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -1091,26 +973,13 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     // create-daloy scaffolds REST API services, not libraries. The npm
     // publish workflow is intentionally omitted so fork PRs cannot reach
     // `id-token: write` or any npm credential by accident.
-    await assert.rejects(
-      access(path.join(projectDir, ".github/workflows/release.yml")),
-    );
+    await assert.rejects(access(path.join(projectDir, ".github/workflows/release.yml")));
 
-    const pkg = JSON.parse(
-      await readFile(path.join(projectDir, "package.json"), "utf8"),
-    );
-    assert.equal(
-      pkg.scripts["verify:lockfile"],
-      "node scripts/verify-lockfile-sources.mjs",
-    );
-    assert.equal(
-      pkg.scripts["verify:runtime-eol"],
-      "node scripts/verify-runtime-eol.mjs",
-    );
+    const pkg = JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8"));
+    assert.equal(pkg.scripts["verify:lockfile"], "node scripts/verify-lockfile-sources.mjs");
+    assert.equal(pkg.scripts["verify:runtime-eol"], "node scripts/verify-runtime-eol.mjs");
 
-    const ci = await readFile(
-      path.join(projectDir, ".github/workflows/ci.yml"),
-      "utf8",
-    );
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
     assert.match(ci, /permissions:\s*\{\}/);
     assert.doesNotMatch(ci, /^\s*pull_request_target:/m);
     assert.doesNotMatch(ci, /cache:\s*pnpm/);
@@ -1122,10 +991,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(ci, /actions\/setup-node@[0-9a-f]{40}\s+# v6/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
 
-    const deploy = await readFile(
-      path.join(projectDir, ".github/workflows/deploy.yml"),
-      "utf8",
-    );
+    const deploy = await readFile(path.join(projectDir, ".github/workflows/deploy.yml"), "utf8");
     assert.match(deploy, /on:\s*\n\s*workflow_dispatch:/);
     assert.match(deploy, /permissions:\s*\{\}/);
     assert.match(deploy, /environment:\s*\n\s*name:\s*production/);
@@ -1150,7 +1016,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
 
     const vulnScan = await readFile(
       path.join(projectDir, ".github/workflows/vuln-scan.yml"),
-      "utf8",
+      "utf8"
     );
     assert.match(vulnScan, /name: Vuln scan/);
     assert.match(vulnScan, /pnpm install --frozen-lockfile --ignore-scripts/);
@@ -1165,10 +1031,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     // Second-source SCA gate (Aikido "SAST vs SCA" / npm-audit-guide).
     // OSV-Scanner is downloaded by pinned SHA-256 from the official
     // google/osv-scanner release — no third-party action wrapper.
-    const osvScan = await readFile(
-      path.join(projectDir, ".github/workflows/osv-scan.yml"),
-      "utf8",
-    );
+    const osvScan = await readFile(path.join(projectDir, ".github/workflows/osv-scan.yml"), "utf8");
     assert.match(osvScan, /name: OSV scan/);
     assert.match(osvScan, /permissions:\s*\{\}/);
     assert.match(osvScan, /OSV_SCANNER_VERSION:/);
@@ -1180,10 +1043,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(osvScan, /cron: "47 6 \* \* \*"/);
     assert.doesNotMatch(osvScan, /uses:\s*google\/osv-scanner-action/);
 
-    const eolScan = await readFile(
-      path.join(projectDir, ".github/workflows/eol-scan.yml"),
-      "utf8",
-    );
+    const eolScan = await readFile(path.join(projectDir, ".github/workflows/eol-scan.yml"), "utf8");
     assert.match(eolScan, /name: EOL runtime scan/);
     assert.match(eolScan, /permissions:\s*\{\}/);
     assert.match(eolScan, /pnpm install --frozen-lockfile --ignore-scripts/);
@@ -1195,7 +1055,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
 
     const containerScan = await readFile(
       path.join(projectDir, ".github/workflows/container-scan.yml"),
-      "utf8",
+      "utf8"
     );
     assert.match(containerScan, /hadolint\/hadolint-action@[0-9a-f]{40}\s+# v3/);
     assert.match(containerScan, /aquasecurity\/trivy-action@[0-9a-f]{40}\s+# v0/);
@@ -1216,7 +1076,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
 
     const secretScan = await readFile(
       path.join(projectDir, ".github/workflows/secret-scan.yml"),
-      "utf8",
+      "utf8"
     );
     // History-aware scan per Aikido "Secrets Detection: A Practical
     // Guide" — scan the working tree on every PR and the full git
@@ -1238,7 +1098,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
 
     const dependabotConfig = await readFile(
       path.join(projectDir, ".github/dependabot.yml"),
-      "utf8",
+      "utf8"
     );
     assert.match(dependabotConfig, /package-ecosystem: docker/);
 
@@ -1247,10 +1107,7 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     // pin, non-root user) are tested above; this block guards the
     // runtime-side `docker run` / Compose flags the scaffolded
     // SECURITY.md prescribes so future edits cannot drop them.
-    const scaffoldedSecurity = await readFile(
-      path.join(projectDir, "SECURITY.md"),
-      "utf8",
-    );
+    const scaffoldedSecurity = await readFile(path.join(projectDir, "SECURITY.md"), "utf8");
     assert.match(scaffoldedSecurity, /Runtime hardening/);
     assert.match(scaffoldedSecurity, /--read-only/);
     assert.match(scaffoldedSecurity, /--cap-drop=ALL/);
@@ -1260,19 +1117,10 @@ test("--with-ci scaffolds hardened GitHub security files for pnpm projects", asy
     assert.match(scaffoldedSecurity, /Never.*--privileged/);
     assert.match(scaffoldedSecurity, /container-security-guide/);
 
-    const codeowners = await readFile(
-      path.join(projectDir, ".github/CODEOWNERS"),
-      "utf8",
-    );
+    const codeowners = await readFile(path.join(projectDir, ".github/CODEOWNERS"), "utf8");
     assert.match(codeowners, /\* @acme\/security/);
-    assert.match(
-      codeowners,
-      /\/\.github\/workflows\/vuln-scan\.yml\s+@acme\/security/,
-    );
-    assert.match(
-      codeowners,
-      /\/\.github\/workflows\/osv-scan\.yml\s+@acme\/security/,
-    );
+    assert.match(codeowners, /\/\.github\/workflows\/vuln-scan\.yml\s+@acme\/security/);
+    assert.match(codeowners, /\/\.github\/workflows\/osv-scan\.yml\s+@acme\/security/);
     assert.doesNotMatch(codeowners, /release\.yml/);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
@@ -1298,7 +1146,7 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -1312,23 +1160,12 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
     assert.doesNotMatch(npmrc, /minimum-release-age/);
     await assert.rejects(access(path.join(projectDir, "pnpm-workspace.yaml")));
 
-    const pkg = JSON.parse(
-      await readFile(path.join(projectDir, "package.json"), "utf8"),
-    );
+    const pkg = JSON.parse(await readFile(path.join(projectDir, "package.json"), "utf8"));
     assert.equal(pkg.scripts.gen, "npm run gen:openapi && npm run gen:client");
-    assert.equal(
-      pkg.scripts["verify:lockfile"],
-      "node scripts/verify-lockfile-sources.mjs",
-    );
-    assert.equal(
-      pkg.scripts["verify:runtime-eol"],
-      "node scripts/verify-runtime-eol.mjs",
-    );
+    assert.equal(pkg.scripts["verify:lockfile"], "node scripts/verify-lockfile-sources.mjs");
+    assert.equal(pkg.scripts["verify:runtime-eol"], "node scripts/verify-runtime-eol.mjs");
 
-    const ci = await readFile(
-      path.join(projectDir, ".github/workflows/ci.yml"),
-      "utf8",
-    );
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
     assert.match(ci, /npm ci --ignore-scripts/);
     assert.match(ci, /npm run verify:lockfile/);
     assert.match(ci, /npm run typecheck/);
@@ -1336,10 +1173,7 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
     assert.doesNotMatch(ci, /pnpm\/action-setup/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
 
-    const eolScan = await readFile(
-      path.join(projectDir, ".github/workflows/eol-scan.yml"),
-      "utf8",
-    );
+    const eolScan = await readFile(path.join(projectDir, ".github/workflows/eol-scan.yml"), "utf8");
     assert.match(eolScan, /npm ci --ignore-scripts/);
     assert.match(eolScan, /npm run verify:runtime-eol/);
     assert.doesNotMatch(eolScan, /pnpm\/action-setup/);
@@ -1347,7 +1181,7 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
 
     const vulnScan = await readFile(
       path.join(projectDir, ".github/workflows/vuln-scan.yml"),
-      "utf8",
+      "utf8"
     );
     assert.match(vulnScan, /npm ci --ignore-scripts/);
     assert.match(vulnScan, /npm audit --omit=dev/);
@@ -1358,16 +1192,10 @@ test("--with-ci keeps non-pnpm scaffolds clean while generating matching CI comm
     assert.doesNotMatch(vulnScan, /__[A-Z_]+__/);
 
     const dockerfile = await readFile(path.join(projectDir, "Dockerfile"), "utf8");
-    assert.match(
-      dockerfile,
-      /COPY package\.json package-lock\.json\* npm-shrinkwrap\.json\* \./,
-    );
+    assert.match(dockerfile, /COPY package\.json package-lock\.json\* npm-shrinkwrap\.json\* \./);
     assert.match(dockerfile, /RUN npm ci --ignore-scripts/);
     assert.match(dockerfile, /RUN npm run build/);
-    assert.doesNotMatch(
-      dockerfile,
-      /pnpm install --frozen-lockfile --ignore-scripts/,
-    );
+    assert.doesNotMatch(dockerfile, /pnpm install --frozen-lockfile --ignore-scripts/);
 
     const dockerignore = await readFile(path.join(projectDir, ".dockerignore"), "utf8");
     assert.match(dockerignore, /^\.npm\/$/m);
@@ -1397,24 +1225,21 @@ test("Docker ignore scaffolding follows the selected yarn package manager", asyn
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
 
-    const dockerfile = await readFile(
-      path.join(tmpDir, projectName, "Dockerfile"),
-      "utf8",
-    );
+    const dockerfile = await readFile(path.join(tmpDir, projectName, "Dockerfile"), "utf8");
     assert.match(dockerfile, /COPY package\.json yarn\.lock\* \./);
-    assert.match(dockerfile, /RUN corepack enable && yarn install --frozen-lockfile --ignore-scripts/);
-
-    const dockerignore = await readFile(
-      path.join(tmpDir, projectName, ".dockerignore"),
-      "utf8",
+    assert.match(
+      dockerfile,
+      /RUN corepack enable && yarn install --frozen-lockfile --ignore-scripts/
     );
+
+    const dockerignore = await readFile(path.join(tmpDir, projectName, ".dockerignore"), "utf8");
     assert.match(dockerignore, /^\.yarn\/cache\/$/m);
     assert.match(dockerignore, /^\.yarn\/unplugged\/$/m);
     assert.match(dockerignore, /^\.yarn\/build-state\.yml$/m);
@@ -1447,17 +1272,14 @@ test("Dockerfile scaffolding follows the selected bun package manager", async ()
             "--no-git",
             "--yes",
           ],
-          { cwd: tmpDir, stdio: "ignore" },
+          { cwd: tmpDir, stdio: "ignore" }
         );
         proc.on("exit", (code) => resolve(code ?? 1));
         proc.on("error", () => resolve(1));
       });
       assert.equal(exitCode, 0);
 
-      const dockerfile = await readFile(
-        path.join(tmpDir, projectName, "Dockerfile"),
-        "utf8",
-      );
+      const dockerfile = await readFile(path.join(tmpDir, projectName, "Dockerfile"), "utf8");
       assert.match(dockerfile, /^ARG BUN_IMAGE=oven\/bun:1-alpine$/m);
       assert.match(dockerfile, /^FROM \$\{BUN_IMAGE\} AS builder$/m);
       assert.match(dockerfile, /COPY package\.json bun\.lock\* bun\.lockb\* \./);
@@ -1469,15 +1291,9 @@ test("Dockerfile scaffolding follows the selected bun package manager", async ()
         assert.doesNotMatch(dockerfile, /RUN bun run build/);
         assert.match(dockerfile, /^FROM \$\{BUN_IMAGE\} AS runner$/m);
       }
-      assert.doesNotMatch(
-        dockerfile,
-        /pnpm install --frozen-lockfile --ignore-scripts/,
-      );
+      assert.doesNotMatch(dockerfile, /pnpm install --frozen-lockfile --ignore-scripts/);
 
-      const dockerignore = await readFile(
-        path.join(tmpDir, projectName, ".dockerignore"),
-        "utf8",
-      );
+      const dockerignore = await readFile(path.join(tmpDir, projectName, ".dockerignore"), "utf8");
       assert.match(dockerignore, /^\.bun\/$/m);
       assert.doesNotMatch(dockerignore, /^\.pnpm-store\/$/m);
       assert.doesNotMatch(dockerignore, /^bun\.lockb?$/m);
@@ -1506,16 +1322,13 @@ test("--with-ci adds Bun runtime setup when bun-basic uses pnpm", async () => {
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    const ci = await readFile(
-      path.join(tmpDir, projectName, ".github/workflows/ci.yml"),
-      "utf8",
-    );
+    const ci = await readFile(path.join(tmpDir, projectName, ".github/workflows/ci.yml"), "utf8");
     assert.match(ci, /pnpm install --frozen-lockfile --ignore-scripts/);
     assert.match(ci, /oven-sh\/setup-bun@[0-9a-f]{40}\s+# v2/);
     assert.match(ci, /pnpm test/);
@@ -1523,16 +1336,13 @@ test("--with-ci adds Bun runtime setup when bun-basic uses pnpm", async () => {
 
     const deploy = await readFile(
       path.join(tmpDir, projectName, ".github/workflows/deploy.yml"),
-      "utf8",
+      "utf8"
     );
     assert.match(deploy, /packages:\s*write/);
     assert.match(deploy, /docker build/);
     assert.doesNotMatch(deploy, /__[A-Z_]+__/);
 
-    const dockerfile = await readFile(
-      path.join(tmpDir, projectName, "Dockerfile"),
-      "utf8",
-    );
+    const dockerfile = await readFile(path.join(tmpDir, projectName, "Dockerfile"), "utf8");
     assert.match(dockerfile, /^FROM \$\{NODE_IMAGE\} AS builder$/m);
     assert.match(dockerfile, /^FROM \$\{BUN_IMAGE\} AS runner$/m);
     assert.match(dockerfile, /pnpm install --frozen-lockfile --ignore-scripts/);
@@ -1561,7 +1371,7 @@ test("--with-ci --no-deploy keeps the security bundle but omits deploy.yml", asy
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -1598,7 +1408,7 @@ test("--with-deploy --no-ci scaffolds deploy.yml without the rest of the securit
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -1623,10 +1433,7 @@ test("--with-deploy --no-ci scaffolds deploy.yml without the rest of the securit
     // In deploy-only mode the verify:lockfile script does not exist on disk,
     // so the deploy workflow must omit the corresponding step rather than
     // fail fast on a missing file. The ref guard still applies.
-    const deploy = await readFile(
-      path.join(projectDir, ".github/workflows/deploy.yml"),
-      "utf8",
-    );
+    const deploy = await readFile(path.join(projectDir, ".github/workflows/deploy.yml"), "utf8");
     assert.doesNotMatch(deploy, /verify:lockfile/);
     assert.match(deploy, /if: github\.ref == 'refs\/heads\/main' \|\| github\.ref_type == 'tag'/);
     assert.doesNotMatch(deploy, /__[A-Z_]+__/);
@@ -1658,23 +1465,17 @@ test("--with-ci composes with --minimal and rejects an invalid --code-owner", as
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(okExit, 0);
     const projectDir = path.join(tmpDir, okProject);
-    const ci = await readFile(
-      path.join(projectDir, ".github/workflows/ci.yml"),
-      "utf8",
-    );
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
     assert.match(ci, /pnpm install --frozen-lockfile --ignore-scripts/);
     assert.doesNotMatch(ci, /__[A-Z_]+__/);
-    const buildApp = await readFile(
-      path.join(projectDir, "src/build-app.ts"),
-      "utf8",
-    );
+    const buildApp = await readFile(path.join(projectDir, "src/build-app.ts"), "utf8");
     assert.doesNotMatch(buildApp, /\/books\/:id/);
     assert.doesNotMatch(buildApp, /daloy-minimal:strip-/);
     assert.match(buildApp, /\/healthz/);
@@ -1698,7 +1499,7 @@ test("--with-ci composes with --minimal and rejects an invalid --code-owner", as
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -1728,7 +1529,7 @@ test("--with-ci emits one Bun audit step when Bun is the package manager", async
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -1737,7 +1538,7 @@ test("--with-ci emits one Bun audit step when Bun is the package manager", async
 
     const vulnScan = await readFile(
       path.join(tmpDir, projectName, ".github/workflows/vuln-scan.yml"),
-      "utf8",
+      "utf8"
     );
     assert.match(vulnScan, /oven-sh\/setup-bun@[0-9a-f]{40}\s+# v2/);
     assert.match(vulnScan, /bun install --frozen-lockfile --ignore-scripts/);
@@ -1746,17 +1547,12 @@ test("--with-ci emits one Bun audit step when Bun is the package manager", async
     assert.doesNotMatch(vulnScan, /Audit full dependency tree \(advisory\)/);
     assert.doesNotMatch(vulnScan, /__[A-Z_]+__/);
 
-    const pkg = JSON.parse(
-      await readFile(path.join(tmpDir, projectName, "package.json"), "utf8"),
-    );
-    assert.equal(
-      pkg.scripts["verify:runtime-eol"],
-      "bun scripts/verify-runtime-eol.mjs",
-    );
+    const pkg = JSON.parse(await readFile(path.join(tmpDir, projectName, "package.json"), "utf8"));
+    assert.equal(pkg.scripts["verify:runtime-eol"], "bun scripts/verify-runtime-eol.mjs");
 
     const eolScan = await readFile(
       path.join(tmpDir, projectName, ".github/workflows/eol-scan.yml"),
-      "utf8",
+      "utf8"
     );
     assert.match(eolScan, /oven-sh\/setup-bun@[0-9a-f]{40}\s+# v2/);
     assert.match(eolScan, /bun install --frozen-lockfile --ignore-scripts/);
@@ -1785,7 +1581,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
@@ -1794,30 +1590,21 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
 
     const projectDir = path.join(tmpDir, projectName);
     await assert.rejects(access(path.join(projectDir, "package.json")));
-    await assert.rejects(
-      access(path.join(projectDir, ".github/workflows/release.yml")),
-    );
+    await assert.rejects(access(path.join(projectDir, ".github/workflows/release.yml")));
     await access(path.join(projectDir, ".github/workflows/deploy.yml"));
-    await assert.rejects(
-      access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs")),
-    );
+    await assert.rejects(access(path.join(projectDir, "scripts/verify-lockfile-sources.mjs")));
     await access(path.join(projectDir, ".github/workflows/container-scan.yml"));
     await access(path.join(projectDir, ".github/workflows/osv-scan.yml"));
     await access(path.join(projectDir, ".github/workflows/eol-scan.yml"));
     await access(path.join(projectDir, "scripts/verify-runtime-eol.mjs"));
 
-    const denoJson = JSON.parse(
-      await readFile(path.join(projectDir, "deno.json"), "utf8"),
-    );
+    const denoJson = JSON.parse(await readFile(path.join(projectDir, "deno.json"), "utf8"));
     assert.equal(
       denoJson.tasks["verify:runtime-eol"],
-      "deno run --allow-read --allow-net=endoflife.date scripts/verify-runtime-eol.mjs",
+      "deno run --allow-read --allow-net=endoflife.date scripts/verify-runtime-eol.mjs"
     );
 
-    const ci = await readFile(
-      path.join(projectDir, ".github/workflows/ci.yml"),
-      "utf8",
-    );
+    const ci = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
     assert.match(ci, /denoland\/setup-deno@[0-9a-f]{40}\s+# v2\.0\.4/);
     assert.match(ci, /deno task typecheck/);
     assert.match(ci, /deno task test/);
@@ -1826,10 +1613,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     // Second-source SCA gate for the Deno scaffold (Aikido "SAST vs
     // SCA"). Deno has no `audit` built in, so OSV-Scanner is the only
     // scheduled SCA layer covering `deno.lock`.
-    const osvScan = await readFile(
-      path.join(projectDir, ".github/workflows/osv-scan.yml"),
-      "utf8",
-    );
+    const osvScan = await readFile(path.join(projectDir, ".github/workflows/osv-scan.yml"), "utf8");
     assert.match(osvScan, /name: OSV scan/);
     assert.match(osvScan, /permissions:\s*\{\}/);
     assert.match(osvScan, /OSV_SCANNER_VERSION:/);
@@ -1841,10 +1625,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     assert.match(osvScan, /cron: "47 6 \* \* \*"/);
     assert.doesNotMatch(osvScan, /uses:\s*google\/osv-scanner-action/);
 
-    const eolScan = await readFile(
-      path.join(projectDir, ".github/workflows/eol-scan.yml"),
-      "utf8",
-    );
+    const eolScan = await readFile(path.join(projectDir, ".github/workflows/eol-scan.yml"), "utf8");
     assert.match(eolScan, /name: EOL runtime scan/);
     assert.match(eolScan, /permissions:\s*\{\}/);
     assert.match(eolScan, /denoland\/setup-deno@[0-9a-f]{40}\s+# v2\.0\.4/);
@@ -1854,22 +1635,16 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     assert.match(eolScan, /cron: "21 8 \* \* \*"/);
     assert.doesNotMatch(eolScan, /__[A-Z_]+__/);
 
-    const dependabot = await readFile(
-      path.join(projectDir, ".github/dependabot.yml"),
-      "utf8",
-    );
+    const dependabot = await readFile(path.join(projectDir, ".github/dependabot.yml"), "utf8");
     assert.match(dependabot, /package-ecosystem: github-actions/);
     assert.match(dependabot, /package-ecosystem: docker/);
     assert.doesNotMatch(dependabot, /package-ecosystem: npm/);
 
     const containerScan = await readFile(
       path.join(projectDir, ".github/workflows/container-scan.yml"),
-      "utf8",
+      "utf8"
     );
-    assert.match(
-      containerScan,
-      /DENO_IMAGE=denoland\/deno:alpine@sha256:<digest>/,
-    );
+    assert.match(containerScan, /DENO_IMAGE=denoland\/deno:alpine@sha256:<digest>/);
     assert.match(containerScan, /aquasecurity\/trivy-action@[0-9a-f]{40}\s+# v0/);
     // IaC misconfig coverage per Aikido's "IaC security scanning for
     // Terraform & Kubernetes misconfigurations" article.
@@ -1877,10 +1652,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     assert.match(containerScan, /\*\*\/\*\.tf/);
     assert.match(containerScan, /k8s\/\*\*/);
 
-    const deploy = await readFile(
-      path.join(projectDir, ".github/workflows/deploy.yml"),
-      "utf8",
-    );
+    const deploy = await readFile(path.join(projectDir, ".github/workflows/deploy.yml"), "utf8");
     assert.match(deploy, /on:\s*\n\s*workflow_dispatch:/);
     assert.match(deploy, /packages:\s*write/);
     assert.match(deploy, /id-token:\s*write/);
@@ -1893,10 +1665,7 @@ test("--with-ci scaffolds runtime-native security files for deno-basic", async (
     assert.match(deploy, /if: github\.ref == 'refs\/heads\/main' \|\| github\.ref_type == 'tag'/);
     assert.doesNotMatch(deploy, /__[A-Z_]+__/);
 
-    const codeowners = await readFile(
-      path.join(projectDir, ".github/CODEOWNERS"),
-      "utf8",
-    );
+    const codeowners = await readFile(path.join(projectDir, ".github/CODEOWNERS"), "utf8");
     assert.match(codeowners, /\* @acme\/security/);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
@@ -1925,24 +1694,19 @@ test("npm scaffold rewrites pnpm-prefixed scripts so `npm run gen` works", async
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    const pkg = JSON.parse(
-      await readFile(path.join(tmpDir, projectName, "package.json"), "utf8"),
-    );
+    const pkg = JSON.parse(await readFile(path.join(tmpDir, projectName, "package.json"), "utf8"));
     assert.equal(pkg.scripts.gen, "npm run gen:openapi && npm run gen:client");
     assert.equal(pkg.scripts.audit, "npm audit --prod");
     // Sanity: scripts that don't reference pnpm must remain untouched.
     assert.equal(pkg.scripts.dev, "daloy dev");
 
-    const readme = await readFile(
-      path.join(tmpDir, projectName, "README.md"),
-      "utf8",
-    );
+    const readme = await readFile(path.join(tmpDir, projectName, "README.md"), "utf8");
     assert.match(readme, /npm install/);
     assert.match(readme, /npm run dev/);
     assert.match(readme, /npm run gen/);
@@ -1950,10 +1714,7 @@ test("npm scaffold rewrites pnpm-prefixed scripts so `npm run gen` works", async
     assert.doesNotMatch(readme, /pnpm/);
     assert.doesNotMatch(readme, /Hardened `\.npmrc`/);
 
-    const agents = await readFile(
-      path.join(tmpDir, projectName, "AGENTS.md"),
-      "utf8",
-    );
+    const agents = await readFile(path.join(tmpDir, projectName, "AGENTS.md"), "utf8");
     assert.match(agents, /Package manager: npm\./);
     assert.match(agents, /npm run dev/);
     assert.match(agents, /npm run typecheck/);
@@ -1962,12 +1723,8 @@ test("npm scaffold rewrites pnpm-prefixed scripts so `npm run gen` works", async
     assert.doesNotMatch(agents, /pnpm/);
 
     const skill = await readFile(
-      path.join(
-        tmpDir,
-        projectName,
-        ".agents/skills/daloyjs-best-practices/SKILL.md",
-      ),
-      "utf8",
+      path.join(tmpDir, projectName, ".agents/skills/daloyjs-best-practices/SKILL.md"),
+      "utf8"
     );
     assert.match(skill, /npm run gen/);
     assert.match(skill, /npm run gen:openapi/);
@@ -2016,7 +1773,7 @@ test("--with-ci scaffolds provider-specific deploy starters for edge adapters", 
             "--no-git",
             "--yes",
           ],
-          { cwd: tmpDir, stdio: "ignore" },
+          { cwd: tmpDir, stdio: "ignore" }
         );
         proc.on("exit", (code) => resolve(code ?? 1));
         proc.on("error", () => resolve(1));
@@ -2025,7 +1782,7 @@ test("--with-ci scaffolds provider-specific deploy starters for edge adapters", 
 
       const deploy = await readFile(
         path.join(tmpDir, testCase.projectName, ".github/workflows/deploy.yml"),
-        "utf8",
+        "utf8"
       );
       assert.match(deploy, /on:\s*\n\s*workflow_dispatch:/);
       assert.match(deploy, /environment:\s*\n\s*name:\s*production/);
@@ -2060,15 +1817,13 @@ test("pnpm scaffold leaves pnpm-prefixed scripts untouched", async () => {
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    const pkg = JSON.parse(
-      await readFile(path.join(tmpDir, projectName, "package.json"), "utf8"),
-    );
+    const pkg = JSON.parse(await readFile(path.join(tmpDir, projectName, "package.json"), "utf8"));
     assert.equal(pkg.scripts.gen, "pnpm gen:openapi && pnpm gen:client");
     assert.equal(pkg.scripts.audit, "pnpm audit --prod");
   } finally {
@@ -2079,24 +1834,18 @@ test("pnpm scaffold leaves pnpm-prefixed scripts untouched", async () => {
 test("bun-basic template ships secure defaults and a Bun adapter entry", async () => {
   const buildApp = await readFile(
     path.join(pkgRoot, "templates/bun-basic/src/build-app.ts"),
-    "utf8",
+    "utf8"
   );
   // Same secure defaults as node-basic.
   assert.match(buildApp, /requestId\(\)/);
   assert.match(buildApp, /secureHeaders\(\)/);
   assert.match(buildApp, /rateLimit\(/);
   // Health route preserves the literal types so codegen sees ok: true.
-  assert.match(
-    buildApp,
-    /body:\s*\{ ok: true as const, runtime: "bun" as const \}/,
-  );
+  assert.match(buildApp, /body:\s*\{ ok: true as const, runtime: "bun" as const \}/);
   // The buildApp factory must not import the Bun adapter.
   assert.doesNotMatch(buildApp, /from\s+"@daloyjs\/core\/bun"/);
 
-  const indexFile = await readFile(
-    path.join(pkgRoot, "templates/bun-basic/src/index.ts"),
-    "utf8",
-  );
+  const indexFile = await readFile(path.join(pkgRoot, "templates/bun-basic/src/index.ts"), "utf8");
   assert.match(indexFile, /from\s+"@daloyjs\/core\/bun"/);
   assert.match(indexFile, /\bserve\s*\(\s*app\b/);
   // Regression guard: Bun auto-starts a server from any module whose default
@@ -2106,10 +1855,7 @@ test("bun-basic template ships secure defaults and a Bun adapter entry", async (
   assert.doesNotMatch(indexFile, /export\s+default\b/);
 
   const pkg = JSON.parse(
-    await readFile(
-      path.join(pkgRoot, "templates/bun-basic/package.json"),
-      "utf8",
-    ),
+    await readFile(path.join(pkgRoot, "templates/bun-basic/package.json"), "utf8")
   );
   assert.equal(pkg.scripts.dev, "daloy dev --runtime bun");
   assert.equal(pkg.scripts.test, "bun test");
@@ -2118,45 +1864,27 @@ test("bun-basic template ships secure defaults and a Bun adapter entry", async (
 test("deno-basic template ships a runtime-native scaffold", async () => {
   const buildApp = await readFile(
     path.join(pkgRoot, "templates/deno-basic/src/build-app.ts"),
-    "utf8",
+    "utf8"
   );
   assert.match(buildApp, /requestId\(\)/);
   assert.match(buildApp, /secureHeaders\(\)/);
-  assert.match(
-    buildApp,
-    /body:\s*\{ ok: true as const, runtime: "deno" as const \}/,
-  );
+  assert.match(buildApp, /body:\s*\{ ok: true as const, runtime: "deno" as const \}/);
   // Factory must not import the Deno adapter.
   assert.doesNotMatch(buildApp, /from\s+"@daloyjs\/core\/deno"/);
 
-  const main = await readFile(
-    path.join(pkgRoot, "templates/deno-basic/src/main.ts"),
-    "utf8",
-  );
+  const main = await readFile(path.join(pkgRoot, "templates/deno-basic/src/main.ts"), "utf8");
   assert.match(main, /from\s+"@daloyjs\/core\/deno"/);
   assert.match(main, /\bserve\s*\(\s*app\b/);
 
   const denoJson = JSON.parse(
-    await readFile(
-      path.join(pkgRoot, "templates/deno-basic/deno.json"),
-      "utf8",
-    ),
+    await readFile(path.join(pkgRoot, "templates/deno-basic/deno.json"), "utf8")
   );
   assert.match(denoJson.tasks.dev, /^deno run.*--watch src\/main\.ts$/);
   assert.match(denoJson.tasks.test, /^deno test\b/);
   assert.equal(denoJson.imports["@daloyjs/core"], "jsr:@daloyjs/daloy@^1.0.0-rc.5");
-  assert.equal(
-    denoJson.imports["@daloyjs/core/deno"],
-    "jsr:@daloyjs/daloy@^1.0.0-rc.5/deno",
-  );
-  assert.equal(
-    denoJson.imports["@daloyjs/core/banner"],
-    "jsr:@daloyjs/daloy@^1.0.0-rc.5/banner",
-  );
-  assert.equal(
-    denoJson.imports["@daloyjs/core/openapi"],
-    "jsr:@daloyjs/daloy@^1.0.0-rc.5/openapi",
-  );
+  assert.equal(denoJson.imports["@daloyjs/core/deno"], "jsr:@daloyjs/daloy@^1.0.0-rc.5/deno");
+  assert.equal(denoJson.imports["@daloyjs/core/banner"], "jsr:@daloyjs/daloy@^1.0.0-rc.5/banner");
+  assert.equal(denoJson.imports["@daloyjs/core/openapi"], "jsr:@daloyjs/daloy@^1.0.0-rc.5/openapi");
 });
 
 test("server templates ship deploy-portable proxy + OpenAPI server defaults", async () => {
@@ -2169,31 +1897,31 @@ test("server templates ship deploy-portable proxy + OpenAPI server defaults", as
   for (const template of ["node-basic", "bun-basic", "deno-basic"]) {
     const buildApp = await readFile(
       path.join(pkgRoot, `templates/${template}/src/build-app.ts`),
-      "utf8",
+      "utf8"
     );
 
     // Reverse-proxy posture is opt-in via TRUST_PROXY_HOPS, not hardcoded.
     assert.match(
       buildApp,
       /TRUST_PROXY_HOPS/,
-      `${template} must expose the TRUST_PROXY_HOPS proxy-posture knob`,
+      `${template} must expose the TRUST_PROXY_HOPS proxy-posture knob`
     );
     assert.match(
       buildApp,
       /behindProxy:\s*\{\s*hops:\s*Number\(/,
-      `${template} must derive behindProxy.hops from the env (not a literal)`,
+      `${template} must derive behindProxy.hops from the env (not a literal)`
     );
     // A hardcoded numeric hop count would bake in a platform-specific,
     // security-sensitive assumption and weaken the secure default.
     assert.doesNotMatch(
       buildApp,
       /behindProxy:\s*\{\s*hops:\s*\d/,
-      `${template} must not hardcode behindProxy.hops`,
+      `${template} must not hardcode behindProxy.hops`
     );
     assert.doesNotMatch(
       buildApp,
       /behindProxy:\s*true/,
-      `${template} must not blanket-trust forwarded headers`,
+      `${template} must not blanket-trust forwarded headers`
     );
 
     // OpenAPI `servers` must NOT be hardcoded to localhost — that breaks the
@@ -2203,20 +1931,18 @@ test("server templates ship deploy-portable proxy + OpenAPI server defaults", as
     assert.doesNotMatch(
       buildApp,
       /servers:\s*\[\s*\{\s*url:\s*[`'"]http:\/\/localhost/,
-      `${template} must not hardcode a localhost OpenAPI server URL`,
+      `${template} must not hardcode a localhost OpenAPI server URL`
     );
     assert.match(
       buildApp,
       /PUBLIC_URL/,
-      `${template} must allow pinning the OpenAPI server URL via PUBLIC_URL`,
+      `${template} must allow pinning the OpenAPI server URL via PUBLIC_URL`
     );
   }
 });
 
 test("jsr package exports cover the Deno template surface", async () => {
-  const jsrConfig = JSON.parse(
-    await readFile(path.join(pkgRoot, "..", "..", "jsr.json"), "utf8"),
-  );
+  const jsrConfig = JSON.parse(await readFile(path.join(pkgRoot, "..", "..", "jsr.json"), "utf8"));
   assert.equal(jsrConfig.exports["."], "./src/index.ts");
   assert.equal(jsrConfig.exports["./deno"], "./src/adapters/deno.ts");
   assert.equal(jsrConfig.exports["./banner"], "./src/banner.ts");
@@ -2229,7 +1955,7 @@ test("--list-templates includes the new bun-basic and deno-basic options", async
     const proc = spawn(
       process.execPath,
       [path.join(pkgRoot, "bin/create-daloy.mjs"), "--list-templates"],
-      { stdio: ["ignore", "pipe", "ignore"] },
+      { stdio: ["ignore", "pipe", "ignore"] }
     );
     proc.stdout.on("data", (chunk) => (buf += chunk.toString()));
     proc.on("exit", () => resolve(buf));
@@ -2242,11 +1968,9 @@ test("--list-templates includes the new bun-basic and deno-basic options", async
 test("--help documents the create flow across package managers", async () => {
   const out = await new Promise((resolve) => {
     let buf = "";
-    const proc = spawn(
-      process.execPath,
-      [path.join(pkgRoot, "bin/create-daloy.mjs"), "--help"],
-      { stdio: ["ignore", "pipe", "ignore"] },
-    );
+    const proc = spawn(process.execPath, [path.join(pkgRoot, "bin/create-daloy.mjs"), "--help"], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
     proc.stdout.on("data", (chunk) => (buf += chunk.toString()));
     proc.on("exit", () => resolve(buf));
     proc.on("error", () => resolve(buf));
@@ -2265,30 +1989,36 @@ test("--help documents the create flow across package managers", async () => {
 test("create-daloy rejects unknown template and package manager values", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   try {
-    const badTemplate = await runCreateDaloy([
-      "bad-template",
-      "--template",
-      "rails",
-      "--package-manager",
-      "pnpm",
-      "--no-install",
-      "--no-git",
-      "--yes",
-    ], { cwd: tmpDir });
+    const badTemplate = await runCreateDaloy(
+      [
+        "bad-template",
+        "--template",
+        "rails",
+        "--package-manager",
+        "pnpm",
+        "--no-install",
+        "--no-git",
+        "--yes",
+      ],
+      { cwd: tmpDir }
+    );
     assert.notEqual(badTemplate.exitCode, 0);
     assert.match(badTemplate.output, /Unknown template "rails"/);
     await assert.rejects(access(path.join(tmpDir, "bad-template")));
 
-    const badPackageManager = await runCreateDaloy([
-      "bad-pm",
-      "--template",
-      "node-basic",
-      "--package-manager",
-      "pip",
-      "--no-install",
-      "--no-git",
-      "--yes",
-    ], { cwd: tmpDir });
+    const badPackageManager = await runCreateDaloy(
+      [
+        "bad-pm",
+        "--template",
+        "node-basic",
+        "--package-manager",
+        "pip",
+        "--no-install",
+        "--no-git",
+        "--yes",
+      ],
+      { cwd: tmpDir }
+    );
     assert.notEqual(badPackageManager.exitCode, 0);
     assert.match(badPackageManager.output, /Unknown --package-manager "pip"/);
     await assert.rejects(access(path.join(tmpDir, "bad-pm")));
@@ -2300,16 +2030,19 @@ test("create-daloy rejects unknown template and package manager values", async (
 test("create-daloy rejects invalid project names and unknown arguments", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   try {
-    const badName = await runCreateDaloy([
-      "Bad Name",
-      "--template",
-      "node-basic",
-      "--package-manager",
-      "pnpm",
-      "--no-install",
-      "--no-git",
-      "--yes",
-    ], { cwd: tmpDir });
+    const badName = await runCreateDaloy(
+      [
+        "Bad Name",
+        "--template",
+        "node-basic",
+        "--package-manager",
+        "pnpm",
+        "--no-install",
+        "--no-git",
+        "--yes",
+      ],
+      { cwd: tmpDir }
+    );
     assert.notEqual(badName.exitCode, 0);
     assert.match(badName.output, /valid npm package name/);
 
@@ -2328,22 +2061,22 @@ test("create-daloy refuses to overwrite a non-empty directory without force", as
     await mkdir(path.join(tmpDir, projectName));
     await writeFile(path.join(tmpDir, projectName, "README.md"), "existing\n");
 
-    const result = await runCreateDaloy([
-      projectName,
-      "--template",
-      "node-basic",
-      "--package-manager",
-      "pnpm",
-      "--no-install",
-      "--no-git",
-      "--yes",
-    ], { cwd: tmpDir });
+    const result = await runCreateDaloy(
+      [
+        projectName,
+        "--template",
+        "node-basic",
+        "--package-manager",
+        "pnpm",
+        "--no-install",
+        "--no-git",
+        "--yes",
+      ],
+      { cwd: tmpDir }
+    );
     assert.notEqual(result.exitCode, 0);
     assert.match(result.output, /Directory occupied is not empty/);
-    assert.equal(
-      await readFile(path.join(tmpDir, projectName, "README.md"), "utf8"),
-      "existing\n",
-    );
+    assert.equal(await readFile(path.join(tmpDir, projectName, "README.md"), "utf8"), "existing\n");
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }
@@ -2368,7 +2101,7 @@ test("non-interactive scaffold output includes the polished completion summary",
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"] },
+        { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"] }
       );
       proc.stdout.on("data", (chunk) => (buf += chunk.toString()));
       proc.stderr.on("data", (chunk) => (buf += chunk.toString()));
@@ -2410,7 +2143,11 @@ test("summary surfaces install links for runtime + package manager missing from 
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PATH: "", Path: "" } },
+        {
+          cwd: tmpDir,
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, PATH: "", Path: "" },
+        }
       );
       proc.stdout.on("data", (chunk) => (buf += chunk.toString()));
       proc.stderr.on("data", (chunk) => (buf += chunk.toString()));
@@ -2447,7 +2184,11 @@ test("a missing package manager skips the install attempt with an install link",
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PATH: "", Path: "" } },
+        {
+          cwd: tmpDir,
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, PATH: "", Path: "" },
+        }
       );
       proc.stdout.on("data", (chunk) => (buf += chunk.toString()));
       proc.stderr.on("data", (chunk) => (buf += chunk.toString()));
@@ -2482,16 +2223,13 @@ test("--minimal strips books + docs sentinel blocks from node-basic", async () =
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    const buildApp = await readFile(
-      path.join(tmpDir, projectName, "src/build-app.ts"),
-      "utf8",
-    );
+    const buildApp = await readFile(path.join(tmpDir, projectName, "src/build-app.ts"), "utf8");
     // Books and Swagger/OpenAPI demo routes should be gone.
     assert.doesNotMatch(buildApp, /\/books\/:id/);
     assert.doesNotMatch(buildApp, /\/openapi\.json/);
@@ -2500,18 +2238,12 @@ test("--minimal strips books + docs sentinel blocks from node-basic", async () =
     // Health route must stay.
     assert.match(buildApp, /\/healthz/);
 
-    const indexFile = await readFile(
-      path.join(tmpDir, projectName, "src/index.ts"),
-      "utf8",
-    );
+    const indexFile = await readFile(path.join(tmpDir, projectName, "src/index.ts"), "utf8");
     assert.doesNotMatch(indexFile, /Swagger UI/);
     assert.doesNotMatch(indexFile, /daloy-minimal:strip-/);
     assert.match(indexFile, /label: "Health"/);
 
-    const readme = await readFile(
-      path.join(tmpDir, projectName, "README.md"),
-      "utf8",
-    );
+    const readme = await readFile(path.join(tmpDir, projectName, "README.md"), "utf8");
     assert.doesNotMatch(readme, /\/books\/1/);
     assert.doesNotMatch(readme, /localhost:3000\/docs/);
     assert.doesNotMatch(readme, /localhost:3000\/openapi\.json/);
@@ -2540,35 +2272,20 @@ test("--minimal also trims the bun-basic and deno-basic templates", async () => 
             "--no-git",
             "--yes",
           ],
-          { cwd: tmpDir, stdio: "ignore" },
+          { cwd: tmpDir, stdio: "ignore" }
         );
         proc.on("exit", (code) => resolve(code ?? 1));
         proc.on("error", () => resolve(1));
       });
-      assert.equal(
-        exitCode,
-        0,
-        `scaffolding ${template} with --minimal should succeed`,
-      );
-      const buildApp = await readFile(
-        path.join(tmpDir, projectName, "src/build-app.ts"),
-        "utf8",
-      );
-      assert.doesNotMatch(
-        buildApp,
-        /\/books\/:id/,
-        `${template} should drop books with --minimal`,
-      );
+      assert.equal(exitCode, 0, `scaffolding ${template} with --minimal should succeed`);
+      const buildApp = await readFile(path.join(tmpDir, projectName, "src/build-app.ts"), "utf8");
+      assert.doesNotMatch(buildApp, /\/books\/:id/, `${template} should drop books with --minimal`);
       assert.doesNotMatch(
         buildApp,
         /daloy-minimal:strip-/,
-        `${template} should remove sentinel comments`,
+        `${template} should remove sentinel comments`
       );
-      assert.match(
-        buildApp,
-        /\/healthz/,
-        `${template} should keep healthz with --minimal`,
-      );
+      assert.match(buildApp, /\/healthz/, `${template} should keep healthz with --minimal`);
     }
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
@@ -2592,19 +2309,17 @@ test("deno-basic scaffold skips package.json patching and never invokes a Node p
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
     // No package.json should have been written.
-    await assert.rejects(
-      access(path.join(tmpDir, projectName, "package.json")),
-    );
+    await assert.rejects(access(path.join(tmpDir, projectName, "package.json")));
     // The deno.json must arrive verbatim with the project's import map.
     const denoJson = JSON.parse(
-      await readFile(path.join(tmpDir, projectName, "deno.json"), "utf8"),
+      await readFile(path.join(tmpDir, projectName, "deno.json"), "utf8")
     );
     assert.ok(denoJson.tasks.dev);
   } finally {
@@ -2633,16 +2348,13 @@ test("non-minimal scaffolds keep sentinel comments (so --minimal stays opt-in)",
           "--no-git",
           "--yes",
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
-    const buildApp = await readFile(
-      path.join(tmpDir, projectName, "src/build-app.ts"),
-      "utf8",
-    );
+    const buildApp = await readFile(path.join(tmpDir, projectName, "src/build-app.ts"), "utf8");
     assert.match(buildApp, /daloy-minimal:strip-start books/);
     assert.match(buildApp, /daloy-minimal:strip-end docs/);
     assert.match(buildApp, /\/books\/:id/);
@@ -2661,32 +2373,18 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
   // SKILL.md lives at `.agents/skills/daloyjs-best-practices/SKILL.md` so it
   // follows the open `agents/skills` directory convention. Templates author
   // it as `_agents/...` so npm pack does not drop the dotfolder on publish.
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-    "deno-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic", "deno-basic"];
   for (const template of templates) {
     // Normalize CRLF -> LF so the byte-budget assertion below measures the
     // canonical committed content length, not the extra `\r` bytes a Windows
     // checkout (core.autocrlf=true) adds. This matches what Linux CI measures.
     const agents = (
-      await readFile(
-        path.join(pkgRoot, "templates", template, "AGENTS.md"),
-        "utf8",
-      )
+      await readFile(path.join(pkgRoot, "templates", template, "AGENTS.md"), "utf8")
     ).replace(/\r\n/g, "\n");
     const skill = (
       await readFile(
-        path.join(
-          pkgRoot,
-          "templates",
-          template,
-          "_agents/skills/daloyjs-best-practices/SKILL.md",
-        ),
-        "utf8",
+        path.join(pkgRoot, "templates", template, "_agents/skills/daloyjs-best-practices/SKILL.md"),
+        "utf8"
       )
     ).replace(/\r\n/g, "\n");
 
@@ -2695,45 +2393,29 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
     // still carrying enough best-practice content to be useful on its own.
     assert.ok(
       agents.length < 6000,
-      `${template} AGENTS.md should stay under 6KB (was ${agents.length} bytes)`,
+      `${template} AGENTS.md should stay under 6KB (was ${agents.length} bytes)`
     );
     assert.match(
       agents,
       /\.agents\/skills\/daloyjs-best-practices\/SKILL\.md/,
-      `${template} AGENTS.md should link to the new SKILL.md path`,
+      `${template} AGENTS.md should link to the new SKILL.md path`
     );
-    assert.match(
-      agents,
-      /DaloyJS/,
-      `${template} AGENTS.md should describe the project`,
-    );
+    assert.match(agents, /DaloyJS/, `${template} AGENTS.md should describe the project`);
 
     // SKILL.md must declare scope, structure, and at least one workflow.
-    assert.match(
-      skill,
-      /When to use this skill/i,
-      `${template} SKILL.md should define boundaries`,
-    );
-    assert.match(
-      skill,
-      /workflow/i,
-      `${template} SKILL.md should describe workflows`,
-    );
-    assert.match(
-      skill,
-      /Pitfalls|guardrails/i,
-      `${template} SKILL.md should list guardrails`,
-    );
+    assert.match(skill, /When to use this skill/i, `${template} SKILL.md should define boundaries`);
+    assert.match(skill, /workflow/i, `${template} SKILL.md should describe workflows`);
+    assert.match(skill, /Pitfalls|guardrails/i, `${template} SKILL.md should list guardrails`);
     // The expanded best-practices skill must cover testing and security.
     assert.match(
       skill,
       /Testing best practices/i,
-      `${template} SKILL.md should describe testing best practices`,
+      `${template} SKILL.md should describe testing best practices`
     );
     assert.match(
       skill,
       /Security best practices/i,
-      `${template} SKILL.md should describe security best practices`,
+      `${template} SKILL.md should describe security best practices`
     );
   }
 });
@@ -2743,13 +2425,7 @@ test("scaffolded projects include AGENTS.md and SKILL.md at the conventional pat
   // (i.e. they are not accidentally renamed or filtered by the copier).
   // SKILL.md lives under `.agents/skills/daloyjs-best-practices/` after the
   // copier renames `_agents/` → `.agents/`.
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-    "deno-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic", "deno-basic"];
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   try {
     for (const template of templates) {
@@ -2779,11 +2455,7 @@ test("scaffolded projects include AGENTS.md and SKILL.md at the conventional pat
       assert.equal(exitCode, 0, `scaffolding ${template} should succeed`);
       await access(path.join(tmpDir, projectName, "AGENTS.md"));
       await access(
-        path.join(
-          tmpDir,
-          projectName,
-          ".agents/skills/daloyjs-best-practices/SKILL.md",
-        ),
+        path.join(tmpDir, projectName, ".agents/skills/daloyjs-best-practices/SKILL.md")
       );
       // The `_agents` placeholder must be renamed to `.agents` on copy.
       await assert.rejects(access(path.join(tmpDir, projectName, "_agents")));
@@ -2800,38 +2472,29 @@ test("every template ships _vscode/mcp.json wiring the DaloyJS docs MCP server",
   // publish; the copier renames it to `.vscode/` on scaffold. The file gives
   // a freshly scaffolded project immediate access to the DaloyJS docs MCP
   // server from VS Code (and compatible editors) with no manual setup.
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-    "deno-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic", "deno-basic"];
   for (const template of templates) {
     const raw = await readFile(
       path.join(pkgRoot, "templates", template, "_vscode", "mcp.json"),
-      "utf8",
+      "utf8"
     );
     // Must be valid JSON declaring the daloyjs-docs HTTP server.
     const parsed = JSON.parse(raw);
     assert.ok(
       parsed.servers && typeof parsed.servers === "object",
-      `${template} mcp.json must declare a "servers" object`,
+      `${template} mcp.json must declare a "servers" object`
     );
     const server = parsed.servers["daloyjs-docs"];
-    assert.ok(
-      server,
-      `${template} mcp.json must declare the "daloyjs-docs" server`,
-    );
+    assert.ok(server, `${template} mcp.json must declare the "daloyjs-docs" server`);
     assert.equal(
       server.type,
       "http",
-      `${template} daloyjs-docs server must use the http transport`,
+      `${template} daloyjs-docs server must use the http transport`
     );
     assert.equal(
       server.url,
       "https://daloyjs.dev/mcp",
-      `${template} daloyjs-docs server must point at the DaloyJS docs MCP endpoint`,
+      `${template} daloyjs-docs server must point at the DaloyJS docs MCP endpoint`
     );
   }
 });
@@ -2840,13 +2503,7 @@ test("scaffolded projects include .vscode/mcp.json at the conventional path", as
   // Verify the CLI copies the editor config out of the template and renames
   // `_vscode/` → `.vscode/` (i.e. it is not left as `_vscode` or filtered by
   // the copier).
-  const templates = [
-    "node-basic",
-    "vercel",
-    "cloudflare-worker",
-    "bun-basic",
-    "deno-basic",
-  ];
+  const templates = ["node-basic", "vercel", "cloudflare-worker", "bun-basic", "deno-basic"];
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-"));
   try {
     for (const template of templates) {
@@ -2881,7 +2538,7 @@ test("scaffolded projects include .vscode/mcp.json at the conventional path", as
       assert.equal(
         parsed.servers?.["daloyjs-docs"]?.url,
         "https://daloyjs.dev/mcp",
-        `${template} scaffold must wire the daloyjs-docs MCP server`,
+        `${template} scaffold must wire the daloyjs-docs MCP server`
       );
 
       // The `_vscode` placeholder must be renamed to `.vscode` on copy.
@@ -2912,7 +2569,7 @@ test("--yes + pnpm defaults install to N and skips dependency installation", asy
           "--yes",
           // intentionally omit --install / --no-install to exercise the default
         ],
-        { cwd: tmpDir },
+        { cwd: tmpDir }
       );
       proc.stdout.on("data", (c) => (buf += c.toString()));
       proc.stderr.on("data", (c) => (buf += c.toString()));
@@ -2921,9 +2578,7 @@ test("--yes + pnpm defaults install to N and skips dependency installation", asy
     });
     assert.equal(exitCode, 0);
     // Default-N for pnpm means node_modules must not exist.
-    await assert.rejects(
-      access(path.join(tmpDir, projectName, "node_modules")),
-    );
+    await assert.rejects(access(path.join(tmpDir, projectName, "node_modules")));
     // Post-install hint about the supply-chain embargo must surface.
     assert.match(stdout, /minimumReleaseAge: 1440/);
     assert.match(stdout, /ignore-scripts/);
@@ -2951,19 +2606,15 @@ test("--yes + non-pnpm package manager defaults --with-ci to Y", async () => {
           "--yes",
           // intentionally omit --with-ci / --no-ci to exercise the default
         ],
-        { cwd: tmpDir, stdio: "ignore" },
+        { cwd: tmpDir, stdio: "ignore" }
       );
       proc.on("exit", (code) => resolve(code ?? 1));
       proc.on("error", () => resolve(1));
     });
     assert.equal(exitCode, 0);
     // CI bundle must be scaffolded by default now.
-    await access(
-      path.join(tmpDir, projectName, ".github/workflows/ci.yml"),
-    );
-    await access(
-      path.join(tmpDir, projectName, ".github/workflows/deploy.yml"),
-    );
+    await access(path.join(tmpDir, projectName, ".github/workflows/ci.yml"));
+    await access(path.join(tmpDir, projectName, ".github/workflows/deploy.yml"));
     await access(path.join(tmpDir, projectName, ".github/CODEOWNERS"));
     await access(path.join(tmpDir, projectName, "SECURITY.md"));
   } finally {
@@ -2974,11 +2625,9 @@ test("--yes + non-pnpm package manager defaults --with-ci to Y", async () => {
 test("--help documents the secure-by-default install + CI defaults", async () => {
   const out = await new Promise((resolve) => {
     let buf = "";
-    const proc = spawn(
-      process.execPath,
-      [path.join(pkgRoot, "bin/create-daloy.mjs"), "--help"],
-      { stdio: ["ignore", "pipe", "pipe"] },
-    );
+    const proc = spawn(process.execPath, [path.join(pkgRoot, "bin/create-daloy.mjs"), "--help"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     proc.stdout.on("data", (c) => (buf += c.toString()));
     proc.stderr.on("data", (c) => (buf += c.toString()));
     proc.on("exit", () => resolve(buf));
@@ -3020,14 +2669,14 @@ for (const template of ["node-basic", "vercel", "cloudflare-worker", "bun-basic"
     try {
       const { exitCode, output } = await runCreateDaloy(
         [projectName, "--template", template, "--no-install", "--no-git", "--yes"],
-        { cwd: tmpDir },
+        { cwd: tmpDir }
       );
       assert.equal(exitCode, 0, `scaffold failed:\n${output}`);
       const offenders = await collectUnderscorePrefixed(path.join(tmpDir, projectName));
       assert.deepEqual(
         offenders,
         [],
-        `scaffolded ${template} still contains _-prefixed entries (missing RENAME_ON_COPY entry?): ${offenders.join(", ")}`,
+        `scaffolded ${template} still contains _-prefixed entries (missing RENAME_ON_COPY entry?): ${offenders.join(", ")}`
       );
     } finally {
       await rm(tmpDir, { recursive: true, force: true });

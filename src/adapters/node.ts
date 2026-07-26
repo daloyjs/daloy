@@ -3,12 +3,7 @@
  * Request/Response. Includes graceful shutdown wired to SIGTERM/SIGINT.
  */
 
-import {
-  createServer,
-  type IncomingMessage,
-  type ServerResponse,
-  type Server,
-} from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import { Readable } from "node:stream";
 import type { Duplex } from "node:stream";
 import type { App } from "../app.js";
@@ -165,37 +160,38 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
       ...(connectionsCheckingInterval !== undefined ? { connectionsCheckingInterval } : {}),
     },
     (req, res) => {
-    // GET/HEAD: no body work, dispatch directly. Keep this first so the GET
-    // hot path doesn't pay for any of the buffering bookkeeping below.
-    const method = req.method;
-    if (method === "GET" || method === "HEAD" || method === undefined) {
+      // GET/HEAD: no body work, dispatch directly. Keep this first so the GET
+      // hot path doesn't pay for any of the buffering bookkeeping below.
+      const method = req.method;
+      if (method === "GET" || method === "HEAD" || method === undefined) {
+        dispatchToApp(app, req, res, trustProxy, undefined);
+        return;
+      }
+      // Refuse Fetch-forbidden methods (CONNECT/TRACE/TRACK) before building a
+      // `Request` — `new Request` throws a `TypeError` for them, which would
+      // otherwise be caught and reported as a generic 500 instead of a clean,
+      // intentional method refusal. Placed after the GET/HEAD fast path so the
+      // hot path never pays for this check.
+      if (FETCH_FORBIDDEN_METHODS.has(method.toUpperCase())) {
+        writeMethodRefused(res);
+        return;
+      }
+      // POST/PUT/PATCH/DELETE with a small known content-length: pre-buffer
+      // bytes from the Node socket directly so the Request constructor gets a
+      // Uint8Array body instead of `Readable.toWeb(req)`. This skips the
+      // WHATWG-stream adapter that dominates POST throughput on Node.
+      const cl = req.headers["content-length"];
+      const n = cl ? Number(cl) : NaN;
+      if (Number.isFinite(n) && n >= 0 && n <= bufferedBodyMaxBytes) {
+        bufferRequestBody(req, n).then(
+          (bytes) => dispatchToApp(app, req, res, trustProxy, bytes),
+          (e) => writeAdapterError(res, e)
+        );
+        return;
+      }
       dispatchToApp(app, req, res, trustProxy, undefined);
-      return;
     }
-    // Refuse Fetch-forbidden methods (CONNECT/TRACE/TRACK) before building a
-    // `Request` — `new Request` throws a `TypeError` for them, which would
-    // otherwise be caught and reported as a generic 500 instead of a clean,
-    // intentional method refusal. Placed after the GET/HEAD fast path so the
-    // hot path never pays for this check.
-    if (FETCH_FORBIDDEN_METHODS.has(method.toUpperCase())) {
-      writeMethodRefused(res);
-      return;
-    }
-    // POST/PUT/PATCH/DELETE with a small known content-length: pre-buffer
-    // bytes from the Node socket directly so the Request constructor gets a
-    // Uint8Array body instead of `Readable.toWeb(req)`. This skips the
-    // WHATWG-stream adapter that dominates POST throughput on Node.
-    const cl = req.headers["content-length"];
-    const n = cl ? Number(cl) : NaN;
-    if (Number.isFinite(n) && n >= 0 && n <= bufferedBodyMaxBytes) {
-      bufferRequestBody(req, n).then(
-        (bytes) => dispatchToApp(app, req, res, trustProxy, bytes),
-        (e) => writeAdapterError(res, e),
-      );
-      return;
-    }
-    dispatchToApp(app, req, res, trustProxy, undefined);
-  });
+  );
 
   server.requestTimeout = connectionTimeoutMs;
   server.headersTimeout = connectionTimeoutMs;
@@ -205,9 +201,7 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
   // `0` opts out and restores Node's unbounded-ish default (2000).
   const maxHeaderCount = opts.maxHeaderCount;
   server.maxHeadersCount =
-    typeof maxHeaderCount === "number" && maxHeaderCount >= 0
-      ? maxHeaderCount
-      : 100;
+    typeof maxHeaderCount === "number" && maxHeaderCount >= 0 ? maxHeaderCount : 100;
   // Connection-layer admission control. Reject overflow sockets at accept time
   // rather than queuing them into the event loop under overload.
   if (typeof opts.maxConnections === "number" && opts.maxConnections > 0) {
@@ -221,17 +215,15 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
       // Safety net: a rejection here would otherwise be unhandled and, under
       // the production crash-on-unhandledRejection posture, kill the process
       // from a single malformed upgrade request.
-      handleUpgrade(app, req, socket as Duplex, head, trustProxy).catch(
-        (err) => {
-          app.log.error({ err }, "WebSocket upgrade failed");
-          try {
-            writeUpgradeError(socket as Duplex, 400, "Bad Request");
-          } catch {
-            /* socket already closed */
-          }
-          (socket as Duplex).destroy();
-        },
-      );
+      handleUpgrade(app, req, socket as Duplex, head, trustProxy).catch((err) => {
+        app.log.error({ err }, "WebSocket upgrade failed");
+        try {
+          writeUpgradeError(socket as Duplex, 400, "Bad Request");
+        } catch {
+          /* socket already closed */
+        }
+        (socket as Duplex).destroy();
+      });
     });
   }
   const requestedPort = opts.port ?? 3000;
@@ -252,10 +244,15 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     await app.shutdown(opts.shutdownTimeoutMs ?? 10_000);
     for (const sock of wsSockets) sock.destroy();
     wsSockets.clear();
-    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve()))
+    );
   };
   if (opts.handleSignals !== false) {
-    const onSignal = (sig: string) => { app.log.info({ sig }, "DaloyJS received signal, shutting down"); void close().then(() => process.exit(0)); };
+    const onSignal = (sig: string) => {
+      app.log.info({ sig }, "DaloyJS received signal, shutting down");
+      void close().then(() => process.exit(0));
+    };
     process.once("SIGTERM", () => onSignal("SIGTERM"));
     process.once("SIGINT", () => onSignal("SIGINT"));
   }
@@ -263,9 +260,7 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     server,
     get port() {
       const address = server.address();
-      return address !== null && typeof address === "object"
-        ? address.port
-        : requestedPort;
+      return address !== null && typeof address === "object" ? address.port : requestedPort;
     },
     close,
   };
@@ -286,7 +281,7 @@ function dispatchToApp(
   req: IncomingMessage,
   res: ServerResponse,
   trustProxy: boolean,
-  bufferedBody: Uint8Array | undefined,
+  bufferedBody: Uint8Array | undefined
 ): void {
   let request: Request;
   try {
@@ -315,7 +310,7 @@ function dispatchToApp(
           writeAdapterError(res, e);
         }
       },
-      (e) => writeAdapterError(res, e),
+      (e) => writeAdapterError(res, e)
     );
   } else {
     try {
@@ -424,11 +419,7 @@ function attachClientCertificate(req: IncomingMessage, request: Request): void {
  * Node's `connect` event rather than the request listener; it is included here
  * defensively for runtimes/proxies that surface it as a normal request.)
  */
-const FETCH_FORBIDDEN_METHODS: ReadonlySet<string> = new Set([
-  "CONNECT",
-  "TRACE",
-  "TRACK",
-]);
+const FETCH_FORBIDDEN_METHODS: ReadonlySet<string> = new Set(["CONNECT", "TRACE", "TRACK"]);
 
 /**
  * Refuse a Fetch-forbidden HTTP method with a spec-correct `501 Not
@@ -693,19 +684,14 @@ Object.setPrototypeOf(LightRequest.prototype, Request.prototype);
 function toWebRequest(
   req: IncomingMessage,
   trustProxy: boolean,
-  bufferedBody?: Uint8Array,
+  bufferedBody?: Uint8Array
 ): Request {
   const reqHeaders = req.headers;
-  const forwardedHost = trustProxy
-    ? firstHeader(reqHeaders["x-forwarded-host"])
-    : undefined;
+  const forwardedHost = trustProxy ? firstHeader(reqHeaders["x-forwarded-host"]) : undefined;
   const host = forwardedHost ?? reqHeaders.host ?? "localhost";
-  const forwardedProto = trustProxy
-    ? firstHeader(reqHeaders["x-forwarded-proto"])
-    : undefined;
+  const forwardedProto = trustProxy ? firstHeader(reqHeaders["x-forwarded-proto"]) : undefined;
   const proto =
-    forwardedProto ??
-    ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
+    forwardedProto ?? ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
   const url = `${proto}://${host}${normalizeRequestTarget(req.url)}`;
   // Reject malformed Host / request-target combinations at the adapter
   // boundary instead of letting the invalid URL propagate as a 500 later.
@@ -781,10 +767,7 @@ function normalizeRequestTarget(target: string | undefined): string {
   return `/${raw}`;
 }
 
-function sendWebResponse(
-  res: Response,
-  out: ServerResponse,
-): void | Promise<void> {
+function sendWebResponse(res: Response, out: ServerResponse): void | Promise<void> {
   out.statusCode = res.status;
   // `Headers.forEach` yields each `Set-Cookie` as a separate callback while
   // `ServerResponse.setHeader` overwrites repeated keys — copying naively
@@ -817,11 +800,12 @@ function sendWebResponse(
   // `new Response(null)` constructor also auto-sets `content-length: 0`
   // which we must strip so Node falls back to chunked transfer-encoding.
   const rawStream = (res as any)[DALOY_RAW_STREAM] as
-    | ReadableStream<Uint8Array>
-    | Readable
-    | undefined;
+    ReadableStream<Uint8Array> | Readable | undefined;
   if (rawStream !== undefined) {
-    if (typeof (rawStream as Readable).pipe === "function" && !(rawStream instanceof ReadableStream)) {
+    if (
+      typeof (rawStream as Readable).pipe === "function" &&
+      !(rawStream instanceof ReadableStream)
+    ) {
       // Node `Readable` from the handler: skip the Web-stream bridge entirely
       // and `.pipe(out)` like Fastify/Koa/Express do.
       out.removeHeader("content-length");
@@ -883,18 +867,13 @@ async function handleUpgrade(
   req: IncomingMessage,
   socket: Duplex,
   head: Buffer,
-  trustProxy: boolean,
+  trustProxy: boolean
 ): Promise<void> {
-  const forwardedHost = trustProxy
-    ? firstHeader(req.headers["x-forwarded-host"])
-    : undefined;
+  const forwardedHost = trustProxy ? firstHeader(req.headers["x-forwarded-host"]) : undefined;
   const host = forwardedHost ?? req.headers.host ?? "localhost";
-  const forwardedProto = trustProxy
-    ? firstHeader(req.headers["x-forwarded-proto"])
-    : undefined;
+  const forwardedProto = trustProxy ? firstHeader(req.headers["x-forwarded-proto"]) : undefined;
   const proto =
-    forwardedProto ??
-    ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
+    forwardedProto ?? ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
   // A malformed `Host` header (e.g. containing a space) reaches this point:
   // Node's HTTP parser accepts it and fires `upgrade`, but WHATWG URL
   // parsing throws. Reject it as the client error it is instead of letting
@@ -973,23 +952,16 @@ async function handleUpgrade(
     "Connection: Upgrade",
     `Sec-WebSocket-Accept: ${result.acceptKey}`,
   ];
-  if (chosenProtocol)
-    responseLines.push(`Sec-WebSocket-Protocol: ${chosenProtocol}`);
+  if (chosenProtocol) responseLines.push(`Sec-WebSocket-Protocol: ${chosenProtocol}`);
   socket.write(responseLines.join("\r\n") + "\r\n\r\n");
 
   (socket as unknown as { setNoDelay: (b: boolean) => void }).setNoDelay(true);
 
   const routeOptions = match.handler.options;
-  const conn = new NodeWebSocketConnection(
-    socket,
-    handler,
-    chosenProtocol,
-    app,
-    routeOptions,
-  );
+  const conn = new NodeWebSocketConnection(socket, handler, chosenProtocol, app, routeOptions);
   (socket as unknown as { setTimeout: (n: number, cb?: () => void) => void }).setTimeout(
     routeOptions.idleTimeout * 1000,
-    () => conn.close(WS_CLOSE_CODE.GOING_AWAY, "idle timeout"),
+    () => conn.close(WS_CLOSE_CODE.GOING_AWAY, "idle timeout")
   );
   // If the upgrade arrived with extra bytes already in the buffer, feed them first.
   if (head.length > 0) conn._ingest(head);
@@ -1007,18 +979,14 @@ async function handleUpgrade(
   }
 }
 
-function writeUpgradeError(
-  socket: Duplex,
-  status: number,
-  reason: string,
-): void {
+function writeUpgradeError(socket: Duplex, status: number, reason: string): void {
   const body = `${status} ${reason}`;
   socket.end(
     `HTTP/1.1 ${status} ${reason}\r\n` +
       "Connection: close\r\n" +
       `Content-Length: ${Buffer.byteLength(body)}\r\n` +
       "Content-Type: text/plain; charset=utf-8\r\n\r\n" +
-      body,
+      body
   );
 }
 
@@ -1045,7 +1013,7 @@ class NodeWebSocketConnection implements WebSocketConnection {
     private handler: WebSocketHandler<any, any, any>,
     readonly protocol: string,
     private app: App,
-    private options: NormalizedWebSocketOptions,
+    private options: NormalizedWebSocketOptions
   ) {
     this.sink = new FrameSink({
       requireMask: true,
@@ -1055,10 +1023,7 @@ class NodeWebSocketConnection implements WebSocketConnection {
           const buf = ev.data as Uint8Array;
           const ab =
             buf.buffer instanceof ArrayBuffer
-              ? buf.buffer.slice(
-                  buf.byteOffset,
-                  buf.byteOffset + buf.byteLength,
-                )
+              ? buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
               : new Uint8Array(buf).buffer;
           void this._invokeMessage(ab, true);
         } else {
@@ -1088,7 +1053,7 @@ class NodeWebSocketConnection implements WebSocketConnection {
           err instanceof WebSocketPayloadTooLargeError
             ? WS_CLOSE_CODE.MESSAGE_TOO_BIG
             : WS_CLOSE_CODE.PROTOCOL_ERROR,
-          err.message,
+          err.message
         );
       },
     });
@@ -1100,9 +1065,7 @@ class NodeWebSocketConnection implements WebSocketConnection {
 
   send(data: string | ArrayBufferLike | ArrayBufferView): void {
     if (this.readyState !== WS_READY_STATE.OPEN) return;
-    const { opcode, payload } = encodeSendPayload(
-      data as string | ArrayBuffer | ArrayBufferView,
-    );
+    const { opcode, payload } = encodeSendPayload(data as string | ArrayBuffer | ArrayBufferView);
     this._writeFrame(opcode, payload);
   }
 
@@ -1131,9 +1094,7 @@ class NodeWebSocketConnection implements WebSocketConnection {
 
   _ingest(chunk: Buffer): void {
     if (this.readyState === WS_READY_STATE.CLOSED) return;
-    this.sink.push(
-      new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
-    );
+    this.sink.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
   }
 
   _handleSocketClose(): void {
@@ -1158,18 +1119,13 @@ class NodeWebSocketConnection implements WebSocketConnection {
     this.socket.destroy();
   }
 
-  private _controlFrame(
-    opcode: number,
-    data?: string | ArrayBufferLike | ArrayBufferView,
-  ): void {
+  private _controlFrame(opcode: number, data?: string | ArrayBufferLike | ArrayBufferView): void {
     if (this.readyState !== WS_READY_STATE.OPEN) return;
     let payload: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
     if (data !== undefined) {
       payload = encodeSendPayload(data as any).payload;
       if (payload.length > WS_MAX_CONTROL_PAYLOAD) {
-        throw new WebSocketProtocolError(
-          "Control frame payload exceeds 125 bytes",
-        );
+        throw new WebSocketProtocolError("Control frame payload exceeds 125 bytes");
       }
     }
     this._writeFrame(opcode, payload);
@@ -1178,13 +1134,11 @@ class NodeWebSocketConnection implements WebSocketConnection {
   private _writeFrame(opcode: number, payload: Uint8Array): void {
     const frame = encodeFrame({ opcode, payload });
     const flushed = this.socket.write(
-      Buffer.from(frame.buffer, frame.byteOffset, frame.byteLength),
+      Buffer.from(frame.buffer, frame.byteOffset, frame.byteLength)
     );
     if (!flushed) {
       this.socket.once("drain", () =>
-        this._invokeHandler("WebSocket drain() handler threw", () =>
-          this.handler.drain?.(this),
-        ),
+        this._invokeHandler("WebSocket drain() handler threw", () => this.handler.drain?.(this))
       );
     }
     if (
@@ -1197,14 +1151,12 @@ class NodeWebSocketConnection implements WebSocketConnection {
   }
 
   _invokeError(err: unknown): void {
-    this._invokeHandler("WebSocket error() handler threw", () =>
-      this.handler.error?.(this, err),
-    );
+    this._invokeHandler("WebSocket error() handler threw", () => this.handler.error?.(this, err));
   }
 
   private async _invokeMessage(
     data: string | Uint8Array | ArrayBuffer,
-    isBinary: boolean,
+    isBinary: boolean
   ): Promise<void> {
     try {
       await this.handler.message?.(this, data, isBinary);
@@ -1218,14 +1170,11 @@ class NodeWebSocketConnection implements WebSocketConnection {
     if (this.closeHandled) return;
     this.closeHandled = true;
     this._invokeHandler("WebSocket close() handler threw", () =>
-      this.handler.close?.(this, code, reason),
+      this.handler.close?.(this, code, reason)
     );
   }
 
-  private _invokeHandler(
-    label: string,
-    run: () => void | Promise<void> | undefined,
-  ): void {
+  private _invokeHandler(label: string, run: () => void | Promise<void> | undefined): void {
     try {
       const result = run();
       if (result && typeof (result as Promise<void>).then === "function") {

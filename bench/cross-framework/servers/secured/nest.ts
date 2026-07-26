@@ -14,10 +14,7 @@ import {
   Post,
 } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import {
-  FastifyAdapter,
-  type NestFastifyApplication,
-} from "@nestjs/platform-fastify";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
@@ -60,13 +57,19 @@ async function bootstrap() {
   await app.register(jwt as never, { secret: SECRET });
 
   const instance = app.getHttpAdapter().getInstance();
-  instance.addHook("onRequest", async (req: { jwtVerify: () => Promise<unknown> }, reply: { code: (n: number) => { send: (b: unknown) => void } }) => {
-    try {
-      await req.jwtVerify();
-    } catch {
-      reply.code(401).send({ error: "invalid token" });
+  instance.addHook(
+    "onRequest",
+    async (
+      req: { jwtVerify: () => Promise<unknown> },
+      reply: { code: (n: number) => { send: (b: unknown) => void } }
+    ) => {
+      try {
+        await req.jwtVerify();
+      } catch {
+        reply.code(401).send({ error: "invalid token" });
+      }
     }
-  });
+  );
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port, "127.0.0.1");

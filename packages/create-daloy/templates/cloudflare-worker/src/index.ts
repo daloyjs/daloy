@@ -47,14 +47,12 @@ app.get(
   async () => ({
     status: 200 as const,
     body: { ok: true as const, runtime: "cloudflare-worker" as const },
-  }),
+  })
 );
 
 // daloy-minimal:strip-start books
 const Book = z.object({ id: z.string(), title: z.string() }).strict();
-const books = new Map<string, z.infer<typeof Book>>([
-  ["1", { id: "1", title: "Noli Me Tangere" }],
-]);
+const books = new Map<string, z.infer<typeof Book>>([["1", { id: "1", title: "Noli Me Tangere" }]]);
 
 app.get(
   "/books/:id",
@@ -71,7 +69,7 @@ app.get(
     const book = books.get(params.id);
     if (!book) throw new NotFoundError(`Book ${params.id} not found`);
     return { status: 200 as const, body: book };
-  },
+  }
 );
 // daloy-minimal:strip-end books
 

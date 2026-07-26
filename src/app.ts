@@ -4461,10 +4461,7 @@ function healthRouteKey(request: Request, trustProxyHeaders: boolean): string {
 }
 
 /** True when the app declared a trusted reverse-proxy posture. */
-function appTrustsProxyHeaders(options: {
-  trustProxy?: boolean;
-  behindProxy?: unknown;
-}): boolean {
+function appTrustsProxyHeaders(options: { trustProxy?: boolean; behindProxy?: unknown }): boolean {
   return options.trustProxy === true || options.behindProxy !== undefined;
 }
 
@@ -4598,10 +4595,7 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
 
 function securityMarkersFromHooks(
   layers: Hooks[]
-): Pick<
-  RouteSecurityMarkers,
-  "hasSession" | "hasCsrf" | "hasAuth" | "cacheBeforeTenancy"
-> {
+): Pick<RouteSecurityMarkers, "hasSession" | "hasCsrf" | "hasAuth" | "cacheBeforeTenancy"> {
   let hasSession = false;
   let hasCsrf = false;
   let hasAuth = false;

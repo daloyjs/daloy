@@ -52,7 +52,7 @@ app.get(
       };
     }
     return { status: 200 as const, body: book };
-  },
+  }
 );
 
 serve(app, { port: 3000 });

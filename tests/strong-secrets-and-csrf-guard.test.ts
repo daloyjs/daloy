@@ -35,10 +35,7 @@ test("assertStrongSecret rejects short secret", () => {
 });
 
 test("assertStrongSecret rejects single-char repeats", () => {
-  assert.throws(
-    () => assertStrongSecret("a".repeat(64), "test"),
-    /single repeated character/,
-  );
+  assert.throws(() => assertStrongSecret("a".repeat(64), "test"), /single repeated character/);
 });
 
 test("assertStrongSecret rejects known-weak strings case-insensitively", () => {
@@ -114,7 +111,7 @@ test('App.use(cors({ origin: "*" })) with secureDefaults: false is allowed in pr
 test('new App({ hooks: cors({ origin: "*" }) }) throws in production', () => {
   assert.throws(
     () => new App({ logger: false, env: "production", hooks: cors({ origin: "*" }) }),
-    /wildcard CORS origin/,
+    /wildcard CORS origin/
   );
 });
 
@@ -130,7 +127,7 @@ test('route-level cors({ origin: "*" }) throws in production', () => {
         responses: { 200: { description: "ok" } },
         handler: () => ({ status: 200 as const, body: undefined }),
       }),
-    /wildcard CORS origin/,
+    /wildcard CORS origin/
   );
 });
 
@@ -138,7 +135,7 @@ test('group-level cors({ origin: "*" }) throws in production', () => {
   const app = new App({ logger: false, env: "production" });
   assert.throws(
     () => app.group("/api", { hooks: cors({ origin: "*" }) }, () => undefined),
-    /wildcard CORS origin/,
+    /wildcard CORS origin/
   );
 });
 
@@ -146,17 +143,14 @@ test("App.use(session({ secret: weak })) throws in production", () => {
   const app = new App({ logger: false, env: "production" });
   // session() itself enforces a >=16-char minimum at construction, so use a 16+ char weak secret
   // long enough to pass that check but short enough to fail assertStrongSecret's 32-byte gate.
-  assert.throws(
-    () => app.use(session({ secret: "sixteen-chars-ok" })),
-    /too short/,
-  );
+  assert.throws(() => app.use(session({ secret: "sixteen-chars-ok" })), /too short/);
 });
 
 test("group-level session({ secret: weak }) throws in production", () => {
   const app = new App({ logger: false, env: "production" });
   assert.throws(
     () => app.group("/api", { hooks: session({ secret: "sixteen-chars-ok" }) }, () => undefined),
-    /too short/,
+    /too short/
   );
 });
 
@@ -356,13 +350,15 @@ test("session + state-changing route + secureDefaults:false skips the boot guard
 
 // ---------- trustProxy unconfigured guard ----------
 
-function makeTrustProxyApp(opts: {
-  env?: "production" | "development";
-  trustProxy?: boolean;
-  secureDefaults?: boolean;
-  acknowledgeInsecureDefaults?: boolean;
-  csrf?: "off";
-} = {}) {
+function makeTrustProxyApp(
+  opts: {
+    env?: "production" | "development";
+    trustProxy?: boolean;
+    secureDefaults?: boolean;
+    acknowledgeInsecureDefaults?: boolean;
+    csrf?: "off";
+  } = {}
+) {
   const app = new App({
     logger: false,
     env: opts.env ?? "production",
@@ -529,7 +525,7 @@ test("an ordinary handler failure still logs its stack", async () => {
   const err = errors[0]!.err as Record<string, unknown>;
   assert.ok(
     typeof err.stack === "string" && err.stack.length > 0,
-    "a real fault in app code must keep its stack — that one is actionable",
+    "a real fault in app code must keep its stack — that one is actionable"
   );
 });
 

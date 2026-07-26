@@ -19,33 +19,25 @@ test("DEFAULT_MAX_HEADER_COUNT is a sane finite cap", () => {
 });
 
 test("assertHeaderCountWithinLimit allows a request at the limit (happy path)", () => {
-  assert.doesNotThrow(() =>
-    assertHeaderCountWithinLimit(headersWithCount(100), 100),
-  );
+  assert.doesNotThrow(() => assertHeaderCountWithinLimit(headersWithCount(100), 100));
 });
 
 test("assertHeaderCountWithinLimit rejects a header flood (unhappy path)", () => {
   assert.throws(
     () => assertHeaderCountWithinLimit(headersWithCount(101), 100),
-    RequestHeaderFieldsTooLargeError,
+    RequestHeaderFieldsTooLargeError
   );
 });
 
 test("assertHeaderCountWithinLimit treats 0 as disabled", () => {
-  assert.doesNotThrow(() =>
-    assertHeaderCountWithinLimit(headersWithCount(5000), 0),
-  );
+  assert.doesNotThrow(() => assertHeaderCountWithinLimit(headersWithCount(5000), 0));
 });
 
 test("assertHeaderCountWithinLimit treats negative / non-finite as disabled", () => {
+  assert.doesNotThrow(() => assertHeaderCountWithinLimit(headersWithCount(500), -1));
+  assert.doesNotThrow(() => assertHeaderCountWithinLimit(headersWithCount(500), Number.NaN));
   assert.doesNotThrow(() =>
-    assertHeaderCountWithinLimit(headersWithCount(500), -1),
-  );
-  assert.doesNotThrow(() =>
-    assertHeaderCountWithinLimit(headersWithCount(500), Number.NaN),
-  );
-  assert.doesNotThrow(() =>
-    assertHeaderCountWithinLimit(headersWithCount(500), Number.POSITIVE_INFINITY),
+    assertHeaderCountWithinLimit(headersWithCount(500), Number.POSITIVE_INFINITY)
   );
 });
 

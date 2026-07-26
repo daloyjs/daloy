@@ -188,10 +188,14 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
     if (extra) Object.assign(attrs, extra);
 
     const parentContext = opts.contextFromRequest?.(req);
-    const span = opts.tracer.startSpan(name, {
-      kind: TRACING_SPAN_KIND_SERVER,
-      attributes: attrs,
-    }, parentContext);
+    const span = opts.tracer.startSpan(
+      name,
+      {
+        kind: TRACING_SPAN_KIND_SERVER,
+        attributes: attrs,
+      },
+      parentContext
+    );
     opts.onSpanStart?.(req, span);
 
     const entry: TracingEntry = { span, ended: false, errored: false };

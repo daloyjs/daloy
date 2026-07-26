@@ -473,7 +473,7 @@ function parseRetryAfter(value: string | null, now: number): number | undefined 
  */
 function withTimeout(
   timeoutMs: number,
-  external?: AbortSignal | null,
+  external?: AbortSignal | null
 ): { signal: AbortSignal; cleanup: () => void; timedOut: () => boolean } {
   const controller = new AbortController();
   let timedOut = false;
@@ -549,11 +549,11 @@ export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetc
     throw new RangeError("resilientFetch(): retries must be a non-negative integer");
   }
   const retryMethods = new Set(
-    (options.retryableMethods ?? DEFAULT_RETRYABLE_METHODS).map((m) => m.toUpperCase()),
+    (options.retryableMethods ?? DEFAULT_RETRYABLE_METHODS).map((m) => m.toUpperCase())
   );
   const retryStatuses = new Set(options.retryableStatuses ?? DEFAULT_RETRYABLE_STATUSES);
   const breakerFailureStatuses = new Set(
-    options.circuitBreakerFailureStatuses ?? DEFAULT_BREAKER_FAILURE_STATUSES,
+    options.circuitBreakerFailureStatuses ?? DEFAULT_BREAKER_FAILURE_STATUSES
   );
   const sleep = options.sleep ?? defaultSleep;
 
@@ -584,10 +584,7 @@ export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetc
     return true; // network error / timeout on an idempotent method
   }
 
-  const resilient = async (
-    input: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Response> => {
+  const resilient = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // Materialise once so method/headers are stable across retries and
     // the caller's signal can be combined per attempt.
     const request = new Request(input as RequestInfo, init);

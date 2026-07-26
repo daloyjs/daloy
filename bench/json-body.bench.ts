@@ -19,7 +19,7 @@ function bench(label: string, iters: number, fn: () => void): void {
     maximumFractionDigits: 0,
   });
   console.log(
-    `${label.padEnd(44)} ${opsPerSec.padStart(12)} ops/sec  (${(t1 - t0).toFixed(1)}ms / ${iters} iters)`,
+    `${label.padEnd(44)} ${opsPerSec.padStart(12)} ops/sec  (${(t1 - t0).toFixed(1)}ms / ${iters} iters)`
   );
 }
 
@@ -38,7 +38,7 @@ const typical = JSON.stringify({
 
 // A larger-but-legitimate body: ~500 keys, still well under the 10k default.
 const wideLegit = JSON.stringify(
-  Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`field_${i}`, `value_${i}`])),
+  Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`field_${i}`, `value_${i}`]))
 );
 
 // A moderately nested legitimate body (depth ~15, under the 50 default).
@@ -55,4 +55,8 @@ bench("500-key body — safeJsonParse", 100_000, () => void safeJsonParse(wideLe
 bench("500-key body — safeJsonParseLimited", 100_000, () => void safeJsonParseLimited(wideLegit));
 console.log("");
 bench("nested body — safeJsonParse", 500_000, () => void safeJsonParse(nestedLegitStr));
-bench("nested body — safeJsonParseLimited", 500_000, () => void safeJsonParseLimited(nestedLegitStr));
+bench(
+  "nested body — safeJsonParseLimited",
+  500_000,
+  () => void safeJsonParseLimited(nestedLegitStr)
+);

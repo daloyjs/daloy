@@ -71,7 +71,10 @@ test("jsonMaxKeys (default 10k) rejects excessively wide objects", async () => {
     operationId: "wide",
     request: { body: z.record(z.string(), z.string()) as any },
     responses: { 200: { description: "ok", body: z.object({ n: z.number() }) as any } },
-    handler: async ({ body }: any) => ({ status: 200 as const, body: { n: Object.keys(body).length } }),
+    handler: async ({ body }: any) => ({
+      status: 200 as const,
+      body: { n: Object.keys(body).length },
+    }),
   });
 
   // 12k keys > default 10k → rejected quickly
@@ -142,8 +145,12 @@ test("jsonMaxDepth rejects deeply nested structures by default", async () => {
 });
 
 test("safeJsonParseLimited rejects wide/deep payloads", () => {
-  const wide = JSON.stringify(Object.fromEntries(Array.from({ length: 20_000 }, (_, i) => [`k${i}`, "v"])));
-  const deep = JSON.stringify({ a: { b: { c: Array.from({ length: 60 }).reduce((p: any) => ({ n: p }), {}) } } });
+  const wide = JSON.stringify(
+    Object.fromEntries(Array.from({ length: 20_000 }, (_, i) => [`k${i}`, "v"]))
+  );
+  const deep = JSON.stringify({
+    a: { b: { c: Array.from({ length: 60 }).reduce((p: any) => ({ n: p }), {}) } },
+  });
 
   try {
     safeJsonParseLimited(wide);
@@ -172,11 +179,7 @@ test("safeJsonParseLimited counts structure, not string contents", () => {
 
   // Colons inside string values are not keys: 3 real keys under a cap of 5.
   assert.doesNotThrow(() =>
-    safeJsonParseLimited(
-      JSON.stringify({ a: "1:2:3:4:5", b: "http://x:y:z", c: "::::::" }),
-      5,
-      50,
-    ),
+    safeJsonParseLimited(JSON.stringify({ a: "1:2:3:4:5", b: "http://x:y:z", c: "::::::" }), 5, 50)
   );
 
   // A colon inside a key name is not a second key: 1 key under a cap of 1.
@@ -184,7 +187,7 @@ test("safeJsonParseLimited counts structure, not string contents", () => {
 
   // Brackets inside a string do not inflate depth: real depth is 1 under a cap of 3.
   assert.doesNotThrow(() =>
-    safeJsonParseLimited(JSON.stringify({ a: "[[[[[[[[[[x]]]]]]]]]]" }), 100, 3),
+    safeJsonParseLimited(JSON.stringify({ a: "[[[[[[[[[[x]]]]]]]]]]" }), 100, 3)
   );
 
   // An escaped quote must not end the string early, so the `:` that follows
@@ -192,7 +195,9 @@ test("safeJsonParseLimited counts structure, not string contents", () => {
   assert.doesNotThrow(() => safeJsonParseLimited('{"a":"he said \\"x:y\\" ok"}', 2, 50));
 
   // Array elements are not object keys: 10 elements, 0 keys, under a cap of 1.
-  assert.doesNotThrow(() => safeJsonParseLimited(JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), 1, 50));
+  assert.doesNotThrow(() =>
+    safeJsonParseLimited(JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), 1, 50)
+  );
 
   // Sanity: genuine structural excess still rejects (the phrase lives in the
   // RFC 9457 `detail`, matching the assertions above).
@@ -206,7 +211,10 @@ test("safeJsonParseLimited counts structure, not string contents", () => {
     }
   };
   rejects(() => safeJsonParseLimited(JSON.stringify({ a: 1, b: 2, c: 3 }), 2, 50), /key count/);
-  rejects(() => safeJsonParseLimited(JSON.stringify({ a: { b: { c: 1 } } }), 100, 2), /nesting depth/);
+  rejects(
+    () => safeJsonParseLimited(JSON.stringify({ a: { b: { c: 1 } } }), 100, 2),
+    /nesting depth/
+  );
 });
 
 test("getSecurityPosture exposes jsonMaxKeys and jsonMaxDepth", () => {
@@ -421,9 +429,7 @@ test("query string drops prototype-pollution keys", async () => {
       return { status: 200 as const, body: undefined };
     },
   });
-  const res = await app.request(
-    "/q?safe=1&__proto__=pwn&constructor=pwn&prototype=pwn",
-  );
+  const res = await app.request("/q?safe=1&__proto__=pwn&constructor=pwn&prototype=pwn");
   assert.equal(res.status, 200);
   const q = observed as Record<string, unknown>;
   assert.equal(q.safe, "1");

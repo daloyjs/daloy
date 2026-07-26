@@ -72,9 +72,7 @@ export interface FileMagicBytesSignature {
  * signatures derived from `accept`, or supply your own signature(s).
  */
 export type FileMagicBytesOption =
-  | true
-  | FileMagicBytesSignature
-  | readonly FileMagicBytesSignature[];
+  true | FileMagicBytesSignature | readonly FileMagicBytesSignature[];
 
 /** Options for {@link fileField}. */
 export interface FileFieldOptions {
@@ -122,20 +120,16 @@ export type UploadedFile = Blob & { readonly name?: string };
  * `[FILE_FIELD_MARKER]` so OpenAPI generation can detect file fields and
  * emit `format: binary`/`byte` accordingly.
  */
-export interface FileFieldSchema<Output = UploadedFile>
-  extends StandardSchemaV1<unknown, Output> {
+export interface FileFieldSchema<Output = UploadedFile> extends StandardSchemaV1<unknown, Output> {
   /** Resolved {@link FileFieldOptions} (with `format` defaulted) stamped on the schema for OpenAPI generation. */
-  readonly [FILE_FIELD_MARKER]: Required<Pick<FileFieldOptions, "format">> &
-    FileFieldOptions;
+  readonly [FILE_FIELD_MARKER]: Required<Pick<FileFieldOptions, "format">> & FileFieldOptions;
 }
 
 function isBlobLike(v: unknown): v is Blob {
   if (v == null || typeof v !== "object") return false;
   const b = v as { size?: unknown; type?: unknown; arrayBuffer?: unknown };
   return (
-    typeof b.size === "number" &&
-    typeof b.type === "string" &&
-    typeof b.arrayBuffer === "function"
+    typeof b.size === "number" && typeof b.type === "string" && typeof b.arrayBuffer === "function"
   );
 }
 
@@ -209,7 +203,7 @@ const KNOWN_MAGIC_SIGNATURES: readonly InternalMagicSignature[] = [
 function fixedMagic(
   label: string,
   mimes: readonly string[],
-  expected: readonly number[],
+  expected: readonly number[]
 ): InternalMagicSignature {
   return {
     label,
@@ -219,9 +213,7 @@ function fixedMagic(
   };
 }
 
-function normalizeCustomMagicSignature(
-  value: FileMagicBytesSignature,
-): InternalMagicSignature {
+function normalizeCustomMagicSignature(value: FileMagicBytesSignature): InternalMagicSignature {
   const offset = value.offset ?? 0;
   if (!Number.isInteger(offset) || offset < 0) {
     throw new Error("fileField(): magicBytes.offset must be a non-negative integer.");
@@ -235,11 +227,8 @@ function normalizeCustomMagicSignature(
       throw new Error("fileField(): magicBytes.bytes entries must be integers in [0, 255].");
     }
   }
-  const mimes = value.mime === undefined
-    ? []
-    : typeof value.mime === "string"
-      ? [value.mime]
-      : [...value.mime];
+  const mimes =
+    value.mime === undefined ? [] : typeof value.mime === "string" ? [value.mime] : [...value.mime];
   return {
     label: value.label ?? bytes.map((byte) => byte.toString(16).padStart(2, "0")).join(" "),
     mimes,
@@ -250,17 +239,17 @@ function normalizeCustomMagicSignature(
 
 function normalizeMagicBytesOption(
   option: FileMagicBytesOption | undefined,
-  accept: readonly string[] | undefined,
+  accept: readonly string[] | undefined
 ): InternalMagicSignature[] {
   if (option === undefined) return [];
   if (option === true) {
     const patterns = accept ?? [];
     const signatures = KNOWN_MAGIC_SIGNATURES.filter((signature) =>
-      signature.mimes.some((mime) => patterns.some((pattern) => mimeMatches(mime, pattern))),
+      signature.mimes.some((mime) => patterns.some((pattern) => mimeMatches(mime, pattern)))
     );
     if (signatures.length === 0) {
       throw new Error(
-        "fileField(): magicBytes: true requires accept to include a known sniffable MIME type.",
+        "fileField(): magicBytes: true requires accept to include a known sniffable MIME type."
       );
     }
     return signatures.slice();
@@ -294,9 +283,10 @@ function asciiPrefix(bytes: Uint8Array): string {
     const byte = bytes[i]!;
     // Keep printable ASCII + common whitespace; replace everything else with
     // a space so keyword searches still work across NULs / UTF-16 padding.
-    out += byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e)
-      ? String.fromCharCode(byte)
-      : " ";
+    out +=
+      byte === 0x09 || byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e)
+        ? String.fromCharCode(byte)
+        : " ";
   }
   return out.toLowerCase();
 }
@@ -309,7 +299,11 @@ function detectScriptableImagePayload(bytes: Uint8Array): string | undefined {
   }
   // ImageMagick MVG / MSL — vector / scripting formats that can shell out
   // through the `url:`, `ephemeral:`, `msl:` coders (ImageTragick).
-  if (prefix.includes("push graphic-context") || prefix.startsWith("<msl>") || prefix.includes("<image ")) {
+  if (
+    prefix.includes("push graphic-context") ||
+    prefix.startsWith("<msl>") ||
+    prefix.includes("<image ")
+  ) {
     return "mvg-or-msl";
   }
   // SVG — XML-based and routinely carries `<script>` / external references.
@@ -326,7 +320,7 @@ function detectScriptableImagePayload(bytes: Uint8Array): string | undefined {
 
 async function verifyMagicBytes(
   file: UploadedFile,
-  signatures: readonly InternalMagicSignature[],
+  signatures: readonly InternalMagicSignature[]
 ): Promise<string | undefined> {
   if (signatures.length === 0) return undefined;
   const readLength = Math.max(...signatures.map((signature) => signature.readLength));
@@ -341,7 +335,7 @@ async function verifyMagicBytes(
     if (
       mimeAwareMatches.length > 0 &&
       !mimeAwareMatches.some((signature) =>
-        signature.mimes.some((mime) => mimeMatches(declared, mime)),
+        signature.mimes.some((mime) => mimeMatches(declared, mime))
       )
     ) {
       return `Declared MIME "${declared}" does not match sniffed magic bytes: ${matched.map((signature) => signature.label).join(", ")}`;
@@ -441,10 +435,10 @@ export function fileField(
         if (scriptableImagesEnabled) {
           const probeLength = Math.max(
             SCRIPTABLE_IMAGE_PREFIX_BYTES,
-            ...magicSignatures.map((signature) => signature.readLength),
+            ...magicSignatures.map((signature) => signature.readLength)
           );
           const prefix = new Uint8Array(
-            await file.slice(0, Math.min(probeLength, file.size)).arrayBuffer(),
+            await file.slice(0, Math.min(probeLength, file.size)).arrayBuffer()
           );
           const scriptable = detectScriptableImagePayload(prefix);
           if (scriptable) {
@@ -475,9 +469,7 @@ export function fileField(
  * @param s - Candidate value to test for the `FILE_FIELD_MARKER` key.
  * @returns `true` when `s` is a {@link fileField}-produced schema.
  */
-export function isFileFieldSchema(
-  s: unknown
-): s is FileFieldSchema {
+export function isFileFieldSchema(s: unknown): s is FileFieldSchema {
   return !!s && typeof s === "object" && FILE_FIELD_MARKER in (s as object);
 }
 
@@ -497,8 +489,10 @@ type MultipartOutput<S extends MultipartShape> = {
   [K in keyof S]: StandardSchemaV1.InferOutput<S[K]>;
 };
 
-interface MultipartSchema<S extends MultipartShape>
-  extends StandardSchemaV1<Record<string, unknown>, MultipartOutput<S>> {
+interface MultipartSchema<S extends MultipartShape> extends StandardSchemaV1<
+  Record<string, unknown>,
+  MultipartOutput<S>
+> {
   readonly [MULTIPART_SCHEMA_MARKER]: { shape: S; strict: boolean };
 }
 
@@ -523,9 +517,7 @@ export function multipartObject<S extends MultipartShape>(
     "~standard": {
       version: 1,
       vendor: "daloyjs",
-      async validate(
-        value
-      ): Promise<StandardSchemaV1.Result<MultipartOutput<S>>> {
+      async validate(value): Promise<StandardSchemaV1.Result<MultipartOutput<S>>> {
         if (value === null || typeof value !== "object") {
           return { issues: [{ message: "Expected a multipart form body" }] };
         }
@@ -570,9 +562,7 @@ export function multipartObject<S extends MultipartShape>(
  * @param s - Candidate value to test for the `MULTIPART_SCHEMA_MARKER` key.
  * @returns `true` when `s` is a {@link multipartObject}-produced schema.
  */
-export function isMultipartObjectSchema(
-  s: unknown
-): s is MultipartSchema<MultipartShape> {
+export function isMultipartObjectSchema(s: unknown): s is MultipartSchema<MultipartShape> {
   return !!s && typeof s === "object" && MULTIPART_SCHEMA_MARKER in (s as object);
 }
 
@@ -587,9 +577,9 @@ export function getMultipartShape(
   s: unknown
 ): { shape: MultipartShape; strict: boolean } | undefined {
   if (!isMultipartObjectSchema(s)) return undefined;
-  return (s as unknown as { [MULTIPART_SCHEMA_MARKER]: { shape: MultipartShape; strict: boolean } })[
-    MULTIPART_SCHEMA_MARKER
-  ];
+  return (
+    s as unknown as { [MULTIPART_SCHEMA_MARKER]: { shape: MultipartShape; strict: boolean } }
+  )[MULTIPART_SCHEMA_MARKER];
 }
 
 /**
@@ -603,7 +593,9 @@ export function getFileFieldOptions(
   s: unknown
 ): (Required<Pick<FileFieldOptions, "format">> & FileFieldOptions) | undefined {
   if (!isFileFieldSchema(s)) return undefined;
-  return (s as unknown as { [FILE_FIELD_MARKER]: Required<Pick<FileFieldOptions, "format">> & FileFieldOptions })[
-    FILE_FIELD_MARKER
-  ];
+  return (
+    s as unknown as {
+      [FILE_FIELD_MARKER]: Required<Pick<FileFieldOptions, "format">> & FileFieldOptions;
+    }
+  )[FILE_FIELD_MARKER];
 }
