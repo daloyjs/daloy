@@ -1,0 +1,13 @@
+# Revisions to skip when running `git blame` — bulk formatting / mechanical
+# rewrites that would otherwise attribute every line to a reformat instead of
+# to the commit that actually wrote the code.
+#
+# GitHub honors this file automatically in its blame view. Locally, enable it
+# once per clone:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Only add commits that provably change no behavior.
+
+# style: apply prettier across the repo (first run of `pnpm format`; 318 files)
+13d7e13c8a95b586e4d51671217c28863a000ef1
