@@ -829,15 +829,22 @@ export const FRAME_INCOMPLETE = Symbol("daloy.ws.frameIncomplete");
  * @param buf - Buffered socket bytes beginning at a frame boundary.
  * @param opts - `requireMask: true` enforces the RFC 6455 rule that
  *   client-to-server frames are masked. Defaults to `{}` (not enforced).
+ *   `maxPayload` rejects data frames whose **declared** payload length
+ *   exceeds the limit as soon as the header is parsed, before the payload
+ *   bytes have arrived — this keeps a slow-or-stalled sender from making
+ *   the caller buffer an oversized incomplete frame. Control frames are
+ *   already capped at 125 bytes and are not affected.
  * @returns The decoded {@link ParsedFrame}, or {@link FRAME_INCOMPLETE}
  *   when more bytes are needed.
  * @throws WebSocketProtocolError on RSV bits, unknown opcodes, fragmented
  *   or oversized control frames, unmasked client frames, or payload lengths
  *   above `Number.MAX_SAFE_INTEGER`.
+ * @throws WebSocketPayloadTooLargeError when `maxPayload` is set and a data
+ *   frame declares a payload length above it.
  */
 export function parseFrame(
   buf: Uint8Array,
-  opts: { requireMask?: boolean } = {},
+  opts: { requireMask?: boolean; maxPayload?: number } = {},
 ): ParsedFrame | typeof FRAME_INCOMPLETE {
   if (buf.length < 2) return FRAME_INCOMPLETE;
   const b0 = buf[0]!;
@@ -901,6 +908,19 @@ export function parseFrame(
       );
     payloadLen = hi * 2 ** 32 + lo;
     offset += 8;
+  }
+
+  // Reject oversized declared lengths as soon as the header is complete —
+  // before waiting on mask or payload bytes — so an attacker cannot make the
+  // caller buffer an unbounded incomplete frame by trickling payload bytes.
+  // Cumulative accounting across fragments stays with the caller; a declared
+  // length above the limit always implies the assembled message exceeds it.
+  if (
+    (opcode & 0x8) === 0 &&
+    opts.maxPayload !== undefined &&
+    payloadLen > opts.maxPayload
+  ) {
+    throw new WebSocketPayloadTooLargeError(opts.maxPayload, payloadLen);
   }
 
   if (opts.requireMask && !masked) {
@@ -1138,6 +1158,7 @@ export class FrameSink {
       while (this.buffer.length > 0) {
         const frame = parseFrame(this.buffer, {
           requireMask: this.opts.requireMask,
+          maxPayload: this.opts.maxPayloadLength,
         });
         if (frame === FRAME_INCOMPLETE) return;
         this.buffer = this.buffer.subarray(frame.consumed);

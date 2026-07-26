@@ -462,6 +462,105 @@ test("FrameSink rejects messages over maxPayloadLength", () => {
   assert.match(events[0]!.reason!, /maxPayloadLength/);
 });
 
+/**
+ * Build a raw masked TEXT frame header declaring `declaredLen` payload bytes
+ * (64-bit extended length) without appending the payload itself — the bytes an
+ * attacker trickles onto the socket to make the server buffer an oversized
+ * incomplete frame.
+ */
+function declaredLengthHeader(declaredLen: number): Uint8Array {
+  const header = new Uint8Array(2 + 8 + 4);
+  header[0] = 0x81; // FIN + TEXT
+  header[1] = 0xff; // MASK + 127 (64-bit extended length)
+  const view = new DataView(header.buffer);
+  view.setUint32(2, Math.floor(declaredLen / 2 ** 32));
+  view.setUint32(6, declaredLen % 2 ** 32);
+  header.fill(0x11, 10); // masking key
+  return header;
+}
+
+test("FrameSink rejects oversized declared frame length before the payload arrives", () => {
+  const events: Array<{ type: string; reason?: string }> = [];
+  const sink = new FrameSink({
+    requireMask: true,
+    maxPayloadLength: 16,
+    onMessage: () => events.push({ type: "message" }),
+    onPing: () => {},
+    onPong: () => {},
+    onClose: () => {},
+    onProtocolError: (err) => {
+      assert.ok(err instanceof WebSocketPayloadTooLargeError);
+      events.push({ type: "error", reason: err.message });
+    },
+  });
+  // Attack: declare a 1 MiB payload but send only the 14-byte header. The
+  // sink must reject on the declared length instead of buffering waiting
+  // for 1 MiB that never has to arrive.
+  sink.push(declaredLengthHeader(1024 * 1024));
+  assert.equal(events.length, 1);
+  assert.equal(events[0]!.type, "error");
+  assert.match(events[0]!.reason!, /maxPayloadLength/);
+});
+
+test("FrameSink stays bounded when an oversized frame is dribbled byte-by-byte", () => {
+  const events: Array<{ type: string; reason?: string }> = [];
+  const sink = new FrameSink({
+    requireMask: true,
+    maxPayloadLength: 1024,
+    onMessage: () => events.push({ type: "message" }),
+    onPing: () => {},
+    onPong: () => {},
+    onClose: () => {},
+    onProtocolError: (err) => events.push({ type: "error", reason: err.message }),
+  });
+  // Attack: declare 64 MiB, then drip the header in tiny chunks to keep the
+  // connection alive and grow the server-side buffer.
+  const header = declaredLengthHeader(64 * 1024 * 1024);
+  for (let i = 0; i < header.length; i++) {
+    sink.push(header.subarray(i, i + 1));
+  }
+  assert.equal(events.length, 1);
+  assert.equal(events[0]!.type, "error");
+  assert.ok(events[0]!.reason!.includes("maxPayloadLength"));
+  // After the protocol error the sink is closed: further bytes are ignored.
+  sink.push(new Uint8Array([0x00, 0x00, 0x00]));
+  assert.equal(events.length, 1);
+});
+
+test("parseFrame honors maxPayload on declared length, FRAME_INCOMPLETE without it", () => {
+  const header = declaredLengthHeader(1024 * 1024);
+  // Default behavior (no limit) is unchanged: wait for the payload.
+  assert.equal(parseFrame(header, { requireMask: true }), FRAME_INCOMPLETE);
+  // With a limit, the declared length is rejected immediately.
+  assert.throws(
+    () => parseFrame(header, { requireMask: true, maxPayload: 16 }),
+    (err: unknown) => err instanceof WebSocketPayloadTooLargeError,
+  );
+});
+
+test("FrameSink still accepts a partial frame whose declared length equals the limit", () => {
+  const events: Array<{ type: string; data?: unknown }> = [];
+  const limit = 32;
+  const payload = new Uint8Array(limit).fill(0x61);
+  const sink = new FrameSink({
+    requireMask: true,
+    maxPayloadLength: limit,
+    onMessage: (ev) => events.push({ type: "message", data: ev.data }),
+    onPing: () => {},
+    onPong: () => {},
+    onClose: () => {},
+    onProtocolError: (err) => events.push({ type: "error", data: err.message }),
+  });
+  const frame = encodeFrame({ opcode: WS_OPCODE.TEXT, payload, mask: true });
+  // Split mid-payload: buffering partial frames at-or-under the limit is
+  // legitimate and must keep working.
+  sink.push(frame.subarray(0, 10));
+  assert.equal(events.length, 0);
+  sink.push(frame.subarray(10));
+  assert.equal(events.length, 1);
+  assert.equal(events[0]!.type, "message");
+});
+
 test("FrameSink propagates non-protocol errors", () => {
   const sink = new FrameSink({
     requireMask: true,
