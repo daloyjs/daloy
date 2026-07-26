@@ -1,3 +1,18 @@
+# OpenSSF Scorecard — supply-chain posture score for this repository.
+#
+# Repository visibility matters here (see SECURITY.md § Prerequisites for the
+# scanning workflows):
+#   * Scorecard is designed for PUBLIC repositories. Several checks cannot
+#     run against a private repo, and publishing to the public OpenSSF
+#     dashboard is public-only.
+#   * The SARIF upload at the end needs GitHub code scanning, which is free
+#     on public repos but requires Advanced Security on private ones.
+#
+# `publish_results` is therefore OFF by default so a freshly scaffolded
+# private repo does not go red on its first push. Once your repo is public
+# and you want the OpenSSF badge, add a repository variable
+# `SCORECARD_PUBLISH_RESULTS` with the value `true`.
+
 name: Scorecard
 
 on:
@@ -8,6 +23,10 @@ on:
     branches: [main]
 
 permissions: {}
+
+concurrency:
+  group: scorecard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analysis:
@@ -38,7 +57,8 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: true
+          # Public repos only — see the header comment.
+          publish_results: ${{ vars.SCORECARD_PUBLISH_RESULTS == 'true' }}
 
       - name: Upload to code-scanning
         uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2

@@ -34,7 +34,7 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **
 2. Validate every input with Zod or another Standard Schema-compatible validator. For Zod object schemas, use `.strict()` to reject unknown keys at the boundary.
 3. Preserve literal types in responses: `status: 200 as const`, `z.literal(...)` on discriminator fields.
 4. Throw typed errors (`NotFoundError`, `BadRequestError`, etc.) from `@daloyjs/core`.
-5. Keep `requestId()`, `secureHeaders()`, and `rateLimit()` enabled. For high-traffic routes, attach Cloudflare's native rate-limit binding (the in-memory limiter resets per isolate).
+5. Keep `requestId()`, `secureHeaders()`, and `rateLimit()` enabled. The in-memory limiter resets per isolate.
 6. Stay on the Workers runtime: only Web Standards APIs + Cloudflare bindings. No `node:` modules unless you explicitly add `nodejs_compat` and require it.
 7. Bindings flow through `env`. Read KV/D1/R2/secrets from the `env` argument; never read them via globals.
 8. Long-running work belongs in `ctx.waitUntil(...)`, not blocking the response.
@@ -53,6 +53,7 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - Credential / HMAC comparisons use constant-time verification, never `===`. Prefer Web Crypto verification APIs or the framework timing-safe helper where available. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
 - Keep `compatibility_date` pinned; do not enable `nodejs_compat` unless a feature requires it.
 - `.env`, `.dev.vars`, secrets, private keys: never commit. Use `wrangler secret put` for production secrets.
+- Workflows count as security surface: SHA-pinned actions, `permissions: {}` per job, never delete a failing gate.
 
 ## Process expectations
 

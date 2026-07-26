@@ -30,12 +30,41 @@ The `--with-ci` bundle adds these defaults:
 - A `secret-scan.yml` workflow runs [gitleaks](https://github.com/gitleaks/gitleaks) against the working tree on every PR / push and against the **full git history** on a daily schedule. The gitleaks binary is downloaded from a pinned official release and verified by SHA-256 before execution so the scan does not introduce a new third-party action into the supply chain. Findings block the merge; matched values are redacted from the public log. The rationale (and the remediation playbook for a confirmed leak) follows Aikido's [Secrets Detection guide](https://www.aikido.dev/blog/secret-detection-application-security): a secret in any commit, branch, or tag should be treated as compromised, and detection must consider the entire history — not just the latest snapshot — alongside GitHub-native push protection.
 - No npm publish workflow is generated: this scaffold is a REST API service, not a published package. If you later carve out a reusable library you can opt into npm trusted publishing yourself.
 
+## Prerequisites for the scanning workflows
+
+Five of the generated workflows publish their findings to the GitHub **Code
+Scanning** tab as SARIF: `codeql.yml`, `opengrep.yml`, `container-scan.yml`,
+`zizmor.yml`, and `scorecard.yml`. Code scanning is free on **public**
+repositories; on a **private** repository it requires GitHub Advanced Security
+(Code Security) to be enabled for the repo. Without it the scan itself runs but
+the upload step fails, so the workflow reports red.
+
+`scorecard.yml` has a second constraint: OpenSSF Scorecard is designed for
+public repositories, and publishing results to the public OpenSSF dashboard
+only works for them. The generated workflow therefore leaves publishing **off**
+by default so a fresh private scaffold stays green.
+
+Pick whichever applies to your repository:
+
+- **Public repository** — everything works as generated. To publish your
+  Scorecard result to the OpenSSF dashboard and earn the badge, add a
+  repository variable `SCORECARD_PUBLISH_RESULTS` set to `true`
+  (Settings → Secrets and variables → Actions → Variables).
+- **Private repository with Advanced Security** — the four SARIF workflows
+  work as generated. Delete `scorecard.yml`, or supply the `repo_token` its
+  documentation describes for private-repo runs.
+- **Private repository without Advanced Security** — delete (or disable in the
+  Actions tab) `codeql.yml`, `opengrep.yml`, `zizmor.yml`, and `scorecard.yml`,
+  and drop the "Upload … SARIF" steps from `container-scan.yml`. The scanners
+  that gate on their own exit code — `vuln-scan.yml`, `osv-scan.yml`,
+  `secret-scan.yml`, `eol-scan.yml`, `dast.yml`, and the Trivy image scan in
+  `container-scan.yml` — need none of this and keep working unchanged.
+
 ## Container hardening
 
-If you scaffolded the `node-basic` template (the only one that ships a
-`Dockerfile`), the following defaults are also enabled. They cover the same
-ground the Snyk container-security guidance recommends, using only free,
-SHA-pinned open-source tooling:
+Every template ships a `Dockerfile`, so the following defaults are also
+enabled. They cover the same ground the Snyk container-security guidance
+recommends, using only free, SHA-pinned open-source tooling:
 
 - Runtime stage is `node:24-alpine` with `tini` as PID 1 and **no `curl`** —
   the `HEALTHCHECK` uses BusyBox `wget` already shipped in the image.
@@ -56,7 +85,8 @@ SHA-pinned open-source tooling:
   - **Trivy** scans the source tree for secrets, config issues, and
     vulnerable lockfile entries.
   - **Trivy** builds the image and scans it for OS + language CVEs
-    (`HIGH`/`CRITICAL`, `--ignore-unfixed`); merges block on CRITICAL.
+    (`--ignore-unfixed`); merges block on `HIGH` or `CRITICAL`. Narrow the
+    `severity` list in the workflow if that proves noisy for your base image.
   - All findings are uploaded as SARIF to the GitHub **Code Scanning**
     tab alongside CodeQL.
 
@@ -161,6 +191,8 @@ container and CI defaults above:
 Before relying on these files for a company project:
 
 1. Replace `@your-org/security-team` in `.github/CODEOWNERS` or pass `--code-owner` when scaffolding.
-2. Protect the `main` branch and require the CI, CodeQL, Opengrep, Scorecard, and zizmor checks.
-3. Enable GitHub secret scanning and push protection.
-4. Keep `ignore-scripts=true` and the `pnpm-workspace.yaml` supply-chain settings on when using pnpm.
+2. Work through **Prerequisites for the scanning workflows** above — on a private repository without Advanced Security, several workflows need to be removed or they will report red on every run.
+3. Protect the `main` branch and require the CI, CodeQL, Opengrep, Scorecard, and zizmor checks (only the ones you kept in step 2).
+4. Enable GitHub secret scanning and push protection.
+5. Keep `ignore-scripts=true` and the `pnpm-workspace.yaml` supply-chain settings on when using pnpm.
+6. Keep the `cooldown` in `.github/dependabot.yml` in sync with `minimum-release-age` in `.npmrc`; they are the same 24-hour policy expressed to two different tools.

@@ -68,6 +68,7 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - Credential / HMAC comparisons use `timingSafeEqual`, never `===`. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
 - `.env`, secrets, and private keys never get committed — the template `_gitignore` is the source of truth.
 - Do not bypass safety checks (`--no-verify`, `--ignore-scripts=false`, lowering the 24h `minimum-release-age` in `.npmrc`) without recording the reason in the PR.
+- Workflows count as security surface: SHA-pinned actions, `permissions: {}` per job, never delete a failing gate.
 
 ## Process expectations
 

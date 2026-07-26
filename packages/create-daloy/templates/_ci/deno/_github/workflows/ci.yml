@@ -40,8 +40,24 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Install dependencies (frozen lockfile)
+        # Deno has no `audit` command, so `deno.lock` is the integrity
+        # anchor for this project: `--frozen=true` fails the build when a
+        # dependency does not match the committed lockfile, instead of
+        # silently resolving something newer than what `osv-scan.yml`
+        # actually scanned. This is the Deno counterpart to the Node
+        # bundle's `verify:lockfile` gate.
+        run: deno install --frozen=true
+
       - name: Typecheck
         run: deno task typecheck
+
+      - name: Contract check
+        # Every route's OpenAPI contract: examples validate against their
+        # response schemas, operationIds are present and unique. AGENTS.md
+        # makes this a hard rule after any OpenAPI-facing change, so it is
+        # a gate here rather than a convention.
+        run: deno task contract
 
       - name: Test
         run: deno task test

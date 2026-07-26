@@ -2,8 +2,8 @@
 # (Aikido "SAST vs SCA" / "npm-audit-guide — the missing layer" gate).
 #
 # Why this exists for a REST API service:
-#   `vuln-scan.yml` already runs `__AUDIT_PROD_STEP__`-equivalent
-#   `pnpm/npm/yarn/bun audit` against the committed lockfile every day,
+#   `vuln-scan.yml` already runs your package manager's own audit
+#   (pnpm / npm / yarn / bun) against the committed lockfile every day,
 #   but that single feed (GHSA) is exactly the failure mode the Aikido
 #   write-up "SAST vs SCA" calls out: SCA findings are only as good as
 #   the database you query. The September 2025 npm phishing wave that

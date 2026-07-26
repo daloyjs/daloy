@@ -9,6 +9,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: zizmor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   zizmor:
     name: Lint workflows

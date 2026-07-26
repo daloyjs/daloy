@@ -22,9 +22,10 @@
 # Defense-in-depth context (see SECURITY.md):
 #   * Deno's permission model (`--allow-net`, etc.) limits blast radius
 #     of a compromised dep at runtime.
-#   * `deno.lock` is checked into the repo and `deno task ...` runs
-#     with `--cached-only` in CI so an attacker cannot swap a dep
-#     between scan and run.
+#   * `deno.lock` is checked into the repo and `ci.yml` runs the
+#     typecheck / test tasks with `--frozen=true`, so a dependency that
+#     does not match the committed lockfile fails the build instead of
+#     being silently resolved to something newer than what was scanned.
 #   * This OSV pass is the LAST layer: "did a pinned version turn out
 #     to carry a CVE or a malware advisory after we pinned it?"
 #

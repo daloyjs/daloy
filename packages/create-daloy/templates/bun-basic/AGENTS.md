@@ -20,7 +20,10 @@ A [DaloyJS](https://daloyjs.dev) REST API for the [Bun](https://bun.sh) runtime.
 - `bun run gen:client` — write the typed Hey API client
 - `bun run contract` — run the focused OpenAPI contract test
 - `bun run hooks:install` — enable the optional pre-push contract gate
-- `bun run build` — produce `dist/`
+- `bun run start` — run the server without watch mode
+
+There is no build step: Bun runs the TypeScript in `src/` directly, and the
+shipped `Dockerfile` does the same.
 
 ## Project shape
 
@@ -62,6 +65,7 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - Credential / HMAC comparisons use `timingSafeEqual`, never `===`. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
 - `.env`, secrets, and private keys never get committed — the template `_gitignore` is the source of truth.
 - Do not bypass safety checks (`--no-verify`, `bun install --trust`) without recording the reason in the PR.
+- Workflows count as security surface: SHA-pinned actions, `permissions: {}` per job, never delete a failing gate.
 
 ## Process expectations
 

@@ -32,6 +32,36 @@ The `--with-ci` bundle adds these defaults:
   receiving security patches does not stay unnoticed on `main`.
 - A `secret-scan.yml` workflow runs [gitleaks](https://github.com/gitleaks/gitleaks) against the working tree on every PR / push and against the **full git history** on a daily schedule. The gitleaks binary is downloaded from a pinned official release and verified by SHA-256 before execution so the scan does not introduce a new third-party action into the supply chain. Findings block the merge; matched values are redacted from the public log. The rationale (and the remediation playbook for a confirmed leak) follows Aikido's [Secrets Detection guide](https://www.aikido.dev/blog/secret-detection-application-security): a secret in any commit, branch, or tag should be treated as compromised, and detection must consider the entire history — not just the latest snapshot — alongside GitHub-native push protection.
 
+## Prerequisites for the scanning workflows
+
+Four of the generated workflows publish their findings to the GitHub **Code
+Scanning** tab as SARIF: `codeql.yml`, `opengrep.yml`, `container-scan.yml`,
+and `zizmor.yml`, plus `scorecard.yml`. Code scanning is free on **public**
+repositories; on a **private** repository it requires GitHub Advanced Security
+(Code Security) to be enabled for the repo. Without it the scan itself runs but
+the upload step fails, so the workflow reports red.
+
+`scorecard.yml` has a second constraint: OpenSSF Scorecard is designed for
+public repositories, and publishing results to the public OpenSSF dashboard
+only works for them. The generated workflow therefore leaves publishing **off**
+by default so a fresh private scaffold stays green.
+
+Pick whichever applies to your repository:
+
+- **Public repository** — everything works as generated. To publish your
+  Scorecard result to the OpenSSF dashboard and earn the badge, add a
+  repository variable `SCORECARD_PUBLISH_RESULTS` set to `true`
+  (Settings → Secrets and variables → Actions → Variables).
+- **Private repository with Advanced Security** — the four SARIF workflows
+  work as generated. Delete `scorecard.yml`, or supply the `repo_token` its
+  documentation describes for private-repo runs.
+- **Private repository without Advanced Security** — delete (or disable in the
+  Actions tab) `codeql.yml`, `opengrep.yml`, `zizmor.yml`, and `scorecard.yml`,
+  and drop the "Upload … SARIF" steps from `container-scan.yml`. The scanners
+  that gate on their own exit code — `osv-scan.yml`, `secret-scan.yml`,
+  `eol-scan.yml`, and the Trivy image scan in `container-scan.yml` — need none
+  of this and keep working unchanged.
+
 ## Cloud posture (operator checklist)
 
 The framework cannot author your cloud configuration for you, but the
@@ -63,6 +93,7 @@ container and CI defaults above:
 Before relying on these files for a company project:
 
 1. Replace `@your-org/security-team` in `.github/CODEOWNERS` or pass `--code-owner` when scaffolding.
-2. Protect the `main` branch and require the CI, CodeQL, Opengrep, Scorecard, and zizmor checks.
-3. Enable GitHub secret scanning and push protection.
-4. Keep Deno permissions narrow; do not switch tasks to `--allow-all`.
+2. Work through **Prerequisites for the scanning workflows** above — on a private repository without Advanced Security, several workflows need to be removed or they will report red on every run.
+3. Protect the `main` branch and require the CI, CodeQL, Opengrep, Scorecard, and zizmor checks (only the ones you kept in step 2).
+4. Enable GitHub secret scanning and push protection.
+5. Keep Deno permissions narrow; do not switch tasks to `--allow-all`.

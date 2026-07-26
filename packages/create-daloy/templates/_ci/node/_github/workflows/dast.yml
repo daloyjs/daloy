@@ -28,11 +28,20 @@
 #   minutes and the same surface is exercised by your test suite on
 #   every PR via `ci.yml`.
 #
+# How the target is booted:
+#   `create-daloy` renders the build and launch commands for the
+#   template you scaffolded, because each one reaches a listening
+#   server differently:
+#     * node-basic       — compiles to `dist/` then `node dist/index.js`
+#     * bun-basic        — runs TypeScript directly: `bun src/index.ts`
+#     * vercel           — `node src/dev.ts`, the plain-Node listener that
+#                          serves the same app as the deployed Function
+#     * cloudflare-worker — `wrangler dev` against the local workerd
+#                          runtime (no Cloudflare account needed)
+#   All four listen on port 3000 here and expose `/healthz`, which the
+#   readiness loop below polls.
+#
 # Customizing:
-#   * The "Start application" step expects `pnpm build` to produce
-#     `dist/index.js` and a `PORT` env var to control the listen port,
-#     matching the shipped `node-basic` template. If your app starts
-#     differently, edit the `nohup` line below.
 #   * If your app needs seed data, secrets, or a database, add them
 #     before the start step (use `vars` / `secrets` in the GitHub
 #     Environment).
@@ -78,38 +87,41 @@ jobs:
           persist-credentials: false
           show-progress: false
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ac6db6d3c1f721f886538a378a2d73e85697340a # v6
-        with:
-          version: 11.1.3
-          run_install: false
+__SETUP_PACKAGE_MANAGER_STEP__
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
 
+__SETUP_BUN_RUNTIME_STEP__
+
       - name: Install dependencies (no scripts)
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: __INSTALL_COMMAND__
         env:
           npm_config_ignore_scripts: "true"
 
-      - name: Build
-        run: pnpm build
+__BUILD_STEP__
 
       - name: Start application (background)
         run: |
           mkdir -p dast-results
+          # ZAP runs as a different uid inside its container and writes its
+          # reports into this bind mount, so it has to be world-writable.
           chmod 777 dast-results
-          nohup node dist/index.js > dast-results/server.log 2>&1 &
+          nohup __DAST_LAUNCH_COMMAND__ > dast-results/server.log 2>&1 &
           echo $! > dast-results/server.pid
         env:
           PORT: "3000"
           NODE_ENV: production
+__DAST_EXTRA_ENV__
 
       - name: Wait for target to be reachable
+        # 60s rather than 30s: `wrangler dev` has to spin up the local
+        # workerd runtime before it binds, which is slower than a plain
+        # Node or Bun listener.
         run: |
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if curl -fsS --max-time 2 http://localhost:3000/healthz > /dev/null \
               || curl -fsS --max-time 2 http://localhost:3000/ > /dev/null; then
               echo "Target ready after ${i} attempt(s)."
@@ -117,7 +129,7 @@ jobs:
             fi
             sleep 1
           done
-          echo "::error::DAST target did not become reachable in 30s."
+          echo "::error::DAST target did not become reachable in 60s."
           cat dast-results/server.log || true
           exit 1
 
@@ -139,7 +151,12 @@ jobs:
         if: always()
         run: |
           if [ -f dast-results/server.pid ]; then
-            kill "$(cat dast-results/server.pid)" || true
+            pid="$(cat dast-results/server.pid)"
+            # Some launchers (a package-manager `exec` shim, `wrangler dev`)
+            # put the real listener in a child process, so reap children
+            # before the recorded pid.
+            pkill -P "$pid" 2>/dev/null || true
+            kill "$pid" 2>/dev/null || true
           fi
 
       - name: Summarize ZAP findings and fail on HIGH

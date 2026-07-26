@@ -1,12 +1,15 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@daloyjs/daloy@^1.0.0-rc.5": "1.0.0-rc.5",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
-    "npm:@daloyjs/core@0.37": "0.37.0",
     "npm:zod@^4.4.3": "4.4.3"
   },
   "jsr": {
+    "@daloyjs/daloy@1.0.0-rc.5": {
+      "integrity": "30d4d04baae914d7edaaf827d144e28caa41fda6bf77817840b8863d345378e6"
+    },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
       "dependencies": [
@@ -18,17 +21,13 @@
     }
   },
   "npm": {
-    "@daloyjs/core@0.37.0": {
-      "integrity": "sha512-z7XRaoue2TqDIyQIdsg8ZKlBPmvYU8WX2ieYk3sGBMyt181bkb9NBgnxD/m6W54ojpiz4ArFRxyJ9BQTfjLvnQ==",
-      "bin": true
-    },
     "zod@4.4.3": {
       "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
     }
   },
   "workspace": {
     "dependencies": [
-      "npm:@daloyjs/core@0.37",
+      "jsr:@daloyjs/daloy@^1.0.0-rc.5",
       "npm:zod@^4.4.3"
     ]
   }

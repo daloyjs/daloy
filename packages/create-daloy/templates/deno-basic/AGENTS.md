@@ -54,6 +54,7 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
 - Credential / HMAC comparisons use a constant-time comparison, never `===`. Throw typed errors from `@daloyjs/core` so problem+json redacts in prod; never return raw stack traces.
 - `.env`, secrets, and private keys never get committed — the template `_gitignore` is the source of truth.
+- CI is part of this surface: keep actions SHA-pinned, `permissions: {}` at workflow level, and never drop `--frozen=true` or delete a failing gate. See the skill's CI section.
 
 ## Process expectations
 

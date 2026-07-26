@@ -181,6 +181,10 @@ jobs:
           ignore-unfixed: true
           format: sarif
           output: trivy-image.sarif
+          # Blocking. With `severity: HIGH,CRITICAL` above this fails the
+          # job on either level, and `ignore-unfixed: true` keeps it to
+          # CVEs that actually have a fix available. Narrow `severity` to
+          # `CRITICAL` if a noisy base image makes this impractical.
           exit-code: "1"
           vuln-type: os,library
 

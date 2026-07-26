@@ -9,8 +9,6 @@ cross-framework HTTP numbers use
 spot checks on Node 26 are fine but are **not** interchangeable with the
 Node 24 baseline.
 
-## Verdict (2026-07-18, Grok 4.5 re-run)
-
 **DaloyJS performance is acceptable.** It is not a “slow framework”; the
 default matrix measures a different product than bare Hono/Fastify:
 
@@ -84,56 +82,6 @@ Harness: `bench/ablation.bench.ts` (`pnpm bench:ablation`). 5 rounds × 50k
 iters, interleaved configs, raw samples + provenance in
 `bench/results.ablation.json` (gitignored).
 
-**Grok 4.5 re-run** (dist, Node 26.4.0, git clean, loadAvg ~5):
-
-| Config                          |     GET /static |
-| ------------------------------- | --------------: |
-| Full defaults + response schema | **~155k ops/s** |
-| `validateResponses: false`      |     ~157k ops/s |
-| `preset: "internal-service"`    |     ~206k ops/s |
-| Bare async handler              |     ~207k ops/s |
-| Bare sync handler               |     ~237k ops/s |
-| `secureDefaults: false`         |     ~203k ops/s |
-
-Handler-supplied `x-frame-options: SAMEORIGIN` still wins over auto DENY; CSP
-and the rest of the baseline still apply (verified in ablation + unit tests).
-
-**Dominant cost of full defaults:** auto `secureHeaders` `onResponse` (many
-header writes + finalize hook path), not Zod response validation and not the
-router. Response validation is only ~1% in this ablation. Turning off browser
-guards (`internal-service` / `secureDefaults: false`) recovers ~+33%.
-
-### Cross-framework HTTP (local `results.json`, autocannon)
-
-**Grok 4.5 focused run** on Node 26.4.0, 100 connections, 5×5s, 10s warmup,
-AC power, loadAvg ~4.5 at start. Headline is mean req/s with 95% CI:
-
-| Framework        |       GET /static |  GET /users/:id |      POST /echo |
-| ---------------- | ----------------: | --------------: | --------------: |
-| fastify          |       65,567 ±789 |   65,467 ±1,159 |     57,434 ±321 |
-| hono-validated   |       62,755 ±740 |     61,703 ±518 |      28,988 ±98 |
-| hono             |     62,375 ±1,766 |     62,847 ±377 |     29,132 ±114 |
-| **daloy-bare**   | **51,948 ±1,351** | **52,284 ±237** | **41,885 ±163** |
-| **daloy** (full) |   **43,700 ±425** | **41,145 ±733** | **34,033 ±147** |
-| daloy-nozod\*    |       39,207 ±930 |      38,397 ±99 |     32,928 ±288 |
-
-\* **`daloy-nozod` in this table still used default info logger** (see
-methodology fix below). After `logger: false`, a short re-check put
-`daloy` and `daloy-nozod` in the same uncertainty group (~43–44k GET,
-~34–35k POST) — Zod validation is not the dominant cost of full defaults.
-
-**Secured stack** (request ID, headers, CORS, rate limit, HS256 JWT) same day:
-
-| Framework |    GET /static |  GET /users/:id |      POST /echo |
-| --------- | -------------: | --------------: | --------------: |
-| fastify   |     30,844 ±44 |     30,541 ±312 |     28,925 ±139 |
-| **daloy** | **26,972 ±93** | **26,460 ±161** | **24,144 ±214** |
-| hono      |    20,441 ±647 |     20,686 ±120 |      14,887 ±85 |
-
-Do not call the Fastify comparison full behavioral parity until it uses the
-same Zod request and response schemas. Hono secured rows also carry matched
-Zod schemas on Daloy/Hono variants in `middleware-stack.mjs`.
-
 ## What already landed (historical + this pass)
 
 Earlier hot-path work (still load-bearing — do not regress):
@@ -203,10 +151,20 @@ Earlier hot-path work (still load-bearing — do not regress):
    throughput/secured Daloy variants so a future edit cannot reintroduce
    default-logger noise.
 2. **Publication runs** should pin Node 24 via `.nvmrc` and use
-   `WARMUP=30 ITERATIONS=10 DURATION=20` on a quiet AC machine.
+   `WARMUP=30 ITERATIONS=10 DURATION=20` on a quiet AC machine —
+   “quiet” meaning loadAvg ≲ 0.25 × cores, not merely under the
+   `loadAvg > cpuCount` warn gate (see the 2026-07-26 methodology note:
+   loadAvg ~5/16 moved absolutes ~10–12%).
 3. **Paired difference tests** (not just CI overlap groups) if publishing
    “tied with Fastify” claims.
 4. Optional Bun matrix for multi-runtime parity claims.
+5. **Split `--only` subset runs are second-class** (found 2026-07-26): each
+   invocation overwrites `results.json`, and the framework order shuffle only
+   rotates within one invocation, so cross-subset position effects are not
+   averaged out. Workaround today: give each subset its own
+   `BENCH_RESULTS_DIR` and compare tables by hand. Proper fix: a merge tool
+   (or `--append`) that combines per-subset results files into one matrix
+   with the union of rows.
 
 ## Safe future optimisations (do not weaken security)
 

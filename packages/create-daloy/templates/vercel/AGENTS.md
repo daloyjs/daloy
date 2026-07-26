@@ -26,7 +26,7 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel** on the **Node.j
 
 - `api/index.ts` — the single Vercel Node.js Functions entrypoint. Export `default toFetchHandler(app)` from `@daloyjs/core/vercel`; add `runtime = "edge"` and switch to `toWebHandler(app)` only when the user asks for Edge.
 - This template is not a Next.js App Router project. Do not add `app/api` routes, `next.config.*`, or Next-specific file structure unless the user asks to convert or embed the API in a Next.js app.
-- `vercel.json` — routes all paths to `/api` so DaloyJS owns root routing; do not remove this rewrite.
+- `vercel.json` — routes all paths to `/api` so DaloyJS owns root routing.
 - `src/dev.ts` — local Node dev server (`pnpm dev`) for fast iteration without `vercel dev`. Dev-only; Vercel does not deploy it.
 - `tests/` — test files.
 
@@ -56,13 +56,14 @@ You import the file you see. Vercel resolves `.ts` at deploy time; Node runs it 
 
 Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/blog/supabase-approach-to-secure-by-default-development): _"If you tell an AI to make something work, it might remove the very security checks that protect you."_ When a guard rejects a request, **satisfy it, do not delete it.**
 
-- Keep `secureHeaders()`, `requestId()`, `rateLimit()`, `bodyLimitBytes`, and `requestTimeoutMs`. For production, back rate limits with a shared store such as Upstash Redis from the Vercel Marketplace.
+- Keep `secureHeaders()`, `requestId()`, `rateLimit()`, `bodyLimitBytes`, and `requestTimeoutMs` (see core rule 5 on backing rate limits with a shared store).
 - Keep Zod `.strict()` on top-level request objects; do not switch to `.passthrough()`. Keep `responses[N].body` schemas tight; never widen to `z.any()` to let a privileged field escape.
 - Every protected route attaches auth `beforeHandle` and tests unauthenticated `401` plus wrong-scope `403`.
 - JWT verifiers keep an explicit `algorithms` allowlist; never trust the token's `alg` header, never allow `none`, always check `exp` / `nbf`.
 - Credential / HMAC comparisons use constant-time comparison, never `===`. Throw typed errors so problem+json redacts in prod.
-- Keep the single `api/index.ts` entry and the `vercel.json` rewrite; do not split into per-path files or remove the rewrite (the root domain would 404).
+- Keep core rule 7 intact: removing the rewrite or splitting into per-path files 404s the root domain.
 - `.env`, `.env.local`, secrets, private keys: never commit. Use `vercel env` for production secrets.
+- Workflows count as security surface: SHA-pinned actions, `permissions: {}` per job, never delete a failing gate.
 
 ## Process expectations
 

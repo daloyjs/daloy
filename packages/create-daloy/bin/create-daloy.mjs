@@ -1311,6 +1311,75 @@ async function addDenoSecurityTasks(dir) {
   await writeFile(file, JSON.stringify(denoJson, null, 2) + "\n", "utf8");
 }
 
+/**
+ * Render the CI job's Node.js version strategy.
+ *
+ * Every Node-flavor template declares `engines.node` as
+ * `^24.0.0 || >=26.0.0`, so CI exercises both ends of that range instead of
+ * silently testing only the lower bound and shipping an untested claim of
+ * Node 26 support.
+ *
+ * `bun-basic` is the exception: its tests execute under Bun and Node is only
+ * present to host tooling, so a second Node job would double the CI bill
+ * without covering anything new.
+ *
+ * @param template Scaffold template id.
+ * @returns `{ strategy, version }` — the job-level `strategy:` block (or an
+ *   empty string) and the value for `setup-node`'s `node-version`.
+ */
+function nodeVersionStrategy(template) {
+  if (template === "bun-basic") {
+    return { strategy: "", version: "24" };
+  }
+  return {
+    strategy: [
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      "        # Both ends of the `engines.node` range in package.json.",
+      "        node-version: [24, 26]",
+    ].join("\n"),
+    version: "${{ matrix.node-version }}",
+  };
+}
+
+/**
+ * Render the command `dast.yml` uses to boot the scanned application, plus
+ * any extra environment the launcher needs.
+ *
+ * The ZAP baseline scan needs a locally reachable HTTP target on port 3000,
+ * and each scaffold reaches that state differently: `node-basic` compiles to
+ * `dist/index.js`, `bun-basic` executes TypeScript directly, `vercel` ships a
+ * plain-Node listener alongside its Function entrypoint, and
+ * `cloudflare-worker` has to boot `wrangler dev` against the local workerd
+ * runtime. Rendering per template keeps the workflow runnable on every
+ * scaffold instead of only on `node-basic`, which is the one shape the
+ * previously hard-coded `node dist/index.js` line assumed.
+ *
+ * @param template Scaffold template id (e.g. `"cloudflare-worker"`).
+ * @param packageManager The user's chosen package manager.
+ * @returns `{ command, extraEnv }` — the `nohup` target and any additional
+ *   `env:` lines (already indented for the step, or an empty string).
+ */
+function dastLaunchConfig(template, packageManager) {
+  if (template === "bun-basic") {
+    return { command: "bun src/index.ts", extraEnv: "" };
+  }
+  if (template === "vercel") {
+    return { command: "node src/dev.ts", extraEnv: "" };
+  }
+  if (template === "cloudflare-worker") {
+    return {
+      command: execCommand(packageManager, "wrangler", "dev --ip 127.0.0.1 --port 3000"),
+      // wrangler defaults to the local workerd runtime, so no Cloudflare
+      // credentials are needed. Silence telemetry so the scan job makes no
+      // unnecessary egress call.
+      extraEnv: '          WRANGLER_SEND_METRICS: "false"',
+    };
+  }
+  return { command: "node dist/index.js", extraEnv: "" };
+}
+
 function renderCiReplacements({
   packageManager,
   template,
@@ -1326,6 +1395,16 @@ function renderCiReplacements({
     ? workflowStep("Build", runScriptCommand(packageManager, "build"))
     : "";
   const auditStep = audit ? workflowStep(auditStepName(packageManager), audit) : "";
+  // Every template's AGENTS.md makes the contract gate a hard rule ("`contract`
+  // must pass after route, metadata, or OpenAPI-facing changes"), so CI has to
+  // actually run it. For templates whose contract script is a focused test file
+  // the unit-test step already covers it; running it as its own named step
+  // costs almost nothing and makes the gate visible as a status check.
+  const contractStep = hasPackageScript(packageJson, "contract")
+    ? workflowStep("Contract check", runScriptCommand(packageManager, "contract"))
+    : "";
+  const nodeVersions = nodeVersionStrategy(template);
+  const dast = dastLaunchConfig(template, packageManager);
   const deploy = renderDeployConfig({ template, packageManager, needsBunRuntime });
   // The verify:lockfile script is only scaffolded when the security bundle
   // ships. In a deploy-only scaffold the script does not exist on disk, so
@@ -1364,10 +1443,46 @@ function renderCiReplacements({
     ["__TYPECHECK_COMMAND__", runScriptCommand(packageManager, "typecheck")],
     ["__TEST_COMMAND__", runScriptCommand(packageManager, "test")],
     ["__BUILD_STEP__", buildStep],
+    ["__CONTRACT_STEP__", contractStep],
+    ["__CI_NODE_STRATEGY__", nodeVersions.strategy],
+    ["__CI_NODE_VERSION__", nodeVersions.version],
+    ["__DAST_LAUNCH_COMMAND__", dast.command],
+    ["__DAST_EXTRA_ENV__", dast.extraEnv],
     ["__AUDIT_STEP__", auditStep],
     ["__AUDIT_PROD_STEP__", auditProdStep],
     ["__AUDIT_FULL_STEP__", auditFullStep],
   ]);
+}
+
+/**
+ * Guard against a template that names a multi-line placeholder inside prose.
+ *
+ * Substitution is a blind `replaceAll` over the whole file, so a placeholder
+ * mentioned in a YAML comment — e.g. "`vuln-scan.yml` already runs
+ * `__AUDIT_PROD_STEP__`-equivalent ..." — expands into real, uncommented YAML
+ * in the middle of the comment block. The file then fails to parse and GitHub
+ * silently refuses to run the workflow at all, which is the worst possible
+ * failure mode for a security scan. A single-line value in a comment is
+ * harmless, so only multi-line values are rejected.
+ *
+ * @param file Absolute path of the file being rendered (used in the error).
+ * @param raw The unrendered template text.
+ * @param placeholder The placeholder token about to be substituted.
+ * @param value Its replacement value.
+ * @throws {Error} If `placeholder` occurs on a comment line and `value` spans
+ *   more than one line.
+ */
+function assertPlaceholderNotInComment(file, raw, placeholder, value) {
+  if (!value.includes("\n")) return;
+  for (const line of raw.split("\n")) {
+    if (line.trimStart().startsWith("#") && line.includes(placeholder)) {
+      throw new Error(
+        `Template ${file} mentions the multi-line placeholder ${placeholder} inside a comment ` +
+          `("${line.trim()}"). Substituting it would inject raw YAML into the comment block and ` +
+          `break the workflow. Reword the comment so it does not name the placeholder.`
+      );
+    }
+  }
 }
 
 async function replacePlaceholdersInTree(dir, replacements) {
@@ -1389,6 +1504,7 @@ async function replacePlaceholdersInTree(dir, replacements) {
     const raw = await readFile(full, "utf8");
     let next = raw;
     for (const [placeholder, value] of replacements) {
+      assertPlaceholderNotInComment(full, raw, placeholder, value);
       next = next.replaceAll(placeholder, value);
     }
     if (next !== raw) await writeFile(full, next, "utf8");
@@ -1400,10 +1516,10 @@ async function pruneCiBundle(targetDir, flavor, { includeSecurityBundle, include
     const workflowFiles =
       flavor === "deno"
         ? [
+            // No dast.yml here: the DAST workflow is node-flavor only.
             "ci.yml",
             "codeql.yml",
             "container-scan.yml",
-            "dast.yml",
             "eol-scan.yml",
             "opengrep.yml",
             "osv-scan.yml",

@@ -21,6 +21,15 @@ updates:
       day: monday
     open-pull-requests-limit: 10
     versioning-strategy: increase-if-necessary
+    # Mirror the `minimum-release-age=1440` (24h) setting in `.npmrc`.
+    # Dependabot does not read the package manager's release-age config, so
+    # without this it would open PRs for versions published minutes ago —
+    # putting you back on exactly the early-installer hot path the `.npmrc`
+    # comment says you are avoiding. Most npm worm campaigns are detected and
+    # unpublished within hours; keep the two numbers in sync if you change
+    # either one.
+    cooldown:
+      default-days: 1
     groups:
       dev-dependencies:
         dependency-type: development

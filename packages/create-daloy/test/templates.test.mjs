@@ -2683,3 +2683,251 @@ for (const template of ["node-basic", "vercel", "cloudflare-worker", "bun-basic"
     }
   });
 }
+
+/**
+ * Recursively collect every file under `dir` whose path matches `predicate`.
+ */
+async function collectFiles(dir, predicate, acc = []) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      await collectFiles(full, predicate, acc);
+    } else if (entry.isFile() && predicate(full)) {
+      acc.push(full);
+    }
+  }
+  return acc;
+}
+
+/**
+ * Scaffold `template` with the CI bundle and hand the project dir to `assertions`.
+ */
+async function withCiScaffold(template, packageManager, assertions) {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "create-daloy-ci-"));
+  const projectName = "ci-scaffold";
+  try {
+    const args = [
+      projectName,
+      "--template",
+      template,
+      "--with-ci",
+      "--code-owner",
+      "@acme/security",
+      "--no-install",
+      "--no-git",
+      "--yes",
+    ];
+    if (packageManager) args.splice(3, 0, "--package-manager", packageManager);
+    const { exitCode, output } = await runCreateDaloy(args, { cwd: tmpDir });
+    assert.equal(exitCode, 0, `scaffold failed for ${template}:\n${output}`);
+    await assertions(path.join(tmpDir, projectName));
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+const CI_SCAFFOLD_MATRIX = [
+  ["node-basic", "pnpm"],
+  ["bun-basic", "bun"],
+  ["vercel", "npm"],
+  ["cloudflare-worker", "yarn"],
+  ["deno-basic", null],
+];
+
+for (const [template, packageManager] of CI_SCAFFOLD_MATRIX) {
+  test(`${template}: generated workflows have no unrendered or comment-injected placeholders`, async () => {
+    await withCiScaffold(template, packageManager, async (projectDir) => {
+      const workflows = await collectFiles(
+        path.join(projectDir, ".github"),
+        (f) => f.endsWith(".yml") || f.endsWith(".yaml")
+      );
+      assert.ok(workflows.length > 0, "expected the CI bundle to produce workflow files");
+
+      for (const file of workflows) {
+        const src = await readFile(file, "utf8");
+        const rel = path.relative(projectDir, file);
+
+        const leftovers = src.match(/__[A-Z0-9_]+__/g);
+        assert.equal(
+          leftovers,
+          null,
+          `${rel} still contains unreplaced placeholders: ${[...new Set(leftovers ?? [])].join(", ")}`
+        );
+
+        // Regression guard: a template that names a multi-line placeholder
+        // inside prose used to expand it into real YAML mid-comment, which
+        // makes the whole workflow unparseable and GitHub silently refuses
+        // to run it. A `#` line carrying a step key is that bug's signature.
+        for (const [index, line] of src.split("\n").entries()) {
+          if (!line.trimStart().startsWith("#")) continue;
+          assert.doesNotMatch(
+            line,
+            /(- name:|^\s*#\s*run:)/,
+            `${rel}:${index + 1} looks like YAML injected into a comment: ${line.trim()}`
+          );
+        }
+      }
+    });
+  });
+}
+
+test("secret-scan keeps fetch-depth operands quoted so the history sweep is not shallow", async () => {
+  // `0` is falsy in a GitHub Actions expression, so the unquoted form
+  // `${{ ... && 0 || 1 }}` collapses to `1` and the daily full-history
+  // gitleaks sweep silently degrades to a single-commit scan.
+  for (const [template, packageManager] of [
+    ["node-basic", "pnpm"],
+    ["deno-basic", null],
+  ]) {
+    await withCiScaffold(template, packageManager, async (projectDir) => {
+      const src = await readFile(
+        path.join(projectDir, ".github/workflows/secret-scan.yml"),
+        "utf8"
+      );
+      assert.match(
+        src,
+        /fetch-depth: \$\{\{ github\.event_name == 'schedule' && '0' \|\| '1' \}\}/
+      );
+      // Check the directive itself, not the comment above it — that comment
+      // quotes the broken form on purpose to explain why the quoting matters.
+      const fetchDepthLines = src
+        .split("\n")
+        .filter((line) => line.includes("fetch-depth:") && !line.trimStart().startsWith("#"));
+      assert.equal(
+        fetchDepthLines.length,
+        1,
+        `${template} has ${fetchDepthLines.length} fetch-depth directives`
+      );
+      assert.doesNotMatch(
+        fetchDepthLines[0],
+        /&& 0 \|\| 1/,
+        `${template} reintroduced the falsy-zero fetch-depth`
+      );
+    });
+  }
+});
+
+test("dast.yml boots each template with a command that template actually has", async () => {
+  const expectations = [
+    ["node-basic", "pnpm", ["pnpm build", "node dist/index.js"], []],
+    ["bun-basic", "bun", ["bun src/index.ts"], ["pnpm install", "pnpm build"]],
+    ["vercel", "npm", ["npm ci", "node src/dev.ts"], ["pnpm install", "pnpm build"]],
+    [
+      "cloudflare-worker",
+      "yarn",
+      ["yarn exec wrangler dev", "WRANGLER_SEND_METRICS"],
+      ["pnpm install", "pnpm build"],
+    ],
+  ];
+
+  for (const [template, packageManager, required, forbidden] of expectations) {
+    await withCiScaffold(template, packageManager, async (projectDir) => {
+      const src = await readFile(path.join(projectDir, ".github/workflows/dast.yml"), "utf8");
+      for (const needle of required) {
+        assert.ok(
+          src.includes(needle),
+          `${template} dast.yml is missing ${JSON.stringify(needle)}`
+        );
+      }
+      for (const needle of forbidden) {
+        assert.ok(
+          !src.includes(needle),
+          `${template} dast.yml still hard-codes ${JSON.stringify(needle)}`
+        );
+      }
+      // Only node-basic defines a build script; the others must not try to run one.
+      if (template !== "node-basic") {
+        assert.ok(
+          !/- name: Build\b/.test(src),
+          `${template} has no build script but dast.yml runs one`
+        );
+      }
+    });
+  }
+});
+
+test("deno scaffolds get no DAST workflow (it is node-flavor only)", async () => {
+  await withCiScaffold("deno-basic", null, async (projectDir) => {
+    await assert.rejects(access(path.join(projectDir, ".github/workflows/dast.yml")));
+  });
+});
+
+test("ci.yml enforces the contract gate every AGENTS.md calls mandatory", async () => {
+  for (const [template, packageManager, expected] of [
+    ["node-basic", "pnpm", "pnpm contract"],
+    ["bun-basic", "bun", "bun run contract"],
+    ["vercel", "npm", "npm run contract"],
+    ["cloudflare-worker", "yarn", "yarn run contract"],
+    ["deno-basic", null, "deno task contract"],
+  ]) {
+    await withCiScaffold(template, packageManager, async (projectDir) => {
+      const src = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+      assert.match(src, /- name: Contract check/, `${template} ci.yml has no contract step`);
+      assert.ok(
+        src.includes(expected),
+        `${template} ci.yml should run ${JSON.stringify(expected)}`
+      );
+    });
+  }
+});
+
+test("node CI matrixes both ends of the engines.node range, except under Bun", async () => {
+  await withCiScaffold("node-basic", "pnpm", async (projectDir) => {
+    const src = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(src, /node-version: \[24, 26\]/);
+    assert.match(src, /node-version: \$\{\{ matrix\.node-version \}\}/);
+  });
+  // bun-basic runs its tests under Bun, so a second Node job would only
+  // burn CI minutes.
+  await withCiScaffold("bun-basic", "bun", async (projectDir) => {
+    const src = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+    assert.doesNotMatch(src, /matrix:/);
+    assert.match(src, /node-version: 24/);
+  });
+});
+
+test("deno CI gates on a frozen lockfile, the runtime's only integrity anchor", async () => {
+  await withCiScaffold("deno-basic", null, async (projectDir) => {
+    const src = await readFile(path.join(projectDir, ".github/workflows/ci.yml"), "utf8");
+    assert.match(src, /deno install --frozen=true/);
+  });
+});
+
+test("dependabot npm cooldown stays aligned with the .npmrc release-age policy", async () => {
+  await withCiScaffold("node-basic", "pnpm", async (projectDir) => {
+    const dependabot = await readFile(path.join(projectDir, ".github/dependabot.yml"), "utf8");
+    assert.match(dependabot, /cooldown:\s*\n\s*default-days: 1/);
+    const npmrc = await readFile(path.join(projectDir, ".npmrc"), "utf8");
+    assert.match(
+      npmrc,
+      /minimum-release-age=1440/,
+      "cooldown: 1 day and minimum-release-age=1440 are the same policy; keep them in sync"
+    );
+  });
+});
+
+test("scorecard does not hard-code publish_results, which fails on private repos", async () => {
+  await withCiScaffold("node-basic", "pnpm", async (projectDir) => {
+    const src = await readFile(path.join(projectDir, ".github/workflows/scorecard.yml"), "utf8");
+    assert.doesNotMatch(src, /publish_results: true/);
+    assert.match(src, /publish_results: \$\{\{ vars\.SCORECARD_PUBLISH_RESULTS == 'true' \}\}/);
+  });
+});
+
+test("every scheduled security workflow declares a concurrency group", async () => {
+  await withCiScaffold("node-basic", "pnpm", async (projectDir) => {
+    const workflows = await collectFiles(path.join(projectDir, ".github/workflows"), (f) =>
+      f.endsWith(".yml")
+    );
+    for (const file of workflows) {
+      const src = await readFile(file, "utf8");
+      assert.match(
+        src,
+        /^concurrency:$/m,
+        `${path.basename(file)} has no concurrency group, so push + PR double-run it`
+      );
+    }
+  });
+});
