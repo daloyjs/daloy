@@ -463,6 +463,76 @@ test("trustProxy unconfigured guard logs a warn exactly once across many request
   assert.equal(warns.length, 1);
 });
 
+test("trustProxy unconfigured refusal logs an error per request but without a stack", async () => {
+  const errors: Array<Record<string, unknown>> = [];
+  const log = {
+    level: "info" as const,
+    info: () => undefined,
+    warn: () => undefined,
+    error: (obj: unknown) => errors.push(obj as Record<string, unknown>),
+    debug: () => undefined,
+    trace: () => undefined,
+    fatal: () => undefined,
+    child: () => log,
+  };
+  const app = new App({ logger: log, env: "production" });
+  app.route({
+    method: "GET",
+    path: "/ip",
+    operationId: "ip",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: undefined }),
+  });
+  for (let i = 0; i < 3; i++) {
+    const res = await app.request("/ip", { headers: { "x-forwarded-for": "1.2.3.4" } });
+    assert.equal(res.status, 500, "the refusal itself must not change");
+  }
+
+  // The refusal stays visible on every request — an operator must be able to
+  // see it is still happening.
+  assert.equal(errors.length, 3);
+  for (const entry of errors) {
+    const err = entry.err as Record<string, unknown>;
+    assert.equal(err.name, "InternalError");
+    // ...but every occurrence throws from the same framework line, so the stack
+    // is identical, names framework internals, and only multiplies the bytes a
+    // client can push into the error tier by replaying one header.
+    assert.equal(err.stack, undefined, "the repeated framework stack must not be logged");
+  }
+});
+
+test("an ordinary handler failure still logs its stack", async () => {
+  const errors: Array<Record<string, unknown>> = [];
+  const log = {
+    level: "info" as const,
+    info: () => undefined,
+    warn: () => undefined,
+    error: (obj: unknown) => errors.push(obj as Record<string, unknown>),
+    debug: () => undefined,
+    trace: () => undefined,
+    fatal: () => undefined,
+    child: () => log,
+  };
+  const app = new App({ logger: log, env: "production", trustProxy: false });
+  app.route({
+    method: "GET",
+    path: "/boom",
+    operationId: "boom",
+    responses: { 200: { description: "ok" } },
+    handler: () => {
+      throw new Error("kaboom");
+    },
+  });
+  const res = await app.request("/boom");
+  assert.equal(res.status, 500);
+  assert.equal(errors.length, 1);
+  const err = errors[0]!.err as Record<string, unknown>;
+  assert.ok(
+    typeof err.stack === "string" && err.stack.length > 0,
+    "a real fault in app code must keep its stack — that one is actionable",
+  );
+});
+
 test("trustProxy unconfigured + secureDefaults: false is allowed", async () => {
   const app = makeTrustProxyApp({ secureDefaults: false, acknowledgeInsecureDefaults: true });
   const res = await app.request("/ip", { headers: { "x-forwarded-for": "1.2.3.4" } });

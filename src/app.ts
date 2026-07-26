@@ -2212,7 +2212,7 @@ export class App<
         `Request carried ${found} but app({ trustProxy }) is unset; refusing to honour spoofable proxy headers.`
       );
     }
-    throw new InternalError(
+    const refusal = new InternalError(
       `Refusing to dispatch request: ${found} header is present but app({ trustProxy }) is unconfigured. ` +
         `Honouring a spoofable forwarded header would let a client forge its source IP for the rate ` +
         `limiter, audit log, and request-id propagation. ` +
@@ -2221,6 +2221,14 @@ export class App<
         `or app({ secureDefaults: false }) to disable this guard. ` +
         `See https://daloyjs.dev/docs/security/boot-guards.`
     );
+    // Every refused request throws from this one line, so the stack is
+    // identical each time and names framework internals rather than anything
+    // an operator can act on. Keep the 500 and keep a line per request — the
+    // refusal must stay visible — but drop the stack, so a client cannot
+    // multiply the bytes it pushes into the error tier by replaying the header.
+    // The actionable message is logged once per process by the warn above.
+    (refusal as unknown as Record<PropertyKey, unknown>)[OMIT_STACK_IN_LOG] = true;
+    throw refusal;
   }
 
   /**
@@ -5639,8 +5647,26 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number, request: Request): Promis
   });
 }
 
+/**
+ * Marker set on an error whose stack carries no incident information because
+ * the same framework line throws it for every offending request — a rejected
+ * *configuration* or *request shape*, not a fault in the app's code.
+ *
+ * `serializeErr` omits the stack for these. The stack is byte-identical on every
+ * occurrence and points at framework internals, so logging it per request just
+ * multiplies the volume an unauthenticated client can push into the error tier
+ * (the expensive, alerting one) without telling an operator anything the
+ * message does not already say.
+ *
+ * @internal
+ */
+const OMIT_STACK_IN_LOG = Symbol.for("daloyjs.error.omitStackInLog");
+
 function serializeErr(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {
+    if ((err as unknown as Record<PropertyKey, unknown>)[OMIT_STACK_IN_LOG] === true) {
+      return { name: err.name, message: err.message };
+    }
     return { name: err.name, message: err.message, stack: err.stack };
   }
   return { value: String(err) };

@@ -78,6 +78,18 @@ For the forward-looking plan and the full thematic release log, see
   `maxBodyBytes` (default 1 MiB); 20,000 unexpired entries were retained against
   a documented 10,000 cap. Both an entry-count and a byte ceiling are now
   enforced with FIFO eviction (expired first).
+- **The unconfigured-`trustProxy` refusal no longer logs a stack trace per
+  request.** The guard's behaviour is unchanged — a production app with
+  `trustProxy` / `behindProxy` unset still returns `500 problem+json` to a
+  request carrying `X-Forwarded-*` / `X-Real-IP` / a vendor client-IP header, and
+  still logs one error line per refused request so an operator can see it is
+  ongoing. But every one of those threw from the same framework line, so the
+  logged stack was byte-identical each time, named framework internals rather
+  than anything actionable, and let a client multiply the bytes it pushes into
+  the error tier (the expensive, alerting one) just by replaying one header.
+  Measured 3,718 → 1,416 bytes of error log for five refused requests. Genuine
+  faults in application code keep their stacks; only errors the framework marks
+  as "same line every time" are trimmed.
 - **New boot guard (production, `secureDefaults` on): `responseCache()` mounted
   ahead of `tenancy()` refuses to boot.** The cache builds its key in
   `beforeHandle`, so in that order the tenant does not exist yet and automatic
