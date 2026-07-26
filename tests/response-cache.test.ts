@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import {
   App,
+  requestId,
   responseCache,
   MemoryResponseCacheStore,
   _resetSharedResponseCacheStoresForTests,
@@ -396,4 +397,218 @@ test("statusHeaderName: null disables the X-Cache marker", async () => {
   await app.request("/now", get());
   const res = await app.request("/now", get());
   assert.equal(res.headers.get("x-cache"), null);
+});
+
+// ---------- Response `Vary` as a secondary cache key (RFC 9111 §4.1) ----------
+
+/**
+ * App whose handler varies its body on a request header and declares that with
+ * `Vary`, plus an `echo` response header carrying the value it varied on — the
+ * shape `cors()` (`Vary: Origin` + `Access-Control-Allow-Origin`) and
+ * `compression()` (`Vary: Accept-Encoding` + `Content-Encoding`) both produce.
+ */
+function makeVaryApp(opts: ResponseCacheOptions = {}, varyValue = "x-flavor") {
+  const app = new App({ logger: false });
+  const state = { calls: 0 };
+  app.use(responseCache({ ttlSeconds: 60, ...opts }));
+  app.route({
+    method: "GET",
+    path: "/v",
+    operationId: "v",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }) => {
+      state.calls++;
+      const flavor = request.headers.get("x-flavor") ?? "none";
+      return new Response(JSON.stringify({ flavor }), {
+        status: 200,
+        headers: { "content-type": "application/json", vary: varyValue, "x-echo": flavor },
+      });
+    },
+  });
+  return { app, state };
+}
+
+test("a response's Vary header partitions the cache without any configuration", async () => {
+  const { app, state } = makeVaryApp();
+
+  const a = await app.request("/v", get({ "x-flavor": "alpha" }));
+  assert.equal(a.headers.get("x-cache"), "MISS");
+  assert.equal(a.headers.get("x-echo"), "alpha");
+
+  // The attack: a second caller with a different value for the varied field
+  // must not be served the first caller's variant.
+  const b = await app.request("/v", get({ "x-flavor": "beta" }));
+  assert.equal(b.headers.get("x-cache"), "MISS", "a different variant must not hit");
+  assert.equal(b.headers.get("x-echo"), "beta", "must not serve the other caller's variant");
+  assert.deepEqual(await b.json(), { flavor: "beta" });
+  assert.equal(state.calls, 2);
+});
+
+test("distinct Vary variants coexist — neither evicts the other", async () => {
+  const { app, state } = makeVaryApp();
+  await app.request("/v", get({ "x-flavor": "alpha" }));
+  await app.request("/v", get({ "x-flavor": "beta" }));
+  assert.equal(state.calls, 2);
+
+  // Both must now be replayable. A single slot per URL would make every
+  // alternation a miss, handing an attacker a cache-defeat DoS by rotating the
+  // varied header.
+  for (const flavor of ["alpha", "beta", "alpha", "beta"]) {
+    const res = await app.request("/v", get({ "x-flavor": flavor }));
+    assert.equal(res.headers.get("x-cache"), "HIT", `${flavor} must stay cached`);
+    assert.equal(res.headers.get("x-echo"), flavor);
+  }
+  assert.equal(state.calls, 2, "no extra handler runs — both variants stayed warm");
+});
+
+test("a request missing the varied header is its own variant", async () => {
+  const { app, state } = makeVaryApp();
+  await app.request("/v", get({ "x-flavor": "alpha" }));
+  const res = await app.request("/v", get());
+  assert.equal(res.headers.get("x-cache"), "MISS");
+  assert.equal(res.headers.get("x-echo"), "none");
+  assert.equal(state.calls, 2);
+});
+
+test("Vary field names are matched case- and order-insensitively", async () => {
+  const { app, state } = makeVaryApp({}, "X-Flavor, Accept-Language");
+  await app.request("/v", get({ "x-flavor": "alpha", "accept-language": "en" }));
+  const res = await app.request("/v", get({ "x-flavor": "alpha", "accept-language": "en" }));
+  assert.equal(res.headers.get("x-cache"), "HIT", "same values must reuse the variant");
+  assert.equal(state.calls, 1);
+});
+
+test("Vary: * is never cached", async () => {
+  const { app, state } = makeVaryApp({}, "*");
+  const a = await app.request("/v", get({ "x-flavor": "alpha" }));
+  assert.equal(a.headers.get("x-cache"), "MISS");
+  const b = await app.request("/v", get({ "x-flavor": "alpha" }));
+  assert.equal(b.headers.get("x-cache"), "MISS", "Vary: * is unreusable for any request");
+  assert.equal(state.calls, 2);
+});
+
+test("a varied header value cannot be crafted to collide with another variant", async () => {
+  const { app, state } = makeVaryApp({}, "X-Flavor, Accept-Language");
+  // Length-prefixed encoding: "a" + lang "b" must not collide with "a<sep>b" + "".
+  await app.request("/v", get({ "x-flavor": "a", "accept-language": "b" }));
+  const res = await app.request("/v", get({ "x-flavor": "a=1:b", "accept-language": "" }));
+  assert.equal(res.headers.get("x-cache"), "MISS", "crafted value must not reuse the variant");
+  assert.equal(state.calls, 2);
+});
+
+// ---------- Per-request / hop-by-hop headers are not persisted ----------
+
+test("x-request-id is not frozen into the entry and replayed", async () => {
+  const app = new App({ logger: false });
+  app.use(requestId());
+  app.use(responseCache({ ttlSeconds: 60 }));
+  app.route({
+    method: "GET",
+    path: "/r",
+    operationId: "r",
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: async () => ({ status: 200 as const, body: { ok: true } }),
+  });
+
+  const first = await app.request("/r", get());
+  const hit = await app.request("/r", get());
+  assert.equal(hit.headers.get("x-cache"), "HIT");
+  assert.notEqual(hit.headers.get("x-request-id"), null, "the live id must still be present");
+  assert.notEqual(
+    hit.headers.get("x-request-id"),
+    first.headers.get("x-request-id"),
+    "a cache hit must not replay the correlation id of the request that populated it",
+  );
+});
+
+test("hop-by-hop headers are stripped before an entry is stored", async () => {
+  const app = new App({ logger: false });
+  const { store, inner, lastKey } = keyCapturingStore();
+  app.use(responseCache({ ttlSeconds: 60, store }));
+  app.route({
+    method: "GET",
+    path: "/h",
+    operationId: "h",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async () =>
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json", "x-keep": "yes", te: "trailers" },
+      }),
+  });
+
+  await app.request("/h", get());
+  const stored = inner.get(lastKey());
+  const names = new Set(stored!.headers.map(([n]) => n));
+  assert.ok(!names.has("te"), "hop-by-hop headers must not be persisted");
+  assert.ok(names.has("x-keep"), "ordinary response headers are still stored");
+});
+
+test("excludeHeaders drops a custom correlation header too", async () => {
+  const app = new App({ logger: false });
+  const { store, inner, lastKey } = keyCapturingStore();
+  app.use(responseCache({ ttlSeconds: 60, store, excludeHeaders: ["X-Correlation-Id"] }));
+  app.route({
+    method: "GET",
+    path: "/c",
+    operationId: "c",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async () =>
+      new Response("{}", { status: 200, headers: { "x-correlation-id": "abc" } }),
+  });
+
+  await app.request("/c", get());
+  const names = new Set(inner.get(lastKey())!.headers.map(([n]) => n));
+  assert.ok(!names.has("x-correlation-id"));
+});
+
+// ---------- MemoryResponseCacheStore capacity ----------
+
+function entryOf(bodyLen: number): CachedResponse {
+  const now = Date.now();
+  return {
+    status: 200,
+    headers: [],
+    body: "A".repeat(bodyLen),
+    storedAt: now,
+    freshUntil: now + 60_000,
+    staleUntil: now + 60_000,
+  };
+}
+
+test("MemoryResponseCacheStore enforces maxEntries against unexpired entries", () => {
+  const store = new MemoryResponseCacheStore({ maxEntries: 100 });
+  // Every entry is fresh, so pruning expired ones alone cannot bound the map —
+  // this is the burst an attacker produces by rotating a query string.
+  for (let i = 0; i < 5_000; i++) store.set(`k${i}`, entryOf(0), 60_000);
+  assert.ok(store.size() <= 100, `expected <= 100 entries, got ${store.size()}`);
+  assert.notEqual(store.get("k4999"), null, "the most recent entry is retained");
+  assert.equal(store.get("k0"), null, "the oldest entry was evicted");
+  store.clear();
+});
+
+test("MemoryResponseCacheStore enforces maxBytes", () => {
+  const store = new MemoryResponseCacheStore({ maxEntries: 1_000_000, maxBytes: 10_000 });
+  for (let i = 0; i < 500; i++) store.set(`k${i}`, entryOf(1_000), 60_000);
+  assert.ok(store.size() <= 10, `byte cap must bound the map, got ${store.size()} entries`);
+  store.clear();
+});
+
+test("MemoryResponseCacheStore byte accounting survives overwrite and delete", () => {
+  const store = new MemoryResponseCacheStore({ maxBytes: 10_000 });
+  for (let i = 0; i < 20; i++) store.set("same", entryOf(1_000), 60_000);
+  assert.equal(store.size(), 1, "overwriting one key must not leak byte budget");
+  store.delete("same");
+  // If delete under-counted, the next writes would be evicted immediately.
+  for (let i = 0; i < 9; i++) store.set(`k${i}`, entryOf(1_000), 60_000);
+  assert.equal(store.size(), 9);
+  store.clear();
+});
+
+test("MemoryResponseCacheStore rejects invalid capacity limits", () => {
+  assert.throws(() => new MemoryResponseCacheStore({ maxEntries: 0 }), /positive integer/);
+  assert.throws(() => new MemoryResponseCacheStore({ maxBytes: -1 }), /positive integer/);
 });

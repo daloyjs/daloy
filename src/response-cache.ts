@@ -50,6 +50,12 @@
  * - **Tenant.** When `tenancy()` has resolved a tenant for the request, that
  *   tenant is folded into the key automatically — no `keyGenerator` wiring
  *   required, and it applies to a custom `keyGenerator` too.
+ * - **Declared variants.** A response's own `Vary` header is honoured as a
+ *   secondary key (RFC 9111 §4.1): an entry is replayed only to a request whose
+ *   values for those fields match the ones it was stored with. `cors()` emits
+ *   `Vary: Origin` and `compression()` emits `Vary: Accept-Encoding`, so
+ *   without this one caller's `Access-Control-Allow-Origin` — or their gzipped
+ *   body — would be served to the next. `Vary: *` is never stored.
  *
  * This module is dependency-free and uses only Web Standard
  * `Request`/`Response` + `Headers`, so it runs unchanged on Node, Bun, Deno,
@@ -130,6 +136,22 @@ export interface CachedResponse {
   freshUntil: number;
   /** End of the stale-while-revalidate window as ms since epoch. */
   staleUntil: number;
+  /**
+   * Lower-cased request-header names from the stored response's `Vary` header —
+   * the secondary cache key per RFC 9111 §4.1. Absent when the response
+   * declared no `Vary`.
+   *
+   * @since 1.0.0
+   */
+  vary?: string[];
+  /**
+   * The values {@link vary}'s fields had on the request that produced this
+   * entry, length-prefix encoded. A stored entry is only reusable for a request
+   * whose values re-encode identically.
+   *
+   * @since 1.0.0
+   */
+  varyKey?: string;
 }
 
 /**
@@ -186,8 +208,26 @@ export interface ResponseCacheOptions {
    * Request header names whose values partition the cache (e.g.
    * `["accept-language"]`). Their values are folded into the cache key.
    * Default: none.
+   *
+   * @remarks This is the *proactive* dimension list, applied to every request
+   * before the handler runs. It is independent of — and additive to — the
+   * `Vary` header a response declares for itself, which the cache always
+   * honours as a secondary key (see {@link responseCache}).
    */
   varyHeaders?: string[];
+  /**
+   * Extra response headers to drop before an entry is stored, on top of the
+   * built-in hop-by-hop / per-request set (`Age`, `Connection`,
+   * `Transfer-Encoding`, `X-Request-Id`, …).
+   *
+   * Supply the name of a custom correlation or tracing header so it is not
+   * frozen into the entry and replayed to every later caller — for example
+   * `requestId({ header: "x-correlation-id" })` pairs with
+   * `excludeHeaders: ["x-correlation-id"]`.
+   *
+   * @since 1.0.0
+   */
+  excludeHeaders?: readonly string[];
   /**
    * Derive the cache key **body** from the request. Default: method + the
    * effective request URI (scheme + authority + path + query) +
@@ -274,20 +314,67 @@ export interface ResponseCacheOptions {
 
 // ---------- Default store ----------
 
+/** Options for {@link MemoryResponseCacheStore}. */
+export interface MemoryResponseCacheStoreOptions {
+  /**
+   * Hard ceiling on retained entries. Default: `10_000`. Once reached, the
+   * oldest-inserted entries are evicted — expired ones first.
+   */
+  maxEntries?: number;
+  /**
+   * Hard ceiling on retained body bytes. Default: `64 * 1024 * 1024` (64 MiB).
+   *
+   * An entry count alone does not bound memory: with the module's default
+   * `maxBodyBytes` of 1 MiB, ten thousand entries is ten gigabytes. This is the
+   * limit that actually caps the store's footprint.
+   */
+  maxBytes?: number;
+}
+
 /**
  * In-memory {@link ResponseCacheStore}. Suitable for tests and single-process
- * deployments. Expired entries are dropped on access; the map is
- * opportunistically pruned so it cannot grow without bound.
+ * deployments.
+ *
+ * Expired entries are dropped on access. The map is bounded on **both** entry
+ * count and retained body bytes ({@link MemoryResponseCacheStoreOptions}):
+ * pruning expired entries alone cannot bound it, because every entry in a burst
+ * of requests for distinct URLs is unexpired for the whole TTL. An attacker
+ * rotating a query string would otherwise grow the map without limit until the
+ * process runs out of memory.
+ *
+ * Eviction is FIFO over insertion order (expired entries first), which `Map`
+ * gives in O(1) per eviction.
  */
 export class MemoryResponseCacheStore implements ResponseCacheStore {
   private readonly map = new Map<string, CachedResponse>();
+  private readonly maxEntries: number;
+  private readonly maxBytes: number;
+  /** Running sum of `entry.body.length` over `map`, kept in step with writes. */
+  private bytes = 0;
+
+  /**
+   * @param opts - Capacity limits; see {@link MemoryResponseCacheStoreOptions}.
+   * @throws TypeError if either limit is not a positive integer.
+   */
+  constructor(opts: MemoryResponseCacheStoreOptions = {}) {
+    const maxEntries = opts.maxEntries ?? 10_000;
+    const maxBytes = opts.maxBytes ?? 64 * 1024 * 1024;
+    if (!Number.isInteger(maxEntries) || maxEntries <= 0) {
+      throw new TypeError("MemoryResponseCacheStore: maxEntries must be a positive integer.");
+    }
+    if (!Number.isInteger(maxBytes) || maxBytes <= 0) {
+      throw new TypeError("MemoryResponseCacheStore: maxBytes must be a positive integer.");
+    }
+    this.maxEntries = maxEntries;
+    this.maxBytes = maxBytes;
+  }
 
   /** @inheritDoc */
   get(key: string): CachedResponse | null {
     const entry = this.map.get(key);
     if (!entry) return null;
     if (entry.staleUntil <= Date.now()) {
-      this.map.delete(key);
+      this.drop(key, entry);
       return null;
     }
     return entry;
@@ -299,25 +386,45 @@ export class MemoryResponseCacheStore implements ResponseCacheStore {
    * here: the in-memory store derives freshness from `entry.freshUntil`.
    */
   set(key: string, entry: CachedResponse, _ttlMs?: number): void {
+    const existing = this.map.get(key);
+    if (existing) this.bytes -= existing.body.length;
     this.map.set(key, entry);
-    if (this.map.size > 10_000) this.prune();
+    this.bytes += entry.body.length;
+    if (this.map.size > this.maxEntries || this.bytes > this.maxBytes) this.evict();
   }
 
   /** @inheritDoc */
   delete(key: string): void {
-    this.map.delete(key);
+    const entry = this.map.get(key);
+    if (entry) this.drop(key, entry);
   }
 
-  private prune(): void {
+  /** Remove one entry, keeping the byte counter in step. */
+  private drop(key: string, entry: CachedResponse): void {
+    this.map.delete(key);
+    this.bytes -= entry.body.length;
+  }
+
+  /**
+   * Bring the map back under both limits: expired entries first, then
+   * oldest-inserted, since `Map` iterates in insertion order.
+   */
+  private evict(): void {
     const now = Date.now();
     for (const [k, v] of this.map) {
-      if (v.staleUntil <= now) this.map.delete(k);
+      if (this.map.size <= this.maxEntries && this.bytes <= this.maxBytes) return;
+      if (v.staleUntil <= now) this.drop(k, v);
+    }
+    for (const [k, v] of this.map) {
+      if (this.map.size <= this.maxEntries && this.bytes <= this.maxBytes) return;
+      this.drop(k, v);
     }
   }
 
   /** Test helper. Remove every entry. */
   clear(): void {
     this.map.clear();
+    this.bytes = 0;
   }
 
   /** Test helper. Number of stored entries (including expired). */
@@ -423,6 +530,91 @@ function appendPartition(partition: string, name: string, value: string): string
   return `${partition}${name}=${value.length}:${value}\n`;
 }
 
+/**
+ * Response headers that must never be persisted in a cache entry, because they
+ * describe *this hop* or *this request* rather than the stored representation.
+ *
+ * - The RFC 9111 §3.1 / RFC 9110 §7.6.1 hop-by-hop set. Replaying a stored
+ *   `Transfer-Encoding: chunked` onto a fixed-length cached body, or a stored
+ *   `Connection` token, corrupts message framing for every later caller.
+ * - `Age`, which is recomputed from `storedAt` on every serve.
+ * - `X-Request-Id`, the default correlation id written by `requestId()`. It
+ *   identifies the *one* request that populated the entry; replaying it makes
+ *   every subsequent caller report a trace id belonging to someone else's
+ *   request, and tells an attacker whether their own seed is still being
+ *   served (a cache-state oracle).
+ *
+ * Extend for a custom correlation header via
+ * {@link ResponseCacheOptions.excludeHeaders}.
+ */
+const NEVER_CACHED_HEADERS: ReadonlySet<string> = new Set([
+  "age",
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "x-request-id",
+]);
+
+/**
+ * Split a response's `Vary` header into normalized field names.
+ *
+ * @param raw - Raw `Vary` header value, or `null` when absent.
+ * @returns `"*"` when the response is declared unreusable by any secondary key,
+ *   a sorted, de-duplicated, lower-cased field list otherwise (empty when the
+ *   header is absent or lists nothing usable). Sorting makes the derived key
+ *   independent of the order the emitting middleware happened to append in.
+ */
+function parseVary(raw: string | null): "*" | string[] {
+  if (!raw) return [];
+  const fields = new Set<string>();
+  for (const part of raw.split(",")) {
+    const name = part.trim().toLowerCase();
+    if (!name) continue;
+    if (name === "*") return "*";
+    fields.add(name);
+  }
+  return [...fields].sort();
+}
+
+/**
+ * Derive the secondary cache key for a request: the values it carries for each
+ * field the stored response varies on.
+ *
+ * Uses the same length-prefixed encoding as {@link appendPartition}, so a header
+ * value containing the delimiter cannot be crafted to collide with a different
+ * variant.
+ *
+ * @param headers - The request's headers.
+ * @param fields - Lower-cased field names from {@link parseVary}.
+ * @returns An unambiguous encoding of those fields' values.
+ */
+function varyKeyFor(headers: Headers, fields: readonly string[]): string {
+  let key = "";
+  for (const name of fields) key = appendPartition(key, name, headers.get(name) ?? "");
+  return key;
+}
+
+/**
+ * Store key for one variant of a primary key.
+ *
+ * Variants live under their own keys so they coexist instead of evicting each
+ * other. A single slot per primary key would make every alternation between
+ * (say) a gzip client and an identity client a miss — and hand an attacker a
+ * cache-defeat DoS: rotate `Origin` or `Accept-Encoding` and every request runs
+ * the handler.
+ *
+ * The separator is a NUL byte, which cannot appear in a header value, so a
+ * variant key can never collide with a primary key.
+ */
+function variantKey(primary: string, varyKey: string): string {
+  return `${primary}\u0000v\u0000${varyKey}`;
+}
+
 function buildResponseFromCache(
   entry: CachedResponse,
   outcome: "HIT" | "STALE",
@@ -466,9 +658,16 @@ function isPromiseLike<T>(value: unknown): value is Promise<T> {
  *
  * Request `Cache-Control: no-store` bypasses the cache entirely; `no-cache`
  * bypasses the read but still refreshes the stored entry. Responses marked
- * `no-store` / `private` / `no-cache`, carrying `Set-Cookie`, failing
- * {@link ResponseCacheOptions.cacheableStatus}, or larger than
+ * `no-store` / `private` / `no-cache`, carrying `Set-Cookie` or `Vary: *`,
+ * failing {@link ResponseCacheOptions.cacheableStatus}, or larger than
  * {@link ResponseCacheOptions.maxBodyBytes} are never cached.
+ *
+ * A response that declares `Vary` is stored as a **variant**: the request's
+ * values for those fields are recorded alongside it, and the entry is replayed
+ * only to a request whose values match. A mismatch is a miss, so the handler
+ * runs and the entry is re-stored for that variant. This applies to `Vary`
+ * written by any middleware in the chain — notably `cors()` (`Origin`) and
+ * `compression()` (`Accept-Encoding`) — with no configuration.
  *
  * @example
  * ```ts
@@ -514,6 +713,9 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
   const cacheableStatus = opts.cacheableStatus ?? ((status: number) => status === 200);
   const varyHeaders = (opts.varyHeaders ?? []).map((h) => h.toLowerCase());
   const principal = opts.principal;
+  const excludedHeaders: ReadonlySet<string> = opts.excludeHeaders?.length
+    ? new Set([...NEVER_CACHED_HEADERS, ...opts.excludeHeaders.map((h) => h.toLowerCase())])
+    : NEVER_CACHED_HEADERS;
 
   // Resolve the per-header credential policy once, at construction. A credential
   // header counts as "handled" when the caller declared it shareable, or when it
@@ -622,14 +824,41 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
       const bypassRead = reqCc.has("no-cache");
       if (!bypassRead) {
         const getResult = store.get(key);
-        const entry = isPromiseLike(getResult) ? await getResult : getResult;
+        let entry = isPromiseLike(getResult) ? await getResult : getResult;
+        let servedKey = key;
+
+        // RFC 9111 §4.1: an entry stored for a response that declared `Vary`
+        // is reusable only for a request whose values for those fields match
+        // the ones it was stored with. Without this, `cors()`'s `Vary: Origin`
+        // and `compression()`'s `Vary: Accept-Encoding` are silently ignored
+        // and one caller's variant — their `Access-Control-Allow-Origin`, their
+        // content-coding, their negotiated language — is served to the next.
+        //
+        // The entry at the primary key doubles as the hint that tells us *which*
+        // fields matter, so the common single-variant case costs one `get`. On a
+        // mismatch we know the field list and can look the right variant up
+        // directly, which is what keeps several variants of one URL alive at
+        // once instead of each evicting the last.
+        if (entry?.vary?.length) {
+          const wanted = varyKeyFor(headers, entry.vary);
+          if (entry.varyKey !== wanted) {
+            servedKey = variantKey(key, wanted);
+            const variantResult = store.get(servedKey);
+            entry = isPromiseLike(variantResult) ? await variantResult : variantResult;
+            // A stored variant records the field list it was keyed on; if that
+            // has since changed (the handler now varies on something else), the
+            // recorded key no longer means what we just computed.
+            if (entry && varyKeyFor(headers, entry.vary ?? []) !== entry.varyKey) entry = null;
+          }
+        }
+
         if (entry) {
           const now = Date.now();
           if (now < entry.freshUntil) {
             return buildResponseFromCache(entry, "HIT", statusHeaderName, method === "HEAD");
           }
           if (revalidate && now < entry.staleUntil) {
-            backgroundRefresh(key, ctx.request);
+            backgroundRefresh(servedKey, ctx.request);
             return buildResponseFromCache(entry, "STALE", statusHeaderName, method === "HEAD");
           }
         }
@@ -661,6 +890,15 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
         return undefined;
       }
 
+      // RFC 9111 §4.1: `Vary: *` declares the response unreusable for any other
+      // request, whatever its headers. There is no secondary key that can make
+      // it safe, so it is never stored.
+      const vary = parseVary(res.headers.get("vary"));
+      if (vary === "*") {
+        if (statusHeaderName) res.headers.set(statusHeaderName, "MISS");
+        return undefined;
+      }
+
       const buf = new Uint8Array(await res.clone().arrayBuffer());
       if (buf.byteLength > maxBodyBytes) {
         if (statusHeaderName) res.headers.set(statusHeaderName, "MISS");
@@ -669,22 +907,37 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
 
       const headers: Array<[string, string]> = [];
       res.headers.forEach((value, name) => {
-        // `Age` is recomputed on every serve; never persist a stale one.
-        if (name === "age") return;
+        // Hop-by-hop and per-request headers describe this exchange, not the
+        // stored representation; replaying them corrupts framing or leaks one
+        // caller's correlation id to the next.
+        if (excludedHeaders.has(name)) return;
         headers.push([name, value]);
       });
 
       const now = Date.now();
       const freshMs = freshness ?? ttlMs;
+      const ttl = freshMs + swrMs;
+      const varyKey = vary.length ? varyKeyFor(ctx.request.headers, vary) : undefined;
       const entry: CachedResponse = {
         status: res.status,
         headers,
         body: buf.byteLength ? bytesToBase64(buf) : "",
         storedAt: now,
         freshUntil: now + freshMs,
-        staleUntil: now + freshMs + swrMs,
+        staleUntil: now + ttl,
+        ...(varyKey === undefined ? {} : { vary, varyKey }),
       };
-      const setResult = store.set(pending.key, entry, freshMs + swrMs);
+
+      // A varying response is written twice: once under its own variant key, so
+      // it survives other variants of the same URL being cached, and once at
+      // the primary key, where the next lookup reads it as the hint naming the
+      // fields that matter. The primary copy is the most recently stored
+      // variant, so that one is served in a single `get`.
+      if (varyKey !== undefined) {
+        const variantResult = store.set(variantKey(pending.key, varyKey), entry, ttl);
+        if (isPromiseLike(variantResult)) await variantResult;
+      }
+      const setResult = store.set(pending.key, entry, ttl);
       if (isPromiseLike(setResult)) await setResult;
       if (statusHeaderName) res.headers.set(statusHeaderName, "MISS");
       return undefined;

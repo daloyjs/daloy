@@ -309,6 +309,9 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
              │                    └─ principal(ctx), when supplied
              └─ ctx.state.tenant, folded in automatically by tenancy()
 
+            + [ secondary key ] ─── the request's values for the fields the
+                                    response's own Vary header names (RFC 9111 §4.1)
+
 Authorization or Cookie present, and neither handled nor identified?  →  bypass the cache entirely`}</code>
         </pre>
       </div>
@@ -361,6 +364,31 @@ app.use(
         in <code>varyHeaders</code> also counts as handling it, since its value
         then partitions the key by itself.
       </p>
+      <h3 id="declared-variants-are-honoured">Declared variants are honoured</h3>
+      <p>
+        A response&apos;s own <code>Vary</code> header is the origin telling the
+        cache which request headers its content depends on, and DaloyJS honours
+        it as a <strong>secondary key</strong> (RFC&nbsp;9111&nbsp;§4.1) with no
+        configuration. This matters because middleware you already mount emits{" "}
+        <code>Vary</code> for you: <code>cors()</code> adds{" "}
+        <code>Vary: Origin</code> alongside the reflected{" "}
+        <code>Access-Control-Allow-Origin</code>, and <code>compression()</code>{" "}
+        adds <code>Vary: Accept-Encoding</code> alongside{" "}
+        <code>Content-Encoding</code>. A cache that ignored those would serve one
+        caller&apos;s allowed origin — or their gzipped bytes — to the next.
+      </p>
+      <p>
+        Each distinct set of values is stored as its own variant, so several
+        variants of one URL stay warm at the same time rather than evicting one
+        another. A response carrying <code>Vary: *</code> declares itself
+        unreusable and is never stored.
+      </p>
+      <p>
+        <code>varyHeaders</code> remains useful and is additive: it partitions{" "}
+        <em>before</em> the handler runs, which is what you want when the
+        response does not declare <code>Vary</code> itself but you know it
+        depends on a header anyway.
+      </p>
       <h3 id="tenants-partition-automatically">Tenants partition automatically</h3>
       <p>
         When <code>tenancy()</code> has resolved a tenant for the request, that
@@ -396,12 +424,27 @@ app.use(
         </li>
         <li>
           Stored bodies are capped by <code>maxBodyBytes</code> to bound memory
-          growth from large replies.
+          growth from large replies, and{" "}
+          <code>MemoryResponseCacheStore</code> is bounded on both entry count (
+          <code>maxEntries</code>, default 10,000) and retained body bytes (
+          <code>maxBytes</code>, default 64&nbsp;MiB). Both limits are needed:
+          expiry-based pruning alone cannot bound a burst of requests for
+          distinct URLs, because every entry in it is unexpired for the whole
+          TTL.
         </li>
         <li>
           Use <code>varyHeaders</code> (or a custom <code>keyGenerator</code>)
           to partition the cache whenever the response depends on a request
-          header such as <code>Accept-Language</code>.
+          header such as <code>Accept-Language</code> without saying so in{" "}
+          <code>Vary</code>.
+        </li>
+        <li>
+          Hop-by-hop headers (<code>Connection</code>,{" "}
+          <code>Transfer-Encoding</code>, <code>TE</code>, …) and the{" "}
+          <code>X-Request-Id</code> correlation id are stripped before an entry
+          is stored, so a cached reply never replays another request&apos;s
+          trace id or corrupts message framing. Add a custom correlation header
+          to <code>excludeHeaders</code>.
         </li>
         <li>
           Partition components are length-prefixed, so a principal or tenant id

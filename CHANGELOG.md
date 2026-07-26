@@ -40,6 +40,44 @@ For the forward-looking plan and the full thematic release log, see
     cookie-authenticated private response was stored and replayed to an
     anonymous stranger.
 
+- **`responseCache()` now honours the response's own `Vary` header — F-7 in
+  [`SECURITY-AUDIT.md`](SECURITY-AUDIT.md) (MEDIUM-HIGH).** A follow-up live
+  engagement found the cache read only its own `varyHeaders` option and
+  discarded the `Vary` the response declared for itself — even though two
+  middlewares in the framework's own recommended stack emit one: `cors()` writes
+  `Vary: Origin` beside the reflected `Access-Control-Allow-Origin`, and
+  `compression()` writes `Vary: Accept-Encoding` beside `Content-Encoding`. The
+  whole response, those headers included, was stored under a key covering
+  neither field. **Plain defaults, on the composition the docs recommend.**
+  Confirmed over the wire: a caller from one allowed origin seeded the entry and
+  every later caller — including one sending no `Origin` — received *that*
+  origin's `Access-Control-Allow-Origin` with `x-cache: HIT`, so their browser
+  rejected a response they were entitled to; a client that negotiated no
+  compression received a gzip body (`1f8b` magic bytes); and a handler that
+  correctly declared `Vary: Accept-Language` served German to an English client.
+  `Vary` is now a secondary key: an entry is replayed only to a request whose
+  values for the declared fields match, values are length-prefixed so a crafted
+  header cannot collide with another variant, and `Vary: *` is never stored.
+  Variants live under their own store keys, so several stay warm at once rather
+  than each evicting the last — a single slot would have handed an attacker a
+  cache-defeat DoS by rotating `Origin`. Measured at parity on
+  `bench/response-cache.bench.ts`.
+- **Cached entries no longer freeze per-request or hop-by-hop headers — F-8
+  (LOW-MEDIUM).** With `requestId()` mounted, every caller served from the cache
+  received the `x-request-id` of the one request that populated it: broken
+  incident correlation, and a cache-state oracle for whoever seeded it.
+  Hop-by-hop headers were storable too, so a handler-written
+  `Transfer-Encoding` would be replayed onto a fixed-length cached body. `Age`,
+  the RFC 9110 §7.6.1 hop-by-hop set, and `X-Request-Id` are now stripped before
+  storage. The origin `Date` is deliberately kept — RFC 9111 §4.2.3 computes age
+  from it.
+- **`MemoryResponseCacheStore` is now bounded — F-9 (MEDIUM).** Its TSDoc
+  claimed the map "cannot grow without bound", but `set()` pruned only *expired*
+  entries, and nothing is expired inside the TTL. An unauthenticated attacker
+  rotating a query string minted a fresh entry per request, each holding up to
+  `maxBodyBytes` (default 1 MiB); 20,000 unexpired entries were retained against
+  a documented 10,000 cap. Both an entry-count and a byte ceiling are now
+  enforced with FIFO eviction (expired first).
 - **New boot guard (production, `secureDefaults` on): `responseCache()` mounted
   ahead of `tenancy()` refuses to boot.** The cache builds its key in
   `beforeHandle`, so in that order the tenant does not exist yet and automatic
@@ -54,6 +92,16 @@ For the forward-looking plan and the full thematic release log, see
   credential), or `null` for anonymous. A `principal` that returns `null` for a
   request that *does* carry credentials fails closed. This is what makes
   cookie-authenticated caching both possible and safe.
+- **`responseCache({ excludeHeaders })`** — extra response headers to drop
+  before an entry is stored, on top of the built-in `Age` / hop-by-hop /
+  `X-Request-Id` set. Name a custom correlation or tracing header here so it is
+  not frozen into the entry and replayed to every later caller — pair
+  `requestId({ header: "x-correlation-id" })` with
+  `excludeHeaders: ["x-correlation-id"]`.
+- **`new MemoryResponseCacheStore({ maxEntries, maxBytes })`** — capacity limits
+  for the default in-memory store, defaulting to 10,000 entries and 64 MiB of
+  retained body bytes. The byte ceiling is the one that actually caps memory:
+  an entry count alone permits 10,000 × 1 MiB.
 - **`TENANCY_RESOLVED_MARKER` / `TENANT_UNRESOLVED` / `TENANCY_HOOK_MARKER`
   (`tenancy`) and `RESPONSE_CACHE_HOOK_MARKER` (`response-cache`)** — the
   `ctx.state` marker under which `tenancy()` records the tenant it resolved
