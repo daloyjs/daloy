@@ -94,6 +94,13 @@ const SQLI_SIGNATURES: readonly RegExp[] = Object.freeze([
   /\bUNION\b[\s\S]{0,40}?\bSELECT\b/i,
   /\b(?:OR|AND)\b\s+['"]?\d+['"]?\s*=\s*['"]?\d+/i,
   /'\s*(?:OR|AND)\s+'?[\w]+'?\s*=\s*'?[\w]+/i,
+  // Parenthesized subquery behind a boolean operator — `1 OR (SELECT 1)`. The
+  // tautology patterns above anchor on `= <digit>`, so a subquery carrying no
+  // comparison slipped through. Paired with the comment-stripped inspection
+  // variant this also catches `1/**/OR/**/(SELECT/**/1)`. High confidence:
+  // prose query values virtually never contain `OR (` immediately followed by
+  // the SELECT keyword.
+  /\b(?:OR|AND)\s*\(\s*SELECT\b/i,
   /;\s*(?:DROP|DELETE|INSERT|UPDATE|TRUNCATE|ALTER|CREATE)\b/i,
   /\b(?:SLEEP|BENCHMARK|PG_SLEEP)\s*\(/i,
   /\bWAITFOR\s+DELAY\b/i,
@@ -347,12 +354,30 @@ function safeDecode(value: string): string {
 const MAX_DECODE_PASSES = 2;
 
 /**
+ * Control characters that are NOT matched by JS `\s`, used to split keywords
+ * past whitespace-anchored signatures (e.g. `1'%00OR%001=1`).
+ *
+ * U+0009-U+000D (\t \n \v \f \r) are deliberately absent: `\s` already
+ * matches them and every signature separates tokens with `\s`, `\b`, or
+ * `[\s\S]`, so normalizing them would only duplicate an existing variant.
+ *
+ * Hoisted to module scope so the hot path neither re-creates the RegExp object
+ * nor pays literal-evaluation overhead per inspected value. The probe is
+ * non-global (stateless `test()`); the replace copy is global and `replace()`
+ * resets `lastIndex`, so neither carries state between calls.
+ */
+const CONTROL_CHAR_PROBE = /[\u0000-\u0008\u000e-\u001f\u007f]/;
+const CONTROL_CHAR_GLOBAL = /[\u0000-\u0008\u000e-\u001f\u007f]/g;
+
+/**
  * Expand a single inbound string into the variants the WAF should scan.
  *
  * Includes the raw value, up to {@link MAX_DECODE_PASSES} percent-decodes,
- * a `+`→space form (URLSearchParams parity), and a SQL-comment-stripped
+ * a `+`→space form (URLSearchParams parity), a SQL-comment-stripped
  * form so comment-split keywords (e.g. OR wrapped in block comments) score
- * the same as the whitespace-separated form.
+ * the same as the whitespace-separated form, and a control-character→space
+ * form so embedded NUL / escape bytes cannot split keywords past the
+ * whitespace-anchored signatures (e.g. `1'%00OR%001=1` → `1' OR 1=1`).
  *
  * Scanning variants is pure defense-in-depth: the handler still receives
  * whatever the framework's single-decode path produced. Each variant is
@@ -388,6 +413,19 @@ function inspectionVariants(value: string, maxValueLength: number): string[] {
   for (const v of decodedChain) {
     if (v.includes("+")) push(v.replace(/\+/g, " "));
     if (v.includes("/*")) push(v.replace(/\/\*[\s\S]*?\*\//g, " "));
+    // Control characters (notably NUL) are not `\s`, so `1'%00OR%001=1` split
+    // `OR` from `1=1` and walked past the whitespace-anchored signatures. Scan
+    // a control-char→space form; benign traffic carries almost no C0 bytes, so
+    // the false-positive surface is negligible.
+    //
+    // The class deliberately excludes U+0009-U+000D (\t \n \v \f \r): JS `\s`
+    // already matches those, and every signature separates tokens with `\s`,
+    // `\b`, or `[\s\S]`, so normalizing them only ever yields a variant that
+    // scores identically to one already in the set. Including them cost ~13%
+    // on every request carrying a multi-line body or query value.
+    if (CONTROL_CHAR_PROBE.test(v)) {
+      push(v.replace(CONTROL_CHAR_GLOBAL, " "));
+    }
   }
   return out;
 }

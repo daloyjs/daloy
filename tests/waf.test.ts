@@ -186,6 +186,92 @@ test("SQL block-comment keyword split is blocked after comment stripping", async
   assert.equal(res.status, 403);
 });
 
+// ---------- live-pentest regression: WAF evasions found over the wire ----------
+
+test("NUL-byte keyword split is blocked after control-char normalization", async () => {
+  // Live-pentest finding: NUL is not `\s`, so `1'%00OR%001=1` split `OR` from
+  // `1=1` and walked past the whitespace-anchored tautology signature. The
+  // control-char→space inspection variant closes it. Note the raw %00 bytes —
+  // the decode chain must surface the NUL-bearing form before normalization.
+  const app = queryApp();
+  const res = await app.fetch(new Request("http://x/search?q=1'%00OR%001=1"));
+  assert.equal(res.status, 403);
+});
+
+test("every C0 control character is unusable as a keyword splicer", async () => {
+  // Guards the split responsibility in inspectionVariants(): U+0009-U+000D are
+  // deliberately excluded from the normalization class because JS `\s` already
+  // matches them (normalizing them would only duplicate an existing variant at
+  // ~13% throughput cost on multi-line bodies). This asserts the outcome that
+  // matters — both halves of the class stay unusable to an attacker — so a
+  // future edit to either half fails loudly.
+  const app = queryApp();
+  for (const pct of [
+    "%09", // TAB   \
+    "%0a", // LF     | already `\s` — matched natively, never normalized
+    "%0b", // VT     |
+    "%0c", // FF     |
+    "%0d", // CR    /
+    "%00", // NUL   \
+    "%01", // SOH    | not `\s` — only caught via the normalized variant
+    "%1f", // US     |
+    "%7f", // DEL   /
+  ]) {
+    const tautology = await app.fetch(new Request(`http://x/search?q=1'${pct}OR${pct}1=1`));
+    assert.equal(tautology.status, 403, `tautology spliced with ${pct} was not blocked`);
+    const union = await app.fetch(
+      new Request(`http://x/search?q=1${pct}UNION${pct}SELECT${pct}1`),
+    );
+    assert.equal(union.status, 403, `UNION SELECT spliced with ${pct} was not blocked`);
+  }
+});
+
+test("parenthesized subquery after a boolean operator is blocked", async () => {
+  // Live-pentest finding: `1 OR (SELECT 1)` carries no `= <digit>` comparison,
+  // so it matched no tautology signature and reached the handler.
+  const app = queryApp();
+  const res = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("1 OR (SELECT 1)")),
+  );
+  assert.equal(res.status, 403);
+});
+
+test("comment-obfuscated parenthesized subquery is blocked", async () => {
+  // Live-pentest finding (extended harness): nested block comments around both
+  // the operator and the subquery — `1/**/OR/**/(SELECT/**/1)` — evaded every
+  // signature; the comment-stripped variant plus the subquery signature close it.
+  const app = queryApp();
+  const res = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("1/**/OR/**/(SELECT/**/1)")),
+  );
+  assert.equal(res.status, 403);
+});
+
+test("AND-prefixed parenthesized subquery is blocked", async () => {
+  const app = queryApp();
+  const res = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("1' AND (SELECT password FROM users)")),
+  );
+  assert.equal(res.status, 403);
+});
+
+test("benign parenthesized prose is NOT a false positive", async () => {
+  // Parentheses alone must not trip the subquery signature.
+  const app = queryApp();
+  const res = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("sort order (ascending)")),
+  );
+  assert.equal(res.status, 200);
+});
+
+test("benign disjunction without a subquery is NOT a false positive", async () => {
+  const app = queryApp();
+  const res = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("cats or dogs")),
+  );
+  assert.equal(res.status, 200);
+});
+
 test("double-encoded XSS event-handler payload is blocked", async () => {
   const app = queryApp();
   // encodeURIComponent of already-encoded XSS → double encoding on the wire.

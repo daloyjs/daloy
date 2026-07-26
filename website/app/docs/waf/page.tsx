@@ -269,11 +269,15 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         </li>
         <li>
           Inspection uses bounded multi-decode (at most two percent-decode
-          passes), <code>+</code>-&gt;space normalization, and SQL block-comment
-          stripping so classic double-encoding and <code>{"/**/"}</code> keyword
-          splits still score. Triple-or-deeper encoding remains a residual
-          signature gap: keep schemas and parameterized queries as the primary
-          wall, and keep an edge WAF on your roadmap for high-risk surfaces.
+          passes), <code>+</code>-&gt;space normalization, SQL block-comment
+          stripping, and control-character (NUL/C0) normalization so classic
+          double-encoding, <code>{"/**/"}</code> keyword splits, and NUL-spliced
+          keywords like <code>{"1'%00OR%001=1"}</code> still score. Parenthesized
+          subqueries behind boolean operators (<code>1 OR (SELECT 1)</code>) are
+          covered by a dedicated signature. Triple-or-deeper encoding remains a
+          residual signature gap: keep schemas and parameterized queries as the
+          primary wall, and keep an edge WAF on your roadmap for high-risk
+          surfaces.
         </li>
         <li>
           A WAF-lite is still best-effort signature matching. Treat it as depth,
