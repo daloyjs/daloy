@@ -104,12 +104,12 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Allow the RFC 6455 WebSocket handshake test vector (base64 of the literal 16-byte string \"0123456789abcdef\") in the live red-team driver. Covers both the raw base64 match and its base64-decoded form."
+description = "Allow the RFC 6455 WebSocket handshake test vector (base64 of the literal 16-byte string \"0123456789abcdef\") in the live red-team drivers. `Sec-WebSocket-Key` is a per-handshake nonce the client generates in the clear, not a credential — every driver that opens a raw upgrade carries one. Covers both the raw base64 match and its base64-decoded form. Scoped to the whole directory rather than named files so a new attack driver does not re-trip the scan; the regexes below still pin it to this one literal vector, so a real secret in these files is still caught."
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "match"
 paths = [
-  '''(?:^|/)red-team-live/run\.ts$''',
+  '''(?:^|/)red-team-live/[^/]+\.ts$''',
 ]
 regexes = [
   '''MDEyMzQ1Njc4OWFiY2RlZg==''',
