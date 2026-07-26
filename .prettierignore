@@ -8,11 +8,19 @@ generated/
 temp_tarball/
 packages/create-daloy/templates/_ci/
 
-website/.next/
-website/.turbo/
-website/out/
-website/node_modules/
-website/coverage/
+# website/ is formatted by its own `cd website && pnpm format`, against its own
+# .prettierrc (printWidth 80 + prettier-plugin-tailwindcss). The plugin is
+# installed only in website/node_modules, so a root `prettier --write .` that
+# reaches these files loads website/.prettierrc, fails to resolve the plugin
+# from the repo root, and aborts the whole run. Keep the two scopes separate.
+website/
+
+# Stale agent worktrees — copies of the repo, not sources to format.
+.claude/
+
+# Pentest scratch fixtures; deep.json is a nesting bomb that overflows
+# Prettier's parser stack.
+tmp/
 
 pnpm-lock.yaml
 *.tsbuildinfo
