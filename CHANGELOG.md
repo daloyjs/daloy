@@ -15,6 +15,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.0.0-rc.6] - 2026-07-26
+
 ### Security
 
 - **`responseCache()` cross-principal disclosure (CWE-524) closed on three more
@@ -95,6 +97,28 @@ For the forward-looking plan and the full thematic release log, see
   `beforeHandle`, so in that order the tenant does not exist yet and automatic
   partitioning cannot protect the entry. Register `tenancy()` first. Joins the
   existing guards for `session()`-without-`csrf()` and `auth:`-without-an-auth-hook.
+- **`waf()` SQLi signature evasions closed (found in the same live
+  engagement).** Two payload shapes walked past the SQLi ruleset. A
+  parenthesized subquery behind a boolean operator (`1 OR (SELECT 1)`) matched
+  nothing, because every tautology signature anchored on a `= <digit>`
+  comparison the payload never contained; a new high-confidence signature
+  covers `OR`/`AND` immediately followed by `(SELECT`. Separately, embedded C0
+  control bytes split keywords past the whitespace-anchored signatures
+  (`1'%00OR%001=1`), because JavaScript `\s` does not match NUL — the inspected
+  variant set now includes a control-character→space normalization. The class
+  deliberately excludes `\t \n \v \f \r`, which `\s` already matches: adding
+  them produced only variants that score identically to one already in the set
+  and cost ~13% on every request carrying a multi-line body or query value.
+- **A WebSocket frame declaring an oversized payload is rejected at the
+  header, before its bytes are buffered.** `parseFrame()` enforced
+  `maxPayloadLength` only once a frame had fully arrived, so a sender could
+  declare a huge length and then trickle the payload, holding the assembled
+  buffer open and growing in `FrameSink` the whole time. The declared length is
+  now checked as soon as the frame header is complete — ahead of the mask and
+  payload bytes — and fails with `WebSocketPayloadTooLargeError` (close 1009).
+  Control frames are unaffected; they are already capped at 125 bytes. A
+  declared length above the limit always implies the assembled message exceeds
+  it, so cumulative fragment accounting stays where it was, with the caller.
 
 ### Added
 
@@ -123,19 +147,19 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Changed
 
-- **BREAKING — the `responseCache()` key now includes the request authority.**
-  Cache keys change shape, so the first deploy after upgrading sees a one-time
-  cold cache (a miss storm, not a correctness problem). Nothing to migrate.
-- **BREAKING — requests carrying `Cookie` now bypass the shared cache by
-  default**, exactly as `Authorization` already did. A route that was
-  (unsafely) caching cookie-bearing traffic will stop caching it. To restore
-  caching, add a `principal` — the safe fix — or, only for genuinely shareable
-  content, opt in explicitly.
-- **BREAKING — `cacheAuthenticatedRequests` widened to
+- **The `responseCache()` key now includes the request authority.** Cache keys
+  change shape, so the first deploy after upgrading sees a one-time cold cache
+  (a miss storm, not a correctness problem). Nothing to migrate.
+- **Requests carrying `Cookie` now bypass the shared cache by default**, exactly
+  as `Authorization` already did. A route that was (unsafely) caching
+  cookie-bearing traffic will stop caching it. To restore caching, add a
+  `principal` — the safe fix — or, only for genuinely shareable content, opt in
+  explicitly.
+- **`cacheAuthenticatedRequests` widened to
   `boolean | { authorization?: boolean; cookie?: boolean }`.** `true` now opts
   in _both_ credential headers rather than just `Authorization`; pass
-  `{ authorization: true }` to keep the old narrow meaning. Declaring a
-  credential header in `varyHeaders` also counts as handling it.
+  `{ authorization: true }` for the narrower `Authorization`-only meaning.
+  Declaring a credential header in `varyHeaders` also counts as handling it.
 - **`keyGenerator` now derives the key _body_ only.** The tenant/principal
   partition is applied around whatever it returns, so a custom generator can no
   longer accidentally widen the partition — and the `tenantScope()`-based
@@ -149,6 +173,15 @@ For the forward-looking plan and the full thematic release log, see
   `Headers.has()` probes (~60 ns) and a partition that costs nothing when
   absent. `App`'s import graph is unchanged, so serverless cold start is
   unaffected.
+- **Version: `1.0.0-rc.5` → `1.0.0-rc.6`** across the lockstep packages
+  (`@daloyjs/core`, `create-daloy`, JSR `@daloyjs/daloy`), the npm
+  `create-daloy` templates, the website version reference, the workshop, and
+  the SBOMs. The `deno-basic` template still resolves
+  `jsr:@daloyjs/daloy@^1.0.0-rc.5`: its `deno.lock` carries an integrity hash
+  that can only be computed once the version exists on JSR, and scaffolded Deno
+  projects run `deno install --frozen=true`, so the pin is refreshed in a
+  follow-up once `1.0.0-rc.6` is live on JSR. The range itself already admits
+  `1.0.0-rc.6`.
 
 ## [1.0.0-rc.5] - 2026-07-20
 
@@ -2276,7 +2309,9 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.4...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...HEAD
+[1.0.0-rc.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.5...v1.0.0-rc.6
+[1.0.0-rc.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.4...v1.0.0-rc.5
 [1.0.0-rc.4]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.1...v1.0.0-rc.2
