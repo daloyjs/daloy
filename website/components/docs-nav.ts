@@ -67,6 +67,7 @@ export const docsNav: DocsNavSection[] = [
       },
       { title: "Testing & contract tests", href: "/docs/testing" },
       { title: "AI-friendly route metadata", href: "/docs/ai-metadata" },
+      { title: "llms.txt for agents", href: "/docs/llms-txt" as Route },
       { title: "Model Context Protocol (MCP)", href: "/docs/mcp" as Route },
       { title: "Vercel AI SDK", href: "/docs/ai-sdk" as Route },
     ],

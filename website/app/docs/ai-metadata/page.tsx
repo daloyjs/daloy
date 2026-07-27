@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 
 import { CodeBlock } from "../../../components/code-block";
 import { BranchDiagram } from "../../../components/diagram";
@@ -40,7 +41,9 @@ export default function Page() {
 
       <p>
         <strong>Additive and non-breaking.</strong> Existing routes keep working
-        unchanged, <code>meta</code> is optional everywhere.
+        unchanged, <code>meta</code> is optional everywhere. For a curated map
+        of public docs pages (not per-route examples), see{" "}
+        <Link href={"/docs/llms-txt" as Route}>llms.txt for agents</Link>.
       </p>
 
       <BranchDiagram
