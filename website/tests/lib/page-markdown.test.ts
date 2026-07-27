@@ -101,3 +101,107 @@ test("buildPageMarkdown returns an empty string for empty articles", () => {
 
   assert.equal(buildPageMarkdown(article, "https://daloyjs.dev/docs/sample"), "");
 });
+
+test("buildPageMarkdown leaves prose punctuation unescaped", () => {
+  const article = articleFromHtml(`
+    <article data-docs-content>
+      <div>
+        A fresh App instance ships these defaults armed (new App()). Each one has a
+        per-feature opt-out, and secureDefaults: false is the master escape hatch.
+      </div>
+    </article>
+  `);
+
+  const markdown = buildPageMarkdown(article, "https://daloyjs.dev/docs/sample");
+
+  assert.ok(
+    !markdown.includes("\\"),
+    `expected no backslash escapes, got: ${JSON.stringify(markdown)}`,
+  );
+  assert.match(markdown, /armed \(new App\(\)\)\. Each one has a per-feature opt-out/);
+});
+
+test("buildPageMarkdown keeps inline runs in a single paragraph", () => {
+  const article = articleFromHtml(`
+    <article data-docs-content>
+      <blockquote>
+        Security defaults start enabled. Disabling them requires both
+        <code>secureDefaults: false</code> and <code>acknowledgeInsecureDefaults: true</code>,
+        and DaloyJS records the choice at startup.
+      </blockquote>
+    </article>
+  `);
+
+  assert.equal(
+    buildPageMarkdown(article, "https://daloyjs.dev/docs/sample"),
+    [
+      "> Security defaults start enabled. Disabling them requires both " +
+        "`secureDefaults: false` and `acknowledgeInsecureDefaults: true`, " +
+        "and DaloyJS records the choice at startup.",
+      "",
+      "---",
+      "",
+      "Source: https://daloyjs.dev/docs/sample",
+    ].join("\n"),
+  );
+});
+
+test("buildPageMarkdown separates adjacent inline elements and drops decorations", () => {
+  const article = articleFromHtml(`
+    <article data-docs-content>
+      <ul>
+        <li><span>✓</span><span>Protecting credential entry against brute-force attacks.</span></li>
+      </ul>
+      <p><span aria-hidden="true">→</span>Visible copy.</p>
+    </article>
+  `);
+
+  const markdown = buildPageMarkdown(article, "https://daloyjs.dev/docs/sample");
+
+  assert.match(markdown, /^- ✓ Protecting credential entry against brute-force attacks\.$/m);
+  assert.match(markdown, /^Visible copy\.$/m);
+});
+
+test("buildPageMarkdown escapes only a paragraph's leading block marker", () => {
+  const article = articleFromHtml(`
+    <article data-docs-content>
+      <p>- not a list item, and 2 - 1 stays intact</p>
+      <p>#hashtags are not headings</p>
+    </article>
+  `);
+
+  const markdown = buildPageMarkdown(article, "https://daloyjs.dev/docs/sample");
+
+  assert.match(markdown, /^\\- not a list item, and 2 - 1 stays intact$/m);
+  assert.match(markdown, /^#hashtags are not headings$/m);
+});
+
+test("buildPageMarkdown indents extra blocks inside a list item", () => {
+  const article = articleFromHtml(`
+    <article data-docs-content>
+      <ul>
+        <li>
+          <p>Register the hook.</p>
+          <div class="code-editor" data-language="ts">
+            <div class="code-editor__content"><pre><code>app.use(cors());</code></pre></div>
+          </div>
+        </li>
+      </ul>
+    </article>
+  `);
+
+  assert.equal(
+    buildPageMarkdown(article, "https://daloyjs.dev/docs/sample"),
+    [
+      "- Register the hook.",
+      "",
+      "  ```ts",
+      "  app.use(cors());",
+      "  ```",
+      "",
+      "---",
+      "",
+      "Source: https://daloyjs.dev/docs/sample",
+    ].join("\n"),
+  );
+});

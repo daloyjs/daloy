@@ -76,6 +76,9 @@ function ConnectorArrow({ className }: { className?: string }) {
  *   for code-like values (paths, identifiers, schemas).
  * @param props.tone - Visual emphasis, see {@link DiagramTone}.
  * @param props.className - Extra classes for layout (width, flex).
+ * @param props.role - Optional structural role (`source`, `converge`) surfaced
+ *   to the markdown converter so a fan-out does not read as a linear pipeline
+ *   in plain text. Unmarked nodes are the fan-out's branches.
  * @returns A themeable node element.
  */
 function DiagramNode({
@@ -85,6 +88,7 @@ function DiagramNode({
   detail,
   tone = "default",
   className,
+  role,
 }: {
   index?: number;
   eyebrow?: string;
@@ -92,11 +96,14 @@ function DiagramNode({
   detail?: ReactNode;
   tone?: DiagramTone;
   className?: string;
+  role?: string;
 }) {
   const showHeader = index !== undefined || eyebrow !== undefined;
 
   return (
     <div
+      data-diagram-node=""
+      data-diagram-role={role}
       className={cn(
         "relative flex min-w-0 flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm",
         TONE_NODE[tone],
@@ -110,16 +117,26 @@ function DiagramNode({
             className={cn("h-1.5 w-1.5 rounded-full", TONE_DOT[tone])}
           />
           {index !== undefined ? (
-            <span>{String(index).padStart(2, "0")}</span>
+            <span data-diagram-index="">{String(index).padStart(2, "0")}</span>
           ) : null}
-          {eyebrow ? <span className="truncate">{eyebrow}</span> : null}
+          {eyebrow ? (
+            <span data-diagram-eyebrow="" className="truncate">
+              {eyebrow}
+            </span>
+          ) : null}
         </span>
       ) : null}
-      <span className="text-sm leading-snug font-semibold text-foreground">
+      <span
+        data-diagram-label=""
+        className="text-sm leading-snug font-semibold text-foreground"
+      >
         {label}
       </span>
       {detail ? (
-        <span className="font-mono text-xs leading-snug break-words text-muted-foreground">
+        <span
+          data-diagram-detail=""
+          className="font-mono text-xs leading-snug break-words text-muted-foreground"
+        >
           {detail}
         </span>
       ) : null}
@@ -138,11 +155,19 @@ function DiagramNode({
  * exposed to assistive tech as a single labelled group, and because every node
  * is real text the diagram is fully readable by screen readers and search.
  *
+ * The `data-diagram*` attributes are not styling hooks: they are how the docs
+ * markdown converter ([page-markdown.ts](../lib/page-markdown.ts)) recovers the
+ * diagram's structure, since the visual line breaks between a node's parts come
+ * from flexbox and are invisible in the DOM. Keep them in sync when changing the
+ * markup.
+ *
  * @param props.title - Optional eyebrow shown above the surface.
  * @param props.caption - Optional descriptive caption shown below the surface.
  * @param props.ariaLabel - Accessible name for the figure; defaults to `title`.
  * @param props.children - The diagram body.
  * @param props.className - Extra classes for the surface container.
+ * @param props.variant - Which diagram shape is being framed, recorded as
+ *   `data-diagram` for the markdown converter. Defaults to `custom`.
  * @returns A `<figure>` framing the diagram.
  */
 export function Diagram({
@@ -151,21 +176,27 @@ export function Diagram({
   ariaLabel,
   children,
   className,
+  variant = "custom",
 }: {
   title?: string;
   caption?: string;
   ariaLabel?: string;
   children: ReactNode;
   className?: string;
+  variant?: "flow" | "layers" | "branch" | "sequence" | "custom";
 }) {
   return (
     <figure
       role="group"
+      data-diagram={variant}
       aria-label={ariaLabel ?? title ?? caption}
       className="float-up my-8 flex flex-col gap-3"
     >
       {title ? (
-        <figcaption className="flex items-center gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        <figcaption
+          data-diagram-title=""
+          className="flex items-center gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+        >
           <span aria-hidden="true" className="h-px w-6 bg-border" />
           {title}
         </figcaption>
@@ -179,7 +210,10 @@ export function Diagram({
         {children}
       </div>
       {caption ? (
-        <figcaption className="text-sm leading-6 text-muted-foreground">
+        <figcaption
+          data-diagram-caption=""
+          className="text-sm leading-6 text-muted-foreground"
+        >
           {caption}
         </figcaption>
       ) : null}
@@ -225,7 +259,7 @@ export function FlowDiagram({
   numbered?: boolean;
 }) {
   return (
-    <Diagram title={title} caption={caption}>
+    <Diagram title={title} caption={caption} variant="flow">
       <ol className="flex list-none flex-col items-stretch gap-2 p-0 md:flex-row md:flex-wrap md:items-center">
         {steps.map((step, index) => (
           <li
@@ -286,31 +320,39 @@ export function LayerStack({
   flow?: "down" | "up" | "both";
 }) {
   return (
-    <Diagram title={title} caption={caption}>
+    <Diagram title={title} caption={caption} variant="layers">
       <div className="flex flex-col gap-2">
         {layers.map((layer, index) => (
           <div key={index} className="flex flex-col gap-2">
             <div
+              data-diagram-node=""
               className={cn(
                 "flex flex-col gap-2 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
                 TONE_NODE[layer.tone ?? "default"],
               )}
             >
               <div className="flex min-w-0 flex-col">
-                <span className="text-sm font-semibold text-foreground">
+                <span
+                  data-diagram-label=""
+                  className="text-sm font-semibold text-foreground"
+                >
                   {layer.title}
                 </span>
                 {layer.detail ? (
-                  <span className="text-xs text-muted-foreground">
+                  <span
+                    data-diagram-detail=""
+                    className="text-xs text-muted-foreground"
+                  >
                     {layer.detail}
                   </span>
                 ) : null}
               </div>
               {layer.items && layer.items.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
+                <div data-diagram-items="" className="flex flex-wrap gap-1.5">
                   {layer.items.map((item, itemIndex) => (
                     <span
                       key={itemIndex}
+                      data-diagram-item=""
                       className="rounded-md border border-border/70 bg-background/70 px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
                     >
                       {item}
@@ -384,7 +426,7 @@ export function BranchDiagram({
   caption?: string;
 }) {
   return (
-    <Diagram title={title} caption={caption}>
+    <Diagram title={title} caption={caption} variant="branch">
       <div className="flex flex-col items-stretch gap-2">
         <DiagramNode
           eyebrow={source.eyebrow}
@@ -392,6 +434,7 @@ export function BranchDiagram({
           detail={source.detail}
           tone={source.tone ?? "accent"}
           className="mx-auto w-full sm:w-2/3"
+          role="source"
         />
         <div
           aria-hidden="true"
@@ -424,6 +467,7 @@ export function BranchDiagram({
               detail={converge.detail}
               tone={converge.tone ?? "success"}
               className="mx-auto w-full sm:w-2/3"
+              role="converge"
             />
           </>
         ) : null}
@@ -490,11 +534,12 @@ export function SequenceDiagram({
   caption?: string;
 }) {
   return (
-    <Diagram title={title} caption={caption}>
-      <div className="mb-4 flex flex-wrap gap-2">
+    <Diagram title={title} caption={caption} variant="sequence">
+      <div data-diagram-participants="" className="mb-4 flex flex-wrap gap-2">
         {participants.map((participant) => (
           <span
             key={participant}
+            data-diagram-item=""
             className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm"
           >
             {participant}
@@ -507,27 +552,35 @@ export function SequenceDiagram({
           return (
             <li
               key={index}
+              data-diagram-node=""
               className={cn(
                 "flex flex-col gap-1 rounded-lg border px-4 py-3",
                 TONE_NODE[KIND_TONE[kind]],
               )}
             >
               <span className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
-                <span>{String(index + 1).padStart(2, "0")}</span>
+                <span data-diagram-index="">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
                 <span
                   aria-hidden="true"
                   className={cn("h-1.5 w-1.5 rounded-full", TONE_DOT[KIND_TONE[kind]])}
                 />
-                <span>{KIND_LABEL[kind]}</span>
+                <span data-diagram-eyebrow="">{KIND_LABEL[kind]}</span>
               </span>
               <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-foreground">
-                <span>{step.from}</span>
+                <span data-diagram-from="">{step.from}</span>
                 <ConnectorArrow className="h-4 w-4" />
-                <span>{step.to}</span>
+                <span data-diagram-to="">{step.to}</span>
               </span>
-              <span className="text-sm text-foreground/90">{step.label}</span>
+              <span data-diagram-label="" className="text-sm text-foreground/90">
+                {step.label}
+              </span>
               {step.detail ? (
-                <span className="font-mono text-xs break-words text-muted-foreground">
+                <span
+                  data-diagram-detail=""
+                  className="font-mono text-xs break-words text-muted-foreground"
+                >
                   {step.detail}
                 </span>
               ) : null}
