@@ -48,6 +48,7 @@
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { fetchGuard } from "./fetch-guard.js";
+import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
 import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./ip-restriction.js";
 
 /**
@@ -116,8 +117,22 @@ export interface IpReputationOptions {
   /**
    * Trust `X-Forwarded-For` / `X-Real-IP` in the default IP resolver. Only
    * enable behind a trusted proxy that overwrites these headers.
+   *
+   * When enabled, the resolver reads the **rightmost** `X-Forwarded-For`
+   * entry — the one your immediate proxy appended — never the
+   * attacker-influenceable leftmost one. Behind more than one proxy hop, set
+   * {@link trustedHops} instead.
    */
   trustProxyHeaders?: boolean;
+  /**
+   * Declare exactly how many proxy hops sit between Daloy and the public
+   * internet. Implies proxy-header trust and reads the client IP that many
+   * entries from the right of `X-Forwarded-For` via
+   * {@link "./conn-info.js".resolveForwardedClientIp}, so attacker-prepended
+   * entries on the left cannot dodge the denylist. Must be an integer in
+   * [1, 64]; validated at construction.
+   */
+  trustedHops?: number;
   /**
    * `"block"` (default) throws a {@link ForbiddenError} on a match; `"log"`
    * only invokes {@link IpReputationOptions.onMatch} and lets the request
@@ -250,14 +265,14 @@ export function urlFeed(url: string, opts: UrlFeedOptions = {}): IpReputationFee
   };
 }
 
-function forwardedIpResolver(ctx: BaseContext<any, any>): string | undefined {
-  const headers = ctx.request.headers;
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return ctx.request.headers.get("x-real-ip") ?? undefined;
+/**
+ * @internal Read the client IP `hops` entries from the right of
+ * `X-Forwarded-For` (falling back to `X-Real-IP`) — the spoof-resistant side
+ * of the header; see {@link resolveForwardedClientIp}.
+ */
+function forwardedIpResolver(hops: number) {
+  return (ctx: BaseContext<any, any>): string | undefined =>
+    resolveForwardedClientIp(ctx.request, hops);
 }
 
 function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
@@ -303,7 +318,12 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
     throw new Error("ipReputation(): fetchTimeoutMs must be a positive integer.");
   }
   const message = opts.message ?? DEFAULT_MESSAGE;
-  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  assertTrustedHops("ipReputation()", opts.trustedHops);
+  const resolveIp =
+    opts.resolveIp ??
+    (opts.trustedHops !== undefined || opts.trustProxyHeaders
+      ? forwardedIpResolver(opts.trustedHops ?? 1)
+      : noIpResolver);
 
   // Last-known-good compiled denylist, one entry per feed so a single feed's
   // failed refresh doesn't drop the others.

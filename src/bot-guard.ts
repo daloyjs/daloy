@@ -38,6 +38,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
+import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
 
 /**
  * Pluggable DNS resolver used to verify declared crawlers. The default
@@ -137,8 +138,22 @@ export interface BotGuardOptions {
   /**
    * Trust `X-Forwarded-For` / `X-Real-IP` in the default IP resolver. Only
    * enable behind a trusted proxy that overwrites these headers.
+   *
+   * When enabled, the resolver reads the **rightmost** `X-Forwarded-For`
+   * entry — the one your immediate proxy appended — never the
+   * attacker-influenceable leftmost one. Behind more than one proxy hop, set
+   * {@link trustedHops} instead.
    */
   trustProxyHeaders?: boolean;
+  /**
+   * Declare exactly how many proxy hops sit between Daloy and the public
+   * internet. Implies proxy-header trust and reads the client IP that many
+   * entries from the right of `X-Forwarded-For` via
+   * {@link "./conn-info.js".resolveForwardedClientIp}, so attacker-prepended
+   * entries on the left cannot impersonate a verified crawler's IP. Must be
+   * an integer in [1, 64]; validated at construction.
+   */
+  trustedHops?: number;
   /**
    * Custom client-IP resolver. Overrides {@link BotGuardOptions.trustProxyHeaders}.
    */
@@ -219,14 +234,14 @@ function matchesUserAgent(ua: string, patterns: readonly (string | RegExp)[]): b
   return false;
 }
 
-function forwardedIpResolver(ctx: BaseContext<any, any>): string | undefined {
-  const headers = ctx.request.headers;
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return ctx.request.headers.get("x-real-ip") ?? undefined;
+/**
+ * @internal Read the client IP `hops` entries from the right of
+ * `X-Forwarded-For` (falling back to `X-Real-IP`) — the spoof-resistant side
+ * of the header; see {@link resolveForwardedClientIp}.
+ */
+function forwardedIpResolver(hops: number) {
+  return (ctx: BaseContext<any, any>): string | undefined =>
+    resolveForwardedClientIp(ctx.request, hops);
 }
 
 function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
@@ -356,11 +371,16 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
     throw new Error('botGuard(): mode must be "block" or "log".');
   }
 
-  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  assertTrustedHops("botGuard()", opts.trustedHops);
+  const resolveIp =
+    opts.resolveIp ??
+    (opts.trustedHops !== undefined || opts.trustProxyHeaders
+      ? forwardedIpResolver(opts.trustedHops ?? 1)
+      : noIpResolver);
 
-  if (verifiedBots.length > 0 && !opts.resolveIp && !opts.trustProxyHeaders) {
+  if (verifiedBots.length > 0 && !opts.resolveIp && !opts.trustProxyHeaders && opts.trustedHops === undefined) {
     throw new Error(
-      "botGuard(): verifiedBots requires a client-IP source — provide resolveIp " +
+      "botGuard(): verifiedBots requires a client-IP source — provide resolveIp, trustedHops, " +
         "or set trustProxyHeaders, otherwise declared crawlers cannot be verified."
     );
   }

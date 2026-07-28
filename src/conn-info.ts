@@ -160,6 +160,59 @@ export function pickForwardedForByHops(header: string | null, hops: number): str
 }
 
 /**
+ * Validate a middleware `trustedHops` option at construction time. The value
+ * must be an integer in [1, 64] — mirroring the `behindProxy.hops` range
+ * floor of one (a middleware that trusts zero proxy hops has no business
+ * reading forwarding headers at all).
+ *
+ * @param name - Middleware function name used in the error message.
+ * @param hops - The configured value; `undefined` (option unset) is accepted.
+ * @throws Error when `hops` is set but not an integer in [1, 64].
+ * @internal
+ */
+export function assertTrustedHops(name: string, hops: number | undefined): void {
+  if (hops === undefined) return;
+  if (!Number.isInteger(hops) || hops < 1 || hops > 64) {
+    throw new Error(`${name}: trustedHops must be an integer in [1, 64]; got ${String(hops)}.`);
+  }
+}
+
+/**
+ * Resolve the client IP from the proxy-set forwarding headers, walking a
+ * declared number of trusted hops from the RIGHT side of `X-Forwarded-For`.
+ *
+ * The right side is the spoof-resistant side: each proxy in the chain appends
+ * the address of the peer it actually observed, so the last `hops` entries
+ * were written by infrastructure you control, while anything further left is
+ * attacker-influenceable. Reading the leftmost entry (the historic
+ * `split(",")[0]` pattern) trusts the MOST attacker-controllable slot and
+ * enabled both rate-limit/ban evasion (rotate a spoofed left entry) and
+ * victim-IP framing (spoof a victim's address to get them banned or blocked).
+ *
+ * Falls back to `X-Real-IP` when `X-Forwarded-For` is absent or shorter than
+ * the declared hop count — that header is only trustworthy under the same
+ * proxy-trust declaration that gates this resolver's callers.
+ *
+ * Security note: this resolver is only meaningful when every request reaches
+ * the app through a proxy chain you control that appends (or overwrites)
+ * these headers. With no proxy in front, any forwarded-header trust is
+ * attacker-controlled by definition.
+ *
+ * @param request - Incoming request whose forwarding headers are read.
+ * @param hops - Number of trusted proxy hops; `1` (default) reads the
+ *   rightmost entry — the one your immediate proxy appended.
+ * @returns The resolved client IP, or `undefined` when no forwarded identity
+ *   is available. Callers decide their own posture for `undefined`
+ *   (fail-closed 403, fail-open skip, or a shared `"global"` bucket).
+ * @since 1.0.0-rc.7
+ */
+export function resolveForwardedClientIp(request: Request, hops = 1): string | undefined {
+  const picked = pickForwardedForByHops(request.headers.get("x-forwarded-for"), hops);
+  if (picked) return picked;
+  return request.headers.get("x-real-ip") ?? undefined;
+}
+
+/**
  * Resolve the client IP for this request using the configured
  * {@link BehindProxyConfig}. Returns `undefined` when no trusted source is
  * available (the caller — rate-limit, ipRestriction, audit-log — must fail
@@ -180,9 +233,10 @@ export function resolveClientIp(
   if (cfg === undefined || cfg === "none") return peer;
   if (cfg === "loopback") {
     if (peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1") {
-      const xff = request.headers.get("x-forwarded-for");
-      const first = xff?.split(",")[0]?.trim();
-      if (first) return first;
+      // The same-host proxy is the single trusted hop, so read the slot IT
+      // appended (rightmost), never the attacker-influenceable leftmost one.
+      const picked = pickForwardedForByHops(request.headers.get("x-forwarded-for"), 1);
+      if (picked) return picked;
     }
     return peer;
   }

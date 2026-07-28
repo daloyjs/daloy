@@ -114,6 +114,14 @@ app.use(reputation.hooks);
 // Release the refresh timer on graceful shutdown.
 process.on("SIGTERM", () => reputation.stop());`}
       />
+      <p>
+        The denylist is matched against the <strong>rightmost</strong>{" "}
+        <code>X-Forwarded-For</code> entry (the one your immediate proxy
+        appended), so a listed client cannot dodge it by prepending a clean
+        spoofed entry on the left. Multi-hop chains declare their length with{" "}
+        <code>trustedHops</code> (<code>trustProxyHeaders: true</code> is
+        exactly <code>trustedHops: 1</code>).
+      </p>
 
       <h2 id="wiring-abuse-feeds">Wiring abuse feeds</h2>
       <p>

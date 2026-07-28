@@ -27,6 +27,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
+import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
 
 /**
  * Why a request was (or would have been) blocked by {@link geoBlock}.
@@ -128,8 +129,23 @@ export interface GeoBlockOptions {
    * to `false` because those headers are client-spoofable unless every
    * request reaches Daloy through a proxy chain you control. Ignored when
    * `resolveCountry` is used or a custom `resolveIp` is supplied.
+   *
+   * When enabled, the resolver reads the **rightmost** `X-Forwarded-For`
+   * entry — the one your immediate proxy appended — never the
+   * attacker-influenceable leftmost one. Behind more than one proxy hop, set
+   * {@link trustedHops} instead.
    */
   trustProxyHeaders?: boolean;
+  /**
+   * Declare exactly how many proxy hops sit between Daloy and the public
+   * internet. Implies proxy-header trust and reads the client IP that many
+   * entries from the right of `X-Forwarded-For` via
+   * {@link "./conn-info.js".resolveForwardedClientIp}, so attacker-prepended
+   * entries on the left cannot spoof an allowed-country IP. Must be an
+   * integer in [1, 64]; validated at construction. Ignored when
+   * `resolveCountry` is used or a custom `resolveIp` is supplied.
+   */
+  trustedHops?: number;
   /**
    * What to do when the country cannot be resolved. Defaults to `false` when
    * an `allow` list is configured (fail closed — an unknown country is not on
@@ -177,15 +193,15 @@ function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
   return undefined;
 }
 
-/** @internal Read the leading `X-Forwarded-For` / `X-Real-IP` hop. */
-function forwardedIpResolver(ctx: BaseContext<any, any>): string | undefined {
-  const headers = ctx.request.headers;
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return ctx.request.headers.get("x-real-ip") ?? undefined;
+/**
+ * @internal Read the client IP `hops` entries from the right of
+ * `X-Forwarded-For` (falling back to `X-Real-IP`). The right side is written
+ * by the operator's own proxy chain and is therefore the spoof-resistant
+ * side — see {@link resolveForwardedClientIp}.
+ */
+function forwardedIpResolver(hops: number) {
+  return (ctx: BaseContext<any, any>): string | undefined =>
+    resolveForwardedClientIp(ctx.request, hops);
 }
 
 /**
@@ -249,7 +265,12 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
   const onBlock = opts.onBlock;
   const lookupCountry = opts.lookupCountry;
   const resolveCountry = opts.resolveCountry;
-  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  assertTrustedHops("geoBlock()", opts.trustedHops);
+  const resolveIp =
+    opts.resolveIp ??
+    (opts.trustedHops !== undefined || opts.trustProxyHeaders
+      ? forwardedIpResolver(opts.trustedHops ?? 1)
+      : noIpResolver);
 
   return {
     async beforeHandle(ctx) {

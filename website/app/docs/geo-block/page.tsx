@@ -55,9 +55,13 @@ export default function Page() {
         </li>
         <li>
           Reuses trusted-proxy IP resolution
-          {": "}the same <code>X-Forwarded-For</code> / <code>X-Real-IP</code>{" "}
-          handling (off by default, opt in with <code>trustProxyHeaders</code>)
-          as the other network guards.
+          {": "}the same spoof-resistant <code>X-Forwarded-For</code> /{" "}
+          <code>X-Real-IP</code> handling (off by default, opt in with{" "}
+          <code>trustProxyHeaders</code>) as the other network guards. The
+          client IP is read from the <strong>rightmost</strong> XFF entry (the
+          one your immediate proxy appended), never an attacker-prepended left
+          entry; multi-hop chains declare their length with{" "}
+          <code>trustedHops</code>.
         </li>
       </ul>
 

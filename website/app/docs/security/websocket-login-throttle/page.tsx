@@ -131,7 +131,11 @@ app.ws("/session", {
         routes. It combines a shared hard limit with a short progressive delay
         before the hard <code>429</code> response. By default it does not trust
         proxy IP headers; pass a <code>keyGenerator</code> or opt in to{" "}
-        <code>trustProxyHeaders: true</code> only behind a trusted proxy.
+        <code>trustProxyHeaders: true</code> only behind a trusted proxy. When
+        proxy headers are trusted, the key is the <strong>rightmost</strong>{" "}
+        <code>X-Forwarded-For</code> entry (the one your proxy appended), so
+        rotating spoofed left entries cannot reset the budget; multi-hop chains
+        declare their length with <code>trustedHops</code>.
       </p>
       <CodeBlock
         code={`app.post(

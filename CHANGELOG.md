@@ -15,6 +15,42 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- **Forwarded-header client-IP resolution is now spoof-resistant across every
+  middleware that keys on it — closing two live red-team findings
+  (`red-team-live/skill-attacks.ts`, cure53 EXP-23-005 / P11-02-005 class).**
+  Every `trustProxyHeaders` resolver (`autoBan`, `rateLimit`, `loginThrottle`,
+  `concurrencyLimit`, `geoBlock`, `ipRestriction`, `ipReputation`, `botGuard`)
+  and `resolveClientIp({ behindProxy: "loopback" })` previously read the
+  **leftmost** `X-Forwarded-For` entry — the most attacker-controllable slot
+  in the header. Confirmed over the wire against a running server:
+  - **autoBan strike evasion (HIGH):** rotating a spoofed leftmost entry on
+    every attempt meant strikes never accumulated — unlimited brute force.
+  - **autoBan victim-IP banning (MEDIUM):** spoofing a victim's IP in the
+    leftmost entry got the _victim_ banned (pre-emptive DoS), and the same
+    read let attackers dodge `geoBlock` / `ipRestriction` / `ipReputation`
+    decisions with a spoofed left entry.
+  - **Fix:** the default resolvers now read the **rightmost** entry — the one
+    your immediate proxy actually appended — via the new exported
+    `resolveForwardedClientIp(request, hops)` helper
+    (`src/conn-info.ts`), and every affected middleware accepts a new
+    `trustedHops?: number` option (integer in [1, 64], validated at
+    construction) that declares exactly how many proxy hops sit between Daloy
+    and the internet for multi-hop chains (CDN → LB → app). `trustedHops`
+    implies proxy-header trust; `trustProxyHeaders: true` is equivalent to
+    `trustedHops: 1`. Single-proxy deployments (the common case) are secure
+    with no config change; multi-hop deployments behind an overwrite-mode CDN
+    must set `trustedHops` to their hop count.
+  - Note: with **no** proxy in front, forwarded-header trust remains
+    attacker-controlled by definition — the option contract already requires
+    a controlled proxy chain; this is now stated explicitly in every
+    resolver's TSDoc.
+  - Regression coverage: `tests/forwarded-client-ip.test.ts` (18 tests —
+    rotation evasion, victim framing, multi-hop slot selection, construction
+    validation for all eight middlewares) plus the live
+    `red-team-live/skill-attacks.ts` suite (92 probes, 0 VULNERABLE).
+
 ## [1.0.0-rc.6] - 2026-07-26
 
 ### Security

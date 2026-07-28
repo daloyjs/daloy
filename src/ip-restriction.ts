@@ -10,6 +10,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
+import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
 
 /**
  * Options for {@link ipRestriction}. At least one of `allow` or `deny` must
@@ -45,8 +46,22 @@ export interface IpRestrictionOptions {
    * to `false` because those headers are client-spoofable unless every
    * request reaches Daloy through a proxy chain you control. Pair with
    * `new App({ trustProxy: true })` in production.
+   *
+   * When enabled, the resolver reads the **rightmost** `X-Forwarded-For`
+   * entry — the one your immediate proxy appended — never the
+   * attacker-influenceable leftmost one, so a spoofed left entry cannot
+   * bypass an allow-list or dodge a deny. Behind more than one proxy hop,
+   * set {@link trustedHops} instead.
    */
   trustProxyHeaders?: boolean;
+  /**
+   * Declare exactly how many proxy hops sit between Daloy and the public
+   * internet. Implies proxy-header trust and reads the client IP that many
+   * entries from the right of `X-Forwarded-For` via
+   * {@link "./conn-info.js".resolveForwardedClientIp}. Must be an integer in
+   * [1, 64]; validated at construction.
+   */
+  trustedHops?: number;
   /**
    * Response message when a request is rejected. Defaults to
    * `"IP address not permitted"`. Avoid echoing the client IP back —
@@ -105,7 +120,12 @@ export function ipRestriction(opts: IpRestrictionOptions): Hooks {
   }
   const allow = (opts.allow ?? []).map(compileCidrMatcher);
   const deny = (opts.deny ?? []).map(compileCidrMatcher);
-  const resolveIp = opts.resolveIp ?? (opts.trustProxyHeaders ? forwardedIpResolver : noIpResolver);
+  assertTrustedHops("ipRestriction()", opts.trustedHops);
+  const resolveIp =
+    opts.resolveIp ??
+    (opts.trustedHops !== undefined || opts.trustProxyHeaders
+      ? forwardedIpResolver(opts.trustedHops ?? 1)
+      : noIpResolver);
   const message = opts.message ?? "IP address not permitted";
   return {
     beforeHandle(ctx) {
@@ -127,11 +147,9 @@ function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
   return undefined;
 }
 
-function forwardedIpResolver(ctx: BaseContext<any, any>): string | undefined {
-  const headers = ctx.request.headers;
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]?.trim();
-  return headers.get("x-real-ip") ?? undefined;
+function forwardedIpResolver(hops: number) {
+  return (ctx: BaseContext<any, any>): string | undefined =>
+    resolveForwardedClientIp(ctx.request, hops);
 }
 
 /**

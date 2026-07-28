@@ -111,8 +111,9 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
       <h2 id="identity-is-mandatory">Identity is mandatory</h2>
       <p>
         <code>autoBan()</code> refuses to construct unless it can identify
-        clients: pass a <code>keyGenerator</code> or set{" "}
-        <code>trustProxyHeaders: true</code>
+        clients: pass a <code>keyGenerator</code>, set{" "}
+        <code>trustProxyHeaders: true</code>, or declare{" "}
+        <code>trustedHops</code>
         {". "}This is deliberate: a shared <code>&quot;global&quot;</code>{" "}
         bucket would let a single offender ban every caller at once. A request
         the key generator cannot attribute (returns <code>undefined</code>) is
@@ -126,6 +127,32 @@ app.use(
     keyGenerator: (ctx) => (ctx.state.user as { id?: string })?.id,
   }),
 );`}
+      />
+
+      <h2 id="spoof-resistant-proxy-identity">Spoof-resistant proxy identity</h2>
+      <p>
+        When the default key generator reads <code>X-Forwarded-For</code>, it
+        keys on the <strong>rightmost</strong> entry: the one your immediate
+        proxy actually appended. Attackers can prepend arbitrary entries to the
+        left of that header, but they cannot touch the slots your own proxy
+        chain wrote. This defeats both classic abuses of leftmost-IP keying:
+        rotating a spoofed entry per attempt to evade strike accumulation, and
+        spoofing a victim&apos;s address to get <em>them</em> banned.
+      </p>
+      <p>
+        Behind more than one proxy hop (CDN &rarr; load balancer &rarr; app),
+        declare the chain length with <code>trustedHops</code> so the key comes
+        from the slot your outermost trusted proxy wrote:
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`// Two proxies in front of Daloy: CDN -> LB -> app.
+// X-Forwarded-For arrives as "client, CDN" and the client IP is 2 hops back.
+app.use(autoBan({ trustedHops: 2 }));
+
+// trustProxyHeaders: true is exactly trustedHops: 1 (single proxy in front).
+// With no proxy at all, forwarded-header trust is attacker-controlled by
+// definition: only enable either option behind a proxy chain you control.`}
       />
 
       <h2 id="how-escalation-and-decay-work">

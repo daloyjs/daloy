@@ -46,6 +46,17 @@ export default function Page() {
         function (reads adapter connection metadata) or by enabling{" "}
         <code>trustProxyHeaders</code> behind a proxy chain you control.
       </p>
+      <p>
+        Proxy-header resolution is spoof-resistant: the client IP is read from
+        the <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the
+        one your immediate proxy actually appended), so an attacker-prepended
+        left entry cannot bypass an allow-list or dodge a deny. Behind a
+        multi-hop chain (CDN &rarr; LB &rarr; app), declare the hop count with{" "}
+        <code>trustedHops</code> (e.g. <code>trustedHops: 2</code>;{" "}
+        <code>trustProxyHeaders: true</code> is exactly <code>1</code>). With no
+        proxy in front, forwarded-header trust is attacker-controlled by
+        definition, so only enable either option behind a chain you control.
+      </p>
 
       <h2 id="quick-start">Quick start</h2>
       <CodeBlock

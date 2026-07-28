@@ -9,6 +9,7 @@ import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { assertCookieAttributes, readRequestCookie, serializeCookie } from "./cookie.js";
 import { TooManyRequestsError, ForbiddenError } from "./errors.js";
 import { randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
+import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
 
 // ---------- Request ID ----------
 
@@ -948,8 +949,22 @@ export interface RateLimitOptions {
    * Trust x-forwarded-for / x-real-ip when deriving the default key.
    * Off by default because those headers are client-spoofable unless your
    * reverse proxy strips and rewrites them.
+   *
+   * When enabled, the key is the **rightmost** `X-Forwarded-For` entry — the
+   * one your immediate proxy appended — never the attacker-influenceable
+   * leftmost one, so rotating spoofed left entries cannot evade the limit.
+   * Behind more than one proxy hop, set {@link trustedHops} instead.
    */
   trustProxyHeaders?: boolean;
+  /**
+   * Declare exactly how many proxy hops sit between Daloy and the public
+   * internet. Implies proxy-header trust and derives the default key that
+   * many entries from the right of `X-Forwarded-For` via
+   * {@link "./conn-info.js".resolveForwardedClientIp}. Must be an integer in
+   * [1, 64]; validated at construction. Ignored when a custom `keyGenerator`
+   * is supplied.
+   */
+  trustedHops?: number;
   /** When true, set Retry-After header on 429. Default: true. */
   retryAfter?: boolean;
   /**
@@ -1065,13 +1080,14 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
     store = new MemoryStore();
   }
   const groupPrefix = opts.groupId ? `${opts.groupId}:` : "";
+  assertTrustedHops("rateLimit()", opts.trustedHops);
+  const trustProxy = opts.trustedHops !== undefined || opts.trustProxyHeaders === true;
+  const hops = opts.trustedHops ?? 1;
   const keyOf =
     opts.keyGenerator ??
     ((ctx: RateLimitContext) => {
-      if (opts.trustProxyHeaders) {
-        const xff = ctx.request.headers.get("x-forwarded-for");
-        const first = xff ? xff.split(",")[0]!.trim() : "";
-        return first || ctx.request.headers.get("x-real-ip") || "global";
+      if (trustProxy) {
+        return resolveForwardedClientIp(ctx.request, hops) ?? "global";
       }
       return "global";
     });
@@ -1108,8 +1124,24 @@ export interface LoginThrottleOptions {
   keyGenerator?: (ctx: RateLimitContext) => string;
   /** Shared store for the hard limit. Uses rateLimit()'s in-memory group bucket by default. */
   store?: RateLimitStore;
-  /** Trust x-forwarded-for / x-real-ip when deriving the default key. Default: false. */
+  /** Trust x-forwarded-for / x-real-ip when deriving the default key. Default: false.
+   *
+   * When enabled, the key is the **rightmost** `X-Forwarded-For` entry — the
+   * one your immediate proxy appended — never the attacker-influenceable
+   * leftmost one. Behind more than one proxy hop, set {@link trustedHops}
+   * instead.
+   */
   trustProxyHeaders?: boolean;
+  /**
+   * Declare exactly how many proxy hops sit between Daloy and the public
+   * internet. Implies proxy-header trust and derives the default key that
+   * many entries from the right of `X-Forwarded-For` via
+   * {@link "./conn-info.js".resolveForwardedClientIp}, so rotating spoofed
+   * left entries cannot evade the throttle. Must be an integer in [1, 64];
+   * validated at construction. Ignored when a custom `keyGenerator` is
+   * supplied.
+   */
+  trustedHops?: number;
   /** When true, set Retry-After header on 429. Default: true. */
   retryAfter?: boolean;
   /** Start slowing responses after this many attempts in the same window. Default: 2. */
@@ -1133,13 +1165,12 @@ function assertPositiveInteger(name: string, value: number): void {
 }
 
 function defaultLoginThrottleKey(
-  trustProxyHeaders: boolean | undefined
+  trustProxy: boolean,
+  hops: number
 ): (ctx: RateLimitContext) => string {
   return (ctx) => {
-    if (trustProxyHeaders) {
-      const forwardedFor = ctx.request.headers.get("x-forwarded-for");
-      const firstForwarded = forwardedFor ? forwardedFor.split(",")[0]!.trim() : "";
-      return firstForwarded || ctx.request.headers.get("x-real-ip") || "global";
+    if (trustProxy) {
+      return resolveForwardedClientIp(ctx.request, hops) ?? "global";
     }
     return "global";
   };
@@ -1179,7 +1210,10 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
   assertNonNegativeInteger("maxDelayMs", maxDelayMs);
 
   const groupId = opts.groupId ?? "login";
-  const keyGenerator = opts.keyGenerator ?? defaultLoginThrottleKey(opts.trustProxyHeaders);
+  assertTrustedHops("loginThrottle()", opts.trustedHops);
+  const trustProxy = opts.trustedHops !== undefined || opts.trustProxyHeaders === true;
+  const keyGenerator =
+    opts.keyGenerator ?? defaultLoginThrottleKey(trustProxy, opts.trustedHops ?? 1);
   const limiter = rateLimit({
     windowMs,
     max,

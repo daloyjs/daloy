@@ -22,6 +22,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError, TooManyRequestsError } from "./errors.js";
+import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
 
 /**
  * One client's auto-ban bookkeeping. A record tracks the current strike count
@@ -141,8 +142,24 @@ export interface AutoBanOptions {
    * Read `X-Forwarded-For` / `X-Real-IP` in the default key generator. Off by
    * default because those headers are client-spoofable unless every request
    * reaches the app through a proxy chain you control.
+   *
+   * When enabled, the key is the **rightmost** `X-Forwarded-For` entry — the
+   * one your immediate proxy appended — never the attacker-influenceable
+   * leftmost one. Behind more than one proxy hop, set {@link trustedHops}
+   * instead so the key comes from the slot your outermost trusted proxy wrote.
    */
   trustProxyHeaders?: boolean;
+  /**
+   * Declare exactly how many proxy hops sit between Daloy and the public
+   * internet. Implies proxy-header trust (no need to also set
+   * {@link trustProxyHeaders}) and reads the client IP that many entries from
+   * the right of `X-Forwarded-For` via
+   * {@link "./conn-info.js".resolveForwardedClientIp}, so spoofed entries an
+   * attacker prepends on the left are ignored — they can neither evade strike
+   * accumulation nor frame a victim IP for banning. Must be an integer in
+   * [1, 64]; validated at construction.
+   */
+  trustedHops?: number;
   /** Pluggable ban store. Default: a shared in-memory store keyed by `groupId`. */
   store?: AutoBanStore;
   /**
@@ -231,11 +248,15 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
-function forwardedKey(ctx: BaseContext<any, any>): string | undefined {
-  const forwarded = ctx.request.headers.get("x-forwarded-for");
-  const first = forwarded ? forwarded.split(",")[0]!.trim() : "";
-  if (first) return first;
-  return ctx.request.headers.get("x-real-ip") ?? undefined;
+/**
+ * @internal Default identity resolver: the client IP at the declared number of
+ * trusted proxy hops from the right of `X-Forwarded-For` (falling back to
+ * `X-Real-IP`). Reading the right side keeps the key spoof-resistant — see
+ * {@link resolveForwardedClientIp}.
+ */
+function forwardedKey(hops: number) {
+  return (ctx: BaseContext<any, any>): string | undefined =>
+    resolveForwardedClientIp(ctx.request, hops);
 }
 
 /**
@@ -296,13 +317,14 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   }
   const watch = new Set<number>(watchStatuses);
 
-  if (!opts.keyGenerator && !opts.trustProxyHeaders) {
+  if (!opts.keyGenerator && !opts.trustProxyHeaders && opts.trustedHops === undefined) {
     throw new Error(
-      "autoBan(): provide keyGenerator or set trustProxyHeaders so clients can be identified; " +
+      "autoBan(): provide keyGenerator, trustedHops, or set trustProxyHeaders so clients can be identified; " +
         "otherwise every caller shares one bucket and a single offender would ban everyone."
     );
   }
-  const keyOf = opts.keyGenerator ?? forwardedKey;
+  assertTrustedHops("autoBan()", opts.trustedHops);
+  const keyOf = opts.keyGenerator ?? forwardedKey(opts.trustedHops ?? 1);
 
   const groupId = opts.groupId ?? DEFAULT_GROUP_ID;
   let store: AutoBanStore;
