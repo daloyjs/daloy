@@ -213,7 +213,7 @@ export function DocsSearch({ sections }: { sections: DocsSearchSection[] }) {
       >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search docs, topics, and routes..."
+            placeholder="Search docs, topics, and routes…"
             value={search}
             onValueChange={setSearch}
           />

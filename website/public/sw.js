@@ -1,4 +1,4 @@
-const CACHE_NAME = "daloyjs-pwa-v2";
+const CACHE_NAME = "daloyjs-pwa-v3";
 const OFFLINE_URL = "/offline";
 const PRECACHE_URLS = [
   OFFLINE_URL,
@@ -93,7 +93,13 @@ async function handleStaticAssetRequest(request) {
 
   const response = await fetch(request);
 
-  if (response.ok) {
+  // Only cache responses the server marked immutable (content-hashed
+  // production assets). A revalidatable response cached here would be served
+  // cache-first forever, outliving the deploy or dev-server restart that
+  // produced it and breaking the client module graph with stale chunks.
+  const cacheControl = response.headers.get("cache-control") ?? "";
+
+  if (response.ok && cacheControl.includes("immutable")) {
     const cache = await caches.open(CACHE_NAME);
     await cache.put(request, response.clone());
   }

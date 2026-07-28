@@ -282,24 +282,65 @@ export default function HomePage() {
         <div className="relative z-10 mx-auto max-w-7xl px-6 py-12 lg:py-16">
           <div className="flex flex-col items-center gap-5 text-center">
             <h1
-              className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight sm:text-5xl lg:text-6xl"
+              className="float-up max-w-4xl text-4xl leading-tight font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl"
               style={{ animationDelay: "80ms" }}
             >
               The first TypeScript REST API framework built for secure
               AI-assisted services
             </h1>
             <p
-              className="float-up max-w-3xl text-base font-medium text-foreground/80 sm:text-lg"
+              className="float-up max-w-3xl text-base font-medium text-foreground/80 text-pretty sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
               DaloyJS combines runtime portability, contract-first OpenAPI,
               generated typed clients, zero-dependency runtime guardrails, and
               supply-chain-aware project defaults in one framework.
             </p>
+            <div
+              className="float-up mt-2 flex flex-col gap-3 sm:flex-row"
+              style={{ animationDelay: "160ms" }}
+            >
+              <Link
+                href="/docs/getting-started"
+                className={buttonVariants({ size: "lg" }) + " group"}
+              >
+                Get started: Install Daloy
+                <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </Link>
+              <Link
+                href="/docs"
+                className={buttonVariants({ size: "lg", variant: "outline" })}
+              >
+                Read the docs
+              </Link>
+            </div>
+            <div
+              className="float-up flex max-w-full items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
+              style={{ animationDelay: "200ms" }}
+            >
+              <code className="overflow-x-auto text-sm whitespace-nowrap">
+                $ {CREATE_COMMAND}
+              </code>
+              <CodeCopyButton code={CREATE_COMMAND} />
+            </div>
+            <div
+              className='float-up flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'
+              style={{ animationDelay: "240ms" }}
+            >
+              <span>2,357/2,357 tests passing</span>
+              <span aria-hidden>·</span>
+              <span>≥90% line/function and ≥92% branch coverage gates</span>
+              <span aria-hidden>·</span>
+              <span>0 runtime dependencies</span>
+              <span aria-hidden>·</span>
+              <span>Node 24 LTS, Node 26+, Bun, Deno, Cloudflare</span>
+              <span aria-hidden>·</span>
+              <span>MIT licensed</span>
+            </div>
             <ContractFlowVisual />
             <p
               className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
-              style={{ animationDelay: "180ms" }}
+              style={{ animationDelay: "320ms" }}
             >
               Any framework can route a request. DaloyJS is built for
               what happens next: one route definition drives validation, types,
@@ -325,27 +366,9 @@ export default function HomePage() {
                 About the name
               </Link>
             </p>
-            <div
-              className="float-up mt-4 flex flex-col gap-3 sm:flex-row"
-              style={{ animationDelay: "320ms" }}
-            >
-              <Link
-                href="/docs/getting-started"
-                className={buttonVariants({ size: "lg" }) + " group"}
-              >
-                Get started: Install Daloy
-                <ArrowRightIcon className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/docs"
-                className={buttonVariants({ size: "lg", variant: "outline" })}
-              >
-                Read the docs
-              </Link>
-            </div>
             <p
               className="float-up max-w-2xl text-sm leading-7 text-muted-foreground"
-              style={{ animationDelay: "350ms" }}
+              style={{ animationDelay: "360ms" }}
             >
               New to backend TypeScript? Start with the{" "}
               <Link
@@ -357,26 +380,6 @@ export default function HomePage() {
               {". "}Evaluating options for a team? Everything below answers one
               question: what does DaloyJS have that the others don&apos;t?
             </p>
-            <div
-              className="float-up flex max-w-full items-center gap-2 rounded-md border border-taupe-200/80 bg-taupe-50/85 px-3 py-2 text-taupe-950 shadow-sm dark:border-taupe-900/70 dark:bg-taupe-950/25 dark:text-taupe-100 dim:border-mist-900/60 dim:bg-mist-950/20 dim:text-mist-100"
-              style={{ animationDelay: "380ms" }}
-            >
-              <code className="overflow-x-auto text-sm whitespace-nowrap">
-                $ {CREATE_COMMAND}
-              </code>
-              <CodeCopyButton code={CREATE_COMMAND} />
-            </div>
-            <div className='flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'>
-              <span>2,357/2,357 tests passing</span>
-              <span aria-hidden>·</span>
-              <span>≥90% line/function and ≥92% branch coverage gates</span>
-              <span aria-hidden>·</span>
-              <span>0 runtime dependencies</span>
-              <span aria-hidden>·</span>
-              <span>Node 24 LTS, Node 26+, Bun, Deno, Cloudflare</span>
-              <span aria-hidden>·</span>
-              <span>MIT licensed</span>
-            </div>
           </div>
         </div>
       </section>
@@ -385,7 +388,7 @@ export default function HomePage() {
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-16">
           <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight">Why DaloyJS</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-balance">Why DaloyJS</h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
               There are plenty of good ways to route an HTTP request in
               JavaScript. This is what the others don&apos;t give you:{" "}
@@ -436,7 +439,7 @@ export default function HomePage() {
             className="float-up mb-8 text-center"
             style={{ animationDelay: "80ms" }}
           >
-            <h2 className="text-3xl font-bold tracking-tight">
+            <h2 className="text-3xl font-bold tracking-tight text-balance">
               Hello, contract
             </h2>
             <p className="mt-3 leading-8 text-muted-foreground">
@@ -461,7 +464,7 @@ export default function HomePage() {
             <span className="inline-flex size-11 items-center justify-center rounded-xl bg-mist-100 text-mist-700 ring-1 ring-mist-200/80 dark:bg-mist-950/40 dark:text-mist-200 dark:ring-mist-800/70 dim:bg-mist-950/35 dim:text-mist-100">
               <BookOpenTextIcon className="size-6" />
             </span>
-            <h2 className="text-3xl font-bold tracking-tight">
+            <h2 className="text-3xl font-bold tracking-tight text-balance">
               Scalar API reference, one line
             </h2>
             <p className="max-w-3xl leading-8 text-muted-foreground">
@@ -490,7 +493,7 @@ export default function HomePage() {
       {/* Comparison */}
       <section className="border-b">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          <h2 className="mb-2 text-center text-3xl font-bold tracking-tight">
+          <h2 className="mb-2 text-center text-3xl font-bold tracking-tight text-balance">
             Competitor strengths, fewer tradeoffs
           </h2>
           <p className="mb-10 text-center leading-8 text-muted-foreground">
@@ -558,7 +561,7 @@ export default function HomePage() {
             <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
               Benchmarks
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight">
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
               The numbers, with the asterisks attached
             </h2>
             <p className="mx-auto mt-3 max-w-2xl leading-8 text-muted-foreground">
@@ -578,7 +581,7 @@ export default function HomePage() {
             <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
               Support the project
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight">
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
               If DaloyJS saves you time, you can buy me a coffee
             </h2>
             <p className="mx-auto mt-4 max-w-2xl leading-8 text-muted-foreground">
@@ -610,7 +613,7 @@ export default function HomePage() {
       {/* CTA */}
       <section className="border-b">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
-          <h2 className="mb-4 text-3xl font-bold tracking-tight">
+          <h2 className="mb-4 text-3xl font-bold tracking-tight text-balance">
             Ready to ship, secure by default?
           </h2>
           <p className="mb-8 leading-8 text-muted-foreground">
@@ -652,7 +655,7 @@ export default function HomePage() {
             <p className="text-xs font-semibold tracking-[0.22em] text-muted-foreground uppercase">
               For developers and AI agents
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight">
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-balance">
               DaloyJS is MCP-ready
             </h2>
             <p className="mx-auto mt-4 max-w-2xl leading-8 text-muted-foreground">

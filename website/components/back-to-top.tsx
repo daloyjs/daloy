@@ -94,7 +94,7 @@ function BlogBackToTop() {
     return (
       <div
         className={cn(
-          "fixed bottom-8 right-4 z-50 transition-all duration-300 ease-out sm:right-6",
+          "fixed bottom-8 right-4 z-50 transition-[opacity,transform] duration-300 ease-out sm:right-6",
           floating
             ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
             : "pointer-events-none translate-y-4 scale-95 opacity-0",
@@ -114,7 +114,7 @@ function BlogBackToTop() {
           : { position: "fixed", top: -200, right: -200, zIndex: 50 }
       }
       className={cn(
-        "transition-all duration-300 ease-out",
+        "transition-[opacity,transform] duration-300 ease-out",
         pos
           ? "pointer-events-auto scale-100 opacity-100"
           : "pointer-events-none scale-95 opacity-0",
@@ -145,7 +145,7 @@ function DocsBackToTop() {
   return (
     <div
       className={cn(
-        "fixed bottom-8 right-4 z-50 transition-all duration-300 ease-out lg:right-1/4",
+        "fixed bottom-8 right-4 z-50 transition-[opacity,transform] duration-300 ease-out lg:right-1/4",
         visible
           ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
           : "pointer-events-none translate-y-4 scale-95 opacity-0",

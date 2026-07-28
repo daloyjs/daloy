@@ -72,6 +72,9 @@
     --sidebar-accent-foreground: oklch(0.986 0.002 67.8);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.547 0.021 43.1);
+    /* Forced dark theme (class-based) must also restyle native scrollbars and
+       form controls, which otherwise follow the OS scheme only. */
+    color-scheme: dark;
 }
 
   .dim {
@@ -106,6 +109,7 @@
     --sidebar-accent-foreground: oklch(0.95 0.01 250);
     --sidebar-border: oklch(0.62 0.018 255 / 32%);
     --sidebar-ring: oklch(0.73 0.018 250);
+    color-scheme: dark;
   }
 
 @theme inline {
@@ -165,6 +169,12 @@
     }
   html {
     @apply font-sans;
+    /* Remove the 300ms double-tap zoom delay on interactive elements and
+       replace the default gray flash with a theme-aware highlight. */
+    -webkit-tap-highlight-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+    }
+  a, button, [role="button"], input, select, textarea, summary {
+    touch-action: manipulation;
     }
 }
 
