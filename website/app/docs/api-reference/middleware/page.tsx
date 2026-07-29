@@ -197,7 +197,13 @@ assertBehindProxy(cfg: BehindProxyConfig | undefined): void;
 resolveClientIp(ctx, cfg?: BehindProxyConfig): string | undefined;
 readRemoteAddress(ctx): string | undefined;
 readRemotePort(ctx): number | undefined;
-pickForwardedForByHops(header: string, hops: number): string | undefined;`}
+pickForwardedForByHops(header: string, hops: number): string | undefined;
+
+// Spoof-resistant client IP: reads \`hops\` entries from the RIGHT of
+// X-Forwarded-For (the slots your own proxy chain wrote). Falls back to
+// X-Real-IP only when hops === 1; past that a chain shorter than the
+// declaration yields undefined rather than a caller-settable header.
+resolveForwardedClientIp(req: Request, hops?: number): string | undefined;`}
       />
 
       <h2 id="subdomains-public-suffix-aware">

@@ -9,7 +9,7 @@ import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { assertCookieAttributes, readRequestCookie, serializeCookie } from "./cookie.js";
 import { TooManyRequestsError, ForbiddenError } from "./errors.js";
 import { randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
-import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
+import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
 // ---------- Request ID ----------
 
@@ -1080,17 +1080,8 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
     store = new MemoryStore();
   }
   const groupPrefix = opts.groupId ? `${opts.groupId}:` : "";
-  assertTrustedHops("rateLimit()", opts.trustedHops);
-  const trustProxy = opts.trustedHops !== undefined || opts.trustProxyHeaders === true;
-  const hops = opts.trustedHops ?? 1;
-  const keyOf =
-    opts.keyGenerator ??
-    ((ctx: RateLimitContext) => {
-      if (trustProxy) {
-        return resolveForwardedClientIp(ctx.request, hops) ?? "global";
-      }
-      return "global";
-    });
+  const hops = resolveForwardedTrust("rateLimit()", opts);
+  const keyOf = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops);
 
   const enforce = async (ctx: RateLimitContext) => {
     const key = `${groupPrefix}${keyOf(ctx)}`;
@@ -1164,16 +1155,21 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
-function defaultLoginThrottleKey(
-  trustProxy: boolean,
-  hops: number
-): (ctx: RateLimitContext) => string {
-  return (ctx) => {
-    if (trustProxy) {
-      return resolveForwardedClientIp(ctx.request, hops) ?? "global";
-    }
-    return "global";
-  };
+/**
+ * Default rate-limit / login-throttle key: the spoof-resistant forwarded client
+ * IP, or the shared `"global"` bucket when proxy-header trust is off or the
+ * request carries no trustworthy forwarded identity.
+ *
+ * @param hops - Trusted proxy hop count from
+ *   {@link "./conn-info.js".resolveForwardedTrust}, or `undefined` when
+ *   forwarded-header trust is disabled.
+ * @returns A key generator suitable for {@link rateLimit} and
+ *   {@link loginThrottle}.
+ * @internal
+ */
+function defaultForwardedRateLimitKey(hops: number | undefined): (ctx: RateLimitContext) => string {
+  if (hops === undefined) return () => "global";
+  return (ctx) => resolveForwardedClientIp(ctx.request, hops) ?? "global";
 }
 
 function wait(ms: number): Promise<void> {
@@ -1210,10 +1206,8 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
   assertNonNegativeInteger("maxDelayMs", maxDelayMs);
 
   const groupId = opts.groupId ?? "login";
-  assertTrustedHops("loginThrottle()", opts.trustedHops);
-  const trustProxy = opts.trustedHops !== undefined || opts.trustProxyHeaders === true;
-  const keyGenerator =
-    opts.keyGenerator ?? defaultLoginThrottleKey(trustProxy, opts.trustedHops ?? 1);
+  const hops = resolveForwardedTrust("loginThrottle()", opts);
+  const keyGenerator = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops);
   const limiter = rateLimit({
     windowMs,
     max,

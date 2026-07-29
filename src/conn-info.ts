@@ -160,21 +160,53 @@ export function pickForwardedForByHops(header: string | null, hops: number): str
 }
 
 /**
- * Validate a middleware `trustedHops` option at construction time. The value
- * must be an integer in [1, 64] — mirroring the `behindProxy.hops` range
- * floor of one (a middleware that trusts zero proxy hops has no business
- * reading forwarding headers at all).
+ * Validate a middleware's forwarded-header trust options and resolve them into
+ * a single hop count. Every middleware that keys on client IP calls this once
+ * at construction, so the trust policy lives in exactly one place instead of
+ * being re-derived at each call site.
  *
- * @param name - Middleware function name used in the error message.
- * @param hops - The configured value; `undefined` (option unset) is accepted.
- * @throws Error when `hops` is set but not an integer in [1, 64].
+ * That single-source property is the point: the spoofable-IP vulnerability this
+ * module now guards against existed in nine independent copies of the same
+ * leftmost-`X-Forwarded-For` read, which meant nine separate places to get it
+ * wrong and nine separate fixes. Keeping the decision here means a future
+ * change to the trust rules lands everywhere at once.
+ *
+ * `trustedHops` must be an integer in [1, 64], mirroring the
+ * `behindProxy.hops` range: the floor of one exists because a middleware that
+ * trusts zero proxy hops has no business reading forwarding headers at all.
+ *
+ * @param name - Middleware function name used in error messages.
+ * @param opts - The middleware's options object; only the two trust fields are
+ *   read, so any middleware option type is structurally acceptable.
+ * @returns The number of trusted proxy hops when forwarded-header trust is
+ *   enabled — `trustedHops` verbatim, or `1` for a bare
+ *   `trustProxyHeaders: true` — or `undefined` when trust is off and the caller
+ *   must not read forwarding headers at all.
+ * @throws Error when `trustedHops` is not an integer in [1, 64], or when
+ *   `trustProxyHeaders: false` is combined with a `trustedHops` value. That
+ *   pairing is a contradiction, and it previously resolved silently in favour
+ *   of trust — meaning an explicit opt-out was ignored.
  * @internal
  */
-export function assertTrustedHops(name: string, hops: number | undefined): void {
-  if (hops === undefined) return;
-  if (!Number.isInteger(hops) || hops < 1 || hops > 64) {
-    throw new Error(`${name}: trustedHops must be an integer in [1, 64]; got ${String(hops)}.`);
+export function resolveForwardedTrust(
+  name: string,
+  opts: { trustedHops?: number; trustProxyHeaders?: boolean }
+): number | undefined {
+  const hops = opts.trustedHops;
+  const trust = opts.trustProxyHeaders;
+  if (hops !== undefined) {
+    if (!Number.isInteger(hops) || hops < 1 || hops > 64) {
+      throw new Error(`${name}: trustedHops must be an integer in [1, 64]; got ${String(hops)}.`);
+    }
+    if (trust === false) {
+      throw new Error(
+        `${name}: trustProxyHeaders: false contradicts trustedHops: ${hops}. ` +
+          "trustedHops implies proxy-header trust; drop whichever one you did not mean."
+      );
+    }
+    return hops;
   }
+  return trust === true ? 1 : undefined;
 }
 
 /**
@@ -189,9 +221,11 @@ export function assertTrustedHops(name: string, hops: number | undefined): void 
  * enabled both rate-limit/ban evasion (rotate a spoofed left entry) and
  * victim-IP framing (spoof a victim's address to get them banned or blocked).
  *
- * Falls back to `X-Real-IP` when `X-Forwarded-For` is absent or shorter than
- * the declared hop count — that header is only trustworthy under the same
- * proxy-trust declaration that gates this resolver's callers.
+ * Falls back to `X-Real-IP` **only for a single declared hop**. That header
+ * carries exactly one hop of information, so it can stand in for a one-proxy
+ * declaration (the common nginx `X-Real-IP`-only setup) but cannot possibly
+ * satisfy a two-or-more-hop one. With 2+ declared hops and a chain shorter
+ * than the declaration, this returns `undefined` rather than guessing.
  *
  * Security note: this resolver is only meaningful when every request reaches
  * the app through a proxy chain you control that appends (or overwrites)
@@ -209,6 +243,18 @@ export function assertTrustedHops(name: string, hops: number | undefined): void 
 export function resolveForwardedClientIp(request: Request, hops = 1): string | undefined {
   const picked = pickForwardedForByHops(request.headers.get("x-forwarded-for"), hops);
   if (picked) return picked;
+  // Fail closed past one hop. A chain that produced fewer than `hops` entries
+  // means the request never traversed the declared topology — a direct-to-origin
+  // request that skipped the CDN, say — so no forwarded value it carries is
+  // trustworthy, `X-Real-IP` least of all. Trusting it here would hand back the
+  // rotating-identity evasion and victim-IP framing that reading from the right
+  // exists to prevent.
+  //
+  // An attacker inside the chain cannot reach this path: conforming proxies
+  // append, so prepending entries only ever lengthens the header. Reaching it
+  // requires bypassing the declared chain, and the safe answer there is "no
+  // identity", not "the identity the caller asked me to believe".
+  if (hops !== 1) return undefined;
   return request.headers.get("x-real-ip") ?? undefined;
 }
 

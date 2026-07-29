@@ -38,7 +38,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
-import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
+import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
 /**
  * Pluggable DNS resolver used to verify declared crawlers. The default
@@ -371,19 +371,11 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
     throw new Error('botGuard(): mode must be "block" or "log".');
   }
 
-  assertTrustedHops("botGuard()", opts.trustedHops);
+  const hops = resolveForwardedTrust("botGuard()", opts);
   const resolveIp =
-    opts.resolveIp ??
-    (opts.trustedHops !== undefined || opts.trustProxyHeaders
-      ? forwardedIpResolver(opts.trustedHops ?? 1)
-      : noIpResolver);
+    opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
 
-  if (
-    verifiedBots.length > 0 &&
-    !opts.resolveIp &&
-    !opts.trustProxyHeaders &&
-    opts.trustedHops === undefined
-  ) {
+  if (verifiedBots.length > 0 && !opts.resolveIp && hops === undefined) {
     throw new Error(
       "botGuard(): verifiedBots requires a client-IP source — provide resolveIp, trustedHops, " +
         "or set trustProxyHeaders, otherwise declared crawlers cannot be verified."

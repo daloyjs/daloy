@@ -48,7 +48,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { HttpError } from "./errors.js";
-import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
+import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
 /**
  * Details of a request rejected by {@link concurrencyLimit}, passed to
@@ -207,14 +207,18 @@ function buildScopeResolver(
     return (ctx) => `${ctx.request.method} ${pathnameOf(ctx.request.url)}`;
   }
   // scope === "client"
-  if (!opts.keyGenerator && !opts.trustProxyHeaders && opts.trustedHops === undefined) {
+  const hops = resolveForwardedTrust("concurrencyLimit()", opts);
+  let resolve: (ctx: BaseContext<any, any>) => string | undefined;
+  if (opts.keyGenerator) {
+    resolve = opts.keyGenerator;
+  } else if (hops !== undefined) {
+    resolve = forwardedKey(hops);
+  } else {
     throw new Error(
       'concurrencyLimit(): scope "client" requires keyGenerator, trustedHops, or trustProxyHeaders so ' +
         "clients can be identified; otherwise every caller shares one bucket."
     );
   }
-  assertTrustedHops("concurrencyLimit()", opts.trustedHops);
-  const resolve = opts.keyGenerator ?? forwardedKey(opts.trustedHops ?? 1);
   return (ctx) => {
     const id = resolve(ctx);
     return id === undefined ? undefined : `client:${id}`;

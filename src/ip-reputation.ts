@@ -48,7 +48,7 @@
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { fetchGuard } from "./fetch-guard.js";
-import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
+import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./ip-restriction.js";
 
 /**
@@ -318,12 +318,9 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
     throw new Error("ipReputation(): fetchTimeoutMs must be a positive integer.");
   }
   const message = opts.message ?? DEFAULT_MESSAGE;
-  assertTrustedHops("ipReputation()", opts.trustedHops);
+  const hops = resolveForwardedTrust("ipReputation()", opts);
   const resolveIp =
-    opts.resolveIp ??
-    (opts.trustedHops !== undefined || opts.trustProxyHeaders
-      ? forwardedIpResolver(opts.trustedHops ?? 1)
-      : noIpResolver);
+    opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
 
   // Last-known-good compiled denylist, one entry per feed so a single feed's
   // failed refresh doesn't drop the others.

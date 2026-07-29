@@ -38,11 +38,13 @@ import {
   resolveClientIp,
   resolveForwardedClientIp,
   setConnInfo,
-  assertTrustedHops,
   UnauthorizedError,
 } from "../src/index.js";
+// Internal: the trust-option policy resolver is deliberately not part of the
+// public API surface, so it is imported from its module rather than the barrel.
+import { resolveForwardedTrust } from "../src/conn-info.js";
 
-// ---------- unit: resolveForwardedClientIp / assertTrustedHops ----------
+// ---------- unit: resolveForwardedClientIp / resolveForwardedTrust ----------
 
 test("resolveForwardedClientIp reads the rightmost entry by default", () => {
   const req = new Request("http://t/", {
@@ -58,22 +60,67 @@ test("resolveForwardedClientIp walks N trusted hops from the right", () => {
   assert.equal(resolveForwardedClientIp(req, 1), "lb");
   assert.equal(resolveForwardedClientIp(req, 2), "cdn");
   assert.equal(resolveForwardedClientIp(req, 3), "client");
-  // Chain shorter than the declared hops: never honor attacker-side entries;
-  // X-Real-IP is the (equally proxy-trust-gated) fallback.
-  assert.equal(resolveForwardedClientIp(req, 9), undefined);
-  const withRealIp = new Request("http://t/", {
-    headers: { "x-forwarded-for": "a, b", "x-real-ip": "10.9.9.9" },
-  });
-  assert.equal(resolveForwardedClientIp(withRealIp, 5), "10.9.9.9");
 });
 
-test("assertTrustedHops validates the [1, 64] integer range", () => {
-  assert.throws(() => assertTrustedHops("x()", 0), /trustedHops must be an integer in \[1, 64\]/);
-  assert.throws(() => assertTrustedHops("x()", 65), /trustedHops/);
-  assert.throws(() => assertTrustedHops("x()", 1.5), /trustedHops/);
-  assert.doesNotThrow(() => assertTrustedHops("x()", undefined));
-  assert.doesNotThrow(() => assertTrustedHops("x()", 1));
-  assert.doesNotThrow(() => assertTrustedHops("x()", 64));
+test("resolveForwardedClientIp falls back to X-Real-IP only at one declared hop", () => {
+  // A single-hop declaration is the one case X-Real-IP can satisfy: the header
+  // carries exactly one hop of information (the common nginx X-Real-IP-only
+  // setup writes it and no XFF at all).
+  const oneHop = new Request("http://t/", { headers: { "x-real-ip": "10.9.9.9" } });
+  assert.equal(resolveForwardedClientIp(oneHop, 1), "10.9.9.9");
+  assert.equal(resolveForwardedClientIp(oneHop), "10.9.9.9");
+});
+
+test("[unhappy] resolveForwardedClientIp fails closed when the chain is shorter than the declared hops", () => {
+  // 2+ declared hops with a chain too short means the request never traversed
+  // the declared topology (direct-to-origin, skipping the CDN). X-Real-IP is
+  // then just another attacker-settable header, so it must NOT be honored:
+  // trusting it here would restore the rotating-identity evasion.
+  const short = new Request("http://t/", {
+    headers: { "x-forwarded-for": "a, b", "x-real-ip": "10.9.9.9" },
+  });
+  assert.equal(resolveForwardedClientIp(short, 5), undefined);
+  assert.equal(resolveForwardedClientIp(short, 3), undefined);
+  // Still correct at the declared depth the chain actually satisfies.
+  assert.equal(resolveForwardedClientIp(short, 2), "a");
+
+  const noXff = new Request("http://t/", { headers: { "x-real-ip": "10.9.9.9" } });
+  assert.equal(resolveForwardedClientIp(noXff, 2), undefined);
+
+  // Rotating X-Real-IP cannot mint fresh identities past one hop.
+  for (const n of [1, 2, 3]) {
+    const rotated = new Request("http://t/", { headers: { "x-real-ip": `198.51.100.${n}` } });
+    assert.equal(resolveForwardedClientIp(rotated, 2), undefined);
+  }
+});
+
+test("resolveForwardedTrust validates the [1, 64] integer range", () => {
+  const check = (hops: unknown) =>
+    resolveForwardedTrust("x()", { trustedHops: hops as number | undefined });
+  assert.throws(() => check(0), /trustedHops must be an integer in \[1, 64\]/);
+  assert.throws(() => check(65), /trustedHops/);
+  assert.throws(() => check(1.5), /trustedHops/);
+  assert.throws(() => check(Number.NaN), /trustedHops/);
+  assert.equal(check(1), 1);
+  assert.equal(check(64), 64);
+});
+
+test("resolveForwardedTrust resolves the trust decision to a hop count", () => {
+  assert.equal(resolveForwardedTrust("x()", {}), undefined);
+  assert.equal(resolveForwardedTrust("x()", { trustProxyHeaders: false }), undefined);
+  assert.equal(resolveForwardedTrust("x()", { trustProxyHeaders: true }), 1);
+  assert.equal(resolveForwardedTrust("x()", { trustedHops: 3 }), 3);
+  // trustedHops implies trust, so the redundant-but-consistent pairing is fine.
+  assert.equal(resolveForwardedTrust("x()", { trustProxyHeaders: true, trustedHops: 2 }), 2);
+});
+
+test("[unhappy] resolveForwardedTrust rejects trustProxyHeaders: false alongside trustedHops", () => {
+  // Previously this resolved silently in favour of trust, so an explicit
+  // opt-out was ignored and the app read forwarding headers anyway.
+  assert.throws(
+    () => resolveForwardedTrust("x()", { trustProxyHeaders: false, trustedHops: 2 }),
+    /trustProxyHeaders: false contradicts trustedHops: 2/
+  );
 });
 
 test('resolveClientIp "loopback" reads the proxy-appended rightmost slot, not a spoofed leftmost one', () => {
@@ -191,6 +238,81 @@ test("trustedHops is validated at construction across all middlewares", () => {
     /trustedHops/
   );
   assert.throws(() => botGuard({ trustedHops: 0 }), /trustedHops/);
+});
+
+test("[unhappy] every middleware rejects trustProxyHeaders: false alongside trustedHops", () => {
+  // The contradiction used to resolve silently in favour of trust, so an
+  // operator who explicitly opted out still got forwarding headers read.
+  const contradiction = /trustProxyHeaders: false contradicts trustedHops: 2/;
+  assert.throws(() => autoBan({ trustProxyHeaders: false, trustedHops: 2 }), contradiction);
+  assert.throws(
+    () => rateLimit({ windowMs: 1000, max: 1, trustProxyHeaders: false, trustedHops: 2 }),
+    contradiction
+  );
+  assert.throws(() => loginThrottle({ trustProxyHeaders: false, trustedHops: 2 }), contradiction);
+  assert.throws(
+    () =>
+      concurrencyLimit({
+        maxConcurrent: 1,
+        scope: "client",
+        trustProxyHeaders: false,
+        trustedHops: 2,
+      }),
+    contradiction
+  );
+  assert.throws(
+    () =>
+      geoBlock({
+        deny: ["ZZ"],
+        lookupCountry: () => "US",
+        trustProxyHeaders: false,
+        trustedHops: 2,
+      }),
+    contradiction
+  );
+  assert.throws(
+    () => ipRestriction({ allow: ["10.0.0.0/8"], trustProxyHeaders: false, trustedHops: 2 }),
+    contradiction
+  );
+  assert.throws(
+    () =>
+      ipReputation({
+        feeds: [{ name: "t", fetch: async () => [] }],
+        trustProxyHeaders: false,
+        trustedHops: 2,
+      }),
+    contradiction
+  );
+  assert.throws(() => botGuard({ trustProxyHeaders: false, trustedHops: 2 }), contradiction);
+});
+
+test("[unhappy] ipRestriction with trustedHops: 2 fails closed on a chain that skipped the CDN", async () => {
+  // End-to-end proof that the resolver's fail-closed posture reaches a caller:
+  // a direct-to-origin request carrying an allow-listed X-Real-IP and a
+  // one-entry XFF must be refused, not admitted on the strength of a header the
+  // attacker set themselves.
+  const app = new App({ env: "development" });
+  app.use(ipRestriction({ allow: ["10.0.0.0/8"], trustedHops: 2 }));
+  app.route({
+    method: "GET",
+    path: "/x",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+
+  const spoofed = await app.fetch(
+    new Request("http://x/x", {
+      headers: { "x-forwarded-for": "10.0.0.5", "x-real-ip": "10.0.0.5" },
+    })
+  );
+  assert.equal(spoofed.status, 403);
+
+  // The same allow-listed address, presented through a chain that actually has
+  // two hops, is admitted.
+  const legit = await app.fetch(
+    new Request("http://x/x", { headers: { "x-forwarded-for": "10.0.0.5, 172.16.0.1" } })
+  );
+  assert.equal(legit.status, 200);
 });
 
 // ---------- rateLimit / loginThrottle: same evasion class ----------

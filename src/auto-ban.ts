@@ -22,7 +22,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError, TooManyRequestsError } from "./errors.js";
-import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
+import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
 /**
  * One client's auto-ban bookkeeping. A record tracks the current strike count
@@ -317,14 +317,18 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   }
   const watch = new Set<number>(watchStatuses);
 
-  if (!opts.keyGenerator && !opts.trustProxyHeaders && opts.trustedHops === undefined) {
+  const hops = resolveForwardedTrust("autoBan()", opts);
+  let keyOf: (ctx: BaseContext<any, any>) => string | undefined;
+  if (opts.keyGenerator) {
+    keyOf = opts.keyGenerator;
+  } else if (hops !== undefined) {
+    keyOf = forwardedKey(hops);
+  } else {
     throw new Error(
       "autoBan(): provide keyGenerator, trustedHops, or set trustProxyHeaders so clients can be identified; " +
         "otherwise every caller shares one bucket and a single offender would ban everyone."
     );
   }
-  assertTrustedHops("autoBan()", opts.trustedHops);
-  const keyOf = opts.keyGenerator ?? forwardedKey(opts.trustedHops ?? 1);
 
   const groupId = opts.groupId ?? DEFAULT_GROUP_ID;
   let store: AutoBanStore;

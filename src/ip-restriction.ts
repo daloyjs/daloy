@@ -10,7 +10,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
-import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
+import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
 /**
  * Options for {@link ipRestriction}. At least one of `allow` or `deny` must
@@ -120,12 +120,9 @@ export function ipRestriction(opts: IpRestrictionOptions): Hooks {
   }
   const allow = (opts.allow ?? []).map(compileCidrMatcher);
   const deny = (opts.deny ?? []).map(compileCidrMatcher);
-  assertTrustedHops("ipRestriction()", opts.trustedHops);
+  const hops = resolveForwardedTrust("ipRestriction()", opts);
   const resolveIp =
-    opts.resolveIp ??
-    (opts.trustedHops !== undefined || opts.trustProxyHeaders
-      ? forwardedIpResolver(opts.trustedHops ?? 1)
-      : noIpResolver);
+    opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
   const message = opts.message ?? "IP address not permitted";
   return {
     beforeHandle(ctx) {

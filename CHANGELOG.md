@@ -46,10 +46,46 @@ For the forward-looking plan and the full thematic release log, see
     attacker-controlled by definition — the option contract already requires
     a controlled proxy chain; this is now stated explicitly in every
     resolver's TSDoc.
-  - Regression coverage: `tests/forwarded-client-ip.test.ts` (18 tests —
-    rotation evasion, victim framing, multi-hop slot selection, construction
-    validation for all eight middlewares) plus the live
-    `red-team-live/skill-attacks.ts` suite (92 probes, 0 VULNERABLE).
+  - Regression coverage: `tests/forwarded-client-ip.test.ts` (24 tests —
+    rotation evasion, victim framing, multi-hop slot selection, fail-closed
+    short chains, and construction validation for all eight middlewares) plus
+    the live `red-team-live/skill-attacks.ts` suite (92 probes, 0 VULNERABLE).
+
+- **`X-Real-IP` is no longer honoured past a single declared hop.**
+  `resolveForwardedClientIp()` previously fell back to `X-Real-IP` whenever
+  `X-Forwarded-For` was absent _or shorter than the declared hop count_. Under
+  `trustedHops: 2+`, a request that reached the origin directly (skipping the
+  CDN, a routinely reachable condition once an origin address leaks) carried a
+  short chain, so the fallback handed back a fully attacker-settable header as
+  the client identity — restoring the rotating-identity evasion the hop-aware
+  read exists to prevent. The fallback is now scoped to `trustedHops: 1`, the
+  only declaration `X-Real-IP` can actually satisfy (it carries exactly one hop
+  of information, and the nginx `X-Real-IP`-only setup is the case it serves).
+  Past one hop, a chain shorter than the declaration resolves to `undefined`:
+  the request did not traverse the declared topology, so no value it carries is
+  trustworthy. Callers keep their documented posture for an unresolved identity
+  (`ipRestriction` / allow-list `geoBlock` refuse with `403`, `autoBan` and
+  `concurrencyLimit` skip, `rateLimit` / `loginThrottle` use the shared
+  `"global"` bucket). An attacker inside the chain cannot reach this path:
+  conforming proxies append, so prepending entries only lengthens the header.
+
+- **`trustProxyHeaders: false` combined with `trustedHops` now throws at
+  construction** instead of silently resolving in favour of trust, which meant
+  an explicit opt-out was ignored and forwarding headers were read anyway.
+  Affects all eight middlewares.
+
+### Changed
+
+- **Forwarded-header trust resolution is now decided in one place.** The
+  `trustedHops !== undefined || trustProxyHeaders` conditional was duplicated
+  across all eight middlewares; it is now a single internal
+  `resolveForwardedTrust(name, opts)` in `src/conn-info.ts` that validates the
+  options and returns the resolved hop count (or `undefined` when trust is
+  off). This is the same de-duplication argument as the fix above: the original
+  vulnerability existed in nine independent copies of one bad read, which meant
+  nine chances to get it wrong. The internal `assertTrustedHops()` helper it
+  replaces has been removed from the public export surface — it was marked
+  `@internal`, has no caller-facing use, and was never published.
 
 ### Added
 

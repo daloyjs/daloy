@@ -23,11 +23,16 @@ The RFC 9116 discovery entry point is [`security.txt`](https://daloyjs.dev/.well
 
 ## Supported Versions
 
-DaloyJS is currently pre-1.0. Security fixes target the latest published `0.x` release and `main`.
+Security fixes target the latest published minor of the current major line, plus `main`. Older minors are not patched in place: within a major line the upgrade path is always forward to its newest minor.
 
-| Version      | Supported |
-| ------------ | --------- |
-| Latest `0.x` | Yes       |
+| Version                                | Supported                                                              |
+| -------------------------------------- | ---------------------------------------------------------------------- |
+| Latest `1.x` minor                     | Yes — for the period given under [Support lifetime](#support-lifetime) |
+| Older `1.x` minors                     | No — upgrade to the latest `1.x`                                       |
+| Latest `0.x` minor                     | Until `1.0.0` ships; end-of-life once it does                          |
+| Pre-release tags (`-beta.N` / `-rc.N`) | No — upgrade to the stable release of that line                        |
+
+Until `1.0.0` ships, "current major line" means the latest published `0.x` or release-candidate build. The minimum 5-year support period described under [Support lifetime](#support-lifetime) starts at the `1.0.0` **stable** release, not at a release candidate.
 
 ## Response Target
 

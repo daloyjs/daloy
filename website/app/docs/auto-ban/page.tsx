@@ -156,6 +156,31 @@ app.use(autoBan({ trustedHops: 2 }));
 // With no proxy at all, forwarded-header trust is attacker-controlled by
 // definition: only enable either option behind a proxy chain you control.`}
       />
+      <p>
+        Two details worth knowing when you declare more than one hop. First,{" "}
+        <code>X-Real-IP</code> is honoured only at <code>trustedHops: 1</code>,
+        because that header carries exactly one hop of information and cannot
+        express a longer chain. Past one hop, a request whose{" "}
+        <code>X-Forwarded-For</code> is shorter than your declaration never
+        traversed the topology you described (a request that reached your origin
+        directly, skipping the CDN, for instance), so it resolves to{" "}
+        <em>no identity</em> rather than to a header the caller set themselves.
+        Unattributable requests are skipped, which is the safe failure: an
+        attacker who bypasses your chain gets no ban bucket at all instead of a
+        forgeable one.
+      </p>
+      <p>
+        Second, <code>trustedHops</code> already implies proxy-header trust, so
+        pairing it with <code>trustProxyHeaders: false</code> is a contradiction
+        and throws at construction rather than silently resolving in favour of
+        trust:
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`// Throws: trustProxyHeaders: false contradicts trustedHops: 2.
+// Drop whichever one you did not mean.
+app.use(autoBan({ trustProxyHeaders: false, trustedHops: 2 }));`}
+      />
 
       <h2 id="how-escalation-and-decay-work">
         How escalation &amp; decay work

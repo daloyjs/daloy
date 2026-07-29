@@ -216,11 +216,16 @@ app.use(
         <li>
           Per source IP
           {": "}set <code>trustProxyHeaders: true</code> <em>only</em> when you
-          run behind a trusted proxy or load balancer that <em>overwrites</em>{" "}
-          <code>X-Forwarded-For</code>
-          {". "}The key is then the first <code>X-Forwarded-For</code> entry (or{" "}
-          <code>X-Real-IP</code>), and falls back to <code>global</code> when
-          neither is present.
+          run behind a proxy chain you control. The key is the{" "}
+          <strong>rightmost</strong> <code>X-Forwarded-For</code> entry, the one
+          your immediate proxy appended, so rotating spoofed entries on the left
+          cannot mint fresh buckets. Behind more than one hop (CDN &rarr; LB
+          &rarr; app) declare the chain length with <code>trustedHops</code>
+          {". "}
+          <code>X-Real-IP</code> is honoured only for a single declared hop,
+          since it cannot express a longer chain; past that, a request whose
+          chain is shorter than the declaration resolves to no identity and
+          falls back to the shared <code>global</code> bucket.
         </li>
       </ul>
       <CodeBlock

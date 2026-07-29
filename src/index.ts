@@ -28,7 +28,6 @@ export {
   readRemotePort,
   pickForwardedForByHops,
   resolveForwardedClientIp,
-  assertTrustedHops,
 } from "./conn-info.js";
 export type { BehindProxyConfig, ConnInfo } from "./conn-info.js";
 export {

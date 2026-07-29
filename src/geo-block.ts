@@ -27,7 +27,7 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { ForbiddenError } from "./errors.js";
-import { assertTrustedHops, resolveForwardedClientIp } from "./conn-info.js";
+import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
 /**
  * Why a request was (or would have been) blocked by {@link geoBlock}.
@@ -265,12 +265,9 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
   const onBlock = opts.onBlock;
   const lookupCountry = opts.lookupCountry;
   const resolveCountry = opts.resolveCountry;
-  assertTrustedHops("geoBlock()", opts.trustedHops);
+  const hops = resolveForwardedTrust("geoBlock()", opts);
   const resolveIp =
-    opts.resolveIp ??
-    (opts.trustedHops !== undefined || opts.trustProxyHeaders
-      ? forwardedIpResolver(opts.trustedHops ?? 1)
-      : noIpResolver);
+    opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
 
   return {
     async beforeHandle(ctx) {
