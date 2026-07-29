@@ -15,6 +15,45 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.0.0-rc.8] - 2026-07-30
+
+### Security
+
+- **`safeRedirect()` now refuses percent-encoded C0/DEL control characters in
+  redirect targets (live red-team finding F2).** A still-encoded control such
+  as the tab in `/%09/evil.com` previously passed the literal control-char
+  check and was written verbatim into the `Location` header. Spec-compliant
+  browsers keep it same-origin, but legacy WebKit stacks strip decoded
+  tabs/newlines and can re-interpret the result as protocol-relative — the
+  trick behind historical Safari open-redirect CVEs. Targets containing
+  `%00`–`%1F` or `%7F` now throw `OpenRedirectBlockedError` with reason
+  `invalid-control-characters`; the range is deliberately narrow so legitimate
+  percent-encoded UTF-8 paths (continuation bytes live in `%80`–`%BF`) are
+  unaffected. Regression tests in `tests/safe-redirect.test.ts` and live
+  redirect-differential probes in `red-team-live/run.ts`.
+- **Live red-team harness expanded from 70 to 127 over-the-wire probes.**
+  `red-team-live/run.ts` gained a `novelProbes` battery covering vectors found
+  by going off-script against a running server: except() case /
+  double-encoding / semicolon / fullwidth-solidus / overlong-UTF-8 confusion,
+  HEAD-method and duplicate-`Authorization` bypass attempts, JWT `kid`/`jku`/
+  `x5u`/`crit`/`zip` header abuse and RS256 confusion, open-redirect parser
+  differentials, SSRF IP-literal differentials (decimal/hex/octal/short IPv4,
+  IPv6-mapped, trailing-dot, userinfo-masked), one-sided CSRF tokens, WAF
+  evasion encodings, production error redaction, CSWSH lookalike-subdomain /
+  null / absent origins, `Expect: 100-continue` timing, chunk-framing abuse,
+  and X-Forwarded-For chain posture. All 127 probes: **0 VULNERABLE**.
+  - Not every probe became a fix. A header-time `413` for `Expect:
+100-continue` requests declaring an over-limit `Content-Length` was
+    implemented and then reverted: `bodyLimitBytes` is enforced when the body is
+    _parsed_, so a route that declares no request body schema never enforces it,
+    and refusing at header time made an identical request resolve differently
+    depending on a transport hint (curl, which sends `Expect` for large bodies,
+    received `413` where `fetch` received `200`). The hand-rolled early response
+    also bypassed `secureHeaders` and `requestId`. Closing this properly needs a
+    uniform transport-level cap that applies with or without `Expect` and is
+    emitted through the error pipeline; it is tracked as post-1.0 work and the
+    harness records the current posture as an INFO probe.
+
 ## [1.0.0-rc.7] - 2026-07-29
 
 ### Security
@@ -2477,6 +2516,7 @@ source })`.
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...HEAD
+[1.0.0-rc.8]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.7...v1.0.0-rc.8
 [1.0.0-rc.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...v1.0.0-rc.7
 [1.0.0-rc.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.5...v1.0.0-rc.6
 [1.0.0-rc.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.4...v1.0.0-rc.5

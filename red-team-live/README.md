@@ -44,8 +44,29 @@ pnpm red-team:live
   connection-refused — a real DoS **finding** — instead of killing the harness.
   A post-engagement liveness probe records whether the target survived.
 
+  A second battery (`novelProbes`) adds vectors found by going off-script:
+  except() case / double-encoding / semicolon / fullwidth-solidus / overlong
+  UTF-8 confusion, HEAD-method and duplicate-`Authorization` bypass attempts,
+  JWT `kid` / `jku` / `x5u` / `crit` / `zip` header abuse and RS256 confusion,
+  oversized (1 MB) tokens over raw sockets, open-redirect parser differentials
+  (userinfo, backslash-after-host, ideographic full stop, scheme smuggling,
+  encoded control characters), SSRF IP-literal differentials (decimal / hex /
+  octal / short IPv4, IPv6-mapped, trailing-dot, userinfo-masked), one-sided
+  CSRF tokens, WAF evasion encodings, production error-redaction checks,
+  CSWSH lookalike-subdomain / null / absent origins, `Expect: 100-continue`
+  timing, chunk-framing abuse, and X-Forwarded-For chain parsing posture.
+
+  Some of these are deliberately recorded as `INFO` posture notes rather than
+  pass/fail assertions, because the safe fix is a design change rather than a
+  patch. The `Expect: 100-continue` probe is one: refusing an over-limit
+  declared `Content-Length` at header time was implemented and reverted, since
+  `bodyLimitBytes` is enforced at body-parse time and the early refusal made an
+  identical request resolve differently depending on whether the client sent
+  `Expect`. The probe documents the current posture so the eventual uniform
+  transport cap has a baseline to measure against.
+
 It prints a bounty-hunter-style report and exits non-zero if any finding is
-`VULNERABLE`. The current run is **68 probes over the wire** across two target
+`VULNERABLE`. The current run is **127 probes over the wire** across two target
 apps.
 
 ## What is covered live vs. in-process

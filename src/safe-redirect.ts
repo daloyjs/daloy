@@ -118,6 +118,18 @@ const ALLOWED_REDIRECT_STATUSES = new Set<number>([301, 302, 303, 307, 308]);
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
+// Reject *percent-encoded* C0 controls and DEL (`%00`-`%1F`, `%7F`) that arrive
+// as literal text in the target (e.g. a still-encoded query value passed
+// straight through). `CONTROL_CHAR_RE` only sees decoded characters, so an
+// encoded tab would otherwise be written verbatim into the `Location` header.
+// Per WHATWG URL that stays same-origin, but legacy WebKit stacks strip
+// decoded tabs/newlines and can re-interpret `/%09/host` as protocol-relative
+// — the trick behind historical Safari open-redirect CVEs. The range is
+// deliberately narrow: UTF-8 continuation bytes live in `%80`-`%BF`, so
+// legitimate percent-encoded non-ASCII paths (e.g. `/s%C3%A9arch`) are
+// unaffected.
+const ENCODED_CONTROL_CHAR_RE = /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i;
+
 // Any code point above U+00FF (outside Latin-1). Such characters cannot be
 // written to a `Location` header — which is serialized as an ISO-8859-1
 // ByteString, so `Headers.set` throws a raw `TypeError` — and they cover the
@@ -143,6 +155,14 @@ function classify(
     return { ok: false, reason: "empty-target" };
   }
   if (CONTROL_CHAR_RE.test(target)) {
+    return { ok: false, reason: "invalid-control-characters" };
+  }
+  // Encoded control characters (`%09`, `%00`, …) arriving as literal text:
+  // spec-compliant browsers keep `/%09/host` same-origin, but legacy WebKit
+  // strips decoded tabs/newlines and can fold it into an origin-escaping
+  // protocol-relative URL. Refuse rather than rely on every user agent
+  // parsing it the WHATWG way.
+  if (ENCODED_CONTROL_CHAR_RE.test(target)) {
     return { ok: false, reason: "invalid-control-characters" };
   }
   // Protocol-relative (`//evil.com`) is the classic open-redirect bypass.

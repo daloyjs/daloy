@@ -112,6 +112,47 @@ test("safeRedirect: refuses CR/LF response-splitting payloads", () => {
   );
 });
 
+test("safeRedirect: refuses percent-encoded C0/DEL control characters", () => {
+  // Regression (live red-team finding F2): a still-encoded control character
+  // such as the tab in `/%09/evil.com` used to sail past CONTROL_CHAR_RE
+  // (which only matches *decoded* characters) and was written verbatim into
+  // the Location header. Spec-compliant browsers keep it same-origin, but
+  // legacy WebKit strips decoded tabs/newlines and can re-interpret the result
+  // as protocol-relative — the historical Safari open-redirect trick.
+  for (const target of [
+    "/%09/evil.example", // encoded tab (the WebKit differential)
+    "/%0a//evil.example", // encoded LF + protocol-relative
+    "/%0d/evil.example", // encoded CR
+    "/%00/evil.example", // encoded NUL
+    "/%1F/evil.example", // encoded C0 boundary (uppercase hex)
+    "/%7f/evil.example", // encoded DEL
+    "https://app.example.com/%09/x", // encoded control on an allowed origin
+  ]) {
+    assert.throws(
+      () =>
+        safeRedirect(target, {
+          allowedPaths: ["/*"],
+          allowedOrigins: ["https://app.example.com"],
+        }),
+      (err: unknown) =>
+        err instanceof OpenRedirectBlockedError && err.reason === "invalid-control-characters",
+      `expected ${JSON.stringify(target)} to be refused`
+    );
+  }
+});
+
+test("safeRedirect: still allows legitimate percent-encoded path characters", () => {
+  // The encoded-control rejection must stay narrow: UTF-8 continuation bytes
+  // live in %80-%BF, so encoded non-ASCII paths and ordinary %20 spaces keep
+  // working (they are written to Location verbatim, as before).
+  const utf8 = safeRedirect("/s%C3%A9arch?q=%E2%82%AC", { allowedPaths: ["/*"] });
+  assert.equal(utf8.headers.get("Location"), "/s%C3%A9arch?q=%E2%82%AC");
+  const space = safeRedirect("/hello%20world", { allowedPaths: ["/*"] });
+  assert.equal(space.headers.get("Location"), "/hello%20world");
+  const tilde = safeRedirect("/%7Euser", { allowedPaths: ["/*"] });
+  assert.equal(tilde.headers.get("Location"), "/%7Euser");
+});
+
 test("safeRedirect: refuses non-Latin1 same-origin paths with a typed error (not a raw TypeError)", () => {
   // Regression: a `/`-prefixed target carrying a code point above U+00FF used
   // to sail past the control-char check, match the `/*` allowlist, and then

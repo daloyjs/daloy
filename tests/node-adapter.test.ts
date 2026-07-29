@@ -927,3 +927,59 @@ test("node adapter: a handler finishing before requestTimeoutMs leaves the signa
     await handle.close();
   }
 });
+
+/**
+ * Open a raw socket, fire a complete (or header-only) request, and collect
+ * every HTTP status code the server emits — including interim `100 Continue`.
+ * Used to assert the exact status-line sequence for `Expect: 100-continue`
+ * requests, which `fetch()` abstracts away.
+ */
+function collectStatusLines(port: number, payload: string): Promise<number[]> {
+  return new Promise((resolve) => {
+    const sock = connect(port, "127.0.0.1");
+    let buf = "";
+    const finish = () => {
+      try {
+        sock.destroy();
+      } catch {
+        /* ignore */
+      }
+      resolve([...buf.matchAll(/HTTP\/\d\.\d (\d{3})/g)].map((m) => Number(m[1])));
+    };
+    sock.setTimeout(3_000);
+    sock.on("connect", () => sock.write(payload));
+    sock.on("data", (d) => {
+      buf += d.toString("latin1");
+    });
+    sock.on("timeout", finish);
+    sock.on("close", finish);
+    sock.on("error", finish);
+  });
+}
+
+test("node adapter: Expect: 100-continue gets the interim 100 followed by the normal response", async () => {
+  // Clients that ask for 100-continue must get the interim 100 and then the
+  // handler's response. Guards the adapter against regressing this: attaching a
+  // `checkContinue` listener suppresses Node's automatic continue AND the
+  // `request` event, so a listener that forgets `writeContinue()` (or refuses
+  // based on the declared length) silently changes the outcome of requests that
+  // send `Expect` relative to identical requests that don't. That asymmetry is
+  // why the header-time body-limit refusal was reverted: `bodyLimitBytes` is
+  // enforced when the body is parsed, so a route with no request body schema
+  // never enforces it, and curl (which sends `Expect` for large bodies) saw 413
+  // where fetch saw 200 for the very same request.
+  const app = buildEchoApp();
+  const { handle, port } = await startServer(app);
+  try {
+    const body = JSON.stringify({ value: "hi" });
+    const statuses = await collectStatusLines(
+      port,
+      "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+        `Content-Length: ${Buffer.byteLength(body)}\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n` +
+        body
+    );
+    assert.deepEqual(statuses, [100, 200]);
+  } finally {
+    await handle.close();
+  }
+});

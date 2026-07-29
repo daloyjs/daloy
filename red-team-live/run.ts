@@ -1003,6 +1003,442 @@ async function exceptPathConfusion() {
   });
 }
 
+/**
+ * Novel attack battery — vectors beyond the original 68-probe suite, added
+ * after a manual off-script engagement (see
+ * `.deepsec/data/daloy/reports/red-team-live-2026-07-29.md`). Covers:
+ * except() case/double-encoding/semicolon/fullwidth/overlong-UTF-8 confusion,
+ * HEAD-method and duplicate-Authorization bypass attempts, JWT kid/jku/x5u/
+ * crit/zip header abuse + alg confusion, open-redirect parser differentials,
+ * SSRF IP-literal differentials, one-sided CSRF tokens, WAF evasion encodings,
+ * production error redaction, CSWSH origin variants, Expect:100-continue
+ * timing (the F1 regression), chunk-framing abuse, and XFF chain parsing.
+ */
+async function novelProbes(port: number, portB: number) {
+  // ---- except() path-confusion, extended ----
+  {
+    const cat = "Auth path-confusion (except)";
+    const at = (path: string, method = "GET") =>
+      fetch(BASE_B + path, { method, redirect: "manual" }).then(async (r) => ({
+        status: r.status,
+        body: await r.text().catch(() => ""),
+      }));
+    const variants: Array<[string, string, string]> = [
+      ["case-swap on protected route", "/API/ADMIN", "GET /API/ADMIN (no token)"],
+      ["mixed-case traversal", "/Public/../api/admin", "GET /Public/../api/admin"],
+      ["double-encoded dots", "/public/%252e%252e/api/admin", "GET /public/%252e%252e/api/admin"],
+      ["encoded slash traversal", "/public/..%2fapi%2fadmin", "GET /public/..%2fapi%2fadmin"],
+      ["semicolon path param", "/public/;/../api/admin", "GET /public/;/../api/admin"],
+      ["semicolon suffix on target", "/api/admin;.json", "GET /api/admin;.json"],
+      ["encoded trailing slash", "/api/admin%2f", "GET /api/admin%2f"],
+      ["trailing dot", "/api/admin.", "GET /api/admin."],
+      ["double leading slash", "//api/admin", "GET //api/admin"],
+      [
+        "fullwidth solidus traversal",
+        "/public/%ef%bc%8f..%ef%bc%8fapi%2fadmin",
+        "GET /public/<U+FF0F>..<U+FF0F>api/admin",
+      ],
+      ["percent-encoded 'a'", "/api/%61dmin", "GET /api/%61dmin"],
+    ];
+    for (const [name, path, attack] of variants) {
+      const r = await at(path);
+      const leaked = r.status === 200 && r.body.includes('"ok":true');
+      record({
+        category: cat,
+        title: `except() bypass — ${name}`,
+        severity: "critical",
+        attack,
+        observed: `status ${r.status}`,
+        verdict: leaked ? "VULNERABLE" : "DEFENDED",
+      });
+    }
+    const head = await at("/api/admin", "HEAD");
+    record({
+      category: cat,
+      title: "except() bypass — HEAD method on protected route",
+      severity: "high",
+      attack: "HEAD /api/admin (no token)",
+      observed: `status ${head.status}`,
+      verdict: head.status === 200 ? "VULNERABLE" : "DEFENDED",
+    });
+    // Node joins duplicate Authorization headers with a comma; the guard must
+    // not let a valid token in one slot smuggle the other past validation.
+    const dupAuth = await rawSend(
+      portB,
+      `GET /api/admin HTTP/1.1\r\nHost: ${HOST}:${portB}\r\nAuthorization: Bearer good\r\nAuthorization: Bearer evil\r\nConnection: close\r\n\r\n`
+    );
+    record({
+      category: cat,
+      title: "Duplicate Authorization headers",
+      severity: "high",
+      attack: "Two Authorization headers ('Bearer good' + 'Bearer evil')",
+      observed: `status ${dupAuth.status}`,
+      verdict: dupAuth.status === 200 ? "VULNERABLE" : "DEFENDED",
+    });
+    // Overlong UTF-8 slash (%c0%af) — rejected by spec-compliant decoders, but
+    // a classic parser-differential bypass; send raw so fetch can't normalize it.
+    const overlong = await rawSend(
+      portB,
+      `GET /public/%c0%af..%c0%afapi%c0%afadmin HTTP/1.1\r\nHost: ${HOST}:${portB}\r\nConnection: close\r\n\r\n`
+    );
+    record({
+      category: cat,
+      title: "Overlong UTF-8 encoded slash (raw)",
+      severity: "high",
+      attack: "GET /public/%c0%af..%c0%afapi%c0%afadmin",
+      observed: `status ${overlong.status}`,
+      verdict: overlong.status === 200 ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- JWT header abuse ----
+  {
+    const cat = "Authentication / Authorization";
+    const payload = { sub: "mallory", scopes: ["admin"], exp: Math.floor(Date.now() / 1000) + 600 };
+    const cases: Array<[string, object, string, "critical" | "high" | "medium"]> = [
+      [
+        "alg confusion (RS256 claim vs HS256-only verifier)",
+        { alg: "RS256", typ: "JWT" },
+        "token claiming RS256",
+        "high",
+      ],
+      [
+        "kid path injection",
+        { alg: "HS256", kid: "../../../../dev/null" },
+        "kid: ../../../../dev/null — verifier must ignore embedded key pointers",
+        "high",
+      ],
+      [
+        "jku URL injection (SSRF via key fetch)",
+        { alg: "HS256", jku: "http://169.254.169.254/jwks.json" },
+        "jku header pointing at cloud metadata — verifier must never fetch it",
+        "critical",
+      ],
+      [
+        "x5u certificate injection",
+        { alg: "HS256", x5u: "http://evil.example/cert.pem" },
+        "x5u header pointing at an attacker cert URL",
+        "high",
+      ],
+      [
+        "crit extension header",
+        { alg: "HS256", crit: ["exp"] },
+        "RFC 7515 crit extension — must reject if unsupported",
+        "medium",
+      ],
+      [
+        "zip (compressed-JWT bomb)",
+        { alg: "HS256", zip: "DEF" },
+        "zip:DEF header — verifier must not attempt decompression",
+        "medium",
+      ],
+    ];
+    for (const [name, header, attack, sev] of cases) {
+      const tok = forgeJwt(header, payload);
+      const r = await http("GET", "/admin", { headers: { authorization: `Bearer ${tok}` } });
+      const leaked = r.text.includes("TOP-SECRET");
+      record({
+        category: cat,
+        title: `JWT — ${name}`,
+        severity: sev,
+        attack,
+        observed: `status ${r.status}${leaked ? " — SECRET LEAKED" : ""}`,
+        verdict: r.status >= 400 && !leaked ? "DEFENDED" : "VULNERABLE",
+      });
+    }
+    // Oversized token: send over a raw socket — undici EPIPEs when the server
+    // (correctly) closes the connection at its 16 KiB header cap mid-write.
+    const bigTok = forgeJwt({ alg: "HS256", pad: "A".repeat(1_000_000) }, payload);
+    const bigRes = await rawSend(
+      port,
+      `GET /admin HTTP/1.1\r\nHost: ${HOST}:${port}\r\nAuthorization: Bearer ${bigTok}\r\nConnection: close\r\n\r\n`
+    );
+    record({
+      category: cat,
+      title: "JWT — oversized token (1 MB header segment)",
+      severity: "medium",
+      attack: "Bearer token with a 1 MB header segment (parser DoS probe, raw socket)",
+      observed:
+        `status ${bigRes.status}` +
+        (bigRes.status === 0 ? " (connection dropped — header-cap refusal mid-write)" : ""),
+      // A 431 is the clean refusal; status 0 means the socket was dropped
+      // while the server rejected at its header-size cap (also a refusal —
+      // the post-engagement liveness probe proves the process survived).
+      verdict: bigRes.status >= 400 || bigRes.status === 0 ? "DEFENDED" : "VULNERABLE",
+    });
+  }
+
+  // ---- Open-redirect parser differentials ----
+  {
+    const cat = "SSRF / Open Redirect";
+    const targetHost = new URL(BASE).host;
+    // The target's safeRedirect allowlist: same-origin plus app.example.com.
+    // A redirect only "escapes" if it lands on a host outside BOTH.
+    const allowlistedHosts = new Set([targetHost, "app.example.com"]);
+    const escapesOrigin = (status: number, loc: string): boolean => {
+      if (status !== 303) return false;
+      if (/^(javascript|data|vbscript|file):/i.test(loc)) return true;
+      try {
+        return !allowlistedHosts.has(new URL(loc, BASE).host);
+      } catch {
+        return false; // unparseable Location is not a working redirect
+      }
+    };
+    const targets: Array<[string, string]> = [
+      ["mixed slash-backslash", "/\\/evil.example"],
+      ["encoded backslash pair", "/%5c%5cevil.example"],
+      ["quad slash", "////evil.example"],
+      ["lookalike subdomain", "https://app.example.com.evil.example/"],
+      ["userinfo trick", "https://app.example.com@evil.example/"],
+      ["encoded userinfo", "https://app.example.com%40evil.example/"],
+      ["backslash after host", "https://app.example.com\\.evil.example/"],
+      ["ideographic full stop (U+3002)", "https://app.example.com%E3%80%82evil.example/"],
+      ["scheme smuggling", "https:\\evil.example"],
+      ["data: scheme", "data:text/html,<script>alert(1)</script>"],
+      // F2 regression: encoded C0 controls must now be refused outright
+      // (before the fix these were 303 with the encoded tab written verbatim).
+      ["encoded tab (F2 regression)", "/%09/evil.example"],
+      ["encoded LF + protocol-relative (F2 regression)", "/%0a//evil.example"],
+    ];
+    for (const [name, t] of targets) {
+      const r = await http("GET", `/go?to=${encodeURIComponent(t)}`);
+      const loc = r.headers.get("location") ?? "";
+      record({
+        category: cat,
+        title: `Open redirect — ${name}`,
+        severity: "high",
+        attack: `GET /go?to=${t}`,
+        observed: `status ${r.status}${loc ? `, Location: ${loc.slice(0, 70)}` : ""}`,
+        verdict: escapesOrigin(r.status, loc) ? "VULNERABLE" : "DEFENDED",
+      });
+    }
+  }
+
+  // ---- SSRF IP-literal differentials ----
+  {
+    const cat = "SSRF / Open Redirect";
+    const literals: Array<[string, string]> = [
+      ["decimal IPv4 (2130706433 = 127.0.0.1)", "http://2130706433/"],
+      ["hex IPv4 (0x7f000001)", "http://0x7f000001/"],
+      ["octal IPv4 (0177.0.0.1)", "http://0177.0.0.1/"],
+      ["short-form (127.1)", "http://127.1/"],
+      ["zero host (0 = 0.0.0.0)", "http://0/"],
+      ["IPv6 loopback", "http://[::1]/"],
+      ["IPv4-mapped IPv6", "http://[::ffff:127.0.0.1]/"],
+      ["trailing-dot localhost", "http://localhost./"],
+      ["userinfo-masked loopback", "http://attacker@127.0.0.1/"],
+    ];
+    for (const [name, u] of literals) {
+      const r = await http("GET", `/fetch?url=${encodeURIComponent(u)}`);
+      record({
+        category: cat,
+        title: `SSRF — ${name}`,
+        severity: "critical",
+        attack: `GET /fetch?url=${u}`,
+        observed: `status ${r.status}`,
+        verdict: r.status === 403 ? "DEFENDED" : "VULNERABLE",
+      });
+    }
+  }
+
+  // ---- CSRF double-submit edges ----
+  {
+    const cat = "Stateful middleware";
+    const cookieOnly = await fetch(`${BASE}/csrf-act`, {
+      method: "POST",
+      headers: { cookie: "csrf=tok" },
+    });
+    record({
+      category: cat,
+      title: "CSRF — cookie present, header missing",
+      severity: "high",
+      attack: "POST /csrf-act with the csrf cookie but no x-csrf-token header",
+      observed: `status ${cookieOnly.status}`,
+      verdict: cookieOnly.status === 403 ? "DEFENDED" : "VULNERABLE",
+    });
+    const headerOnly = await fetch(`${BASE}/csrf-act`, {
+      method: "POST",
+      headers: { "x-csrf-token": "tok" },
+    });
+    record({
+      category: cat,
+      title: "CSRF — header present, cookie missing",
+      severity: "high",
+      attack: "POST /csrf-act with x-csrf-token but no cookie",
+      observed: `status ${headerOnly.status}`,
+      verdict: headerOnly.status === 403 ? "DEFENDED" : "VULNERABLE",
+    });
+  }
+
+  // ---- WAF evasion encodings (signature-coverage documentation) ----
+  {
+    const cat = "Injection (WSTG-INPV)";
+    const probes: Array<[string, string]> = [
+      ["inline-comment SQLi", "un/**/ion sel/**/ect user,pass"],
+      ["mixed-case SQLi", "uNiOn SeLeCt * fRoM users"],
+      ["fullwidth-Unicode SQLi", "ｕｎｉｏｎ ｓｅｌｅｃｔ"],
+      ["template-injection strings", "{{7*7}}${7*7}#{7*7}"],
+    ];
+    for (const [name, q] of probes) {
+      const r = await http("GET", `/search?q=${encodeURIComponent(q)}`);
+      record({
+        category: cat,
+        title: `WAF signature coverage — ${name}`,
+        severity: "medium",
+        attack: `GET /search?q=${q}`,
+        observed:
+          `status ${r.status}` +
+          (r.status === 200
+            ? " (passed the signature WAF — /search has no SQL/template sink, so this documents WAF coverage, not an exploit)"
+            : " (blocked)"),
+        verdict: "INFO",
+      });
+    }
+  }
+
+  // ---- Production error redaction ----
+  {
+    const cat = "Data Exposure / Mass Assignment";
+    const stackRe = /at\s+\S+\s+\(|node:internal|\.ts:\d+/i;
+    const bad = await http("POST", "/items", {
+      headers: { "content-type": "application/json" },
+      body: '{"name":',
+    });
+    record({
+      category: cat,
+      title: "Malformed JSON — stack leakage in 400",
+      severity: "medium",
+      attack: "POST /items with broken JSON; inspect the 400 body",
+      observed: `status ${bad.status}, body ${bad.text.length}B${stackRe.test(bad.text) ? " LEAKS STACK" : ""}`,
+      verdict: stackRe.test(bad.text) ? "VULNERABLE" : "DEFENDED",
+    });
+    const nf = await http("GET", "/no-such-route-xyz");
+    record({
+      category: cat,
+      title: "404 shape — stack/framework leakage",
+      severity: "low",
+      attack: "GET /no-such-route-xyz in production mode",
+      observed: `status ${nf.status}, body: ${nf.text.slice(0, 90)}`,
+      verdict: stackRe.test(nf.text) ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- CSWSH origin variants ----
+  {
+    const cat = "WebSocket (CSWSH)";
+    const subdomain = await wsHandshake(port, "https://app.example.com.evil.example");
+    record({
+      category: cat,
+      title: "CSWSH — lookalike subdomain origin",
+      severity: "high",
+      attack: "WS upgrade with Origin: https://app.example.com.evil.example",
+      observed: `handshake: ${subdomain.statusLine || "(connection dropped)"}`,
+      verdict: subdomain.status !== 101 ? "DEFENDED" : "VULNERABLE",
+    });
+    const nullOrigin = await wsHandshake(port, "null");
+    record({
+      category: cat,
+      title: "CSWSH — null origin",
+      severity: "medium",
+      attack: "WS upgrade with Origin: null",
+      observed: `handshake: ${nullOrigin.statusLine || "(connection dropped)"}`,
+      verdict: nullOrigin.status !== 101 ? "DEFENDED" : "VULNERABLE",
+    });
+    const noOrigin = await wsHandshake(port);
+    record({
+      category: cat,
+      title: "CSWSH — absent Origin header (non-browser client posture)",
+      severity: "info",
+      attack: "WS upgrade with no Origin header",
+      observed:
+        `handshake: ${noOrigin.statusLine || "(connection dropped)"}` +
+        (noOrigin.status === 101 ? " — accepted by design for non-browser clients" : ""),
+      verdict: "INFO",
+    });
+  }
+
+  // ---- Wire-level: Expect:100-continue timing + chunk abuse ----
+  {
+    const cat = "Protocol / parsing abuse";
+    // Posture probe, deliberately INFO rather than a pass/fail assertion.
+    //
+    // Node answers `100 Continue` for any request that asks, including one
+    // whose declared Content-Length exceeds `bodyLimitBytes`, so a hostile
+    // client can hold sockets open awaiting a body that may be refused later.
+    // A `checkContinue` listener that refuses at header time was tried and
+    // reverted: `bodyLimitBytes` is enforced when the body is *parsed*, so a
+    // route with no request body schema never enforces it, and rejecting early
+    // made an `Expect` header change the outcome of an otherwise identical
+    // request (curl, which sends `Expect` for large bodies, got 413 where
+    // fetch got 200). Closing this properly needs a uniform transport-level
+    // cap applied with or without `Expect` and emitted through the error
+    // pipeline so it carries secureHeaders and a request id. Tracked as
+    // post-1.0 work; this probe records the current posture.
+    const expect100 = await rawSend(
+      port,
+      `POST /sink HTTP/1.1\r\nHost: ${HOST}:${port}\r\nContent-Type: application/json\r\nContent-Length: 99999999\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n`
+    );
+    record({
+      category: cat,
+      title: "Expect: 100-continue with oversized declared body",
+      severity: "info",
+      attack: "POST /sink, Content-Length: 99999999, Expect: 100-continue",
+      observed:
+        `first status line: ${expect100.statusLine || "(none)"}` +
+        " — body limit is enforced at parse time, not at header time",
+      verdict: "INFO",
+    });
+    const chunkExt = await rawSend(
+      port,
+      `POST /sink HTTP/1.1\r\nHost: ${HOST}:${port}\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5;evil=1\r\n{}\r\n\r\n0\r\n\r\n`
+    );
+    record({
+      category: cat,
+      title: "Chunk-extension smuggling",
+      severity: "medium",
+      attack: "Chunked body with a '5;evil=1' chunk-size line",
+      observed: `status ${chunkExt.status}`,
+      verdict: "INFO",
+    });
+    const giantChunk = await rawSend(
+      port,
+      `POST /sink HTTP/1.1\r\nHost: ${HOST}:${port}\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\nFFFFFFFFFFFFFFFF\r\n`,
+      3000
+    );
+    record({
+      category: cat,
+      title: "Giant chunk size (16 EB declared)",
+      severity: "medium",
+      attack: "Chunked body declaring chunk size 0xFFFFFFFFFFFFFFFF",
+      observed: `status ${giantChunk.status || "(connection dropped)"}`,
+      verdict: "INFO",
+    });
+  }
+
+  // ---- X-Forwarded-For chain parsing posture ----
+  {
+    const cat = "Access control (bot / geo / ban / mTLS)";
+    const innocentFirst = await http("GET", "/healthz", {
+      headers: { "x-forwarded-for": "1.2.3.4, 203.0.113.7" },
+    });
+    const bannedFirst = await http("GET", "/healthz", {
+      headers: { "x-forwarded-for": "203.0.113.7, 1.2.3.4" },
+    });
+    record({
+      category: cat,
+      title: "XFF chain parsing — rightmost hop is trusted",
+      severity: "medium",
+      attack:
+        "XFF '1.2.3.4, 203.0.113.7' (innocent first) vs '203.0.113.7, 1.2.3.4' (banned first) — which hop does geoBlock see?",
+      observed:
+        `innocent-first=${innocentFirst.status} banned-first=${bannedFirst.status} ` +
+        "(rightmost = the hop your LB appends, correct under trustProxy; a client with direct " +
+        "access to the origin can claim any IP, which is why prod refuses XFF by default)",
+      verdict: "INFO",
+    });
+  }
+}
+
 async function unorthodoxAttacks(port: number, portB: number) {
   const cat = "Unorthodox vectors";
 
@@ -1238,6 +1674,7 @@ async function main() {
     await statefulMiddleware();
     await accessControlFeeds();
     await exceptPathConfusion();
+    await novelProbes(port, portB);
     await unorthodoxAttacks(port, portB);
   } finally {
     // Confirm the target survived the engagement (crash = DoS finding).
