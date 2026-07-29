@@ -771,3 +771,57 @@ test("preflight advertises the headers 2026-07-28 requires", () => {
   assert.match(allowed, /Mcp-Method/i);
   assert.match(allowed, /Mcp-Name/i);
 });
+
+// ─────────────── Untrusted-body parsing posture ───────────────
+
+test("prototype-pollution keys are stripped from the parsed body", async () => {
+  // Hand-written JSON: a JS object literal's `__proto__` sets the prototype and
+  // is dropped by JSON.stringify, so the raw string is required to prove the
+  // parser strips the sink keys rather than materializing them.
+  const raw =
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":' +
+    '{"name":"search_docs","arguments":' +
+    '{"__proto__":{"polluted":true},"constructor":"x","prototype":"y","query":"routing"}}}';
+
+  const res = await post(raw);
+  const json = (await res.json()) as RpcResponse;
+
+  assert.equal(res.status, 200);
+  assert.notEqual(json.result.isError, true);
+  // The global prototype must be untouched regardless of the payload.
+  assert.equal(({} as Record<string, unknown>).polluted, undefined);
+});
+
+test("an excessively nested body is rejected before it is parsed", async () => {
+  const deep = `${"[".repeat(200)}${"]".repeat(200)}`;
+  const res = await post(
+    `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"deep":${deep}}}`
+  );
+  assert.equal(res.status, 400);
+  const json = (await res.json()) as RpcResponse;
+  assert.equal(json.error.code, -32600);
+  assert.match(json.error.message, /depth/i);
+});
+
+test("a body with too many keys is rejected before it is parsed", async () => {
+  const wide = Array.from({ length: 10_050 }, (_, i) => `"k${i}":1`).join(",");
+  const res = await post(
+    `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{${wide}}}`
+  );
+  assert.equal(res.status, 400);
+  assert.equal(((await res.json()) as RpcResponse).error.code, -32600);
+});
+
+test("braces and colons inside strings do not count toward the structural caps", async () => {
+  // A query full of JSON-looking punctuation must still be accepted.
+  const noisy = "{".repeat(80) + ":".repeat(80);
+  const { res, json } = await rpc({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "search_docs", arguments: { query: noisy } },
+  });
+  assert.equal(res.status, 200);
+  // No structural rejection; the tool itself decides what to do with the query.
+  assert.equal(json.error, undefined);
+});

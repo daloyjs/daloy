@@ -157,6 +157,86 @@ function decodeMcpHeaderValue(raw: string): string | undefined {
   }
 }
 
+/**
+ * Keys that let a JSON payload reach `Object.prototype`. Stripped from every
+ * nested object while parsing, matching `safeJsonParse()` in `@daloyjs/core`.
+ */
+const FORBIDDEN_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * Structural caps on an inbound payload, mirroring the `safeJsonParseLimited()`
+ * defaults in `@daloyjs/core`. The body cap alone does not bound *shape*: 256
+ * KiB is ample room for pathological nesting or key counts.
+ */
+const MAX_JSON_DEPTH = 50;
+const MAX_JSON_KEYS = 10_000;
+
+/** Raised when a payload is structurally abusive rather than merely malformed. */
+class JsonStructureError extends Error {}
+
+/**
+ * Reject wide or deeply nested JSON before handing it to `JSON.parse`.
+ *
+ * Scans the raw text rather than the parsed value, so an abusive payload is
+ * refused without ever being materialized. String contents are skipped so
+ * braces and colons inside string literals never count.
+ *
+ * @param text - The raw request body.
+ * @throws {JsonStructureError} When nesting or key count exceeds the caps.
+ */
+function assertJsonStructure(text: string): void {
+  let depth = 0;
+  let keys = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === "{" || char === "[") {
+      depth += 1;
+      if (depth > MAX_JSON_DEPTH) {
+        throw new JsonStructureError(
+          "JSON nesting exceeds the permitted depth."
+        );
+      }
+    } else if (char === "}" || char === "]") {
+      depth -= 1;
+    } else if (char === ":") {
+      keys += 1;
+      if (keys > MAX_JSON_KEYS) {
+        throw new JsonStructureError("JSON payload has too many keys.");
+      }
+    }
+  }
+}
+
+/**
+ * Parse an untrusted JSON body with the same posture as the framework's own
+ * body parsers: structural caps first, then prototype-pollution keys stripped
+ * from every nested object.
+ *
+ * @param text - The raw request body.
+ * @returns The parsed value with `__proto__` / `constructor` / `prototype` removed.
+ * @throws {JsonStructureError} When the payload is structurally abusive.
+ * @throws {SyntaxError} When the payload is not valid JSON.
+ */
+function safeJsonParse(text: string): unknown {
+  assertJsonStructure(text);
+  return JSON.parse(text, (key, value) =>
+    FORBIDDEN_JSON_KEYS.has(key) ? undefined : value
+  );
+}
+
 /** A JSON-RPC id is a string, number, or null. */
 type JsonRpcId = string | number | null;
 
@@ -836,12 +916,14 @@ export async function POST(request: Request): Promise<Response> {
 
   let message: JsonRpcMessage;
   try {
-    message = JSON.parse(raw) as JsonRpcMessage;
-  } catch {
+    message = safeJsonParse(raw) as JsonRpcMessage;
+  } catch (error) {
     return rpcError(
       null,
-      PARSE_ERROR,
-      "Invalid JSON in request body.",
+      error instanceof JsonStructureError ? INVALID_REQUEST : PARSE_ERROR,
+      error instanceof JsonStructureError
+        ? error.message
+        : "Invalid JSON in request body.",
       undefined,
       400
     );
