@@ -127,7 +127,11 @@ test("[unhappy] autoBan: rotating a spoofed leftmost XFF entry no longer evades 
   // Under the old leftmost read each attempt keyed a fresh bucket and no ban
   // ever fired. Now the rightmost (real) client accumulates the strikes.
   const banned = await app.fetch(viaProxy("/ok", "198.51.100.99", "203.0.113.5"));
-  assert.equal(banned.status, 429, "the real client IP must accumulate strikes regardless of leftmost spoofing");
+  assert.equal(
+    banned.status,
+    429,
+    "the real client IP must accumulate strikes regardless of leftmost spoofing"
+  );
 });
 
 // ---------- Finding 2 regression: victim-IP banning via spoofed XFF ----------
@@ -247,7 +251,11 @@ test("[unhappy] geoBlock: a spoofed leftmost XFF no longer dodges a denied count
   });
   // The denied client (ZZ) spoofs an allowed US IP at the leftmost slot.
   const spoofed = await app.fetch(viaProxy("/x", "198.51.100.7", "203.0.113.7"));
-  assert.equal(spoofed.status, 403, "geo decision must use the proxy-observed IP, not the spoofed one");
+  assert.equal(
+    spoofed.status,
+    403,
+    "geo decision must use the proxy-observed IP, not the spoofed one"
+  );
   // And a genuine allowed client still passes.
   const legit = await app.fetch(viaProxy("/x", "1.2.3.4", "198.51.100.7"));
   assert.equal(legit.status, 200);
@@ -326,9 +334,7 @@ test("botGuard trustedHops resolves the proxy-observed IP for verification", asy
 
 test("concurrencyLimit scope client with trustedHops buckets on the proxy-observed IP", async () => {
   const app = new App({ env: "development" });
-  app.use(
-    concurrencyLimit({ maxConcurrent: 1, maxQueue: 0, scope: "client", trustedHops: 1 })
-  );
+  app.use(concurrencyLimit({ maxConcurrent: 1, maxQueue: 0, scope: "client", trustedHops: 1 }));
   app.route({
     method: "GET",
     path: "/slow",

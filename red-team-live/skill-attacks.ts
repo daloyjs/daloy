@@ -73,11 +73,7 @@ async function http(
 }
 
 /** Raw TCP request so we control the exact bytes on the wire. */
-function raw(
-  port: number,
-  bytes: string,
-  waitMs = 1500
-): Promise<string> {
+function raw(port: number, bytes: string, waitMs = 1500): Promise<string> {
   return new Promise((resolve, reject) => {
     const sock: Socket = connect(port, "127.0.0.1");
     let out = "";
@@ -100,11 +96,9 @@ const statusLine = (rawText: string) => rawText.split("\r\n", 1)[0] ?? "(no resp
 // ---------------------------------------------------------------------------
 async function bootTarget() {
   const here = dirname(fileURLToPath(import.meta.url));
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", join(here, "target.ts")],
-    { stdio: ["ignore", "pipe", "inherit"] }
-  );
+  const child = spawn(process.execPath, ["--import", "tsx", join(here, "target.ts")], {
+    stdio: ["ignore", "pipe", "inherit"],
+  });
   let buf = "";
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("target boot timeout")), 30_000);
@@ -249,7 +243,7 @@ async function openRedirectNormalization() {
     const offOrigin =
       /^(https?:)?\\?\/\\?\/+[a-z0-9.-]*evil\.example/i.test(loc.trim()) ||
       /^(javascript|vbscript|data)\s*:/i.test(loc.trim()) ||
-      /[?#]/.test(loc) === false && /evil\.example/i.test(loc) && !loc.startsWith("/");
+      (/[?#]/.test(loc) === false && /evil\.example/i.test(loc) && !loc.startsWith("/"));
     const escaped = literalCtrl || offOrigin;
     record({
       category: cat,
@@ -317,7 +311,8 @@ async function banEvasionViaXff() {
     category: cat,
     title: "autoBan victim-IP banning (pre-emptive DoS via spoofed XFF)",
     severity: "medium",
-    skill: "cure53-webapp-api-pentest — limiter keyed on spoofable IP enables self-DoS (P11-02-005)",
+    skill:
+      "cure53-webapp-api-pentest — limiter keyed on spoofable IP enables self-DoS (P11-02-005)",
     attack: `4 failed logins spoofing XFF of victim ${victim} (append-mode LB model)`,
     observed:
       `victim's /ab-public: ${asVictim.status} (429 = attacker can ban arbitrary IPs), ` +
@@ -371,7 +366,8 @@ async function exceptPathConfusion() {
         category: cat,
         title: `except() bypass via ${p}`,
         severity: "critical",
-        skill: "cure53-webapp-api-pentest — double-encoded traversal past a block-list (EXP-23-017)",
+        skill:
+          "cure53-webapp-api-pentest — double-encoded traversal past a block-list (EXP-23-017)",
         attack: `GET ${p} on except()-guarded app`,
         observed: `request failed: ${(e as Error).message}`,
         verdict: "INFO",
@@ -420,7 +416,8 @@ async function websocketOriginEdgeCases() {
       category: cat,
       title: `CSWSH — ${label}`,
       severity: "high",
-      skill: "tob-insecure-defaults — fail-open check on missing config; cure53 RSP-01-001 cross-origin",
+      skill:
+        "tob-insecure-defaults — fail-open check on missing config; cure53 RSP-01-001 cross-origin",
       attack: `WS upgrade with ${label}`,
       observed: `${statusLine(resp)} (101 = handshake ACCEPTED)`,
       // A "same-origin" policy that accepts a missing Origin fails open for
@@ -443,13 +440,20 @@ async function errorDisclosure() {
   const cases: Array<[string, string, string | Buffer, Record<string, string>]> = [
     ["malformed JSON", "/items", '{"name": "x", "price":}', { "content-type": "application/json" }],
     ["truncated JSON", "/items", '{"name": "x"', { "content-type": "application/json" }],
-    ["JSON with BOM", "/items", "﻿{\"name\":\"x\",\"price\":1}", { "content-type": "application/json" }],
-    ["invalid UTF-8 JSON", "/items", Buffer.from([0x7b, 0x22, 0x61, 0x22, 0x3a, 0xff, 0xfe, 0x7d]), { "content-type": "application/json" }],
+    ["JSON with BOM", "/items", '﻿{"name":"x","price":1}', { "content-type": "application/json" }],
+    [
+      "invalid UTF-8 JSON",
+      "/items",
+      Buffer.from([0x7b, 0x22, 0x61, 0x22, 0x3a, 0xff, 0xfe, 0x7d]),
+      { "content-type": "application/json" },
+    ],
     ["JSON literal root", "/items", "null", { "content-type": "application/json" }],
   ];
   for (const [label, path, body, headers] of cases) {
     const r = await http("POST", path, { headers, body });
-    const leaks = /stack|at Object\.|node_modules|\/src\/|zoderror|expected .+ at line/i.test(r.text);
+    const leaks = /stack|at Object\.|node_modules|\/src\/|zoderror|expected .+ at line/i.test(
+      r.text
+    );
     record({
       category: cat,
       title: `Parse-error disclosure — ${label}`,
@@ -496,7 +500,8 @@ async function decompressionEdgeCases() {
     skill: "tob-sharp-edges — silent failure on unrecognized security-relevant input",
     attack: "POST /ingest with Content-Encoding: zstd",
     observed: `status ${r2.status}, body=${r2.text.slice(0, 100)}`,
-    verdict: r2.status === 415 || r2.status === 400 ? "DEFENDED" : r2.status < 300 ? "VULNERABLE" : "INFO",
+    verdict:
+      r2.status === 415 || r2.status === 400 ? "DEFENDED" : r2.status < 300 ? "VULNERABLE" : "INFO",
   });
 
   // 3) Case-variant encoding value.
@@ -518,7 +523,10 @@ async function decompressionEdgeCases() {
 /** HPP on the redirect parameter — last/first-wins confusion. */
 async function hppOnRedirect() {
   const cat = "HTTP Parameter Pollution — redirect target";
-  const r = await http("GET", `/go?to=${encodeURIComponent("/healthz")}&to=${encodeURIComponent("https://evil.example")}`);
+  const r = await http(
+    "GET",
+    `/go?to=${encodeURIComponent("/healthz")}&to=${encodeURIComponent("https://evil.example")}`
+  );
   const loc = r.headers.get("location") ?? "";
   const escaped = /evil\.example/i.test(loc);
   record({
@@ -568,15 +576,23 @@ async function methodOverrideVariants() {
 /** tob-sharp-edges "JWT pattern" — header-driven algorithm confusion variants. */
 async function jwtHeaderConfusion() {
   const cat = "JWT header confusion (tob-sharp-edges JWT pattern)";
-  const b64 = (o: object) =>
-    Buffer.from(JSON.stringify(o)).toString("base64url");
+  const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const payload = { sub: "alice", scopes: ["admin"], iat: 1, exp: 4_000_000_000 };
   const tokens: Array<[string, string]> = [
     ["alg case variant hs256", `${b64({ alg: "hs256", typ: "JWT" })}.${b64(payload)}.fakesig`],
     ["alg with whitespace", `${b64({ alg: " HS256", typ: "JWT" })}.${b64(payload)}.fakesig`],
-    ["kid path traversal", `${b64({ alg: "HS256", kid: "../../../../etc/passwd" })}.${b64(payload)}.fakesig`],
-    ["jku injection", `${b64({ alg: "HS256", jku: "http://evil.example/jwks.json" })}.${b64(payload)}.fakesig`],
-    ["x5u injection", `${b64({ alg: "HS256", x5u: "http://evil.example/cert" })}.${b64(payload)}.fakesig`],
+    [
+      "kid path traversal",
+      `${b64({ alg: "HS256", kid: "../../../../etc/passwd" })}.${b64(payload)}.fakesig`,
+    ],
+    [
+      "jku injection",
+      `${b64({ alg: "HS256", jku: "http://evil.example/jwks.json" })}.${b64(payload)}.fakesig`,
+    ],
+    [
+      "x5u injection",
+      `${b64({ alg: "HS256", x5u: "http://evil.example/cert" })}.${b64(payload)}.fakesig`,
+    ],
     ["crit extension", `${b64({ alg: "HS256", crit: ["exp"], exp: "x" })}.${b64(payload)}.fakesig`],
     ["exp as string", `${b64({ alg: "HS256" })}.${b64({ ...payload, exp: "4000000000" })}.fakesig`],
   ];
@@ -727,7 +743,8 @@ async function corsLookalikes() {
       category: cat,
       title: `CORS origin ${o.slice(0, 44)}`,
       severity: "medium",
-      skill: "cure53-webapp-api-pentest — credentialed CORS reflects lookalike origins (RSP-01-001)",
+      skill:
+        "cure53-webapp-api-pentest — credentialed CORS reflects lookalike origins (RSP-01-001)",
       attack: `GET /users/1 with Origin: ${o}`,
       observed: `ACAO=${acao ?? "(none)"}`,
       verdict: reflected ? "VULNERABLE" : "DEFENDED",

@@ -378,7 +378,12 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
       ? forwardedIpResolver(opts.trustedHops ?? 1)
       : noIpResolver);
 
-  if (verifiedBots.length > 0 && !opts.resolveIp && !opts.trustProxyHeaders && opts.trustedHops === undefined) {
+  if (
+    verifiedBots.length > 0 &&
+    !opts.resolveIp &&
+    !opts.trustProxyHeaders &&
+    opts.trustedHops === undefined
+  ) {
     throw new Error(
       "botGuard(): verifiedBots requires a client-IP source — provide resolveIp, trustedHops, " +
         "or set trustProxyHeaders, otherwise declared crawlers cannot be verified."
