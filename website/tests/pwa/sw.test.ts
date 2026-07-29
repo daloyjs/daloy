@@ -130,8 +130,11 @@ test("service worker reuses a previously cached page when navigation is offline"
   assert.equal(await response.text(), "cached docs page");
 });
 
-test("service worker caches same-origin Next static assets after a network hit", async () => {
-  const assetResponse = new Response("chunk", { status: 200 });
+test("service worker caches same-origin Next static assets marked immutable", async () => {
+  const assetResponse = new Response("chunk", {
+    status: 200,
+    headers: { "cache-control": "public, max-age=31536000, immutable" },
+  });
   const worker = loadServiceWorker({
     fetchImpl: async () => assetResponse,
   });
@@ -144,4 +147,28 @@ test("service worker caches same-origin Next static assets after a network hit",
 
   assert.equal(await response.text(), "chunk");
   assert.ok(worker.cacheEntries.has(assetRequest.url));
+});
+
+test("service worker refuses to cache a static asset that is not immutable", async () => {
+  // Regression guard for the stale-chunk bug the `immutable` check exists to
+  // prevent: anything cached here is served cache-first indefinitely, so a
+  // revalidatable response would outlive the deploy or dev-server restart that
+  // produced it and break the client module graph.
+  const assetResponse = new Response("chunk", {
+    status: 200,
+    headers: { "cache-control": "public, max-age=0, must-revalidate" },
+  });
+  const worker = loadServiceWorker({
+    fetchImpl: async () => assetResponse,
+  });
+  const assetRequest = {
+    method: "GET",
+    url: "https://daloyjs.dev/_next/static/chunks/app.js",
+  };
+
+  const response = await worker.fetch(assetRequest);
+
+  // Still served from the network — only the caching is withheld.
+  assert.equal(await response.text(), "chunk");
+  assert.equal(worker.cacheEntries.has(assetRequest.url), false);
 });
