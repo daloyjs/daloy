@@ -17,11 +17,29 @@ import { SITE_URL } from "@/lib/seo";
  * - `get_doc` - read the full plain-text body of one page by route or slug.
  * - `list_docs` - enumerate every available docs page.
  *
- * @see https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
+ * It serves both MCP protocol eras on the one endpoint, mirroring
+ * `createMcpHandler()` in `@daloyjs/core`: the stateless `2026-07-28` revision
+ * (per-request `_meta`, `server/discover`, `resultType` results, caching hints)
+ * and the older handshake-based revisions, so existing clients keep working.
+ *
+ * @see https://modelcontextprotocol.io/specification/2026-07-28
  */
 
-/** Protocol version this server negotiates against when it has a free choice. */
-const PREFERRED_PROTOCOL_VERSION = "2025-11-25";
+/**
+ * Newest revision a legacy `initialize` handshake may be answered with.
+ *
+ * A handshake must never be answered with a modern revision: the client would
+ * then be expected to send per-request `_meta` it knows nothing about. Modern
+ * clients never reach `initialize` — they use `server/discover` or just send a
+ * request.
+ */
+const LEGACY_FALLBACK_PROTOCOL_VERSION = "2025-11-25";
+
+/**
+ * First revision of the stateless ("modern") MCP era. Revisions are
+ * `YYYY-MM-DD`, so a lexicographic compare classifies every past and future one.
+ */
+const MODERN_ERA_MIN_VERSION = "2026-07-28";
 
 /**
  * MCP protocol revisions this endpoint understands. An incoming
@@ -33,7 +51,30 @@ const KNOWN_PROTOCOL_VERSIONS = new Set([
   "2025-03-26",
   "2025-06-18",
   "2025-11-25",
+  "2026-07-28",
 ]);
+
+/** Reserved `_meta` keys carrying per-request protocol metadata (2026-07-28). */
+const META_PROTOCOL_VERSION = "io.modelcontextprotocol/protocolVersion";
+const META_CLIENT_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
+const META_SERVER_INFO = "io.modelcontextprotocol/serverInfo";
+
+/**
+ * Client caching hints returned on cacheable modern results.
+ *
+ * `"public"` is correct *here* specifically: this endpoint is unauthenticated
+ * and read-only, so every caller sees an identical tool list and there is no
+ * per-credential variation for a shared cache to leak. An authenticated MCP
+ * server must not copy this value — `@daloyjs/core` defaults to `"private"` for
+ * exactly that reason.
+ */
+const CACHE_TTL_MS = 300_000;
+const CACHE_SCOPE = "public";
+
+/** Protocol revisions that use per-request metadata instead of a handshake. */
+function isModernProtocolVersion(version: string): boolean {
+  return version >= MODERN_ERA_MIN_VERSION;
+}
 
 /** Identity reported in the `initialize` handshake. */
 const SERVER_INFO = {
@@ -74,6 +115,47 @@ const INVALID_REQUEST = -32600;
 const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
 const INTERNAL_ERROR = -32603;
+// Codes the MCP specification defines in its reserved -32020..-32099 sub-range.
+const HEADER_MISMATCH = -32020;
+const UNSUPPORTED_PROTOCOL_VERSION = -32022;
+
+/** Protocol era a request was served under. */
+type ProtocolEra = "modern" | "legacy";
+
+const HEADER_BASE64_PREFIX = "=?base64?";
+const HEADER_BASE64_SUFFIX = "?=";
+
+/**
+ * Decode a header value that may use the `2026-07-28` Base64 sentinel form
+ * `=?base64?<payload>?=`, which clients must use when a tool name or resource
+ * URI cannot be represented as a plain ASCII header value.
+ *
+ * @param raw - The raw HTTP header value.
+ * @returns The decoded value, or `undefined` when the sentinel wrapper is
+ *   present but its payload is not valid Base64-encoded UTF-8.
+ */
+function decodeMcpHeaderValue(raw: string): string | undefined {
+  if (
+    !raw.startsWith(HEADER_BASE64_PREFIX) ||
+    !raw.endsWith(HEADER_BASE64_SUFFIX)
+  ) {
+    return raw;
+  }
+  const encoded = raw.slice(
+    HEADER_BASE64_PREFIX.length,
+    raw.length - HEADER_BASE64_SUFFIX.length
+  );
+  try {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
 
 /** A JSON-RPC id is a string, number, or null. */
 type JsonRpcId = string | number | null;
@@ -94,8 +176,10 @@ type JsonRpcMessage = {
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
+  // Mcp-Method / Mcp-Name are REQUIRED on 2026-07-28 requests, so a
+  // browser-based client cannot talk to us at all unless preflight allows them.
   "access-control-allow-headers":
-    "Content-Type, Accept, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
+    "Content-Type, Accept, Authorization, Mcp-Session-Id, MCP-Protocol-Version, Mcp-Method, Mcp-Name",
   "access-control-max-age": "86400",
 };
 
@@ -396,25 +480,246 @@ async function callTool(
 }
 
 /**
+ * Validate the `Mcp-Method` / `Mcp-Name` headers against the request body.
+ *
+ * These headers exist so intermediaries can route and inspect requests without
+ * parsing the body; letting one disagree with the body is what turns that
+ * convenience into a confused-deputy bug.
+ *
+ * `require` is `true` for modern requests, where both headers are mandatory. It
+ * is `false` for legacy requests, which predate them — but a legacy request that
+ * *does* send them is still held to them, so declaring an old protocol version
+ * is not a free bypass. This is stricter than the specification requires, and
+ * matches `@daloyjs/core`.
+ *
+ * @param request - The inbound HTTP request.
+ * @param method - The JSON-RPC method from the body.
+ * @param params - The JSON-RPC params from the body.
+ * @param id - The originating request id.
+ * @param require - Whether the headers are mandatory.
+ * @returns A JSON-RPC error response, or `undefined` when the headers agree.
+ */
+function validateStandardHeaders(
+  request: Request,
+  method: string,
+  params: Record<string, unknown>,
+  id: JsonRpcId,
+  require: boolean
+): Response | undefined {
+  const mismatch = (message: string): Response =>
+    rpcError(id, HEADER_MISMATCH, message, undefined, 400);
+
+  const headerMethod = request.headers.get("mcp-method");
+  if (headerMethod === null) {
+    if (require) return mismatch("Missing required header: Mcp-Method");
+  } else if (headerMethod !== method) {
+    return mismatch(
+      `Header mismatch: Mcp-Method header value '${headerMethod}' does not match body value '${method}'`
+    );
+  }
+
+  // Mcp-Name mirrors params.name on tools/call (this server exposes no
+  // resources or prompts, so those methods never carry a name).
+  if (method === "tools/call") {
+    const rawName = request.headers.get("mcp-name");
+    if (rawName === null) {
+      if (require) return mismatch("Missing required header: Mcp-Name");
+      return undefined;
+    }
+    const decoded = decodeMcpHeaderValue(rawName);
+    if (decoded === undefined) {
+      return mismatch(
+        "Header mismatch: Mcp-Name is not valid Base64-encoded UTF-8"
+      );
+    }
+    if (typeof params.name !== "string" || decoded !== params.name) {
+      return mismatch(
+        "Header mismatch: Mcp-Name header value does not match the request body"
+      );
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Enforce the 2026-07-28 per-request contract: the required `_meta` fields and
+ * the standard headers that intermediaries may route on.
+ *
+ * @param request - The inbound HTTP request.
+ * @param method - The JSON-RPC method from the body.
+ * @param params - The JSON-RPC params from the body.
+ * @param id - The originating request id.
+ * @returns A JSON-RPC error response, or `undefined` when the request is valid.
+ */
+function validateModernRequest(
+  request: Request,
+  method: string,
+  params: Record<string, unknown>,
+  id: JsonRpcId
+): Response | undefined {
+  const meta =
+    params._meta &&
+    typeof params._meta === "object" &&
+    !Array.isArray(params._meta)
+      ? (params._meta as Record<string, unknown>)
+      : {};
+
+  const metaVersion = meta[META_PROTOCOL_VERSION];
+  if (typeof metaVersion !== "string") {
+    return rpcError(
+      id,
+      INVALID_PARAMS,
+      `Missing required _meta field "${META_PROTOCOL_VERSION}".`,
+      undefined,
+      400
+    );
+  }
+  if (!KNOWN_PROTOCOL_VERSIONS.has(metaVersion)) {
+    return rpcError(
+      id,
+      UNSUPPORTED_PROTOCOL_VERSION,
+      `Unsupported protocol version: ${metaVersion}`,
+      { supported: [...KNOWN_PROTOCOL_VERSIONS], requested: metaVersion },
+      400
+    );
+  }
+  const capabilities = meta[META_CLIENT_CAPABILITIES];
+  if (
+    capabilities === null ||
+    typeof capabilities !== "object" ||
+    Array.isArray(capabilities)
+  ) {
+    return rpcError(
+      id,
+      INVALID_PARAMS,
+      `Missing required _meta field "${META_CLIENT_CAPABILITIES}".`,
+      undefined,
+      400
+    );
+  }
+
+  const headerVersion = request.headers.get("mcp-protocol-version");
+  if (headerVersion === null) {
+    return rpcError(
+      id,
+      HEADER_MISMATCH,
+      "Missing required header: MCP-Protocol-Version",
+      undefined,
+      400
+    );
+  }
+  if (headerVersion !== metaVersion) {
+    return rpcError(
+      id,
+      HEADER_MISMATCH,
+      `Header mismatch: MCP-Protocol-Version header value '${headerVersion}' does not match body value '${metaVersion}'`,
+      undefined,
+      400
+    );
+  }
+
+  return validateStandardHeaders(request, method, params, id, true);
+}
+
+/**
  * Route a validated JSON-RPC **request** (one carrying an id) to its handler.
  *
  * @param message - The validated JSON-RPC request.
+ * @param request - The inbound HTTP request, for header validation.
  * @returns The JSON-RPC response.
  */
-async function handleRpcRequest(message: JsonRpcMessage): Promise<Response> {
+async function handleRpcRequest(
+  message: JsonRpcMessage,
+  request: Request
+): Promise<Response> {
   const id = (message.id ?? null) as JsonRpcId;
   const method = message.method as string;
   const params = (message.params ?? {}) as Record<string, unknown>;
 
+  const meta =
+    params._meta &&
+    typeof params._meta === "object" &&
+    !Array.isArray(params._meta)
+      ? (params._meta as Record<string, unknown>)
+      : {};
+  const metaVersion = meta[META_PROTOCOL_VERSION];
+  const headerVersion = request.headers.get("mcp-protocol-version");
+  const era: ProtocolEra =
+    (typeof metaVersion === "string" && isModernProtocolVersion(metaVersion)) ||
+    (headerVersion !== null && isModernProtocolVersion(headerVersion))
+      ? "modern"
+      : "legacy";
+
+  if (era === "modern") {
+    const invalid = validateModernRequest(request, method, params, id);
+    if (invalid) return invalid;
+  } else {
+    // Legacy revisions predate the standard headers, so they are optional here,
+    // but any that are sent must still agree with the body.
+    const invalid = validateStandardHeaders(request, method, params, id, false);
+    if (invalid) return invalid;
+  }
+
+  /**
+   * Finalize a successful result: modern results carry the required
+   * `resultType`, the server identity in `_meta`, and — on cacheable methods —
+   * the client-caching hints. Legacy results are returned untouched.
+   */
+  const ok = (result: Record<string, unknown>, cacheable = false): Response =>
+    rpcResult(
+      id,
+      era === "modern"
+        ? {
+            resultType: "complete",
+            ...result,
+            ...(cacheable
+              ? { ttlMs: CACHE_TTL_MS, cacheScope: CACHE_SCOPE }
+              : {}),
+            _meta: { [META_SERVER_INFO]: SERVER_INFO },
+          }
+        : result
+    );
+
+  // `initialize` and `ping` were removed in 2026-07-28; `server/discover` exists
+  // only there. Answering either in the wrong era would let a client infer a
+  // handshake this endpoint does not have. Modern unknown methods use HTTP 404
+  // so a client can tell a modern server from a legacy one.
+  if (era === "modern" && (method === "initialize" || method === "ping")) {
+    return rpcError(
+      id,
+      METHOD_NOT_FOUND,
+      `Method not found: ${method}`,
+      { supported: [...KNOWN_PROTOCOL_VERSIONS] },
+      404
+    );
+  }
+  if (era === "legacy" && method === "server/discover") {
+    return rpcError(id, METHOD_NOT_FOUND, "Method not found: server/discover", {
+      supported: [...KNOWN_PROTOCOL_VERSIONS],
+    });
+  }
+
   switch (method) {
+    case "server/discover":
+      return ok(
+        {
+          supportedVersions: [...KNOWN_PROTOCOL_VERSIONS],
+          capabilities: { tools: {} },
+          instructions: INSTRUCTIONS,
+        },
+        true
+      );
     case "initialize": {
       const requested =
         typeof params.protocolVersion === "string"
           ? params.protocolVersion
           : "";
-      const protocolVersion = KNOWN_PROTOCOL_VERSIONS.has(requested)
-        ? requested
-        : PREFERRED_PROTOCOL_VERSION;
+      const protocolVersion =
+        KNOWN_PROTOCOL_VERSIONS.has(requested) &&
+        !isModernProtocolVersion(requested)
+          ? requested
+          : LEGACY_FALLBACK_PROTOCOL_VERSION;
       return rpcResult(id, {
         protocolVersion,
         capabilities: { tools: {} },
@@ -425,7 +730,7 @@ async function handleRpcRequest(message: JsonRpcMessage): Promise<Response> {
     case "ping":
       return rpcResult(id, {});
     case "tools/list":
-      return rpcResult(id, { tools: TOOLS });
+      return ok({ tools: TOOLS }, true);
     case "tools/call": {
       const name = typeof params.name === "string" ? params.name : "";
       if (name.length === 0) {
@@ -443,7 +748,7 @@ async function handleRpcRequest(message: JsonRpcMessage): Promise<Response> {
           ? (params.arguments as Record<string, unknown>)
           : {};
       try {
-        return rpcResult(id, await callTool(name, args));
+        return ok({ ...(await callTool(name, args)) });
       } catch (error) {
         return rpcError(
           id,
@@ -456,11 +761,17 @@ async function handleRpcRequest(message: JsonRpcMessage): Promise<Response> {
     // Advertised capability set is tools-only; answer the optional list methods
     // with empty collections so probing clients do not error.
     case "resources/list":
-      return rpcResult(id, { resources: [] });
+      return ok({ resources: [] }, true);
     case "prompts/list":
-      return rpcResult(id, { prompts: [] });
+      return ok({ prompts: [] }, true);
     default:
-      return rpcError(id, METHOD_NOT_FOUND, `Method not found: ${method}`);
+      return rpcError(
+        id,
+        METHOD_NOT_FOUND,
+        `Method not found: ${method}`,
+        undefined,
+        era === "modern" ? 404 : 200
+      );
   }
 }
 
@@ -476,11 +787,13 @@ export async function POST(request: Request): Promise<Response> {
   // Transport-level: reject an unknown protocol-version header per the spec.
   const protocolHeader = request.headers.get("mcp-protocol-version");
   if (protocolHeader && !KNOWN_PROTOCOL_VERSIONS.has(protocolHeader)) {
+    // 2026-07-28 requires an UnsupportedProtocolVersionError naming the
+    // versions we do implement, so the client can retry on a mutual one.
     return rpcError(
       null,
-      INVALID_REQUEST,
-      `Unsupported MCP-Protocol-Version: ${protocolHeader}`,
-      { supported: [...KNOWN_PROTOCOL_VERSIONS] },
+      UNSUPPORTED_PROTOCOL_VERSION,
+      `Unsupported protocol version: ${protocolHeader}`,
+      { supported: [...KNOWN_PROTOCOL_VERSIONS], requested: protocolHeader },
       400
     );
   }
@@ -596,7 +909,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    return await handleRpcRequest(message);
+    return await handleRpcRequest(message, request);
   } catch (error) {
     return rpcError(
       message.id ?? null,
@@ -622,7 +935,9 @@ export function GET(): Response {
       endpoint: `${SITE_URL}/mcp`,
       protocolVersions: [...KNOWN_PROTOCOL_VERSIONS],
       tools: TOOLS.map((tool) => tool.name),
-      hint: "Send JSON-RPC 2.0 over HTTP POST to this URL. See https://daloyjs.dev/#mcp for setup.",
+      hint:
+        "Send JSON-RPC 2.0 over HTTP POST to this URL; call server/discover for " +
+        "capabilities. See https://daloyjs.dev/#mcp for setup.",
     },
     { status: 405, headers: { allow: "POST, OPTIONS" } }
   );
