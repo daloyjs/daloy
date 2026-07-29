@@ -47,7 +47,13 @@ export const MCP_PROTOCOL_VERSIONS: readonly string[] = Object.freeze([
  *
  * @since 1.0.0
  */
-export const MCP_META_KEYS = Object.freeze({
+export const MCP_META_KEYS: {
+  readonly protocolVersion: "io.modelcontextprotocol/protocolVersion";
+  readonly clientInfo: "io.modelcontextprotocol/clientInfo";
+  readonly clientCapabilities: "io.modelcontextprotocol/clientCapabilities";
+  readonly logLevel: "io.modelcontextprotocol/logLevel";
+  readonly serverInfo: "io.modelcontextprotocol/serverInfo";
+} = Object.freeze({
   /** Protocol version for this request. Required on every modern request. */
   protocolVersion: "io.modelcontextprotocol/protocolVersion",
   /** Self-reported client name/version. Advisory only; never a security input. */
@@ -66,7 +72,11 @@ export const MCP_META_KEYS = Object.freeze({
  *
  * @since 1.0.0
  */
-export const MCP_ERROR_CODES = Object.freeze({
+export const MCP_ERROR_CODES: {
+  readonly headerMismatch: -32020;
+  readonly missingRequiredClientCapability: -32021;
+  readonly unsupportedProtocolVersion: -32022;
+} = Object.freeze({
   /** HTTP headers disagree with the request body, or a required header is missing. */
   headerMismatch: -32020,
   /** The request needs a client capability the client did not declare. */

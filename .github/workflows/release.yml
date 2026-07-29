@@ -194,6 +194,16 @@ jobs:
       - name: Verify no encoded-payload literals (Socket Obfuscation 101 gate)
         run: pnpm verify:no-encoded-payloads
 
+      # JSR packaging must be proven BEFORE any publish job runs. publish-jsr
+      # does its own dry-run, but it runs in parallel with the npm staging jobs,
+      # so a JSR-only packaging error (e.g. a "slow type" in the public API)
+      # left v1.0.0-rc.7 half-released: both npm packages staged and a GitHub
+      # Release created, with no JSR version. Gating it here in the token-less
+      # verify job means that class of failure blocks the whole release with no
+      # side effects to unwind. Dry-run needs no credentials.
+      - name: JSR packaging gate (slow types + publish dry-run)
+        run: pnpm verify:jsr-packaging
+
       - name: Audit production dependencies
         run: pnpm audit --prod
 
