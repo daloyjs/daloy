@@ -1881,10 +1881,41 @@ test("deno-basic template ships a runtime-native scaffold", async () => {
   );
   assert.match(denoJson.tasks.dev, /^deno run.*--watch src\/main\.ts$/);
   assert.match(denoJson.tasks.test, /^deno test\b/);
-  assert.equal(denoJson.imports["@daloyjs/core"], "jsr:@daloyjs/daloy@^1.0.0-rc.5");
-  assert.equal(denoJson.imports["@daloyjs/core/deno"], "jsr:@daloyjs/daloy@^1.0.0-rc.5/deno");
-  assert.equal(denoJson.imports["@daloyjs/core/banner"], "jsr:@daloyjs/daloy@^1.0.0-rc.5/banner");
-  assert.equal(denoJson.imports["@daloyjs/core/openapi"], "jsr:@daloyjs/daloy@^1.0.0-rc.5/openapi");
+  // Derived from the published core version rather than hardcoded. Hardcoding
+  // is what let this template fall a full release behind: through the entire
+  // rc.6 cycle both the template and these assertions sat on rc.5, so the test
+  // kept the drift in sync instead of catching it. Deriving the expectation
+  // means a missed release bump fails here instead of shipping.
+  const coreVersion = JSON.parse(
+    await readFile(path.join(pkgRoot, "../../package.json"), "utf8")
+  ).version;
+  for (const suffix of ["", "/banner", "/contract", "/deno", "/openapi"]) {
+    const specifier = `@daloyjs/core${suffix}`;
+    assert.equal(
+      denoJson.imports[specifier],
+      `jsr:@daloyjs/daloy@^${coreVersion}${suffix}`,
+      `deno-basic deno.json must pin ${specifier} to the current core version (${coreVersion})`
+    );
+  }
+});
+
+test("npm templates pin @daloyjs/core to the current release version", async () => {
+  // The companion guard to the deno-basic check above: nothing asserted these
+  // four at all, so a release that bumped the core version but missed a
+  // template would scaffold projects against a stale peer with no test failure.
+  const coreVersion = JSON.parse(
+    await readFile(path.join(pkgRoot, "../../package.json"), "utf8")
+  ).version;
+  for (const template of ["node-basic", "bun-basic", "vercel", "cloudflare-worker"]) {
+    const pkg = JSON.parse(
+      await readFile(path.join(pkgRoot, "templates", template, "package.json"), "utf8")
+    );
+    assert.equal(
+      pkg.dependencies?.["@daloyjs/core"],
+      `^${coreVersion}`,
+      `${template}/package.json must pin @daloyjs/core to ^${coreVersion}`
+    );
+  }
 });
 
 test("server templates ship deploy-portable proxy + OpenAPI server defaults", async () => {

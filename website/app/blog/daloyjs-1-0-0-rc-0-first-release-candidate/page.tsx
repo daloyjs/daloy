@@ -229,7 +229,7 @@ export default function BlogPostPage() {
           </p>
 
           <div className="not-prose mt-8 rounded-2xl border bg-muted/35 p-5 text-sm leading-relaxed text-muted-foreground">
-            <strong className="text-foreground">Update, 28 July 2026.</strong>{" "}
+            <strong className="text-foreground">Update, 29 July 2026.</strong>{" "}
             This section first listed three production users as a hard gate,
             plus Fastify and Hono migration guides. Both are gone. The
             production-user gate turned out to be circular: sensible teams do

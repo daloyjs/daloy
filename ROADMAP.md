@@ -190,7 +190,7 @@ removes a surface.
 
 - **Migration guides (1 shipped)** — Express (`/docs/migrating/express`).
   Fastify and Hono are wanted but unscheduled; moved here from the `1.0.0`
-  stabilization gates on 2026-07-28 so they no longer block the stable release.
+  stabilization gates on 2026-07-29 so they no longer block the stable release.
 - **Email (6 providers)** — AWS SES, Mailgun, Mailtrap, Postmark, Resend, SendGrid.
 - **Payments (9 providers)** — Adyen, Authorize.Net, Braintree (PayPal), Mollie, PayTabs, Razorpay, Shopify, Square, Tap Payments.
 - **Database hosting (5 platforms)** — AWS Aurora DSQL, Cloudflare D1, Neon, PlanetScale, Turso (libSQL).
@@ -211,7 +211,7 @@ Open items for this track:
 
 ## Stabilization — `1.0.0` ("public API freeze")
 
-**Status (2026-07-28): `1.0.0-rc.6` shipped (2026-07-26)** — `rc.0` was the first
+**Status (2026-07-29): `1.0.0-rc.6` shipped (2026-07-26)** — `rc.0` was the first
 release candidate; `rc.1` was a security-hardening RC from an internal
 threat-model audit, and `rc.2`–`rc.6` continued that train. `beta.0`
 (2026-06-21) through `beta.7` (2026-07-02) shipped additively, enforced per
@@ -229,7 +229,7 @@ protocol rather than a superseded one. From the stable release onward the public
 API follows SemVer. The stable release ships when every unchecked item below is
 true.
 
-**Criteria amended 2026-07-28** (recorded here rather than silently dropped,
+**Criteria amended 2026-07-29** (recorded here rather than silently dropped,
 because `SECURITY.md` maps this project onto EU CRA / NIS2 procurement claims
 and a waived maturity gate is the kind of thing an auditor asks about):
 
@@ -249,11 +249,11 @@ and a waived maturity gate is the kind of thing an auditor asks about):
 - [x] Public benchmark suite published with reproducible numbers. _(Shipped `bench/` micro-benchmarks + `bench/cross-framework/` isolated multi-framework HTTP suite; numbers still being kept current.)_
 - [x] Migration guide from the largest Node framework. _(Express shipped at
       `/docs/migrating/express`. Narrowed from "the most-used Node frameworks"
-      on 2026-07-28 — see the amendment note above; Fastify and Hono are tracked
+      on 2026-07-29 — see the amendment note above; Fastify and Hono are tracked
       under the standing integrations/docs track, not as stable-release gates.)_
-- [x] Branch coverage has a stable high-confidence gate; ignored branches have documented runtime / source-map reasons. _(Gate shipped and holding at ≥92%, verified 2026-07-28 at 92.52%. The re-ratchet toward ≥95% is the open `0.10.0` subtask above and does not block the stable release; checked off 2026-07-28 so it stops reading as a blocker it was never meant to be.)_
+- [x] Branch coverage has a stable high-confidence gate; ignored branches have documented runtime / source-map reasons. _(Gate shipped and holding at ≥92%, verified 2026-07-29 at 92.41%. The re-ratchet toward ≥95% is the open `0.10.0` subtask above and does not block the stable release; checked off 2026-07-29 so it stops reading as a blocker it was never meant to be.)_
 - [ ] Security policy and disclosure process have been exercised at least once.
-      _(In progress 2026-07-28. The live case is the forwarded-header client-IP
+      _(In progress 2026-07-29. The live case is the forwarded-header client-IP
       finding fixed in the `Unreleased` section of [`CHANGELOG.md`](./CHANGELOG.md);
       draft advisory prepared at `otherdocs/advisories/GHSA-DRAFT-forwarded-ip.md`
       (maintainer-local, `otherdocs/` is not tracked). Sequence to close this
