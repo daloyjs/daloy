@@ -839,6 +839,202 @@ async function loginLimitPosture() {
 }
 
 // ===========================================================================
+// WAVE 3 — tob-fuzzing-dictionary / tob-constant-time-testing /
+//          tob-insecure-defaults
+// ===========================================================================
+
+/**
+ * tob-fuzzing-dictionary: dictionary-guided fuzz sweep over the wire.
+ * Instead of blind mutation, fire domain-specific tokens (interesting paths,
+ * parser-hostile query values, hostile JSON bodies) that are likely to reach
+ * deep code paths. Any 5xx or process death is a finding; a wall of clean
+ * 4xx/2xx means the parsers held.
+ */
+async function fuzzingDictionarySweep() {
+  const cat = "Fuzzing dictionary sweep";
+  const skill = "tob-fuzzing-dictionary — domain tokens reach deeper parser states than blind mutation";
+
+  // -- Path tokens: framework/meta endpoints, traversal seeds, encoding tricks.
+  const pathTokens = [
+    "/metrics", "/actuator", "/debug", "/openapi.json", "/docs", "/swagger",
+    "/.well-known/security.txt", "/server-status", "/env", "/config",
+    "/%2e%2e/%2e%2e/etc/passwd", "/....//....//etc/passwd",
+    "/users/1%252fadmin", "/%c0%ae%c0%ae/", "/%e0%80%ae/", "/users/-1",
+    "/users/0", "/users/1e10", "/users/%20", "/users/.", "/users/~",
+  ];
+  let pathBad: string[] = [];
+  for (const p of pathTokens) {
+    const r = await http("GET", p);
+    if (r.status >= 500) pathBad.push(`${p}→${r.status}`);
+  }
+  record({
+    category: cat,
+    title: `Path dictionary sweep (${pathTokens.length} tokens)`,
+    severity: "high",
+    skill,
+    attack: "GET on framework/meta endpoints, traversal seeds, malformed encodings",
+    observed: pathBad.length ? `5xx on: ${pathBad.join(", ")}` : "no 5xx — every token got a clean 4xx/2xx",
+    verdict: pathBad.length ? "VULNERABLE" : "DEFENDED",
+  });
+
+  // -- Query tokens: parser-hostile values against the typed /search schema.
+  const queryTokens = [
+    "%s%s%s%s%s", "{},{[]}", "${7*7}", "{{constructor}}", "__proto__",
+    "NaN", "Infinity", "-Infinity", "1e999", "0x41", "\\u0000",
+    " ".repeat(10_000), "🚀".repeat(500), "﷐﷐﷐", "ＡＢＣ",
+    "q=1&q=2", "a[b]=c", "a.b.c=d",
+  ];
+  let queryBad: string[] = [];
+  for (const q of queryTokens) {
+    const r = await http("GET", `/search?q=${encodeURIComponent(q)}`);
+    if (r.status >= 500) queryBad.push(`${q.slice(0, 20)}→${r.status}`);
+  }
+  record({
+    category: cat,
+    title: `Query-value dictionary sweep (${queryTokens.length} tokens)`,
+    severity: "high",
+    skill,
+    attack: "GET /search?q=<format strings, JS tokens, unicode abuse, oversized values>",
+    observed: queryBad.length ? `5xx on: ${queryBad.join(", ")}` : "no 5xx — schema/parser held on every token",
+    verdict: queryBad.length ? "VULNERABLE" : "DEFENDED",
+  });
+
+  // -- JSON body tokens: hostile shapes against the strict /items schema.
+  const bodyTokens: string[] = [
+    '{"name":"x","price":1e308}',
+    '{"name":"x","price":-0}',
+    '{"name":"x","price":1e-999}',
+    '{"name":"x","price":9007199254740993}',
+    '{"name":null,"price":null}',
+    '{"name":["x"],"price":{"$gt":0}}',
+    '{"name":"a","name":"b","price":1}',
+    '{"name":"x","price":1,}',
+    '{"name":"x","price":01}',
+    "{'name':'x','price':1}",
+    '{"name":"x","price":1}\n{"name":"y","price":2}',
+    '[]', '"just a string"', '12345', 'null', 'true',
+    '{"name":"﷐","price":1}',
+    '{"名":"x","price":1}',
+    '{"name":"x","price":1,"__proto__":{"polluted":true}}',
+  ];
+  let bodyBad: string[] = [];
+  for (const b of bodyTokens) {
+    const r = await http("POST", "/items", {
+      headers: { "content-type": "application/json" },
+      body: b,
+    });
+    if (r.status >= 500) bodyBad.push(`${b.slice(0, 24)}→${r.status}`);
+  }
+  record({
+    category: cat,
+    title: `JSON body dictionary sweep (${bodyTokens.length} tokens)`,
+    severity: "high",
+    skill,
+    attack: "POST /items with hostile JSON: extreme floats, dup keys, trailing commas, wrong types, proto keys",
+    observed: bodyBad.length ? `5xx on: ${bodyBad.join(", ")}` : "no 5xx — strict schema + safe parser held on every token",
+    verdict: bodyBad.length ? "VULNERABLE" : "DEFENDED",
+  });
+}
+
+/**
+ * tob-constant-time-testing (dudect methodology): Welch's t-test over the
+ * wire against the /basic-vault credential oracle. Three input classes —
+ * unknown user, known user + early-mismatch password, known user +
+ * prefix-matching password — interleaved to cancel drift. |t| > 4.5 is the
+ * dudect significance threshold. Scope note: this validates *network-scale*
+ * exploitability (loopback noise floor is ~µs→ms); it cannot rule out
+ * nanosecond-scale memcmp early-exit, which is why the framework separately
+ * mandates timingSafeEqual in verify:secret-comparisons.
+ */
+async function constantTimeOracle() {
+  const cat = "Timing side channel";
+  const skill = "tob-constant-time-testing — dudect: interleaved classes + Welch's t-test (|t| > 4.5 significant)";
+  const creds = {
+    unknownUser: Buffer.from("mallory:wrong-password0").toString("base64"),
+    earlyMismatch: Buffer.from("alice:X000000000000000").toString("base64"),
+    prefixMatch: Buffer.from("alice:s3cret-X0000000").toString("base64"),
+  };
+  const N = 250;
+  const samples: Record<keyof typeof creds, number[]> = { unknownUser: [], earlyMismatch: [], prefixMatch: [] };
+  const timed = async (key: keyof typeof creds) => {
+    const t0 = performance.now();
+    await http("GET", "/basic-vault", { headers: { authorization: `Basic ${creds[key]}` } });
+    samples[key].push(performance.now() - t0);
+  };
+  // Warmup, then interleaved measurement to cancel slow drift (dudect practice).
+  for (let i = 0; i < 30; i++) await timed("unknownUser");
+  samples.unknownUser.length = 0;
+  for (let i = 0; i < N; i++) {
+    await timed("unknownUser");
+    await timed("earlyMismatch");
+    await timed("prefixMatch");
+  }
+  const stats = (xs: number[]) => {
+    const sorted = [...xs].sort((a, b) => a - b);
+    const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const variance = xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (xs.length - 1);
+    return { mean, variance, median: sorted[Math.floor(sorted.length / 2)]! };
+  };
+  const welch = (a: number[], b: number[]) => {
+    const sa = stats(a), sb = stats(b);
+    return (sa.mean - sb.mean) / Math.sqrt(sa.variance / a.length + sb.variance / b.length);
+  };
+  const tAE = welch(samples.unknownUser, samples.earlyMismatch);
+  const tAP = welch(samples.unknownUser, samples.prefixMatch);
+  const tEP = welch(samples.earlyMismatch, samples.prefixMatch);
+  const maxAbsT = Math.max(Math.abs(tAE), Math.abs(tAP), Math.abs(tEP));
+  const med = (k: keyof typeof creds) => stats(samples[k]).median.toFixed(3);
+  const leak = maxAbsT > 4.5;
+  record({
+    category: cat,
+    title: "Credential oracle timing (basic-auth, 3 classes × 250 samples)",
+    severity: "medium",
+    skill,
+    attack:
+      "Interleaved timing of /basic-vault: unknown user vs known user + early-mismatch vs prefix-matching password",
+    observed:
+      `medians(ms): unknown=${med("unknownUser")} early=${med("earlyMismatch")} prefix=${med("prefixMatch")}; ` +
+      `Welch t: ${tAE.toFixed(2)} / ${tAP.toFixed(2)} / ${tEP.toFixed(2)} (|t|>4.5 = leak)`,
+    verdict: leak ? "VULNERABLE" : "DEFENDED",
+  });
+}
+
+/**
+ * tob-insecure-defaults: development-mode error verbosity on app B (the
+ * except() app runs env:"development") and the framework's env-resolution
+ * posture. Dev-mode verbosity is a documented debugging aid, not a flaw —
+ * the insecure default would be *silent production verbosity*, which the
+ * prod probes (error redaction, P11 class) already cover.
+ */
+async function insecureDefaultsProbe() {
+  const cat = "Insecure defaults";
+  const skill = "tob-insecure-defaults — defaults must be safe without opt-in; dev verbosity must not ship silently to prod";
+  const nf = await http("GET", "/no-such-route-xyz", { base: baseB() });
+  const stackRe = /at\s+\S+\s+\(|node:internal|\.ts:\d+/i;
+  record({
+    category: cat,
+    title: "Development-mode 404 verbosity (app B)",
+    severity: "low",
+    skill,
+    attack: "GET /no-such-route-xyz on the development-env app",
+    observed: `status ${nf.status}, body: ${nf.text.slice(0, 100)}${stackRe.test(nf.text) ? " — CONTAINS STACK" : ""}`,
+    verdict: stackRe.test(nf.text) ? "VULNERABLE" : "INFO",
+  });
+  const stackInProd = stackRe.test((await http("GET", "/no-such-route-xyz")).text);
+  record({
+    category: cat,
+    title: "Env posture: explicit env with loud NODE_ENV-mismatch warnings",
+    severity: "info",
+    skill,
+    attack: "Code review of env resolution (src/app.ts) + prod 404 re-check",
+    observed:
+      `env is explicit/NODE_ENV-driven with a one-time loud warn on disagreement; ` +
+      `prod 404 stack-free: ${!stackInProd}`,
+    verdict: "INFO",
+  });
+}
+
+// ===========================================================================
 async function main() {
   console.log("Booting red-team target…");
   const target = await bootTarget();
@@ -863,6 +1059,9 @@ async function main() {
     await corsLookalikes();
     await headerReflectionEdgeCases();
     await routeNormalization();
+    await fuzzingDictionarySweep();
+    await constantTimeOracle();
+    await insecureDefaultsProbe();
     await banEvasionViaXff(); // last: it bans IPs and could disturb other probes
 
     // Post-engagement liveness.

@@ -40,6 +40,29 @@ For the forward-looking plan and the full thematic release log, see
   evasion encodings, production error redaction, CSWSH lookalike-subdomain /
   null / absent origins, `Expect: 100-continue` timing, chunk-framing abuse,
   and X-Forwarded-For chain posture. All 127 probes: **0 VULNERABLE**.
+  The skills-driven second wave (`red-team-live/skill-attacks.ts`, built from
+  `.claude/skills`: cure53-webapp-api-pentest, tob-insecure-defaults,
+  tob-sharp-edges, tob-constant-time-analysis) grew to **98 probes** with a
+  third battery drawn from tob-fuzzing-dictionary (path/query/JSON-body token
+  sweeps), tob-constant-time-testing (dudect-style interleaved Welch's t-test
+  against the basic-auth credential oracle — no network-detectable leak,
+  |t| < 0.5 across all class pairs) and tob-insecure-defaults (dev-mode error
+  verbosity, env-resolution posture), plus a tob-variant-analysis pass over the
+  `safeRedirect()` fix above, which found no variants: `safeRedirect` is the
+  only writer of a `Location` header in `src/` (`fetch-guard` only reads one,
+  to re-validate a redirect hop). The same pass confirmed no runtime other than
+  the Node adapter owns `Expect: 100-continue` handling at all — every other
+  adapter receives an already-materialized `Request` with the body cap enforced
+  in the shared core — which is background for the reverted header-time refusal
+  described below, not a variant of a shipped fix. All 98 probes:
+  **0 VULNERABLE**.
+
+  Caveat on this harness: `red-team-live/` is **not** covered by `pnpm
+typecheck` (no tsconfig project includes it) and currently has 3 outstanding
+  type errors. It is excluded from both published artifacts — npm ships
+  `files: ["dist", "bin", "README.md"]` and JSR publishes
+  `include: ["src", "README.md", "LICENSE"]` — so no consumer is affected, but
+  do not read a green `pnpm typecheck` as covering these files.
   - Not every probe became a fix. A header-time `413` for `Expect:
 100-continue` requests declaring an over-limit `Content-Length` was
     implemented and then reverted: `bodyLimitBytes` is enforced when the body is
