@@ -26,11 +26,10 @@ export default function Page() {
       <h1>Streaming responses</h1>
       <p>
         DaloyJS ships first-class helpers for two streaming formats that are
-        common in HTTP APIs: <strong>Server-Sent Events (SSE)</strong> and
+        common in HTTP APIs: <strong>Server-Sent Events (SSE)</strong> and{" "}
         <strong>newline-delimited JSON (NDJSON)</strong>
-        {". "}Both helpers wrap an
-        <code>AsyncIterable</code> in a backpressure-safe{" "}
-        <code>ReadableStream</code>
+        {". "}Both helpers wrap an <code>AsyncIterable</code> in a
+        backpressure-safe <code>ReadableStream</code>
         {": "}the underlying iterator is only advanced when the consumer pulls
         the next chunk, so a slow client cannot cause unbounded memory growth.
       </p>
@@ -113,8 +112,8 @@ import { sseStream } from "@daloyjs/core/streaming";`}
         <code>comment</code>
         {", "}and <code>data</code>
         {". "}Multi-line strings are split into one <code>data:</code> line per
-        source line, and CR/LF in
-        <code>event</code> / <code>id</code> values are sanitized.
+        source line, and CR/LF in <code>event</code> / <code>id</code> values
+        are sanitized.
       </p>
       <CodeBlock
         code={`import { sseStream } from "@daloyjs/core";

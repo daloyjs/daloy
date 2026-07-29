@@ -148,8 +148,8 @@ export default function BlogPostPage() {
           <p>
             That is why DaloyJS stands out. It bundles the things teams usually
             forget: typed contracts, OpenAPI, docs, client generation, and a
-            security posture that does not depend on whether somebody had
-            enough coffee before opening the middleware docs.
+            security posture that does not depend on whether somebody had enough
+            coffee before opening the middleware docs.
           </p>
 
           <h2>The shape of a safer default</h2>
@@ -238,7 +238,7 @@ export default function BlogPostPage() {
             If you want to go further down this rabbit hole, start with{" "}
             <Link href="/blog/contract-first-without-the-codegen-dance">
               the contract-first post
-            </Link>
+            </Link>{" "}
             and{" "}
             <Link href="/blog/supply-chain-hardening-for-typescript-libraries">
               the supply-chain hardening write-up

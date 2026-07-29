@@ -177,8 +177,7 @@ app.register({ name: "metrics", seed: "public", register: publicMetrics });`}
         {". "}Decorations added at the root are visible inside plugins.
         Decorations added inside a plugin stay scoped to that plugin and never
         leak sideways to sibling plugins or back up to the root. Reusing a key
-        throws unless you pass <code>{`{ override: true }`}</code>
-        deliberately.
+        throws unless you pass <code>{`{ override: true }`}</code> deliberately.
       </p>
       <p>
         Each route binds to its scope&apos;s decorations when it is registered,

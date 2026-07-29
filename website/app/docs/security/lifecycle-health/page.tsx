@@ -25,7 +25,7 @@ export default function Page() {
     <>
       <h1>Lifecycle &amp; health</h1>
       <blockquote>
-        Graceful shutdown drains in-flight requests and sends
+        Graceful shutdown drains in-flight requests and sends{" "}
         <code>Connection: close</code>. Health and readiness checks keep new
         traffic away from an instance that is starting or stopping.
       </blockquote>

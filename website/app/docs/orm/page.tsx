@@ -197,8 +197,8 @@ app.get(
       <p>
         This section is intentionally SQL-focused. If you are using MongoDB or
         Couchbase, jump to the <Link href="/docs/odm">ODM overview</Link> and
-        use <Link href="/docs/odm/mongoose">Mongoose</Link>
-        or <Link href="/docs/odm/ottoman">Ottoman</Link> instead of forcing
+        use <Link href="/docs/odm/mongoose">Mongoose</Link> or{" "}
+        <Link href="/docs/odm/ottoman">Ottoman</Link> instead of forcing
         document models into an ORM-shaped abstraction.
       </p>
 

@@ -304,9 +304,8 @@ app.get(
       />
       <p>
         GraphQL pagination uses opaque cursors (<code>endCursor</code>) rather
-        than the REST
-        <code>nextPageParameters</code> helper. Forward the cursor as a query
-        string to your client.
+        than the REST <code>nextPageParameters</code> helper. Forward the cursor
+        as a query string to your client.
       </p>
 
       <h2 id="6-receive-and-verify-webhooks">6. Receive and verify webhooks</h2>

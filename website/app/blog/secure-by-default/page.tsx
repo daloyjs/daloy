@@ -397,10 +397,10 @@ export default function BlogPostPage() {
           <p>
             So when we sat down to design DaloyJS, we made a rule and stuck to
             it: the boring, well-understood defenses must be on by default. You
-            should be able to type <code>new App()</code> with empty
-            arguments and already be in a place where most of the OWASP
-            &quot;low effort, high impact&quot; checklist is satisfied before
-            you write a single route.
+            should be able to type <code>new App()</code> with empty arguments
+            and already be in a place where most of the OWASP &quot;low effort,
+            high impact&quot; checklist is satisfied before you write a single
+            route.
           </p>
 
           <p>
@@ -852,10 +852,10 @@ export default function BlogPostPage() {
             if there was, I&apos;d have shipped one to my younger self by
             registered mail. What these defaults <em>do</em> get you is the
             comfort of knowing that the boring bugs, the ones we have
-            collectively known about for fifteen years, the ones that
-            show up on every pentest report under &quot;Medium&quot; because the
-            auditor is tired, those are already handled. Your brain is free to
-            spend its limited budget on the actually-hard parts of your product.
+            collectively known about for fifteen years, the ones that show up on
+            every pentest report under &quot;Medium&quot; because the auditor is
+            tired, those are already handled. Your brain is free to spend its
+            limited budget on the actually-hard parts of your product.
           </p>
 
           <p>

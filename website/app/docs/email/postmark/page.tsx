@@ -96,7 +96,7 @@ export default function Page() {
           and Return-Path records.
         </li>
         <li>
-          Decide which <strong>Message Stream</strong> you&apos;ll use:
+          Decide which <strong>Message Stream</strong> you&apos;ll use:{" "}
           <ul>
             <li>
               <code>outbound</code>

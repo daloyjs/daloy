@@ -438,7 +438,7 @@ export default function BlogPostPage() {
           <h2>The shared app: note what&apos;s missing</h2>
 
           <p>
-            The application file imports none of the runtime entry APIs:
+            The application file imports none of the runtime entry APIs:{" "}
             <code>http</code>
             {", "}
             <code>node:fs</code>
@@ -778,9 +778,9 @@ export default function BlogPostPage() {
             Operationally, you can run the same suite of tests against an
             in-process client in CI (fast), against a Bun process on a preview
             environment (also fast), against a Workers deployment in canary
-            (cheap to spin up, very real
-            edge), and against your Node prod cluster (the boring grown-up). All
-            five are the same code. The difference is one import.
+            (cheap to spin up, very real edge), and against your Node prod
+            cluster (the boring grown-up). All five are the same code. The
+            difference is one import.
           </p>
 
           <p>

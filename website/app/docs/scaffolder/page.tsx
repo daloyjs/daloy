@@ -286,9 +286,9 @@ bun  create daloy           my-api`}
       <p>
         A minimal Cloudflare Worker using <code>@daloyjs/core/cloudflare</code>{" "}
         with <code>wrangler.toml</code> ready to deploy,{" "}
-        <code>secureHeaders</code> + <code>requestId</code>
-        enabled by default, smaller edge-friendly body and timeout limits, and a
-        Zod-validated route exposed as <code>fetch</code>.
+        <code>secureHeaders</code> + <code>requestId</code> enabled by default,
+        smaller edge-friendly body and timeout limits, and a Zod-validated route
+        exposed as <code>fetch</code>.
       </p>
 
       <h3 id="vercel">
@@ -307,9 +307,8 @@ bun  create daloy           my-api`}
       </p>
       <p>
         The Vercel template also ships <code>/docs</code> (Scalar API reference)
-        and <code>/openapi.json</code>
-        wired to the same app, so the deployed Vercel URL serves API
-        documentation automatically.
+        and <code>/openapi.json</code> wired to the same app, so the deployed
+        Vercel URL serves API documentation automatically.
       </p>
 
       <h3 id="bun-basic">
@@ -322,7 +321,7 @@ bun  create daloy           my-api`}
         </a>{" "}
         runtime starter using
         <code>@daloyjs/core/bun</code>
-        {". "}Ships <code>bun --hot</code> for instant reloads,
+        {". "}Ships <code>bun --hot</code> for instant reloads,{" "}
         <code>bun test</code> for the test runner, the same starter security
         middleware as the Node template (<code>secureHeaders</code> /{" "}
         <code>requestId</code> / <code>rateLimit</code>), the bookstore demo

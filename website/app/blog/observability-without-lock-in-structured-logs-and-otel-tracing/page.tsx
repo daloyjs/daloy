@@ -723,7 +723,7 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            If you do not need the OTel propagator, read
+            If you do not need the OTel propagator, read{" "}
             <code>traceparent</code> from the headers and return a minimal
             parent context object. The framework does not care what shape the
             parent context has; it passes it through to <code>startSpan</code>{" "}

@@ -108,16 +108,16 @@ export default function Page() {
       <ul>
         <li>
           <strong>Is:</strong> a curated Markdown index at{" "}
-          <code>/llms.txt</code>, optionally paired with clean{" "}
-          <code>.md</code> versions of linked pages.
+          <code>/llms.txt</code>, optionally paired with clean <code>.md</code>{" "}
+          versions of linked pages.
         </li>
         <li>
-          <strong>Is not:</strong> a replacement for{" "}
-          <code>robots.txt</code> (access policy for crawlers).
+          <strong>Is not:</strong> a replacement for <code>robots.txt</code>{" "}
+          (access policy for crawlers).
         </li>
         <li>
-          <strong>Is not:</strong> a replacement for{" "}
-          <code>sitemap.xml</code> (exhaustive indexable URLs).
+          <strong>Is not:</strong> a replacement for <code>sitemap.xml</code>{" "}
+          (exhaustive indexable URLs).
         </li>
         <li>
           <strong>Is not:</strong> a guaranteed boost in ChatGPT or Google AI
@@ -135,9 +135,7 @@ export default function Page() {
       </p>
 
       <h2 id="spec-shape">Spec shape</h2>
-      <p>
-        The informal spec at llmstxt.org is Markdown with a fixed skeleton:
-      </p>
+      <p>The informal spec at llmstxt.org is Markdown with a fixed skeleton:</p>
       <ol>
         <li>
           <strong>H1</strong> with the project or site name (required).
@@ -168,20 +166,17 @@ export default function Page() {
 
       <h2 id="daloyjs-dev">How daloyjs.dev implements it</h2>
       <p>
-        The site route{" "}
-        <code>website/app/llms.txt/route.ts</code> builds the file at request
-        time (cached for an hour):
+        The site route <code>website/app/llms.txt/route.ts</code> builds the
+        file at request time (cached for an hour):
       </p>
       <ul>
         <li>
-          Project links (homepage, docs{" "}
-          <Link href="/docs/mcp">MCP server</Link>, GitHub, npm, JSR,{" "}
-          <code>create-daloy</code>).
+          Project links (homepage, docs <Link href="/docs/mcp">MCP server</Link>
+          , GitHub, npm, JSR, <code>create-daloy</code>).
         </li>
         <li>
-          Every docs page from{" "}
-          <code>getDocsSearchSections()</code>, grouped like the sidebar, with
-          URLs pointing at the <code>.md</code> siblings.
+          Every docs page from <code>getDocsSearchSections()</code>, grouped
+          like the sidebar, with URLs pointing at the <code>.md</code> siblings.
         </li>
         <li>
           Blog posts under the final <code>## Optional</code> section.
@@ -190,10 +185,10 @@ export default function Page() {
       <p>
         Agents that prefer structured tools over page fetches can use{" "}
         <code>https://daloyjs.dev/mcp</code> (
-        <Link href="/docs/mcp">MCP docs</Link>) with{" "}
-        <code>search_docs</code>, <code>get_doc</code>, and{" "}
-        <code>list_docs</code>. The <code>llms.txt</code> file points at that
-        endpoint so the two surfaces stay discoverable together.
+        <Link href="/docs/mcp">MCP docs</Link>) with <code>search_docs</code>,{" "}
+        <code>get_doc</code>, and <code>list_docs</code>. The{" "}
+        <code>llms.txt</code> file points at that endpoint so the two surfaces
+        stay discoverable together.
       </p>
 
       <h2 id="for-your-api">For your own API or docs site</h2>
@@ -215,8 +210,8 @@ export default function Page() {
           <code>daloy inspect --ai</code>.
         </li>
         <li>
-          Optional dedicated{" "}
-          <Link href="/docs/mcp">MCP server</Link> for live tools.
+          Optional dedicated <Link href="/docs/mcp">MCP server</Link> for live
+          tools.
         </li>
         <li>
           In-repo <code>AGENTS.md</code> for agents that edit the codebase (the
@@ -235,9 +230,7 @@ export default function Page() {
           File is reachable at <code>https://&lt;host&gt;/llms.txt</code> with{" "}
           <code>text/plain</code> (or Markdown) and a 2xx status.
         </li>
-        <li>
-          H1 + short summary describe the product in plain language.
-        </li>
+        <li>H1 + short summary describe the product in plain language.</li>
         <li>
           Links are curated, described, and mostly point at Markdown or other
           low-chrome content.

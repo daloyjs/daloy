@@ -164,7 +164,7 @@ declare module "@daloyjs/core" {
       />
       <p>
         In production, the verifier validates a JWT or session and maps the
-        external <code>(issuer, subject)</code> pair to an immutable internal
+        external <code>(issuer, subject)</code> pair to an immutable internal{" "}
         <code>userId</code>
         {". "}Do not use email as the ownership key.
       </p>

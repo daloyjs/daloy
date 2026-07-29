@@ -68,8 +68,8 @@ export default function Page() {
           #1 cause of &ldquo;works in test, 404 in live&rdquo;.
         </li>
         <li>
-          Webhooks come signed. Each <em>NotificationRequestItem</em>
-          carries an HMAC-SHA256 of selected fields in{" "}
+          Webhooks come signed. Each <em>NotificationRequestItem</em> carries an
+          HMAC-SHA256 of selected fields in{" "}
           <code>additionalData.hmacSignature</code>
           {". "}Verify with <code>hmacValidator.validateHMAC</code> and respond{" "}
           <code>[accepted]</code> within ~10 seconds, or Adyen marks it failed

@@ -522,9 +522,8 @@ export default function BlogPostPage() {
           <p>
             There are six hooks. They fire in the order they appear in the code,
             in the order you registered them, in three nested scopes (global
-            -&gt; group -&gt; route). The file
-            exposes the sequence directly, without adapter shims, inheritance
-            chains, or hidden re-entry.
+            -&gt; group -&gt; route). The file exposes the sequence directly,
+            without adapter shims, inheritance chains, or hidden re-entry.
           </p>
 
           <h2>The whole API in one screen</h2>

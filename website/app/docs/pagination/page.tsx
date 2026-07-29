@@ -176,7 +176,7 @@ const payload = decodeCursor<{ id: number; createdAt: string }>(cursor);
         <code>prev</code>
         {", "}and <code>first</code> page URLs, preserving every other query
         parameter (filters, <code>limit</code>
-        {", "} ...), then serializes them into a single <code>Link</code>{" "}
+        {", "}...), then serializes them into a single <code>Link</code>{" "}
         header.
       </p>
       <CodeBlock

@@ -437,8 +437,7 @@ app.post(
           server SDK deprecation policy
         </a>
         {": "}major versions are supported for 3 years and you should pin a
-        recent major in
-        <code>package.json</code>
+        recent major in <code>package.json</code>
         {". "}Stay current, old SDKs lose support for new payment methods, new
         fields, and security patches.
       </p>

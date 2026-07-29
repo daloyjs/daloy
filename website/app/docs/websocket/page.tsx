@@ -32,11 +32,10 @@ export default function Page() {
         <code>@daloyjs/core/websocket</code>) plus adapter wiring for{" "}
         <code>@daloyjs/core/node</code> and <code>@daloyjs/core/bun</code>
         {". "}Both adapters accept the <strong>same handler shape</strong>
-        {": "}the Bun-style
-        <code>open</code> / <code>message</code> / <code>close</code> /{" "}
-        <code>drain</code> / <code>error</code> callbacks, so the same{" "}
-        <code>app.ws(path, handler)</code> registration works on either runtime
-        without changes.
+        {": "}the Bun-style <code>open</code> / <code>message</code> /{" "}
+        <code>close</code> / <code>drain</code> / <code>error</code> callbacks,
+        so the same <code>app.ws(path, handler)</code> registration works on
+        either runtime without changes.
       </p>
       <p>
         On Node the adapter only installs an <code>upgrade</code> listener when
@@ -287,11 +286,10 @@ app.ws("/cli", {
       />
       <p>
         Missing <code>Origin</code> is allowed by the{" "}
-        <code>&quot;same-origin&quot;</code>
-        and array policies because browsers send <code>Origin</code> on WS
-        handshakes; no <code>Origin</code> usually means a CLI or
-        server-to-server client. Use the predicate form when your route should
-        reject clients that omit the header.
+        <code>&quot;same-origin&quot;</code> and array policies because browsers
+        send <code>Origin</code> on WS handshakes; no <code>Origin</code>{" "}
+        usually means a CLI or server-to-server client. Use the predicate form
+        when your route should reject clients that omit the header.
       </p>
 
       <h2 id="upgrade-rate-limiting">Upgrade rate limiting</h2>

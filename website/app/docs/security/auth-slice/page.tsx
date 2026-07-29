@@ -31,7 +31,7 @@ export default function Page() {
       <h1>JWT and authentication safeguards</h1>
       <blockquote>
         The authentication slice resolves signing keys by <code>kid</code>, runs
-        the <code>verify</code> hook on every request, and adds
+        the <code>verify</code> hook on every request, and adds{" "}
         <code>Cache-Control: no-store</code> to authentication failures.
       </blockquote>
 
@@ -335,9 +335,9 @@ app.use(
         <code>Cache-Control: no-store</code> alongside{" "}
         <code>WWW-Authenticate</code> on the <code>401</code> response. A shared
         CDN, a corporate proxy, or a service-worker cache could previously cache
-        the challenge and serve it to a different user;
-        <code>no-store</code> closes that fingerprinting and stale-challenge
-        risk. This applies uniformly to <code>bearerAuth()</code>
+        the challenge and serve it to a different user; <code>no-store</code>{" "}
+        closes that fingerprinting and stale-challenge risk. This applies
+        uniformly to <code>bearerAuth()</code>
         {", "}
         <code>basicAuth()</code>
         {", "}and the new <code>jwk()</code>.

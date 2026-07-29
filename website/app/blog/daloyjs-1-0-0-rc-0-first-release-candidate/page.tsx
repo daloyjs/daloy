@@ -199,10 +199,9 @@ export default function BlogPostPage() {
             {", "}
             <code>create-daloy</code>
             {", "}and the JSR package <code>@daloyjs/daloy</code> together, as
-            always, and every
-            <code>create-daloy</code> template points at the matching core
-            package. A plain install gets you the RC, no dist-tag archaeology
-            required:
+            always, and every <code>create-daloy</code> template points at the
+            matching core package. A plain install gets you the RC, no dist-tag
+            archaeology required:
           </p>
 
           <CodeBlock language="bash" code={INSTALL} />
@@ -222,24 +221,24 @@ export default function BlogPostPage() {
             The rest is judgment, not a checklist. I want the security
             disclosure process to get one real exercise, because an untested
             policy is only a file. And I want the migration story to be solid
-            for the framework most people are actually leaving, which is why
-            the <Link href="/docs/migrating/express">Express guide</Link> came
-            first and got the most attention. Everything past those two is
-            polish I can ship inside a stable line instead of holding the
-            stable line hostage to it.
+            for the framework most people are actually leaving, which is why the{" "}
+            <Link href="/docs/migrating/express">Express guide</Link> came first
+            and got the most attention. Everything past those two is polish I
+            can ship inside a stable line instead of holding the stable line
+            hostage to it.
           </p>
 
           <div className="not-prose mt-8 rounded-2xl border bg-muted/35 p-5 text-sm leading-relaxed text-muted-foreground">
             <strong className="text-foreground">Update, 28 July 2026.</strong>{" "}
-            This section first listed three production users as a hard gate, plus
-            Fastify and Hono migration guides. Both are gone. The production-user
-            gate turned out to be circular: sensible teams do not put a release
-            candidate into production, so waiting for production users before
-            dropping the <code>-rc</code> suffix meant waiting for something my
-            own version number was preventing. Developers trust a stable line,
-            and that trust is what produces the field feedback I was trying to
-            collect. The Fastify and Hono guides are still wanted, just moved to
-            the standing docs track. The{" "}
+            This section first listed three production users as a hard gate,
+            plus Fastify and Hono migration guides. Both are gone. The
+            production-user gate turned out to be circular: sensible teams do
+            not put a release candidate into production, so waiting for
+            production users before dropping the <code>-rc</code> suffix meant
+            waiting for something my own version number was preventing.
+            Developers trust a stable line, and that trust is what produces the
+            field feedback I was trying to collect. The Fastify and Hono guides
+            are still wanted, just moved to the standing docs track. The{" "}
             <Link href="/docs">roadmap</Link> records the amendment in full,
             including what I give up by freezing the API without production
             feedback first. First drafts of a plan are written before you have

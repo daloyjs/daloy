@@ -307,11 +307,11 @@ await fetch("/transfer", {
       </h2>
       <p>
         The <code>csrf()</code> middleware also implements the modern{" "}
-        <strong>Fetch Metadata</strong>
-        strategy. Modern browsers send a <code>Sec-Fetch-Site</code> header on
-        every request that tells the server whether the request originated from
-        the <em>same</em> origin, a <em>cross</em>-site context, or no navigable
-        context at all (<code>none</code>
+        <strong>Fetch Metadata</strong> strategy. Modern browsers send a{" "}
+        <code>Sec-Fetch-Site</code> header on every request that tells the
+        server whether the request originated from the <em>same</em> origin, a{" "}
+        <em>cross</em>-site context, or no navigable context at all (
+        <code>none</code>
         {", "}such as bookmarks or direct address-bar typing). That single
         header is enough to defeat the classic CSRF attack model without any
         cookie round-trip and without coupling your HTML rendering to a token.

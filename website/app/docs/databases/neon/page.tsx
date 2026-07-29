@@ -173,9 +173,8 @@ app.get(
         Use the HTTP <code>neon()</code> client and pass the connection string
         from the worker environment instead of <code>process.env</code>
         {". "}Because this example reads <code>env</code>
-        {", "}wrap the Worker
-        <code>fetch</code> handler and call <code>app.fetch(req)</code> after
-        decorating state:
+        {", "}wrap the Worker <code>fetch</code> handler and call{" "}
+        <code>app.fetch(req)</code> after decorating state:
       </p>
       <CodeBlock
         code={`import { neon } from "@neondatabase/serverless";

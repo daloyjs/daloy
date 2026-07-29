@@ -270,9 +270,8 @@ curl localhost:3002/orders \\
         </li>
         <li>
           Single end. If a handler throws, the same span is marked errored and
-          ended once during <code>onSend</code>; later
-          <code>onError</code> / repeat <code>onSend</code> invocations are
-          no-ops.
+          ended once during <code>onSend</code>; later <code>onError</code> /
+          repeat <code>onSend</code> invocations are no-ops.
         </li>
         <li>
           Composes with other hooks. Combine <code>otelTracing(...)</code> with{" "}

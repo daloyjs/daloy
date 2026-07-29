@@ -46,9 +46,8 @@ export default function Page() {
         </li>
         <li>
           Periodic refresh
-          {": "}the denylist reloads on an
-          <code>unref</code>&apos;d timer so stale ranges expire and new ones
-          are picked up automatically.
+          {": "}the denylist reloads on an <code>unref</code>&apos;d timer so
+          stale ranges expire and new ones are picked up automatically.
         </li>
         <li>
           Fail-open

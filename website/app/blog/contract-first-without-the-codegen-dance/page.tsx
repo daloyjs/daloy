@@ -511,8 +511,8 @@ export default function BlogPostPage() {
               <code>res.body</code> inside the <code>200</code> branch is
               narrowed to the <code>Book</code> shape, not the union of every
               declared response, the actual <code>200</code> one. Second, the{" "}
-              <code>@ts-expect-error</code> comment in the
-              <code>404</code> branch <em>passes</em>
+              <code>@ts-expect-error</code> comment in the <code>404</code>{" "}
+              branch <em>passes</em>
               {": "}trying to read <code>title</code> from a{" "}
               <code>Problem</code> is a compile error, by construction.
             </p>
@@ -705,9 +705,7 @@ export default function BlogPostPage() {
             into a single key press.
           </p>
 
-          <p>
-            Go delete a hand-written API client.
-          </p>
+          <p>Go delete a hand-written API client.</p>
 
           <p>Devlin</p>
         </div>

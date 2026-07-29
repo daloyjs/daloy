@@ -104,8 +104,8 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
         Mount it globally with <code>app.use()</code> so it observes every
         route. Because it reads the outgoing status, it counts failures produced
         by <em>any</em> downstream middleware or handler (auth rejections,
-        rate-limit
-        <code>429</code>s, your own <code>403</code>s), not just its own.
+        rate-limit <code>429</code>s, your own <code>403</code>s), not just its
+        own.
       </p>
 
       <h2 id="identity-is-mandatory">Identity is mandatory</h2>
@@ -129,7 +129,9 @@ app.use(
 );`}
       />
 
-      <h2 id="spoof-resistant-proxy-identity">Spoof-resistant proxy identity</h2>
+      <h2 id="spoof-resistant-proxy-identity">
+        Spoof-resistant proxy identity
+      </h2>
       <p>
         When the default key generator reads <code>X-Forwarded-For</code>, it
         keys on the <strong>rightmost</strong> entry: the one your immediate
@@ -175,7 +177,7 @@ app.use(autoBan({ trustedHops: 2 }));
           <code>2×</code>
           {", "}
           <code>4×</code>
-          {", "} ...), capped at <code>maxBanMs</code> (default 24 h), for as
+          {", "}...), capped at <code>maxBanMs</code> (default 24 h), for as
           long as the record stays alive.
         </li>
         <li>

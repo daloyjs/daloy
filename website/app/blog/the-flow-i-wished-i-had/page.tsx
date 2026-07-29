@@ -246,11 +246,11 @@ export default function BlogPostPage() {
           <p>
             Look at all those places where truth can hide. The schema knows what
             a valid request looks like. The handler knows what statuses it
-            returns. The YAML file knows what the
-            <em>world</em> is told it returns. The generated client knows what
-            the YAML said two sprints ago. None of them are checked against each
-            other. The compiler is happily humming along, oblivious, like me
-            eating lunch while my deploy is failing in another tab.
+            returns. The YAML file knows what the <em>world</em> is told it
+            returns. The generated client knows what the YAML said two sprints
+            ago. None of them are checked against each other. The compiler is
+            happily humming along, oblivious, like me eating lunch while my
+            deploy is failing in another tab.
           </p>
 
           <h2>The &quot;after&quot; picture: one route, one truth</h2>
@@ -358,8 +358,8 @@ export default function BlogPostPage() {
           </blockquote>
 
           <p>
-            Everything in the <Link href="/docs">docs</Link> is a consequence
-            of that index card.
+            Everything in the <Link href="/docs">docs</Link> is a consequence of
+            that index card.
           </p>
 
           <h2>

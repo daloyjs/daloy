@@ -144,8 +144,7 @@ app.use(requestDecompression({
         {", "}so the same line works on Node, Bun, Deno, and Cloudflare Workers.
         Only <code>gzip</code> and <code>deflate</code> are accepted (the
         encodings <code>DecompressionStream</code> implements consistently
-        across runtimes).
-        <strong>Brotli is intentionally excluded</strong>
+        across runtimes). <strong>Brotli is intentionally excluded</strong>
         {": "}it is not part of the Compression Streams spec and is unavailable
         on most runtimes. Restrict the allowlist with <code>encodings</code>
         {": "}

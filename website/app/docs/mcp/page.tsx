@@ -546,14 +546,14 @@ export default function Page() {
         Because the era follows the version the <em>client</em> declares, a
         naive dual-era server would hand attackers a free bypass: declare{" "}
         <code>2025-11-25</code>
-        {", "}keep whatever <code>Mcp-Method</code> or{" "}
-        <code>Mcp-Param-*</code> header satisfies the gateway in front, and send
-        a body that does something else. DaloyJS closes that.{" "}
+        {", "}keep whatever <code>Mcp-Method</code> or <code>Mcp-Param-*</code>{" "}
+        header satisfies the gateway in front, and send a body that does
+        something else. DaloyJS closes that.{" "}
         <a href="#request-headers">Header/body agreement</a> is validated in{" "}
-        <strong>both</strong> eras. Legacy requests are not{" "}
-        <em>required</em> to carry the standard headers — those headers postdate
-        them — but any they do carry must match the body, or the request is
-        refused with <code>-32020</code>
+        <strong>both</strong> eras. Legacy requests are not <em>required</em> to
+        carry the standard headers — those headers postdate them — but any they
+        do carry must match the body, or the request is refused with{" "}
+        <code>-32020</code>
         {". "}A genuine legacy client, which sends none of them, is unaffected.
       </p>
       <p>
@@ -758,7 +758,9 @@ export default function Page() {
         </li>
       </ul>
 
-      <h2 id="server-discover">Discovery (<code>server/discover</code>)</h2>
+      <h2 id="server-discover">
+        Discovery (<code>server/discover</code>)
+      </h2>
       <p>
         A modern server <strong>must</strong> implement{" "}
         <code>server/discover</code>
@@ -794,13 +796,12 @@ export default function Page() {
         {": "}
         <code>MCP-Protocol-Version</code> (must equal{" "}
         <code>_meta[&quot;io.modelcontextprotocol/protocolVersion&quot;]</code>
-        ), <code>Mcp-Method</code> (must equal the JSON-RPC{" "}
-        <code>method</code>), and <code>Mcp-Name</code> for{" "}
-        <code>tools/call</code>
+        ), <code>Mcp-Method</code> (must equal the JSON-RPC <code>method</code>
+        ), and <code>Mcp-Name</code> for <code>tools/call</code>
         {", "}
         <code>resources/read</code>
-        {", "}and <code>prompts/get</code> (must equal{" "}
-        <code>params.name</code> or <code>params.uri</code>).
+        {", "}and <code>prompts/get</code> (must equal <code>params.name</code>{" "}
+        or <code>params.uri</code>).
       </p>
       <p>
         DaloyJS rejects a missing or disagreeing header with HTTP{" "}
@@ -967,10 +968,10 @@ export default function Page() {
       </p>
       <CodeBlock code={STATE_HANDLE} />
       <p>
-        A handle is a name, not a capability. Re-authorize it on every call, keep
-        it opaque, give it a bounded lifetime, state that lifetime in the
-        tool&apos;s description so the model can see it, and return a recoverable{" "}
-        <code>McpToolError</code> when it expires.
+        A handle is a name, not a capability. Re-authorize it on every call,
+        keep it opaque, give it a bounded lifetime, state that lifetime in the
+        tool&apos;s description so the model can see it, and return a
+        recoverable <code>McpToolError</code> when it expires.
       </p>
 
       <h2 id="origin-validation-dns-rebinding">
@@ -1070,13 +1071,13 @@ export default function Page() {
       <h2 id="what-stays-out-of-core">What stays out of core</h2>
       <p>
         DaloyJS does not bundle the official MCP SDK, stdio process management,
-        OAuth server metadata, or the{" "}
-        <code>subscriptions/listen</code> notification stream (so no{" "}
-        <code>listChanged</code> capability). It also does not implement the{" "}
-        <code>io.modelcontextprotocol/tasks</code> or MCP Apps extensions — you
-        can advertise an extension you implement yourself through the{" "}
-        <code>extensions</code> option, but core ships none. Those pieces either
-        add dependency weight or need a product-specific security model.
+        OAuth server metadata, or the <code>subscriptions/listen</code>{" "}
+        notification stream (so no <code>listChanged</code> capability). It also
+        does not implement the <code>io.modelcontextprotocol/tasks</code> or MCP
+        Apps extensions — you can advertise an extension you implement yourself
+        through the <code>extensions</code> option, but core ships none. Those
+        pieces either add dependency weight or need a product-specific security
+        model.
       </p>
       <p>
         Features the specification deprecated in <code>2026-07-28</code> are
@@ -1178,9 +1179,9 @@ export default function Page() {
           path.
         </li>
         <li>
-          Re-authorize state handles on every call. Without protocol sessions,
-          a handle passed as a tool argument is just a string the model
-          carries — treat it as a name, not a capability.
+          Re-authorize state handles on every call. Without protocol sessions, a
+          handle passed as a tool argument is just a string the model carries —
+          treat it as a name, not a capability.
         </li>
         <li>
           Leave <code>cacheScope</code> at <code>&quot;private&quot;</code>{" "}

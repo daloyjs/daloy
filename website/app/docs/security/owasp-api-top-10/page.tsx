@@ -213,7 +213,7 @@ export default function Page() {
               <code>@daloyjs/core/rate-limit-redis</code> for multi-instance
               deploys; <code>loadShedding()</code>; <code>ipRestriction()</code>{" "}
               with CIDR-aware allow/deny; multipart per-field size caps and MIME
-              allowlist; <code>compression()</code> with BREACH-aware skips and
+              allowlist; <code>compression()</code> with BREACH-aware skips and{" "}
               <code>minimumSize</code> + negative-ratio guard;{" "}
               connection-draining shutdown.
             </td>

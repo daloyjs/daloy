@@ -579,11 +579,11 @@ export default function BlogPostPage() {
 
           <p>
             None of this is the agent&apos;s fault either. It read the schema.
-            It picked the most plausible field names from the
+            It picked the most plausible field names from the{" "}
             <code>operationId</code>
-            {". "}It invented a <code>createdAt</code>
-            because that&apos;s what most APIs return. The schema was right but
-            not <em>specific enough</em> to anchor the model to the real field
+            {". "}It invented a <code>createdAt</code> because that&apos;s what
+            most APIs return. The schema was right but not{" "}
+            <em>specific enough</em> to anchor the model to the real field
             names. One concrete example would have changed every decision
             downstream.
           </p>

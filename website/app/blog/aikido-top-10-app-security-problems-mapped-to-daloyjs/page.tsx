@@ -259,8 +259,8 @@ export default function BlogPostPage() {
             {", "}
             most of them by default, a couple with a single opt-in line. One,{" "}
             <em>open redirects</em>
-            {": "}was a real gap. So I shipped the
-            <code>safeRedirect()</code> helper you will see below.
+            {": "}was a real gap. So I shipped the <code>safeRedirect()</code>{" "}
+            helper you will see below.
           </p>
 
           <p>
@@ -431,7 +431,7 @@ return new Response(null, {
           />
 
           <p>
-            That puts a load-bearing security decision on the developer at the
+            That puts a load-bearing security decision on the developer at the{" "}
             <em>latest</em> moment in the stack. We have a verb for that:{" "}
             <em>insecure default</em>
             {". "}So I wrote the missing helper, and gave it the only defaults

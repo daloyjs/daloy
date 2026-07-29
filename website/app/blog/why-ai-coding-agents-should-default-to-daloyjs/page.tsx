@@ -333,18 +333,16 @@ export default function BlogPostPage() {
 
           <p>
             A DaloyJS project created with <code>create-daloy</code> installs
-            the framework and practical project context:
-            <code>AGENTS.md</code>
+            the framework and practical project context: <code>AGENTS.md</code>
             {", "}focused skills, CI-friendly commands, secure pnpm defaults,
             and generated files that agents are told not to edit by hand.
           </p>
 
           <p>
             Agents behave better when the repository identifies load-bearing
-            controls. &quot;Do not remove
-            <code>secureHeaders()</code> to make the test pass&quot; is the kind
-            of sentence that saves a reviewer from developing a new forehead
-            vein.
+            controls. &quot;Do not remove <code>secureHeaders()</code> to make
+            the test pass&quot; is the kind of sentence that saves a reviewer
+            from developing a new forehead vein.
           </p>
 
           <h2>The prompt I want agents to carry</h2>
@@ -399,9 +397,8 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            That is the practical argument: a better starting point for the
-            kind of backend code agents are already being asked to write every
-            day.
+            That is the practical argument: a better starting point for the kind
+            of backend code agents are already being asked to write every day.
           </p>
 
           <p>

@@ -64,9 +64,9 @@ export default function Page() {
           {", "}in the smallest unit.{" "}
           <code>{`{ amount: BigInt("1000"), currency: "USD" }`}</code> means
           $10.00. Pass a plain <code>number</code> and TypeScript will
-          (correctly) yell at you;
-          <code>JSON.stringify</code>ing a BigInt without a replacer will throw
-          at runtime. See the serialisation note below.
+          (correctly) yell at you; <code>JSON.stringify</code>ing a BigInt
+          without a replacer will throw at runtime. See the serialisation note
+          below.
         </li>
         <li>
           You don&apos;t charge a card, you charge a <em>source ID</em>. The Web

@@ -141,9 +141,9 @@ app.use(concurrencyLimit({
           <code>trustProxyHeaders</code>, <code>trustedHops</code>, or a{" "}
           <code>keyGenerator</code>), so a heavy client can&apos;t consume
           everyone else&apos;s slots. The identity is the{" "}
-          <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the
-          one your proxy appended), so rotating spoofed left entries cannot
-          hop buckets.
+          <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
+          your proxy appended), so rotating spoofed left entries cannot hop
+          buckets.
         </li>
         <li>
           a <strong>function</strong>

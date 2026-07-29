@@ -462,10 +462,9 @@ export default function BlogPostPage() {
 
           <p>
             That list maps cleanly onto what an HTTP framework can enforce at
-            the request boundary. Below is the
-            per-requirement mapping of what an app on <code>@daloyjs/core</code>{" "}
-            already enforces by default, what one opt-in line adds, and the
-            items no framework can own.
+            the request boundary. Below is the per-requirement mapping of what
+            an app on <code>@daloyjs/core</code> already enforces by default,
+            what one opt-in line adds, and the items no framework can own.
           </p>
 
           <h2>Layered defense: the deployment layer must stand alone</h2>

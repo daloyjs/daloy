@@ -539,7 +539,7 @@ export default function BlogPostPage() {
             That conversation has a fix, and it&apos;s twenty years old at this
             point: <strong>RFC 9457 Problem Details for HTTP APIs</strong> (the
             freshly-renamed successor to RFC 7807). One Content-Type, one
-            document shape, one set of optional fields, and you can build
+            document shape, one set of optional fields, and you can build{" "}
             <em>one</em> client-side error helper that works for every endpoint.
             DaloyJS uses it for every error response, not sometimes, every time,
             and this post is the tour.
@@ -739,12 +739,12 @@ export default function BlogPostPage() {
           <h2>Unauthorized vs Forbidden, sorted</h2>
 
           <p>
-            Whoever named these two status codes did the field a disservice.
+            Whoever named these two status codes did the field a disservice.{" "}
             <em>Unauthorized</em> means &quot;we don&apos;t know who you
             are&quot; (a.k.a. unauthenticated). <em>Forbidden</em> means
             &quot;we know who you are; you can&apos;t do this&quot;. The
             framework picks the right one based on which middleware triggered
-            it, and your bearerAuth automatically attaches the
+            it, and your bearerAuth automatically attaches the{" "}
             <code>WWW-Authenticate</code> challenge:
           </p>
 

@@ -391,10 +391,9 @@ responseCache({ ttlSeconds: 30 });`}
         the first <code>app.use(...)</code>
         {", "}so the tenant is populated before any <code>keyGenerator</code> /{" "}
         <code>scope</code> callback runs. If a limiter runs first, its key falls
-        back to <code>tenant:unknown</code>. For{" "}
-        <code>responseCache()</code> specifically the stakes are high enough that
-        the order is <em>enforced</em>: a cache mounted ahead of{" "}
-        <code>tenancy()</code>{" "}
+        back to <code>tenant:unknown</code>. For <code>responseCache()</code>{" "}
+        specifically the stakes are high enough that the order is{" "}
+        <em>enforced</em>: a cache mounted ahead of <code>tenancy()</code>{" "}
         <a href="/docs/security/boot-guards#7-responsecache-mounted-ahead-of-tenancy">
           refuses to boot in production
         </a>{" "}

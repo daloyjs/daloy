@@ -309,7 +309,7 @@ serve(app, { port: 3000 });`}
         The CLI is installed as a dev dependency and reads{" "}
         <code>src/mikro-orm.config.ts</code> by default. If you move the config
         under <code>src/db</code>
-        {", "}pass <code>--config</code> or configure
+        {", "}pass <code>--config</code> or configure{" "}
         <code>mikro-orm.configPaths</code> in <code>package.json</code>.
       </p>
       <CodeBlock

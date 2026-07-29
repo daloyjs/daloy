@@ -158,8 +158,7 @@ app.get(
         binding from <code>env</code>
         {", "}then call <code>app.fetch(req)</code>
         {". "}If your app does not need worker bindings, you can export the
-        standard <Link href="/docs/adapters">Cloudflare adapter</Link>
-        directly.
+        standard <Link href="/docs/adapters">Cloudflare adapter</Link> directly.
       </p>
       <CodeBlock
         code={`import { connect } from "@planetscale/database";
@@ -208,9 +207,9 @@ export const db = drizzle({
         </a>{" "}
         (GA since Prisma <code>6.16.0</code>). PlanetScale disables foreign-key
         constraints by default on MySQL unless you enable them in database
-        settings, so set <code>relationMode = &quot;prisma&quot;</code>
-        in your <code>schema.prisma</code> when you are using the default no-FK
-        mode, and point <code>DATABASE_URL</code> at the serverless host (
+        settings, so set <code>relationMode = &quot;prisma&quot;</code> in your{" "}
+        <code>schema.prisma</code> when you are using the default no-FK mode,
+        and point <code>DATABASE_URL</code> at the serverless host (
         <code>aws.connect.psdb.cloud</code>).
       </p>
       <CodeBlock

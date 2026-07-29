@@ -23,8 +23,8 @@ export default function Page() {
     <>
       <h1>Secure-by-default</h1>
       <blockquote>
-        Security defaults start enabled. Disabling them requires both
-        <code>secureDefaults: false</code> and
+        Security defaults start enabled. Disabling them requires both{" "}
+        <code>secureDefaults: false</code> and{" "}
         <code>acknowledgeInsecureDefaults: true</code>, and DaloyJS records the
         choice at startup.
       </blockquote>

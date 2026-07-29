@@ -27,7 +27,7 @@ export default function Page() {
     <>
       <h1>WebSocket and login safeguards</h1>
       <blockquote>
-        Use <code>wsRateLimit()</code> on upgrades, <code>loginThrottle()</code>
+        Use <code>wsRateLimit()</code> on upgrades, <code>loginThrottle()</code>{" "}
         on failed authentication, and <code>rotateSession()</code> after login
         or a privilege change.
       </blockquote>
@@ -42,7 +42,7 @@ export default function Page() {
       </h2>
       <p>
         <code>wsRateLimit()</code> adapts the existing <code>rateLimit()</code>{" "}
-        shared-bucket primitive to the WebSocket upgrade boundary. Put the same
+        shared-bucket primitive to the WebSocket upgrade boundary. Put the same{" "}
         <code>groupId</code> on HTTP login routes and the WebSocket session
         route so an attacker cannot dodge the bucket by switching transports.
       </p>
@@ -192,7 +192,7 @@ app.post(
         allowlists. Add <code>magicBytes: true</code> to derive known signatures
         from <code>accept</code>
         {", "}or pass custom signatures for private formats. The OpenAPI
-        generator emits <code>x-magic-bytes</code> alongside
+        generator emits <code>x-magic-bytes</code> alongside{" "}
         <code>x-accept</code> and <code>x-max-bytes</code>.
       </p>
       <CodeBlock
@@ -250,7 +250,7 @@ app.post(
         limit, compression off by default, a non-zero idle timeout, and a 1 MiB
         inbound payload cap. In production under <code>secureDefaults</code>
         {", "}
-        <code>perMessageDeflate: true</code> is refused. Daloy also refuses a
+        <code>perMessageDeflate: true</code> is refused. Daloy also refuses a{" "}
         <code>maxPayloadLength</code> larger than a route body schema&apos;s
         declared maximum when the schema exposes one.
       </p>

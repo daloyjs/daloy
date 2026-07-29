@@ -292,7 +292,9 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
         language="ts"
       />
 
-      <h2 id="cache-key-and-isolation">Cache key and cross-principal isolation</h2>
+      <h2 id="cache-key-and-isolation">
+        Cache key and cross-principal isolation
+      </h2>
       <p>
         A shared response cache is only as safe as its key. Anything that varies
         the response but <em>not</em> the key becomes a cross-principal
@@ -315,13 +317,16 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
 Authorization or Cookie present, and neither handled nor identified?  →  bypass the cache entirely`}</code>
         </pre>
       </div>
-      <h3 id="the-authority-is-part-of-the-key">The authority is part of the key</h3>
+      <h3 id="the-authority-is-part-of-the-key">
+        The authority is part of the key
+      </h3>
       <p>
-        The key is built from the <strong>effective request URI</strong> — scheme,
-        authority, path, and query — per RFC&nbsp;9111&nbsp;§4. One process
-        serving several hostnames (vanity domains, subdomain-per-customer,
-        staging alongside production) therefore never shares an entry across
-        them. A key covering only path and query would silently mix them.
+        The key is built from the <strong>effective request URI</strong> —
+        scheme, authority, path, and query — per RFC&nbsp;9111&nbsp;§4. One
+        process serving several hostnames (vanity domains,
+        subdomain-per-customer, staging alongside production) therefore never
+        shares an entry across them. A key covering only path and query would
+        silently mix them.
       </p>
       <h3 id="credentials-fail-closed">Credentials fail closed</h3>
       <p>
@@ -329,8 +334,8 @@ Authorization or Cookie present, and neither handled nor identified?  →  bypas
         <code>Cookie</code> bypass the shared cache entirely
         (RFC&nbsp;9111&nbsp;§3.5). <code>Cookie</code> counts because a session
         cookie is the single most common way a response becomes private — a
-        cache that only knew about <code>Authorization</code> would happily serve
-        one logged-in user&apos;s page to the next visitor.
+        cache that only knew about <code>Authorization</code> would happily
+        serve one logged-in user&apos;s page to the next visitor.
       </p>
       <p>
         Rather than simply losing the cache on authenticated routes, name the
@@ -359,12 +364,14 @@ app.use(
       <p>
         A <code>principal</code> that returns <code>null</code> for a request
         that <em>does</em> carry credentials is treated as &quot;cannot identify
-        this caller&quot;, and the request bypasses the cache rather than sharing
-        one anonymous entry among authenticated users. Declaring the credential
-        in <code>varyHeaders</code> also counts as handling it, since its value
-        then partitions the key by itself.
+        this caller&quot;, and the request bypasses the cache rather than
+        sharing one anonymous entry among authenticated users. Declaring the
+        credential in <code>varyHeaders</code> also counts as handling it, since
+        its value then partitions the key by itself.
       </p>
-      <h3 id="declared-variants-are-honoured">Declared variants are honoured</h3>
+      <h3 id="declared-variants-are-honoured">
+        Declared variants are honoured
+      </h3>
       <p>
         A response&apos;s own <code>Vary</code> header is the origin telling the
         cache which request headers its content depends on, and DaloyJS honours
@@ -374,8 +381,8 @@ app.use(
         <code>Vary: Origin</code> alongside the reflected{" "}
         <code>Access-Control-Allow-Origin</code>, and <code>compression()</code>{" "}
         adds <code>Vary: Accept-Encoding</code> alongside{" "}
-        <code>Content-Encoding</code>. A cache that ignored those would serve one
-        caller&apos;s allowed origin — or their gzipped bytes — to the next.
+        <code>Content-Encoding</code>. A cache that ignored those would serve
+        one caller&apos;s allowed origin — or their gzipped bytes — to the next.
       </p>
       <p>
         Each distinct set of values is stored as its own variant, so several
@@ -389,18 +396,20 @@ app.use(
         response does not declare <code>Vary</code> itself but you know it
         depends on a header anyway.
       </p>
-      <h3 id="tenants-partition-automatically">Tenants partition automatically</h3>
+      <h3 id="tenants-partition-automatically">
+        Tenants partition automatically
+      </h3>
       <p>
         When <code>tenancy()</code> has resolved a tenant for the request, that
         tenant is folded into the cache key with no wiring on your part — and
         the partition is applied <em>around</em> a custom{" "}
         <code>keyGenerator</code> too, so a hand-written generator cannot
-        accidentally widen it. A caller that resolves to no tenant is kept in its
-        own partition rather than sharing the resolved ones.
+        accidentally widen it. A caller that resolves to no tenant is kept in
+        its own partition rather than sharing the resolved ones.
       </p>
       <p>
-        Ordering still matters, and it is enforced rather than merely documented:
-        because the key is built in <code>beforeHandle</code>, a{" "}
+        Ordering still matters, and it is enforced rather than merely
+        documented: because the key is built in <code>beforeHandle</code>, a{" "}
         <code>responseCache()</code> mounted <em>ahead of</em>{" "}
         <code>tenancy()</code> would run before the tenant exists in{" "}
         <code>ctx.state</code>. In production that combination{" "}
@@ -424,13 +433,12 @@ app.use(
         </li>
         <li>
           Stored bodies are capped by <code>maxBodyBytes</code> to bound memory
-          growth from large replies, and{" "}
-          <code>MemoryResponseCacheStore</code> is bounded on both entry count (
-          <code>maxEntries</code>, default 10,000) and retained body bytes (
-          <code>maxBytes</code>, default 64&nbsp;MiB). Both limits are needed:
-          expiry-based pruning alone cannot bound a burst of requests for
-          distinct URLs, because every entry in it is unexpired for the whole
-          TTL.
+          growth from large replies, and <code>MemoryResponseCacheStore</code>{" "}
+          is bounded on both entry count (<code>maxEntries</code>, default
+          10,000) and retained body bytes (<code>maxBytes</code>, default
+          64&nbsp;MiB). Both limits are needed: expiry-based pruning alone
+          cannot bound a burst of requests for distinct URLs, because every
+          entry in it is unexpired for the whole TTL.
         </li>
         <li>
           Use <code>varyHeaders</code> (or a custom <code>keyGenerator</code>)

@@ -345,9 +345,8 @@ console.log(\`wrote \${out}\`);`}
         OpenAPI 3.1 lets a producer publish <strong>top-level webhooks</strong>
         {", "}
         operations a consumer is expected to implement. Pass{" "}
-        <code>webhooks</code> to <code>generateOpenAPI</code>
-        and DaloyJS emits them under the document&apos;s top-level{" "}
-        <code>webhooks</code> map.
+        <code>webhooks</code> to <code>generateOpenAPI</code> and DaloyJS emits
+        them under the document&apos;s top-level <code>webhooks</code> map.
       </p>
       <CodeBlock
         code={`import { generateOpenAPI } from "@daloyjs/core/openapi";

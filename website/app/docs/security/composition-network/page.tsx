@@ -26,9 +26,9 @@ export default function Page() {
     <>
       <h1>Composition &amp; network</h1>
       <blockquote>
-        Use <code>ipRestriction</code> for network policy,
-        <code>rateLimit({"{ groupId }"})</code> for a shared quota, and
-        <code>internal: true</code> for routes reachable only through
+        Use <code>ipRestriction</code> for network policy,{" "}
+        <code>rateLimit({"{ groupId }"})</code> for a shared quota, and{" "}
+        <code>internal: true</code> for routes reachable only through{" "}
         <code>app.inject()</code>.
       </blockquote>
       <p>
@@ -238,9 +238,9 @@ app.use(ipRestriction({
         default; pass <code>includeInternal: true</code> to{" "}
         <code>generateOpenAPI()</code> (imported from the{" "}
         <code>@daloyjs/core/openapi</code> subpath) for private admin SDK
-        generation. The framework also filters
-        <code>Allow</code> headers so a probe with a different method stays a
-        clean <code>404</code> rather than a leaky <code>405</code>.
+        generation. The framework also filters <code>Allow</code> headers so a
+        probe with a different method stays a clean <code>404</code> rather than
+        a leaky <code>405</code>.
       </p>
 
       <BranchDiagram

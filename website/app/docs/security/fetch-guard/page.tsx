@@ -165,9 +165,8 @@ app.post(
           <code>100.64.0.0/10</code> (CGNAT, Alibaba metadata),{" "}
           <code>192.0.0.0/24</code> (Oracle Cloud metadata), all IANA-reserved{" "}
           <code>TEST-NET</code> / benchmarking / docs ranges,{" "}
-          <code>224.0.0.0/4</code> multicast,
-          <code>240.0.0.0/4</code> reserved, broadcast{" "}
-          <code>255.255.255.255</code>
+          <code>224.0.0.0/4</code> multicast, <code>240.0.0.0/4</code> reserved,
+          broadcast <code>255.255.255.255</code>
           {", "}IPv6 <code>::/128</code> and <code>ff00::/8</code>.
         </li>
         <li>

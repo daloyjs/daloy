@@ -106,7 +106,7 @@ export default function Page() {
         <code>&quot;your-jwt-secret&quot;</code>
         {", "}
         <code>&quot;it-is-very-secret&quot;</code>
-        {", "} ...), or is a single repeated character (
+        {", "}...), or is a single repeated character (
         <code>&quot;a&quot;.repeat(64)</code>
         {", "}
         <code>&quot;0&quot;.repeat(64)</code>). The check runs synchronously
@@ -369,13 +369,13 @@ for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
         7. <code>responseCache()</code> mounted ahead of <code>tenancy()</code>
       </h2>
       <p>
-        <code>responseCache()</code> folds the resolved tenant into its cache key
-        automatically, which is what keeps one tenant&apos;s cached response from
-        being served to another (CWE-524). That only works if the tenant is
+        <code>responseCache()</code> folds the resolved tenant into its cache
+        key automatically, which is what keeps one tenant&apos;s cached response
+        from being served to another (CWE-524). That only works if the tenant is
         already in <code>ctx.state</code> when the key is built — and both
         middlewares resolve in <code>beforeHandle</code>, in registration order.
-        Mounted <em>before</em> <code>tenancy()</code>, the cache would key every
-        tenant&apos;s response identically and leak silently, behind a
+        Mounted <em>before</em> <code>tenancy()</code>, the cache would key
+        every tenant&apos;s response identically and leak silently, behind a
         perfectly ordinary-looking <code>x-cache: HIT</code>.
       </p>
       <p>
@@ -403,9 +403,12 @@ const alsoGood = new App({
 alsoGood.use(responseCache({ ttlSeconds: 30 }));`}
       />
       <p>
-        See <a href="/docs/response-cache#cache-key-and-isolation">cache key and
-        cross-principal isolation</a> for the full keying model, including the{" "}
-        <code>principal</code> option for cookie-authenticated routes.
+        See{" "}
+        <a href="/docs/response-cache#cache-key-and-isolation">
+          cache key and cross-principal isolation
+        </a>{" "}
+        for the full keying model, including the <code>principal</code> option
+        for cookie-authenticated routes.
       </p>
 
       <h2 id="migration-checklist">Migration checklist</h2>

@@ -386,7 +386,7 @@ export default function Page() {
         <li>
           Use the CLI before releases when you want a local or CI gate with
           explicit exit codes. The current <code>snyk test</code> command exits
-          non-zero when vulnerabilities are found, and <code>snyk monitor</code>
+          non-zero when vulnerabilities are found, and <code>snyk monitor</code>{" "}
           creates a monitored dependency snapshot.
         </li>
       </ul>

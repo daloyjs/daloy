@@ -645,8 +645,8 @@ export default function BlogPostPage() {
             Working well with coding agents looks a lot like onboarding a new
             human joiner: write down the load-bearing conventions, keep them
             short, link to the deeper manual when one is needed, and enforce
-            what you can in tooling. DaloyJS
-            just makes sure the scaffold gives you a head start on all four.
+            what you can in tooling. DaloyJS just makes sure the scaffold gives
+            you a head start on all four.
           </p>
 
           <p>

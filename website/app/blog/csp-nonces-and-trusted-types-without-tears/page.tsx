@@ -483,12 +483,11 @@ export default function BlogPostPage() {
             Trusted Types upgrades the browser&apos;s sink APIs (
             <code>innerHTML</code>
             {", "}
-            <code>setTimeout</code> with strings,
-            <code>document.write</code>) so they refuse plain strings, anything
-            dangerous has to come from a named, registered policy. Together they
-            shrink the XSS attack surface from &quot;anywhere in your
-            bundle&quot; to &quot;the three lines in{" "}
-            <code>trusted-types.ts</code> where you call
+            <code>setTimeout</code> with strings, <code>document.write</code>)
+            so they refuse plain strings, anything dangerous has to come from a
+            named, registered policy. Together they shrink the XSS attack
+            surface from &quot;anywhere in your bundle&quot; to &quot;the three
+            lines in <code>trusted-types.ts</code> where you call{" "}
             <code>createPolicy</code>&quot;.
           </p>
 
@@ -530,7 +529,7 @@ export default function BlogPostPage() {
           <p>
             In older CSP guides you&apos;ll see &quot;just add the nonce to{" "}
             <code>script-src</code> and <code>style-src</code>&quot;. That was
-            true in CSP 2. In CSP 3, the browser also consults
+            true in CSP 2. In CSP 3, the browser also consults{" "}
             <code>script-src-elem</code> and <code>style-src-elem</code>{" "}
             specifically for <em>element-based</em> loads,{" "}
             <code>&lt;script src=...&gt;</code> and{" "}
@@ -635,7 +634,7 @@ export default function BlogPostPage() {
           <p>
             Enforcing <code>trustedTypes</code> on the first deployment will
             break many existing apps. Framework code, third-party widgets, and
-            an ancient utility someone wrote in 2019 probably call
+            an ancient utility someone wrote in 2019 probably call{" "}
             <code>innerHTML</code> somewhere. Don&apos;t do that. Roll out in
             report-only mode first.
           </p>

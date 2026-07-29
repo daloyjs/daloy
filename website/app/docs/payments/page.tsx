@@ -112,9 +112,9 @@ export default function Page() {
         <li>
           <Link href={"/docs/payments/paytabs" as Route}>PayTabs</Link>
           {": "}MENA acquiring (Mada, KNET, BenefitPay, STC Pay, OmanNet, cards,
-          Apple Pay) via the official
-          <code>paytabs_pt2</code> npm package, wrapped as a Promise-friendly
-          plugin with HMAC-SHA256 IPN signature verification.
+          Apple Pay) via the official <code>paytabs_pt2</code> npm package,
+          wrapped as a Promise-friendly plugin with HMAC-SHA256 IPN signature
+          verification.
         </li>
         <li>
           <Link href={"/docs/payments/razorpay" as Route}>Razorpay</Link>

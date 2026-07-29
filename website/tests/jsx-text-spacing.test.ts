@@ -47,9 +47,45 @@ function pageFiles(directory: string): string[] {
   });
 }
 
+/**
+ * Collapse a `JsxText` node the way the JSX transform does, so the edges this
+ * test inspects are the ones React actually receives.
+ *
+ * This matters because source formatting is not rendered output. Prettier wraps
+ * prose, so `<code>x</code>\n        ), more` reaches the compiler as a text
+ * node whose raw value *starts* with a newline and indentation — yet JSX strips
+ * that, emitting `"), more"` with no leading space. Comparing raw edges made
+ * every wrapped line look like a spacing defect: the check reported 559
+ * violations across 128 of 187 pages while the rendered HTML contained none.
+ *
+ * The algorithm is the JSX text-collapsing rule as implemented by both TSC and
+ * Babel: split on newlines, strip leading whitespace from every line except the
+ * first and trailing whitespace from every line except the last, drop the lines
+ * that are then empty, and join the rest with a single space. A whitespace-only
+ * node containing a newline collapses to nothing (so indentation between
+ * elements disappears), while a whitespace-only node on one line survives (so
+ * the deliberate space in `<b>a</b> <i>b</i>` is preserved).
+ *
+ * @param node - The `JsxText` node to collapse.
+ * @returns The text React receives, or `""` when JSX drops the node entirely.
+ */
 function jsxTextValue(node: ts.JsxText): string {
-  if (node.text.trim()) return node.text;
-  return /[\r\n]/u.test(node.text) ? "" : node.text;
+  const lines = node.text.split(/\r\n|\n|\r/u);
+
+  let lastNonEmptyLine = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (/[^ \t]/u.test(lines[i])) lastNonEmptyLine = i;
+  }
+
+  let collapsed = "";
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].replace(/\t/gu, " ");
+    if (i !== 0) line = line.replace(/^ +/u, "");
+    if (i !== lines.length - 1) line = line.replace(/ +$/u, "");
+    if (!line) continue;
+    collapsed += i === lastNonEmptyLine ? line : `${line} `;
+  }
+  return collapsed;
 }
 
 function renderedLiteral(node: ts.JsxChild): string | null {
@@ -106,6 +142,19 @@ function isIntentionalCodeSuffix(
   );
 }
 
+/**
+ * An ellipsis after a space is correct prose, not punctuation crowding the word
+ * before it: enumerations such as `<code>a</code>, <code>b</code>, ...)` are
+ * meant to read with that space. Without this exception the space-before-
+ * punctuation rule fires on the leading `.` of every `...`.
+ *
+ * @param currentValue - The collapsed text following the space.
+ * @returns `true` when the text opens with an ellipsis.
+ */
+function isEllipsis(currentValue: string): boolean {
+  return /^(?:\.\.\.|…)/u.test(currentValue.trimStart());
+}
+
 function spacingViolations(file: string): string[] {
   const sourceText = readFileSync(file, "utf8");
   const source = ts.createSourceFile(
@@ -156,7 +205,8 @@ function spacingViolations(file: string): string[] {
             hasSpace &&
             /[.,;:!?)}\]]/u.test(edge.first) &&
             !ts.isJsxElement(child) &&
-            !ts.isJsxFragment(child)
+            !ts.isJsxFragment(child) &&
+            !isEllipsis(value)
           ) {
             violations.push(`${location} has whitespace before punctuation`);
           }

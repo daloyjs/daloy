@@ -181,7 +181,7 @@ export default function Page() {
       <ul>
         <li>
           API server
-          {": "}a process that exposes endpoints (like
+          {": "}a process that exposes endpoints (like{" "}
           <code>GET /books/:id</code>) over HTTP and returns structured data
           (usually JSON). The thing your mobile app, web app, or another service
           talks to.
@@ -256,8 +256,7 @@ export default function Page() {
         <li>
           GraphQL
           {": "}a query language where the client picks the shape of the
-          response from a single endpoint (usually
-          <code>POST /graphql</code>).
+          response from a single endpoint (usually <code>POST /graphql</code>).
         </li>
         <li>
           SOAP
@@ -458,7 +457,7 @@ const app = new App({
         Load balancing is a TCP-level job. Use NGINX, HAProxy, AWS ALB/NLB, GCP
         Load Balancing, or Cloudflare. DaloyJS sits <em>behind</em> the LB and
         serves requests; it doesn&apos;t distribute them. The framework does
-        ship a <code>behindProxy</code> declarative model so it correctly reads
+        ship a <code>behindProxy</code> declarative model so it correctly reads{" "}
         <code>X-Forwarded-*</code> headers when the LB terminates TLS.
       </p>
 
@@ -466,7 +465,7 @@ const app = new App({
         7. Server-side renderer (SSR): no
       </h3>
       <p>
-        There is no JSX, React, Vue, or Svelte renderer in DaloyJS. No
+        There is no JSX, React, Vue, or Svelte renderer in DaloyJS. No{" "}
         <code>renderToString</code>
         {", "}no hydration, no file-system page router, no React Server
         Components. The framework deliberately stays in the REST/WS layer.

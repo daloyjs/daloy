@@ -712,7 +712,7 @@ export default function BlogPostPage() {
 
           <p>
             That ordering is deliberate. Pushing metrics <em>after</em> drain
-            risks a SIGKILL in the middle of the flush. Deregistering
+            risks a SIGKILL in the middle of the flush. Deregistering{" "}
             <em>after</em> drain creates a 30-second window where the load
             balancer is still routing fresh traffic to a server that&apos;s
             already saying 503. <code>onShutdown</code> exists exactly to give

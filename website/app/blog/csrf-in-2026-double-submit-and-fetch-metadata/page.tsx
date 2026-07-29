@@ -387,15 +387,15 @@ export default function BlogPostPage() {
               &lt;img src=&quot;https://your-bank/transfer?amount=...&quot;&gt;
             </code>{" "}
             from the early 2010s. The &quot;we forgot to send the token from the
-            new mobile app&quot; from the mid 2010s. The &quot;we set
-            <code>SameSite=None</code> for the iframe and then forgot to set
+            new mobile app&quot; from the mid 2010s. The &quot;we set{" "}
+            <code>SameSite=None</code> for the iframe and then forgot to set{" "}
             <code>Secure</code>&quot; one from a year I don&apos;t want to name.
             So when the team sat down to decide what CSRF should look like in
             DaloyJS, my entire request was: please make it unsurprising.
           </p>
 
           <p>
-            This post is the result. We ship two strategies, the classic
+            This post is the result. We ship two strategies, the classic{" "}
             <em>double-submit cookie</em> and the modern <em>Fetch-Metadata</em>{" "}
             check, and a third option, <code>strategy: &quot;both&quot;</code>
             {", "}
@@ -552,9 +552,8 @@ export default function BlogPostPage() {
             We allow <code>same-origin</code> and <code>none</code>
             {", "}fall back to <code>allowedOrigins</code> for everything else,
             and on legacy browsers (no <code>Sec-Fetch-Site</code> at all) we
-            check
-            <code>Origin</code> and then <code>Referer</code> against the same
-            allowlist. That last step is the one that keeps your support
+            check <code>Origin</code> and then <code>Referer</code> against the
+            same allowlist. That last step is the one that keeps your support
             engineer from getting paged about &quot;my Android 9 device
             can&apos;t check out&quot;.
           </p>
@@ -569,11 +568,11 @@ export default function BlogPostPage() {
 
           <ul>
             <li>
-              When <code>Sec-Fetch-Site</code> is <code>same-site</code> or
+              When <code>Sec-Fetch-Site</code> is <code>same-site</code> or{" "}
               <code>cross-site</code>
               {": "}usually because of a subdomain or a user opening your site
-              via a partner, we check the request&apos;s
-              <code>Origin</code> against the allowlist.
+              via a partner, we check the request&apos;s <code>Origin</code>{" "}
+              against the allowlist.
             </li>
             <li>
               When <code>Sec-Fetch-Site</code> is missing entirely (legacy
@@ -670,10 +669,9 @@ export default function BlogPostPage() {
               when you call <code>csrf()</code>
             </em>
             {", "}not when a request arrives. A typo in the strategy string, a
-            cookie name with a space, a <code>__Host-</code> cookie without
+            cookie name with a space, a <code>__Host-</code> cookie without{" "}
             <code>secure: true</code>
-            {", "}a <code>SameSite=None</code> without
-            <code>Secure</code>
+            {", "}a <code>SameSite=None</code> without <code>Secure</code>
             {": "}every one of these throws at app boot, with a message that
             tells you exactly what to fix:
           </p>
@@ -708,7 +706,7 @@ export default function BlogPostPage() {
           <h2>Limits</h2>
 
           <p>
-            CSRF, as a class, is mostly a solved problem in 2026, between
+            CSRF, as a class, is mostly a solved problem in 2026, between{" "}
             <code>SameSite=Lax</code> defaults, Fetch-Metadata reporting, and
             double-submit being two lines away, the surviving bugs are almost
             always configuration bugs (a cookie set without <code>Secure</code>
@@ -730,7 +728,7 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            Thanks for reading. Now go look at your frontend&apos;s
+            Thanks for reading. Now go look at your frontend&apos;s{" "}
             <code>fetch</code> helper and make sure every mutation actually goes
             through it. Don&apos;t ask me why I know to suggest that.
           </p>

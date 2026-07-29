@@ -384,8 +384,7 @@ app.use(secureHeaders({
               <code>bearerAuth()</code>
               {", "}
               <code>basicAuth()</code>
-              {", "}JWT helpers,
-              <code>session()</code>
+              {", "}JWT helpers, <code>session()</code>
               {": "}each ties a request to an identifiable subject
             </td>
           </tr>

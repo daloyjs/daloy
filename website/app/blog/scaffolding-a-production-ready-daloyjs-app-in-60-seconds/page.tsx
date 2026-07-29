@@ -408,11 +408,10 @@ export default function BlogPostPage() {
             <code>create-daloy</code> is the scaffolder we shipped to make those
             sixty seconds feel good for DaloyJS. This post is the grand tour:
             every template, every flag, the AGENTS.md drop-in for coding agents,
-            and the cosmetic-but-important
-            <code>printStartupBanner()</code> that tells you the dev server is
-            alive. Then, at the end, I&apos;ll hand you off to the
-            contract-first post for the next sixty seconds, wiring up the typed
-            client.
+            and the cosmetic-but-important <code>printStartupBanner()</code>{" "}
+            that tells you the dev server is alive. Then, at the end, I&apos;ll
+            hand you off to the contract-first post for the next sixty seconds,
+            wiring up the typed client.
           </p>
 
           <h2>The 60-second path</h2>

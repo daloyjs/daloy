@@ -202,8 +202,7 @@ export default function BlogPostPage() {
 
           <p>
             For the more detailed versions of this argument, read{" "}
-            <Link href="/blog/secure-by-default">Secure by Default</Link>
-            and{" "}
+            <Link href="/blog/secure-by-default">Secure by Default</Link> and{" "}
             <Link href="/blog/scaffolding-a-production-ready-daloyjs-app-in-60-seconds">
               the scaffolding post
             </Link>

@@ -249,7 +249,7 @@ export default function Page() {
             <td>Software supply chain</td>
             <td>
               Zero runtime deps; npm provenance (<code>--provenance</code>);
-              SBOM published per release; <code>create-daloy</code> ships
+              SBOM published per release; <code>create-daloy</code> ships{" "}
               <code>ignore-scripts=true</code> and{" "}
               <code>minimum-release-age</code>; CI is SHA-pinned and{" "}
               <code>harden-runner</code>-gated.
@@ -304,8 +304,7 @@ export default function Page() {
         </li>
         <li>
           CC6.8: protection against malicious software. Supply-chain hardening
-          (no runtime deps, provenance, SBOM,
-          <code>ignore-scripts</code>
+          (no runtime deps, provenance, SBOM, <code>ignore-scripts</code>
           {", "}SHA-pinned actions, lockfile-source verification).
         </li>
         <li>

@@ -30,7 +30,7 @@ export default function Page() {
     <>
       <h1>Runtime resilience and configuration</h1>
       <blockquote>
-        This page covers load shedding with <code>503</code> and
+        This page covers load shedding with <code>503</code> and{" "}
         <code>Retry-After</code>, CSP violation reports, <code>499</code> client
         disconnects, and configuration validation at startup.
       </blockquote>

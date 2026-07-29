@@ -166,7 +166,7 @@ app.use(waf());`}
           {": "}Mongo operator strings (<code>$ne</code>
           {", "}
           <code>$where</code>
-          {", "} ...) <em>and</em> a structural check that rejects a parsed body
+          {", "}...) <em>and</em> a structural check that rejects a parsed body
           containing any <code>$</code>-prefixed key, so{" "}
           <code>{`{"password": {"$ne": null}}`}</code> is caught even when no
           string value matches.
@@ -272,12 +272,12 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
           passes), <code>+</code>-&gt;space normalization, SQL block-comment
           stripping, and control-character (NUL/C0) normalization so classic
           double-encoding, <code>{"/**/"}</code> keyword splits, and NUL-spliced
-          keywords like <code>{"1'%00OR%001=1"}</code> still score. Parenthesized
-          subqueries behind boolean operators (<code>1 OR (SELECT 1)</code>) are
-          covered by a dedicated signature. Triple-or-deeper encoding remains a
-          residual signature gap: keep schemas and parameterized queries as the
-          primary wall, and keep an edge WAF on your roadmap for high-risk
-          surfaces.
+          keywords like <code>{"1'%00OR%001=1"}</code> still score.
+          Parenthesized subqueries behind boolean operators (
+          <code>1 OR (SELECT 1)</code>) are covered by a dedicated signature.
+          Triple-or-deeper encoding remains a residual signature gap: keep
+          schemas and parameterized queries as the primary wall, and keep an
+          edge WAF on your roadmap for high-risk surfaces.
         </li>
         <li>
           A WAF-lite is still best-effort signature matching. Treat it as depth,

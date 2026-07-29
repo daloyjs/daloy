@@ -294,7 +294,7 @@ export default function BlogPostPage() {
 
           <p>
             The &quot;can you immediately tell whether a new CVE affects
-            you?&quot; question is the whole point of the SBOM. Daloy&apos;s
+            you?&quot; question is the whole point of the SBOM. Daloy&apos;s{" "}
             <code>verify:sbom</code> gate fails the build if the SBOM is missing
             or stale, there is no &quot;we&apos;ll generate one for the
             audit&quot; mode. Every release carries one. Every scaffolded
@@ -401,7 +401,7 @@ export default function BlogPostPage() {
           />
 
           <p>
-            The reason this works is the audit framing. Daloy&apos;s
+            The reason this works is the audit framing. Daloy&apos;s{" "}
             <code>verify:parity-audits</code>
             {", "}
             <code>verify:runtime-parity-audits</code>

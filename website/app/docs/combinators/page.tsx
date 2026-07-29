@@ -38,7 +38,7 @@ export default function Page() {
         <code>every(...layers)</code> merges several <code>Hooks</code> bundles
         into one that runs each layer in registration order. It is equivalent to
         calling <code>app.use(...)</code> for each bundle, but lets you name and
-        reuse a curated stack. All lifecycle phases compose:
+        reuse a curated stack. All lifecycle phases compose:{" "}
         <code>onRequest</code> and <code>onResponse</code> run in order,{" "}
         <code>preBody</code>
         {", "}

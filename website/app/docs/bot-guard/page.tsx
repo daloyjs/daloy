@@ -123,12 +123,12 @@ app.use(
       <p>
         Mount it with <code>app.use()</code> so it runs in{" "}
         <code>beforeHandle</code> before your handlers. A blocked request is
-        rejected with <code>403 Forbidden</code> RFC 9457 problem+json.
-        Crawler verification resolves the client IP from the{" "}
-        <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
-        your immediate proxy appended), so an attacker-prepended left entry
-        cannot impersonate a verified crawler&apos;s address; multi-hop chains
-        declare their length with <code>trustedHops</code>.
+        rejected with <code>403 Forbidden</code> RFC 9457 problem+json. Crawler
+        verification resolves the client IP from the <strong>rightmost</strong>{" "}
+        <code>X-Forwarded-For</code> entry (the one your immediate proxy
+        appended), so an attacker-prepended left entry cannot impersonate a
+        verified crawler&apos;s address; multi-hop chains declare their length
+        with <code>trustedHops</code>.
       </p>
 
       <h2 id="blocking-empty-and-abusive-user-agents">

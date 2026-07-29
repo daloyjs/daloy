@@ -99,7 +99,7 @@ export default toFetchHandler(app);`}
         <strong>root</strong> (<code>/healthz</code>
         {", "}
         <code>/docs</code>
-        {", "} ...). Add a <strong>rewrite</strong> so every path reaches the
+        {", "}...). Add a <strong>rewrite</strong> so every path reaches the
         function and DaloyJS owns routing at the site root, without it the
         deployed root domain returns a Vercel 404:
       </p>

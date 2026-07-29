@@ -527,7 +527,7 @@ export default function BlogPostPage() {
             <strong>route-level callbacks</strong> for out-of-band calls you
             make back to the consumer, and the{" "}
             <strong>discriminator + discriminatedUnion pair</strong> that turns
-            polymorphic payloads into tagged TypeScript unions a
+            polymorphic payloads into tagged TypeScript unions a{" "}
             <code>switch</code> statement actually understands.
           </p>
 
@@ -689,13 +689,13 @@ export default function BlogPostPage() {
           <h2>The combo: webhooks + discriminatedUnion</h2>
 
           <p>
-            I keep recommending this pattern in design reviews:
-            <em>one</em> webhook entry whose body is a discriminated union over
-            every event type. The alternative, one webhook per event type,
-            produces an SDK with N near-identical handlers, N opportunities to
-            forget signature verification, and N opportunities to disagree with
-            yourself about retry semantics. The combo collapses all of that to
-            one typed handler with one exhaustive switch:
+            I keep recommending this pattern in design reviews: <em>one</em>{" "}
+            webhook entry whose body is a discriminated union over every event
+            type. The alternative, one webhook per event type, produces an SDK
+            with N near-identical handlers, N opportunities to forget signature
+            verification, and N opportunities to disagree with yourself about
+            retry semantics. The combo collapses all of that to one typed
+            handler with one exhaustive switch:
           </p>
 
           <EditorFrame

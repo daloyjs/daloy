@@ -39,8 +39,8 @@ export default function Page() {
         Better Auth already documents Hono, Elysia, and Fastify adapters.
         DaloyJS does not need a special adapter because both libraries meet at
         the Web-standard boundary: Better Auth exposes{" "}
-        <code>auth.handler(request)</code>
-        and DaloyJS gives every route and hook the original <code>Request</code>
+        <code>auth.handler(request)</code> and DaloyJS gives every route and
+        hook the original <code>Request</code>
         {"."}
       </p>
 
@@ -190,7 +190,7 @@ app.post(
 
       <h2 id="5-protect-daloyjs-routes">5. Protect DaloyJS routes</h2>
       <p>
-        Use <code>auth.api.getSession(&#123; headers &#125;)</code> inside a
+        Use <code>auth.api.getSession(&#123; headers &#125;)</code> inside a{" "}
         <code>preBody</code> guard. Because it only reads headers (no body
         parsing needed), it runs in the cheapest-rejection phase before
         validated context is built. This keeps normal DaloyJS routes

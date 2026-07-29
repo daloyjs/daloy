@@ -67,9 +67,8 @@ app.use(compression());
         {", "}
         <code>gzip</code>
         {", "}and <code>deflate</code> from the request{" "}
-        <code>Accept-Encoding</code>
-        header and the runtime codecs available through{" "}
-        <code>CompressionStream</code>
+        <code>Accept-Encoding</code> header and the runtime codecs available
+        through <code>CompressionStream</code>
         {". "}Runtime support is probed once and cached. If the platform has no
         supported codec, the middleware becomes a silent no-op instead of
         breaking older runtimes.

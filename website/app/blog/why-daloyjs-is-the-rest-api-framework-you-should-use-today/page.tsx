@@ -204,12 +204,12 @@ export default function BlogPostPage() {
           <h2>Zero runtime dependencies matters</h2>
 
           <p>
-            One property that matters more than it looks: the core
-            keeps a zero-runtime-dependency posture. That reduces the transitive
-            tree, the audit surface, and the number of maintainers you are
-            trusting by accident. In a world where one compromised maintainer
-            account can cause a very bad week for a lot of strangers, smaller
-            trees reduce risk.
+            One property that matters more than it looks: the core keeps a
+            zero-runtime-dependency posture. That reduces the transitive tree,
+            the audit surface, and the number of maintainers you are trusting by
+            accident. In a world where one compromised maintainer account can
+            cause a very bad week for a lot of strangers, smaller trees reduce
+            risk.
           </p>
 
           <h2>The baseline changed</h2>
@@ -226,7 +226,9 @@ export default function BlogPostPage() {
             with <Link href="/blog/secure-by-default">Secure by Default</Link>
             {". "}
             If you want the origin story,{" "}
-            <Link href="/blog/the-flow-i-wished-i-had">the launch story</Link>
+            <Link href="/blog/the-flow-i-wished-i-had">
+              the launch story
+            </Link>{" "}
             is where the sleep deprivation becomes autobiographical.
           </p>
 

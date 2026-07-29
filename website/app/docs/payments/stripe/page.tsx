@@ -356,11 +356,9 @@ app.post(
       <h2 id="6-redirect-from-the-browser">6. Redirect from the browser</h2>
       <p>
         If your route returns a <code>session.url</code>
-        {", "}a plain
-        <code>window.location.assign(url)</code> is enough. If you prefer
-        redirecting by Session ID, load Stripe.js from{" "}
-        <code>@stripe/stripe-js</code>
-        and call <code>redirectToCheckout</code>
+        {", "}a plain <code>window.location.assign(url)</code> is enough. If you
+        prefer redirecting by Session ID, load Stripe.js from{" "}
+        <code>@stripe/stripe-js</code> and call <code>redirectToCheckout</code>
         {": "}
       </p>
       <CodeBlock
@@ -386,7 +384,7 @@ export async function startCheckout(cartId: string) {
 }`}
       />
       <p className="text-sm text-muted-foreground">
-        <strong>CSP note:</strong> include <code>https://js.stripe.com</code>
+        <strong>CSP note:</strong> include <code>https://js.stripe.com</code>{" "}
         and Stripe&apos;s required frame/connect endpoints in your content
         security policy when you render Stripe.js or Elements.
       </p>
@@ -505,7 +503,7 @@ await state.stripe.refund({
 
       <h2 id="errors">Errors</h2>
       <p>
-        The SDK throws structured <code>Stripe.errors.StripeError</code>
+        The SDK throws structured <code>Stripe.errors.StripeError</code>{" "}
         subclasses for API, card, authentication, rate-limit, and connection
         failures. Preserve <code>requestId</code>
         {", "}

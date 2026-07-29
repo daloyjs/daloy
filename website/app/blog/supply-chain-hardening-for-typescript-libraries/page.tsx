@@ -426,7 +426,7 @@ export default function BlogPostPage() {
           <p>
             Hi, Devlin. Ten years of fullstack, currently in Norway, currently
             wishing I could un-read the changelogs of three different npm worm
-            campaigns. The 2025 and 2026 supply-chain news has been
+            campaigns. The 2025 and 2026 supply-chain news has been{" "}
             <em>rough</em>
             {": "}chalk/debug, node-ipc, Shai-Hulud, TanStack, and if you
             maintain a TypeScript library that other people install, you
@@ -440,7 +440,7 @@ export default function BlogPostPage() {
 
           <p>
             So this post is the maintainer-facing writeup of every supply-chain
-            control we shipped for DaloyJS, plus the
+            control we shipped for DaloyJS, plus the{" "}
             <code>create-daloy --with-ci</code> flag that drops the app-safe
             pieces into a brand-new user project. Nothing here is
             DaloyJS-specific, these are reusable defaults for pnpm-based
@@ -746,8 +746,7 @@ export default function BlogPostPage() {
           <p>
             Every file in this post is open-source in the DaloyJS repo and comes
             with comments that explain <em>why</em>
-            {", "}not just
-            <em>what</em>
+            {", "}not just <em>what</em>
             {". "}The best place to start is <code>.npmrc</code> +{" "}
             <code>pnpm-workspace.yaml</code>; the next best place is to copy{" "}
             <code>.github/workflows/release.yml</code> and adapt the package

@@ -132,10 +132,10 @@ export default function Page() {
           daily batch run (see below).
         </li>
         <li>
-          Lockfile source verification runs in CI via
+          Lockfile source verification runs in CI via{" "}
           <code>pnpm verify:lockfile</code> and fails if{" "}
-          <code>pnpm-lock.yaml</code>
-          introduces git dependency sources or non-registry tarball URLs.
+          <code>pnpm-lock.yaml</code> introduces git dependency sources or
+          non-registry tarball URLs.
         </li>
       </ul>
       <p>
@@ -281,12 +281,11 @@ strict-peer-dependencies=true`}
         <code>create-daloy --with-ci</code> adds the GitHub-side controls that
         do not come from a package install: CI with top-level{" "}
         <code>{"permissions: {}"}</code>
-        {", "}SHA-pinned actions,
-        <code>harden-runner</code>
+        {", "}SHA-pinned actions, <code>harden-runner</code>
         {", "}no package-manager cache, disabled lifecycle scripts,
         lockfile-source verification, CodeQL, OpenSSF Scorecard, zizmor,
         Dependabot, CODEOWNERS, and <code>SECURITY.md</code>
-        {". "}Templates can also get a manual-only <code>deploy.yml</code>
+        {". "}Templates can also get a manual-only <code>deploy.yml</code>{" "}
         starter: container templates publish a Docker image to GHCR, while
         Vercel and Cloudflare templates run their platform CLIs with credentials
         from GitHub Actions secrets and variables. The scaffolder deliberately
@@ -568,8 +567,7 @@ safe-chain setup`}
         </li>
         <li>
           Bump <code>minimum-release-age</code> in <code>.npmrc</code> further
-          (e.g.
-          <code>4320</code> for 72h) until the campaign settles.
+          (e.g. <code>4320</code> for 72h) until the campaign settles.
         </li>
         <li>
           Subscribe to{" "}

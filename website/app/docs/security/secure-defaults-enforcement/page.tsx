@@ -29,7 +29,7 @@ export default function Page() {
     <>
       <h1>secureDefaults enforcement</h1>
       <blockquote>
-        Insecure settings require an explicit
+        Insecure settings require an explicit{" "}
         <code>acknowledgeInsecureDefaults: true</code> and produce a startup
         log. Some configurations, including JWT secrets shorter than 32 bytes,
         are rejected outright.

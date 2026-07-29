@@ -1011,7 +1011,7 @@ app.get(
       />
       <p>
         One more nicety: because validation runs before your handler, the
-        &quot;bad input&quot; error path (Express&apos;s most common manual
+        &quot;bad input&quot; error path (Express&apos;s most common manual{" "}
         <code>if (!valid) return res.status(400)</code>) disappears entirely.
         DaloyJS returns the 422 for you.
       </p>

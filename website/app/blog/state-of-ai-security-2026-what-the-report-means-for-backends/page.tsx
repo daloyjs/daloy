@@ -405,7 +405,7 @@ export default function BlogPostPage() {
             Three bugs, zero of them visible in a quick scroll. No input
             validation, so the request body becomes the database write. Mass
             assignment, so <code>role</code> and <code>isVerified</code> are
-            fair game. And the response serializes the entire user record,
+            fair game. And the response serializes the entire user record,{" "}
             <code>passwordHash</code> included. The demo works. The tests, if
             there are any, probably pass. This is what &quot;the code runs&quot;
             buys you now.
@@ -710,7 +710,7 @@ export default function BlogPostPage() {
 
           <p>
             Validation now runs as part of the route. Unknown keys are rejected,
-            so mass assignment is gone. The response schema means
+            so mass assignment is gone. The response schema means{" "}
             <code>passwordHash</code> cannot leak, even by accident, even next
             quarter. An AI assistant can generate this just as quickly as the
             unsafe version. The difference is that the safe shape is the default
