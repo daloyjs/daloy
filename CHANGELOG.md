@@ -15,8 +15,6 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
-## [1.0.0-rc.8] - 2026-07-30
-
 ### Security
 
 - **`safeRedirect()` now refuses percent-encoded C0/DEL control characters in
@@ -2516,7 +2514,6 @@ source })`.
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...HEAD
-[1.0.0-rc.8]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.7...v1.0.0-rc.8
 [1.0.0-rc.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...v1.0.0-rc.7
 [1.0.0-rc.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.5...v1.0.0-rc.6
 [1.0.0-rc.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.4...v1.0.0-rc.5
