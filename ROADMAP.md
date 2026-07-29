@@ -220,9 +220,14 @@ external users yet, the RC train intentionally ships a few behavioural
 adjustments (MCP `inputSchema` enforcement, route-auth and MCP refuse-to-boot
 guards, spoof-resistant forwarded-IP resolution) to get the secure-by-default
 posture right before the stable release; the generated OpenAPI contract is
-unchanged, so `verify:breaking-changes` still passes. From the stable release
-onward the public API follows SemVer. The stable release ships when every
-unchecked item below is true.
+unchanged, so `verify:breaking-changes` still passes. The same window is being
+used to land **MCP `2026-07-28`** (the stateless revision published 2026-07-28)
+in `@daloyjs/core/mcp` — `server/discover`, per-request `_meta`, standard-header
+validation, caching hints, and multi round-trip requests, served alongside the
+legacy `initialize` handshake — so the stable release ships against the current
+protocol rather than a superseded one. From the stable release onward the public
+API follows SemVer. The stable release ships when every unchecked item below is
+true.
 
 **Criteria amended 2026-07-28** (recorded here rather than silently dropped,
 because `SECURITY.md` maps this project onto EU CRA / NIS2 procurement claims

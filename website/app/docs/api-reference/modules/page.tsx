@@ -148,14 +148,29 @@ interface ContractIssue  { route: string; method: HttpMethod; code: string; mess
         <code>@daloyjs/core/mcp</code>
       </h2>
       <CodeBlock
-        code={`const MCP_PROTOCOL_VERSION = "2025-11-25";
-const MCP_PROTOCOL_VERSIONS: readonly string[];
+        code={`const MCP_PROTOCOL_VERSION = "2026-07-28";
+const MCP_MODERN_ERA_MIN_VERSION = "2026-07-28";
+const MCP_PROTOCOL_VERSIONS: readonly string[];  // 2024-11-05 … 2026-07-28
 const MCP_DEFAULT_MAX_BODY_BYTES = 262144;
+const MCP_MAX_REQUEST_STATE_LENGTH = 8192;
+const MCP_META_KEYS: {
+  protocolVersion: "io.modelcontextprotocol/protocolVersion";
+  clientInfo: "io.modelcontextprotocol/clientInfo";
+  clientCapabilities: "io.modelcontextprotocol/clientCapabilities";
+  logLevel: "io.modelcontextprotocol/logLevel";
+  serverInfo: "io.modelcontextprotocol/serverInfo";
+};
+const MCP_ERROR_CODES: {
+  headerMismatch: -32020;
+  missingRequiredClientCapability: -32021;
+  unsupportedProtocolVersion: -32022;
+};
 
 createMcpHandler(options: McpHandlerOptions): McpHandler;
 mcpRoutes(path: PathString, handler: McpHandler, options?: McpRoutesOptions):
   RouteDefinition<PathString, "GET" | "POST" | "OPTIONS">[];
 validateMcpInput(schema: McpJsonSchema, value: unknown): string[];
+isModernProtocolVersion(version: string): boolean;
 class McpToolError extends Error {}
 
 type McpHandler = (request: Request) => Promise<Response>;
@@ -163,9 +178,15 @@ type McpJsonValue = null | boolean | number | string | McpJsonValue[] | { [key: 
 type McpJsonObject = { [key: string]: McpJsonValue };
 type McpJsonSchema = McpJsonObject;
 type McpJsonRpcId = string | number | null;
+type McpProtocolEra = "modern" | "legacy";
 
 interface McpRoutesOptions {
   public?: boolean;  // default false; opt out of the production auth boot guard
+}
+
+interface McpCacheHints {
+  ttlMs?: number;                 // default 0 (revalidate every call)
+  scope?: "public" | "private";   // default "private"
 }
 
 interface McpHandlerOptions {
@@ -175,12 +196,29 @@ interface McpHandlerOptions {
   resources?: readonly McpResourceDefinition[];
   resourceTemplates?: readonly McpResourceTemplateDefinition[];
   prompts?: readonly McpPromptDefinition[];
+  extensions?: Record<string, McpJsonObject>;  // capabilities.extensions
+  cache?: McpCacheHints;                    // ttlMs / cacheScope on cacheable results
   allowedOrigins?: readonly string[];       // bare origins, plus optional "null"
   protocolVersions?: readonly string[];     // default MCP_PROTOCOL_VERSIONS
   preferredProtocolVersion?: string;        // default MCP_PROTOCOL_VERSION
   maxBodyBytes?: number;                    // default MCP_DEFAULT_MAX_BODY_BYTES
   headers?: Record<string, string>;
   exposeInternalErrors?: boolean;           // default NODE_ENV !== "production"
+}
+
+interface McpImplementation { name: string; version: string; title?: string }
+
+interface McpInputRequest {
+  method: "elicitation/create" | "sampling/createMessage" | "roots/list";
+  params?: McpJsonObject;
+}
+type McpInputRequests = { [id: string]: McpInputRequest };
+type McpInputResponses = { [id: string]: McpJsonValue };
+
+interface McpInputRequiredResult {
+  resultType: "input_required";
+  inputRequests?: McpInputRequests;
+  requestState?: string;
 }
 
 interface McpServerInfo {
@@ -205,7 +243,8 @@ interface McpTool<TArgs extends Record<string, unknown> = Record<string, unknown
 
 type McpToolHandler<TArgs extends Record<string, unknown> = Record<string, unknown>> =
   (args: TArgs, ctx: McpRequestContext) =>
-    string | McpToolResult | Promise<string | McpToolResult>;
+    | string | McpToolResult | McpInputRequiredResult
+    | Promise<string | McpToolResult | McpInputRequiredResult>;
 
 interface McpToolResult {
   content?: McpContent[];
@@ -216,10 +255,21 @@ interface McpToolResult {
 interface McpRequestContext {
   request: Request;
   protocolVersion: string;
+  era: McpProtocolEra;
   id: McpJsonRpcId;
   method: string;
+  clientCapabilities: McpJsonObject;   // {} on legacy requests
+  clientInfo?: McpImplementation;      // advisory only, never a security input
+  logLevel?: string;
+  inputResponses?: McpInputResponses;  // present on a multi round-trip retry
+  requestState?: string;               // attacker-controlled; verify before trusting
 }
 
+// One endpoint, both protocol eras. Modern (2026-07-28+) requests carry version,
+// identity, and capabilities in params._meta and must mirror them into the
+// MCP-Protocol-Version / Mcp-Method / Mcp-Name headers; a missing or mismatched
+// header is rejected with 400 and -32020. Legacy (2025-11-25 and earlier) clients
+// keep the initialize handshake unchanged.
 // tools/call arguments are validated against inputSchema before the handler runs.
 // Schema violations return JSON-RPC -32602. Unsupported keywords such as
 // pattern, format, $ref, anyOf, oneOf, and allOf are advertised but not enforced.

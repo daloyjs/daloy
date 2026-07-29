@@ -51,6 +51,99 @@ For the forward-looking plan and the full thematic release log, see
     validation for all eight middlewares) plus the live
     `red-team-live/skill-attacks.ts` suite (92 probes, 0 VULNERABLE).
 
+### Added
+
+- **MCP `2026-07-28` (the stateless revision) on the same endpoint as every
+  earlier revision.** `createMcpHandler()` is now dual-era: a request whose
+  `_meta` protocol version (or `MCP-Protocol-Version` header) is `2026-07-28`
+  or later is served statelessly, and everything else keeps the `initialize`
+  handshake path unchanged. No configuration; existing clients are unaffected.
+  - `MCP_PROTOCOL_VERSION` is now `"2026-07-28"` and
+    `MCP_PROTOCOL_VERSIONS` gained it.
+  - **`server/discover`** (required of every modern server) answers with
+    `supportedVersions`, `capabilities`, `instructions`, and the server
+    identity, built from the options you already pass.
+  - **Per-request metadata.** `io.modelcontextprotocol/protocolVersion` and
+    `io.modelcontextprotocol/clientCapabilities` are required on every modern
+    request (`-32602` + HTTP 400 when missing); `clientInfo` and `logLevel` are
+    surfaced on `McpRequestContext` alongside a new `era` discriminator.
+  - **Result envelope.** Modern results carry `resultType`, the server identity
+    in `_meta`, and — on `server/discover`, the four list methods, and
+    `resources/read` — `ttlMs` / `cacheScope` from the new `cache` option.
+  - **Multi round-trip requests (MRTR).** Tool, resource, and prompt handlers
+    may return `{ resultType: "input_required", inputRequests, requestState }`
+    instead of a final result; the client answers on a retry via
+    `ctx.inputResponses` / `ctx.requestState`. This replaces server-initiated
+    `elicitation/create`, `sampling/createMessage`, and `roots/list`.
+  - `capabilities.extensions` via the new `extensions` option (core implements
+    no extension itself).
+  - New exports: `MCP_MODERN_ERA_MIN_VERSION`, `MCP_META_KEYS`,
+    `MCP_ERROR_CODES`, `MCP_MAX_REQUEST_STATE_LENGTH`,
+    `isModernProtocolVersion()`, and the `McpCacheHints`, `McpImplementation`,
+    `McpInputRequest`, `McpInputRequests`, `McpInputResponses`,
+    `McpInputRequiredResult`, `McpProtocolEra` types.
+  - Docs: rewritten [`/docs/mcp`](https://daloyjs.dev/docs/mcp) with protocol
+    eras, discovery, required headers, caching hints, MRTR, mirrored
+    parameters, and state-without-sessions; refreshed API reference.
+  - Coverage: `tests/mcp-2026-07-28.test.ts` (24 tests) plus the existing MCP
+    suite.
+
+### Security
+
+- **Standard-header validation on MCP requests, in both protocol eras.** A
+  missing or disagreeing `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, or
+  `Mcp-Param-{Name}` header is rejected with HTTP 400 and JSON-RPC `-32020`
+  (`HeaderMismatch`). Without this a gateway can authorize, route, or
+  rate-limit on a mirrored header value while the server executes a different
+  body value. `Mcp-Name` and `Mcp-Param-*` values in the `=?base64?…?=`
+  sentinel form are decoded before comparison, and an undecodable payload is
+  treated as a mismatch.
+  - The agreement check deliberately goes **beyond** the specification, which
+    scopes these headers to `2026-07-28`. Enforcing them only there would make
+    the guarantee one downgrade away from useless: a client could declare
+    `2025-11-25`, keep the gateway-satisfying header, and send a body that
+    called a different method, a different tool, or a different region. Legacy
+    requests are therefore not _required_ to carry the headers (they predate
+    them) but are held to any they do carry. A genuine legacy client, which
+    sends none, is unaffected.
+  - Deployments that no longer need the older revisions can refuse them
+    outright with `protocolVersions: ["2026-07-28"]`, so nothing reaches a tool
+    without the full modern contract.
+  - Regression coverage: `tests/mcp-2026-07-28.test.ts` — method-confusion,
+    tool-confusion, and mirrored-parameter-confusion via downgrade, plus the
+    unaffected genuine-legacy control.
+- **`x-mcp-header` annotations are validated at construction.** Empty,
+  non-token, case-insensitively duplicated, or non-primitive annotations throw
+  from `createMcpHandler()`, so a server cannot advertise a mirroring contract
+  it will not enforce.
+- **Secure-by-default caching hints.** `cache` defaults to
+  `{ ttlMs: 0, scope: "private" }`. MCP explicitly allows a tool list to vary
+  with the credential on the request, so a `"public"` scope would let a shared
+  proxy serve one caller's tools to another; widening it is opt-in.
+- **MRTR guardrails.** DaloyJS refuses to emit an `inputRequests` entry whose
+  method the client did not declare support for, answering `-32021`
+  (`MissingRequiredClientCapability`) instead; an `input_required` result is
+  rejected outside `tools/call` / `resources/read` / `prompts/get` and outside
+  the modern era; and a client-supplied `requestState` is bounded at
+  `MCP_MAX_REQUEST_STATE_LENGTH` (8 KiB). `requestState` round-trips through
+  an untrusted client, and the docs state plainly that it must be
+  integrity-protected, principal-bound, and short-lived.
+- **No sessions, no resumability.** `Mcp-Session-Id` and `Last-Event-ID` from
+  older clients are ignored and never echoed; `GET` and `DELETE` on the MCP
+  endpoint answer `405`.
+
+### Changed
+
+- An unsupported `MCP-Protocol-Version` now returns JSON-RPC `-32022`
+  (`UnsupportedProtocolVersion`) with `data.supported` / `data.requested`
+  instead of `-32600`, so a client can retry on a mutually supported revision
+  rather than guess. The HTTP status stays `400`.
+- Modern requests for a method this server does not implement — including
+  `initialize` and `ping`, which `2026-07-28` removed — answer HTTP `404` with
+  `-32601`, the status the specification reserves so a client can distinguish
+  a modern server from a legacy endpoint. Legacy requests are unchanged
+  (HTTP `200`).
+
 ## [1.0.0-rc.6] - 2026-07-26
 
 ### Security

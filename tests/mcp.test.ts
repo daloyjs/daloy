@@ -384,7 +384,15 @@ test("createMcpHandler rejects malformed protocol and oversized bodies", async (
     { "mcp-protocol-version": "1900-01-01" }
   );
   assert.equal(badProtocol.res.status, 400);
-  assert.equal(badProtocol.json.error?.code, -32600);
+  // 2026-07-28: UnsupportedProtocolVersionError, listing what the server does speak.
+  assert.equal(badProtocol.json.error?.code, -32022);
+  assert.deepEqual(
+    (badProtocol.json.error?.data as { requested?: string }).requested,
+    "1900-01-01"
+  );
+  assert.ok(
+    (badProtocol.json.error?.data as { supported?: string[] }).supported?.includes("2026-07-28")
+  );
 
   const tooLarge = await post(handler, {
     jsonrpc: "2.0",

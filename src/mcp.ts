@@ -5,14 +5,30 @@ import { safeJsonParse, safeJsonParseLimited } from "./security.js";
 /**
  * Latest MCP protocol version DaloyJS negotiates by default.
  *
- * @see https://modelcontextprotocol.io/specification/2025-11-25
+ * @see https://modelcontextprotocol.io/specification/2026-07-28
  * @since 1.0.0
  */
-export const MCP_PROTOCOL_VERSION = "2025-11-25";
+export const MCP_PROTOCOL_VERSION = "2026-07-28";
+
+/**
+ * First MCP revision of the *stateless* ("modern") era: version, client
+ * identity, and client capabilities travel in each request's `_meta` instead
+ * of being established once by an `initialize` handshake.
+ *
+ * Revisions are `YYYY-MM-DD` strings, so a lexicographic comparison against
+ * this constant correctly classifies every past and future revision.
+ *
+ * @since 1.0.0
+ */
+export const MCP_MODERN_ERA_MIN_VERSION = "2026-07-28";
 
 /**
  * Protocol revisions accepted by {@link createMcpHandler} unless the caller
  * provides an explicit `protocolVersions` list.
+ *
+ * The list spans both protocol eras: the stateless `2026-07-28` revision and
+ * the older handshake-based revisions, so one endpoint serves modern and
+ * legacy MCP clients at the same time.
  *
  * @since 1.0.0
  */
@@ -21,7 +37,43 @@ export const MCP_PROTOCOL_VERSIONS: readonly string[] = Object.freeze([
   "2025-03-26",
   "2025-06-18",
   "2025-11-25",
+  "2026-07-28",
 ]);
+
+/**
+ * Reserved `_meta` keys defined by MCP `2026-07-28` for per-request protocol
+ * metadata. Exported so applications and tests can build spec-compliant
+ * requests without hard-coding string literals.
+ *
+ * @since 1.0.0
+ */
+export const MCP_META_KEYS = Object.freeze({
+  /** Protocol version for this request. Required on every modern request. */
+  protocolVersion: "io.modelcontextprotocol/protocolVersion",
+  /** Self-reported client name/version. Advisory only; never a security input. */
+  clientInfo: "io.modelcontextprotocol/clientInfo",
+  /** Client capabilities relevant to this request. Required on every modern request. */
+  clientCapabilities: "io.modelcontextprotocol/clientCapabilities",
+  /** Minimum log level the server should emit for this request. */
+  logLevel: "io.modelcontextprotocol/logLevel",
+  /** Self-reported server name/version, returned in each modern result's `_meta`. */
+  serverInfo: "io.modelcontextprotocol/serverInfo",
+} as const);
+
+/**
+ * JSON-RPC error codes defined by the MCP specification in its reserved
+ * `-32020`..`-32099` sub-range.
+ *
+ * @since 1.0.0
+ */
+export const MCP_ERROR_CODES = Object.freeze({
+  /** HTTP headers disagree with the request body, or a required header is missing. */
+  headerMismatch: -32020,
+  /** The request needs a client capability the client did not declare. */
+  missingRequiredClientCapability: -32021,
+  /** The requested protocol version is not implemented by this server. */
+  unsupportedProtocolVersion: -32022,
+} as const);
 
 /**
  * Default maximum accepted JSON-RPC request body for a DaloyJS MCP endpoint.
@@ -31,6 +83,17 @@ export const MCP_PROTOCOL_VERSIONS: readonly string[] = Object.freeze([
  * @since 1.0.0
  */
 export const MCP_DEFAULT_MAX_BODY_BYTES = 1 << 18;
+
+/**
+ * Maximum accepted length of a client-supplied `params.requestState` string.
+ *
+ * `requestState` is opaque server state that round-trips through an untrusted
+ * client during a multi round-trip request, so it is bounded independently of
+ * the body cap to keep a hostile client from forcing large state parsing.
+ *
+ * @since 1.0.0
+ */
+export const MCP_MAX_REQUEST_STATE_LENGTH = 8192;
 
 /**
  * Protocol revision assumed when an HTTP request carries no
@@ -44,6 +107,26 @@ const INVALID_REQUEST = -32600;
 const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
 const INTERNAL_ERROR = -32603;
+const HEADER_MISMATCH = MCP_ERROR_CODES.headerMismatch;
+const MISSING_REQUIRED_CLIENT_CAPABILITY = MCP_ERROR_CODES.missingRequiredClientCapability;
+const UNSUPPORTED_PROTOCOL_VERSION = MCP_ERROR_CODES.unsupportedProtocolVersion;
+
+/**
+ * Report whether a protocol revision belongs to the stateless ("modern") MCP
+ * era introduced by {@link MCP_MODERN_ERA_MIN_VERSION}.
+ *
+ * Modern requests carry their protocol version, client identity, and client
+ * capabilities in `_meta` and are validated against the standard
+ * `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` HTTP headers. Older
+ * revisions keep the `initialize` handshake instead.
+ *
+ * @param version - A protocol revision string such as `"2026-07-28"`.
+ * @returns `true` when the revision uses per-request metadata.
+ * @since 1.0.0
+ */
+export function isModernProtocolVersion(version: string): boolean {
+  return version >= MCP_MODERN_ERA_MIN_VERSION;
+}
 
 /**
  * JSON Schema for the JSON-RPC 2.0 envelope every MCP response uses. Exposed
@@ -161,6 +244,36 @@ export interface McpServerInfo {
 }
 
 /**
+ * Self-reported implementation identity (`serverInfo` / `clientInfo`).
+ *
+ * Values are supplied by the peer and are **not** verified by the protocol.
+ * Use them for display, logging, and debugging only — never for authorization
+ * or any other security decision.
+ *
+ * @since 1.0.0
+ */
+export interface McpImplementation {
+  /** Stable machine-readable implementation name. */
+  name: string;
+  /** Implementation version string. */
+  version: string;
+  /** Optional human-readable display title. */
+  title?: string;
+}
+
+/**
+ * Protocol era a request was served under.
+ *
+ * - `"modern"`: MCP `2026-07-28` and later. Stateless; version, identity, and
+ *   capabilities arrive in `_meta` and are mirrored into HTTP headers.
+ * - `"legacy"`: MCP `2025-11-25` and earlier. Established by an `initialize`
+ *   handshake.
+ *
+ * @since 1.0.0
+ */
+export type McpProtocolEra = "modern" | "legacy";
+
+/**
  * Per-request context passed to tool, resource, and prompt handlers.
  *
  * @since 1.0.0
@@ -169,16 +282,57 @@ export interface McpRequestContext {
   /** The original HTTP request received by the DaloyJS route. */
   request: Request;
   /**
-   * Protocol version selected for this call. `initialize` negotiates it from
-   * `params.protocolVersion`; other calls take the `MCP-Protocol-Version`
-   * header, falling back to `2025-03-26` (the spec's assumption for
-   * headerless requests) when supported, otherwise the preferred version.
+   * Protocol version selected for this call. On a modern request this is the
+   * verified `io.modelcontextprotocol/protocolVersion` from `_meta`. On a
+   * legacy request, `initialize` negotiates it from `params.protocolVersion`
+   * and other calls take the `MCP-Protocol-Version` header, falling back to
+   * `2025-03-26` (the spec's assumption for headerless requests) when
+   * supported, otherwise the preferred version.
    */
   protocolVersion: string;
+  /**
+   * Protocol era this request was served under. Handlers that emit multi
+   * round-trip results must check this: `input_required` only exists in the
+   * `"modern"` era.
+   */
+  era: McpProtocolEra;
   /** JSON-RPC id for request/response correlation. */
   id: McpJsonRpcId;
   /** Raw MCP method name, such as `"tools/call"` or `"resources/read"`. */
   method: string;
+  /**
+   * Capabilities the client declared for this request
+   * (`io.modelcontextprotocol/clientCapabilities`). Empty on legacy requests,
+   * which declare capabilities once during `initialize` instead.
+   */
+  clientCapabilities: McpJsonObject;
+  /**
+   * Self-reported client identity (`io.modelcontextprotocol/clientInfo`), when
+   * the client sent one. Advisory metadata — never a security input.
+   */
+  clientInfo?: McpImplementation;
+  /**
+   * Minimum log level the client asked the server to emit for this request
+   * (`io.modelcontextprotocol/logLevel`), when supplied.
+   */
+  logLevel?: string;
+  /**
+   * Client answers to a previous {@link McpInputRequiredResult}, keyed by the
+   * identifiers the server assigned in `inputRequests`. Present only on a
+   * multi round-trip retry.
+   */
+  inputResponses?: McpInputResponses;
+  /**
+   * Opaque state the server emitted on a previous
+   * {@link McpInputRequiredResult} and the client echoed back.
+   *
+   * Security: this value round-trips through an untrusted client. If it
+   * influences authorization, resource access, or business logic, integrity-
+   * protect it (HMAC or AEAD), bind it to the authenticated principal and the
+   * originating request, give it a short expiry, and reject anything that
+   * fails verification.
+   */
+  requestState?: string;
 }
 
 /**
@@ -252,6 +406,69 @@ export interface McpToolResult {
 }
 
 /**
+ * Server-to-client request embedded in an {@link McpInputRequiredResult}.
+ *
+ * MCP `2026-07-28` removed server-initiated JSON-RPC requests. A server that
+ * needs elicitation, sampling, or the client's roots returns them here and the
+ * client supplies the answers on a retry of the original request.
+ *
+ * @since 1.0.0
+ */
+export interface McpInputRequest {
+  /** The client-side method being requested. */
+  method: "elicitation/create" | "sampling/createMessage" | "roots/list";
+  /** Method parameters, as defined by the MCP client-features specification. */
+  params?: McpJsonObject;
+}
+
+/**
+ * Map of server-assigned identifiers to server-to-client requests.
+ *
+ * @since 1.0.0
+ */
+export type McpInputRequests = { [id: string]: McpInputRequest };
+
+/**
+ * Map of the same identifiers to the client's answers, echoed back on the
+ * retry of the original request.
+ *
+ * @since 1.0.0
+ */
+export type McpInputResponses = { [id: string]: McpJsonValue };
+
+/**
+ * Interim result telling the client that more input is required before the
+ * call can complete (MCP `2026-07-28` multi round-trip requests).
+ *
+ * Return this from a tool, resource, or prompt handler instead of a final
+ * result. The client gathers the requested input and retries the original
+ * request — with a **new** JSON-RPC id — carrying `inputResponses` and, when
+ * present, the exact `requestState` string it received.
+ *
+ * At least one of `inputRequests` or `requestState` must be set. DaloyJS
+ * refuses to emit an `inputRequests` entry whose method the client did not
+ * declare support for, answering `-32021` instead of leaking a request the
+ * client cannot fulfil.
+ *
+ * @since 1.0.0
+ */
+export interface McpInputRequiredResult {
+  /** Discriminator literal identifying this as a multi round-trip result. */
+  resultType: "input_required";
+  /** Requests the client must fulfil before retrying. */
+  inputRequests?: McpInputRequests;
+  /**
+   * Opaque state the client must echo back verbatim on the retry.
+   *
+   * Security: it passes through an untrusted client. Integrity-protect it
+   * (HMAC or AEAD) whenever it influences authorization, resource access, or
+   * business logic, bind it to the authenticated principal and originating
+   * request, and give it a short expiry.
+   */
+  requestState?: string;
+}
+
+/**
  * Behavioral hints a tool can advertise to MCP clients. Hints are untrusted
  * metadata for UX decisions (confirmation prompts, badges); clients must not
  * rely on them for security decisions.
@@ -281,7 +498,9 @@ export interface McpToolAnnotations {
  *   declared shape holds at runtime. Constraints expressed only through
  *   unsupported schema keywords (e.g. `pattern`) remain the handler's job.
  * @param ctx - Request metadata and the original HTTP request.
- * @returns Text shorthand or a full {@link McpToolResult}.
+ * @returns Text shorthand, a full {@link McpToolResult}, or an
+ *   {@link McpInputRequiredResult} to ask the client for more input first
+ *   (modern protocol era only).
  * @throws {McpToolError} for caller-correctable failures that should be
  *   returned as an MCP tool error result.
  *
@@ -290,7 +509,11 @@ export interface McpToolAnnotations {
 export type McpToolHandler<TArgs extends Record<string, unknown> = Record<string, unknown>> = (
   args: TArgs,
   ctx: McpRequestContext
-) => string | McpToolResult | Promise<string | McpToolResult>;
+) =>
+  | string
+  | McpToolResult
+  | McpInputRequiredResult
+  | Promise<string | McpToolResult | McpInputRequiredResult>;
 
 /**
  * Definition of a callable MCP tool.
@@ -381,14 +604,17 @@ export interface McpResourceDefinition extends McpResource {
    * Read the resource contents for `resources/read`.
    *
    * @param ctx - Request metadata and the original HTTP request.
-   * @returns One or more content entries for this resource.
+   * @returns One or more content entries for this resource, or an
+   *   {@link McpInputRequiredResult} to ask the client for more input first
+   *   (modern protocol era only).
    */
   read: (
     ctx: McpRequestContext
   ) =>
     | McpResourceContents
     | McpResourceContents[]
-    | Promise<McpResourceContents | McpResourceContents[]>;
+    | McpInputRequiredResult
+    | Promise<McpResourceContents | McpResourceContents[] | McpInputRequiredResult>;
 }
 
 /**
@@ -431,7 +657,9 @@ export interface McpResourceTemplateDefinition extends McpResourceTemplate {
    * @param uri - The full resource URI requested by the client.
    * @param variables - Template variable values extracted from `uri`.
    * @param ctx - Request metadata and the original HTTP request.
-   * @returns One or more content entries for this resource.
+   * @returns One or more content entries for this resource, or an
+   *   {@link McpInputRequiredResult} to ask the client for more input first
+   *   (modern protocol era only).
    * @throws {McpToolError} for caller-correctable failures such as an unknown
    *   record id; these become JSON-RPC invalid-params errors.
    */
@@ -442,7 +670,8 @@ export interface McpResourceTemplateDefinition extends McpResourceTemplate {
   ) =>
     | McpResourceContents
     | McpResourceContents[]
-    | Promise<McpResourceContents | McpResourceContents[]>;
+    | McpInputRequiredResult
+    | Promise<McpResourceContents | McpResourceContents[] | McpInputRequiredResult>;
 }
 
 /**
@@ -516,12 +745,13 @@ export interface McpPromptDefinition extends McpPrompt {
    *
    * @param args - Prompt arguments supplied by the MCP client.
    * @param ctx - Request metadata and the original HTTP request.
-   * @returns Prompt messages.
+   * @returns Prompt messages, or an {@link McpInputRequiredResult} to ask the
+   *   client for more input first (modern protocol era only).
    */
   get: (
     args: Record<string, unknown>,
     ctx: McpRequestContext
-  ) => McpPromptResult | Promise<McpPromptResult>;
+  ) => McpPromptResult | McpInputRequiredResult | Promise<McpPromptResult | McpInputRequiredResult>;
 }
 
 /**
@@ -545,6 +775,32 @@ export class McpToolError extends Error {
     super(message);
     this.name = "McpToolError";
   }
+}
+
+/**
+ * Client-side caching hints attached to every cacheable modern result
+ * (`server/discover`, the four list methods, and `resources/read`).
+ *
+ * @since 1.0.0
+ */
+export interface McpCacheHints {
+  /**
+   * Freshness hint in milliseconds. `0` (the default) tells clients to
+   * revalidate on every call.
+   *
+   * @defaultValue 0
+   */
+  ttlMs?: number;
+  /**
+   * Whether shared intermediaries may cache the response. DaloyJS defaults to
+   * `"private"` because MCP list results legitimately vary by the credential
+   * presented on the request — a `"public"` scope on an authorization-scoped
+   * tool list would let a proxy serve one caller's tools to another. Only set
+   * `"public"` for a server whose results are identical for every caller.
+   *
+   * @defaultValue "private"
+   */
+  scope?: "public" | "private";
 }
 
 /**
@@ -580,6 +836,21 @@ export interface McpHandlerOptions {
    * other origin is rejected with `403` unless listed here.
    */
   allowedOrigins?: readonly string[];
+  /**
+   * Optional extensions advertised in `capabilities.extensions`, keyed by
+   * extension identifier (for example `"io.modelcontextprotocol/tasks"`), with
+   * each value the extension's settings object. Identifiers must carry a
+   * reverse-DNS prefix, per the `_meta` key naming rules.
+   *
+   * DaloyJS core implements no extension itself; declaring one here advertises
+   * that *your* handlers implement it.
+   */
+  extensions?: Record<string, McpJsonObject>;
+  /**
+   * Caching hints returned on cacheable modern results. Defaults to
+   * `{ ttlMs: 0, scope: "private" }` — no caching, no sharing.
+   */
+  cache?: McpCacheHints;
   /** Accepted MCP protocol versions. Defaults to {@link MCP_PROTOCOL_VERSIONS}. */
   protocolVersions?: readonly string[];
   /**
@@ -961,34 +1232,191 @@ function isAllowedOrigin(
   return false;
 }
 
+const HEADER_BASE64_PREFIX = "=?base64?";
+const HEADER_BASE64_SUFFIX = "?=";
+
+/**
+ * Decode a Streamable HTTP header value that may use the `2026-07-28` Base64
+ * sentinel form `=?base64?<b64>?=`.
+ *
+ * Clients must use the sentinel whenever a tool name, resource URI, or mirrored
+ * parameter cannot be represented as a plain ASCII header value. Servers must
+ * decode before comparing the header against the request body.
+ *
+ * @param raw - The raw HTTP header value.
+ * @returns The decoded value, or `undefined` when the sentinel wrapper is
+ *   present but its payload is not valid Base64-encoded UTF-8.
+ */
+function decodeMcpHeaderValue(raw: string): string | undefined {
+  if (!raw.startsWith(HEADER_BASE64_PREFIX) || !raw.endsWith(HEADER_BASE64_SUFFIX)) return raw;
+  const encoded = raw.slice(HEADER_BASE64_PREFIX.length, raw.length - HEADER_BASE64_SUFFIX.length);
+  try {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+/** RFC 9110 `token` (`1*tchar`) — the legal character set for an HTTP field name. */
+const HTTP_TOKEN_PATTERN = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
+
+/** A tool input property mirrored into an `Mcp-Param-{Name}` HTTP header. */
+interface CompiledHeaderParam {
+  /** The `x-mcp-header` name, as authored. */
+  name: string;
+  /** Lowercased `mcp-param-<name>` header key used for case-insensitive lookup. */
+  headerKey: string;
+  /** Chain of `properties` keys leading to the annotated property. */
+  path: readonly string[];
+  /** The property's primitive JSON Schema type. */
+  type: "string" | "integer" | "boolean";
+}
+
+/**
+ * Collect and validate a tool's `x-mcp-header` annotations.
+ *
+ * Only properties statically reachable from the schema root through a chain of
+ * `properties` keys may be annotated, and only primitive `string` / `integer` /
+ * `boolean` properties. Invalid annotations throw at construction so a server
+ * never advertises a mirroring contract it cannot enforce.
+ *
+ * @param tool - The tool whose `inputSchema` is being compiled.
+ * @returns The mirrored properties, in schema order.
+ * @throws {TypeError} when an annotation violates the specification's
+ *   constraints (empty, non-token, duplicate, or on a non-primitive or
+ *   non-statically-reachable property).
+ */
+function collectHeaderParams(tool: McpTool): CompiledHeaderParam[] {
+  const collected: CompiledHeaderParam[] = [];
+  const seen = new Set<string>();
+
+  const walk = (schema: McpJsonObject, path: readonly string[], depth: number): void => {
+    if (depth > MAX_MCP_SCHEMA_DEPTH) return;
+    const props = isSchemaObject(schema.properties) ? schema.properties : undefined;
+    if (!props) return;
+    for (const key of Object.keys(props)) {
+      const sub = props[key];
+      if (!isSchemaObject(sub)) continue;
+      const nextPath = [...path, key];
+      const annotation = sub["x-mcp-header"];
+      if (annotation !== undefined) {
+        if (typeof annotation !== "string" || annotation.length === 0) {
+          throw new TypeError(
+            `MCP tool "${tool.name}" has an empty or non-string "x-mcp-header" on "${nextPath.join(".")}".`
+          );
+        }
+        if (!HTTP_TOKEN_PATTERN.test(annotation)) {
+          throw new TypeError(
+            `MCP tool "${tool.name}" has an "x-mcp-header" value "${annotation}" that is not a valid HTTP field-name token.`
+          );
+        }
+        const lower = annotation.toLowerCase();
+        if (seen.has(lower)) {
+          throw new TypeError(
+            `MCP tool "${tool.name}" reuses the "x-mcp-header" name "${annotation}"; names must be case-insensitively unique.`
+          );
+        }
+        const type = sub.type;
+        if (type !== "string" && type !== "integer" && type !== "boolean") {
+          throw new TypeError(
+            `MCP tool "${tool.name}" annotates "${nextPath.join(".")}" with "x-mcp-header" but its type is not string, integer, or boolean.`
+          );
+        }
+        seen.add(lower);
+        collected.push({ name: annotation, headerKey: `mcp-param-${lower}`, path: nextPath, type });
+      }
+      walk(sub, nextPath, depth + 1);
+    }
+  };
+
+  walk(tool.inputSchema, [], 0);
+  return collected;
+}
+
+/** Read the value at an exact chain of object keys, or `undefined` if absent. */
+function valueAtPath(root: unknown, path: readonly string[]): unknown {
+  let cursor: unknown = root;
+  for (const key of path) {
+    if (cursor === null || typeof cursor !== "object" || Array.isArray(cursor)) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(cursor, key)) return undefined;
+    cursor = (cursor as Record<string, unknown>)[key];
+  }
+  return cursor;
+}
+
+/** Narrow a handler return value to a multi round-trip interim result. */
+function isInputRequiredResult(value: unknown): value is McpInputRequiredResult {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    (value as { resultType?: unknown }).resultType === "input_required"
+  );
+}
+
+/**
+ * Client capability each server-to-client request in an `inputRequests` map
+ * depends on. A server must not ask for input the client cannot provide.
+ */
+const INPUT_REQUEST_CAPABILITY: Readonly<Record<string, string>> = Object.freeze({
+  "elicitation/create": "elicitation",
+  "sampling/createMessage": "sampling",
+  "roots/list": "roots",
+});
+
+/** Modern methods that may answer with an `input_required` interim result. */
+const MRTR_METHODS = new Set(["tools/call", "resources/read", "prompts/get"]);
+
 /**
  * Create a dependency-free MCP Streamable HTTP endpoint handler.
  *
- * The handler implements the server side of MCP over one HTTP endpoint:
- * `initialize`, `ping`, `tools/list`, `tools/call`, `resources/list`,
- * `resources/templates/list`, `resources/read`, `prompts/list`, and
- * `prompts/get`. It accepts JSON-RPC requests over `POST`, acknowledges
- * notifications with `202`, validates the `MCP-Protocol-Version` header,
- * bounds request bodies, enforces required prompt arguments, and returns
- * JSON-RPC errors for malformed input.
+ * The handler serves **both MCP protocol eras** on one endpoint:
  *
- * Security: per the Streamable HTTP spec's DNS-rebinding guidance, every
- * request bearing an `Origin` header is validated. Same-origin and loopback
- * origins pass; anything else is rejected with `403` unless listed in
- * {@link McpHandlerOptions.allowedOrigins}.
+ * - **Modern (`2026-07-28`+, stateless).** No handshake. Every request carries
+ *   its protocol version, client identity, and client capabilities in `_meta`,
+ *   mirrored into the required `MCP-Protocol-Version`, `Mcp-Method`, and
+ *   `Mcp-Name` headers. Methods: `server/discover`, `tools/list`,
+ *   `tools/call`, `resources/list`, `resources/templates/list`,
+ *   `resources/read`, `prompts/list`, `prompts/get`. Every result carries
+ *   `resultType`, the server identity in `_meta`, and — on cacheable methods —
+ *   `ttlMs` / `cacheScope`. Handlers may return an
+ *   {@link McpInputRequiredResult} to run a multi round-trip request.
+ * - **Legacy (`2025-11-25` and earlier).** The `initialize` / `ping` handshake
+ *   protocol, unchanged, so existing clients keep working.
  *
- * It intentionally does not spawn stdio servers, manage OAuth metadata, keep
- * durable sessions, or open server-initiated SSE streams. Use DaloyJS
- * middleware for authentication and authorization, and run this on a dedicated
- * Daloy app when your MCP server has a different trust boundary than your REST
- * API.
+ * A request is served as modern when its `_meta` protocol version (or the
+ * `MCP-Protocol-Version` header) is `2026-07-28` or later; otherwise it takes
+ * the legacy path.
+ *
+ * Security, on top of the era-independent body cap, prototype-pollution-safe
+ * parsing, and `inputSchema` enforcement:
+ *
+ * - Per the Streamable HTTP spec's DNS-rebinding guidance, every request
+ *   bearing an `Origin` header is validated. Loopback origins pass; anything
+ *   else is rejected with `403` unless listed in
+ *   {@link McpHandlerOptions.allowedOrigins}.
+ * - Modern requests are rejected with `400` and `-32020` (`HeaderMismatch`)
+ *   when a required standard header is missing or disagrees with the body.
+ *   This closes the header/body confusion gap that lets a gateway route on one
+ *   value while the server executes another.
+ * - `Mcp-Session-Id` and `Last-Event-ID` are ignored; no session is ever minted
+ *   or echoed.
+ *
+ * It intentionally does not spawn stdio servers, manage OAuth metadata, open
+ * `subscriptions/listen` notification streams, or implement the tasks
+ * extension. Use DaloyJS middleware for authentication and authorization, and
+ * run this on a dedicated Daloy app when your MCP server has a different trust
+ * boundary than your REST API.
  *
  * @param options - Server identity, capabilities, limits, and response headers.
  * @returns A Fetch-compatible request handler suitable for {@link mcpRoutes}
  *   or for direct use in any web-standard runtime.
  * @throws {TypeError} at construction for invalid serverInfo, protocol
- *   versions, body limits, duplicate names/URIs, malformed `allowedOrigins`
- *   entries, or unsupported URI template expressions.
+ *   versions, body limits, cache hints, extension identifiers, duplicate
+ *   names/URIs, malformed `allowedOrigins` entries, invalid `x-mcp-header`
+ *   annotations, or unsupported URI template expressions.
  *
  * @example
  * ```ts
@@ -1054,6 +1482,33 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     throw new TypeError("MCP resource template URIs must be unique.");
   }
   const compiledTemplates = resourceTemplates.map(compileUriTemplate);
+  // Compile x-mcp-header annotations once so tools/call can verify that the
+  // mirrored Mcp-Param-* headers agree with the body on every request.
+  const toolHeaderParams = new Map<string, CompiledHeaderParam[]>();
+  for (const tool of tools) {
+    const params = collectHeaderParams(tool);
+    if (params.length > 0) toolHeaderParams.set(tool.name, params);
+  }
+
+  const extensions = options.extensions;
+  if (extensions) {
+    for (const identifier of Object.keys(extensions)) {
+      if (!identifier.includes("/") || identifier.startsWith("/")) {
+        throw new TypeError(
+          `MCP extension identifier "${identifier}" must carry a reverse-DNS prefix, e.g. "io.modelcontextprotocol/tasks".`
+        );
+      }
+    }
+  }
+
+  const cacheTtlMs = options.cache?.ttlMs ?? 0;
+  if (!Number.isSafeInteger(cacheTtlMs) || cacheTtlMs < 0) {
+    throw new TypeError("MCP cache.ttlMs must be a non-negative safe integer.");
+  }
+  const cacheScope = options.cache?.scope ?? "private";
+  if (cacheScope !== "public" && cacheScope !== "private") {
+    throw new TypeError('MCP cache.scope must be "public" or "private".');
+  }
 
   const allowedOrigins = new Set<string>();
   for (const entry of options.allowedOrigins ?? []) {
@@ -1085,26 +1540,163 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     ? LEGACY_ASSUMED_PROTOCOL_VERSION
     : preferred;
 
+  const capabilities: McpJsonObject = Object.freeze({
+    ...(tools.length > 0 ? { tools: {} } : {}),
+    ...(resources.length > 0 || resourceTemplates.length > 0 ? { resources: {} } : {}),
+    ...(prompts.length > 0 ? { prompts: {} } : {}),
+    ...(extensions ? { extensions } : {}),
+  });
+  const serverInfoMeta = Object.freeze({ [MCP_META_KEYS.serverInfo]: options.serverInfo });
+
   async function handleRpcRequest(message: JsonRpcMessage, request: Request): Promise<Response> {
     const id = (message.id ?? null) as McpJsonRpcId;
     const method = message.method as string;
     const params = asRecord(message.params);
+    const meta = asRecord(params._meta);
     const headerVersion = request.headers.get("mcp-protocol-version");
-    // Per the Streamable HTTP spec, a request without the header is assumed
-    // to speak 2025-03-26; `initialize` negotiates via params instead.
+    const metaVersion = meta[MCP_META_KEYS.protocolVersion];
+
+    // Era selection: a request speaks the stateless revision when either the
+    // `_meta` version or the transport header names 2026-07-28 or later. Every
+    // other request keeps the handshake-based behavior unchanged.
+    const era: McpProtocolEra =
+      (typeof metaVersion === "string" && isModernProtocolVersion(metaVersion)) ||
+      (headerVersion !== null && isModernProtocolVersion(headerVersion))
+        ? "modern"
+        : "legacy";
+
+    if (era === "modern") {
+      const modernError = validateModernRequest(request, method, params, meta, id);
+      if (modernError) return modernError;
+    } else {
+      // Legacy revisions predate the standard headers, so they are optional
+      // here — but a legacy request that sends them is still held to them.
+      // Otherwise declaring an old protocol version would be a free bypass of
+      // the header/body agreement an intermediary in front of us relies on.
+      const headerError = validateStandardHeaders(request, method, params, id, false);
+      if (headerError) return headerError;
+    }
+
+    // Per the Streamable HTTP spec, a legacy request without the header is
+    // assumed to speak 2025-03-26; `initialize` negotiates via params instead.
     const protocolVersion =
-      method === "initialize"
-        ? selectedProtocolVersion(
-            typeof params.protocolVersion === "string"
-              ? params.protocolVersion
-              : (headerVersion ?? ""),
-            supported,
-            preferred
-          )
-        : headerVersion !== null
-          ? selectedProtocolVersion(headerVersion, supported, preferred)
-          : legacyAssumed;
-    const ctx: McpRequestContext = { request, protocolVersion, id, method };
+      era === "modern"
+        ? (metaVersion as string)
+        : method === "initialize"
+          ? selectedProtocolVersion(
+              typeof params.protocolVersion === "string"
+                ? params.protocolVersion
+                : (headerVersion ?? ""),
+              supported,
+              preferred
+            )
+          : headerVersion !== null
+            ? selectedProtocolVersion(headerVersion, supported, preferred)
+            : legacyAssumed;
+
+    const ctx: McpRequestContext = {
+      request,
+      protocolVersion,
+      era,
+      id,
+      method,
+      clientCapabilities:
+        era === "modern" ? (asRecord(meta[MCP_META_KEYS.clientCapabilities]) as McpJsonObject) : {},
+    };
+    if (era === "modern") {
+      const clientInfo = meta[MCP_META_KEYS.clientInfo];
+      if (clientInfo !== null && typeof clientInfo === "object" && !Array.isArray(clientInfo)) {
+        ctx.clientInfo = clientInfo as unknown as McpImplementation;
+      }
+      const logLevel = meta[MCP_META_KEYS.logLevel];
+      if (typeof logLevel === "string") ctx.logLevel = logLevel;
+      const inputResponses = params.inputResponses;
+      if (
+        inputResponses !== null &&
+        typeof inputResponses === "object" &&
+        !Array.isArray(inputResponses)
+      ) {
+        ctx.inputResponses = inputResponses as McpInputResponses;
+      }
+      if (typeof params.requestState === "string") ctx.requestState = params.requestState;
+    }
+
+    /**
+     * Finalize a successful result. Modern results gain the required
+     * `resultType`, the server identity in `_meta`, and — on cacheable
+     * methods — the client-caching hints. Legacy results are untouched.
+     */
+    const ok = (result: Record<string, unknown>, cacheable = false): Response =>
+      rpcResult(
+        id,
+        era === "modern"
+          ? {
+              resultType: "complete",
+              ...result,
+              ...(cacheable ? { ttlMs: cacheTtlMs, cacheScope } : {}),
+              _meta: serverInfoMeta,
+            }
+          : result,
+        headers
+      );
+
+    /**
+     * Turn a handler-supplied interim result into an `input_required`
+     * response, refusing to ask for input the client cannot provide.
+     */
+    const inputRequired = (interim: McpInputRequiredResult): Response => {
+      if (era !== "modern" || !MRTR_METHODS.has(method)) {
+        return rpcError(
+          id,
+          INTERNAL_ERROR,
+          "Multi round-trip results require MCP 2026-07-28 on tools/call, resources/read, or prompts/get.",
+          undefined,
+          200,
+          headers
+        );
+      }
+      const requests = interim.inputRequests;
+      const hasRequests = requests !== undefined && Object.keys(requests).length > 0;
+      if (!hasRequests && interim.requestState === undefined) {
+        return rpcError(
+          id,
+          INTERNAL_ERROR,
+          "An input_required result must carry inputRequests or requestState.",
+          undefined,
+          200,
+          headers
+        );
+      }
+      if (hasRequests) {
+        const missing: string[] = [];
+        for (const key of Object.keys(requests)) {
+          const needed = INPUT_REQUEST_CAPABILITY[requests[key]?.method ?? ""];
+          if (needed && ctx.clientCapabilities[needed] === undefined && !missing.includes(needed)) {
+            missing.push(needed);
+          }
+        }
+        if (missing.length > 0) {
+          return rpcError(
+            id,
+            MISSING_REQUIRED_CLIENT_CAPABILITY,
+            `Client did not declare required capabilities: ${missing.join(", ")}`,
+            { requiredCapabilities: missing },
+            400,
+            headers
+          );
+        }
+      }
+      return rpcResult(
+        id,
+        {
+          resultType: "input_required",
+          ...(hasRequests ? { inputRequests: requests } : {}),
+          ...(interim.requestState !== undefined ? { requestState: interim.requestState } : {}),
+          _meta: serverInfoMeta,
+        },
+        headers
+      );
+    };
 
     const cursor = params.cursor;
     if (
@@ -1119,17 +1711,46 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
       return rpcError(id, INVALID_PARAMS, "Unknown pagination cursor.", undefined, 200, headers);
     }
 
+    // `initialize` and `ping` were removed in 2026-07-28; `server/discover`
+    // exists only there. Answering each in the wrong era would let a client
+    // infer a handshake or a session that this endpoint does not have.
+    if (era === "modern" && (method === "initialize" || method === "ping")) {
+      return rpcError(
+        id,
+        METHOD_NOT_FOUND,
+        `Method not found: ${method}`,
+        { supported: protocolVersions },
+        404,
+        headers
+      );
+    }
+    if (era === "legacy" && method === "server/discover") {
+      return rpcError(
+        id,
+        METHOD_NOT_FOUND,
+        "Method not found: server/discover",
+        { supported: protocolVersions },
+        200,
+        headers
+      );
+    }
+
     switch (method) {
+      case "server/discover":
+        return ok(
+          {
+            supportedVersions: protocolVersions,
+            capabilities,
+            ...(options.instructions ? { instructions: options.instructions } : {}),
+          },
+          true
+        );
       case "initialize":
         return rpcResult(
           id,
           {
             protocolVersion,
-            capabilities: {
-              ...(tools.length > 0 ? { tools: {} } : {}),
-              ...(resources.length > 0 || resourceTemplates.length > 0 ? { resources: {} } : {}),
-              ...(prompts.length > 0 ? { prompts: {} } : {}),
-            },
+            capabilities,
             serverInfo: options.serverInfo,
             ...(options.instructions ? { instructions: options.instructions } : {}),
           },
@@ -1138,7 +1759,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
       case "ping":
         return rpcResult(id, {}, headers);
       case "tools/list":
-        return rpcResult(id, { tools: tools.map(publicTool) }, headers);
+        return ok({ tools: tools.map(publicTool) }, true);
       case "tools/call": {
         const name = typeof params.name === "string" ? params.name : "";
         const tool = toolMap.get(name);
@@ -1169,16 +1790,28 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
             headers
           );
         }
+        // The mirrored Mcp-Param-* headers must agree with the arguments the
+        // handler is about to run on, so an intermediary cannot route on one
+        // value while the tool executes another. Legacy requests are not
+        // required to send them, but any they do send must still match.
+        {
+          const mismatch = validateMirroredParams(
+            request,
+            tool,
+            asRecord(rawArgs),
+            era === "modern"
+          );
+          if (mismatch) {
+            return rpcError(id, HEADER_MISMATCH, mismatch, undefined, 400, headers);
+          }
+        }
         try {
           const result = await tool.handler(asRecord(rawArgs), ctx);
-          return rpcResult(id, normalizeToolResult(result), headers);
+          if (isInputRequiredResult(result)) return inputRequired(result);
+          return ok({ ...normalizeToolResult(result) });
         } catch (error) {
           if (error instanceof McpToolError) {
-            return rpcResult(
-              id,
-              { content: [{ type: "text", text: error.message }], isError: true },
-              headers
-            );
+            return ok({ content: [{ type: "text", text: error.message }], isError: true });
           }
           return rpcError(
             id,
@@ -1191,13 +1824,9 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
         }
       }
       case "resources/list":
-        return rpcResult(id, { resources: resources.map(publicResource) }, headers);
+        return ok({ resources: resources.map(publicResource) }, true);
       case "resources/templates/list":
-        return rpcResult(
-          id,
-          { resourceTemplates: resourceTemplates.map(publicResourceTemplate) },
-          headers
-        );
+        return ok({ resourceTemplates: resourceTemplates.map(publicResourceTemplate) }, true);
       case "resources/read": {
         const uri = typeof params.uri === "string" ? params.uri : "";
         const readError = (error: unknown): Response => {
@@ -1219,7 +1848,8 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
         if (resource) {
           try {
             const read = await resource.read(ctx);
-            return rpcResult(id, { contents: Array.isArray(read) ? read : [read] }, headers);
+            if (isInputRequiredResult(read)) return inputRequired(read);
+            return ok({ contents: Array.isArray(read) ? read : [read] }, true);
           } catch (error) {
             return readError(error);
           }
@@ -1234,7 +1864,8 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
             });
             try {
               const read = await compiled.template.read(uri, variables, ctx);
-              return rpcResult(id, { contents: Array.isArray(read) ? read : [read] }, headers);
+              if (isInputRequiredResult(read)) return inputRequired(read);
+              return ok({ contents: Array.isArray(read) ? read : [read] }, true);
             } catch (error) {
               return readError(error);
             }
@@ -1250,7 +1881,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
         );
       }
       case "prompts/list":
-        return rpcResult(id, { prompts: prompts.map(publicPrompt) }, headers);
+        return ok({ prompts: prompts.map(publicPrompt) }, true);
       case "prompts/get": {
         const name = typeof params.name === "string" ? params.name : "";
         const prompt = promptMap.get(name);
@@ -1279,7 +1910,9 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
           );
         }
         try {
-          return rpcResult(id, await prompt.get(promptArgs, ctx), headers);
+          const rendered = await prompt.get(promptArgs, ctx);
+          if (isInputRequiredResult(rendered)) return inputRequired(rendered);
+          return ok({ ...rendered });
         } catch (error) {
           const message =
             error instanceof McpToolError ? error.message : "Prompt rendering failed.";
@@ -1298,15 +1931,210 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
         }
       }
       default:
+        // 2026-07-28 maps an unimplemented RPC to HTTP 404 so a client can
+        // tell "modern server, unknown method" from a legacy 404.
         return rpcError(
           id,
           METHOD_NOT_FOUND,
           `Method not found: ${method}`,
           undefined,
-          200,
+          era === "modern" ? 404 : 200,
           headers
         );
     }
+  }
+
+  /**
+   * Enforce the 2026-07-28 per-request contract before any handler runs:
+   * required `_meta` fields, and the standard headers that intermediaries are
+   * allowed to route on.
+   *
+   * @returns A JSON-RPC error response, or `undefined` when the request is
+   *   well-formed.
+   */
+  function validateModernRequest(
+    request: Request,
+    method: string,
+    params: Record<string, unknown>,
+    meta: Record<string, unknown>,
+    id: McpJsonRpcId
+  ): Response | undefined {
+    const mismatch = (message: string): Response =>
+      rpcError(id, HEADER_MISMATCH, message, undefined, 400, headers);
+
+    const metaVersion = meta[MCP_META_KEYS.protocolVersion];
+    if (typeof metaVersion !== "string") {
+      return rpcError(
+        id,
+        INVALID_PARAMS,
+        `Missing required _meta field "${MCP_META_KEYS.protocolVersion}".`,
+        undefined,
+        400,
+        headers
+      );
+    }
+    if (!supported.has(metaVersion)) {
+      return rpcError(
+        id,
+        UNSUPPORTED_PROTOCOL_VERSION,
+        `Unsupported protocol version: ${metaVersion}`,
+        { supported: protocolVersions, requested: metaVersion },
+        400,
+        headers
+      );
+    }
+    const capabilitiesMeta = meta[MCP_META_KEYS.clientCapabilities];
+    if (
+      capabilitiesMeta === null ||
+      typeof capabilitiesMeta !== "object" ||
+      Array.isArray(capabilitiesMeta)
+    ) {
+      return rpcError(
+        id,
+        INVALID_PARAMS,
+        `Missing required _meta field "${MCP_META_KEYS.clientCapabilities}".`,
+        undefined,
+        400,
+        headers
+      );
+    }
+
+    const headerVersion = request.headers.get("mcp-protocol-version");
+    if (headerVersion === null) {
+      return mismatch("Missing required header: MCP-Protocol-Version");
+    }
+    if (headerVersion !== metaVersion) {
+      return mismatch(
+        `Header mismatch: MCP-Protocol-Version header value '${headerVersion}' does not match body value '${metaVersion}'`
+      );
+    }
+
+    const headerError = validateStandardHeaders(request, method, params, id, true);
+    if (headerError) return headerError;
+
+    if (
+      typeof params.requestState === "string" &&
+      params.requestState.length > MCP_MAX_REQUEST_STATE_LENGTH
+    ) {
+      return rpcError(
+        id,
+        INVALID_PARAMS,
+        `requestState exceeds ${MCP_MAX_REQUEST_STATE_LENGTH} characters.`,
+        undefined,
+        400,
+        headers
+      );
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Validate the `Mcp-Method` / `Mcp-Name` headers against the request body.
+   *
+   * These headers exist so intermediaries can route, authorize, and rate-limit
+   * without parsing the body; letting a header disagree with the body is what
+   * turns that convenience into a confused-deputy bug.
+   *
+   * `require` is `true` for modern requests, where the specification makes both
+   * headers mandatory. It is `false` for legacy requests, which predate the
+   * headers entirely — but a legacy request that *does* carry them is still
+   * held to them. That closes the obvious downgrade: an attacker cannot declare
+   * an older protocol version to keep a gateway-satisfying header while the
+   * server executes a different body value.
+   *
+   * @returns A JSON-RPC error response, or `undefined` when the headers agree
+   *   with the body (or are legitimately absent on a legacy request).
+   */
+  function validateStandardHeaders(
+    request: Request,
+    method: string,
+    params: Record<string, unknown>,
+    id: McpJsonRpcId,
+    require: boolean
+  ): Response | undefined {
+    const mismatch = (message: string): Response =>
+      rpcError(id, HEADER_MISMATCH, message, undefined, 400, headers);
+
+    const headerMethod = request.headers.get("mcp-method");
+    if (headerMethod === null) {
+      if (require) return mismatch("Missing required header: Mcp-Method");
+    } else if (headerMethod !== method) {
+      return mismatch(
+        `Header mismatch: Mcp-Method header value '${headerMethod}' does not match body value '${method}'`
+      );
+    }
+
+    // Mcp-Name mirrors params.name (tools/prompts) or params.uri (resources).
+    if (method === "tools/call" || method === "prompts/get" || method === "resources/read") {
+      const bodyName = method === "resources/read" ? params.uri : params.name;
+      const rawName = request.headers.get("mcp-name");
+      if (rawName === null) {
+        if (require) return mismatch("Missing required header: Mcp-Name");
+        return undefined;
+      }
+      const decoded = decodeMcpHeaderValue(rawName);
+      if (decoded === undefined) {
+        return mismatch("Header mismatch: Mcp-Name is not valid Base64-encoded UTF-8");
+      }
+      if (typeof bodyName !== "string" || decoded !== bodyName) {
+        return mismatch("Header mismatch: Mcp-Name header value does not match the request body");
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Verify that every `x-mcp-header` mirrored tool parameter matches its
+   * `Mcp-Param-{Name}` header.
+   *
+   * When `require` is `true` (modern requests) the check runs in both
+   * directions: a value present in the arguments requires the header, and an
+   * absent value forbids it. When `require` is `false` (legacy requests, which
+   * predate mirroring) a missing header is accepted, but a header that *is*
+   * present must still match the arguments — so declaring an older protocol
+   * version cannot be used to slip a gateway-satisfying header past the tool.
+   *
+   * @returns A human-readable mismatch description, or `undefined` when the
+   *   headers agree with the arguments.
+   */
+  function validateMirroredParams(
+    request: Request,
+    tool: McpTool,
+    args: Record<string, unknown>,
+    require: boolean
+  ): string | undefined {
+    const mirrored = toolHeaderParams.get(tool.name);
+    if (!mirrored) return undefined;
+    for (const param of mirrored) {
+      const raw = request.headers.get(param.headerKey);
+      const value = valueAtPath(args, param.path);
+      if (value === undefined || value === null) {
+        if (raw !== null) {
+          return `Header mismatch: Mcp-Param-${param.name} was sent but "${param.path.join(".")}" is absent from the arguments`;
+        }
+        continue;
+      }
+      if (raw === null) {
+        if (require) return `Header mismatch: missing required header Mcp-Param-${param.name}`;
+        continue;
+      }
+      const decoded = decodeMcpHeaderValue(raw);
+      if (decoded === undefined) {
+        return `Header mismatch: Mcp-Param-${param.name} is not valid Base64-encoded UTF-8`;
+      }
+      // Integers compare numerically ("42.0" equals 42); strings and booleans
+      // compare against their canonical string form.
+      const matches =
+        param.type === "integer"
+          ? typeof value === "number" && Number(decoded) === value
+          : decoded === String(value);
+      if (!matches) {
+        return `Header mismatch: Mcp-Param-${param.name} header value does not match the request body`;
+      }
+    }
+    return undefined;
   }
 
   return async function handleMcpRequest(request: Request): Promise<Response> {
@@ -1332,6 +2160,8 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     }
 
     if (request.method === "GET") {
+      // 2026-07-28 removed the standalone GET stream; older clients that still
+      // try it get 405 plus a human-readable pointer at the POST endpoint.
       return jsonResponse(
         {
           transport: "streamable-http",
@@ -1342,7 +2172,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
             resourceTemplates: resourceTemplates.map((template) => template.uriTemplate),
             prompts: prompts.map((prompt) => prompt.name),
           },
-          hint: "Send JSON-RPC 2.0 over HTTP POST to this endpoint.",
+          hint: "Send JSON-RPC 2.0 over HTTP POST to this endpoint; call server/discover for capabilities.",
         },
         405,
         { allow: "POST, OPTIONS", ...(headers ?? {}) }
@@ -1370,11 +2200,14 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
 
     const protocolHeader = request.headers.get("mcp-protocol-version");
     if (protocolHeader && !supported.has(protocolHeader)) {
+      // 2026-07-28 requires an UnsupportedProtocolVersionError naming the
+      // versions this server does implement, so the client can retry on a
+      // mutually supported revision instead of guessing.
       return rpcError(
         null,
-        INVALID_REQUEST,
-        `Unsupported MCP-Protocol-Version: ${protocolHeader}`,
-        { supported: protocolVersions },
+        UNSUPPORTED_PROTOCOL_VERSION,
+        `Unsupported protocol version: ${protocolHeader}`,
+        { supported: protocolVersions, requested: protocolHeader },
         400,
         headers
       );

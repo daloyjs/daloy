@@ -1,16 +1,18 @@
 import { CodeBlock } from "../../../components/code-block";
-import { FlowDiagram } from "../../../components/diagram";
+import { FlowDiagram, SequenceDiagram } from "../../../components/diagram";
 
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Model Context Protocol (MCP)",
   description:
-    "Build a dedicated Model Context Protocol server with DaloyJS. Expose tools, resources, and prompts over MCP Streamable HTTP while keeping @daloyjs/core dependency-free and secure by default.",
+    "Build a dedicated Model Context Protocol server with DaloyJS. Expose tools, resources, and prompts over stateless MCP 2026-07-28 Streamable HTTP while keeping @daloyjs/core dependency-free and secure by default.",
   path: "/docs/mcp",
   keywords: [
     "DaloyJS MCP",
     "Model Context Protocol",
+    "MCP 2026-07-28",
+    "stateless MCP",
     "MCP Streamable HTTP",
     "MCP tools",
     "MCP resources",
@@ -19,11 +21,206 @@ export const metadata = buildMetadata({
     "createMcpHandler",
     "validateMcpInput",
     "MCP inputSchema validation",
+    "server/discover",
+    "multi round-trip requests",
+    "MRTR",
+    "x-mcp-header",
     "mcpRoutes public",
     "MCP auth boot guard",
   ],
   type: "article",
 });
+
+const DISCOVER_REQUEST = `POST /mcp HTTP/1.1
+Content-Type: application/json
+MCP-Protocol-Version: 2026-07-28
+Mcp-Method: server/discover
+
+{
+  "jsonrpc": "2.0",
+  "id": "discover-1",
+  "method": "server/discover",
+  "params": {
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientInfo": { "name": "ExampleClient", "version": "1.0.0" },
+      "io.modelcontextprotocol/clientCapabilities": {}
+    }
+  }
+}`;
+
+const DISCOVER_RESPONSE = `{
+  "jsonrpc": "2.0",
+  "id": "discover-1",
+  "result": {
+    "resultType": "complete",
+    "supportedVersions": ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"],
+    "capabilities": { "tools": {}, "resources": {}, "prompts": {} },
+    "instructions": "Use this server to inspect inventory and prepare stock reports.",
+    "ttlMs": 0,
+    "cacheScope": "private",
+    "_meta": {
+      "io.modelcontextprotocol/serverInfo": { "name": "inventory-mcp", "version": "1.0.0" }
+    }
+  }
+}`;
+
+const STRICT_VERSIONS = `const mcp = createMcpHandler({
+  serverInfo: { name: "inventory-mcp", version: "1.0.0" },
+  // Refuse every pre-2026 revision. A client that asks for an older version
+  // gets -32022 with the supported list instead of legacy semantics, so the
+  // Mcp-Method / Mcp-Name header contract holds for every request that reaches
+  // a tool. Only do this once your clients have migrated.
+  protocolVersions: ["2026-07-28"],
+  tools: [/* ... */],
+});`;
+
+const HEADER_MISMATCH = `{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32020,
+    "message": "Header mismatch: Mcp-Method header value 'prompts/list' does not match body value 'tools/list'"
+  }
+}`;
+
+const CACHE = `const mcp = createMcpHandler({
+  serverInfo: { name: "inventory-mcp", version: "1.0.0" },
+  // Defaults: { ttlMs: 0, scope: "private" } — clients revalidate every call and
+  // no shared proxy may store the response. Raise ttlMs once you are sure the
+  // list is stable, and only use "public" when every caller sees the same tools.
+  cache: { ttlMs: 300_000, scope: "private" },
+  tools: [/* ... */],
+});`;
+
+const MRTR = `const mcp = createMcpHandler({
+  serverInfo: { name: "deploy-mcp", version: "1.0.0" },
+  tools: [
+    {
+      name: "deploy_service",
+      description: "Deploy a service after the user confirms.",
+      inputSchema: {
+        type: "object",
+        properties: { service: { type: "string", minLength: 1 } },
+        required: ["service"],
+        additionalProperties: false,
+      },
+      handler: async (args, ctx) => {
+        const confirmation = ctx.inputResponses?.confirm as
+          | { action?: string }
+          | undefined;
+
+        if (!confirmation) {
+          // Nothing to resume from yet: ask the client to collect a decision.
+          return {
+            resultType: "input_required",
+            inputRequests: {
+              confirm: {
+                method: "elicitation/create",
+                params: {
+                  mode: "form",
+                  message: \`Deploy \${String(args.service)} to production?\`,
+                  requestedSchema: {
+                    type: "object",
+                    properties: { approve: { type: "boolean" } },
+                    required: ["approve"],
+                  },
+                },
+              },
+            },
+            // Opaque to the client, attacker-controlled on the way back.
+            // Sign it: this one carries the principal, the target, and an expiry.
+            requestState: await signState({
+              sub: ctx.request.headers.get("x-user-id"),
+              service: args.service,
+              exp: Date.now() + 120_000,
+            }),
+          };
+        }
+
+        // Retry path. Never trust requestState before verifying it.
+        const state = await verifyState(ctx.requestState);
+        if (state.service !== args.service) {
+          throw new McpToolError("Request state does not match this call.");
+        }
+        if (confirmation.action !== "accept") {
+          return "Deploy cancelled.";
+        }
+
+        await deploy(state.service);
+        return \`Deployed \${state.service}.\`;
+      },
+    },
+  ],
+});`;
+
+const MRTR_WIRE = `// 1. First call — the server cannot finish yet.
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "resultType": "input_required",
+    "inputRequests": {
+      "confirm": { "method": "elicitation/create", "params": { "...": "..." } }
+    },
+    "requestState": "v1.eyJzdWIiOiJ1XzEifQ.<hmac>"
+  }
+}
+
+// 2. Retry — NEW JSON-RPC id, original params, plus the answers and state.
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "deploy_service",
+    "arguments": { "service": "checkout-api" },
+    "inputResponses": { "confirm": { "action": "accept", "content": { "approve": true } } },
+    "requestState": "v1.eyJzdWIiOiJ1XzEifQ.<hmac>",
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": { "elicitation": {} }
+    }
+  }
+}`;
+
+const MIRRORED = `{
+  name: "execute_sql",
+  description: "Execute SQL in a regional cluster.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      // Mirrored into "Mcp-Param-Region" so a gateway can route on it.
+      region: { type: "string", "x-mcp-header": "Region" },
+      query: { type: "string" },
+    },
+    required: ["region", "query"],
+    additionalProperties: false,
+  },
+  handler: async (args) => runSql(String(args.region), String(args.query)),
+}`;
+
+const STATE_HANDLE = `// No protocol session exists, so carry state in an explicit handle.
+{
+  name: "add_item",
+  description: "Add a SKU to an existing basket. Baskets expire after 24h.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      basket_id: { type: "string", minLength: 1 },
+      sku: { type: "string", minLength: 1 },
+    },
+    required: ["basket_id", "sku"],
+    additionalProperties: false,
+  },
+  handler: async (args, ctx) => {
+    // A handle is a name, not a capability: re-authorize it on every call.
+    const basket = await baskets.findForCaller(String(args.basket_id), ctx.request);
+    if (!basket) throw new McpToolError("Unknown or expired basket.");
+    await basket.add(String(args.sku));
+    return \`Added \${String(args.sku)} to \${basket.id}.\`;
+  },
+}`;
 
 const INSTALL = `# MCP support ships in @daloyjs/core.
 # No @modelcontextprotocol/sdk dependency is required.
@@ -326,6 +523,115 @@ export default function Page() {
         caption="Run MCP as its own DaloyJS service when it has a different trust boundary than your REST API. The app still gets body limits, request timeouts, rate limits, auth middleware, and problem+json errors."
       />
 
+      <h2 id="protocol-versions">Protocol versions and the stateless core</h2>
+      <p>
+        MCP <code>2026-07-28</code> removed the <code>initialize</code> /{" "}
+        <code>notifications/initialized</code> handshake and the{" "}
+        <code>Mcp-Session-Id</code> header. The protocol is now stateless: every
+        request carries its own protocol version, client identity, and client
+        capabilities in <code>params._meta</code>
+        {", "}so any request can land on any instance. That is exactly the shape
+        serverless and edge deployments want, and it is the shape DaloyJS was
+        already built for.
+      </p>
+      <p>
+        <code>createMcpHandler()</code> serves <strong>both eras</strong> on one
+        endpoint. A request is handled as <em>modern</em> when its{" "}
+        <code>_meta</code> protocol version (or the{" "}
+        <code>MCP-Protocol-Version</code> header) is <code>2026-07-28</code> or
+        later; everything else takes the unchanged legacy path. You do not
+        configure this, and older clients keep working.
+      </p>
+      <p>
+        Because the era follows the version the <em>client</em> declares, a
+        naive dual-era server would hand attackers a free bypass: declare{" "}
+        <code>2025-11-25</code>
+        {", "}keep whatever <code>Mcp-Method</code> or{" "}
+        <code>Mcp-Param-*</code> header satisfies the gateway in front, and send
+        a body that does something else. DaloyJS closes that.{" "}
+        <a href="#request-headers">Header/body agreement</a> is validated in{" "}
+        <strong>both</strong> eras. Legacy requests are not{" "}
+        <em>required</em> to carry the standard headers — those headers postdate
+        them — but any they do carry must match the body, or the request is
+        refused with <code>-32020</code>
+        {". "}A genuine legacy client, which sends none of them, is unaffected.
+      </p>
+      <p>
+        Once your clients have migrated you can go further and refuse the older
+        revisions entirely, so no request reaches a tool without the full modern
+        contract:
+      </p>
+      <CodeBlock code={STRICT_VERSIONS} />
+      <div className="not-prose overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Concern</th>
+              <th>Legacy (2024-11-05 … 2025-11-25)</th>
+              <th>Modern (2026-07-28)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Handshake</td>
+              <td>
+                <code>initialize</code> + <code>ping</code>
+              </td>
+              <td>
+                none; optional <code>server/discover</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Version and capabilities</td>
+              <td>negotiated once per session</td>
+              <td>
+                per request, in <code>_meta</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Sessions</td>
+              <td>
+                <code>Mcp-Session-Id</code>
+              </td>
+              <td>none; use explicit handles</td>
+            </tr>
+            <tr>
+              <td>Required headers</td>
+              <td>
+                <code>MCP-Protocol-Version</code>
+              </td>
+              <td>
+                <code>MCP-Protocol-Version</code>, <code>Mcp-Method</code>,{" "}
+                <code>Mcp-Name</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Result envelope</td>
+              <td>method-specific</td>
+              <td>
+                <code>resultType</code> + <code>_meta.serverInfo</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Server asks the user something</td>
+              <td>server-initiated request over SSE</td>
+              <td>
+                <code>input_required</code> + client retry
+              </td>
+            </tr>
+            <tr>
+              <td>Resource not found</td>
+              <td>
+                <code>-32002</code>
+              </td>
+              <td>
+                <code>-32602</code>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <h2 id="install">Install</h2>
       <CodeBlock code={INSTALL} language="bash" />
 
@@ -383,9 +689,8 @@ export default function Page() {
       <h2 id="what-core-supports">What core supports</h2>
       <ul>
         <li>
-          <code>initialize</code>
-          {", "}
-          <code>ping</code>
+          <strong>MCP 2026-07-28 (stateless):</strong>{" "}
+          <code>server/discover</code>
           {", "}
           <code>tools/list</code>
           {", "}
@@ -397,14 +702,28 @@ export default function Page() {
           {", "}
           <code>resources/read</code> (including template-matched URIs),{" "}
           <code>prompts/list</code>
-          {", "}and <code>prompts/get</code> with required-argument enforcement.
+          {", "}and <code>prompts/get</code>
+          {". "}Every result carries <code>resultType</code> and{" "}
+          <code>_meta.serverInfo</code>
+          {"; "}cacheable ones also carry <code>ttlMs</code> /{" "}
+          <code>cacheScope</code>
+          {". "}Per-request <code>_meta</code> validation, standard-header
+          validation (<code>-32020</code>), multi round-trip results, and{" "}
+          <code>x-mcp-header</code> mirroring are all enforced.
         </li>
         <li>
-          Protocol-version negotiation, <code>MCP-Protocol-Version</code>{" "}
-          rejection for unsupported versions (headerless requests assume{" "}
-          <code>2025-03-26</code> per the spec), JSON-RPC parse errors, accepted
-          notifications, unknown-pagination-cursor rejection, and bounded
-          request bodies parsed with the framework&apos;s{" "}
+          <strong>MCP 2025-11-25 and earlier (legacy):</strong>{" "}
+          <code>initialize</code> and <code>ping</code> on the same endpoint,
+          unchanged, so existing clients keep working while the ecosystem
+          migrates.
+        </li>
+        <li>
+          Protocol-version negotiation with{" "}
+          <code>UnsupportedProtocolVersion</code> (<code>-32022</code>)
+          responses that name the versions this server does speak (headerless
+          legacy requests assume <code>2025-03-26</code> per the spec), JSON-RPC
+          parse errors, accepted notifications, unknown-pagination-cursor
+          rejection, and bounded request bodies parsed with the framework&apos;s{" "}
           <code>safeJsonParse</code> so <code>__proto__</code> /{" "}
           <code>constructor</code> / <code>prototype</code> keys are stripped,
           matching the REST body parsers.
@@ -439,6 +758,221 @@ export default function Page() {
         </li>
       </ul>
 
+      <h2 id="server-discover">Discovery (<code>server/discover</code>)</h2>
+      <p>
+        A modern server <strong>must</strong> implement{" "}
+        <code>server/discover</code>
+        {". "}It is the one call that tells a client which protocol versions,
+        capabilities, and identity a server has, without probing{" "}
+        <code>tools/list</code>
+        {", "}
+        <code>prompts/list</code>
+        {", "}and <code>resources/list</code> separately. DaloyJS answers it
+        from the same <code>serverInfo</code>
+        {", "}
+        <code>instructions</code>
+        {", "}and capability set you already configured, so there is nothing
+        extra to wire up.
+      </p>
+      <CodeBlock code={DISCOVER_REQUEST} language="http" />
+      <CodeBlock code={DISCOVER_RESPONSE} language="json" />
+      <p>
+        Legacy clients that call <code>server/discover</code> get{" "}
+        <code>-32601</code>
+        {", "}and modern clients that call <code>initialize</code> or{" "}
+        <code>ping</code> get <code>-32601</code> with HTTP <code>404</code>
+        {" — "}the status the spec reserves for &ldquo;modern server, unknown
+        method&rdquo; so a client can tell it apart from a legacy endpoint.
+      </p>
+
+      <h2 id="request-headers">Required request headers</h2>
+      <p>
+        Streamable HTTP mirrors selected body fields into HTTP headers so load
+        balancers, gateways, and WAFs can route and inspect requests without
+        parsing JSON. On a modern request all of these are{" "}
+        <strong>required</strong>
+        {": "}
+        <code>MCP-Protocol-Version</code> (must equal{" "}
+        <code>_meta[&quot;io.modelcontextprotocol/protocolVersion&quot;]</code>
+        ), <code>Mcp-Method</code> (must equal the JSON-RPC{" "}
+        <code>method</code>), and <code>Mcp-Name</code> for{" "}
+        <code>tools/call</code>
+        {", "}
+        <code>resources/read</code>
+        {", "}and <code>prompts/get</code> (must equal{" "}
+        <code>params.name</code> or <code>params.uri</code>).
+      </p>
+      <p>
+        DaloyJS rejects a missing or disagreeing header with HTTP{" "}
+        <code>400</code> and JSON-RPC <code>-32020</code> (
+        <code>HeaderMismatch</code>). This is a security control, not
+        bookkeeping: without it a gateway can authorize, route, or rate-limit on
+        the header value while the server executes the body value.
+      </p>
+      <p>
+        The agreement check also runs on <strong>legacy</strong> requests, which
+        is stricter than the specification requires. Those revisions predate the
+        headers, so a legacy request may omit them — but one that sends them is
+        held to them. Without that, declaring an old protocol version would be
+        enough to keep a gateway-satisfying <code>Mcp-Method</code>
+        {", "}
+        <code>Mcp-Name</code>
+        {", "}or <code>Mcp-Param-*</code> header while the body called something
+        else entirely.
+      </p>
+      <CodeBlock code={HEADER_MISMATCH} language="json" />
+      <p>
+        Values that cannot be represented as plain ASCII arrive in the Base64
+        sentinel form <code>=?base64?&lt;payload&gt;?=</code>
+        {"; "}DaloyJS decodes them before comparing, and treats an undecodable
+        payload as a mismatch. <code>Mcp-Session-Id</code> and{" "}
+        <code>Last-Event-ID</code> from older clients are ignored: no session is
+        ever minted or echoed, and streams are not resumable.
+      </p>
+
+      <h2 id="mirrored-parameters">
+        Mirrored tool parameters (<code>x-mcp-header</code>)
+      </h2>
+      <p>
+        A tool may ask clients to mirror a primitive parameter into an{" "}
+        <code>Mcp-Param-&#123;Name&#125;</code> header so infrastructure can
+        route on it. Annotate the property in <code>inputSchema</code>
+        {": "}
+      </p>
+      <CodeBlock code={MIRRORED} />
+      <p>
+        DaloyJS validates the contract in both directions on every{" "}
+        <code>tools/call</code>
+        {": "}a value present in the arguments requires the matching header, an
+        absent value forbids it, and integers compare numerically. Any
+        disagreement is a <code>-32020</code>
+        {". "}Invalid annotations (empty, non-token, duplicated
+        case-insensitively, or on a non-primitive property) throw at{" "}
+        <code>createMcpHandler()</code> construction, so a misconfigured tool
+        fails at boot rather than in front of a model.
+      </p>
+      <p>
+        <strong>Do not mirror secrets.</strong> Header values are visible to
+        every intermediary on the path, so passwords, API keys, tokens, and PII
+        must never carry an <code>x-mcp-header</code> annotation.
+      </p>
+
+      <h2 id="caching-hints">Caching hints</h2>
+      <p>
+        Modern list results and <code>resources/read</code> carry{" "}
+        <code>ttlMs</code> (a freshness hint) and <code>cacheScope</code> (
+        <code>&quot;public&quot;</code> or <code>&quot;private&quot;</code>), so
+        clients can cache instead of polling. DaloyJS defaults to{" "}
+        <code>&#123; ttlMs: 0, scope: &quot;private&quot; &#125;</code>
+        {". "}That is deliberate: MCP explicitly allows a tool list to vary with
+        the credential on the request, and a <code>&quot;public&quot;</code>{" "}
+        scope would let a shared proxy hand one caller&apos;s tools to another.
+        Widen it once you know your results are identical for every caller.
+      </p>
+      <CodeBlock code={CACHE} />
+
+      <h2 id="multi-round-trip-requests">Multi round-trip requests (MRTR)</h2>
+      <p>
+        Servers can no longer send their own JSON-RPC requests. When a tool,
+        resource, or prompt needs elicitation, sampling, or the client&apos;s
+        roots, it returns an interim result with{" "}
+        <code>resultType: &quot;input_required&quot;</code>
+        {". "}The client gathers the input and retries the{" "}
+        <em>original request</em> with a new JSON-RPC id, carrying{" "}
+        <code>inputResponses</code> and whatever <code>requestState</code> the
+        server handed back. Nothing is stored server-side between the two calls.
+      </p>
+      <SequenceDiagram
+        title="Multi round-trip request"
+        participants={["MCP client", "DaloyJS tool", "User"]}
+        steps={[
+          {
+            from: "MCP client",
+            to: "DaloyJS tool",
+            label: "tools/call (id: 1)",
+            detail: "deploy_service { service: 'checkout-api' }",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS tool",
+            to: "MCP client",
+            label: "input_required + signed requestState",
+            detail: "inputRequests: { confirm: elicitation/create }",
+            kind: "response",
+          },
+          {
+            from: "MCP client",
+            to: "User",
+            label: "Prompts for confirmation",
+            detail: "the client owns the UI, not the server",
+            kind: "note",
+          },
+          {
+            from: "MCP client",
+            to: "DaloyJS tool",
+            label: "tools/call (id: 2)",
+            detail: "same params + inputResponses + requestState",
+            kind: "request",
+          },
+          {
+            from: "DaloyJS tool",
+            to: "DaloyJS tool",
+            label: "Verify requestState before acting",
+            detail: "HMAC/AEAD, principal binding, short expiry",
+            kind: "note",
+          },
+          {
+            from: "DaloyJS tool",
+            to: "MCP client",
+            label: "complete",
+            detail: "the final tool result",
+            kind: "response",
+          },
+        ]}
+        caption="No shared storage and no sticky load balancing: the retry carries everything the server needs, which is why requestState has to be integrity-protected."
+      />
+      <CodeBlock code={MRTR} />
+      <CodeBlock code={MRTR_WIRE} language="json" />
+      <p>
+        DaloyJS enforces the protocol rules around this so your handler cannot
+        get them wrong: an <code>input_required</code> result must carry{" "}
+        <code>inputRequests</code> or <code>requestState</code>
+        {", "}it is only valid on <code>tools/call</code>
+        {", "}
+        <code>resources/read</code>
+        {", "}and <code>prompts/get</code> in the modern era, and a request the
+        client did not declare support for is refused with <code>-32021</code> (
+        <code>MissingRequiredClientCapability</code>) rather than sent to a
+        client that cannot answer it.
+      </p>
+      <blockquote>
+        <strong>
+          Treat <code>requestState</code> as attacker-controlled.
+        </strong>{" "}
+        It round-trips through the client. If it influences authorization,
+        resource access, or business logic, integrity-protect it (HMAC or AEAD),
+        bind it to the authenticated principal <em>and</em> the originating
+        request, give it a short expiry, and reject anything that fails
+        verification. Incoming values are capped at{" "}
+        <code>MCP_MAX_REQUEST_STATE_LENGTH</code> (8 KiB) so a hostile client
+        cannot force large state parsing.
+      </blockquote>
+
+      <h2 id="state-without-sessions">State without sessions</h2>
+      <p>
+        With protocol sessions gone, a server that needs state across calls
+        returns an explicit handle from one tool and accepts it as an ordinary
+        argument on the next. The model carries the handle forward; the protocol
+        does not.
+      </p>
+      <CodeBlock code={STATE_HANDLE} />
+      <p>
+        A handle is a name, not a capability. Re-authorize it on every call, keep
+        it opaque, give it a bounded lifetime, state that lifetime in the
+        tool&apos;s description so the model can see it, and return a recoverable{" "}
+        <code>McpToolError</code> when it expires.
+      </p>
+
       <h2 id="origin-validation-dns-rebinding">
         Origin validation (DNS rebinding)
       </h2>
@@ -461,7 +995,7 @@ export default function Page() {
 
       <h2 id="input-schema-enforcement">Input schema enforcement</h2>
       <blockquote>
-        <strong>Breaking change.</strong> A tool&apos;s <code>inputSchema</code>{" "}
+        <strong>Behavior change.</strong> A tool&apos;s <code>inputSchema</code>{" "}
         used to be documentation only. It is now enforced server-side:{" "}
         <code>tools/call</code> arguments that violate the schema are rejected
         before your handler runs. Handlers that previously received malformed
@@ -536,10 +1070,21 @@ export default function Page() {
       <h2 id="what-stays-out-of-core">What stays out of core</h2>
       <p>
         DaloyJS does not bundle the official MCP SDK, stdio process management,
-        OAuth server metadata, persistent MCP sessions, server-initiated SSE, or
-        experimental tasks. Those pieces either add dependency weight or need a
-        product-specific security model. Keep them in your application or a
-        separate integration package until your use case needs them.
+        OAuth server metadata, or the{" "}
+        <code>subscriptions/listen</code> notification stream (so no{" "}
+        <code>listChanged</code> capability). It also does not implement the{" "}
+        <code>io.modelcontextprotocol/tasks</code> or MCP Apps extensions — you
+        can advertise an extension you implement yourself through the{" "}
+        <code>extensions</code> option, but core ships none. Those pieces either
+        add dependency weight or need a product-specific security model.
+      </p>
+      <p>
+        Features the specification deprecated in <code>2026-07-28</code> are
+        deliberately absent rather than reimplemented: Roots, Sampling, and
+        Logging (pass paths as tool parameters, call your LLM provider directly,
+        and log to stderr or OpenTelemetry instead), the legacy HTTP+SSE
+        transport, SSE resumability, and Dynamic Client Registration. New
+        servers should not adopt them.
       </p>
 
       <h2 id="error-handling">Error handling</h2>
@@ -608,6 +1153,39 @@ export default function Page() {
           <code>format</code>
           {", "}or <code>anyOf</code>/<code>oneOf</code>/<code>allOf</code>{" "}
           inside the handler.
+        </li>
+        <li>
+          Sign and bind <code>requestState</code> before it can influence
+          anything. It passes through the client, so an unsigned blob is a
+          request-forgery primitive. Include the authenticated principal, an
+          identifier for the originating request, and a short expiry, and reject
+          state that fails verification. See{" "}
+          <a href="#multi-round-trip-requests">multi round-trip requests</a>
+          {"."}
+        </li>
+        <li>
+          Pin <code>protocolVersions</code> to{" "}
+          <code>[&quot;2026-07-28&quot;]</code> once your clients have migrated.
+          Header/body agreement is already enforced in both eras, so this is
+          defense in depth rather than a fix — it just means nothing reaches a
+          tool without the full modern contract (required headers, per-request{" "}
+          <code>_meta</code>
+          {", "}declared capabilities).
+        </li>
+        <li>
+          Never mark a secret with <code>x-mcp-header</code>
+          {". "}Mirrored parameter values are visible to every proxy on the
+          path.
+        </li>
+        <li>
+          Re-authorize state handles on every call. Without protocol sessions,
+          a handle passed as a tool argument is just a string the model
+          carries — treat it as a name, not a capability.
+        </li>
+        <li>
+          Leave <code>cacheScope</code> at <code>&quot;private&quot;</code>{" "}
+          unless every caller genuinely sees the same tools, resources, and
+          prompts.
         </li>
         <li>
           Keep tool descriptions precise. A vague tool is easier for a model to
