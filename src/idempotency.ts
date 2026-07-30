@@ -508,6 +508,20 @@ function buildReplayResponse(stored: StoredIdempotentResponse, replayHeaderName:
 // ---------- Middleware ----------
 
 /**
+ * Internal Symbol stamped on the hooks {@link idempotency} returns, so `App`'s
+ * boot guards can see where a stored-response replay sits in a route's effective
+ * hook chain.
+ *
+ * A replay is returned from `beforeHandle` and ends the hook chain, which means
+ * anything enforcing from the *same* phase but mounted later never runs. That is
+ * how a `rateLimit()` behind a replay stops counting. The marker lets the boot
+ * path refuse that order rather than leave the limiter silently infinite.
+ *
+ * @internal
+ */
+export const IDEMPOTENCY_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.idempotency.hook");
+
+/**
  * Idempotency-key middleware. Mount it ahead of the routes that need
  * exactly-once semantics under retries (typically the payment / write
  * surface).
@@ -577,7 +591,7 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
   }
   const keyPrefix = opts.groupId ? `${opts.groupId}:` : "";
 
-  return {
+  const hooks: Hooks = {
     async beforeHandle(ctx) {
       const method = ctx.request.method.toUpperCase();
       if (!methods.has(method)) return undefined;
@@ -719,6 +733,8 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       return undefined;
     },
   };
+  (hooks as Record<PropertyKey, unknown>)[IDEMPOTENCY_HOOK_MARKER] = true;
+  return hooks;
 }
 
 function isPromiseLike<T>(value: unknown): value is Promise<T> {

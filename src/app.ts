@@ -1018,6 +1018,18 @@ interface RouteSecurityMarkers {
    * cache cannot partition on it.
    */
   cacheBeforeTenancy: boolean;
+  /**
+   * Name of a stored-response middleware (`responseCache()` / `idempotency()`)
+   * that runs *before* a request-budget hook (`rateLimit()` /
+   * `loginThrottle()`) in the route's effective chain, or `null` when the order
+   * is safe.
+   *
+   * Both sides act from `beforeHandle`. A cache hit or an idempotent replay
+   * returns a `Response` from there and ends the hook chain, so the limiter
+   * mounted behind it never counts the request — the declared budget becomes
+   * infinite for exactly the requests that repeat most.
+   */
+  replayBeforeBudget: string | null;
 }
 
 /**
@@ -1037,6 +1049,8 @@ const MCP_ROUTE_MARKER = Symbol.for("daloyjs.mcp.route");
  */
 const RESPONSE_CACHE_HOOK_MARKER = Symbol.for("daloyjs.response-cache.hook");
 const TENANCY_HOOK_MARKER = Symbol.for("daloyjs.tenancy.hook");
+const IDEMPOTENCY_HOOK_MARKER = Symbol.for("daloyjs.idempotency.hook");
+const EARLY_REJECTION_MARKER = Symbol.for("daloyjs.middleware.earlyRejectionHooks");
 
 interface BootGuardCache {
   checked: boolean;
@@ -2164,6 +2178,32 @@ export class App<
       );
       this.bootGuard.error = err;
       throw err;
+    }
+
+    // Guard 3b: a stored-response layer mounted ahead of a request budget.
+    // `responseCache()` and `idempotency()` both answer from `beforeHandle` and
+    // end the hook chain, and `rateLimit()` / `loginThrottle()` enforce from that
+    // same phase — so a limiter mounted behind either one never counts the
+    // requests it serves. Measured: `rateLimit({ max: 2 })` behind a cache or a
+    // replay admitted six of six. The budget silently becomes infinite for
+    // exactly the traffic that repeats most, which is what the limit was written
+    // for. Same shape as the responseCache-ahead-of-gates finding, and the reason
+    // the five network-identity gates moved to `preBody`; `rateLimit` cannot
+    // follow them there because its `keyGenerator` is caller-supplied and may
+    // read `ctx.state`, so the unsafe order is refused instead.
+    const replayBeforeBudget = this.routeSecurityMarkers.find((r) => r.replayBeforeBudget !== null);
+    if (replayBeforeBudget !== undefined && this.bootGuard.error === undefined) {
+      this.bootGuard.error = new Error(
+        `Route ${replayBeforeBudget.method} ${replayBeforeBudget.path} runs ` +
+          `${replayBeforeBudget.replayBeforeBudget} before rateLimit() / loginThrottle() in its ` +
+          `effective hook chain. Both act from beforeHandle, so a cache hit or an idempotent ` +
+          `replay returns a response and ends the chain before the limiter counts the request — ` +
+          `the declared budget is never spent on repeat traffic and is effectively unlimited. ` +
+          `Register rateLimit() first — as a global hook (new App({ hooks: rateLimit(...) })) or ` +
+          `an earlier app.use(...) — so every request is counted before a stored response can ` +
+          `short-circuit it. See https://daloyjs.dev/docs/security/boot-guards.`
+      );
+      throw this.bootGuard.error;
     }
 
     // Guard 4: session() + state-changing route without csrf().
@@ -4621,7 +4661,10 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
 
 function securityMarkersFromHooks(
   layers: Hooks[]
-): Pick<RouteSecurityMarkers, "hasSession" | "hasCsrf" | "hasAuth" | "cacheBeforeTenancy"> {
+): Pick<
+  RouteSecurityMarkers,
+  "hasSession" | "hasCsrf" | "hasAuth" | "cacheBeforeTenancy" | "replayBeforeBudget"
+> {
   let hasSession = false;
   let hasCsrf = false;
   let hasAuth = false;
@@ -4629,6 +4672,12 @@ function securityMarkersFromHooks(
   // to tell whether the cache reads state before tenancy has written it.
   let cacheIndex = -1;
   let tenancyIndex = -1;
+  // First stored-response layer of either kind, and the first request-budget
+  // layer. Only the earliest of each matters: if any replay precedes any budget
+  // hook, that budget is preemptable.
+  let replayIndex = -1;
+  let replayName = "";
+  let budgetIndex = -1;
   for (let i = 0; i < layers.length; i++) {
     const record = layers[i] as Record<PropertyKey, unknown>;
     if (record[SESSION_HOOK_MARKER] === true) hasSession = true;
@@ -4636,12 +4685,24 @@ function securityMarkersFromHooks(
     if (record[AUTH_HOOK_MARKER] === true) hasAuth = true;
     if (cacheIndex === -1 && record[RESPONSE_CACHE_HOOK_MARKER] === true) cacheIndex = i;
     if (tenancyIndex === -1 && record[TENANCY_HOOK_MARKER] === true) tenancyIndex = i;
+    if (replayIndex === -1) {
+      if (record[RESPONSE_CACHE_HOOK_MARKER] === true) {
+        replayIndex = i;
+        replayName = "responseCache()";
+      } else if (record[IDEMPOTENCY_HOOK_MARKER] === true) {
+        replayIndex = i;
+        replayName = "idempotency()";
+      }
+    }
+    if (budgetIndex === -1 && Array.isArray(record[EARLY_REJECTION_MARKER])) budgetIndex = i;
   }
   return {
     hasSession,
     hasCsrf,
     hasAuth,
     cacheBeforeTenancy: cacheIndex !== -1 && tenancyIndex !== -1 && cacheIndex < tenancyIndex,
+    replayBeforeBudget:
+      replayIndex !== -1 && budgetIndex !== -1 && replayIndex < budgetIndex ? replayName : null,
   };
 }
 

@@ -76,6 +76,18 @@ export default function Page() {
         <code>GET</code> / <code>HEAD</code> responses with status{" "}
         <code>200</code> are cached.
       </p>
+      <p>
+        One ordering rule: if the app also uses <code>rateLimit()</code> or{" "}
+        <code>loginThrottle()</code>, register the limiter{" "}
+        <strong>before</strong> the cache. A cache hit is returned from{" "}
+        <code>beforeHandle</code> and ends the hook chain, so a limiter mounted
+        behind the cache never counts the requests the cache serves and the
+        declared budget is effectively unlimited. In production that order{" "}
+        <a href="/docs/security/boot-guards#8-stored-response-mounted-ahead-of-a-request-budget">
+          refuses to boot
+        </a>
+        .
+      </p>
       <CodeBlock
         code={`import { App, responseCache } from "@daloyjs/core";
 import { z } from "zod";
@@ -423,8 +435,8 @@ app.use(
         Access control is not order-sensitive
       </h3>
       <p>
-        A cache hit returns a response from <code>beforeHandle</code>, which ends
-        the hook chain. Any gate running in that <em>same</em> phase could
+        A cache hit returns a response from <code>beforeHandle</code>, which
+        ends the hook chain. Any gate running in that <em>same</em> phase could
         therefore be skipped by a hit above it. That is why the network-identity
         gates — <code>geoBlock()</code>
         {", "}

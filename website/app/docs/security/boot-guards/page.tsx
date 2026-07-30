@@ -411,6 +411,58 @@ alsoGood.use(responseCache({ ttlSeconds: 30 }));`}
         for cookie-authenticated routes.
       </p>
 
+      <h2 id="8-stored-response-mounted-ahead-of-a-request-budget">
+        8. <code>responseCache()</code> / <code>idempotency()</code> mounted
+        ahead of <code>rateLimit()</code>
+      </h2>
+      <p>
+        A cache hit and an idempotent replay are both returned from{" "}
+        <code>beforeHandle</code>, and returning a response there ends the hook
+        chain. <code>rateLimit()</code> and <code>loginThrottle()</code> enforce
+        from that same phase, so a limiter mounted <em>behind</em> either one
+        never counts the requests it serves. Measured before this guard existed:{" "}
+        <code>rateLimit(&#123; max: 2 &#125;)</code> admitted six of six
+        requests behind a cache and behind a replay. The declared budget becomes
+        unlimited for precisely the repeat traffic the limit was written for,
+        and nothing in the response says so.
+      </p>
+      <p>
+        This is the same hazard as guard 7, one phase later. The five
+        network-identity gates (<code>geoBlock</code>,{" "}
+        <code>ipRestriction</code>, <code>botGuard</code>, <code>autoBan</code>,{" "}
+        <code>ipReputation</code>) were made immune by moving them to{" "}
+        <code>preBody</code>, which always runs first. <code>rateLimit()</code>{" "}
+        cannot follow them there, because its <code>keyGenerator</code> is
+        caller-supplied and may read <code>ctx.state</code> that{" "}
+        <code>session()</code> or an auth layer populates later. So the unsafe
+        order is refused instead of silently reordered.
+      </p>
+      <CodeBlock
+        code={`import { App, rateLimit, responseCache, idempotency } from "@daloyjs/core";
+
+// (a) WRONG - refuses to boot: cache hits never reach the limiter.
+const bad = new App({ env: "production" });
+bad.use(responseCache({ ttlSeconds: 30 }));
+bad.use(rateLimit({ windowMs: 60_000, max: 100 }));
+
+// (b) RIGHT - every request is counted before a stored response can answer it.
+const good = new App({ env: "production" });
+good.use(rateLimit({ windowMs: 60_000, max: 100 }));
+good.use(responseCache({ ttlSeconds: 30 }));
+
+// (c) Also right - the limiter as a global hook always runs first.
+const alsoGood = new App({
+  env: "production",
+  hooks: rateLimit({ windowMs: 60_000, max: 100 }),
+});
+alsoGood.use(idempotency({ ttlSeconds: 86_400 }));`}
+      />
+      <p>
+        Ordering the limiter first does mean cache hits and replays spend
+        budget. That is the intended reading of a rate limit: the cap is on what
+        a caller may ask for, not on what happened to be expensive to produce.
+      </p>
+
       <h2 id="migration-checklist">Migration checklist</h2>
       <ul>
         <li>

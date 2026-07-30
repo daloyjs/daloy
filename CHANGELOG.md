@@ -15,6 +15,41 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- **`responseCache()` / `idempotency()` mounted ahead of `rateLimit()` /
+  `loginThrottle()` now refuses to boot in production (boot guard 8).** A cache
+  hit and an idempotent replay are both returned from `beforeHandle`, and
+  returning a response there ends the hook chain. The limiters enforce from that
+  same phase, so one mounted _behind_ either never counted the requests it
+  served. Measured: `rateLimit({ max: 2 })` admitted **six of six** requests
+  behind a cache, and six of six behind a replay — the declared budget was
+  silently unlimited for exactly the repeat traffic a rate limit exists to bound,
+  with nothing in the response indicating it.
+  - Same hazard as the `responseCache`-ahead-of-`tenancy()` guard, one phase
+    later, and the same shape as the finding that moved the five
+    network-identity gates to `preBody`. `rateLimit()` cannot follow them there:
+    its `keyGenerator` is caller-supplied and may read `ctx.state` that
+    `session()` or an auth layer populates in `beforeHandle`, which is precisely
+    the regression that move caused for the gates. So the unsafe order is
+    refused rather than silently reordered — no runtime behaviour changes for
+    apps that already order the limiter first.
+  - Ordering the limiter first does mean cache hits and replays spend budget.
+    That is the intended reading: the cap is on what a caller may ask for, not
+    on what happened to be expensive to produce.
+  - Production-only and `secureDefaults`-gated, like every other boot guard.
+    Documented as guard 8 on `/docs/security/boot-guards`, with mount-order
+    notes added to the `responseCache()` and `idempotency()` quick-starts.
+    Regression tests in `tests/replay-before-budget-guard.test.ts`, including
+    both safe orders still enforcing the budget and each middleware alone still
+    booting. Verified by ablation: disabling the guard lets both unsafe orders
+    boot again.
+  - Investigated in the same pass and found already safe, so no code changed:
+    `idempotency()` ahead of `bearerAuth()` (its default `scope` partitions on
+    the `Authorization` header, so an anonymous replay misses and auth still
+    runs), and `etag()`, which acts only in `onSend` and so cannot preempt a
+    gate or downgrade a `401` into a `304`.
+
 ### Tests
 
 - **`responseCache()`'s credential bypass is now pinned by regression tests**

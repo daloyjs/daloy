@@ -73,6 +73,18 @@ export default function Page() {
         exactly-once semantics. That is all: clients opt in per request by
         sending an <code>Idempotency-Key</code> header.
       </p>
+      <p>
+        One ordering rule: if the app also uses <code>rateLimit()</code> or{" "}
+        <code>loginThrottle()</code>, register the limiter{" "}
+        <strong>before</strong> <code>idempotency()</code>. A replay is returned
+        from <code>beforeHandle</code> and ends the hook chain, so a limiter
+        mounted behind it never counts replayed requests and the declared budget
+        is effectively unlimited. In production that order{" "}
+        <a href="/docs/security/boot-guards#8-stored-response-mounted-ahead-of-a-request-budget">
+          refuses to boot
+        </a>
+        .
+      </p>
       <CodeBlock
         code={`import { App, idempotency } from "@daloyjs/core";
 import { z } from "zod";
