@@ -56,6 +56,21 @@ pnpm red-team:live
   CSWSH lookalike-subdomain / null / absent origins, `Expect: 100-continue`
   timing, chunk-framing abuse, and X-Forwarded-For chain parsing posture.
 
+  A third battery (`wave4Probes`) goes further off-script: **race conditions**
+  (idempotency double-spend, rate-limit overrun, concurrency-limit overshoot —
+  fired as truly simultaneous request bursts), **CL/TE parser differentials**
+  (hex / plus-signed / leading-zero / decimal / space-padded `Content-Length`,
+  TE+CL:0 desync pairs, pipelined-after-CL:0), **post-upgrade WebSocket frame
+  attacks** (reserved opcodes, RSV bits, fragmented/oversized/unmasked control
+  frames, invalid UTF-8, invalid close codes, 4 GiB declared lengths, new
+  opcodes mid-fragment), **multipart exotica** (1000-part floods, embedded
+  boundaries, truncation, traversal filenames), **content-encoding confusion**
+  (gzip-labeled deflate, nested gzip, UTF-16 charset, BOM), protocol oddities
+  (h2c upgrade, WS upgrade to non-WS routes, OPTIONS *, CONNECT, HTTP/0.9,
+  obs-fold), and **trailer-field smuggling**. The invalid-close-code probe
+  doubles as the live regression test for the wave-4 finding (close codes are
+  now validated in `decodeClosePayload` per RFC 6455 §7.1.6).
+
   Some of these are deliberately recorded as `INFO` posture notes rather than
   pass/fail assertions, because the safe fix is a design change rather than a
   patch. The `Expect: 100-continue` probe is one: refusing an over-limit
@@ -66,7 +81,7 @@ pnpm red-team:live
   transport cap has a baseline to measure against.
 
 It prints a bounty-hunter-style report and exits non-zero if any finding is
-`VULNERABLE`. The current run is **127 probes over the wire** across two target
+`VULNERABLE`. The current run is **175 probes over the wire** across two target
 apps.
 
 ## What is covered live vs. in-process

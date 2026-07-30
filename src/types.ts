@@ -329,6 +329,38 @@ export interface PreBodyContext<P extends string = string> {
   };
 }
 
+/**
+ * Context handed to the caller-supplied resolvers of the network-identity
+ * access-control gates — `geoBlock`, `ipRestriction`, `botGuard`, `autoBan` and
+ * `ipReputation`.
+ *
+ * Those gates enforce from {@link Hooks.preBody} so a `responseCache()` hit
+ * cannot preempt them (see SECURITY.md, "Hook phase decides what a
+ * short-circuiting middleware can preempt"). Their callbacks therefore run
+ * before body I/O and before *any* `beforeHandle` middleware, which means:
+ *
+ * - `body` is always `undefined` — nothing has been parsed yet.
+ * - `state` holds only what `onRequest` / an earlier `preBody` layer put there.
+ *   In particular it does **not** hold anything `session()` or another
+ *   `beforeHandle` layer resolves.
+ *
+ * The alias exists so that is a compile error instead of a runtime surprise.
+ * Typing these callbacks on the full {@link BaseContext} — whose `body` widens
+ * to `any` — let `(ctx) => ctx.body.email` type-check and then silently evaluate
+ * to `undefined` at run time. The consequence differed per gate and two of the
+ * five failed *silently*: `ipReputation` fails open on an unresolved IP, and
+ * `autoBan` stopped recording strikes altogether because it never got an
+ * identity to attribute them to.
+ *
+ * Resolve identity from `request` (headers, URL), `params`, `query`, or state a
+ * `preBody` layer set. If a value genuinely requires the parsed body, it cannot
+ * be a `preBody` gate input — see {@link "./auto-ban.js".AutoBanOptions.keyGenerator},
+ * which falls back to a later phase for exactly that case.
+ *
+ * @since 1.0.0-rc.8
+ */
+export type IdentityGateContext = PreBodyContext<any>;
+
 // ---------- Hooks ----------
 
 /**

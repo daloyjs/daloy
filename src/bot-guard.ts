@@ -36,7 +36,7 @@
  * @since 0.37.0
  */
 
-import type { BaseContext, Hooks } from "./types.js";
+import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
@@ -157,7 +157,7 @@ export interface BotGuardOptions {
   /**
    * Custom client-IP resolver. Overrides {@link BotGuardOptions.trustProxyHeaders}.
    */
-  resolveIp?: (ctx: BaseContext<any, any>) => string | undefined;
+  resolveIp?: (ctx: IdentityGateContext) => string | undefined;
   /**
    * Custom DNS resolver for crawler verification. Defaults to a lazy
    * `node:dns/promises`-backed resolver.
@@ -423,7 +423,12 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
   };
 
   return {
-    async beforeHandle(ctx) {
+    // `preBody`, not `beforeHandle`: a bot gate that short-circuits from
+    // `beforeHandle` loses to any earlier `beforeHandle` middleware that returns
+    // a Response first — a `responseCache()` HIT mounted above it would hand a
+    // blocked scraper the cached body. `preBody` always precedes `beforeHandle`,
+    // so the gate holds regardless of mount order.
+    async preBody(ctx) {
       const ua = ctx.request.headers.get("user-agent") ?? "";
 
       // Allowlist wins over every other rule.

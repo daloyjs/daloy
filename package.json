@@ -1,7 +1,7 @@
 {
   "name": "@daloyjs/core",
   "version": "1.0.0-rc.7",
-  "description": "DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI (Hey API), typed client generation, large-scale maintainability, and security-first defaults. Hono-grade portability, Elysia-grade DX, FastAPI-grade docs, Fastify-grade ops — distributed via pnpm.",
+  "description": "DaloyJS is a runtime-portable, contract-first TypeScript web framework with built-in OpenAPI (Hey API), typed client generation, large-scale maintainability, and security-first defaults. Hono-grade portability, Elysia-grade DX, FastAPI-grade docs, Fastify-grade ops \u2014 distributed via pnpm.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -258,7 +258,7 @@
     "red-team:live": "node --import tsx red-team-live/run.ts",
     "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=90 --test-coverage-functions=90 tests/**/*.test.ts",
     "coverage:branches": "tsc -p tsconfig.coverage.json && node --test --experimental-test-coverage --test-coverage-include='dist-coverage/src/**' --test-coverage-branches=92 dist-coverage/tests/**/*.test.js",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.typetest.json && tsc -p tests/tsconfig.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.typetest.json && tsc -p tests/tsconfig.json --noEmit && tsc -p red-team-live/tsconfig.json --noEmit",
     "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit",
     "format": "prettier --write .",
     "gen:openapi": "node --import tsx scripts/dump-openapi.ts",
@@ -301,7 +301,8 @@
     "scan:staged-secrets": "node --import tsx scripts/scan-staged-secrets.ts",
     "hooks:install": "node --import tsx scripts/install-git-hooks.ts",
     "audit": "pnpm audit --prod",
-    "prepublishOnly": "pnpm build && pnpm gen:sbom"
+    "prepublishOnly": "pnpm build && pnpm gen:sbom",
+    "typecheck:red-team-live": "tsc -p red-team-live/tsconfig.json --noEmit"
   },
   "files": [
     "dist",

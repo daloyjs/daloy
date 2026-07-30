@@ -1039,9 +1039,19 @@ class NodeWebSocketConnection implements WebSocketConnection {
       },
       onClose: (code, reason) => {
         if (this.readyState === WS_READY_STATE.OPEN) {
-          // Echo close per RFC 6455 §5.5.1.
+          // Echo close per RFC 6455 §5.5.1 ("SHOULD use the same status code").
+          // A peer that closed with an *empty* payload surfaces as the 1005
+          // sentinel, which §7.4.1 forbids on the wire — echoing it produced a
+          // CLOSE(1005) that a conforming peer (and this framework's own
+          // decoder) must reject with 1002. An empty close is answered with an
+          // empty close.
           this.readyState = WS_READY_STATE.CLOSING;
-          this._writeFrame(WS_OPCODE.CLOSE, encodeClosePayload(code, reason));
+          this._writeFrame(
+            WS_OPCODE.CLOSE,
+            code === WS_CLOSE_CODE.NO_STATUS_RECEIVED
+              ? new Uint8Array(0)
+              : encodeClosePayload(code, reason)
+          );
         }
         this.readyState = WS_READY_STATE.CLOSED;
         this._fireClose(code, reason);

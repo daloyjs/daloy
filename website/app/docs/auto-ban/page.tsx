@@ -67,7 +67,7 @@ export default function Page() {
           },
           {
             label: "Already banned?",
-            detail: "checked in beforeHandle",
+            detail: "checked in preBody, before body I/O",
             tone: "accent",
           },
           {
@@ -128,6 +128,46 @@ app.use(
   }),
 );`}
       />
+      <h3 id="when-your-key-generator-runs">When your key generator runs</h3>
+      <p>
+        <code>autoBan</code> enforces in the <code>preBody</code> phase, which
+        is what makes it immune to mount order (see{" "}
+        <a href="/docs/response-cache#access-control-is-not-order-sensitive">
+          the response-cache note
+        </a>
+        ). Your <code>keyGenerator</code> is called there first, before any body
+        is parsed and before any <code>beforeHandle</code> middleware has run.
+        Key off the request line, headers, params or query and it resolves in
+        that phase, and the ban holds wherever you mount it.
+      </p>
+      <p>
+        Some identities only exist later. The example above reads{" "}
+        <code>ctx.state.user</code>
+        {", "}which a <code>session()</code>-style layer populates in{" "}
+        <code>beforeHandle</code>. So if the <code>preBody</code> call returns{" "}
+        <code>undefined</code>
+        {", "}DaloyJS calls your generator a second time in{" "}
+        <code>beforeHandle</code>
+        {", "}when that state exists. Without the retry such a generator
+        returned <code>undefined</code> forever: no key was recorded, strike
+        accounting found nothing to attribute, and the ban silently never armed.
+        Requests enforced by the second attempt are order-sensitive again, since{" "}
+        <code>beforeHandle</code> is the phase a <code>responseCache()</code>{" "}
+        hit short-circuits — enforcing late still beats not enforcing. Returning{" "}
+        <code>undefined</code> from both attempts skips the request as
+        documented.
+      </p>
+      <p>
+        <code>ctx.body</code> is not available in either phase. The option is
+        typed as <code>IdentityGateContext</code>
+        {", "}so reading through <code>body</code> is a compile error rather
+        than a security control that quietly turns itself off at run time. The
+        same type governs <code>resolveIp</code> on <code>geoBlock()</code>
+        {", "}
+        <code>ipRestriction()</code>
+        {", "}
+        <code>botGuard()</code> and <code>ipReputation()</code>.
+      </p>
 
       <h2 id="spoof-resistant-proxy-identity">
         Spoof-resistant proxy identity
@@ -165,9 +205,36 @@ app.use(autoBan({ trustedHops: 2 }));
         traversed the topology you described (a request that reached your origin
         directly, skipping the CDN, for instance), so it resolves to{" "}
         <em>no identity</em> rather than to a header the caller set themselves.
-        Unattributable requests are skipped, which is the safe failure: an
-        attacker who bypasses your chain gets no ban bucket at all instead of a
-        forgeable one.
+      </p>
+      <p>
+        Resolving to no identity is right for <em>identity</em>, but discarding
+        such a request is wrong for <em>abuse accounting</em>: an attacker who
+        reaches your origin directly would get unlimited strikes simply by
+        omitting a header. So <code>autoBan</code> falls back to the{" "}
+        <strong>immediate TCP peer</strong> address, in its own{" "}
+        <code>peer:</code> keyspace. The peer cannot be spoofed — it is the
+        socket actually talking to your server — and in exactly the
+        direct-to-origin case that produced the bypass, the peer <em>is</em> the
+        attacker, so accounting becomes precise rather than absent.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`// Default. An unresolvable forwarded identity falls back to the TCP peer.
+app.use(autoBan({ trustedHops: 2 }));
+
+// Opt out: never count or ban a request whose identity cannot be resolved.
+app.use(autoBan({ trustedHops: 2, onUnresolvedIdentity: "skip" }));`}
+      />
+      <p>
+        Choose <code>&quot;skip&quot;</code> only when unresolved requests are
+        known-benign and arrive from a shared address — a load balancer that
+        does not always set <code>X-Forwarded-For</code>, say, where every such
+        request would otherwise share that balancer&apos;s single{" "}
+        <code>peer:</code> bucket and a few <code>401</code>s could ban the lot.
+        Fixing the proxy configuration is the better answer. On edge runtimes
+        that expose no peer socket there is nothing to attribute to, and the
+        request is skipped either way. A custom <code>keyGenerator</code> owns
+        its own posture: returning <code>undefined</code> still means skip.
       </p>
       <p>
         Second, <code>trustedHops</code> already implies proxy-header trust, so

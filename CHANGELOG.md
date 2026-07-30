@@ -17,16 +17,171 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Security
 
+- **`idempotency()` no longer stores or replays `Set-Cookie` (review of the
+  cookie-scoping fix below).**
+
+  `captureResponse()` stored every response header and replayed them verbatim, so
+  a `Set-Cookie` issued to the first caller was re-issued to whoever replayed the
+  record. Combined with any coarse namespace that turns a body disclosure into
+  handing over a live session — account takeover rather than data leakage. It was
+  wrong for a legitimate same-caller retry too, resurrecting a cookie the handler
+  set once and rolling back a session rotation performed at login or on a
+  privilege change. `Set-Cookie`/`Set-Cookie2` plus the hop-by-hop and
+  per-request fields (`Connection`, `Transfer-Encoding`, `Age`, `X-Request-Id`, …)
+  are now filtered on capture, so a credential never reaches the store at all,
+  and re-filtered on replay so a record written by an older build — or any other
+  writer sharing the same Redis store — cannot replay one either. Unlike
+  `responseCache()`, which refuses to store such a response outright, idempotency
+  strips and stores: declining would release the reservation and let a retry
+  re-execute the handler, which is the double-charge the middleware exists to
+  prevent.
+
+  This also bounds the blast radius of a scope that resolves but is too _coarse_.
+  A per-tenant API key with cookie-identified end users partitions per tenant
+  while every user inside one shares a namespace — the guard below cannot see
+  that, because a coarse scope is indistinguishable from a correctly per-user one
+  (widening it to fire on any cookie-bearing request was tried and reverted: it
+  rejects a per-user bearer token arriving with ordinary browser cookies, which is
+  the far more common shape). That residual is now documented on
+  `IdempotencyOptions.scope` as the app's call, and with `Set-Cookie` stripped it
+  can no longer escalate from disclosing a body into handing over a live session.
+  Regression tests in `tests/idempotency-replay-hardening.test.ts`.
+
+- **`MemoryIdempotencyStore` is now actually bounded.** Its TSDoc claimed the map
+  "cannot grow without bound", but the sweep only dropped _expired_ records and
+  only ran past 10 000 entries, so a stream of unique keys inside the TTL grew it
+  linearly — each entry pinning a stored response body up to `maxResponseBytes`
+  (1 MiB by default). A `maxEntries` cap (default 10 000, constructor-validated)
+  now sweeps expired records first and evicts the oldest survivor if the store is
+  still full. Evicting a live record can only cost exactly-once semantics for a
+  retry arriving after the eviction, which is the right trade against unbounded
+  memory — and a reason to supply a shared store when key volume approaches the
+  cap.
+- **`autoBan()` retries a custom `keyGenerator` in `beforeHandle` when `preBody`
+  cannot resolve an identity.** Moving the gate to `preBody` (below) silently
+  changed what a custom generator can see: it now runs before body I/O and before
+  every `beforeHandle` layer, so a generator keyed on state that `session()`
+  resolves returned `undefined`, no key was stashed, and `onSend` — which reads
+  that stashed key — recorded no strike. The ban never armed, with no error and no
+  log. The generator is now called again in `beforeHandle` when, and only when,
+  the `preBody` pass came up empty; the hook is registered only for a custom
+  generator, so the default path costs nothing. Requests enforced by that second
+  attempt are order-sensitive again (a `responseCache()` hit short-circuits
+  `beforeHandle`), which is documented and strictly better than not enforcing at
+  all. Regression tests in `tests/auto-ban-keygen-phase.test.ts`.
+- **The resolver options of all five network-identity gates are typed on the
+  phase they actually run in.** `geoBlock`'s `resolveIp`/`resolveCountry`,
+  `ipRestriction`/`botGuard`/`ipReputation`'s `resolveIp`, and `autoBan`'s
+  `keyGenerator` were typed on `BaseContext`, whose `body` widens to `any`. After
+  the move to `preBody` that let `(ctx) => ctx.body.email` type-check and then
+  evaluate to `undefined` at run time — and two of the five failed _silently_:
+  `ipReputation` fails open on an unresolved IP, and `autoBan` stopped banning
+  entirely. They now take the new `IdentityGateContext` (a `PreBodyContext`
+  alias), so reading through `body` is a compile error instead of a security
+  control that quietly switches itself off. Type-level regression tests in
+  `tests/types/identity-gate-context.types.ts`.
+- **`encodeClosePayload()` validates the close code, and a status-less CLOSE is no
+  longer echoed as `1005`.** Close-code validation (below) landed on the decoder
+  only, so the framework could emit a frame its own decoder — and any conforming
+  peer — must reject with `1002`. `ws.close(1005)` was the obvious way to hit it,
+  and `WS_CLOSE_CODE.NO_STATUS_RECEIVED`/`ABNORMAL_CLOSURE` are exported, so it
+  was reachable by accident. Worse, the Node adapter's echo path already hit it on
+  a completely benign request: a peer closing with an _empty_ payload surfaces as
+  the `1005` sentinel, which was fed straight back into the encoder, so the most
+  common close in existence was answered with an illegal `CLOSE(1005)`. The echo
+  now answers a status-less close with a status-less close, both halves of the
+  codec share the new exported `isValidWireCloseCode()` predicate, and
+  `WS_CLOSE_CODE` documents `1005`/`1006` as receive-only sentinels. Verified over
+  a real socket in `tests/websocket.test.ts` and by four live probes in
+  `red-team-live/run.ts`.
+
+- **The network-identity access-control gates now run in `preBody`, so a
+  `responseCache()` mounted ahead of them can no longer disable them (live
+  red-team finding, high).** `geoBlock()`, `ipRestriction()`, `botGuard()`,
+  `autoBan()` and `ipReputation()` all enforced from `beforeHandle` — the _same_
+  phase as `responseCache()`. A cache hit returns a `Response` from
+  `beforeHandle` and ends the hook chain, so mounting the cache above a gate
+  silently switched that gate off: a denied country, a deny-listed address, a
+  blocked user agent and an actively-banned client each received `200` plus the
+  cached body, with `X-Cache: HIT` the only trace. The response-cache
+  quick-start mounts the cache first, so the documented pattern produced the
+  vulnerable order, and the existing `App` boot guard for
+  cache-ahead-of-`tenancy()` had no equivalent for access control. All five now
+  enforce from `preBody`, which always precedes `beforeHandle`, so mount order
+  cannot preempt them — the same reason `bearerAuth()` / `basicAuth()` /
+  `clientCertAuth()` were already immune. Strike accounting in `autoBan()` stays
+  in `onSend`. Cache behaviour for permitted callers is unchanged. Regression
+  tests in `tests/access-control-cache-composition.test.ts`.
+- **`autoBan()` now attributes strikes to the TCP peer when the forwarded
+  identity cannot be resolved, instead of discarding the request (live red-team
+  finding, medium).** `resolveForwardedClientIp()` fails closed past one hop, so
+  a request whose `X-Forwarded-For` was shorter than the declared `trustedHops`
+  resolved to no identity — and `autoBan()` treated that as "skip". An attacker
+  who could reach the origin directly, past the CDN that appends the header,
+  therefore got **unlimited credential attempts by simply omitting a header**:
+  12 consecutive failed logins never produced a ban. The default is now
+  `onUnresolvedIdentity: "peer"`, which keys such requests on the immediate TCP
+  peer address in its own `peer:` keyspace. The peer cannot be spoofed, and in
+  exactly the direct-to-origin case that produced the bypass the peer _is_ the
+  attacker, so accounting becomes precise rather than absent. Set
+  `onUnresolvedIdentity: "skip"` to restore the previous posture (documented
+  trade-off: a load balancer that does not always set `X-Forwarded-For` would
+  otherwise share one `peer:` bucket). Requests with neither a forwarded
+  identity nor a peer — edge runtimes with no socket — are still skipped rather
+  than collapsed into a shared bucket. A custom `keyGenerator` keeps its own
+  posture.
+- **`idempotency()` now refuses a cookie-bearing request whose calling principal
+  the default `scope` cannot identify, instead of sharing one namespace across
+  callers (live red-team finding, high).** `scope` defaults to the
+  `Authorization` header, and the scope tag was only mixed into the store key
+  when it resolved (`scopeRaw ? hash : ""`). A cookie-authenticated app sends no
+  `Authorization`, so every caller collapsed into the unscoped namespace and the
+  retry fingerprint (method + path + body) became the only thing separating two
+  users — which two users submitting the same payload compute identically. The
+  live probe had a second user receive the first user's stored order response:
+  CWE-524 cross-principal disclosure, the exact failure `scope` exists to
+  prevent. A request that carries a `Cookie` but yields no scope now throws with
+  an actionable message naming `scope` and the new `allowUnscopedCallers` escape
+  hatch. Deliberately narrow: the documented bearer path is untouched, a
+  genuinely anonymous caller (no credential at all) still dedupes by key alone,
+  and a custom `scope` bypasses the guard entirely — including when it returns
+  `undefined` — because an explicit resolver owns its own posture. Mirrors
+  `responseCache()`, which already treats `Cookie` as a credential alongside
+  `Authorization` for the same reason. Regression tests in
+  `tests/access-control-cache-composition.test.ts`.
+- **Live red-team harness: the oversized-body probe now sends a `User-Agent`, and
+  a second probe asserts the earlier perimeter refusal (175 probes).** Moving the
+  access-control gates to `preBody` means they reject _before_ body I/O, so the
+  raw `POST` advertising a 1 GiB `Content-Length` and no `User-Agent` is now
+  refused `403` by `botGuard()`'s default `blockEmptyUserAgent` at header time
+  instead of `413` after body parsing began — cheaper, not weaker
+  (`bodyLimitBytes` still returns `413` once a UA is present). The probe had
+  therefore been measuring `botGuard`, not the body limit. Rather than widen its
+  accepted-status list, it now sends a plausible UA so it exercises the path it
+  claims to, plus a companion probe pinning the earlier perimeter refusal so the
+  ordering cannot silently regress. Worth knowing generally: raw-socket probes
+  need a `User-Agent` or `botGuard` intercepts them first.
 - **`waf()` now NFKC-normalizes inspection variants so fullwidth / compatibility
-  homoglyph keywords cannot walk past ASCII-anchored signatures (live red-team
-  finding).** Payloads such as `ｕｎｉｏｎ ｓｅｌｅｃｔ` and `ＳＥＬＥＣＴ １`
-  previously scored 0 and reached the handler because every built-in SQLi/XSS
-  signature anchors on ASCII word boundaries. `inspectionVariants()` now adds an
-  NFKC-folded form whenever a value contains non-ASCII code points (pure-ASCII
-  traffic skips `String.prototype.normalize` entirely). Regression tests in
-  `tests/waf.test.ts`; live harnesses in `red-team-live/run.ts` and
-  `red-team-live/blackhat-attacks.ts` now assert 403 on fullwidth SQLi instead
-  of recording it as an INFO coverage note.
+  homoglyph keywords cannot walk past ASCII-anchored signatures, and the fold
+  composes with the other inspection passes (live red-team finding).** Payloads
+  such as `ｕｎｉｏｎ ｓｅｌｅｃｔ` previously scored 0 and reached the handler
+  because every built-in SQLi/XSS signature anchors on ASCII word boundaries.
+  `inspectionVariants()` now adds an NFKC-folded form whenever a value contains
+  non-ASCII code points (pure-ASCII traffic skips `String.prototype.normalize`
+  entirely).
+
+  The fold is applied to the decode chain **before** the `+` / comment-strip /
+  control-character passes, and its output joins that chain, so the transforms
+  compose. Closing the homoglyph evasion in isolation was not enough: the folded
+  form was pushed as a leaf variant, so the other passes never ran on it and the
+  fold never ran on theirs. Combining two individually-blocked techniques —
+  `＇%00ＯＲ%00＇１＇＝＇１` (fold + NUL split) or `＇/**/ＯＲ/**/＇１＇＝＇１`
+  (fold + comment split) — therefore walked straight through with a `200`. Order
+  matters in one more way: NFKC _creates_ comment delimiters out of fullwidth
+  solidus and asterisk, so `ｕｎｉｏｎ／＊ｘ＊／ｓｅｌｅｃｔ` only scores if the
+  fold precedes the comment pass. Regression tests in `tests/waf.test.ts`; nine
+  live probes in `red-team-live/run.ts` cover the fold and every composition.
+
 - **`safeRedirect()` now refuses percent-encoded C0/DEL control characters in
   redirect targets (live red-team finding F2).** A still-encoded control such
   as the tab in `/%09/evil.com` previously passed the literal control-char
@@ -51,6 +206,21 @@ For the forward-looking plan and the full thematic release log, see
   sink maps to a `CLOSE(1002)` — verified live against a running server.
   Regression tests in `tests/websocket.test.ts`; live probes in
   `red-team-live/run.ts` (`wave4Probes`).
+- **Live red-team harness expanded from 127 to 175 over-the-wire probes.** The
+  new `wave4Probes` battery in `red-team-live/run.ts` fires attack classes the
+  earlier waves never touched: race conditions (idempotency double-spend,
+  rate-limit overrun, concurrency-limit overshoot — truly simultaneous bursts;
+  exactly 1 / ≤5 / 1 admitted), CL/TE parser differentials (hex / plus-signed /
+  leading-zero / decimal / space-padded `Content-Length`, TE+CL:0 desync pairs,
+  pipelined-after-CL:0), post-upgrade WebSocket frame attacks (reserved
+  opcodes, RSV bits, fragmented / oversized / unmasked control frames, invalid
+  UTF-8, invalid close codes, 4 GiB declared lengths, new opcodes
+  mid-fragment), multipart exotica (1000-part floods, embedded boundaries,
+  truncation, traversal filenames), content-encoding confusion (gzip-labeled
+  deflate, nested gzip, UTF-16 charset, BOM), protocol oddities (h2c upgrade,
+  WS upgrade to non-WS routes, OPTIONS *, CONNECT, HTTP/0.9, obs-fold), and
+  trailer-field smuggling. All 175 probes: **0 VULNERABLE** (the one genuine
+  wave-4 finding, F3 above, was fixed before folding the battery in).
 - **Live red-team harness expanded from 70 to 127 over-the-wire probes.**
   `red-team-live/run.ts` gained a `novelProbes` battery covering vectors found
   by going off-script against a running server: except() case /
@@ -96,6 +266,27 @@ typecheck` (no tsconfig project includes it) and currently has 3 outstanding
     uniform transport-level cap that applies with or without `Expect` and is
     emitted through the error pipeline; it is tracked as post-1.0 work and the
     harness records the current posture as an INFO probe.
+
+### Changed
+
+- **`red-team-live/` is now type-checked.** The root `tsconfig.json` excludes the
+  directory (the harness runs through `tsx`, which strips types without checking
+  them), so ~2 500 lines of attack-harness TypeScript were never checked anywhere.
+  That is the wrong place to have no safety net: a probe that never compile-checks
+  can stop exercising what its title claims — sending `undefined` as a body,
+  reading the wrong field off a response — and still print `DEFENDED`, which reads
+  as evidence the framework held. A new `red-team-live/tsconfig.json` (mirroring
+  `tests/tsconfig.json`) is wired into `pnpm typecheck` as a fourth project and
+  available on its own as `pnpm typecheck:red-team-live`.
+
+  Enabling it surfaced six real errors, all now fixed: four `BodyInit`
+  incompatibilities where `Buffer`/`Uint8Array` default to an `ArrayBufferLike`
+  backing store (resolved with a `toBodyInit()` conversion at the `fetch`
+  boundary — a real re-wrap, not a cast), and one `noUncheckedIndexedAccess`
+  widening in an SSRF URL table (resolved by typing it as tuples). A
+  `body: opts.body as any` in `blackhat-attacks.ts` was papering over the same
+  mismatch and is gone — in an attack harness, a cast that lets `undefined`
+  through means a probe can report `DEFENDED` without ever sending its payload.
 
 ## [1.0.0-rc.7] - 2026-07-29
 

@@ -380,6 +380,113 @@ TOCTOU window on `https:` and non-Node runtimes in `fetchGuard`; Node defaults
 operator egress firewall for defense-in-depth) are spelled out at their source
 rather than hidden.
 
+### Hook phase decides what a short-circuiting middleware can preempt
+
+A hook that returns a `Response` ends the chain for its phase. Any gate in the
+_same_ phase as a middleware that short-circuits earlier can therefore be
+skipped. The concrete case: `responseCache()` answers a hit from `beforeHandle`,
+so a gate in `beforeHandle` mounted below it never runs.
+
+Every built-in access-control gate therefore enforces from **`preBody`**, which
+always precedes `beforeHandle` and makes them immune to mount order:
+
+| Phase                          | Middleware                                                                                                           |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `preBody` (order-independent)  | `bearerAuth`, `basicAuth`, `clientCertAuth`, `geoBlock`, `ipRestriction`, `botGuard`, `autoBan`, `ipReputation`      |
+| `beforeHandle` (order matters) | `responseCache`, `idempotency`, `rateLimit`, `concurrencyLimit`, `csrf`, `fetchMetadata`, `requireScopes`, `tenancy` |
+
+If you write your own gate, put it in `preBody` or register it ahead of the
+cache. A custom guard in `beforeHandle` mounted below `responseCache()` **can**
+be preempted by a cache hit. `responseCache()` ahead of `tenancy()` refuses to
+boot in production, because that pair cannot be made safe by phase alone — the
+cache key needs the resolved tenant.
+
+Two entries in the `beforeHandle` column are access control and deserve a note,
+because the table is meant to be audited against your own stack:
+
+- **`requireScopes`** authorizes an already-authenticated caller. It is not
+  preemptable by a cache hit under the defaults, because `responseCache()`
+  declines to store or serve a request carrying `Authorization` or `Cookie` unless
+  a `principal` names the caller — and then it partitions the key by that
+  principal. Opting into caching credentialed responses without a `principal` (or
+  a `Vary` that distinguishes callers) removes that protection.
+- **`fetchMetadata`** and **`csrf`** guard unsafe methods, which are not in
+  `responseCache()`'s cacheable set (`GET`/`HEAD`), so a hit cannot arrive on a
+  request they would have rejected.
+
+A cache hit does legitimately bypass `rateLimit()` and `concurrencyLimit()`:
+absorbing load is what the cache is for. Mount the limiter ahead of the cache if
+you need every request counted regardless of cache outcome.
+
+### When the client IP cannot be resolved
+
+`resolveForwardedClientIp()` fails closed past one declared hop: a request whose
+`X-Forwarded-For` is shorter than `trustedHops` never traversed the declared
+topology, so it resolves to _no identity_ rather than to a value the caller
+chose. What each middleware does with that answer differs by design, and the
+aggregate is worth knowing before you rely on it as defense in depth:
+
+| Middleware         | Unresolved client IP                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `ipRestriction`    | fail **closed** — `403`                                                                              |
+| `geoBlock`         | **closed** with an `allow` list; **open** for `deny`-only (an unknown country is not on a deny list) |
+| `autoBan`          | falls back to the unspoofable **TCP peer**; `onUnresolvedIdentity: "skip"` opts out                  |
+| `ipReputation`     | fail **open** — an unknown address is not on a denylist                                              |
+| `concurrencyLimit` | fail **open** — not subject to limiting                                                              |
+
+The fail-open entries are deliberate: a denylist cannot match an address it does
+not have, and failing closed there would reject all traffic on any topology
+hiccup. But it does mean a **direct-to-origin request that skips your CDN
+disengages those controls**, so treat "every request reaches the app through my
+proxy chain" as a security requirement, not a deployment detail. Bind the origin
+to the proxy's network, or authenticate the hop. `autoBan` is the exception
+because unlimited credential attempts is never an acceptable answer to "I cannot
+identify you".
+
+### Anything that stores a response must partition it by caller
+
+`responseCache()` and `idempotency()` both hand a stored response to a later
+request. Both are therefore governed by RFC 9111 §3.5 / CWE-524: a store keyed on
+the request alone will serve one principal's private data to the next caller.
+
+The framework treats **both `Authorization` and `Cookie` as credentials**, because
+a session cookie is the most common way a response becomes private:
+
+- `responseCache()` declines to store or serve a credentialed request unless a
+  `principal` names the caller, then partitions the key by that principal (and by
+  the resolved tenant, when `tenancy()` is mounted).
+- `idempotency()` namespaces by `scope`, which defaults to `Authorization`. A
+  cookie-bearing request that resolves to **no** scope is refused with an
+  actionable error rather than sharing a namespace — that is the cookie-session app
+  that forgot `scope`. Supply `scope: (ctx) => ctx.state.session?.id`, or set
+  `allowUnscopedCallers: true` when callers really are interchangeable.
+
+  **`scope` is yours to get right when `Authorization` is not per-user.** A shared
+  credential — a per-tenant API key, a service token, a gateway credential — with
+  end users distinguished some other way resolves a scope, so no guard fires, and
+  it partitions per tenant while every user inside one shares a namespace. The
+  framework cannot detect this: a coarse scope is indistinguishable from a
+  correctly per-user one, and rejecting every cookie-bearing request instead would
+  reject the very common per-user-bearer-plus-browser-cookies shape. Pass `scope`
+  whenever the credential does not name exactly one caller.
+
+Two further rules apply to whatever is stored:
+
+- **A credential is never stored.** `idempotency()` strips `Set-Cookie` (and the
+  hop-by-hop / per-request fields) on capture, so a replay cannot re-issue the
+  first caller's session — that is what turns a body disclosure into account
+  takeover. It also cannot roll back a session rotation on a legitimate retry.
+  `responseCache()` refuses to store a `Set-Cookie` response outright.
+- **Stores are bounded.** The in-memory stores cap live entries and evict, rather
+  than only sweeping expired ones; an unbounded response store is a memory-
+  exhaustion primitive driven entirely by attacker-chosen keys. Supply a shared
+  store for multi-instance deployments — and for any deployment whose key volume
+  approaches the cap, since eviction costs exactly-once semantics for a retry that
+  arrives after it.
+
+If you write your own store-and-replay middleware, partition by caller and strip
+credentials from what you keep. Neither is something a key prefix gives you.
+
 ### Out of scope (the framework will NOT defend)
 
 - **Network-layer DoS** (SYN floods, amplification). Place DaloyJS behind a reverse proxy / WAF / DDoS service.

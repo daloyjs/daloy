@@ -60,6 +60,21 @@ interface Res {
   headers: Headers;
   text: string;
 }
+/**
+ * Narrow a probe body to a `BodyInit`.
+ *
+ * `Buffer` / `Uint8Array` default to an `ArrayBufferLike` backing store, which
+ * admits `SharedArrayBuffer` and is therefore not assignable to `BodyInit`.
+ * Re-wrapping the bytes over a fresh `ArrayBuffer` is a real conversion rather
+ * than a cast, so each probe still puts the exact bytes it intends on the wire.
+ * This replaced an `as any` — in an attack harness a cast that lets `undefined`
+ * through means a probe can report DEFENDED without ever sending its payload.
+ */
+function toBodyInit(body: string | Uint8Array | undefined): BodyInit | undefined {
+  if (body === undefined || typeof body === "string") return body;
+  return new Uint8Array(body);
+}
+
 async function http(
   method: string,
   path: string,
@@ -68,7 +83,7 @@ async function http(
   const res = await fetch(BASE + path, {
     method,
     headers: opts.headers,
-    body: opts.body as any,
+    body: toBodyInit(opts.body),
     redirect: "manual",
   });
   return { status: res.status, headers: res.headers, text: await res.text() };

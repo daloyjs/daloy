@@ -22,7 +22,7 @@
 
 import { spawn } from "node:child_process";
 import net from "node:net";
-import { gzipSync } from "node:zlib";
+import { gzipSync, deflateSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const HOST = "127.0.0.1";
@@ -525,19 +525,50 @@ async function wireLevel(port: number) {
     verdict: "INFO",
   });
 
+  // A `User-Agent` is required for this probe to measure what it claims to.
+  // `botGuard()` blocks an empty UA by default and now enforces from `preBody`,
+  // i.e. BEFORE body I/O, so a UA-less raw POST is rejected with 403 at header
+  // time and the body limit is never reached. Sending a plausible UA lets the
+  // request through the perimeter so the `bodyLimitBytes` path is the thing
+  // actually under test.
   const bigBody = await rawSend(
     port,
-    "POST /items HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Length: 1073741824\r\n\r\n{}",
+    "POST /items HTTP/1.1\r\nHost: t\r\nUser-Agent: Mozilla/5.0\r\n" +
+      "Content-Type: application/json\r\nContent-Length: 1073741824\r\n\r\n{}",
     1500
   );
   record({
     category: cat,
     title: "Oversized-body resource exhaustion",
     severity: "high",
-    attack: "Raw POST advertising a 1 GiB Content-Length",
+    attack: "Raw POST advertising a 1 GiB Content-Length (with a UA, so botGuard passes)",
     observed: `response: ${bigBody.statusLine || "(connection dropped)"}`,
     verdict:
       bigBody.status === 413 || bigBody.status === 400 || bigBody.status === 0
+        ? "DEFENDED"
+        : "VULNERABLE",
+  });
+
+  // The same oversized request WITHOUT a UA: the perimeter gate refuses before
+  // the advertised gigabyte is read at all. Cheaper than reaching the body
+  // limit, and worth asserting so the ordering does not silently regress.
+  const bigBodyNoUa = await rawSend(
+    port,
+    "POST /items HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+      "Content-Length: 1073741824\r\n\r\n{}",
+    1500
+  );
+  record({
+    category: cat,
+    title: "Oversized body is refused at the perimeter before body I/O",
+    severity: "medium",
+    attack: "Raw POST advertising a 1 GiB Content-Length and no User-Agent",
+    observed: `response: ${bigBodyNoUa.statusLine || "(connection dropped)"} — botGuard rejects in preBody, before the body is read`,
+    verdict:
+      bigBodyNoUa.status === 403 ||
+      bigBodyNoUa.status === 413 ||
+      bigBodyNoUa.status === 400 ||
+      bigBodyNoUa.status === 0
         ? "DEFENDED"
         : "VULNERABLE",
   });
@@ -1273,14 +1304,47 @@ async function novelProbes(port: number, portB: number) {
   // ---- WAF evasion encodings (signature-coverage documentation) ----
   {
     const cat = "Injection (WSTG-INPV)";
-    const probes: Array<[string, string]> = [
-      ["inline-comment SQLi", "un/**/ion sel/**/ect user,pass"],
-      ["mixed-case SQLi", "uNiOn SeLeCt * fRoM users"],
-      ["fullwidth-Unicode SQLi", "ｕｎｉｏｎ ｓｅｌｅｃｔ"],
-      ["template-injection strings", "{{7*7}}${7*7}#{7*7}"],
+    // Fullwidth-Unicode SQLi is a real signature-bypass class that was closed
+    // by NFKC inspection variants (see src/waf.ts inspectionVariants). It is
+    // asserted DEFENDED (403), not INFO. Inline-comment keyword splitting and
+    // template-injection strings still pass the signature set by design —
+    // they have no executable sink on /search and are recorded as coverage.
+    const probes: Array<[string, string, "INFO" | "DEFENDED"]> = [
+      ["inline-comment SQLi", "un/**/ion sel/**/ect user,pass", "INFO"],
+      ["mixed-case SQLi", "uNiOn SeLeCt * fRoM users", "DEFENDED"],
+      ["fullwidth-Unicode SQLi", "ｕｎｉｏｎ ｓｅｌｅｃｔ", "DEFENDED"],
+      ["template-injection strings", "{{7*7}}${7*7}#{7*7}", "INFO"],
+      // Composed evasions. Each half is blocked on its own — the fullwidth
+      // tautology by the NFKC fold, the NUL/comment split by the control-char
+      // and comment passes — but the fold was applied only to the decode chain
+      // and its output never re-entered the other passes, so combining two
+      // individually-blocked techniques walked straight through. Every
+      // combination must converge on the same ASCII form the signatures anchor
+      // on, so these are DEFENDED, not coverage notes.
+      // Real NUL / `+` code points, not the literal text "%00" / "%2B": the
+      // probe loop percent-encodes `q` on the way out, so a literal `%` would
+      // arrive double-encoded and the probe would silently test a different
+      // payload than its title claims.
+      [
+        "fullwidth SQLi split by NUL",
+        "\uff07\u0000\uff2f\uff32\u0000\uff07\uff11\uff07\uff1d\uff07\uff11",
+        "DEFENDED",
+      ],
+      ["fullwidth SQLi split by comment", "＇/**/ＯＲ/**/＇１＇＝＇１", "DEFENDED"],
+      ["fullwidth SQLi split by plus", "＇+ＯＲ+＇１＇＝＇１", "DEFENDED"],
+      // NFKC *creates* the comment delimiters here (fullwidth solidus and
+      // asterisk fold to `/` and `*`), so the fold must run before the comment
+      // pass, not merely alongside it.
+      ["fullwidth comment delimiters", "ｕｎｉｏｎ／＊ｘ＊／ｓｅｌｅｃｔ a", "DEFENDED"],
+      [
+        "mixed ASCII/fullwidth across a NUL",
+        "union\u0000\uff53\uff45\uff4c\uff45\uff43\uff54\u0000a",
+        "DEFENDED",
+      ],
     ];
-    for (const [name, q] of probes) {
+    for (const [name, q, expected] of probes) {
       const r = await http("GET", `/search?q=${encodeURIComponent(q)}`);
+      const blocked = r.status === 403;
       record({
         category: cat,
         title: `WAF signature coverage — ${name}`,
@@ -1288,10 +1352,10 @@ async function novelProbes(port: number, portB: number) {
         attack: `GET /search?q=${q}`,
         observed:
           `status ${r.status}` +
-          (r.status === 200
-            ? " (passed the signature WAF — /search has no SQL/template sink, so this documents WAF coverage, not an exploit)"
-            : " (blocked)"),
-        verdict: "INFO",
+          (blocked
+            ? " (blocked)"
+            : " (passed the signature WAF — /search has no SQL/template sink, so this documents WAF coverage, not an exploit)"),
+        verdict: expected === "DEFENDED" ? (blocked ? "DEFENDED" : "VULNERABLE") : "INFO",
       });
     }
   }
@@ -1435,6 +1499,708 @@ async function novelProbes(port: number, portB: number) {
         "(rightmost = the hop your LB appends, correct under trustProxy; a client with direct " +
         "access to the origin can claim any IP, which is why prod refuses XFF by default)",
       verdict: "INFO",
+    });
+  }
+}
+
+/**
+ * Narrow a probe body to a `BodyInit`.
+ *
+ * `Buffer` / `Uint8Array` default to an `ArrayBufferLike` backing store, which
+ * admits `SharedArrayBuffer` and is therefore not assignable to `BodyInit`.
+ * Re-wrapping the bytes over a fresh `ArrayBuffer` is a real conversion rather
+ * than a cast, so each probe still puts the exact bytes it intends on the wire.
+ * The copy is deliberate and affordable — probe bodies here are at most a few
+ * hundred KiB.
+ */
+function toBodyInit(body: string | Uint8Array | undefined): BodyInit | undefined {
+  if (body === undefined || typeof body === "string") return body;
+  return new Uint8Array(body);
+}
+
+/** Build a client→server WS frame (masked by default; supports a forged declared length). */
+function wsFrame(
+  firstByte: number,
+  payload: Buffer,
+  opts: { mask?: boolean; declaredLen?: number } = {}
+): Buffer {
+  const mask = opts.mask !== false;
+  const len = opts.declaredLen ?? payload.length;
+  const parts: Buffer[] = [Buffer.from([firstByte])];
+  const maskBit = mask ? 0x80 : 0x00;
+  if (len < 126) parts.push(Buffer.from([maskBit | len]));
+  else if (len <= 0xffff) {
+    const b = Buffer.alloc(3);
+    b[0] = maskBit | 126;
+    b.writeUInt16BE(len, 1);
+    parts.push(b);
+  } else {
+    const b = Buffer.alloc(9);
+    b[0] = maskBit | 127;
+    b.writeBigUInt64BE(BigInt(len), 1);
+    parts.push(b);
+  }
+  if (mask) {
+    const key = Buffer.from([0x11, 0x22, 0x33, 0x44]);
+    parts.push(key);
+    const masked = Buffer.from(payload);
+    for (let i = 0; i < masked.length; i++) masked[i]! ^= key[i % 4]!;
+    parts.push(masked);
+  } else {
+    parts.push(payload);
+  }
+  return Buffer.concat(parts);
+}
+
+/** Handshake on /ws, fire one or more hostile frames, collect whatever comes back (latin1). */
+function wsFrameProbe(port: number, frames: Buffer, waitMs = 1500): Promise<string> {
+  return new Promise((resolve) => {
+    const sock = net.connect(port, HOST);
+    let hs = "";
+    let out = "";
+    let upgraded = false;
+    let settled = false;
+    const fin = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hard);
+      try {
+        sock.destroy();
+      } catch {
+        /* ignore */
+      }
+      resolve(out);
+    };
+    // Hard fallback — the socket idle timer alone proved unreliable mid-fragment.
+    const hard = setTimeout(fin, waitMs + 2500);
+    sock.setTimeout(waitMs);
+    sock.on("connect", () =>
+      sock.write(
+        `GET /ws HTTP/1.1\r\nHost: ${HOST}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\nSec-WebSocket-Version: 13\r\n\r\n`
+      )
+    );
+    sock.on("data", (d) => {
+      const s = d.toString("latin1");
+      if (!upgraded) {
+        hs += s;
+        const end = hs.indexOf("\r\n\r\n");
+        if (end !== -1) {
+          upgraded = true;
+          if (!/^HTTP\/\d\.\d 101/.test(hs)) {
+            out = `(handshake rejected: ${hs.split("\r\n")[0]})`;
+            return fin();
+          }
+          out = hs.slice(end + 4);
+          sock.write(frames);
+        }
+      } else {
+        out += s;
+      }
+    });
+    sock.on("timeout", fin);
+    sock.on("close", fin);
+    sock.on("error", fin);
+  });
+}
+
+/** Extract the close code from a server close frame, if one was sent. */
+function wsCloseCode(out: string): string {
+  const idx = out.indexOf("\x88");
+  if (idx === -1 || idx + 3 >= out.length)
+    return out.length ? `(no close frame: ${out.slice(0, 60)})` : "(closed silently)";
+  return `close ${out.charCodeAt(idx + 2) * 256 + out.charCodeAt(idx + 3)}`;
+}
+
+/**
+ * Wave 4 — folded from the standalone wave-4 engagement: race conditions
+ * (TOCTOU), CL/TE parser differentials, post-upgrade WebSocket frame attacks,
+ * multipart exotica, content-encoding confusion, prototype-pollution
+ * persistence, protocol oddities, and trailer smuggling. The invalid-close-code
+ * probe doubles as the live regression test for the F3 fix (close-code
+ * validation in `decodeClosePayload`, src/websocket.ts).
+ */
+async function wave4Probes(port: number) {
+  // ---- R1. Race conditions (TOCTOU) ---------------------------------------
+  {
+    const cat = "Race conditions (TOCTOU)";
+    const key = `race-${Date.now()}`;
+    const rs = await Promise.all(
+      Array.from({ length: 12 }, () =>
+        http("POST", "/pay", {
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": key,
+            authorization: "Bearer racer",
+          },
+          body: JSON.stringify({ amount: 10 }),
+        })
+      )
+    );
+    const calls = new Set(rs.map((r) => /"call":(\d+)/.exec(r.text)?.[1]).filter(Boolean));
+    record({
+      category: cat,
+      title: "Idempotency double-spend race (12 concurrent, one key)",
+      severity: "critical",
+      attack:
+        "12 simultaneous POST /pay with the same Idempotency-Key — a check-then-set gap " +
+        "double-charges (the OWASP API4 race-condition class behind real-world payment bugs)",
+      observed: `statuses ${rs.map((r) => r.status).join(",")}; distinct handler executions: ${calls.size}`,
+      verdict: calls.size > 1 ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const rl = await Promise.all(
+      Array.from({ length: 25 }, (_, i) =>
+        http("POST", "/login", {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ user: "alice", pass: `guess-${i}` }),
+        }).then((r) => r.status)
+      )
+    );
+    const reached = rl.filter((s) => s !== 429).length;
+    record({
+      category: cat,
+      title: "Rate-limit overrun race (25 concurrent vs max 5/60s)",
+      severity: "high",
+      attack:
+        "25 simultaneous POST /login — a non-atomic check-then-increment would let more than " +
+        "5 through (earlier campaigns may have pre-spent part of the window, which can only " +
+        "LOWER the count; an overshoot past 5 is impossible to mask)",
+      observed: `reached handler (non-429): ${reached}, throttled: ${rl.length - reached}`,
+      verdict: reached > 5 ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const cc = await Promise.all(
+      Array.from({ length: 12 }, () => http("GET", "/slow").then((r) => r.status))
+    );
+    const admitted = cc.filter((s) => s === 200).length;
+    record({
+      category: cat,
+      title: "Concurrency-limit overshoot race (12 concurrent vs maxConcurrent 1)",
+      severity: "high",
+      attack:
+        "12 simultaneous GET /slow (maxConcurrent: 1, maxQueue: 0) — slot acquire must be atomic",
+      observed: `statuses ${cc.join(",")} — ${admitted} admitted`,
+      verdict: admitted > 1 ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- R2. CL/TE parser differentials (desync) ----------------------------
+  {
+    const cat = "Request smuggling / framing";
+    const r = await rawSend(
+      port,
+      "POST /sink HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: 0\r\n\r\nGET /healthz HTTP/1.1\r\nHost: x\r\n\r\n",
+      2500
+    );
+    const sts = [...r.raw.matchAll(/HTTP\/\d\.\d (\d{3})/g)].map((m) => m[1]);
+    record({
+      category: cat,
+      title: "Pipelined request after a CL:0 POST",
+      severity: "high",
+      attack:
+        "POST /sink CL:0 immediately followed by a pipelined GET /healthz in the same segment",
+      observed: `statuses: ${sts.join(", ") || "(none)"} — handled as two separate requests, never one smuggled body`,
+      verdict: "INFO",
+    });
+
+    for (const [name, cl] of [
+      ["hex Content-Length", "0x10"],
+      ["plus-signed Content-Length", "+5"],
+      ["leading-zero Content-Length", "00005"],
+      ["decimal Content-Length", "5.0"],
+      ["space-padded Content-Length", " 5"],
+    ] as const) {
+      const rx = await rawSend(
+        port,
+        `POST /sink HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: ${cl}\r\n\r\n{}"x"\r\n`,
+        2000
+      );
+      record({
+        category: cat,
+        title: `Exotic Content-Length — ${name}`,
+        severity: "high",
+        attack: `POST /sink with Content-Length: ${JSON.stringify(cl)} (llhttp/framework desync probe)`,
+        observed: `status: ${rx.status || "(connection dropped)"}`,
+        verdict: rx.status >= 200 && rx.status < 300 ? "VULNERABLE" : "DEFENDED",
+      });
+    }
+
+    const te = await rawSend(
+      port,
+      "POST /sink HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nContent-Length: 0\r\n\r\n0\r\n\r\n",
+      2000
+    );
+    record({
+      category: cat,
+      title: "TE: chunked + Content-Length: 0 (classic desync pair)",
+      severity: "critical",
+      attack: "POST /sink with both Transfer-Encoding: chunked and Content-Length: 0",
+      observed: `status: ${te.status || "(connection dropped)"}`,
+      verdict: te.status >= 200 && te.status < 300 ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- R3. Post-upgrade WebSocket frame attacks ---------------------------
+  {
+    const cat = "WebSocket frame-layer";
+    const wsCases: Array<[string, Finding["severity"], Buffer, string, RegExp]> = [
+      [
+        "reserved opcode 0x3",
+        "high",
+        wsFrame(0x83, Buffer.from("x")),
+        "frame with reserved non-control opcode 0x3",
+        /1002/,
+      ],
+      [
+        "RSV1 bit set (no extension negotiated)",
+        "high",
+        wsFrame(0xc1, Buffer.from("x")),
+        "text frame with RSV1=1",
+        /1002/,
+      ],
+      [
+        "fragmented control frame",
+        "high",
+        wsFrame(0x09, Buffer.from("x")),
+        "FIN=0 ping (control frames must be atomic)",
+        /1002/,
+      ],
+      [
+        "oversized control payload (126 B)",
+        "high",
+        wsFrame(0x89, Buffer.alloc(126, 0x41)),
+        "ping with a 126-byte payload (max 125)",
+        /1002/,
+      ],
+      [
+        "unmasked client frame",
+        "high",
+        wsFrame(0x81, Buffer.from("hi"), { mask: false }),
+        "client frame without the mandatory mask",
+        /1002|closed|silence/i,
+      ],
+      [
+        "invalid UTF-8 in a text frame",
+        "high",
+        wsFrame(0x81, Buffer.from([0xff, 0xfe])),
+        "text frame carrying 0xFF 0xFE",
+        /1007|1002/,
+      ],
+      [
+        "invalid close code 999 (F3 live regression)",
+        "medium",
+        wsFrame(0x88, Buffer.from([0x03, 0xe7])),
+        "close frame with code 999 — must fail 1002, never echo 999",
+        /1002|closed|silence/i,
+      ],
+      [
+        "reserved close code 1005 from the peer",
+        "medium",
+        wsFrame(0x88, Buffer.from([0x03, 0xed])),
+        "close frame with 1005 — reserved for local reporting, illegal on the wire",
+        /1002|closed|silence/i,
+      ],
+      [
+        "reserved close code 1006 from the peer",
+        "medium",
+        wsFrame(0x88, Buffer.from([0x03, 0xee])),
+        "close frame with 1006 — reserved for local reporting, illegal on the wire",
+        /1002|closed|silence/i,
+      ],
+      [
+        "close code above the private range (5001)",
+        "low",
+        wsFrame(0x88, Buffer.from([0x13, 0x89])),
+        "close frame with 5001 — past the 3000-4999 application range",
+        /1002|closed|silence/i,
+      ],
+    ];
+    for (const [name, sev, frame, attack, expect] of wsCases) {
+      const out = await wsFrameProbe(port, frame);
+      const code = wsCloseCode(out);
+      record({
+        category: cat,
+        title: `WS frame — ${name}`,
+        severity: sev,
+        attack,
+        observed: code,
+        verdict: expect.test(code) ? "DEFENDED" : "VULNERABLE",
+      });
+    }
+    {
+      // A status-less CLOSE is the most common close there is, and it surfaces
+      // internally as the 1005 sentinel — which RFC 6455 §7.4.1 forbids on the
+      // wire. The echo path fed that sentinel straight back through the encoder,
+      // so the server answered a perfectly benign close with CLOSE(1005): a
+      // frame its own decoder now rejects with 1002. Correct behaviour is an
+      // empty CLOSE, so this asserts on the payload length, not on a code.
+      const out = await wsFrameProbe(port, wsFrame(0x88, Buffer.alloc(0)));
+      const idx = out.indexOf("\x88");
+      const echoedLen = idx === -1 ? -1 : out.charCodeAt(idx + 1) & 0x7f;
+      const echoedCode =
+        idx !== -1 && echoedLen >= 2 ? out.charCodeAt(idx + 2) * 256 + out.charCodeAt(idx + 3) : 0;
+      record({
+        category: cat,
+        title: "WS close — status-less CLOSE is echoed without a status code",
+        severity: "low",
+        attack: "CLOSE frame with an empty payload",
+        observed:
+          idx === -1
+            ? "no close frame echoed (connection dropped)"
+            : `echoed close payload length ${echoedLen}${echoedCode ? ` (code ${echoedCode})` : ""}`,
+        // Either an empty echo or no echo at all is conforming. Echoing 1005 or
+        // 1006 back is the regression.
+        verdict: echoedCode === 1005 || echoedCode === 1006 ? "VULNERABLE" : "DEFENDED",
+      });
+    }
+    {
+      const out = await wsFrameProbe(
+        port,
+        wsFrame(0x82, Buffer.alloc(0), { declaredLen: 0xffffffff }),
+        3000
+      );
+      record({
+        category: cat,
+        title: "WS frame — 4 GiB declared payload, never delivered",
+        severity: "high",
+        attack:
+          "binary frame header declaring 0xFFFFFFFF bytes then silence (memory-exhaustion probe)",
+        observed: `${wsCloseCode(out)} — no allocation crash`,
+        verdict: "INFO",
+      });
+    }
+    {
+      const frag1 = wsFrame(0x02, Buffer.from("hel")); // FIN=0 binary, starts a message
+      const ping = wsFrame(0x89, Buffer.from("ok")); // legal interleaved control frame
+      const illegal = wsFrame(0x81, Buffer.from("x")); // new data frame mid-fragment → 1002
+      const out = await wsFrameProbe(port, Buffer.concat([frag1, ping, illegal]));
+      const code = wsCloseCode(out);
+      record({
+        category: cat,
+        title: "WS frame — new message opcode mid-fragment",
+        severity: "high",
+        attack:
+          "fragmented binary, interleaved ping (legal), then a fresh text frame before FIN (illegal)",
+        observed: code,
+        verdict: /1002/.test(code) ? "DEFENDED" : "VULNERABLE",
+      });
+    }
+  }
+
+  // ---- R4. Multipart exotica ----------------------------------------------
+  {
+    const cat = "Multipart exotica";
+    const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+    const mp = (
+      parts: { name: string; data: Buffer; type?: string; filename?: string }[],
+      boundary = "XBOUNDARY"
+    ) => {
+      const chunks: Buffer[] = [];
+      for (const p of parts) {
+        chunks.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="${p.name}"${p.filename ? `; filename="${p.filename}"` : ""}\r\n${p.type ? `Content-Type: ${p.type}\r\n` : ""}\r\n`
+          ),
+          p.data,
+          Buffer.from("\r\n")
+        );
+      }
+      chunks.push(Buffer.from(`--${boundary}--\r\n`));
+      return Buffer.concat(chunks);
+    };
+    const up = (body: Buffer) =>
+      fetch(`${BASE}/upload`, {
+        method: "POST",
+        headers: { "content-type": "multipart/form-data; boundary=XBOUNDARY" },
+        body: toBodyInit(body),
+      });
+
+    const t0 = Date.now();
+    const flood = await up(
+      mp(
+        Array.from({ length: 1000 }, (_, i) => ({
+          name: `f${i}`,
+          data: PNG,
+          type: "image/png",
+          filename: `p${i}.png`,
+        }))
+      )
+    );
+    record({
+      category: cat,
+      title: "Multipart part-count flood (1000 parts)",
+      severity: "high",
+      attack: "POST /upload with 1000 tiny PNG parts (per-part bookkeeping DoS)",
+      observed: `status ${flood.status} in ${Date.now() - t0}ms`,
+      verdict: flood.status >= 500 ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const trav = await up(
+      mp([{ name: "avatar", data: PNG, type: "image/png", filename: "../../evil.png" }])
+    );
+    record({
+      category: cat,
+      title: "Multipart filename path traversal",
+      severity: "medium",
+      attack:
+        'POST /upload with filename="../../evil.png" — the name must never reach a filesystem path unfiltered',
+      observed: `status ${trav.status} (target never writes to disk; the raw name is handler-facing data — handler responsibility)`,
+      verdict: "INFO",
+    });
+
+    const tricky = await up(
+      mp([
+        {
+          name: "avatar",
+          data: Buffer.concat([PNG, Buffer.from("\r\n--XBOUNDARY--\r\n")]),
+          type: "image/png",
+          filename: "b.png",
+        },
+      ])
+    );
+    record({
+      category: cat,
+      title: "Multipart boundary embedded in file content",
+      severity: "medium",
+      attack:
+        "file bytes contain the literal boundary terminator — parser must not mis-split into a 500",
+      observed: `status ${tricky.status}`,
+      verdict: tricky.status >= 500 ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const t1 = Date.now();
+    const trunc = await up(
+      Buffer.concat([
+        Buffer.from(
+          '--XBOUNDARY\r\nContent-Disposition: form-data; name="avatar"; filename="t.png"\r\nContent-Type: image/png\r\n\r\n'
+        ),
+        PNG,
+      ])
+    );
+    record({
+      category: cat,
+      title: "Multipart truncated (no closing boundary)",
+      severity: "medium",
+      attack: "POST /upload with a body that ends mid-part",
+      observed: `status ${trunc.status} in ${Date.now() - t1}ms`,
+      verdict: trunc.status >= 500 ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- R5. Content-encoding confusion --------------------------------------
+  {
+    const cat = "Content-encoding confusion";
+    const postBin = (path: string, body: Buffer, headers: Record<string, string>) =>
+      fetch(BASE + path, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: toBodyInit(body),
+      });
+
+    const mislabel = await postBin(
+      "/ingest",
+      deflateSync(JSON.stringify({ value: "x".repeat(100) })),
+      { "content-encoding": "gzip" }
+    );
+    record({
+      category: cat,
+      title: "gzip-labeled raw deflate body",
+      severity: "medium",
+      attack: "POST /ingest Content-Encoding: gzip with raw DEFLATE bytes (wrong wrapper)",
+      observed: `status ${mislabel.status} — label/actual mismatch must 4xx, never 500 or silent pass-through`,
+      verdict: mislabel.status >= 500 ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const nested = await postBin(
+      "/ingest",
+      gzipSync(gzipSync(JSON.stringify({ value: "x".repeat(100) }))),
+      { "content-encoding": "gzip" }
+    );
+    record({
+      category: cat,
+      title: "Nested gzip (double-compressed) body",
+      severity: "high",
+      attack:
+        "gzip(gzip(json)) with a single gzip declaration — layer-1 ratio passes, handler would get compressed bytes",
+      observed: `status ${nested.status}`,
+      verdict: nested.status >= 500 ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const utf16 = await postBin(
+      "/items",
+      Buffer.from(JSON.stringify({ name: "x", price: 1 }), "utf16le"),
+      { "content-type": "application/json; charset=utf-16" }
+    );
+    record({
+      category: cat,
+      title: "UTF-16 charset JSON body",
+      severity: "medium",
+      attack:
+        "POST /items with application/json; charset=utf-16 and UTF-16LE bytes — accepting mojibake is a parsing-smuggling gap",
+      observed: `status ${utf16.status}`,
+      verdict: utf16.status === 201 ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const bom = await postBin(
+      "/items",
+      Buffer.concat([
+        Buffer.from([0xef, 0xbb, 0xbf]),
+        Buffer.from(JSON.stringify({ name: "x", price: 1 })),
+      ]),
+      {}
+    );
+    record({
+      category: cat,
+      title: "BOM-prefixed JSON body",
+      severity: "low",
+      attack: "POST /items with EF BB BF before the JSON",
+      observed: `status ${bom.status}`,
+      verdict: bom.status >= 500 ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- R6. Prototype-pollution persistence ---------------------------------
+  {
+    const cat = "Prototype pollution";
+    const r1 = await http("GET", "/search?q=x&__proto__[polluted]=yes&constructor[prototype][y]=1");
+    const r2 = await http("POST", "/sink", {
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ data: JSON.parse('{"__proto__":{"polluted":"yes"}}') }),
+    });
+    const r3 = await http("POST", "/items", {
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "clean", price: 1 }),
+    });
+    record({
+      category: cat,
+      title: "Query + JSON __proto__ pollution with persistence check",
+      severity: "critical",
+      attack:
+        "GET /search?q=x&__proto__[polluted]=yes, POST /sink with a __proto__ body, then a normal POST /items",
+      observed: `search=${r1.status} sink=${r2.status} follow-up=${r3.status} (follow-up 201 = no global corruption)`,
+      verdict: r3.status !== 201 ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- R7. Protocol oddities -----------------------------------------------
+  {
+    const cat = "Protocol oddities";
+    const oddities: Array<[string, Finding["severity"], string, string]> = [
+      [
+        "OPTIONS * (asterisk-form)",
+        "low",
+        "OPTIONS * HTTP/1.1\r\nHost: x\r\n\r\n",
+        "asterisk-form request line",
+      ],
+      [
+        "CONNECT authority-form",
+        "medium",
+        "CONNECT 127.0.0.1:443 HTTP/1.1\r\nHost: x\r\n\r\n",
+        "CONNECT to a tunnel authority",
+      ],
+      ["HTTP/0.9 request", "medium", "GET /healthz\r\n\r\n", "request line with no HTTP version"],
+      [
+        "obs-fold header",
+        "high",
+        "GET /healthz HTTP/1.1\r\nHost: x\r\nX-Fold: a\r\n b\r\n\r\n",
+        "obsolete line folding in a header value",
+      ],
+      [
+        "method with embedded space",
+        "medium",
+        "GE T /healthz HTTP/1.1\r\nHost: x\r\n\r\n",
+        "space inside the method token",
+      ],
+    ];
+    for (const [name, sev, payload, attack] of oddities) {
+      const r = await rawSend(port, payload);
+      record({
+        category: cat,
+        title: `Protocol — ${name}`,
+        severity: sev,
+        attack,
+        observed: `status: ${r.status || "(connection dropped)"}`,
+        verdict: "INFO",
+      });
+    }
+    {
+      const r = await rawSend(
+        port,
+        "GET /healthz HTTP/1.1\r\nHost: x\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAMAAABkAARAAAAAAAIAAAAA\r\n\r\n"
+      );
+      record({
+        category: cat,
+        title: "h2c cleartext HTTP/2 upgrade",
+        severity: "high",
+        attack: "GET /healthz with Upgrade: h2c + HTTP2-Settings — must not switch protocols",
+        observed: `status: ${r.status || "(connection dropped)"}`,
+        verdict: r.status === 101 ? "VULNERABLE" : "DEFENDED",
+      });
+    }
+    {
+      const r = await rawSend(
+        port,
+        "GET /healthz HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\nSec-WebSocket-Version: 13\r\n\r\n"
+      );
+      record({
+        category: cat,
+        title: "WebSocket upgrade to a non-WS route",
+        severity: "medium",
+        attack: "valid WS handshake headers against /healthz (no WS handler)",
+        observed: `status: ${r.status || "(connection dropped)"}`,
+        verdict: r.status === 101 ? "VULNERABLE" : "DEFENDED",
+      });
+    }
+    {
+      const r = await rawSend(
+        port,
+        "POST /sink HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\nExpect: bananas\r\n\r\n{}"
+      );
+      record({
+        category: cat,
+        title: "Unknown Expect token",
+        severity: "low",
+        attack: "POST /sink with Expect: bananas — must be 417 or ignored, never an invitation",
+        observed: `status: ${r.status || "(connection dropped)"}`,
+        verdict: "INFO",
+      });
+    }
+  }
+
+  // ---- R8. Trailer smuggling + reflection ----------------------------------
+  {
+    const cat = "Trailer smuggling / reflection";
+    const body = JSON.stringify({ amount: 5 });
+    const r = await rawSend(
+      port,
+      `POST /pay HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nIdempotency-Key: trailer-${Date.now()}\r\nTransfer-Encoding: chunked\r\nTrailer: Authorization\r\n\r\n${body.length.toString(16)}\r\n${body}\r\n0\r\nAuthorization: Bearer SMUGGLED-TRAILER\r\n\r\n`,
+      2500
+    );
+    const smuggled = r.raw.includes("SMUGGLED-TRAILER");
+    record({
+      category: cat,
+      title: "Trailer-field smuggling into request headers",
+      severity: "critical",
+      attack:
+        "Chunked POST /pay with Trailer: Authorization — if the trailer merges into request " +
+        "headers, the handler sees a forged identity (observable via /pay's owner field)",
+      observed: smuggled
+        ? "SMUGGLED VALUE REACHED THE HANDLER"
+        : `status ${r.status}, trailer not visible to the handler`,
+      verdict: smuggled ? "VULNERABLE" : "DEFENDED",
+    });
+
+    const res = await fetch(`${BASE}/no-such%0d%0aroute%0d%0aInjected:%20yes`);
+    const text = await res.text();
+    const rawCrlf = text.includes("\r") || text.includes("\n");
+    record({
+      category: cat,
+      title: "CRLF-encoded path reflection in a 404 body",
+      severity: "medium",
+      attack:
+        "GET /no-such%0d%0aroute%0d%0aInjected:%20yes — the reflected path must stay JSON-escaped",
+      observed: `status ${res.status}, raw CR/LF in body: ${rawCrlf}, body: ${text.slice(0, 120)}`,
+      verdict: rawCrlf ? "VULNERABLE" : "DEFENDED",
     });
   }
 }
@@ -1675,6 +2441,7 @@ async function main() {
     await accessControlFeeds();
     await exceptPathConfusion();
     await novelProbes(port, portB);
+    await wave4Probes(port);
     await unorthodoxAttacks(port, portB);
   } finally {
     // Confirm the target survived the engagement (crash = DoS finding).

@@ -195,20 +195,92 @@ export interface IdempotencyOptions {
    * unauthenticated idempotent writes). Returning a stable per-user id is
    * preferable to the raw credential when tokens rotate between retries.
    *
+   * **Supply this whenever `Authorization` is not per-user.** The default assumes
+   * that header names one caller. If it is shared — a per-tenant API key, a
+   * service token, a gateway credential — with end users distinguished some other
+   * way (a session cookie, a subject claim your app reads), then the default
+   * partitions per *tenant* and every user inside one tenant shares a namespace.
+   * A caller who knows another's `Idempotency-Key` can then replay their stored
+   * response. This is not detectable from the header alone, which is why it is
+   * your call rather than a framework guard: a resolvable-but-coarse scope looks
+   * identical to a correctly per-user one. The cookie-only case *is* guarded —
+   * see {@link allowUnscopedCallers}.
+   *
+   * Independently of scoping, a replay never re-issues `Set-Cookie`, so a coarse
+   * namespace cannot escalate from disclosing a response body into handing over a
+   * live session.
+   *
    * @since 0.40.0
    */
   scope?: (ctx: BaseContext<any, any>) => string | undefined | Promise<string | undefined>;
+  /**
+   * Accept callers the default {@link scope} resolver cannot identify, letting
+   * them share one idempotency namespace. Default `false`.
+   *
+   * The guard this disables exists because a cookie-authenticated request
+   * carries no `Authorization` header, so the default resolver returns
+   * `undefined` and the namespace collapses. The retry fingerprint (method +
+   * path + body) is then all that separates two users — and two users
+   * submitting the same payload fingerprint identically, so one replays the
+   * other's stored response (CWE-524). Rather than share the namespace
+   * silently, a cookie-bearing request with no resolvable scope throws with an
+   * actionable message.
+   *
+   * Set this to `true` only when unscoped callers are genuinely interchangeable
+   * — a public, unauthenticated idempotent write where no response body is
+   * caller-specific. Supplying {@link scope} is almost always the right answer
+   * instead. A custom `scope` bypasses the guard entirely, including when it
+   * returns `undefined`, because an explicit resolver owns its own posture.
+   *
+   * @since 1.0.0-rc.8
+   */
+  allowUnscopedCallers?: boolean;
 }
 
 // ---------- Default store ----------
 
 /**
+ * Default cap on live records held by {@link MemoryIdempotencyStore}.
+ *
+ * Each record can hold a base64 response body up to
+ * {@link IdempotencyOptions.maxResponseBytes} (1 MiB by default), so the cap is
+ * what actually bounds this store's footprint. Matches the size at which the
+ * store already attempted an expiry sweep.
+ */
+const DEFAULT_MAX_IDEMPOTENCY_ENTRIES = 10_000;
+
+/**
  * In-memory {@link IdempotencyStore}. Suitable for tests and single-process
- * deployments. Expired records are dropped on access; the map is opportunistically
- * pruned so it cannot grow without bound.
+ * deployments. Expired records are dropped on access.
+ *
+ * Growth is bounded by {@link maxEntries}: an expiry sweep runs first, and if the
+ * store is still at the cap the oldest surviving record is evicted. The sweep
+ * alone is not a bound — it only drops records that have *expired*, so a stream
+ * of unique keys inside the TTL grew the map linearly no matter how often it ran,
+ * with each entry pinning a stored response body.
+ *
+ * Evicting a live record can only cost exactly-once semantics for a retry that
+ * arrives after the eviction — it re-executes rather than replaying. That is the
+ * right trade against unbounded memory, but it is a reason to supply a shared
+ * (e.g. Redis) store for any deployment where the key volume approaches the cap.
  */
 export class MemoryIdempotencyStore implements IdempotencyStore {
   private readonly map = new Map<string, IdempotencyRecord>();
+  private readonly maxEntries: number;
+
+  /**
+   * @param maxEntries - Maximum live records retained. Must be a positive
+   *   integer. Default {@link DEFAULT_MAX_IDEMPOTENCY_ENTRIES} (10 000).
+   * @throws Error when `maxEntries` is not a positive integer.
+   */
+  constructor(maxEntries: number = DEFAULT_MAX_IDEMPOTENCY_ENTRIES) {
+    if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+      throw new Error(
+        `MemoryIdempotencyStore: maxEntries must be a positive integer; got ${String(maxEntries)}.`
+      );
+    }
+    this.maxEntries = maxEntries;
+  }
 
   /**
    * @inheritDoc
@@ -218,8 +290,18 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
   reserve(key: string, record: IdempotencyRecord, _ttlMs?: number): IdempotencyRecord | null {
     const existing = this.read(key);
     if (existing) return existing;
+    if (this.map.size >= this.maxEntries) {
+      this.prune();
+      // Still full: every record is live, so drop the oldest. `Map` iterates in
+      // insertion order, and `complete()` overwrites in place rather than
+      // re-inserting, so the first key is the least recently reserved.
+      while (this.map.size >= this.maxEntries) {
+        const oldest = this.map.keys().next();
+        if (oldest.done) break;
+        this.map.delete(oldest.value);
+      }
+    }
     this.map.set(key, record);
-    if (this.map.size > 10_000) this.prune();
     return null;
   }
 
@@ -351,6 +433,46 @@ function validateKey(key: string, headerName: string, maxLen: number): void {
   }
 }
 
+/**
+ * Response headers that must never be stored for replay.
+ *
+ * `set-cookie` is the security-critical entry. A stored response was replayed
+ * with every header the original produced, so a `Set-Cookie` issued to the first
+ * caller was re-issued to whoever replayed the record. Combined with any
+ * coarse-scoped namespace (a shared tenant `Authorization`, or an explicit
+ * `allowUnscopedCallers: true`) that promotes a body disclosure into handing over
+ * a live session — account takeover rather than data leakage. Even for a
+ * correctly scoped, genuinely same-caller retry it is wrong: the replay would
+ * resurrect a cookie the handler set once, silently rolling back a session
+ * rotation performed at login or on a privilege change.
+ *
+ * Unlike `responseCache()`, which refuses to store a `Set-Cookie` response at
+ * all, idempotency strips and stores: declining to store would release the
+ * reservation and let a retry re-execute the handler, which for a payment or
+ * order endpoint is the double-charge this middleware exists to prevent.
+ * Stripping keeps exactly-once semantics and drops only the header that must not
+ * be replayed.
+ *
+ * The remainder are hop-by-hop or per-request fields (RFC 9110 §7.6.1) that
+ * describe the one connection or the one request that populated the record;
+ * replaying `x-request-id` in particular hands every later caller a correlation
+ * id belonging to someone else's request.
+ */
+const NEVER_REPLAYED_HEADERS: ReadonlySet<string> = new Set([
+  "set-cookie",
+  "set-cookie2",
+  "age",
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "x-request-id",
+]);
+
 async function captureResponse(
   res: Response,
   maxBytes: number
@@ -359,14 +481,23 @@ async function captureResponse(
   if (buf.byteLength > maxBytes) return null;
   const headers: Array<[string, string]> = [];
   res.headers.forEach((value, name) => {
-    headers.push([name, value]);
+    // Filter on capture, not on replay, so a credential never reaches the store
+    // in the first place — a shared (Redis) store would otherwise persist one
+    // caller's session cookie for the whole TTL.
+    if (!NEVER_REPLAYED_HEADERS.has(name.toLowerCase())) headers.push([name, value]);
   });
   return { status: res.status, headers, body: buf.byteLength ? bytesToBase64(buf) : "" };
 }
 
 function buildReplayResponse(stored: StoredIdempotentResponse, replayHeaderName: string): Response {
   const headers = new Headers();
-  for (const [name, value] of stored.headers) headers.set(name, value);
+  for (const [name, value] of stored.headers) {
+    // Filtered on capture already; re-checked here so a record written by an
+    // older build — or by any other writer sharing the same Redis store — cannot
+    // replay a credential either.
+    if (NEVER_REPLAYED_HEADERS.has(name.toLowerCase())) continue;
+    headers.set(name, value);
+  }
   headers.set(replayHeaderName, "true");
   const body = stored.body ? base64ToBytes(stored.body) : null;
   return markSchemaValidatedResponse(
@@ -427,6 +558,7 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
     (opts.methods ?? ["POST", "PUT", "PATCH", "DELETE"]).map((m) => m.toUpperCase())
   );
   const requireKey = opts.requireKey === true;
+  const allowUnscopedCallers = opts.allowUnscopedCallers === true;
   const cacheableStatus = opts.cacheableStatus ?? ((status: number) => status < 500);
   const ttlMs = ttlSeconds * 1_000;
 
@@ -468,6 +600,48 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       const scopeRaw = opts.scope
         ? await opts.scope(ctx)
         : (ctx.request.headers.get("authorization") ?? undefined);
+      // A credentialed request the default resolver cannot see is the dangerous
+      // case: cookie-session auth sends no `Authorization`, so `scopeRaw` is
+      // undefined, the namespace collapses to the shared one, and the retry
+      // fingerprint (method + path + body) becomes the only thing separating two
+      // users. Two users legitimately submit the same payload fingerprint
+      // identically — so client B replays client A's stored response, which is
+      // exactly the CWE-524 disclosure `scope` exists to prevent.
+      //
+      // Fail loudly rather than share the namespace. This mirrors
+      // `responseCache()`, which treats `Cookie` as a credential alongside
+      // `Authorization` for the same reason. Only fires when a cookie is present
+      // *and* nothing resolved, so the documented bearer-token path is untouched
+      // and a genuinely anonymous caller still shares the unscoped namespace.
+      //
+      // Deliberately NOT widened to "any cookie-bearing request". A resolvable
+      // scope can still be too coarse — a per-tenant API key with
+      // cookie-identified end users partitions per tenant while every user inside
+      // one shares a namespace — but that is indistinguishable from the far more
+      // common shape of a *per-user* bearer token arriving alongside incidental
+      // browser cookies (analytics, consent, CSRF), where the default is already
+      // correct. Keying the guard on the cookie's presence rejects that setup with
+      // a 500, so the check stays where the default is provably useless rather
+      // than merely possibly coarse. Callers whose `Authorization` is shared
+      // across users must pass `scope` — see the TSDoc on
+      // {@link IdempotencyOptions.scope}. Independently of scoping, `Set-Cookie`
+      // is never stored or replayed (see {@link NEVER_REPLAYED_HEADERS}), so a
+      // coarse namespace cannot escalate into handing over a live session.
+      if (
+        !opts.scope &&
+        scopeRaw === undefined &&
+        !allowUnscopedCallers &&
+        ctx.request.headers.has("cookie")
+      ) {
+        throw new Error(
+          "idempotency(): cannot determine the calling principal for a cookie-bearing request. " +
+            "The default scope reads the Authorization header, which this request does not carry, " +
+            "so every cookie-authenticated caller would share one idempotency namespace and could " +
+            "replay another caller's stored response (CWE-524). Pass " +
+            "`scope: (ctx) => ctx.state.session?.id` (or another stable per-caller id), or set " +
+            "`allowUnscopedCallers: true` if these callers are genuinely interchangeable."
+        );
+      }
       const scopeTag = scopeRaw ? `${await sha256Hex(scopeRaw)}:` : "";
       const storeKey = `${keyPrefix}${scopeTag}${key}`;
       const now = Date.now();

@@ -419,6 +419,37 @@ app.use(
         <code>tenancy()</code> first.
       </p>
 
+      <h3 id="access-control-is-not-order-sensitive">
+        Access control is not order-sensitive
+      </h3>
+      <p>
+        A cache hit returns a response from <code>beforeHandle</code>, which ends
+        the hook chain. Any gate running in that <em>same</em> phase could
+        therefore be skipped by a hit above it. That is why the network-identity
+        gates — <code>geoBlock()</code>
+        {", "}
+        <code>ipRestriction()</code>
+        {", "}
+        <code>botGuard()</code>
+        {", "}
+        <code>autoBan()</code> and <code>ipReputation()</code> — run in{" "}
+        <code>preBody</code>
+        {", "}which always precedes <code>beforeHandle</code>. They hold whether
+        you mount them above or below the cache. Authentication (
+        <code>bearerAuth()</code>
+        {", "}
+        <code>basicAuth()</code>
+        {", "}
+        <code>clientCertAuth()</code>) runs in <code>preBody</code> for the same
+        reason.
+      </p>
+      <p>
+        This matters for a hand-written gate: a custom guard in{" "}
+        <code>beforeHandle</code> <em>can</em> be preempted by a cache hit
+        mounted ahead of it. Put your own access-control checks in{" "}
+        <code>preBody</code> too, or register them before the cache.
+      </p>
+
       <h2 id="security-notes">Other security notes</h2>
       <ul>
         <li>

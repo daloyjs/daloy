@@ -36,6 +36,21 @@ interface Res {
   headers: Headers;
   text: string;
 }
+/**
+ * Narrow a probe body to a `BodyInit`.
+ *
+ * `Buffer` / `Uint8Array` default to an `ArrayBufferLike` backing store, which
+ * admits `SharedArrayBuffer` and is therefore not assignable to `BodyInit`.
+ * Re-wrapping the bytes over a fresh `ArrayBuffer` is a real conversion rather
+ * than a cast, so each probe still puts the exact bytes it intends on the wire.
+ * The copy is deliberate and affordable — probe bodies here are at most a few
+ * hundred KiB.
+ */
+function toBodyInit(body: string | Uint8Array | undefined): BodyInit | undefined {
+  if (body === undefined || typeof body === "string") return body;
+  return new Uint8Array(body);
+}
+
 async function http(
   method: string,
   path: string,
@@ -48,7 +63,7 @@ async function http(
   const res = await fetch(BASE + path, {
     method,
     headers: opts.headers,
-    body: opts.body,
+    body: toBodyInit(opts.body),
     redirect: opts.redirect ?? "manual",
   });
   return { status: res.status, headers: res.headers, text: await res.text() };
@@ -147,7 +162,9 @@ async function wafEvasion() {
 async function ssrfBypass() {
   const cat = "SSRF bypass against fetchGuard";
 
-  const urls = [
+  // Typed as tuples: `string[][]` plus `noUncheckedIndexedAccess` widens the
+  // destructured elements to `string | undefined`.
+  const urls: ReadonlyArray<readonly [kind: string, url: string]> = [
     ["IPv6 localhost", "http://[::1]/"],
     ["0.0.0.0", "http://0.0.0.0/"],
     ["localhost", "http://localhost/"],

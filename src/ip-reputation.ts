@@ -45,7 +45,7 @@
  * @since 0.37.0
  */
 
-import type { BaseContext, Hooks } from "./types.js";
+import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { fetchGuard } from "./fetch-guard.js";
 import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
@@ -113,7 +113,7 @@ export interface IpReputationOptions {
    * Custom client-IP resolver. Overrides {@link IpReputationOptions.trustProxyHeaders}.
    * Defaults to failing open (no IP → not blocked).
    */
-  resolveIp?: (ctx: BaseContext<any, any>) => string | undefined;
+  resolveIp?: (ctx: IdentityGateContext) => string | undefined;
   /**
    * Trust `X-Forwarded-For` / `X-Real-IP` in the default IP resolver. Only
    * enable behind a trusted proxy that overwrites these headers.
@@ -386,7 +386,12 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
 
   return {
     hooks: {
-      beforeHandle(ctx) {
+      // `preBody`, not `beforeHandle`: a denylist gate that short-circuits from
+      // `beforeHandle` is preempted by any earlier `beforeHandle` middleware that
+      // returns a Response first — a `responseCache()` HIT mounted above it would
+      // serve a denylisted address the cached body. `preBody` always runs first,
+      // so the feed holds regardless of mount order.
+      preBody(ctx) {
         const ip = resolveIp(ctx);
         if (!ip) return undefined; // fail-open on unresolved IP
         const feeds = matchingFeeds(ip);

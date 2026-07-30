@@ -8,7 +8,7 @@
  * @since 0.19.0
  */
 
-import type { BaseContext, Hooks } from "./types.js";
+import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
@@ -40,7 +40,7 @@ export interface IpRestrictionOptions {
    * Provide a function to read adapter connection metadata or a trusted
    * custom header (e.g. a CDN-specific identifier).
    */
-  resolveIp?: (ctx: BaseContext<any, any>) => string | undefined;
+  resolveIp?: (ctx: IdentityGateContext) => string | undefined;
   /**
    * Read `X-Forwarded-For` / `X-Real-IP` in the default resolver. Defaults
    * to `false` because those headers are client-spoofable unless every
@@ -108,7 +108,7 @@ export interface IpMatcher {
  *
  * @param opts Allow/deny lists plus IP-resolution options; see
  *   {@link IpRestrictionOptions}. Deny matches always win over allow.
- * @returns A {@link Hooks} object whose `beforeHandle` enforces the lists,
+ * @returns A {@link Hooks} object whose `preBody` hook enforces the lists,
  *   failing closed (403) when the client IP cannot be resolved or parsed.
  * @throws Error at setup time when neither `allow` nor `deny` is provided,
  *   or when a pattern is not a valid IP/CIDR.
@@ -125,7 +125,12 @@ export function ipRestriction(opts: IpRestrictionOptions): Hooks {
     opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
   const message = opts.message ?? "IP address not permitted";
   return {
-    beforeHandle(ctx) {
+    // `preBody`, not `beforeHandle`: a gate that returns a Response from
+    // `beforeHandle` can be preempted by any earlier `beforeHandle` middleware
+    // that short-circuits first — a `responseCache()` HIT mounted above it would
+    // serve a deny-listed address the cached body. `preBody` always runs first,
+    // so the allow/deny lists hold regardless of mount order.
+    preBody(ctx) {
       const raw = resolveIp(ctx);
       if (!raw) throw new ForbiddenError(message);
       const parsed = parseIp(raw);

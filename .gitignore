@@ -53,3 +53,10 @@ write-ups
 build-out
 
 .deepsec
+
+# Ad-hoc pentest / investigation scratch space. Untracked and unignored, these
+# accumulated minted JWTs, captured tokens, and `.bak` copies of attack targets —
+# one `git add -A` from being committed. Anything worth keeping belongs in
+# `red-team-live/` (the harness) or `tests/` (a regression), both of which are
+# type-checked and run in CI; scratch material stays out of git entirely.
+tmp/

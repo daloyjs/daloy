@@ -25,7 +25,7 @@
  * @since 0.37.0
  */
 
-import type { BaseContext, Hooks } from "./types.js";
+import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
@@ -64,7 +64,7 @@ export interface GeoBlockDecision {
  * @since 0.37.0
  */
 export type CountryFromContext = (
-  ctx: BaseContext<any, any>
+  ctx: IdentityGateContext
 ) => string | undefined | null | Promise<string | undefined | null>;
 
 /**
@@ -123,7 +123,7 @@ export interface GeoBlockOptions {
    * default Daloy fails closed because Web-standard `Request` objects do not
    * expose the peer address. Ignored when `resolveCountry` is used.
    */
-  resolveIp?: (ctx: BaseContext<any, any>) => string | undefined;
+  resolveIp?: (ctx: IdentityGateContext) => string | undefined;
   /**
    * Read `X-Forwarded-For` / `X-Real-IP` in the default IP resolver. Defaults
    * to `false` because those headers are client-spoofable unless every
@@ -270,7 +270,13 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
     opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
 
   return {
-    async beforeHandle(ctx) {
+    // Runs in `preBody`, not `beforeHandle`. A `beforeHandle` hook that returns
+    // a Response ends the chain, so a country gate in that phase is preempted by
+    // any earlier `beforeHandle` middleware that short-circuits — a
+    // `responseCache()` HIT above it would serve a denied country the cached
+    // body. `preBody` always precedes `beforeHandle`, which makes the gate
+    // immune to mount order. See {@link geoBlock}'s security note.
+    async preBody(ctx) {
       let ip: string | undefined;
       let rawCountry: string | undefined | null;
       if (resolveCountry) {

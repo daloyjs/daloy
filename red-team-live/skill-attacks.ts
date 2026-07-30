@@ -58,15 +58,30 @@ interface HttpResult {
   text: string;
 }
 
+/**
+ * Narrow a probe body to a `BodyInit`.
+ *
+ * `Buffer` / `Uint8Array` default to an `ArrayBufferLike` backing store, which
+ * admits `SharedArrayBuffer` and is therefore not assignable to `BodyInit`.
+ * Re-wrapping the bytes over a fresh `ArrayBuffer` is a real conversion rather
+ * than a cast, so each probe still puts the exact bytes it intends on the wire.
+ * The copy is deliberate and affordable — probe bodies here are at most a few
+ * hundred KiB.
+ */
+function toBodyInit(body: string | Uint8Array | undefined): BodyInit | undefined {
+  if (body === undefined || typeof body === "string") return body;
+  return new Uint8Array(body);
+}
+
 async function http(
   method: string,
   path: string,
-  opts: { headers?: Record<string, string>; body?: string | Buffer; base?: string } = {}
+  opts: { headers?: Record<string, string>; body?: string | Uint8Array; base?: string } = {}
 ): Promise<HttpResult> {
   const res = await fetch(`${opts.base ?? baseA()}${path}`, {
     method,
     headers: opts.headers,
-    body: opts.body,
+    body: toBodyInit(opts.body),
     redirect: "manual",
   });
   return { status: res.status, headers: res.headers, text: await res.text() };
@@ -852,15 +867,32 @@ async function loginLimitPosture() {
  */
 async function fuzzingDictionarySweep() {
   const cat = "Fuzzing dictionary sweep";
-  const skill = "tob-fuzzing-dictionary — domain tokens reach deeper parser states than blind mutation";
+  const skill =
+    "tob-fuzzing-dictionary — domain tokens reach deeper parser states than blind mutation";
 
   // -- Path tokens: framework/meta endpoints, traversal seeds, encoding tricks.
   const pathTokens = [
-    "/metrics", "/actuator", "/debug", "/openapi.json", "/docs", "/swagger",
-    "/.well-known/security.txt", "/server-status", "/env", "/config",
-    "/%2e%2e/%2e%2e/etc/passwd", "/....//....//etc/passwd",
-    "/users/1%252fadmin", "/%c0%ae%c0%ae/", "/%e0%80%ae/", "/users/-1",
-    "/users/0", "/users/1e10", "/users/%20", "/users/.", "/users/~",
+    "/metrics",
+    "/actuator",
+    "/debug",
+    "/openapi.json",
+    "/docs",
+    "/swagger",
+    "/.well-known/security.txt",
+    "/server-status",
+    "/env",
+    "/config",
+    "/%2e%2e/%2e%2e/etc/passwd",
+    "/....//....//etc/passwd",
+    "/users/1%252fadmin",
+    "/%c0%ae%c0%ae/",
+    "/%e0%80%ae/",
+    "/users/-1",
+    "/users/0",
+    "/users/1e10",
+    "/users/%20",
+    "/users/.",
+    "/users/~",
   ];
   let pathBad: string[] = [];
   for (const p of pathTokens) {
@@ -873,16 +905,32 @@ async function fuzzingDictionarySweep() {
     severity: "high",
     skill,
     attack: "GET on framework/meta endpoints, traversal seeds, malformed encodings",
-    observed: pathBad.length ? `5xx on: ${pathBad.join(", ")}` : "no 5xx — every token got a clean 4xx/2xx",
+    observed: pathBad.length
+      ? `5xx on: ${pathBad.join(", ")}`
+      : "no 5xx — every token got a clean 4xx/2xx",
     verdict: pathBad.length ? "VULNERABLE" : "DEFENDED",
   });
 
   // -- Query tokens: parser-hostile values against the typed /search schema.
   const queryTokens = [
-    "%s%s%s%s%s", "{},{[]}", "${7*7}", "{{constructor}}", "__proto__",
-    "NaN", "Infinity", "-Infinity", "1e999", "0x41", "\\u0000",
-    " ".repeat(10_000), "🚀".repeat(500), "﷐﷐﷐", "ＡＢＣ",
-    "q=1&q=2", "a[b]=c", "a.b.c=d",
+    "%s%s%s%s%s",
+    "{},{[]}",
+    "${7*7}",
+    "{{constructor}}",
+    "__proto__",
+    "NaN",
+    "Infinity",
+    "-Infinity",
+    "1e999",
+    "0x41",
+    "\\u0000",
+    " ".repeat(10_000),
+    "🚀".repeat(500),
+    "﷐﷐﷐",
+    "ＡＢＣ",
+    "q=1&q=2",
+    "a[b]=c",
+    "a.b.c=d",
   ];
   let queryBad: string[] = [];
   for (const q of queryTokens) {
@@ -895,7 +943,9 @@ async function fuzzingDictionarySweep() {
     severity: "high",
     skill,
     attack: "GET /search?q=<format strings, JS tokens, unicode abuse, oversized values>",
-    observed: queryBad.length ? `5xx on: ${queryBad.join(", ")}` : "no 5xx — schema/parser held on every token",
+    observed: queryBad.length
+      ? `5xx on: ${queryBad.join(", ")}`
+      : "no 5xx — schema/parser held on every token",
     verdict: queryBad.length ? "VULNERABLE" : "DEFENDED",
   });
 
@@ -912,7 +962,11 @@ async function fuzzingDictionarySweep() {
     '{"name":"x","price":01}',
     "{'name':'x','price':1}",
     '{"name":"x","price":1}\n{"name":"y","price":2}',
-    '[]', '"just a string"', '12345', 'null', 'true',
+    "[]",
+    '"just a string"',
+    "12345",
+    "null",
+    "true",
     '{"name":"﷐","price":1}',
     '{"名":"x","price":1}',
     '{"name":"x","price":1,"__proto__":{"polluted":true}}',
@@ -930,8 +984,11 @@ async function fuzzingDictionarySweep() {
     title: `JSON body dictionary sweep (${bodyTokens.length} tokens)`,
     severity: "high",
     skill,
-    attack: "POST /items with hostile JSON: extreme floats, dup keys, trailing commas, wrong types, proto keys",
-    observed: bodyBad.length ? `5xx on: ${bodyBad.join(", ")}` : "no 5xx — strict schema + safe parser held on every token",
+    attack:
+      "POST /items with hostile JSON: extreme floats, dup keys, trailing commas, wrong types, proto keys",
+    observed: bodyBad.length
+      ? `5xx on: ${bodyBad.join(", ")}`
+      : "no 5xx — strict schema + safe parser held on every token",
     verdict: bodyBad.length ? "VULNERABLE" : "DEFENDED",
   });
 }
@@ -948,14 +1005,19 @@ async function fuzzingDictionarySweep() {
  */
 async function constantTimeOracle() {
   const cat = "Timing side channel";
-  const skill = "tob-constant-time-testing — dudect: interleaved classes + Welch's t-test (|t| > 4.5 significant)";
+  const skill =
+    "tob-constant-time-testing — dudect: interleaved classes + Welch's t-test (|t| > 4.5 significant)";
   const creds = {
     unknownUser: Buffer.from("mallory:wrong-password0").toString("base64"),
     earlyMismatch: Buffer.from("alice:X000000000000000").toString("base64"),
     prefixMatch: Buffer.from("alice:s3cret-X0000000").toString("base64"),
   };
   const N = 250;
-  const samples: Record<keyof typeof creds, number[]> = { unknownUser: [], earlyMismatch: [], prefixMatch: [] };
+  const samples: Record<keyof typeof creds, number[]> = {
+    unknownUser: [],
+    earlyMismatch: [],
+    prefixMatch: [],
+  };
   const timed = async (key: keyof typeof creds) => {
     const t0 = performance.now();
     await http("GET", "/basic-vault", { headers: { authorization: `Basic ${creds[key]}` } });
@@ -976,7 +1038,8 @@ async function constantTimeOracle() {
     return { mean, variance, median: sorted[Math.floor(sorted.length / 2)]! };
   };
   const welch = (a: number[], b: number[]) => {
-    const sa = stats(a), sb = stats(b);
+    const sa = stats(a),
+      sb = stats(b);
     return (sa.mean - sb.mean) / Math.sqrt(sa.variance / a.length + sb.variance / b.length);
   };
   const tAE = welch(samples.unknownUser, samples.earlyMismatch);
@@ -1008,7 +1071,8 @@ async function constantTimeOracle() {
  */
 async function insecureDefaultsProbe() {
   const cat = "Insecure defaults";
-  const skill = "tob-insecure-defaults — defaults must be safe without opt-in; dev verbosity must not ship silently to prod";
+  const skill =
+    "tob-insecure-defaults — defaults must be safe without opt-in; dev verbosity must not ship silently to prod";
   const nf = await http("GET", "/no-such-route-xyz", { base: baseB() });
   const stackRe = /at\s+\S+\s+\(|node:internal|\.ts:\d+/i;
   record({

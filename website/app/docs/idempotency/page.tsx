@@ -311,6 +311,70 @@ async function createChargeWithRetries(amount: number) {
           {". "}Unauthenticated requests (no <code>Authorization</code>
           {", "}no <code>scope</code>) still dedupe by key alone.
         </li>
+        <li>
+          <strong>
+            A cookie-bearing request with no resolvable scope is refused.
+          </strong>{" "}
+          Forgetting <code>scope</code> on a cookie-authenticated app is the one
+          way the namespace silently collapses: no <code>Authorization</code>{" "}
+          header means no scope tag, so the retry fingerprint (method + path +
+          body) becomes the only thing separating two users, and two users
+          submit the same fingerprint identically. DaloyJS therefore throws on a
+          request that carries a <code>Cookie</code> but yields no scope, rather
+          than serving one caller&apos;s stored response to another. Pass{" "}
+          <code>scope</code>
+          {", "}or set <code>allowUnscopedCallers: true</code> if those callers
+          really are interchangeable (a public idempotent write whose response
+          body is not caller-specific). A custom <code>scope</code> bypasses the
+          guard entirely, including when it returns <code>undefined</code>
+          {", "}because an explicit resolver owns its own posture.
+        </li>
+        <li>
+          <strong>
+            Pass <code>scope</code> whenever <code>Authorization</code> is not
+            per-user.
+          </strong>{" "}
+          The default assumes that header names one caller. If it is shared (a
+          per-tenant API key, a service token, a gateway credential) while end
+          users are distinguished some other way, the scope <em>does</em>{" "}
+          resolve, so no guard fires, and it partitions per tenant while
+          everyone inside one tenant shares a namespace. DaloyJS cannot detect
+          this: a coarse scope looks exactly like a correctly per-user one, and
+          refusing every cookie-bearing request instead would reject the far
+          more common shape of a per-user bearer token arriving with ordinary
+          browser cookies (analytics, consent, CSRF). So this one is your call.
+          The replay carries no credential either way, so a coarse namespace
+          stays a body disclosure and never becomes a session handover.
+        </li>
+        <li>
+          <strong>A replay never re-issues the original Set-Cookie.</strong>{" "}
+          Storing every response header meant a <code>Set-Cookie</code> issued
+          to the first caller was handed to whoever replayed the record. Under
+          any coarse namespace that upgrades a body disclosure into giving away
+          a live session, and even for a legitimate same-caller retry it would
+          resurrect a cookie the handler set once, undoing a session rotation
+          performed at login or on a privilege change. <code>Set-Cookie</code>{" "}
+          is stripped on capture (so a credential never reaches the store) and
+          re-checked on replay, alongside the hop-by-hop and per-request fields
+          — <code>Connection</code>
+          {", "}
+          <code>Transfer-Encoding</code>
+          {", "}
+          <code>Age</code>
+          {", "}
+          <code>X-Request-Id</code>. Your application headers replay unchanged.
+        </li>
+        <li>
+          <strong>The in-memory store is bounded.</strong>{" "}
+          <code>MemoryIdempotencyStore</code> caps live records (
+          <code>maxEntries</code>, default 10 000): it sweeps expired records
+          first, then evicts the oldest survivor. Sweeping alone was not a
+          bound, since a stream of unique keys inside the TTL grew the map
+          linearly with each entry pinning a stored response body. Eviction can
+          only cost exactly-once semantics for a retry that arrives after it, so
+          supply a shared (Redis) store when your key volume approaches the cap
+          — which you want anyway for multi-instance deployments.
+        </li>
       </ul>
     </>
   );

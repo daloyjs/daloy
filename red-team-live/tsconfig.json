@@ -1,0 +1,25 @@
+{
+  // Editor + CI type-check config for the live red-team harness.
+  //
+  // The root tsconfig.json excludes this directory (the harness runs through
+  // `tsx`, which strips types without checking them), which meant ~2 500 lines
+  // of attack-harness TypeScript were never type-checked anywhere. That is the
+  // wrong place to have no safety net: a probe that fails to compile-check can
+  // silently stop exercising what its title claims — sending `undefined` as a
+  // body, comparing a status against the wrong field — and still report
+  // DEFENDED, which reads as evidence the framework held.
+  //
+  // Same strict options as the root plus Node types (the harness uses
+  // `node:net`, `node:zlib`, `node:crypto`). Wired into `pnpm typecheck` and
+  // available on its own as `pnpm typecheck:red-team-live`.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Widen rootDir to the repo root: this config never emits, but the root
+    // tsconfig pins rootDir to `src`, which would otherwise reject these files
+    // (TS6059) for living outside it.
+    "rootDir": "..",
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

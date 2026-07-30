@@ -11,7 +11,7 @@
  * The middleware is dependency-free and runtime-portable. It observes outgoing
  * responses via the {@link "./types.js".Hooks.onSend} hook (so it counts the
  * status produced by *any* later middleware or handler, not just its own) and
- * enforces the ban in {@link "./types.js".Hooks.beforeHandle}. The ban state
+ * enforces the ban in {@link "./types.js".Hooks.preBody}. The ban state
  * lives in a pluggable {@link AutoBanStore} — the in-memory default mirrors the
  * `rateLimit()` store and is single-process only; supply a shared (e.g. Redis)
  * implementation for multi-instance deployments.
@@ -20,9 +20,9 @@
  * @since 0.37.0
  */
 
-import type { BaseContext, Hooks } from "./types.js";
+import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError, TooManyRequestsError } from "./errors.js";
-import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
+import { readRemoteAddress, resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
 
 /**
  * One client's auto-ban bookkeeping. A record tracks the current strike count
@@ -136,8 +136,22 @@ export interface AutoBanOptions {
    * Derive the client identity from `ctx`, or `undefined` to skip the request
    * (fail-open — never banned, never counted). Defaults to the proxy-header
    * resolver when {@link trustProxyHeaders} is set.
+   *
+   * Called first in `preBody`, where the gate is immune to mount order (see
+   * {@link IdentityGateContext}). If it returns `undefined` there, it is called
+   * again in `beforeHandle` — by then `session()` and other `beforeHandle` layers
+   * have populated `ctx.state`, so a generator keyed on a resolved session works
+   * rather than silently disabling the ban. Requests enforced by that second
+   * attempt are order-sensitive again, because `beforeHandle` is the phase a
+   * `responseCache()` hit short-circuits; key off headers, params or query where
+   * you can and the `preBody` pass handles it. Returning `undefined` from *both*
+   * still skips the request.
+   *
+   * `ctx.body` is not available in either phase — `preBody` runs before parsing,
+   * and the type reflects that. Derive the key from the request line, headers, or
+   * state instead.
    */
-  keyGenerator?: (ctx: BaseContext<any, any>) => string | undefined;
+  keyGenerator?: (ctx: IdentityGateContext) => string | undefined;
   /**
    * Read `X-Forwarded-For` / `X-Real-IP` in the default key generator. Off by
    * default because those headers are client-spoofable unless every request
@@ -160,6 +174,32 @@ export interface AutoBanOptions {
    * [1, 64]; validated at construction.
    */
   trustedHops?: number;
+  /**
+   * What to do when the default key generator cannot resolve a forwarded
+   * identity — the request carried no `X-Forwarded-For`, or a chain shorter than
+   * {@link trustedHops} declares.
+   *
+   * - `"peer"` (default) — fall back to the immediate TCP peer address, in its
+   *   own `peer:` keyspace. The peer cannot be spoofed, and a request that
+   *   skipped the declared proxy chain came *from* that peer, so strikes are
+   *   attributed to the real origin of the traffic.
+   * - `"skip"` — never count and never ban such a request.
+   *
+   * `"peer"` is the default because `"skip"` is a silent bypass: an attacker who
+   * can reach the origin directly gets unlimited strikes simply by omitting a
+   * header. Choose `"skip"` only when unresolved requests are known-benign and
+   * arrive from a shared address — for instance a load balancer that does not
+   * always set `X-Forwarded-For`, where every such request would otherwise share
+   * the balancer's single `peer:` bucket and a few `401`s could ban the lot.
+   * Prefer fixing the proxy configuration over choosing `"skip"`.
+   *
+   * Ignored when {@link keyGenerator} is supplied — a custom generator owns its
+   * own unresolved-identity posture, and returning `undefined` from it still
+   * means skip.
+   *
+   * @since 1.0.0-rc.8
+   */
+  onUnresolvedIdentity?: "peer" | "skip";
   /** Pluggable ban store. Default: a shared in-memory store keyed by `groupId`. */
   store?: AutoBanStore;
   /**
@@ -253,10 +293,30 @@ function assertPositiveInteger(name: string, value: number): void {
  * trusted proxy hops from the right of `X-Forwarded-For` (falling back to
  * `X-Real-IP`). Reading the right side keeps the key spoof-resistant — see
  * {@link resolveForwardedClientIp}.
+ *
+ * When the forwarded chain cannot satisfy the declaration,
+ * {@link resolveForwardedClientIp} returns `undefined` — correct for *identity*,
+ * because such a request never traversed the declared topology. For *abuse
+ * accounting* that answer used to mean "skip", which handed an attacker unlimited
+ * strikes for free: reach the origin directly, past the CDN that appends the
+ * header, and every failed credential attempt went uncounted.
+ *
+ * So the fallback is the immediate TCP peer, prefixed to keep it in its own
+ * keyspace. The peer address cannot be spoofed — it is the socket actually
+ * talking to the adapter — and in exactly the direct-to-origin case that
+ * produced the bypass, the peer *is* the attacker, so accounting becomes precise
+ * rather than absent. Set `onUnresolvedIdentity: "skip"` to restore the previous
+ * behaviour; see {@link AutoBanOptions.onUnresolvedIdentity} for when that is
+ * the right call.
  */
-function forwardedKey(hops: number) {
-  return (ctx: BaseContext<any, any>): string | undefined =>
-    resolveForwardedClientIp(ctx.request, hops);
+function forwardedKey(hops: number, peerFallback: boolean) {
+  return (ctx: BaseContext<any, any>): string | undefined => {
+    const forwarded = resolveForwardedClientIp(ctx.request, hops);
+    if (forwarded !== undefined) return forwarded;
+    if (!peerFallback) return undefined;
+    const peer = readRemoteAddress(ctx);
+    return peer === undefined ? undefined : `peer:${peer}`;
+  };
 }
 
 /**
@@ -268,8 +328,12 @@ function forwardedKey(hops: number) {
  * Identity attribution is mandatory: pass {@link AutoBanOptions.keyGenerator} or
  * set {@link AutoBanOptions.trustProxyHeaders}, otherwise construction throws so
  * a misconfiguration can never collapse every caller into one shared bucket and
- * ban the whole world at once. A request the key generator cannot attribute is
- * skipped (never counted, never banned).
+ * ban the whole world at once. When the default generator cannot resolve a
+ * forwarded identity — no `X-Forwarded-For`, or a chain shorter than
+ * {@link AutoBanOptions.trustedHops} declares — strikes are attributed to the
+ * unspoofable TCP peer instead of being discarded; see
+ * {@link AutoBanOptions.onUnresolvedIdentity}. A custom `keyGenerator` that
+ * returns `undefined` still skips the request.
  *
  * @example
  * ```ts
@@ -318,11 +382,17 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   const watch = new Set<number>(watchStatuses);
 
   const hops = resolveForwardedTrust("autoBan()", opts);
+  const onUnresolved = opts.onUnresolvedIdentity ?? "peer";
+  if (onUnresolved !== "peer" && onUnresolved !== "skip") {
+    throw new Error(
+      `autoBan(): onUnresolvedIdentity must be "peer" or "skip"; got ${String(onUnresolved)}.`
+    );
+  }
   let keyOf: (ctx: BaseContext<any, any>) => string | undefined;
   if (opts.keyGenerator) {
     keyOf = opts.keyGenerator;
   } else if (hops !== undefined) {
-    keyOf = forwardedKey(hops);
+    keyOf = forwardedKey(hops, onUnresolved === "peer");
   } else {
     throw new Error(
       "autoBan(): provide keyGenerator, trustedHops, or set trustProxyHeaders so clients can be identified; " +
@@ -344,21 +414,39 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   }
   const prefix = `${groupId}:`;
 
-  return {
-    async beforeHandle(ctx) {
-      const identity = keyOf(ctx);
-      if (identity === undefined) return undefined;
-      const key = `${prefix}${identity}`;
-      const state = ctx.state as Record<string, unknown>;
-      state[STATE_KEY] = key;
-      const record = await store.get(key);
-      const now = Date.now();
-      if (record && record.bannedUntilMs > now) {
-        state[STATE_REJECTED] = true;
-        if (banStatus === 403) throw new ForbiddenError(message);
-        const retry = Math.ceil((record.bannedUntilMs - now) / 1000);
-        throw new TooManyRequestsError(retryAfter ? retry : undefined);
-      }
+  /**
+   * Resolve the identity, stash the key for `onSend`, and reject an active ban.
+   *
+   * Shared by the `preBody` gate and the `beforeHandle` fallback below so both
+   * phases enforce identically. Returns `true` once an identity was found, so
+   * the fallback knows whether `preBody` already handled the request.
+   */
+  const enforce = async (ctx: BaseContext<any, any>): Promise<boolean> => {
+    const identity = keyOf(ctx);
+    if (identity === undefined) return false;
+    const key = `${prefix}${identity}`;
+    const state = ctx.state as Record<string, unknown>;
+    state[STATE_KEY] = key;
+    const record = await store.get(key);
+    const now = Date.now();
+    if (record && record.bannedUntilMs > now) {
+      state[STATE_REJECTED] = true;
+      if (banStatus === 403) throw new ForbiddenError(message);
+      const retry = Math.ceil((record.bannedUntilMs - now) / 1000);
+      throw new TooManyRequestsError(retryAfter ? retry : undefined);
+    }
+    return true;
+  };
+
+  const hooks: Hooks = {
+    // `preBody`, not `beforeHandle`: the ban check must not be preemptable by an
+    // earlier `beforeHandle` middleware that short-circuits — a
+    // `responseCache()` HIT mounted above it would serve a banned client the
+    // cached body, so the ban would only ever apply to uncached routes.
+    // `preBody` always runs before any `beforeHandle`. Strike accounting stays in
+    // `onSend`, which observes the final status either way.
+    async preBody(ctx) {
+      await enforce(ctx);
       return undefined;
     },
 
@@ -395,4 +483,32 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
       return undefined;
     },
   };
+
+  // A custom `keyGenerator` may legitimately be unable to answer in `preBody` —
+  // typically because it reads state a `beforeHandle` layer resolves, such as
+  // `session()`. Without a second attempt that request gets no identity, so
+  // `onSend` finds no key and records no strike: the ban silently never arms.
+  // That is a worse failure than the ordering hazard the phase move closed, so
+  // retry in `beforeHandle` when, and only when, `preBody` came up empty.
+  //
+  // The default forwarded resolver never needs this — `onUnresolvedIdentity`
+  // already falls back to the TCP peer — so the hook is registered only for a
+  // custom generator and the common path pays nothing.
+  //
+  // Residual, deliberately accepted: a request enforced by this fallback IS
+  // order-sensitive again, because `beforeHandle` is the phase a
+  // `responseCache()` hit short-circuits. It applies solely to requests whose
+  // identity could not be resolved earlier, and enforcing late beats not
+  // enforcing at all. Resolve identity from headers/params/query where you can
+  // and `preBody` handles it, immune to mount order.
+  if (opts.keyGenerator) {
+    hooks.beforeHandle = async (ctx) => {
+      const state = ctx.state as Record<string, unknown>;
+      if (state[STATE_KEY] !== undefined) return undefined; // preBody had it
+      await enforce(ctx);
+      return undefined;
+    };
+  }
+
+  return hooks;
 }
