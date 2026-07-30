@@ -1424,20 +1424,18 @@ async function novelProbes(port: number, portB: number) {
   // ---- Wire-level: Expect:100-continue timing + chunk abuse ----
   {
     const cat = "Protocol / parsing abuse";
-    // Posture probe, deliberately INFO rather than a pass/fail assertion.
+    // `/sink` declares a request-body schema, so an over-limit declared
+    // Content-Length is refused before a byte is read. The interim `100` must
+    // therefore never appear: soliciting the body would invite ~100 MB that
+    // could only be discarded. Previously the wire showed `100` then `413`.
     //
-    // Node answers `100 Continue` for any request that asks, including one
-    // whose declared Content-Length exceeds `bodyLimitBytes`, so a hostile
-    // client can hold sockets open awaiting a body that may be refused later.
-    // A `checkContinue` listener that refuses at header time was tried and
-    // reverted: `bodyLimitBytes` is enforced when the body is *parsed*, so a
-    // route with no request body schema never enforces it, and rejecting early
-    // made an `Expect` header change the outcome of an otherwise identical
-    // request (curl, which sends `Expect` for large bodies, got 413 where
-    // fetch got 200). Closing this properly needs a uniform transport-level
-    // cap applied with or without `Expect` and emitted through the error
-    // pipeline so it carries secureHeaders and a request id. Tracked as
-    // post-1.0 work; this probe records the current posture.
+    // An earlier attempt refused at header time against `bodyLimitBytes`
+    // directly and had to be reverted, because that limit only applies where a
+    // body is parsed: a route declaring no body schema never applies it, so the
+    // same request answered `413` with `Expect` and `200` without. The adapter
+    // now defers `writeContinue()` until the framework actually reaches for the
+    // body, which keeps the two paths in agreement by construction. The
+    // schema-less half of that property is pinned in tests/node-adapter.test.ts.
     const expect100 = await rawSend(
       port,
       `POST /sink HTTP/1.1\r\nHost: ${HOST}:${port}\r\nContent-Type: application/json\r\nContent-Length: 99999999\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n`
@@ -1445,12 +1443,19 @@ async function novelProbes(port: number, portB: number) {
     record({
       category: cat,
       title: "Expect: 100-continue with oversized declared body",
-      severity: "info",
+      severity: "medium",
       attack: "POST /sink, Content-Length: 99999999, Expect: 100-continue",
       observed:
         `first status line: ${expect100.statusLine || "(none)"}` +
-        " — body limit is enforced at parse time, not at header time",
-      verdict: "INFO",
+        (/HTTP\/\d\.\d\s+100/.test(expect100.raw)
+          ? " — an interim 100 solicited a body that was then refused"
+          : " — refused without soliciting the body"),
+      // Keyed on the absence of the interim `100`, not on a specific status: by
+      // this point in the engagement an earlier preBody gate (rate limit /
+      // auto-ban) may legitimately answer 403 before the body limit is reached.
+      // Either way the body must never have been solicited. The exact 413 path
+      // is pinned against a clean app in tests/node-adapter.test.ts.
+      verdict: /HTTP\/\d\.\d\s+100/.test(expect100.raw) ? "VULNERABLE" : "DEFENDED",
     });
     const chunkExt = await rawSend(
       port,

@@ -13,6 +13,7 @@ import {
   DALOY_REQUEST_RAW_BODY,
   DALOY_LIGHT_RESPONSE_OK,
   DALOY_REQUEST_ABORT,
+  DALOY_REQUEST_BODY_SOLICIT,
 } from "../app.js";
 import { BadRequestError } from "../errors.js";
 import {
@@ -154,44 +155,95 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     connectionTimeoutMs > 0
       ? Math.max(1_000, Math.min(5_000, Math.floor(connectionTimeoutMs / 2)))
       : undefined;
+  const handleRequest = (
+    req: IncomingMessage,
+    res: ServerResponse,
+    onBodyPull?: () => void
+  ): void => {
+    // GET/HEAD: no body work, dispatch directly. Keep this first so the GET
+    // hot path doesn't pay for any of the buffering bookkeeping below.
+    const method = req.method;
+    if (method === "GET" || method === "HEAD" || method === undefined) {
+      dispatchToApp(app, req, res, trustProxy, undefined, onBodyPull);
+      return;
+    }
+    // Refuse Fetch-forbidden methods (CONNECT/TRACE/TRACK) before building a
+    // `Request` — `new Request` throws a `TypeError` for them, which would
+    // otherwise be caught and reported as a generic 500 instead of a clean,
+    // intentional method refusal. Placed after the GET/HEAD fast path so the
+    // hot path never pays for this check.
+    if (FETCH_FORBIDDEN_METHODS.has(method.toUpperCase())) {
+      writeMethodRefused(res);
+      return;
+    }
+    // POST/PUT/PATCH/DELETE with a small known content-length: pre-buffer
+    // bytes from the Node socket directly so the Request constructor gets a
+    // Uint8Array body instead of `Readable.toWeb(req)`. This skips the
+    // WHATWG-stream adapter that dominates POST throughput on Node.
+    const cl = req.headers["content-length"];
+    const n = cl ? Number(cl) : NaN;
+    if (Number.isFinite(n) && n >= 0 && n <= bufferedBodyMaxBytes) {
+      bufferRequestBody(req, n).then(
+        (bytes) => dispatchToApp(app, req, res, trustProxy, bytes, onBodyPull),
+        (e) => writeAdapterError(res, e)
+      );
+      return;
+    }
+    dispatchToApp(app, req, res, trustProxy, undefined, onBodyPull);
+  };
   const server = createServer(
     {
       maxHeaderSize: opts.maxHeaderBytes ?? 16 * 1024,
       ...(connectionsCheckingInterval !== undefined ? { connectionsCheckingInterval } : {}),
     },
-    (req, res) => {
-      // GET/HEAD: no body work, dispatch directly. Keep this first so the GET
-      // hot path doesn't pay for any of the buffering bookkeeping below.
-      const method = req.method;
-      if (method === "GET" || method === "HEAD" || method === undefined) {
-        dispatchToApp(app, req, res, trustProxy, undefined);
-        return;
-      }
-      // Refuse Fetch-forbidden methods (CONNECT/TRACE/TRACK) before building a
-      // `Request` — `new Request` throws a `TypeError` for them, which would
-      // otherwise be caught and reported as a generic 500 instead of a clean,
-      // intentional method refusal. Placed after the GET/HEAD fast path so the
-      // hot path never pays for this check.
-      if (FETCH_FORBIDDEN_METHODS.has(method.toUpperCase())) {
-        writeMethodRefused(res);
-        return;
-      }
-      // POST/PUT/PATCH/DELETE with a small known content-length: pre-buffer
-      // bytes from the Node socket directly so the Request constructor gets a
-      // Uint8Array body instead of `Readable.toWeb(req)`. This skips the
-      // WHATWG-stream adapter that dominates POST throughput on Node.
-      const cl = req.headers["content-length"];
-      const n = cl ? Number(cl) : NaN;
-      if (Number.isFinite(n) && n >= 0 && n <= bufferedBodyMaxBytes) {
-        bufferRequestBody(req, n).then(
-          (bytes) => dispatchToApp(app, req, res, trustProxy, bytes),
-          (e) => writeAdapterError(res, e)
-        );
-        return;
-      }
-      dispatchToApp(app, req, res, trustProxy, undefined);
-    }
+    handleRequest
   );
+
+  // `Expect: 100-continue`: hold the interim response until the framework
+  // actually reaches for the body.
+  //
+  // Node's default is to answer `100 Continue` for anyone who asks, which
+  // solicits a body the framework may be about to refuse outright. A route with
+  // a request-body schema and a declared `Content-Length` over `bodyLimitBytes`
+  // is rejected by `readBodyLimited` *before* it reads a byte, so the interim
+  // `100` invited megabytes that could only ever be discarded — measured as
+  // `100` then `413` on the wire.
+  //
+  // Deferring to the first actual read makes the framework's own read decision
+  // the predicate, and that is what keeps this honest. An earlier attempt
+  // refused at header time against `bodyLimitBytes` directly, but that limit is
+  // only enforced where a body is *parsed*, so a route that declares no body
+  // schema never applies it: the same request answered `413` with `Expect` and
+  // `200` without it. `Expect` is a hint about when to send the body (RFC 9110
+  // §10.1.1), so it must never change the outcome — only when the client
+  // learns it. Keying off the read keeps the two paths in agreement by
+  // construction rather than by test coverage.
+  server.on("checkContinue", (req, res) => {
+    const cl = req.headers["content-length"];
+    const n = cl ? Number(cl) : NaN;
+    if (Number.isFinite(n) && n >= 0 && n <= bufferedBodyMaxBytes) {
+      // Small declared body: `handleRequest` buffers it eagerly, before dispatch,
+      // so there is no later read to key off. It is also under the buffer cap,
+      // so soliciting it immediately costs nothing worth deferring.
+      res.writeContinue();
+      handleRequest(req, res);
+      return;
+    }
+    // Streaming path (no `Content-Length`, or one above the buffer cap): answer
+    // the interim `100` the first time the framework pulls the body stream.
+    //
+    // The socket's own `resume` event is deliberately NOT the trigger. Node also
+    // resumes the stream on a microtask when it drains a body nobody read, which
+    // races the response: measured, that fired the `100` even for a request whose
+    // body was never wanted, and beat the `413` to the wire. The consumer's first
+    // `pull` is the only signal that means "the framework wants these bytes".
+    let sent = false;
+    handleRequest(req, res, () => {
+      if (sent || res.headersSent || res.writableEnded) return;
+      sent = true;
+      res.writeContinue();
+    });
+  });
 
   server.requestTimeout = connectionTimeoutMs;
   server.headersTimeout = connectionTimeoutMs;
@@ -281,11 +333,12 @@ function dispatchToApp(
   req: IncomingMessage,
   res: ServerResponse,
   trustProxy: boolean,
-  bufferedBody: Uint8Array | undefined
+  bufferedBody: Uint8Array | undefined,
+  onBodyPull?: () => void
 ): void {
   let request: Request;
   try {
-    request = toWebRequest(req, trustProxy, bufferedBody);
+    request = toWebRequest(req, trustProxy, bufferedBody, onBodyPull);
   } catch (e) {
     writeAdapterError(res, e);
     return;
@@ -684,8 +737,13 @@ Object.setPrototypeOf(LightRequest.prototype, Request.prototype);
 function toWebRequest(
   req: IncomingMessage,
   trustProxy: boolean,
-  bufferedBody?: Uint8Array
+  bufferedBody?: Uint8Array,
+  onBodyPull?: () => void
 ): Request {
+  // `onBodyPull` is attached to the finished Request below rather than wrapping
+  // the body stream: undici pulls a streaming body during `new Request(...)`,
+  // so a stream-level hook fired at construction — before the framework had
+  // decided anything — and re-solicited bodies it went on to refuse.
   const reqHeaders = req.headers;
   const forwardedHost = trustProxy ? firstHeader(reqHeaders["x-forwarded-host"]) : undefined;
   const host = forwardedHost ?? reqHeaders.host ?? "localhost";
@@ -736,12 +794,18 @@ function toWebRequest(
     (req2 as unknown as Record<symbol, unknown>)[DALOY_REQUEST_RAW_BODY] = bufferedBody;
     return req2;
   }
-  return new Request(url, {
+  const streamed = new Request(url, {
     method,
     headers,
     body: Readable.toWeb(req) as ReadableStream,
     duplex: "half",
   } as RequestInit);
+  if (onBodyPull !== undefined) {
+    (streamed as unknown as { [DALOY_REQUEST_BODY_SOLICIT]?: () => void })[
+      DALOY_REQUEST_BODY_SOLICIT
+    ] = onBodyPull;
+  }
+  return streamed;
 }
 
 function firstHeader(v: string | string[] | undefined): string | undefined {

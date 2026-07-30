@@ -15,6 +15,46 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Security
+
+- **The Node adapter no longer solicits a request body it is about to refuse.**
+  Node answers `100 Continue` to anyone who sends `Expect: 100-continue`,
+  including a request whose declared `Content-Length` already exceeds
+  `bodyLimitBytes`. Measured on the wire, that produced `100` then `413`: the
+  client was invited to stream ~100 MB that could only be discarded, and a
+  hostile client could hold many such sockets open cheaply. `writeContinue()` is
+  now deferred until the framework actually reaches for the body, so a request
+  that is going to be refused is refused without the invitation.
+  - **This is the second attempt, and the first one was reverted for a reason
+    worth recording.** That attempt refused at header time by comparing
+    `Content-Length` against `bodyLimitBytes` directly. It looks equivalent and
+    is not: `bodyLimitBytes` is enforced where a body is _parsed_, so a route
+    declaring no request-body schema never applies it. The early check therefore
+    refused requests the framework would have served, and because only clients
+    sending `Expect` took that path, the same request answered `413` from curl
+    (which sends `Expect` for large bodies) and `200` from `fetch`. `Expect` is
+    a hint about _when_ to send a body (RFC 9110 §10.1.1); it must never change
+    the outcome.
+  - The fix keys off the framework's own read decision instead, via a new
+    internal `DALOY_REQUEST_BODY_SOLICIT` hook that the core invokes once it has
+    decided the body is both wanted and within the limit. Because both paths now
+    consult one decision, `Expect` changes only _when_ the client learns the
+    answer — by construction, not by test coverage. `stepBody()` also refuses an
+    over-limit declared length before firing that hook; `readBodyLimited()`
+    already made the identical check on the identical boundary, so no outcome
+    changes, but the ordering is what keeps the body from being solicited first.
+  - Deliberately not done: turning `bodyLimitBytes` into a transport-level cap
+    that applies to routes with no body schema. That would change documented
+    behaviour for streaming routes and needs a per-route override, which does not
+    exist today. The socket-holding risk it would additionally cover is already
+    bounded by `connectionTimeoutMs` / `headersTimeout` / `keepAliveTimeout`.
+  - Regression tests in `tests/node-adapter.test.ts`, including the schema-less
+    route whose absence let the first attempt's own tests pass while it was
+    broken, and a streaming in-limit upload that would hang if the hook ever
+    stopped firing. The live probe in `red-team-live/run.ts` was upgraded from an
+    INFO posture note to a `DEFENDED` assertion on the absence of the interim
+    `100`.
+
 ## [1.0.0-rc.8] - 2026-07-30
 
 ### Security

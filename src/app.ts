@@ -1132,6 +1132,32 @@ export const DALOY_REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
 export const DALOY_REQUEST_ABORT: unique symbol = Symbol.for("daloyjs.request.abort");
 
 /**
+ * Internal Symbol an adapter may set to a callback that the framework invokes
+ * immediately before it reads the request body — and only once it has decided
+ * the body is both wanted and within {@link AppOptions.bodyLimitBytes}.
+ *
+ * It exists for `Expect: 100-continue`. Node answers the interim `100` to
+ * anyone who asks, which solicits a body the framework may be about to refuse:
+ * a route with a body schema and a declared `Content-Length` over the limit is
+ * rejected before a byte is read, so the `100` invited megabytes that could
+ * only be discarded. The adapter defers its `writeContinue()` into this hook so
+ * the invitation tracks the framework's own decision.
+ *
+ * The framework's read decision has to be the trigger, because it is the only
+ * thing that makes the outcome independent of the `Expect` header. `Expect` is
+ * a hint about *when* to send the body (RFC 9110 §10.1.1); refusing at header
+ * time against `bodyLimitBytes` instead looks equivalent but is not, since that
+ * limit is only applied where a body is parsed — a route declaring no body
+ * schema never applies it, so the same request answered `413` with `Expect` and
+ * `200` without.
+ *
+ * Adapter-facing only; userland code should not depend on it.
+ *
+ * @since 1.0.0-rc.9
+ */
+export const DALOY_REQUEST_BODY_SOLICIT: unique symbol = Symbol.for("daloyjs.request.bodySolicit");
+
+/**
  * Internal Symbol set by handlers/serializers to attach a raw stream
  * (Node `Readable` or Web `ReadableStream`) to a `Response`. The Node
  * adapter pipes the stream straight to the socket, skipping the
@@ -5182,6 +5208,23 @@ function validateContext(
     if (!allowed.some((a) => ct.includes(a))) {
       throw new UnsupportedMediaTypeError(ct || "(none)", allowed);
     }
+    // Refuse an over-limit *declared* length here, before soliciting the body.
+    // `readBodyLimited` already makes the identical check on the identical
+    // boundary, so this changes no outcome — it is load-bearing purely for
+    // ordering, so that an adapter deferring `Expect: 100-continue` (see
+    // {@link DALOY_REQUEST_BODY_SOLICIT}) never invites bytes this request was
+    // always going to be refused for. Kept below the content-type check so a
+    // wrong media type still answers `415` rather than `413`, as before.
+    const declared = request.headers.get("content-length");
+    if (declared !== null) {
+      const declaredBytes = Number(declared);
+      if (Number.isFinite(declaredBytes) && declaredBytes > opts.bodyLimitBytes) {
+        throw new PayloadTooLargeError(opts.bodyLimitBytes);
+      }
+    }
+    (request as unknown as { [DALOY_REQUEST_BODY_SOLICIT]?: () => void })[
+      DALOY_REQUEST_BODY_SOLICIT
+    ]?.();
     const raw = readBody(
       request,
       ct,

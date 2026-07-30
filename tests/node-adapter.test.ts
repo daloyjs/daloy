@@ -983,3 +983,95 @@ test("node adapter: Expect: 100-continue gets the interim 100 followed by the no
     await handle.close();
   }
 });
+
+test("node adapter: an over-limit declared body is refused without soliciting it", async () => {
+  // The interim `100` must not be sent when the framework is going to refuse the
+  // body outright. Before this, the wire showed `100` then `413`: the client was
+  // invited to stream a megabyte that could only be discarded.
+  const app = new App({ logger: false, bodyLimitBytes: 1024 });
+  app.route({
+    method: "POST",
+    path: "/echo",
+    operationId: "echoPost",
+    request: { body: z.object({ value: z.string() }) as any },
+    responses: { 200: { description: "ok", body: z.object({ value: z.string() }) as any } },
+    handler: async ({ body }) => ({ status: 200 as const, body: body as { value: string } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    // Headers only — the body is deliberately never sent.
+    const statuses = await collectStatusLines(
+      port,
+      "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+        "Content-Length: 99999999\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n"
+    );
+    assert.deepEqual(statuses, [413], "must answer 413 alone, with no interim 100");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("[unhappy] node adapter: Expect never changes the outcome on a schema-less route", async () => {
+  // The property that the reverted header-time refusal violated. A route with no
+  // request body schema never applies `bodyLimitBytes`, because the body is never
+  // parsed — so an over-limit declared length is simply irrelevant there. The
+  // answer must be the same whether or not the client sends `Expect`, since
+  // `Expect` is a hint about when to send the body (RFC 9110 §10.1.1), not
+  // something that alters the request. Refusing at header time made curl (which
+  // sends `Expect` for large bodies) see 413 where fetch saw 200.
+  const app = new App({ logger: false, bodyLimitBytes: 1024 });
+  app.route({
+    method: "POST",
+    path: "/ignores-body",
+    operationId: "ignoresBody",
+    responses: { 200: { description: "ok" } },
+    acknowledgeNoResponseBodySchema: true,
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const head =
+      "POST /ignores-body HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+      "Content-Length: 99999999\r\n";
+    const withExpect = await collectStatusLines(
+      port,
+      `${head}Expect: 100-continue\r\nConnection: close\r\n\r\n`
+    );
+    assert.deepEqual(withExpect, [200], "Expect must not turn an accepted request into a refusal");
+
+    // The same request without `Expect`, sending a body far over the limit: still
+    // accepted, because nothing parses it.
+    const big = "x".repeat(4096);
+    const withoutExpect = await collectStatusLines(
+      port,
+      "POST /ignores-body HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+        `Content-Length: ${big.length}\r\nConnection: close\r\n\r\n${big}`
+    );
+    assert.deepEqual(withoutExpect, [200]);
+    assert.deepEqual(withExpect, withoutExpect, "Expect and non-Expect must agree");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: a streaming in-limit body still completes after the deferred 100", async () => {
+  // Deferring the interim `100` must not strand a legitimate upload. With the
+  // buffer cap below the payload the body takes the streaming path, which is
+  // where the solicit hook has to fire — if it never did, the client would wait
+  // for a `100` that never arrives and the request would hang until the
+  // connection timeout.
+  const app = buildEchoApp();
+  const { handle, port } = await startServer(app, { bufferedBodyMaxBytes: 8 });
+  try {
+    const body = JSON.stringify({ value: "y".repeat(400) });
+    const statuses = await collectStatusLines(
+      port,
+      "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+        `Content-Length: ${Buffer.byteLength(body)}\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n` +
+        body
+    );
+    assert.deepEqual(statuses, [100, 200]);
+  } finally {
+    await handle.close();
+  }
+});
