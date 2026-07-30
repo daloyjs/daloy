@@ -17,6 +17,16 @@ For the forward-looking plan and the full thematic release log, see
 
 ### Security
 
+- **`waf()` now NFKC-normalizes inspection variants so fullwidth / compatibility
+  homoglyph keywords cannot walk past ASCII-anchored signatures (live red-team
+  finding).** Payloads such as `ｕｎｉｏｎ ｓｅｌｅｃｔ` and `ＳＥＬＥＣＴ １`
+  previously scored 0 and reached the handler because every built-in SQLi/XSS
+  signature anchors on ASCII word boundaries. `inspectionVariants()` now adds an
+  NFKC-folded form whenever a value contains non-ASCII code points (pure-ASCII
+  traffic skips `String.prototype.normalize` entirely). Regression tests in
+  `tests/waf.test.ts`; live harnesses in `red-team-live/run.ts` and
+  `red-team-live/blackhat-attacks.ts` now assert 403 on fullwidth SQLi instead
+  of recording it as an INFO coverage note.
 - **`safeRedirect()` now refuses percent-encoded C0/DEL control characters in
   redirect targets (live red-team finding F2).** A still-encoded control such
   as the tab in `/%09/evil.com` previously passed the literal control-char
@@ -29,6 +39,18 @@ For the forward-looking plan and the full thematic release log, see
   percent-encoded UTF-8 paths (continuation bytes live in `%80`–`%BF`) are
   unaffected. Regression tests in `tests/safe-redirect.test.ts` and live
   redirect-differential probes in `red-team-live/run.ts`.
+- **WebSocket close-code validation in `decodeClosePayload` (live red-team
+  finding F3).** The close-frame payload decoder never validated the 2-byte
+  status code, so a peer could close with a code that is invalid on the wire
+  (e.g. `999`, or `5001` above the private-use range) and the server would echo
+  it back instead of failing the connection — a protocol-compliance gap that
+  non-conforming clients could use to desynchronize close-handshake state
+  machines. Codes are now validated per RFC 6455 §7.1.6 (`1000`–`1014` except
+  the reserved `1004`/`1005`/`1006`, plus the application/private `3000`–`4999`
+  ranges); an invalid code throws `WebSocketProtocolError`, which the frame
+  sink maps to a `CLOSE(1002)` — verified live against a running server.
+  Regression tests in `tests/websocket.test.ts`; live probes in
+  `red-team-live/run.ts` (`wave4Probes`).
 - **Live red-team harness expanded from 70 to 127 over-the-wire probes.**
   `red-team-live/run.ts` gained a `novelProbes` battery covering vectors found
   by going off-script against a running server: except() case /

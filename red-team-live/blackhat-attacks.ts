@@ -626,7 +626,7 @@ async function wafEvasionFollowUps() {
     ["mixed-case XSS", "<ScRiPt>alert(1)</ScRiPt>"],
     ["event-handler XSS", "<img src=x onerror=alert(1)>"],
     ["svg XSS", "<svg onload=alert(1)>"],
-    ["fullwidth homoglyph SQL", "ＳＥＬＥＣＴ １"],
+    ["fullwidth homoglyph SQL", "ｕｎｉｏｎ ｓｅｌｅｃｔ password"],
     ["union select", "1 UNION SELECT password FROM users"],
     ["double nested comment", "1/**//**/OR/**//**/1=1"],
     ["select in parens", "1 OR (SELECT 1)"],
@@ -635,27 +635,16 @@ async function wafEvasionFollowUps() {
   for (const [label, q] of probes) {
     const r = await http("GET", `/search?q=${encodeURIComponent(q)}`);
     // /search echoes input — the only question is whether the WAF let it reach
-    // the handler (200) or blocked it (403). Fullwidth homoglyphs evade the
-    // signature but are NOT valid SQL downstream, so that one is INFO.
-    const homoglyph = label.includes("homoglyph");
+    // the handler (200) or blocked it (403). Fullwidth homoglyphs used to
+    // evade the ASCII-only signatures; NFKC inspection variants now fold
+    // them, so they are expected DEFENDED like every other probe here.
     record({
       category: cat,
       title: `WAF: ${label}`,
-      severity: homoglyph ? "info" : "medium",
+      severity: "medium",
       attack: `GET /search?q=${q}`,
-      observed:
-        `status ${r.status}` +
-        (homoglyph && r.status === 200
-          ? " — evades the ASCII-only signature, but fullwidth SQL is not executable downstream"
-          : ""),
-      verdict:
-        r.status === 403
-          ? "DEFENDED"
-          : homoglyph
-            ? "INFO"
-            : r.status === 200
-              ? "VULNERABLE"
-              : "INFO",
+      observed: `status ${r.status}`,
+      verdict: r.status === 403 ? "DEFENDED" : r.status === 200 ? "VULNERABLE" : "INFO",
     });
   }
 }

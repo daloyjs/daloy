@@ -58,13 +58,24 @@ export const WS_OPCODE = {
   PONG: 0xa,
 } as const;
 
-/** Common RFC 6455 / IANA close codes. */
+/**
+ * Common RFC 6455 / IANA close codes.
+ *
+ * `NO_STATUS_RECEIVED` (1005) and `ABNORMAL_CLOSURE` (1006) are **receive-only
+ * sentinels**: RFC 6455 §7.4.1 reserves them for reporting a local condition to
+ * the application and forbids them in a CLOSE frame on the wire. Passing either
+ * to `close()` or {@link encodeClosePayload} throws
+ * {@link WebSocketProtocolError} — to close with no status code, send an empty
+ * payload instead.
+ */
 export const WS_CLOSE_CODE = {
   NORMAL_CLOSURE: 1000,
   GOING_AWAY: 1001,
   PROTOCOL_ERROR: 1002,
   UNSUPPORTED_DATA: 1003,
+  /** Receive-only sentinel — never send this on the wire. */
   NO_STATUS_RECEIVED: 1005,
+  /** Receive-only sentinel — never send this on the wire. */
   ABNORMAL_CLOSURE: 1006,
   INVALID_PAYLOAD: 1007,
   POLICY_VIOLATION: 1008,
@@ -993,14 +1004,47 @@ export function encodeFrame(opts: {
 }
 
 /**
+ * Whether `code` may legally appear in a CLOSE frame on the wire per
+ * RFC 6455 §7.1.6 / §7.4.
+ *
+ * Valid: `1000`–`1014` from the registered range, minus the three codes
+ * §7.4.1 reserves for local reporting only (`1004` unassigned, `1005`
+ * "no status received", `1006` "abnormal closure"), plus the `3000`–`4999`
+ * library/application range. Everything else — `0`–`999`, `1015`+, and all of
+ * `2000`–`2999` — is a protocol violation.
+ *
+ * Used on both sides of the codec so the framework can never *emit* a code it
+ * would reject on receipt.
+ *
+ * @param code - Candidate close status code.
+ * @returns `true` when the code is legal in a wire CLOSE frame.
+ * @since 1.0.0-rc.8
+ */
+export function isValidWireCloseCode(code: number): boolean {
+  return (
+    (code >= 1000 && code <= 1014 && code !== 1004 && code !== 1005 && code !== 1006) ||
+    (code >= 3000 && code <= 4999)
+  );
+}
+
+/**
  * Encode a CLOSE frame payload (`uint16 code` + optional UTF-8 reason).
  *
- * @param code - RFC 6455 close status code, written big-endian.
+ * @param code - RFC 6455 close status code, written big-endian. Must be legal
+ *   on the wire — see {@link isValidWireCloseCode}. To close with *no* status
+ *   code, send an empty payload rather than passing `1005`.
  * @param reason - Optional human-readable reason. Defaults to `""`.
  * @returns The 2+N byte close payload.
- * @throws WebSocketProtocolError when the encoded reason exceeds 123 bytes.
+ * @throws WebSocketProtocolError when the encoded reason exceeds 123 bytes, or
+ *   when `code` is not valid on the wire. Validating here as well as in
+ *   {@link decodeClosePayload} keeps the codec symmetric: without it the
+ *   framework could emit a frame its own decoder — and any conforming peer —
+ *   must reject with `1002`.
  */
 export function encodeClosePayload(code: number, reason = ""): Uint8Array {
+  if (!isValidWireCloseCode(code)) {
+    throw new WebSocketProtocolError(`Invalid close status code ${code}`);
+  }
   const reasonBytes = enc.encode(reason);
   if (reasonBytes.length > WS_MAX_CONTROL_PAYLOAD - 2) {
     throw new WebSocketProtocolError("Close reason exceeds 123 bytes");
@@ -1017,8 +1061,16 @@ export function encodeClosePayload(code: number, reason = ""): Uint8Array {
  *
  * @param payload - Unmasked close-frame payload bytes.
  * @returns The close `code` and decoded UTF-8 `reason`.
- * @throws WebSocketProtocolError when the payload is exactly 1 byte or the
- *   reason is not valid UTF-8.
+ * @throws WebSocketProtocolError when the payload is exactly 1 byte, the
+ *   reason is not valid UTF-8, or the status code is not valid on the wire —
+ *   see {@link isValidWireCloseCode}. Without this check an endpoint would
+ *   echo an attacker-supplied invalid code (e.g. 999) back in its own CLOSE
+ *   frame instead of failing the connection with a 1002 protocol error.
+ *
+ * Note the asymmetry in the empty-payload case: a peer that closes with no
+ * status code yields the `1005` *sentinel*, which is deliberately not legal to
+ * send back. An endpoint echoing that close must reply with an empty payload,
+ * not with `1005`.
  */
 export function decodeClosePayload(payload: Uint8Array): {
   code: number;
@@ -1028,6 +1080,9 @@ export function decodeClosePayload(payload: Uint8Array): {
   if (payload.length === 1)
     throw new WebSocketProtocolError("Close payload must be empty or ≥2 bytes");
   const code = (payload[0]! << 8) | payload[1]!;
+  if (!isValidWireCloseCode(code)) {
+    throw new WebSocketProtocolError(`Invalid close status code ${code}`);
+  }
   const reason = new TextDecoder("utf-8", { fatal: true }).decode(payload.subarray(2));
   return { code, reason };
 }

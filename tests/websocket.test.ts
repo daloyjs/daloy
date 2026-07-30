@@ -14,6 +14,7 @@ import {
   decodeClosePayload,
   defineWebSocket,
   encodeClosePayload,
+  isValidWireCloseCode,
   encodeFrame,
   encodeSendPayload,
   FrameSink,
@@ -242,6 +243,59 @@ test("encodeClosePayload rejects overlong reason; decodeClosePayload handles emp
   assert.throws(() => decodeClosePayload(new Uint8Array([0x03])), /must be empty/);
   const enc = encodeClosePayload(1000, "bye");
   assert.deepEqual(decodeClosePayload(enc), { code: 1000, reason: "bye" });
+});
+
+test("decodeClosePayload rejects close codes that are invalid on the wire (RFC 6455 §7.1.6)", () => {
+  // Regression (live red-team finding F3): an invalid close code such as 999
+  // used to decode cleanly and get echoed back in the server's own CLOSE frame
+  // instead of failing the connection with a 1002 protocol error.
+  const enc = (code: number) => new Uint8Array([(code >> 8) & 0xff, code & 0xff]);
+  // Invalid: 0-999, reserved 1004/1005/1006, 1015+, 1016-2999, 5000+.
+  for (const code of [0, 1, 999, 1004, 1005, 1006, 1015, 1016, 1100, 2000, 2999, 5000, 65535]) {
+    assert.throws(
+      () => decodeClosePayload(enc(code)),
+      (err: unknown) => err instanceof WebSocketProtocolError && /Invalid close status code/.test((err as Error).message),
+      `expected code ${code} to be rejected`
+    );
+  }
+  // Valid: 1000-1014 (minus reserved) and 3000-4999.
+  for (const code of [1000, 1001, 1002, 1003, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 3000, 3999, 4999]) {
+    assert.deepEqual(decodeClosePayload(enc(code)), { code, reason: "" }, `expected code ${code} to decode`);
+  }
+});
+
+const INVALID_WIRE_CODES = [0, 1, 999, 1004, 1005, 1006, 1015, 1016, 1100, 2000, 2999, 5000, 65535];
+const VALID_WIRE_CODES = [
+  1000, 1001, 1002, 1003, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 3000, 3999, 4999,
+];
+
+test("encodeClosePayload validates the status code, keeping the codec symmetric", () => {
+  // The decoder rejected invalid codes but the encoder accepted anything, so the
+  // framework could emit a frame its own decoder — and any conforming peer —
+  // must reject with 1002. `ws.close(1005)` was the obvious way to hit it, and
+  // 1005/1006 are exported on WS_CLOSE_CODE, so it was reachable by accident.
+  for (const code of INVALID_WIRE_CODES) {
+    assert.throws(
+      () => encodeClosePayload(code, "bye"),
+      (err: unknown) =>
+        err instanceof WebSocketProtocolError &&
+        /Invalid close status code/.test((err as Error).message),
+      `expected encode of code ${code} to be rejected`
+    );
+  }
+  // Anything the encoder emits must survive its own decoder.
+  for (const code of VALID_WIRE_CODES) {
+    assert.deepEqual(decodeClosePayload(encodeClosePayload(code, "r")), { code, reason: "r" });
+  }
+});
+
+test("isValidWireCloseCode agrees with both halves of the codec", () => {
+  for (const code of INVALID_WIRE_CODES) {
+    assert.equal(isValidWireCloseCode(code), false, `${code} should be invalid`);
+  }
+  for (const code of VALID_WIRE_CODES) {
+    assert.equal(isValidWireCloseCode(code), true, `${code} should be valid`);
+  }
 });
 
 test("encodeSendPayload accepts strings, Uint8Arrays, typed-array views, and ArrayBuffers", () => {
@@ -1204,6 +1258,66 @@ test("Node adapter closes connection with PROTOCOL_ERROR when client sends inval
     assert.equal(closeEvents[0]!.code, WS_CLOSE_CODE.PROTOCOL_ERROR);
     assert.ok(errors.length >= 1);
     socket.destroy();
+  } finally {
+    await handle.close();
+  }
+});
+
+test("Node adapter echoes an empty CLOSE for a status-less CLOSE, never the 1005 sentinel", async () => {
+  // A peer closing with an empty payload is the single most common close, and it
+  // surfaces to the framework as the 1005 sentinel. The echo path fed that
+  // straight back into encodeClosePayload, so the server emitted CLOSE(1005) —
+  // a code RFC 6455 §7.4.1 forbids on the wire and which this framework's own
+  // decoder now rejects with 1002. Verified over a real socket, not in unit
+  // isolation, because the defect lived in the adapter's echo, not the codec.
+  const app = new App({ logger: false });
+  app.ws("/echo-close", { open() {}, message() {}, close() {} });
+  const handle = await startApp(app);
+  try {
+    const port = (handle.server.address() as AddressInfo).port;
+    const net = await import("node:net");
+
+    const closeFrame = (payload: Buffer): Buffer => {
+      const key = Buffer.from([0x11, 0x22, 0x33, 0x44]);
+      const masked = Buffer.from(payload);
+      for (let i = 0; i < masked.length; i++) masked[i]! ^= key[i % 4]!;
+      return Buffer.concat([Buffer.from([0x88, 0x80 | payload.length]), key, masked]);
+    };
+
+    const echoFor = async (payload: Buffer): Promise<Buffer> => {
+      const socket = net.connect({ port, host: "127.0.0.1" });
+      await once(socket, "connect");
+      socket.write(
+        "GET /echo-close HTTP/1.1\r\n" +
+          `Host: 127.0.0.1:${port}\r\n` +
+          "Upgrade: websocket\r\n" +
+          "Connection: Upgrade\r\n" +
+          "Sec-WebSocket-Version: 13\r\n" +
+          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+          "\r\n"
+      );
+      await once(socket, "data");
+      socket.write(closeFrame(payload));
+      const [echo] = (await once(socket, "data")) as [Buffer];
+      socket.destroy();
+      return echo;
+    };
+
+    const statusless = await echoFor(Buffer.alloc(0));
+    assert.equal(statusless[0], 0x88, "reply should be a CLOSE frame");
+    assert.equal(statusless[1], 0x00, "status-less close must be echoed with an empty payload");
+
+    const withCode = await echoFor(Buffer.from([0x03, 0xe8])); // 1000
+    assert.equal(withCode[0], 0x88);
+    assert.equal(withCode[1], 0x02, "a coded close is echoed with its 2-byte code");
+    assert.equal((withCode[2]! << 8) | withCode[3]!, WS_CLOSE_CODE.NORMAL_CLOSURE);
+
+    // Whatever the adapter emits must round-trip through our own decoder.
+    assert.deepEqual(decodeClosePayload(withCode.subarray(2)), { code: 1000, reason: "" });
+    assert.deepEqual(decodeClosePayload(statusless.subarray(2)), {
+      code: WS_CLOSE_CODE.NO_STATUS_RECEIVED,
+      reason: "",
+    });
   } finally {
     await handle.close();
   }

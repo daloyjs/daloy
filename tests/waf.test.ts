@@ -255,6 +255,73 @@ test("benign parenthesized prose is NOT a false positive", async () => {
   assert.equal(res.status, 200);
 });
 
+test("fullwidth Unicode SQLi keywords are blocked after NFKC normalization", async () => {
+  // Live-pentest finding: fullwidth Latin walked past every ASCII-anchored
+  // signature because the inspection path never folded compatibility
+  // characters. NFKC turns them into their ASCII counterparts so the
+  // existing signatures fire. Payloads are chosen to match real rules
+  // after fold (`UNION…SELECT`, tautology) — a bare `SELECT 1` is not a
+  // signature hit even in ASCII, so it is not a valid regression vector.
+  const app = queryApp();
+  const fullwidthUnion = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("ｕｎｉｏｎ ｓｅｌｅｃｔ user,pass"))
+  );
+  assert.equal(fullwidthUnion.status, 403);
+  const fullwidthUnionSelect = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("１ ＵＮＩＯＮ ＳＥＬＥＣＴ １"))
+  );
+  assert.equal(fullwidthUnionSelect.status, 403);
+  const fullwidthTautology = await app.fetch(
+    new Request("http://x/search?q=" + encodeURIComponent("＇ ＯＲ ＇１＇＝＇１"))
+  );
+  assert.equal(fullwidthTautology.status, 403);
+});
+
+test("homoglyph folding composes with the comment / control-char / plus passes", async () => {
+  // The NFKC fold closed the fullwidth evasion in isolation, but it was pushed
+  // as a leaf variant instead of joining the decode chain, so the `+`, comment
+  // and control-character passes never ran on the folded form — and the fold
+  // never ran on theirs. Composing two evasions that are each individually
+  // blocked therefore walked straight through. Every case below is the
+  // fullwidth tautology with an ASCII splitter substituted for the space.
+  const app = queryApp();
+  const e = encodeURIComponent;
+  const fw = { quote: e("＇"), or: e("ＯＲ"), tail: e("＇１＇＝＇１") };
+  const cases: Array<[string, string]> = [
+    ["NUL-split", `${fw.quote}%00${fw.or}%00${fw.tail}`],
+    ["block-comment-split", `${fw.quote}/**/${fw.or}/**/${fw.tail}`],
+    ["plus-split", `${fw.quote}+${fw.or}+${fw.tail}`],
+    ["double-encoded NUL-split", `${e(fw.quote)}%2500${e(fw.or)}%2500${e(fw.tail)}`],
+    // NFKC also *creates* comment delimiters from fullwidth solidus/asterisk,
+    // so the fold must precede the comment pass, not merely accompany it.
+    ["fullwidth comment delimiters", e("ｕｎｉｏｎ／＊ｘ＊／ｓｅｌｅｃｔ a")],
+    // Mixed script: ASCII keyword, fullwidth keyword, control-char separator.
+    ["mixed ASCII/fullwidth across a NUL", `union%00${e("ｓｅｌｅｃｔ")}%00a`],
+  ];
+  for (const [label, q] of cases) {
+    const res = await app.fetch(new Request("http://x/search?q=" + q));
+    assert.equal(res.status, 403, `composed evasion "${label}" was not blocked`);
+  }
+});
+
+test("benign non-ASCII prose is NOT a false positive under NFKC", async () => {
+  // NFKC must not invent injection tokens from ordinary multilingual text.
+  const app = queryApp();
+  for (const q of [
+    "café résumé",
+    "東京スカイツリー",
+    "naïve coöperate",
+    "ﬁle",
+    // Extending the decode chain with folded forms feeds them to the `+` and
+    // comment passes too, so benign punctuation must stay benign after a fold.
+    "Ω≈ç√ a+b 1/2 x/*y",
+    "①②③ ¼ ﬄ ㍿",
+  ]) {
+    const res = await app.fetch(new Request("http://x/search?q=" + encodeURIComponent(q)));
+    assert.equal(res.status, 200, `benign query ${JSON.stringify(q)} was blocked`);
+  }
+});
+
 test("benign disjunction without a subquery is NOT a false positive", async () => {
   const app = queryApp();
   const res = await app.fetch(

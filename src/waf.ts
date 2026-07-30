@@ -365,14 +365,32 @@ const CONTROL_CHAR_PROBE = /[\u0000-\u0008\u000e-\u001f\u007f]/;
 const CONTROL_CHAR_GLOBAL = /[\u0000-\u0008\u000e-\u001f\u007f]/g;
 
 /**
+ * Non-ASCII probe used to skip {@link String.prototype.normalize} on the pure
+ * ASCII hot path. Fullwidth Latin (U+FF01–U+FF5E), compatibility ideographs,
+ * and other NFKC-collapsible code points only appear when this matches.
+ *
+ * Hoisted so the hot path neither re-creates the RegExp nor pays a
+ * literal-evaluation cost per inspected value.
+ */
+const NON_ASCII_PROBE = /[^\x00-\x7F]/;
+
+/**
  * Expand a single inbound string into the variants the WAF should scan.
  *
  * Includes the raw value, up to {@link MAX_DECODE_PASSES} percent-decodes,
  * a `+`→space form (URLSearchParams parity), a SQL-comment-stripped
  * form so comment-split keywords (e.g. OR wrapped in block comments) score
- * the same as the whitespace-separated form, and a control-character→space
+ * the same as the whitespace-separated form, a control-character→space
  * form so embedded NUL / escape bytes cannot split keywords past the
- * whitespace-anchored signatures (e.g. `1'%00OR%001=1` → `1' OR 1=1`).
+ * whitespace-anchored signatures (e.g. `1'%00OR%001=1` → `1' OR 1=1`), and
+ * an NFKC-normalized form so fullwidth / compatibility-homoglyph keywords
+ * (e.g. `ｕｎｉｏｎ ｓｅｌｅｃｔ`) score the same as their ASCII counterparts.
+ *
+ * The NFKC fold is applied to the decode chain *before* the `+` / comment /
+ * control-character passes, and its output joins that chain, so the transforms
+ * **compose**: a payload mixing homoglyphs with comment- or NUL-splitting
+ * (`＇%00ＯＲ%00＇１＇＝＇１`) still converges on the ASCII form the signatures
+ * anchor on. Closing each evasion only in isolation leaves the combination open.
  *
  * Scanning variants is pure defense-in-depth: the handler still receives
  * whatever the framework's single-decode path produced. Each variant is
@@ -405,6 +423,27 @@ function inspectionVariants(value: string, maxValueLength: number): string[] {
 
   // Snapshot before secondary transforms so we only expand the decode chain.
   const decodedChain = out.slice();
+
+  // Fold compatibility characters FIRST, and extend the chain with the folded
+  // forms, so the secondary transforms below run on them too. Order matters:
+  // pushing the NFKC form after the loop (or without extending `decodedChain`)
+  // leaves each evasion closed only in isolation, and composing two of them
+  // reopens the hole — `＇%00ＯＲ%00＇１＇＝＇１` folds to a NUL-split ASCII
+  // tautology that the control-char pass would catch, and control-strips to a
+  // fullwidth tautology that the fold would catch, but neither variant is ever
+  // subjected to the other transform. Extending the chain makes the passes
+  // compose, so any combination of fold + decode + comment/control/`+`
+  // splitting converges on the same ASCII form the signatures anchor on.
+  for (const v of out.slice()) {
+    if (NON_ASCII_PROBE.test(v)) {
+      const nfkc = v.normalize("NFKC");
+      if (nfkc !== v) {
+        push(nfkc);
+        decodedChain.push(nfkc);
+      }
+    }
+  }
+
   for (const v of decodedChain) {
     if (v.includes("+")) push(v.replace(/\+/g, " "));
     if (v.includes("/*")) push(v.replace(/\/\*[\s\S]*?\*\//g, " "));
