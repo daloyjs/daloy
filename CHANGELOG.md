@@ -15,6 +15,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.0.0-rc.8] - 2026-07-30
+
 ### Security
 
 - **`idempotency()` no longer stores or replays `Set-Cookie` (review of the
@@ -249,12 +251,16 @@ For the forward-looking plan and the full thematic release log, see
   described below, not a variant of a shipped fix. All 98 probes:
   **0 VULNERABLE**.
 
-  Caveat on this harness: `red-team-live/` is **not** covered by `pnpm
-typecheck` (no tsconfig project includes it) and currently has 3 outstanding
-  type errors. It is excluded from both published artifacts — npm ships
-  `files: ["dist", "bin", "README.md"]` and JSR publishes
-  `include: ["src", "README.md", "LICENSE"]` — so no consumer is affected, but
-  do not read a green `pnpm typecheck` as covering these files.
+  This harness is now type-checked. `red-team-live/` sat outside every tsconfig
+  project, so `pnpm typecheck` had never looked at roughly 100 KB of TypeScript
+  and a contributor reasonably reported "typecheck passes" for changes to it. It
+  is wired in as a fourth project (`red-team-live/tsconfig.json`, also runnable
+  standalone as `pnpm typecheck:red-team-live`) and the errors that surfaced are
+  fixed with real type conversions rather than casts — including a
+  `body: opts.body as any` that could have let a probe report DEFENDED without
+  actually sending its payload. The directory still ships in neither published
+  artifact (npm `files: ["dist", "bin", "README.md"]`, JSR
+  `include: ["src", "README.md", "LICENSE"]`).
   - Not every probe became a fix. A header-time `413` for `Expect:
 100-continue` requests declaring an over-limit `Content-Length` was
     implemented and then reverted: `bodyLimitBytes` is enforced when the body is
@@ -2750,6 +2756,7 @@ source })`.
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...HEAD
+[1.0.0-rc.8]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.7...v1.0.0-rc.8
 [1.0.0-rc.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...v1.0.0-rc.7
 [1.0.0-rc.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.5...v1.0.0-rc.6
 [1.0.0-rc.5]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.4...v1.0.0-rc.5
