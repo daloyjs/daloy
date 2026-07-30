@@ -15,6 +15,28 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Tests
+
+- **`responseCache()`'s credential bypass is now pinned by regression tests**
+  (`tests/response-cache-credentials.test.ts`). Declining to store or serve a
+  request that carries `Authorization` or `Cookie` is the CWE-524 protection
+  that makes a cache mounted _ahead of_ auth safe: both run in `beforeHandle`,
+  so a hit returned from there ends the hook chain and the auth layer never
+  executes. Nothing covered it — zero tests referenced
+  `cacheAuthenticatedRequests`, and the existing `Set-Cookie` test is about the
+  _response_ header, not the request credential. An optimization that made the
+  cache store everything would have turned the documented mount order into an
+  authentication bypass with no test failing. Verified by ablation: neutralising
+  the `authorization` bypass fails two of the six.
+  - Also pins the deliberate footgun. `cacheAuthenticatedRequests: true`
+    _without_ a partitioning key does reuse one caller's body for the next, as
+    its own TSDoc documents; the test asserts that rather than treating it as a
+    defect, so the opt-in's blast radius stays measured and anyone who later
+    makes it partition automatically gets a prompt to update the guidance.
+  - Investigated and found already safe, so no code changed: cache ahead of
+    `bearerAuth`, and the per-dimension `{ cookie: true }` form not quietly
+    enabling the `authorization` dimension.
+
 ### Security
 
 - **The Node adapter no longer solicits a request body it is about to refuse.**
