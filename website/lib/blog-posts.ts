@@ -8,6 +8,16 @@
  */
 export const BLOG_POSTS = [
   {
+    slug: "ibm-cost-of-a-data-breach-2026-what-it-means-for-backends",
+    title:
+      "IBM Cost of a Data Breach 2026: $5M Average, AI on Both Sides, and What Your Backend Still Controls",
+    description:
+      "Ponemon interviewed 3,500 people across 602 breached organizations. The global average hit $4.99M, AI-driven attacks are up 56%, and 92% of AI-related breaches lacked basic access controls. The data, the IBM walkthrough, and the backend guardrails that still move the numbers.",
+    date: "2026-07-31",
+    readingTime: "13 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "your-jwt-is-valid-and-your-api-is-still-vulnerable",
     title: "Your JWT Is Valid and Your API Is Still Vulnerable",
     description:

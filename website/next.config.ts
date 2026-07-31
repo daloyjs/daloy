@@ -46,6 +46,7 @@ const nextConfig: NextConfig = {
     // rename). Turbopack falls back to in-memory caching anyway, so turn the
     // dev filesystem cache off to keep the startup log clean. Build caching
     // is unaffected.
+    useTypeScriptCli: true,
     turbopackFileSystemCacheForDev: false,
   },
   // The /mcp documentation endpoint reads the docs `page.tsx` sources from disk
