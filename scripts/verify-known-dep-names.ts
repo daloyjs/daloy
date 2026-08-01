@@ -73,6 +73,17 @@ export const ALLOWED_DEP_NAMES: ReadonlySet<string> = new Set([
   // ----- packages/create-daloy -----
   // (no runtime deps; CLI is zero-dep)
   // ----- website (Next.js docs/marketing site) -----
+  // MCP endpoint deps, added with the website's move to mcp-handler.
+  // Provenance checked against the registry before allowlisting, which is the
+  // whole point of this gate — "the name resolves on npm" is not the bar, since
+  // a typosquat resolves too:
+  //   @modelcontextprotocol/server — inside the `@modelcontextprotocol` npm org
+  //     scope, so only that org can publish it; a squatter cannot take the name.
+  //   mcp-handler — unscoped, so checked directly: repository
+  //     github.com/vercel/mcp-handler, maintainers include vercel-release-bot
+  //     and zeit-bot. Vercel's own MCP adapter, not a lookalike.
+  "@modelcontextprotocol/server",
+  "mcp-handler",
   "@base-ui/react",
   "@next/third-parties",
   "@phosphor-icons/react",

@@ -15,6 +15,8 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.0.0-rc.9] - 2026-08-01
+
 ### Security
 
 - **`responseCache()` / `idempotency()` mounted ahead of `rateLimit()` /
@@ -2853,6 +2855,7 @@ source })`.
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...HEAD
+[1.0.0-rc.9]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.8...v1.0.0-rc.9
 [1.0.0-rc.8]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.7...v1.0.0-rc.8
 [1.0.0-rc.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...v1.0.0-rc.7
 [1.0.0-rc.6]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.5...v1.0.0-rc.6
