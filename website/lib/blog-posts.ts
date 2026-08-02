@@ -8,6 +8,16 @@
  */
 export const BLOG_POSTS = [
   {
+    slug: "secure-defaults-beat-training-willpower-is-not-a-control",
+    title:
+      "Willpower Is Not a Security Control: Secure Defaults Beat Training, and AI Does Not Fix That",
+    description:
+      "Tanya Janca's DevSecStation episode on secure defaults matches why I built DaloyJS the way I did: security on by default, insecure paths explicit and effortful. Login with JWT is not enough, and telling an AI to build an API does not make the easy path safe.",
+    date: "2026-08-02",
+    readingTime: "11 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "ibm-cost-of-a-data-breach-2026-what-it-means-for-backends",
     title:
       "IBM Cost of a Data Breach 2026: $5M Average, AI on Both Sides, and What Your Backend Still Controls",
