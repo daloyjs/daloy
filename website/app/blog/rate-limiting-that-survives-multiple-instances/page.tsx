@@ -14,7 +14,7 @@ const POST = {
   date: "2026-06-02",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack, currently writing TypeScript from a desk in Norway. Has watched a rate limiter fail open against a credential-stuffing botnet exactly once, which is, it turns out, the precise number of times it takes to become opinionated about this.",
 };

@@ -15,7 +15,7 @@ const POST = {
   date: "2026-05-21",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack work. Has maintained too many openapi.yaml files in too many monorepos. Currently writes TypeScript from Norway.",
 };

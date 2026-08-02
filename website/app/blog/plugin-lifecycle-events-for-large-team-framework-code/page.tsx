@@ -14,7 +14,7 @@ const POST = {
   date: "2026-06-04",
   readingTime: "13 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack, now in Norway. Spent at least three of those years staring at routes that had to import the infra layer directly because the framework didn't have a place for cross-cutting concerns. Has opinions about that, apparently.",
 };

@@ -14,7 +14,7 @@ const POST = {
   date: "2026-05-29",
   readingTime: "14 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack, currently writing TypeScript from a desk in Norway. This is the walkthrough I wish someone had handed me on day one, bookmark it and send it to the next new hire.",
 };

@@ -13,7 +13,7 @@ const POST = {
   date: "2026-07-01",
   readingTime: "9 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Filipino fullstack developer in Norway. Has shipped enough backend services to know that the missing middleware is never missing in the demo, only in production, where invoices and emotions live.",
 };

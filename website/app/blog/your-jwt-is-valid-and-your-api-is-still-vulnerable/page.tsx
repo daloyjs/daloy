@@ -15,7 +15,7 @@ const POST = {
   date: "2026-07-17",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Filipino fullstack developer in Norway. Has spent around 12 years learning that a green login button is not an authorization policy, no matter how confidently the demo presenter clicks it.",
 };

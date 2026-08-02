@@ -15,7 +15,7 @@ const POST = {
   date: "2026-06-05",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack, currently in Norway. Has reviewed more pull requests where 'just adds a small endpoint' meant 'removes operationId, drops the 422 response, accidentally publishes a debug route' than he cares to count. Now everything goes through the CLI first.",
 };

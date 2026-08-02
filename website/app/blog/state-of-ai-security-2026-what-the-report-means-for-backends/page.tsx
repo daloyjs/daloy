@@ -16,7 +16,7 @@ const POST = {
   date: "2026-06-25",
   readingTime: "14 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
 };
 
 export const metadata = buildMetadata({

@@ -15,7 +15,7 @@ const POST = {
   date: "2026-05-30",
   readingTime: "13 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     'Ten years of fullstack, currently writing TypeScript from a desk in Norway. Has explained "why is my middleware running twice" enough times to make a poster of it.',
 };

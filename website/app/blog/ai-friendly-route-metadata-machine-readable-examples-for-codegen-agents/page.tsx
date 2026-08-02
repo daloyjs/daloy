@@ -15,7 +15,7 @@ const POST = {
   date: "2026-06-14",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack, currently in Norway. Has watched a coding agent hallucinate a 3-field response body for an endpoint that returns 7, then ship the typed client. Now ships an examples block on every public route so the agent has nothing to invent.",
 };

@@ -14,7 +14,7 @@ const POST = {
   date: "2026-06-22",
   readingTime: "17 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Filipino developer in Norway, about ten years of shipping backends, and still convinced that the most dangerous line of code is the one nobody read before deploying it.",
 };

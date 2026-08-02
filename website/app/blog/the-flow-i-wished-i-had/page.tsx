@@ -13,7 +13,7 @@ const POST = {
   date: "2026-05-18",
   readingTime: "9 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Filipino dev living in Norway. Spends summers debugging, winters debugging; only the lighting changes.",
 };

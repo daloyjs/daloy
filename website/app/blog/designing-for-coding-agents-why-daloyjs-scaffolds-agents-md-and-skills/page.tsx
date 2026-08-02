@@ -15,7 +15,7 @@ const POST = {
   date: "2026-06-06",
   readingTime: "11 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack, currently in Norway. Has watched a coding agent confidently delete a security middleware because nothing in the repo told it the middleware was load-bearing. Now puts a single sentence about it in AGENTS.md, problem retired.",
 };

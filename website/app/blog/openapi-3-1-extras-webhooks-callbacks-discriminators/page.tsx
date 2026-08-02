@@ -14,7 +14,7 @@ const POST = {
   date: "2026-05-31",
   readingTime: "13 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Ten years of fullstack, currently writing TypeScript from a desk in Norway. Survivor of two webhook-signing migrations and one schema rewrite that should have used a discriminator from day one.",
 };

@@ -14,7 +14,7 @@ const POST = {
   date: "2026-06-19",
   readingTime: "6 min read",
   author: "Devlin Duldulao",
-  authorRole: "Fullstack cloud engineer",
+  authorRole: "software engineer & published book author",
   authorBio:
     "Has shipped enough backends to know that the scary part is usually not routing. It is everything around routing.",
 };
