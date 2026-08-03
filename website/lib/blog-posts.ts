@@ -8,6 +8,15 @@
  */
 export const BLOG_POSTS = [
   {
+    slug: "daloyjs-1-0-0-the-bugs-were-in-the-wiring",
+    title: "DaloyJS 1.0.0 Is Out, and Almost Every Late Bug Was in the Wiring",
+    description:
+      "The API is frozen and semver starts now. The interesting part of getting here: nine release candidates of live pentesting, where the findings were almost never inside a middleware. They were between two of them, in the order I told people to mount them.",
+    date: "2026-08-03",
+    readingTime: "9 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "secure-defaults-beat-training-willpower-is-not-a-control",
     title:
       "Willpower Is Not a Security Control: Secure Defaults Beat Training, and AI Does Not Fix That",

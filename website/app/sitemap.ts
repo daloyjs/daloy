@@ -14,6 +14,11 @@ const STATIC_PATHS: Array<{
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
   {
+    path: "/blog/daloyjs-1-0-0-the-bugs-were-in-the-wiring",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/secure-defaults-beat-training-willpower-is-not-a-control",
     changeFrequency: "monthly",
     priority: 0.7,
