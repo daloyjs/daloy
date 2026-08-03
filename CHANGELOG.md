@@ -8,12 +8,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 For the forward-looking plan and the full thematic release log, see
 [`ROADMAP.md`](ROADMAP.md).
 
-> Now in the **1.0.0 release candidate**. The public API is feature-complete and
-> stable for the 1.0 line; from 1.0 onward the API follows semver. `@daloyjs/core`
-> and `create-daloy` ship together, so every release publishes a matching
-> scaffolder and generated projects pin the latest peer.
+> **`1.0.0` is out.** The public API is frozen and follows semver: no `1.x` minor
+> changes it, and deprecations run at least one minor cycle before removal.
+> `@daloyjs/core` (npm), `create-daloy` (npm), and `@daloyjs/daloy` (JSR) ship
+> together at matching versions, so a generated project always pins a peer that
+> exists. The `1.x` line carries a minimum 5-year security-update support period;
+> see [`SECURITY.md`](SECURITY.md#support-lifetime).
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-08-03
+
+**Public API freeze.** No code changes from `1.0.0-rc.9`; this release promotes
+that build to stable and syncs the surfaces that still described a release
+candidate. Everything functional shipped across the `rc.0`–`rc.9` train
+documented below.
+
+### Changed
+
+- Versions moved to `1.0.0` across `@daloyjs/core`, `create-daloy`, the JSR
+  package `@daloyjs/daloy`, all five scaffolder templates, the CycloneDX + SPDX
+  SBOMs, and the website's version fallback.
+- `SECURITY.md` now publishes concrete end-of-support dates rather than promising
+  them: the `1.x` line is security-supported until at least **2031-08-03**, and
+  the `0.x` line is end-of-life. The Supported Versions table drops its pre-1.0
+  transition wording.
+- The workshop tracked `1.0.0-rc.6`, three release candidates behind, in its
+  README, `AGENTS.md` version table, and schedule. All now read `1.0.0`.
+- README's status section describes the frozen API, the post-1.0 patch SLA, and
+  the 5-year support window instead of an in-flight RC.
+
+### Notes on the release-candidate train
+
+The second half of the RC train was driven by live over-the-wire engagements
+rather than planning, and the findings clustered somewhere worth naming:
+**composition**, not individual modules. A `responseCache()` mounted ahead of the
+network-identity gates silently disabled all five. The same ordering left
+`rateLimit()` never counting requests that a cache hit or an idempotent replay
+served. A forwarded-header resolver read the one `X-Forwarded-For` slot an
+attacker fully controls. `idempotency()` captured and replayed a `Set-Cookie`.
+Each is fixed with regression coverage, and the ones that were mount-order
+mistakes are now refuse-to-boot guards, so the unsafe wiring cannot ship quietly.
+
+One stabilization criterion is **not** met at this release: the security
+disclosure process has not yet been exercised. The vulnerability behind it is
+fixed and published (`1.0.0-rc.7` onward, provenance-attested), but no advisory
+has been filed. Recorded openly in [`ROADMAP.md`](ROADMAP.md) rather than
+back-dated.
 
 ## [1.0.0-rc.9] - 2026-08-01
 
@@ -2855,6 +2896,7 @@ source })`.
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
 [Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...HEAD
+[1.0.0]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.9...v1.0.0
 [1.0.0-rc.9]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.8...v1.0.0-rc.9
 [1.0.0-rc.8]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.7...v1.0.0-rc.8
 [1.0.0-rc.7]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...v1.0.0-rc.7

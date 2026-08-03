@@ -29,10 +29,10 @@ Security fixes target the latest published minor of the current major line, plus
 | -------------------------------------- | ---------------------------------------------------------------------- |
 | Latest `1.x` minor                     | Yes — for the period given under [Support lifetime](#support-lifetime) |
 | Older `1.x` minors                     | No — upgrade to the latest `1.x`                                       |
-| Latest `0.x` minor                     | Until `1.0.0` ships; end-of-life once it does                          |
+| Latest `0.x` minor                     | No — end-of-life since `1.0.0` shipped                                 |
 | Pre-release tags (`-beta.N` / `-rc.N`) | No — upgrade to the stable release of that line                        |
 
-Until `1.0.0` ships, "current major line" means the latest published `0.x` or release-candidate build. The minimum 5-year support period described under [Support lifetime](#support-lifetime) starts at the `1.0.0` **stable** release, not at a release candidate.
+`1.0.0` shipped on 2026-08-03, so "current major line" now means `1.x`, and the minimum 5-year support period described under [Support lifetime](#support-lifetime) runs from that date. The release candidates `1.0.0-rc.0` … `1.0.0-rc.9` are superseded by `1.0.0` and are not supported.
 
 ## Response Target
 
@@ -122,7 +122,14 @@ This is the maintainer's upstream commitment. Downstream commercial consumers re
 
 CRA Article 13(8) requires a "support period" reflecting expected product lifetime, with **5 years** as the regulatory floor for most consumer products.
 
-DaloyJS commits to a **minimum 5-year security-update support period** for every major release line starting with `1.0`, measured from that line's first stable release. The current `0.x` line is security-supported on the latest minor until `1.0` ships; the 5-year clock starts at `1.0` and resets on every subsequent major. End-of-support dates will be published here and on [`/docs/security/compliance`](https://daloyjs.dev/docs/security/compliance) once `1.0` lands.
+DaloyJS commits to a **minimum 5-year security-update support period** for every major release line starting with `1.0`, measured from that line's first stable release. The clock starts at that line's `x.0.0` and resets on every subsequent major.
+
+| Release line | First stable release | Security-supported until (minimum) |
+| ------------ | -------------------- | ---------------------------------- |
+| `1.x`        | 2026-08-03 (`1.0.0`) | **2031-08-03**                     |
+| `0.x`        | —                    | End-of-life; superseded by `1.0.0` |
+
+The `0.x` line reached end-of-life when `1.0.0` shipped. Upgrade to `1.x` to stay inside a supported window. These dates are mirrored on [`/docs/security/compliance`](https://daloyjs.dev/docs/security/compliance).
 
 ---
 

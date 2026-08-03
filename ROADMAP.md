@@ -211,7 +211,19 @@ Open items for this track:
 
 ## Stabilization — `1.0.0` ("public API freeze")
 
-**Status (2026-07-29): `1.0.0-rc.6` shipped (2026-07-26)** — `rc.0` was the first
+**Status (2026-08-03): `1.0.0` SHIPPED.** The public API is frozen; every `1.x`
+minor is additive from here and deprecations run at least one minor cycle. The
+release-candidate train ran `rc.0` (2026-07-03) through `rc.9` (2026-08-01), and
+its second half was driven by live over-the-wire engagements rather than
+planning: `rc.7` closed spoofable forwarded-header identity, `rc.8` closed the
+`responseCache()`-ahead-of-access-control bypass plus two unresolved-identity
+holes, and `rc.9` closed a request-budget bypass and stopped the Node adapter
+soliciting bodies it was about to refuse. The pattern worth carrying forward is
+that almost every finding was a **composition** bug — two individually correct
+middlewares in the wrong order — which is why several are now refuse-to-boot
+guards rather than documentation.
+
+**Historical context (pre-stable).** `rc.0` was the first
 release candidate; `rc.1` was a security-hardening RC from an internal
 threat-model audit, and `rc.2`–`rc.6` continued that train. `beta.0`
 (2026-06-21) through `beta.7` (2026-07-02) shipped additively, enforced per
@@ -226,8 +238,14 @@ in `@daloyjs/core/mcp` — `server/discover`, per-request `_meta`, standard-head
 validation, caching hints, and multi round-trip requests, served alongside the
 legacy `initialize` handshake — so the stable release ships against the current
 protocol rather than a superseded one. From the stable release onward the public
-API follows SemVer. The stable release ships when every unchecked item below is
-true.
+API follows SemVer.
+
+The original rule for this section was that the stable release ships when every
+item below is true. It shipped with one still open — the disclosure-process
+exercise — because the remaining work there is a publication step, not an
+engineering one: the vulnerability is fixed, published, and provenance-attested,
+and only the advisory itself is outstanding. That is recorded on the item rather
+than back-dated, for the same auditability reason as the amendments below.
 
 **Criteria amended 2026-07-29** (recorded here rather than silently dropped,
 because `SECURITY.md` maps this project onto EU CRA / NIS2 procurement claims
@@ -253,14 +271,20 @@ and a waived maturity gate is the kind of thing an auditor asks about):
       under the standing integrations/docs track, not as stable-release gates.)_
 - [x] Branch coverage has a stable high-confidence gate; ignored branches have documented runtime / source-map reasons. _(Gate shipped and holding at ≥92%, verified 2026-07-29 at 92.41%. The re-ratchet toward ≥95% is the open `0.10.0` subtask above and does not block the stable release; checked off 2026-07-29 so it stops reading as a blocker it was never meant to be.)_
 - [ ] Security policy and disclosure process have been exercised at least once.
-      _(In progress 2026-07-29. The live case is the forwarded-header client-IP
-      finding fixed in the `Unreleased` section of [`CHANGELOG.md`](./CHANGELOG.md);
-      draft advisory prepared at `otherdocs/advisories/GHSA-DRAFT-forwarded-ip.md`
-      (maintainer-local, `otherdocs/` is not tracked). Sequence to close this
-      gate: ship the fix → publish the GHSA with the three evidence timestamps
-      `SECURITY.md` requires → tick this box. The gate cannot be ticked before
-      the patch is published, because "Patch available" is one of the required
-      evidence fields.)_
+      **Still open at the `1.0.0` release, and deliberately not ticked.**
+      _(The live case is the forwarded-header client-IP finding, fixed and
+      published in `1.0.0-rc.7` (npm, 2026-07-29T20:06:43Z, provenance-attested)
+      and carried through `rc.8`, `rc.9`, and `1.0.0`. So every piece of evidence
+      `SECURITY.md` § "Evidence per advisory" requires now exists — including
+      "Patch available", which was the blocker. What has not happened is the
+      publication itself: no GitHub Security Advisory has been created and no CVE
+      requested, so the disclosure process remains untested. The draft body is
+      maintainer-local at `otherdocs/advisories/GHSA-DRAFT-forwarded-ip.md`
+      (`otherdocs/` is not tracked) with a proposed CVSS v3.1 vector of
+      `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:L` (6.5 Medium). Remaining action:
+      publish the advisory, request the CVE through GitHub's CNA, then tick this
+      box with the GHSA id. Tracked as the one stabilization criterion `1.0.0`
+      shipped without, rather than back-dated to look satisfied.)_
 
 ---
 

@@ -957,8 +957,49 @@ export default function Page() {
               DaloyJS commits to a{" "}
               <strong>minimum 5-year security-update support period</strong> for
               every stable major release line, measured from that line&apos;s
-              first stable release.
+              first stable release. The <code>1.x</code> line reached its first
+              stable release on <strong>2026-08-03</strong> (
+              <code>1.0.0</code>), so it is security-supported until at least{" "}
+              <strong>2031-08-03</strong>. The <code>0.x</code> line is
+              end-of-life, superseded by <code>1.0.0</code>.
             </td>
+          </tr>
+        </tbody>
+      </table>
+      <h3 id="declared-support-periods">Declared support periods</h3>
+      <p>
+        These are the dates referenced by{" "}
+        <a href="https://github.com/daloyjs/daloy/blob/main/SECURITY.md#support-lifetime">
+          SECURITY.md
+        </a>
+        {", "}restated here so a procurement reviewer can cite a page rather than
+        a repository file. Security fixes land on the latest minor of a supported
+        line; older minors are not patched in place.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Release line</th>
+            <th>First stable release</th>
+            <th>Security-supported until (minimum)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>1.x</code>
+            </td>
+            <td>2026-08-03 (<code>1.0.0</code>)</td>
+            <td>
+              <strong>2031-08-03</strong>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>0.x</code>
+            </td>
+            <td>&mdash;</td>
+            <td>End-of-life; superseded by <code>1.0.0</code></td>
           </tr>
         </tbody>
       </table>
