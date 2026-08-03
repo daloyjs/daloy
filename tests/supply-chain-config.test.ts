@@ -561,8 +561,17 @@ test("all workflows avoid unsafe pull_request_target and zizmor is enforced", as
   const zizmor = await readWorkspaceFile(".github/workflows/zizmor.yml");
   assert.match(zizmor, /^\s*pull_request:\s*$/m);
   assert.match(zizmor, /permissions:\s*\{\}/);
-  assert.match(zizmor, /zizmorcore\/zizmor-action@[0-9a-f]{40}\s+# v0\.5\.7/);
-  assert.match(zizmor, /version:\s*v1\.25\.0/);
+  // The security property is the 40-hex commit-SHA pin plus a human-readable
+  // semver comment — not the specific patch release. Asserting the exact patch
+  // makes every Dependabot action bump fail this suite, which pressures the
+  // next contributor to delete the assertion instead of updating it. The pin
+  // shape is what stays enforced here (and in `pnpm verify:actions-pinned`).
+  assert.match(zizmor, /zizmorcore\/zizmor-action@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+/);
+  assert.doesNotMatch(zizmor, /zizmorcore\/zizmor-action@(?![0-9a-f]{40}\b)/);
+  // The zizmor CLI version must stay explicitly pinned; the action's own
+  // default is `latest`, which would silently float the analyzer.
+  assert.match(zizmor, /version:\s*v\d+\.\d+\.\d+\s*$/m);
+  assert.doesNotMatch(zizmor, /version:\s*latest/);
 });
 
 test("release workflow isolates npm publish permissions", async () => {
