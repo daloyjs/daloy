@@ -3,17 +3,18 @@
  *
  * Every number here is copied verbatim from the repository's own benchmark
  * suite under `bench/cross-framework/lib/results*.json`. The runs were executed
- * on a single Apple M3 Max (16 cores, 64 GiB) under Node v25.7 in June 2026
- * against `@daloyjs/core` 1.0.0-beta.1. They are a point-in-time snapshot, not a
- * continuously updated leaderboard — see {@link BENCH_NOTES} for why these are
- * deliberately *not* an apples-to-apples comparison.
+ * on a single Apple M3 Max (16 cores, 64 GiB) under Node v24.3.0 (the suite's
+ * `.nvmrc` baseline) in August 2026 against the stable `@daloyjs/core` 1.1.0.
+ * They are a point-in-time snapshot, not a continuously updated leaderboard —
+ * see {@link BENCH_NOTES} for why these are deliberately *not* an
+ * apples-to-apples comparison.
  */
 
 /** Provenance shown alongside the charts so readers can reproduce the numbers. */
 export const BENCH_META = {
-  machine: "Apple M3 Max · 16 cores · Node v25.7",
-  ranAt: "June 2026",
-  coreVersion: "@daloyjs/core 1.0.0-beta.1",
+  machine: "Apple M3 Max · 16 cores · Node v24.3.0",
+  ranAt: "August 2026",
+  coreVersion: "@daloyjs/core 1.1.0 (stable)",
   source: "bench/cross-framework",
 } as const
 
@@ -40,13 +41,13 @@ export type FootprintRow = {
  * Sorted ascending by the secure-parity size.
  */
 export const INSTALL_FOOTPRINT_BYTES: FootprintRow[] = [
-  { framework: "koa", minimal: 794585, secure: 1263699 },
-  { framework: "hono", minimal: 1642345, secure: 1642345 },
-  { framework: "elysia", minimal: 1458302, secure: 1867366 },
-  { framework: "daloy", minimal: 2008237, secure: 2008237 },
-  { framework: "express", minimal: 2027687, secure: 2874459 },
-  { framework: "fastify", minimal: 7133620, secure: 8315670 },
-  { framework: "nest", minimal: 13845732, secure: 17173856 },
+  { framework: "koa", minimal: 794585, secure: 1261564 },
+  { framework: "hono", minimal: 1583476, secure: 1583476 },
+  { framework: "elysia", minimal: 1455717, secure: 1864781 },
+  { framework: "daloy", minimal: 1992920, secure: 1992920 },
+  { framework: "express", minimal: 2053007, secure: 2899418 },
+  { framework: "fastify", minimal: 7226919, secure: 8412454 },
+  { framework: "nest", minimal: 13840039, secure: 17227486 },
 ]
 
 /**
@@ -71,13 +72,13 @@ export const DEPENDENCY_COUNT: FootprintRow[] = [
  * Sorted ascending by the secure-parity size.
  */
 export const BUNDLE_GZIP_BYTES: FootprintRow[] = [
-  { framework: "hono", minimal: 10941, secure: 16664 },
-  { framework: "daloy", minimal: 37695, secure: 41640 },
-  { framework: "koa", minimal: 76682, secure: 102050 },
-  { framework: "elysia", minimal: 129316, secure: 137755 },
-  { framework: "fastify", minimal: 164310, secure: 207872 },
-  { framework: "express", minimal: 270341, secure: 304256 },
-  { framework: "nest", minimal: 285768, secure: 308720 },
+  { framework: "hono", minimal: 11039, secure: 16773 },
+  { framework: "daloy", minimal: 44829, secure: 49362 },
+  { framework: "koa", minimal: 76682, secure: 102214 },
+  { framework: "elysia", minimal: 131474, secure: 139879 },
+  { framework: "fastify", minimal: 170051, secure: 213986 },
+  { framework: "express", minimal: 270590, secure: 304724 },
+  { framework: "nest", minimal: 285810, secure: 309026 },
 ]
 
 /**
@@ -94,17 +95,17 @@ export type MiddlewareThroughputRow = {
 }
 
 /**
- * Throughput (requests/sec, 100 connections) with a comparable middleware
- * stack on both frameworks. This is the fair throughput comparison: when both
- * sides actually do per-request work, DaloyJS and Hono land within a handful of
- * percent of each other, with DaloyJS slightly ahead (~6% on these GET routes).
- * The `echo` (POST body) scenario is omitted to keep the chart to the two GET
- * routes; both frameworks returned zero non-2xx responses on every scenario in
- * this run.
+ * Throughput (requests/sec, 100 connections, mean of 5×10s runs after a 15s
+ * warmup) with a comparable middleware stack on both frameworks. This is the
+ * fair throughput comparison: when both sides actually do per-request work,
+ * DaloyJS leads Hono by ~37% on the GET routes and ~76% on the POST body
+ * route — while also Zod-validating the request body on `echo`. Both
+ * frameworks returned zero non-2xx responses on every scenario in this run.
  */
 export const MIDDLEWARE_THROUGHPUT_RPS: MiddlewareThroughputRow[] = [
-  { scenario: "Static route", daloy: 18570, hono: 17492 },
-  { scenario: "Dynamic route", daloy: 18188, hono: 17171 },
+  { scenario: "Static route", daloy: 23636, hono: 17166 },
+  { scenario: "Dynamic route", daloy: 23217, hono: 16954 },
+  { scenario: "POST + body", daloy: 20724, hono: 11766 },
 ]
 
 /**
@@ -114,7 +115,7 @@ export const MIDDLEWARE_THROUGHPUT_RPS: MiddlewareThroughputRow[] = [
 export const BENCH_NOTES: string[] = [
   "Apples vs oranges, not apples to apples. These are different tools doing different amounts of work. On every request, DaloyJS validates the body against your Zod or Valibot schema and runs secure headers, a request ID, body-size limits, and request timeouts, all out of the box. The 'minimal' apps for the other frameworks do almost none of this, and even 'secure parity' rarely matches it one for one. So part of every DaloyJS number is security and validation you would otherwise have to build yourself.",
   "Footprint methodology differs: DaloyJS is one zero-dependency package, while the others resolve transitive trees whose exact size depends on when the lockfile was generated.",
-  "Throughput is workload-shaped: with a comparable middleware stack on both sides, DaloyJS and Hono land within a handful of percent of each other (DaloyJS ~6% ahead on these GET routes). Real services are usually bound by database and I/O time, not framework dispatch, so these micro-numbers rarely predict production.",
+  "Throughput is workload-shaped: with a comparable middleware stack on both sides, DaloyJS comes out ~37% ahead of Hono on these GET routes and ~76% ahead on the POST body route — and DaloyJS is additionally Zod-validating that body. Real services are usually bound by database and I/O time, not framework dispatch, so these micro-numbers rarely predict production.",
   "Different target runtimes: some frameworks (e.g. Elysia) are tuned for Bun but are measured here under their Node adapters for a fair single-runtime baseline.",
-  "Single machine, single moment: one Apple M3 Max, Node v25.7, June 2026, against @daloyjs/core 1.0.0-beta.1. Your hardware, runtime, and versions will move these numbers.",
+  "Single machine, single moment: one Apple M3 Max, Node v24.3.0, August 2026, against the stable @daloyjs/core 1.1.0. Your hardware, runtime, and versions will move these numbers.",
 ]

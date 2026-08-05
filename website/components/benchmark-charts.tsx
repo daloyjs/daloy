@@ -177,16 +177,16 @@ function FootprintBarChart({
 
 /**
  * Renders the DaloyJS-vs-Hono middleware throughput as a horizontal grouped bar
- * chart. Both frameworks run a comparable middleware stack, so the bars come
- * out nearly equal by design: the honest read is "neck and neck", and two bars
- * of almost-equal length show that far more clearly than overlapping areas did.
+ * chart. Both frameworks run a comparable middleware stack, so the gap that
+ * remains is honest: DaloyJS leads on every scenario in this run, including
+ * the POST route where it also Zod-validates the body.
  */
 function ThroughputBarChart() {
   const format = withUnit("req/s");
   return (
     <ChartContainer
       config={throughputConfig}
-      className="aspect-auto h-[240px] w-full"
+      className="aspect-auto h-[300px] w-full"
     >
       <BarChart
         accessibilityLayer
@@ -198,7 +198,7 @@ function ThroughputBarChart() {
         <CartesianGrid horizontal={false} />
         <XAxis
           type="number"
-          domain={[0, 24000]}
+          domain={[0, 25000]}
           tickLine={false}
           axisLine={false}
           tickMargin={6}
@@ -314,7 +314,7 @@ const TABS = [
     description:
       "Single-file production build, gzipped. Smaller is faster to ship to the edge and cold-start.",
     takeaway:
-      "DaloyJS gzips to ~37 kB minimal and ~41 kB secure, second only to Hono and a fraction of the Express or Nest bundles, despite shipping more batteries by default.",
+      "DaloyJS gzips to ~44 kB minimal and ~48 kB secure, second only to Hono and a fraction of the Express or Nest bundles, despite shipping more batteries by default.",
     soWhat:
       "A smaller bundle boots faster after a cold start, so the first user to hit your edge function or serverless endpoint waits less.",
     render: () => (
@@ -332,7 +332,7 @@ const TABS = [
     description:
       "Both frameworks run a comparable middleware stack on the same routes at 100 connections. This is the fair version of the throughput question: what does it cost once both sides actually do work?",
     takeaway:
-      "With comparable middleware on both sides, DaloyJS and Hono are neck and neck, and DaloyJS even edges ahead at ~18.6k vs ~17.5k req/s on static routes. A bare hello-world route would show a much larger gap, but that gap is mostly DaloyJS's security and validation running on every request, work the bare baseline simply skips.",
+      "With comparable middleware on both sides, DaloyJS leads Hono on every scenario: ~23.6k vs ~17.2k req/s on static routes (~37% ahead) and ~20.7k vs ~11.8k on the POST body route (~76% ahead) — while also Zod-validating that body. Security and validation on by default no longer costs you the benchmark.",
     soWhat:
       "Security and validation are essentially free at the framework layer. Your real bottleneck will be the database and the network, not DaloyJS.",
     render: () => <ThroughputBarChart />,
