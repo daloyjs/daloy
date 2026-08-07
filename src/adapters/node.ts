@@ -75,7 +75,12 @@ export interface NodeServerOptions {
    * amplification (the dimension abused by the "HTTP/2 Bomb"). Node's own
    * default is `2000`; this adapter tightens it to `100` to mirror the
    * application-tier cap. Set `0` to disable (use Node's unbounded default).
-   * Default: 100.
+   *
+   * Note: Node's parser (llhttp) *silently truncates* headers past this cap
+   * rather than rejecting the request, so the adapter additionally refuses
+   * any request *or WebSocket upgrade* whose raw field count reaches the cap
+   * with `431` — at the cap, a truncated flood is indistinguishable from a
+   * legitimate handshake. Default: 100.
    *
    * @since 0.38.0
    */
@@ -160,6 +165,15 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     res: ServerResponse,
     onBodyPull?: () => void
   ): void => {
+    // Node's HTTP parser *silently truncates* headers past
+    // `server.maxHeadersCount` instead of rejecting the request (llhttp
+    // semantics — verified live against Node 24). See
+    // {@link isAtOrOverParserHeaderCap}. Cost: two property reads + compare.
+    const headerCap = server.maxHeadersCount ?? 0;
+    if (isAtOrOverParserHeaderCap(req, headerCap)) {
+      writeHeadersTooLarge(res, headerCap);
+      return;
+    }
     // GET/HEAD: no body work, dispatch directly. Keep this first so the GET
     // hot path doesn't pay for any of the buffering bookkeeping below.
     const method = req.method;
@@ -264,6 +278,19 @@ export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle 
     server.on("upgrade", (req, socket, head) => {
       wsSockets.add(socket as Duplex);
       (socket as Duplex).on("close", () => wsSockets.delete(socket as Duplex));
+      // Same llhttp truncation blind spot as handleRequest: upgrades never
+      // pass through the request listener or App.dispatch, so the portable
+      // maxHeaderCount guard never runs. Refuse at the parser cap before
+      // any Headers construction / 101 handshake.
+      const headerCap = server.maxHeadersCount ?? 0;
+      if (isAtOrOverParserHeaderCap(req, headerCap)) {
+        try {
+          writeUpgradeError(socket as Duplex, 431, "Request Header Fields Too Large");
+        } catch {
+          /* socket already closed */
+        }
+        return;
+      }
       // Safety net: a rejection here would otherwise be unhandled and, under
       // the production crash-on-unhandledRejection posture, kill the process
       // from a single malformed upgrade request.
@@ -473,6 +500,40 @@ function attachClientCertificate(req: IncomingMessage, request: Request): void {
  * defensively for runtimes/proxies that surface it as a normal request.)
  */
 const FETCH_FORBIDDEN_METHODS: ReadonlySet<string> = new Set(["CONNECT", "TRACE", "TRACK"]);
+
+/**
+ * True when Node's parser has retained at least `headerCap` raw header fields.
+ * At the cap a truncated flood is indistinguishable from a legitimate request
+ * sitting exactly on the limit (llhttp drops excess fields instead of 431).
+ * A non-positive `headerCap` disables the check (`maxHeaderCount: 0`).
+ */
+function isAtOrOverParserHeaderCap(req: IncomingMessage, headerCap: number): boolean {
+  return headerCap > 0 && req.rawHeaders.length / 2 >= headerCap;
+}
+
+/**
+ * Refuse a request whose raw header-field count reached the parser cap —
+ * indistinguishable from a flood that llhttp silently truncated. Mirrors
+ * {@link writeMethodRefused}'s RFC 9457 problem+json shape; `Connection: close`
+ * avoids reusing a socket whose remaining header fields were discarded.
+ *
+ * @param res - The Node {@link ServerResponse} to write the refusal to.
+ * @param cap - The effective parser header-count cap, echoed in the `detail`.
+ */
+function writeHeadersTooLarge(res: ServerResponse, cap: number): void {
+  if (res.headersSent) return;
+  res.statusCode = 431;
+  res.setHeader("content-type", "application/problem+json");
+  res.setHeader("connection", "close");
+  res.end(
+    JSON.stringify({
+      type: "https://daloyjs.dev/errors/request-header-fields-too-large",
+      title: "Request Header Fields Too Large",
+      status: 431,
+      detail: `Request reached the parser header-count cap (${cap}); excess fields would have been silently dropped.`,
+    })
+  );
+}
 
 /**
  * Refuse a Fetch-forbidden HTTP method with a spec-correct `501 Not

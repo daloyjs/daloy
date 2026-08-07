@@ -53,9 +53,15 @@ export default function Page() {
         left entry cannot bypass an allow-list or dodge a deny. Behind a
         multi-hop chain (CDN &rarr; LB &rarr; app), declare the hop count with{" "}
         <code>trustedHops</code> (e.g. <code>trustedHops: 2</code>;{" "}
-        <code>trustProxyHeaders: true</code> is exactly <code>1</code>). With no
-        proxy in front, forwarded-header trust is attacker-controlled by
-        definition, so only enable either option behind a chain you control.
+        <code>trustProxyHeaders: true</code> is exactly <code>1</code>). When
+        the origin itself can be reached (misconfigured firewall, leaked origin
+        IP), set <code>trustedProxies</code> so the peer socket is verified
+        against a CIDR allowlist before any forwarded header is read (see{" "}
+        <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
+          the autoBan note
+        </a>
+        ). With no proxy in front and no peer verification, forwarded-header
+        trust is attacker-controlled by definition.
       </p>
 
       <h2 id="quick-start">Quick start</h2>
@@ -131,11 +137,13 @@ app.use(ipRestriction({
       <h2 id="resolving-the-client-ip">Resolving the client IP</h2>
       <p>
         Behind a trusted proxy chain, set <code>trustProxyHeaders: true</code>{" "}
-        to read <code>X-Forwarded-For</code> / <code>X-Real-IP</code>
-        {". "}This defaults to <code>false</code> because those headers are
-        client-spoofable unless every request reaches DaloyJS through
-        infrastructure you control. Pair it with{" "}
-        <code>new App(&#123; trustProxy: true &#125;)</code> in production.
+        or (preferred when the origin can be reached directly){" "}
+        <code>trustedProxies</code> to read <code>X-Forwarded-For</code> /{" "}
+        <code>X-Real-IP</code>
+        {". "}This defaults to off because those headers are client-spoofable
+        unless every request reaches DaloyJS through infrastructure you control.
+        Pair it with <code>new App(&#123; trustProxy: true &#125;)</code> in
+        production.
       </p>
       <CodeBlock
         language="ts"
@@ -147,11 +155,11 @@ app.use(ipRestriction({
   resolveIp: (ctx) => readRemoteAddress(ctx),
 }));
 
-// Behind a CDN/load balancer you control:
+// Behind a CDN/load balancer you control; verify the peer when origin is reachable:
 const app = new App({ trustProxy: true });
 app.use(ipRestriction({
   deny: ["192.0.2.0/24"],
-  trustProxyHeaders: true,
+  trustedProxies: ["10.0.0.0/8"],
 }));`}
       />
 

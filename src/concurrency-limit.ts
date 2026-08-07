@@ -48,7 +48,13 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { HttpError } from "./errors.js";
-import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
+import {
+  getConnInfo,
+  resolveForwardedClientIp,
+  resolveForwardedTrust,
+  resolveTrustedProxyMatchers,
+} from "./conn-info.js";
+import type { IpMatcher } from "./ip-match.js";
 
 /**
  * Details of a request rejected by {@link concurrencyLimit}, passed to
@@ -119,6 +125,16 @@ export interface ConcurrencyLimitOptions {
    */
   trustedHops?: number;
   /**
+   * Declare WHICH proxies are yours: an IP/CIDR allowlist for the immediate
+   * peer's address when `scope: "client"`. Forwarded headers feed the bucket
+   * key only when the TCP socket actually talking to the adapter matches the
+   * list, so a direct-to-origin attacker cannot hop buckets with spoofed XFF
+   * to hoard slots. Implies proxy-header trust at one hop unless
+   * {@link trustedHops} says otherwise; validated and compiled at
+   * construction. On peer-less edge platforms verification fails closed.
+   */
+  trustedProxies?: readonly string[];
+  /**
    * Custom client-identity resolver for `scope: "client"`. Overrides
    * {@link trustProxyHeaders}. Returning `undefined` skips limiting for the
    * request (fail-open).
@@ -166,10 +182,16 @@ function assertNonNegativeInteger(name: string, value: number): void {
  * @internal Default identity resolver: the client IP `hops` entries from the
  * right of `X-Forwarded-For` (falling back to `X-Real-IP`) — the
  * spoof-resistant side of the header; see {@link resolveForwardedClientIp}.
+ * When no trustworthy forwarded identity exists, falls back to the unspoofable
+ * TCP peer so a missing/spoofed XFF cannot skip the limit entirely (undefined
+ * would fail open). Peer-less platforms still return `undefined` (skip).
  */
-function forwardedKey(hops: number) {
-  return (ctx: BaseContext<any, any>): string | undefined =>
-    resolveForwardedClientIp(ctx.request, hops);
+function forwardedKey(hops: number, trustedPeers?: readonly IpMatcher[]) {
+  return (ctx: BaseContext<any, any>): string | undefined => {
+    const forwarded = resolveForwardedClientIp(ctx.request, hops, trustedPeers);
+    if (forwarded !== undefined) return forwarded;
+    return getConnInfo(ctx.request)?.remoteAddress;
+  };
 }
 
 /** Extract just the pathname from a request URL without a full `URL` parse where possible. */
@@ -208,15 +230,16 @@ function buildScopeResolver(
   }
   // scope === "client"
   const hops = resolveForwardedTrust("concurrencyLimit()", opts);
+  const proxyMatchers = resolveTrustedProxyMatchers("concurrencyLimit()", opts);
   let resolve: (ctx: BaseContext<any, any>) => string | undefined;
   if (opts.keyGenerator) {
     resolve = opts.keyGenerator;
   } else if (hops !== undefined) {
-    resolve = forwardedKey(hops);
+    resolve = forwardedKey(hops, proxyMatchers);
   } else {
     throw new Error(
-      'concurrencyLimit(): scope "client" requires keyGenerator, trustedHops, or trustProxyHeaders so ' +
-        "clients can be identified; otherwise every caller shares one bucket."
+      'concurrencyLimit(): scope "client" requires keyGenerator, trustedHops, trustedProxies, or ' +
+        "trustProxyHeaders so clients can be identified; otherwise every caller shares one bucket."
     );
   }
   return (ctx) => {

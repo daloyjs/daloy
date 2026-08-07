@@ -211,10 +211,12 @@ export default function Page() {
               <code>431 Request Header Fields Too Large</code> when a request
               exceeds the cap (e.g. via <code>app.fetch()</code> or runtimes
               without a native cap). The Node adapter also sets the native{" "}
-              <code>server.maxHeadersCount</code> to the same value, so on Node
-              a header-count flood is dropped at the HTTP parser as a{" "}
-              <code>400</code>-class client error before it ever becomes a
-              request. Either way it is defence-in-depth, apply the vendor
+              <code>server.maxHeadersCount</code> to the same value. Because
+              Node&apos;s llhttp parser <em>silently truncates</em> headers past
+              that cap instead of rejecting, the adapter additionally answers{" "}
+              <code>431</code> for any HTTP request <em>or WebSocket upgrade</em>{" "}
+              whose raw field count reaches the cap (usable default budget: 99
+              fields). Either way it is defence-in-depth; apply the vendor
               HTTP/2 fix at any proxy that terminates HTTP/2.
             </td>
           </tr>

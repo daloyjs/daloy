@@ -48,8 +48,12 @@
 import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import { fetchGuard } from "./fetch-guard.js";
-import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
-import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./ip-restriction.js";
+import {
+  resolveForwardedClientIp,
+  resolveForwardedTrust,
+  resolveTrustedProxyMatchers,
+} from "./conn-info.js";
+import { compileCidrMatcher, matchesMatcher, parseIp, type IpMatcher } from "./ip-match.js";
 
 /**
  * A pluggable source of abusive IP / CIDR entries. Implementations return the
@@ -133,6 +137,16 @@ export interface IpReputationOptions {
    * [1, 64]; validated at construction.
    */
   trustedHops?: number;
+  /**
+   * Declare WHICH proxies are yours: an IP/CIDR allowlist for the immediate
+   * peer's address. Forwarded headers are honoured only when the TCP socket
+   * actually talking to the adapter matches the list, so a direct-to-origin
+   * attacker cannot dodge the denylist with a spoofed XFF. Implies
+   * proxy-header trust at one hop unless {@link trustedHops} says otherwise;
+   * validated and compiled at construction. On peer-less edge platforms
+   * verification fails closed (forwarded identity ignored).
+   */
+  trustedProxies?: readonly string[];
   /**
    * `"block"` (default) throws a {@link ForbiddenError} on a match; `"log"`
    * only invokes {@link IpReputationOptions.onMatch} and lets the request
@@ -270,9 +284,9 @@ export function urlFeed(url: string, opts: UrlFeedOptions = {}): IpReputationFee
  * `X-Forwarded-For` (falling back to `X-Real-IP`) — the spoof-resistant side
  * of the header; see {@link resolveForwardedClientIp}.
  */
-function forwardedIpResolver(hops: number) {
+function forwardedIpResolver(hops: number, trustedPeers?: readonly IpMatcher[]) {
   return (ctx: BaseContext<any, any>): string | undefined =>
-    resolveForwardedClientIp(ctx.request, hops);
+    resolveForwardedClientIp(ctx.request, hops, trustedPeers);
 }
 
 function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
@@ -319,8 +333,10 @@ export function ipReputation(opts: IpReputationOptions): IpReputationController 
   }
   const message = opts.message ?? DEFAULT_MESSAGE;
   const hops = resolveForwardedTrust("ipReputation()", opts);
+  const proxyMatchers = resolveTrustedProxyMatchers("ipReputation()", opts);
   const resolveIp =
-    opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
+    opts.resolveIp ??
+    (hops !== undefined ? forwardedIpResolver(hops, proxyMatchers) : noIpResolver);
 
   // Last-known-good compiled denylist, one entry per feed so a single feed's
   // failed refresh doesn't drop the others.

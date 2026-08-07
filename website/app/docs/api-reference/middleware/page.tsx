@@ -86,7 +86,9 @@ interface RateLimitOptions {
   max: number;
   keyGenerator?: (ctx: RateLimitContext) => string; // may run on an early auth rejection
   store?: RateLimitStore;          // default in-memory; use redisRateLimitStore for clusters
-  trustProxyHeaders?: boolean;
+  trustProxyHeaders?: boolean;     // rightmost XFF; spoofable if origin is reachable
+  trustedHops?: number;            // multi-hop chain length (implies trust)
+  trustedProxies?: readonly string[]; // CIDR allowlist of proxy peers (peer-verified trust)
   retryAfter?: boolean;
   groupId?: string;
 }

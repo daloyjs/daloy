@@ -168,6 +168,36 @@ crypto.getRandomValues(key);
 createJwtSigner({ alg: "HS256", key, maxLifetimeSeconds: 60 });`}
       />
 
+      <h3 id="2a-jwt-crit-refusal-and-verifier-lifetime-cap">
+        2a. JWT <code>crit</code> refusal and the verifier lifetime cap
+      </h3>
+      <p>
+        Two verification-side hardening rules close the asymmetries a live
+        pentest against the 1.0.0 line surfaced. First, any token whose header
+        carries <code>crit</code> is rejected outright: Daloy implements no JWS
+        extensions, so RFC 7515 §4.1.11 requires refusal, and accepting the
+        token would mean silently ignoring semantics the issuer marked
+        critical. The signer refuses to <em>emit</em> <code>crit</code> for the
+        same reason. Second, the signer-side{" "}
+        <code>maxLifetimeSeconds</code> requirement now has a verifier-side
+        counterpart: pass <code>maxLifetimeSeconds</code> to{" "}
+        <code>createJwtVerifier()</code> and any token whose{" "}
+        <code>exp - (iat ?? now)</code> exceeds it is rejected with{" "}
+        <code>lifetime_exceeded</code>, so a misconfigured or compromised
+        issuer sharing the key cannot mint a 100-year token your API accepts.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`createJwtVerifier({
+  algorithms: ["HS256"],
+  key,
+  maxLifetimeSeconds: 3600, // reject tokens living longer than 1h
+});
+// JwtError [lifetime_exceeded]: token lifetime 3153600000s exceeds
+// verifier maxLifetimeSeconds 3600s.
+// JwtError [unsupported_crit]: token header carries 'crit' ...`}
+      />
+
       <h2 id="3-secureheaders-refuses-dual-framing-defense-disable">
         3. <code>secureHeaders()</code> refuses dual framing-defense disable
       </h2>

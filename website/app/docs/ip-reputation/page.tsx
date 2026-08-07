@@ -119,7 +119,13 @@ process.on("SIGTERM", () => reputation.stop());`}
         appended), so a listed client cannot dodge it by prepending a clean
         spoofed entry on the left. Multi-hop chains declare their length with{" "}
         <code>trustedHops</code> (<code>trustProxyHeaders: true</code> is
-        exactly <code>trustedHops: 1</code>).
+        exactly <code>trustedHops: 1</code>). When the origin itself can be
+        reached, set <code>trustedProxies</code> so the peer socket is verified
+        against a CIDR allowlist before any forwarded header is read (see{" "}
+        <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
+          the autoBan note
+        </a>
+        ).
       </p>
 
       <h2 id="wiring-abuse-feeds">Wiring abuse feeds</h2>
@@ -237,10 +243,11 @@ reputation.has("203.0.113.7");       // probe without side effects`}
       <h2 id="custom-ip-resolution">Custom IP resolution</h2>
       <p>
         By default the client IP is resolved from the socket-supplied value; set{" "}
-        <code>trustProxyHeaders: true</code> to read{" "}
-        <code>X-Forwarded-For</code> / <code>X-Real-IP</code> (only behind a
-        proxy you trust to overwrite them), or pass your own{" "}
-        <code>resolveIp</code>
+        <code>trustProxyHeaders: true</code> or <code>trustedProxies</code> to
+        read <code>X-Forwarded-For</code> / <code>X-Real-IP</code> (only behind
+        a proxy you trust to overwrite them; prefer{" "}
+        <code>trustedProxies</code> when the origin can be reached directly), or
+        pass your own <code>resolveIp</code>
         {": "}
       </p>
       <CodeBlock

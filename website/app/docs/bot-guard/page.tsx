@@ -128,7 +128,13 @@ app.use(
         <code>X-Forwarded-For</code> entry (the one your immediate proxy
         appended), so an attacker-prepended left entry cannot impersonate a
         verified crawler&apos;s address; multi-hop chains declare their length
-        with <code>trustedHops</code>.
+        with <code>trustedHops</code>. When the origin itself can be reached,
+        set <code>trustedProxies</code> so the peer socket is verified against a
+        CIDR allowlist before any forwarded header is believed (see{" "}
+        <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
+          the autoBan note
+        </a>
+        ).
       </p>
 
       <h2 id="blocking-empty-and-abusive-user-agents">

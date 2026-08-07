@@ -551,11 +551,18 @@ app.use(basicAuth({
         headers are client-spoofable unless your reverse proxy strips and
         rewrites them. The default limiter is therefore global until you provide
         an explicit <code>keyGenerator</code> or opt in to{" "}
-        <code>trustProxyHeaders: true</code> behind a trusted proxy. When proxy
-        headers are trusted, the key is the <strong>rightmost</strong>{" "}
-        <code>X-Forwarded-For</code> entry (the one your proxy appended), never
-        an attacker-prepended left entry; multi-hop chains declare their hop
-        count with <code>trustedHops</code>.
+        <code>trustProxyHeaders: true</code> / <code>trustedProxies</code>{" "}
+        behind a trusted proxy. When proxy headers are trusted, the key is the{" "}
+        <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
+        your proxy appended), never an attacker-prepended left entry; multi-hop
+        chains declare their hop count with <code>trustedHops</code>. When the
+        origin itself can be reached, set <code>trustedProxies</code> so the
+        peer socket is verified against a CIDR allowlist before any forwarded
+        header is believed (see{" "}
+        <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
+          the autoBan note
+        </a>
+        ).
       </p>
       <p>
         For credential-entry routes, use{" "}

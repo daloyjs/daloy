@@ -27,7 +27,12 @@
 
 import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
-import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
+import {
+  resolveForwardedClientIp,
+  resolveForwardedTrust,
+  resolveTrustedProxyMatchers,
+} from "./conn-info.js";
+import type { IpMatcher } from "./ip-match.js";
 
 /**
  * Why a request was (or would have been) blocked by {@link geoBlock}.
@@ -147,6 +152,17 @@ export interface GeoBlockOptions {
    */
   trustedHops?: number;
   /**
+   * Declare WHICH proxies are yours: an IP/CIDR allowlist for the immediate
+   * peer's address. Forwarded headers are honoured only when the TCP socket
+   * actually talking to the adapter matches the list — the one property a
+   * remote client cannot spoof — so a direct-to-origin attacker cannot claim
+   * an allowed-country IP. Implies proxy-header trust at one hop unless
+   * {@link trustedHops} says otherwise; validated and compiled at
+   * construction. On peer-less edge platforms verification fails closed.
+   * Ignored when `resolveCountry` is used or a custom `resolveIp` is supplied.
+   */
+  trustedProxies?: readonly string[];
+  /**
    * What to do when the country cannot be resolved. Defaults to `false` when
    * an `allow` list is configured (fail closed — an unknown country is not on
    * the allow-list) and `true` for deny-only configurations (fail open). Set
@@ -199,9 +215,9 @@ function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
  * by the operator's own proxy chain and is therefore the spoof-resistant
  * side — see {@link resolveForwardedClientIp}.
  */
-function forwardedIpResolver(hops: number) {
+function forwardedIpResolver(hops: number, trustedPeers?: readonly IpMatcher[]) {
   return (ctx: BaseContext<any, any>): string | undefined =>
-    resolveForwardedClientIp(ctx.request, hops);
+    resolveForwardedClientIp(ctx.request, hops, trustedPeers);
 }
 
 /**
@@ -266,8 +282,10 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
   const lookupCountry = opts.lookupCountry;
   const resolveCountry = opts.resolveCountry;
   const hops = resolveForwardedTrust("geoBlock()", opts);
+  const proxyMatchers = resolveTrustedProxyMatchers("geoBlock()", opts);
   const resolveIp =
-    opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
+    opts.resolveIp ??
+    (hops !== undefined ? forwardedIpResolver(hops, proxyMatchers) : noIpResolver);
 
   return {
     // Runs in `preBody`, not `beforeHandle`. A `beforeHandle` hook that returns

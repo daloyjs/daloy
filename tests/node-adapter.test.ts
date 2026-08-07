@@ -799,6 +799,71 @@ test("node adapter: attaches conn-info with the immediate TCP peer", async () =>
   }
 });
 
+test("node adapter: header flood on WebSocket upgrade is refused 431, not 101", async () => {
+  // Upgrades never enter handleRequest, so the request-path 431 check cannot
+  // cover them. Without the upgrade-path guard, llhttp still truncates to the
+  // cap and the handshake completes with 101 (verified on bare Node).
+  const app = new App({ logger: false });
+  // No origin allowlist: undefined allowedOrigins permits any Origin (test-only).
+  app.ws("/ws", {
+    open() {},
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    let flood =
+      "GET /ws HTTP/1.1\r\n" +
+      "Host: t\r\n" +
+      "Upgrade: websocket\r\n" +
+      "Connection: Upgrade\r\n" +
+      "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+      "Sec-WebSocket-Version: 13\r\n" +
+      "Origin: http://127.0.0.1\r\n";
+    for (let i = 0; i < 250; i++) flood += `X-Flood-${i}: v\r\n`;
+    flood += "\r\n";
+    const statuses = await collectStatusLines(port, flood);
+    assert.deepEqual(statuses, [431]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: WebSocket upgrade under the header cap still reaches 101", async () => {
+  const app = new App({ logger: false });
+  app.ws("/ws", {
+    open() {},
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest({
+        port,
+        host: "127.0.0.1",
+        path: "/ws",
+        method: "GET",
+        headers: {
+          host: "127.0.0.1",
+          upgrade: "websocket",
+          connection: "Upgrade",
+          "sec-websocket-version": "13",
+          "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+          origin: "http://127.0.0.1",
+        },
+      });
+      req.on("response", (res) => {
+        const code = res.statusCode ?? 0;
+        res.resume();
+        res.on("end", () => resolve(code));
+      });
+      req.on("upgrade", (res) => resolve(res.statusCode ?? 101));
+      req.on("error", reject);
+      req.end();
+    });
+    assert.equal(status, 101);
+  } finally {
+    await handle.close();
+  }
+});
+
 test("node adapter: malformed Host on WebSocket upgrade returns 400 and does not crash the process", async () => {
   // Regression: `new URL("http://exa mple/ws")` throws, and the upgrade
   // promise was discarded with `void`, so a single malformed upgrade request
@@ -1071,6 +1136,98 @@ test("node adapter: a streaming in-limit body still completes after the deferred
         body
     );
     assert.deepEqual(statuses, [100, 200]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: header flood past maxHeadersCount is refused 431, not silently truncated", async () => {
+  // llhttp *truncates* headers past server.maxHeadersCount instead of
+  // rejecting (verified live against Node 24): without the adapter's at-cap
+  // refusal this request used to sail through as a 200 with only 100 fields
+  // visible. Now anything that reaches the cap is refused, since a truncated
+  // flood is indistinguishable from a legit request sitting exactly at it.
+  const { handle, port } = await startServer(buildEchoApp());
+  try {
+    let flood = "GET /hello HTTP/1.1\r\nHost: t\r\n";
+    for (let i = 0; i < 250; i++) flood += `X-Flood-${i}: v\r\n`;
+    flood += "\r\n";
+    const statuses = await collectStatusLines(port, flood);
+    assert.deepEqual(statuses, [431]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: the exact-cap boundary — 100 fields is refused, 99 is served", async () => {
+  // Pins the one deliberate compat tradeoff of the at-cap rule: `>= cap` means
+  // a request sitting *exactly* on the cap (Host + 99 extras) is refused, so
+  // the usable field budget at the default is 99. That is intentional — at the
+  // cap a truncated flood and a legitimate request are indistinguishable — and
+  // it must not be loosened to `> cap` without reintroducing the blind spot.
+  const { handle, port } = await startServer(buildEchoApp());
+  try {
+    const build = (extras: number): string => {
+      let req = "GET /hello HTTP/1.1\r\nHost: t\r\n";
+      for (let i = 0; i < extras; i++) req += `X-Pad-${i}: v\r\n`;
+      return `${req}\r\n`;
+    };
+    // Host + 99 extras = 100 raw pairs = the cap.
+    assert.deepEqual(await collectStatusLines(port, build(99)), [431]);
+    // Host + 98 extras = 99 raw pairs = one under the cap.
+    assert.deepEqual(await collectStatusLines(port, build(98)), [200]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: a request comfortably under the header cap is unaffected", async () => {
+  const { handle, port } = await startServer(buildEchoApp());
+  try {
+    let req = "GET /hello HTTP/1.1\r\nHost: t\r\n";
+    for (let i = 0; i < 20; i++) req += `X-Normal-${i}: v\r\n`;
+    req += "\r\n";
+    const statuses = await collectStatusLines(port, req);
+    assert.deepEqual(statuses, [200]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: maxHeaderCount: 0 disables the at-cap refusal", async () => {
+  // With the parser cap disabled, all 250 fields reach the app — so the
+  // app-level portable cap must be disabled too to observe the opt-out.
+  const app = new App({ logger: false, maxHeaderCount: 0 });
+  app.route({
+    method: "GET",
+    path: "/hello",
+    operationId: "hello",
+    responses: { 200: { description: "ok", body: z.object({ msg: z.string() }) as any } },
+    handler: async () => ({ status: 200 as const, body: { msg: "hi" } }),
+  });
+  const { handle, port } = await startServer(app, { maxHeaderCount: 0 });
+  try {
+    let req = "GET /hello HTTP/1.1\r\nHost: t\r\n";
+    for (let i = 0; i < 250; i++) req += `X-Flood-${i}: v\r\n`;
+    req += "\r\n";
+    const statuses = await collectStatusLines(port, req);
+    assert.deepEqual(statuses, [200]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: with the parser cap disabled, the app-level guard still rejects floods", async () => {
+  // Defense in depth: maxHeaderCount: 0 on the adapter opts out of the
+  // parser-level cap, but the framework's portable app-level guard (default
+  // 100) still refuses the flood with 431 — nothing is silently truncated.
+  const { handle, port } = await startServer(buildEchoApp(), { maxHeaderCount: 0 });
+  try {
+    let req = "GET /hello HTTP/1.1\r\nHost: t\r\n";
+    for (let i = 0; i < 250; i++) req += `X-Flood-${i}: v\r\n`;
+    req += "\r\n";
+    const statuses = await collectStatusLines(port, req);
+    assert.deepEqual(statuses, [431]);
   } finally {
     await handle.close();
   }

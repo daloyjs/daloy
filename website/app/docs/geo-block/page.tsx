@@ -298,7 +298,14 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         <li>
           Only set <code>trustProxyHeaders</code> when every request reaches
           Daloy through a proxy chain you control. Otherwise{" "}
-          <code>X-Forwarded-For</code> is attacker-spoofable.
+          <code>X-Forwarded-For</code> is attacker-spoofable. If the origin
+          can be reached directly, pin the proxies down with{" "}
+          <code>trustedProxies</code> so the peer socket is verified against
+          a CIDR allowlist before any forwarded header is read (see{" "}
+          <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
+            the autoBan note
+          </a>
+          ).
         </li>
         <li>
           Keep your GeoIP database current; stale data misclassifies reassigned

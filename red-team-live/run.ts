@@ -40,6 +40,7 @@ const record = (f: Finding) => findings.push(f);
 
 let BASE = "";
 let BASE_B = ""; // second app: global except()-based auth
+let BASE_C = ""; // third app: autoBan behind peer-verified trustedProxies
 
 // ---------------------------------------------------------------------------
 // Wire primitives
@@ -157,6 +158,32 @@ function wsHandshake(
 const seg = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const forgeJwt = (header: object, payload: object, sig = "AAAA") =>
   `${seg(header)}.${seg(payload)}.${sig}`;
+
+/**
+ * Log in as a real tenant and return a valid user-scoped Bearer token.
+ *
+ * The login rate limit keys on the rightmost X-Forwarded-For hop
+ * (trustedHops: 1 on the target, simulating a real LB deployment). Each
+ * identity logs in through its own stable "proxy hop" so the harness's many
+ * probes — including the deliberate brute-force campaigns — can never
+ * exhaust one another's buckets and make later probes flaky.
+ */
+const tokenCache = new Map<string, string>();
+async function loginAs(user: string, pass: string, proxyHop: string): Promise<string> {
+  const cached = tokenCache.get(user);
+  if (cached) return cached;
+  const r = await http("POST", "/login", {
+    headers: { "content-type": "application/json", "x-forwarded-for": proxyHop },
+    body: JSON.stringify({ user, pass }),
+  });
+  if (r.status !== 200)
+    throw new Error(`loginAs(${user}) failed with ${r.status}: ${r.text.slice(0, 120)}`);
+  const token = JSON.parse(r.text).token as string;
+  tokenCache.set(user, token);
+  return token;
+}
+const aliceToken = () => loginAs("alice", "correct-horse-battery", "10.0.0.1");
+const bobToken = () => loginAs("bob", "bob-hunter2-passphrase", "10.0.0.2");
 
 // ---------------------------------------------------------------------------
 // Campaigns
@@ -374,15 +401,19 @@ async function ssrfAndRedirect() {
 
 async function dataExposureAndMassAssignment() {
   const cat = "Data Exposure / Mass Assignment";
-  const u = await http("GET", "/users/1");
+  // /users/:id now requires a verified token + ownership (wave 5): read the
+  // caller's OWN record and confirm the schema still strips passwordHash.
+  const u = await http("GET", "/users/alice", {
+    headers: { authorization: `Bearer ${await aliceToken()}` },
+  });
   const leaked = /passwordhash|\$2b\$/i.test(u.text);
   record({
     category: cat,
     title: "Excessive data exposure (OWASP API3) — passwordHash leak",
     severity: "high",
-    attack: "GET /users/1 (handler returns passwordHash; schema should strip it)",
+    attack: "GET /users/alice as alice (handler returns passwordHash; schema should strip it)",
     observed: `status ${u.status}, body=${u.text.slice(0, 120)}`,
-    verdict: leaked ? "VULNERABLE" : "DEFENDED",
+    verdict: u.status === 200 && !leaked ? "DEFENDED" : "VULNERABLE",
   });
 
   const ma = await http("POST", "/items", {
@@ -885,16 +916,19 @@ async function statefulMiddleware() {
     verdict: bomb.status === 413 ? "DEFENDED" : "VULNERABLE",
   });
 
-  // Idempotency: replay + cross-tenant isolation.
+  // Idempotency: replay + cross-tenant isolation. /pay now requires a
+  // verified JWT (wave 5) and derives `owner` from claims, so the two
+  // tenants are alice and bob — arbitrary Bearer strings no longer pass.
+  const [tokA, tokB] = await Promise.all([aliceToken(), bobToken()]);
   const pay = (key: string, auth: string, amount = 10) =>
     http("POST", "/pay", {
       headers: { "content-type": "application/json", "idempotency-key": key, authorization: auth },
       body: JSON.stringify({ amount }),
     });
-  const a1 = await pay("k1", "Bearer USER_A");
-  const replay = await pay("k1", "Bearer USER_A");
-  const reuse = await pay("k1", "Bearer USER_A", 999); // same key, different body
-  const crossTenant = await pay("k1", "Bearer USER_B"); // A's key, B's identity
+  const a1 = await pay("k1", `Bearer ${tokA}`);
+  const replay = await pay("k1", `Bearer ${tokA}`);
+  const reuse = await pay("k1", `Bearer ${tokA}`, 999); // same key, different body
+  const crossTenant = await pay("k1", `Bearer ${tokB}`); // alice's key, bob's identity
   const aOwner = JSON.parse(a1.text).owner;
   const bOwner = JSON.parse(crossTenant.text).owner ?? "";
   record({
@@ -902,12 +936,12 @@ async function statefulMiddleware() {
     title: "Idempotency replay + cross-tenant response disclosure (CWE-524)",
     severity: "high",
     attack: "Replay a key; reuse with a new body; reuse another user's key",
-    observed: `replayed=${replay.headers.get("idempotency-replayed")}, key+newbody=${reuse.status}, B-got-own=${bOwner !== aOwner}`,
+    observed: `replayed=${replay.headers.get("idempotency-replayed")}, key+newbody=${reuse.status}, alice=${aOwner}, bob-got=${bOwner}`,
     verdict:
       replay.headers.get("idempotency-replayed") &&
       reuse.status === 422 &&
-      bOwner !== aOwner &&
-      bOwner === "Bearer USER_B"
+      aOwner === "alice" &&
+      bOwner === "bob"
         ? "DEFENDED"
         : "VULNERABLE",
   });
@@ -1629,13 +1663,14 @@ async function wave4Probes(port: number) {
   {
     const cat = "Race conditions (TOCTOU)";
     const key = `race-${Date.now()}`;
+    const racerAuth = `Bearer ${await aliceToken()}`;
     const rs = await Promise.all(
       Array.from({ length: 12 }, () =>
         http("POST", "/pay", {
           headers: {
             "content-type": "application/json",
             "idempotency-key": key,
-            authorization: "Bearer racer",
+            authorization: racerAuth,
           },
           body: JSON.stringify({ amount: 10 }),
         })
@@ -2215,6 +2250,8 @@ async function unorthodoxAttacks(port: number, portB: number) {
 
   // Browsers send Origin: null for file:// pages, sandboxed iframes, and some
   // redirects. A configured allowlist must not reflect that opaque origin.
+  // (The route now answers 401 to anonymous callers since wave 5 — the CORS
+  // assertion is about the ACAO header, not the status.)
   const nullOrigin = await http("GET", "/users/1", { headers: { origin: "null" } });
   const nullAcao = nullOrigin.headers.get("access-control-allow-origin");
   record({
@@ -2223,7 +2260,10 @@ async function unorthodoxAttacks(port: number, portB: number) {
     severity: "medium",
     attack: "GET /users/1 with Origin: null",
     observed: `status ${nullOrigin.status}, Access-Control-Allow-Origin=${nullAcao ?? "(none)"}`,
-    verdict: nullOrigin.status === 200 && nullAcao === null ? "DEFENDED" : "VULNERABLE",
+    verdict:
+      (nullOrigin.status === 200 || nullOrigin.status === 401) && nullAcao === null
+        ? "DEFENDED"
+        : "VULNERABLE",
   });
 
   // Duplicate Host headers must be rejected rather than leaving different
@@ -2345,6 +2385,299 @@ async function unorthodoxAttacks(port: number, portB: number) {
   });
 }
 
+/**
+ * Wave 5 — reasoning-layer probes: the $100 flaws, not the $1 bugs.
+ * ================================================================
+ * Folded from the 2026-08-05 COS-methodology engagement
+ * (red-team-live/COS-ENGAGEMENT-2026-08-05.md). Waves 1–4 prove the
+ * commodity classes hold; this battery reasons about what the target app is
+ * DESIGNED to do and tries to subvert the intent — the flaw class no scanner
+ * signature can express:
+ *
+ *   - BOLA/IDOR: anonymous + cross-tenant object reads (First American class)
+ *   - defensive-control weaponization: a global login bucket turned into an
+ *     availability kill-switch for every user (BodySnatcher "trusts the
+ *     wrong thing" class)
+ *   - business logic: unauthenticated money movement with a caller-chosen
+ *     owner identity, and sub-cent dust amounts (ledger-rounding fraud)
+ *   - JWT claim type-confusion and except() intent subversion
+ *
+ * The first three were CONFIRMED VULNERABLE in the engagement and fixed in
+ * target.ts (requireAuth + ownership, per-hop login bucket, claims-derived
+ * owner, min-unit amount); these probes are the live regression tests that
+ * keep the fixes from silently reverting. autoBan framing/evasion — spoofed
+ * XFF trusted without peer verification — is now fixed at the FRAMEWORK
+ * layer: the `trustedProxies` CIDR allowlist verifies the immediate TCP peer
+ * before any forwarded header is read, asserted DEFENDED live against a
+ * third app (port C) whose declared proxy range excludes the harness peer.
+ * App A keeps the legacy unverified posture as INFO documentation.
+ *
+ * The engagement's one false positive (SSRF redirect re-validation, caught
+ * by independent re-verification) is deliberately NOT a live probe: it needs
+ * an external redirector and would be flaky offline. It is pinned
+ * deterministically in-process by tests/fetch-guard.test.ts
+ * ("re-validates redirects (302 -> metadata is blocked)").
+ */
+async function wave5Probes() {
+  const cat = "Reasoning layer (application intent)";
+
+  // ---- BOLA / IDOR ----------------------------------------------------------
+  const anon = await http("GET", "/users/1");
+  record({
+    category: cat,
+    title: "BOLA — anonymous object read (IDOR regression)",
+    severity: "high",
+    attack: "GET /users/1 with no Authorization header",
+    observed: `status ${anon.status}`,
+    verdict: anon.status === 401 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  const tokA = await aliceToken();
+  const cross = await http("GET", "/users/bob", { headers: { authorization: `Bearer ${tokA}` } });
+  record({
+    category: cat,
+    title: "BOLA — cross-tenant object read (alice reads bob)",
+    severity: "high",
+    attack: "GET /users/bob with alice's valid token",
+    observed: `status ${cross.status}`,
+    verdict: cross.status === 403 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  const own = await http("GET", "/users/alice", { headers: { authorization: `Bearer ${tokA}` } });
+  record({
+    category: cat,
+    title: "BOLA — own-record read still works (no false-deny)",
+    severity: "info",
+    attack: "GET /users/alice with alice's token",
+    observed: `status ${own.status}`,
+    verdict: own.status === 200 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  const harvest = await http("GET", "/users/42");
+  record({
+    category: cat,
+    title: "PII-harvest dictionary feed is cut (chain link)",
+    severity: "medium",
+    attack: "GET /users/42 anonymously — emails once fed credential stuffing",
+    observed: `status ${harvest.status}`,
+    verdict: harvest.status === 401 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // ---- Defensive-control weaponization --------------------------------------
+  // The OLD login limiter keyed on a constant: an attacker's bad attempts
+  // locked EVERY user out. Fire 6 bad logins through one "proxy hop", then
+  // the real user with CORRECT credentials through their own hop — she must
+  // get in. (Regression test for the availability finding.)
+  for (let i = 0; i < 6; i++) {
+    await http("POST", "/login", {
+      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.66" },
+      body: JSON.stringify({ user: "attacker", pass: "nope" }),
+    });
+  }
+  const victim = await http("POST", "/login", {
+    headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.77" },
+    body: JSON.stringify({ user: "alice", pass: "correct-horse-battery" }),
+  });
+  record({
+    category: cat,
+    title: "Global-bucket login lockout (availability) — regression",
+    severity: "high",
+    attack: "6× bad /login from attacker hop, then victim with CORRECT password from her own hop",
+    observed: `victim login status ${victim.status}${victim.status === 200 ? " — attacker's strikes stay in the attacker's bucket" : " — VICTIM LOCKED OUT"}`,
+    verdict: victim.status === 200 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // autoBan with a spoofable client identity is a framing/evasion tool when
+  // the deployment lets clients reach the origin directly and trusts XFF
+  // WITHOUT peer verification. App A models exactly that legacy posture
+  // (trustProxyHeaders with no trustedProxies) — kept as INFO documentation.
+  // The framework-level fix is asserted DEFENDED on app C below.
+  const framedIp = "198.51.100.23";
+  for (let i = 0; i < 3; i++)
+    await http("GET", "/ab-login", { headers: { "x-forwarded-for": framedIp } });
+  const framed = await http("GET", "/ab-public", { headers: { "x-forwarded-for": framedIp } });
+  record({
+    category: cat,
+    title: "autoBan framing posture WITHOUT peer verification (legacy, app A)",
+    severity: "high",
+    attack: `3 strikes with X-Forwarded-For: ${framedIp}, then /ab-public as that IP`,
+    observed:
+      `victim IP sees ${framed.status} — expected on an unverified-XFF deployment; ` +
+      "the trustedProxies fix for this is asserted live on app C below",
+    verdict: "INFO",
+  });
+
+  const rotCodes: number[] = [];
+  for (let i = 0; i < 6; i++)
+    rotCodes.push(
+      (await http("GET", "/ab-login", { headers: { "x-forwarded-for": `10.9.9.${i}` } })).status
+    );
+  record({
+    category: cat,
+    title: "autoBan evasion posture WITHOUT peer verification (legacy, app A)",
+    severity: "medium",
+    attack: "6× /ab-login, each with a different spoofed X-Forwarded-For",
+    observed: `statuses ${rotCodes.join(",")} — rotation wins when XFF is trusted unverified; app C asserts the fix`,
+    verdict: "INFO",
+  });
+
+  // ---- trustedProxies (app C): the framework-level fix -----------------------
+  // App C runs autoBan with trustedProxies: ["10.0.0.0/8"] — every harness
+  // request arrives from loopback, OUTSIDE the declared proxy range, so its
+  // XFF must be ignored and strikes must land on the unspoofable real peer.
+  const c = (path: string, headers: Record<string, string>) =>
+    fetch(BASE_C + path, { headers, redirect: "manual" });
+  // Framing: after 3 strikes claiming the victim's IP, the ban must track
+  // the ATTACKER's real peer — observable because the ban then fires for ANY
+  // claimed identity (the victim's identity itself was never given a strike).
+  for (let i = 0; i < 3; i++) await c("/c-login", { "x-forwarded-for": framedIp });
+  const bannedAsVictim = await c("/c-public", { "x-forwarded-for": framedIp });
+  const bannedAsAnyone = await c("/c-public", { "x-forwarded-for": "9.9.9.9" });
+  record({
+    category: cat,
+    title: "trustedProxies — victim-IP framing defeated (ban tracks the real peer)",
+    severity: "high",
+    attack: `3 strikes on app C claiming XFF ${framedIp}, then /c-public as the victim AND as an unrelated identity`,
+    observed:
+      `victim-xff ${bannedAsVictim.status}, other-xff ${bannedAsAnyone.status} — the ban follows ` +
+      "the unspoofable peer (the attacker banned themselves), never the spoofed identity",
+    verdict:
+      bannedAsVictim.status === 429 && bannedAsAnyone.status === 429 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // Evasion: rotating spoofed XFF collapses onto the single real peer, so
+  // strikes accumulate and the 4th attempt is banned.
+  const evCodes: number[] = [];
+  for (let i = 0; i < 4; i++)
+    evCodes.push((await c("/c-ev-login", { "x-forwarded-for": `10.9.9.${i}` })).status);
+  record({
+    category: cat,
+    title: "trustedProxies — XFF-rotation ban evasion defeated",
+    severity: "high",
+    attack: "4× /c-ev-login on app C, each with a different spoofed X-Forwarded-For",
+    observed: `statuses ${evCodes.join(",")} — rotated identities collapse onto the real peer; strikes accumulate`,
+    verdict:
+      evCodes[0] === 401 && evCodes[1] === 401 && evCodes[2] === 401 && evCodes[3] === 429
+        ? "DEFENDED"
+        : "VULNERABLE",
+  });
+
+  // ---- Business logic --------------------------------------------------------
+  const noAuthPay = await http("POST", "/pay", {
+    headers: { "content-type": "application/json", "idempotency-key": `w5-${Date.now()}` },
+    body: JSON.stringify({ amount: 1000000 }),
+  });
+  record({
+    category: cat,
+    title: "Unauthenticated money movement — regression",
+    severity: "critical",
+    attack: "POST /pay {amount: 1000000} with no Authorization header",
+    observed: `status ${noAuthPay.status}`,
+    verdict: noAuthPay.status === 401 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  const ownedPay = await http("POST", "/pay", {
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": `w5-own-${Date.now()}`,
+      authorization: `Bearer ${tokA}`,
+      // A caller-chosen identity must be impossible to inject through any channel.
+      "x-owner": "ceo",
+      "x-user": "admin",
+    },
+    body: JSON.stringify({ amount: 10 }),
+  });
+  let payOwner = "";
+  try {
+    payOwner = JSON.parse(ownedPay.text).owner ?? "";
+  } catch {
+    /* ignore */
+  }
+  record({
+    category: cat,
+    title: "Payment owner comes from verified claims, never caller input",
+    severity: "critical",
+    attack: "POST /pay as alice with X-Owner: ceo / X-User: admin override headers",
+    observed: `status ${ownedPay.status}, recorded owner="${payOwner}"`,
+    verdict: ownedPay.status === 201 && payOwner === "alice" ? "DEFENDED" : "VULNERABLE",
+  });
+
+  const dust = await http("POST", "/pay", {
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": `w5-dust-${Date.now()}`,
+      authorization: `Bearer ${tokA}`,
+    },
+    body: JSON.stringify({ amount: 0.0000001 }),
+  });
+  record({
+    category: cat,
+    title: "Sub-cent dust payment (ledger-rounding fraud class)",
+    severity: "low",
+    attack: "POST /pay {amount: 1e-7} — must fail the 0.01 currency-unit floor",
+    observed: `status ${dust.status}`,
+    verdict: dust.status === 422 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // ---- JWT claim type-confusion ----------------------------------------------
+  for (const [name, payload] of [
+    ["scopes as a string", { sub: "alice", scopes: "admin" }],
+    ["scopes as an object", { sub: "alice", scopes: { toString: "admin" } }],
+  ] as const) {
+    const r = await http("GET", "/admin", {
+      headers: { authorization: `Bearer ${forgeJwt({ alg: "HS256", typ: "JWT" }, payload)}` },
+    });
+    record({
+      category: cat,
+      title: `JWT claim type-confusion — ${name}`,
+      severity: "high",
+      attack: `GET /admin with a forged token carrying ${name}`,
+      observed: `status ${r.status} — claims must be type-checked, never duck-typed`,
+      verdict: r.status >= 400 && !r.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
+    });
+  }
+
+  // ---- except() intent subversion (app B) -------------------------------------
+  const intent: Array<[string, string, boolean]> = [
+    // [name, path, reachesProtectedHandlerWhen200]
+    ["trailing slash on protected route", "/api/admin/", true],
+    ["query-string path smuggling", "/api/admin?/public/info", true],
+    ["fragment inside the path", "/api/admin#/public", true],
+    ["semicolon matrix params", "/public/info;/../api/admin", true],
+    ["double-slash collapse", "//api//admin", true],
+    // This one RESOLVES to the intentionally-public /public/info — correct
+    // normalization, not a bypass; a 200 here is defended behaviour.
+    ["encoded dot-segment to a public route", "/api/%2e%2e/public/info", false],
+  ];
+  for (const [name, p, protectedWhen200] of intent) {
+    const r = await fetch(`${BASE_B}${p}`, { redirect: "manual" });
+    const leaked = r.status === 200 && protectedWhen200;
+    record({
+      category: cat,
+      title: `except() intent — ${name}`,
+      severity: "high",
+      attack: `GET ${p} on the except()-guarded app (no token)`,
+      observed: `status ${r.status}`,
+      verdict: leaked ? "VULNERABLE" : "DEFENDED",
+    });
+  }
+
+  // ---- SSRF redirect re-validation: covered in-process ------------------------
+  record({
+    category: cat,
+    title: "SSRF redirect-hop re-validation (pointer, not a live probe)",
+    severity: "info",
+    attack:
+      "Engagement fired this live via an external redirector and self-retracted it as a " +
+      "false positive during independent validation (the redirector returned a non-redirect " +
+      "error page) — a network-dependent probe would be flaky here",
+    observed:
+      "pinned deterministically in-process: tests/fetch-guard.test.ts 're-validates redirects " +
+      "(302 -> metadata is blocked)' + DNS pinning; src/fetch-guard.ts re-validates every hop",
+    verdict: "INFO",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
@@ -2394,7 +2727,7 @@ function report(): number {
 // Orchestration: boot the target, attack, tear down.
 // ---------------------------------------------------------------------------
 
-function startTarget(): Promise<{ port: number; portB: number; kill: () => void }> {
+function startTarget(): Promise<{ port: number; portB: number; portC: number; kill: () => void }> {
   return new Promise((resolve, reject) => {
     const targetPath = fileURLToPath(new URL("./target.ts", import.meta.url));
     const child = spawn(process.execPath, ["--import", "tsx", targetPath], {
@@ -2407,10 +2740,15 @@ function startTarget(): Promise<{ port: number; portB: number; kill: () => void 
       reject(new Error("target did not become ready in 15s\n" + stderr));
     }, 15_000);
     child.stdout.on("data", (d) => {
-      const m = /RED_TEAM_TARGET_READY (\d+) (\d+)/.exec(d.toString());
+      const m = /RED_TEAM_TARGET_READY (\d+) (\d+) (\d+)/.exec(d.toString());
       if (m) {
         clearTimeout(timer);
-        resolve({ port: Number(m[1]), portB: Number(m[2]), kill: () => child.kill("SIGKILL") });
+        resolve({
+          port: Number(m[1]),
+          portB: Number(m[2]),
+          portC: Number(m[3]),
+          kill: () => child.kill("SIGKILL"),
+        });
       }
     });
     child.stderr.on("data", (d) => {
@@ -2425,10 +2763,11 @@ function startTarget(): Promise<{ port: number; portB: number; kill: () => void 
 
 async function main() {
   console.log("⚔️  Booting target service and opening the engagement…");
-  const { port, portB, kill } = await startTarget();
+  const { port, portB, portC, kill } = await startTarget();
   BASE = `http://${HOST}:${port}`;
   BASE_B = `http://${HOST}:${portB}`;
-  console.log(`🎯  Target live on ${BASE} (and ${BASE_B}) — commencing attacks.\n`);
+  BASE_C = `http://${HOST}:${portC}`;
+  console.log(`🎯  Target live on ${BASE} (and ${BASE_B}, ${BASE_C}) — commencing attacks.\n`);
 
   try {
     await reconAndFingerprint();
@@ -2448,6 +2787,7 @@ async function main() {
     await novelProbes(port, portB);
     await wave4Probes(port);
     await unorthodoxAttacks(port, portB);
+    await wave5Probes();
   } finally {
     // Confirm the target survived the engagement (crash = DoS finding).
     let alive = false;

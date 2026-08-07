@@ -22,7 +22,13 @@
 
 import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError, TooManyRequestsError } from "./errors.js";
-import { readRemoteAddress, resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
+import {
+  readRemoteAddress,
+  resolveForwardedClientIp,
+  resolveForwardedTrust,
+  resolveTrustedProxyMatchers,
+} from "./conn-info.js";
+import type { IpMatcher } from "./ip-match.js";
 
 /**
  * One client's auto-ban bookkeeping. A record tracks the current strike count
@@ -100,9 +106,10 @@ export interface AutoBanStrikeEvent {
 
 /**
  * Configuration for {@link autoBan}. Every field is optional except that the
- * middleware must be able to identify clients: supply a {@link keyGenerator} or
- * set {@link trustProxyHeaders} (otherwise construction throws, to avoid
- * accidentally banning every client through a shared `"global"` bucket).
+ * middleware must be able to identify clients: supply a {@link keyGenerator},
+ * {@link trustedHops}, {@link trustedProxies}, or set {@link trustProxyHeaders}
+ * (otherwise construction throws, to avoid accidentally banning every client
+ * through a shared `"global"` bucket).
  *
  * @since 0.37.0
  */
@@ -174,6 +181,19 @@ export interface AutoBanOptions {
    * [1, 64]; validated at construction.
    */
   trustedHops?: number;
+  /**
+   * Declare WHICH proxies are yours: an IP/CIDR allowlist (e.g.
+   * `["10.0.0.0/8", "203.0.113.10"]`) for the immediate peer's address.
+   * Forwarded headers are honoured only when the TCP socket actually talking
+   * to the adapter matches the list — the one property a remote client
+   * cannot spoof. A direct-to-origin attacker then falls back to the
+   * unspoofable peer identity, so a spoofed `X-Forwarded-For` can neither
+   * frame a victim IP for banning nor rotate away strike accumulation.
+   * Implies proxy-header trust at one hop unless {@link trustedHops} says
+   * otherwise; validated and compiled at construction. On peer-less edge
+   * platforms verification fails closed (forwarded identity ignored).
+   */
+  trustedProxies?: readonly string[];
   /**
    * What to do when the default key generator cannot resolve a forwarded
    * identity — the request carried no `X-Forwarded-For`, or a chain shorter than
@@ -309,9 +329,9 @@ function assertPositiveInteger(name: string, value: number): void {
  * behaviour; see {@link AutoBanOptions.onUnresolvedIdentity} for when that is
  * the right call.
  */
-function forwardedKey(hops: number, peerFallback: boolean) {
+function forwardedKey(hops: number, peerFallback: boolean, trustedPeers?: readonly IpMatcher[]) {
   return (ctx: BaseContext<any, any>): string | undefined => {
-    const forwarded = resolveForwardedClientIp(ctx.request, hops);
+    const forwarded = resolveForwardedClientIp(ctx.request, hops, trustedPeers);
     if (forwarded !== undefined) return forwarded;
     if (!peerFallback) return undefined;
     const peer = readRemoteAddress(ctx);
@@ -325,7 +345,8 @@ function forwardedKey(hops: number, peerFallback: boolean) {
  * offenders; bans grow exponentially for persistent abuse and decay once the
  * client goes quiet.
  *
- * Identity attribution is mandatory: pass {@link AutoBanOptions.keyGenerator} or
+ * Identity attribution is mandatory: pass {@link AutoBanOptions.keyGenerator},
+ * {@link AutoBanOptions.trustedHops}, {@link AutoBanOptions.trustedProxies}, or
  * set {@link AutoBanOptions.trustProxyHeaders}, otherwise construction throws so
  * a misconfiguration can never collapse every caller into one shared bucket and
  * ban the whole world at once. When the default generator cannot resolve a
@@ -345,8 +366,8 @@ function forwardedKey(hops: number, peerFallback: boolean) {
  *
  * @param opts - Auto-ban configuration.
  * @returns A {@link Hooks} bundle ready for `app.use(...)`.
- * @throws Error when neither `keyGenerator` nor `trustProxyHeaders` is provided,
- *   or when a numeric option is out of range.
+ * @throws Error when none of `keyGenerator`, `trustedHops`, `trustedProxies`, or
+ *   `trustProxyHeaders` is provided, or when a numeric option is out of range.
  * @since 0.37.0
  */
 export function autoBan(opts: AutoBanOptions = {}): Hooks {
@@ -382,6 +403,7 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   const watch = new Set<number>(watchStatuses);
 
   const hops = resolveForwardedTrust("autoBan()", opts);
+  const proxyMatchers = resolveTrustedProxyMatchers("autoBan()", opts);
   const onUnresolved = opts.onUnresolvedIdentity ?? "peer";
   if (onUnresolved !== "peer" && onUnresolved !== "skip") {
     throw new Error(
@@ -392,10 +414,10 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   if (opts.keyGenerator) {
     keyOf = opts.keyGenerator;
   } else if (hops !== undefined) {
-    keyOf = forwardedKey(hops, onUnresolved === "peer");
+    keyOf = forwardedKey(hops, onUnresolved === "peer", proxyMatchers);
   } else {
     throw new Error(
-      "autoBan(): provide keyGenerator, trustedHops, or set trustProxyHeaders so clients can be identified; " +
+      "autoBan(): provide keyGenerator, trustedHops, trustedProxies, or set trustProxyHeaders so clients can be identified; " +
         "otherwise every caller shares one bucket and a single offender would ban everyone."
     );
   }

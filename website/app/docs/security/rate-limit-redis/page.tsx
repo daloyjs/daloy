@@ -215,17 +215,25 @@ app.use(
         </li>
         <li>
           Per source IP
-          {": "}set <code>trustProxyHeaders: true</code> <em>only</em> when you
-          run behind a proxy chain you control. The key is the{" "}
-          <strong>rightmost</strong> <code>X-Forwarded-For</code> entry, the one
-          your immediate proxy appended, so rotating spoofed entries on the left
-          cannot mint fresh buckets. Behind more than one hop (CDN &rarr; LB
-          &rarr; app) declare the chain length with <code>trustedHops</code>
-          {". "}
-          <code>X-Real-IP</code> is honoured only for a single declared hop,
-          since it cannot express a longer chain; past that, a request whose
-          chain is shorter than the declaration resolves to no identity and
-          falls back to the shared <code>global</code> bucket.
+          {": "}set <code>trustProxyHeaders: true</code> or{" "}
+          <code>trustedProxies</code> <em>only</em> when you run behind a proxy
+          chain you control. The key is the <strong>rightmost</strong>{" "}
+          <code>X-Forwarded-For</code> entry, the one your immediate proxy
+          appended, so rotating spoofed entries on the left cannot mint fresh
+          buckets. Behind more than one hop (CDN &rarr; LB &rarr; app) declare
+          the chain length with <code>trustedHops</code>
+          {". "}When the origin itself can be reached, prefer{" "}
+          <code>trustedProxies</code> so the peer socket is verified against a
+          CIDR allowlist before any forwarded header is believed (see{" "}
+          <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
+            the autoBan note
+          </a>
+          ). <code>X-Real-IP</code> is honoured only for a single declared hop,
+          since it cannot express a longer chain. When no trustworthy forwarded
+          identity remains, the key falls back to the unspoofable TCP peer (
+          <code>peer:&lt;addr&gt;</code>) so one caller cannot 429 the world via
+          a shared <code>global</code> bucket; only peer-less edge platforms
+          still share <code>global</code>.
         </li>
       </ul>
       <CodeBlock
@@ -240,12 +248,14 @@ app.use(
 );`}
       />
       <blockquote>
-        <strong>Security:</strong> never set{" "}
+        <strong>Security:</strong> never set bare{" "}
         <code>trustProxyHeaders: true</code> on a service reachable directly. A
         client can send any <code>X-Forwarded-For</code> it likes, mint a fresh
-        bucket per spoofed IP, and walk straight past the limit. Behind a proxy
-        that rewrites the header it is safe; exposed directly it is an evasion
-        hole. When in doubt, key off the authenticated user instead.
+        bucket per spoofed IP, and walk straight past the limit. Use{" "}
+        <code>trustedProxies</code> when the origin can be reached without your
+        proxy, or key off the authenticated user instead. Behind a proxy that
+        rewrites the header and is the only path to the origin, hop-based trust
+        is enough.
       </blockquote>
       <p>
         For credential-entry routes, register <code>loginThrottle()</code> (or

@@ -38,7 +38,12 @@
 
 import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
-import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
+import {
+  resolveForwardedClientIp,
+  resolveForwardedTrust,
+  resolveTrustedProxyMatchers,
+} from "./conn-info.js";
+import type { IpMatcher } from "./ip-match.js";
 
 /**
  * Pluggable DNS resolver used to verify declared crawlers. The default
@@ -124,8 +129,8 @@ export interface BotGuardOptions {
   allowUserAgents?: readonly (string | RegExp)[];
   /**
    * Declared-crawler verification rules. When provided, an IP source is
-   * required (`resolveIp` or `trustProxyHeaders`), otherwise construction
-   * throws.
+   * required (`resolveIp`, `trustedHops`, `trustedProxies`, or
+   * `trustProxyHeaders`), otherwise construction throws.
    */
   verifiedBots?: readonly VerifiedBotRule[];
   /**
@@ -154,6 +159,16 @@ export interface BotGuardOptions {
    * an integer in [1, 64]; validated at construction.
    */
   trustedHops?: number;
+  /**
+   * Declare WHICH proxies are yours: an IP/CIDR allowlist for the immediate
+   * peer's address. Forwarded headers are honoured only when the TCP socket
+   * actually talking to the adapter matches the list, so a direct-to-origin
+   * attacker cannot impersonate a verified crawler's IP. Implies
+   * proxy-header trust at one hop unless {@link trustedHops} says otherwise;
+   * validated and compiled at construction. On peer-less edge platforms
+   * verification fails closed.
+   */
+  trustedProxies?: readonly string[];
   /**
    * Custom client-IP resolver. Overrides {@link BotGuardOptions.trustProxyHeaders}.
    */
@@ -239,9 +254,9 @@ function matchesUserAgent(ua: string, patterns: readonly (string | RegExp)[]): b
  * `X-Forwarded-For` (falling back to `X-Real-IP`) — the spoof-resistant side
  * of the header; see {@link resolveForwardedClientIp}.
  */
-function forwardedIpResolver(hops: number) {
+function forwardedIpResolver(hops: number, trustedPeers?: readonly IpMatcher[]) {
   return (ctx: BaseContext<any, any>): string | undefined =>
-    resolveForwardedClientIp(ctx.request, hops);
+    resolveForwardedClientIp(ctx.request, hops, trustedPeers);
 }
 
 function noIpResolver(_ctx: BaseContext<any, any>): string | undefined {
@@ -372,13 +387,15 @@ export function botGuard(opts: BotGuardOptions = {}): Hooks {
   }
 
   const hops = resolveForwardedTrust("botGuard()", opts);
+  const proxyMatchers = resolveTrustedProxyMatchers("botGuard()", opts);
   const resolveIp =
-    opts.resolveIp ?? (hops !== undefined ? forwardedIpResolver(hops) : noIpResolver);
+    opts.resolveIp ??
+    (hops !== undefined ? forwardedIpResolver(hops, proxyMatchers) : noIpResolver);
 
   if (verifiedBots.length > 0 && !opts.resolveIp && hops === undefined) {
     throw new Error(
       "botGuard(): verifiedBots requires a client-IP source — provide resolveIp, trustedHops, " +
-        "or set trustProxyHeaders, otherwise declared crawlers cannot be verified."
+        "trustedProxies, or set trustProxyHeaders, otherwise declared crawlers cannot be verified."
     );
   }
   const resolver = opts.resolver ?? createDefaultResolver();

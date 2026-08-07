@@ -48,8 +48,14 @@ const byHeader = (ctx: { request: Request }): string | undefined =>
 // ---------- construction validation (unhappy) ----------
 
 test("autoBan() requires an identity source", () => {
-  assert.throws(() => autoBan(), /keyGenerator, trustedHops, or set trustProxyHeaders/);
-  assert.throws(() => autoBan({}), /keyGenerator, trustedHops, or set trustProxyHeaders/);
+  assert.throws(
+    () => autoBan(),
+    /keyGenerator, trustedHops, trustedProxies, or set trustProxyHeaders/
+  );
+  assert.throws(
+    () => autoBan({}),
+    /keyGenerator, trustedHops, trustedProxies, or set trustProxyHeaders/
+  );
 });
 
 test("autoBan() validates numeric options", () => {

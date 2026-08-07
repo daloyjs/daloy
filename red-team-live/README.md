@@ -13,8 +13,9 @@ pnpm red-team:live
 - **`target.ts`** boots a realistic, idiomatically-secured daloyjs API on a
   real TCP port via the Node adapter's `serve()` (production env, WAF, CORS
   allowlist, rate-limited login, `fetchGuard`, `safeRedirect`, JWT-protected
-  admin route, response-body schemas). It is _not_ deliberately weakened — the
-  point is to attack the **framework's defaults**.
+  admin route, response-body schemas, **authenticated object/money routes
+  with ownership checks**). It is _not_ deliberately weakened — the point is
+  to attack the **framework's defaults**.
 - **`run.ts`** is the attacker. It spawns `target.ts` as a **separate process**,
   waits for it to listen, then attacks it over the wire:
   - `fetch()` for application-layer attacks — auth bypass, JWT forgery
@@ -71,6 +72,29 @@ pnpm red-team:live
   doubles as the live regression test for the wave-4 finding (close codes are
   now validated in `decodeClosePayload` per RFC 6455 §7.1.6).
 
+  A fourth battery (`wave5Probes`) is the **reasoning layer** — the
+  architectural and business-logic flaw class no scanner signature can
+  express, folded in from the 2026-08-05 COS-methodology engagement
+  ([COS-ENGAGEMENT-2026-08-05.md](COS-ENGAGEMENT-2026-08-05.md)): BOLA/IDOR
+  (anonymous + cross-tenant object reads), defensive-control weaponization
+  (a global login rate-limit bucket turned into an availability kill-switch
+  for every user), business-logic abuse (unauthenticated money movement with
+  a caller-chosen owner identity, sub-cent dust amounts), JWT claim
+  type-confusion, and `except()` intent subversion. The engagement confirmed
+  the first three as VULNERABLE **in the target's application design** (not
+  in framework primitives) and fixed them in `target.ts`; the probes are the
+  live regression tests that keep those fixes from silently reverting. Its
+  one false positive (SSRF redirect-hop re-validation, self-retracted under
+  independent re-verification) is deliberately not a live probe — it is
+  pinned deterministically in `tests/fetch-guard.test.ts`.
+
+  Wave 5 also covers the framework-level `trustedProxies` fix: a third target
+  app (`appC`) mounts `autoBan({ trustedProxies: ["10.0.0.0/8"] })` so
+  loopback harness peers fall outside the allowlist; victim-IP framing and
+  XFF-rotation ban evasion are asserted as DEFENDED. The same attacks against
+  the legacy app-A posture (rightmost hop only, no peer verification) remain
+  INFO documentation of the pre-fix deployment model.
+
   Some of these are deliberately recorded as `INFO` posture notes rather than
   pass/fail assertions, because the safe fix is a design change rather than a
   patch. The `Expect: 100-continue` probe is one: refusing an over-limit
@@ -81,8 +105,8 @@ pnpm red-team:live
   transport cap has a baseline to measure against.
 
 It prints a bounty-hunter-style report and exits non-zero if any finding is
-`VULNERABLE`. The current run is **175 probes over the wire** across two target
-apps.
+`VULNERABLE`. The current run is **196 probes over the wire** across **three**
+target apps (primary, `except()` second port, and `trustedProxies` third port).
 
 ## What is covered live vs. in-process
 

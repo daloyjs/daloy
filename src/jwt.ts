@@ -121,7 +121,7 @@ export interface JwtSignerOptions {
   env?: "production" | "development" | "test";
   /** Set `secureDefaults: false` to skip the production opt-out gate. */
   secureDefaults?: boolean;
-  /** Optional extra header fields (`kid`, `typ`, ...). `alg` is always derived. */
+  /** Optional extra header fields (`kid`, `typ`, ...). `alg` is always derived. `crit` is refused: no JWS extensions are supported, so a `crit` token could never verify. */
   header?: Record<string, unknown>;
 }
 
@@ -161,6 +161,20 @@ export interface JwtVerifierOptions {
    * never `token_revoked` (which would leak the existence of the `jti`).
    */
   isRevoked?: (verified: JwtVerified) => boolean | Promise<boolean>;
+  /**
+   * Maximum accepted token lifetime in seconds, enforced at verification
+   * time as `exp - (iat ?? now) <= maxLifetimeSeconds`. Mirrors the signer-
+   * side {@link JwtSignerOptions.maxLifetimeSeconds} requirement: without it,
+   * a verifier accepts any validly-signed token no matter how long it lives
+   * (a 100-year token issued by a misconfigured or compromised signer of the
+   * same key would verify). Tokens with no `exp` are also rejected when this
+   * is set. Optional — left unset for callers that deliberately accept
+   * externally-issued long-lived tokens (e.g. refresh tokens verified by a
+   * dedicated endpoint).
+   *
+   * @since 1.1.0
+   */
+  maxLifetimeSeconds?: number;
   /** Optional injectable clock for tests. */
   now?: () => number;
 }
@@ -180,6 +194,7 @@ interface ResolvedVerifier {
   audiences: ReadonlySet<string> | null;
   clockSkewSeconds: number;
   isRevoked: ((verified: JwtVerified) => boolean | Promise<boolean>) | null;
+  maxLifetimeSeconds: number | null;
   now: () => number;
 }
 
@@ -438,6 +453,18 @@ export function createJwtSigner(opts: JwtSignerOptions): {
     );
   }
 
+  // The verifier refuses any `crit` header per RFC 7515 §4.1.11 (no JWS
+  // extensions are supported), so the signer must never emit one either —
+  // otherwise it would mint tokens its own verifier rejects. Checked
+  // synchronously at construction like every other signer option.
+  const extraHeader = opts.header && isJsonObject(opts.header) ? { ...opts.header } : {};
+  if ("crit" in extraHeader) {
+    throw new JwtError(
+      "unsupported_crit",
+      "jwt(): header.crit is refused — this implementation supports no JWS extensions, so a crit token could never verify."
+    );
+  }
+
   const resolved: Promise<ResolvedSigner> = (async () => {
     const key = await importKey(alg, opts.key, "sign");
     return {
@@ -445,7 +472,7 @@ export function createJwtSigner(opts: JwtSignerOptions): {
       key,
       maxLifetimeSeconds: opts.maxLifetimeSeconds,
       allowNoExp: opts.acknowledgeNoExp === true,
-      header: opts.header && isJsonObject(opts.header) ? { ...opts.header } : {},
+      header: extraHeader,
     };
   })();
 
@@ -600,6 +627,17 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
       "jwt(): isRevoked must be a function (verified) => boolean | Promise<boolean>."
     );
   }
+  if (
+    opts.maxLifetimeSeconds !== undefined &&
+    (!Number.isFinite(opts.maxLifetimeSeconds) ||
+      opts.maxLifetimeSeconds <= 0 ||
+      !Number.isInteger(opts.maxLifetimeSeconds))
+  ) {
+    throw new JwtError(
+      "invalid_max_lifetime",
+      "jwt(): verifier maxLifetimeSeconds must be a positive integer."
+    );
+  }
   const issuers = normalizeStringSet(opts.issuer);
   const audiences = normalizeStringSet(opts.audience);
 
@@ -632,6 +670,7 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
     audiences,
     clockSkewSeconds: opts.clockSkewSeconds ?? 0,
     isRevoked: opts.isRevoked ?? null,
+    maxLifetimeSeconds: opts.maxLifetimeSeconds ?? null,
     now: opts.now ?? (() => Math.floor(Date.now() / 1000)),
   };
 
@@ -685,6 +724,18 @@ async function verifyInternal(token: string, r: ResolvedVerifier): Promise<JwtVe
     );
   }
   const alg = algRaw as JwtAlgorithm;
+  // RFC 7515 §4.1.11: a JWS whose header carries `crit` MUST be rejected when
+  // any listed extension is not understood. This verifier supports no JWS
+  // extensions at all, so any `crit` header is refused outright — otherwise a
+  // token smuggling an extension-marked-critical parameter (e.g.
+  // `crit:["exp"]` with `exp` mirrored into the header) would be accepted
+  // while its critical semantics were silently ignored.
+  if (header.crit !== undefined) {
+    throw new JwtError(
+      "unsupported_crit",
+      "jwt(): token header carries 'crit' but this verifier supports no JWS extensions; refusing per RFC 7515 §4.1.11."
+    );
+  }
   const key = await r.resolveKey(header);
   const sig = b64urlDecode(sigB64);
   const signingInput = ENC.encode(`${headerB64}.${payloadB64}`);
@@ -714,6 +765,22 @@ async function verifyInternal(token: string, r: ResolvedVerifier): Promise<JwtVe
       throw new JwtError(err.code, `jwt(): ${err.message}`);
     }
     throw err;
+  }
+  if (r.maxLifetimeSeconds !== null) {
+    const exp = payload.exp;
+    if (typeof exp !== "number" || !Number.isFinite(exp)) {
+      throw new JwtError(
+        "missing_exp",
+        "jwt(): verifier maxLifetimeSeconds is set but the token has no exp claim."
+      );
+    }
+    const iat = typeof payload.iat === "number" && Number.isFinite(payload.iat) ? payload.iat : now;
+    if (exp - iat > r.maxLifetimeSeconds) {
+      throw new JwtError(
+        "lifetime_exceeded",
+        `jwt(): token lifetime ${exp - iat}s exceeds verifier maxLifetimeSeconds ${r.maxLifetimeSeconds}s.`
+      );
+    }
   }
   if (r.issuers) {
     const iss = payload.iss;

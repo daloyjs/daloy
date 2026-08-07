@@ -9,9 +9,19 @@
  *
  * The app is written the way a competent developer would write it using the
  * framework's secure-by-default posture (production env, WAF, CORS allowlist,
- * rate-limited login, fetchGuard, safeRedirect, response-body schemas). We are
- * attacking the FRAMEWORK'S defaults, not a deliberately-broken app. Any
- * weakness the harness reports is a weakness in @daloyjs/core itself.
+ * rate-limited login, fetchGuard, safeRedirect, JWT-protected admin route,
+ * response-body schemas, authenticated object/money routes with ownership
+ * checks). We are attacking the FRAMEWORK'S defaults, not a
+ * deliberately-broken app. Any weakness the harness reports is a weakness in
+ * @daloyjs/core itself.
+ *
+ * Wave 5 hardened the APPLICATION-INTENT layer after a reasoning-level
+ * engagement (see run.ts `wave5Probes`): /users/:id and /pay mounted no
+ * authorization decision (BOLA / unauthenticated payment), and the login
+ * rate limit keyed on a global constant (attacker-induced lockout of every
+ * user). Those were trust-design flaws in this file, not in framework
+ * primitives — fixed here, and the probes now assert the fixed behaviour so
+ * the target cannot silently regress.
  *
  * Handshake: once listening, it prints `RED_TEAM_TARGET_READY <port>` so the
  * attacker process can discover the ephemeral port.
@@ -42,6 +52,7 @@ import {
   autoBan,
   clientCertAuth,
   except,
+  every,
   bearerAuth,
   UnauthorizedError,
 } from "../src/index.js";
@@ -63,7 +74,11 @@ const ab = autoBan({
 // A server-side secret the attacker never possesses. 32 bytes (HS256 floor).
 const JWT_SECRET = new TextEncoder().encode("live-target-jwt-secret-32-bytes!!");
 const signer = createJwtSigner({ alg: "HS256", key: JWT_SECRET, maxLifetimeSeconds: 3600 });
-const verifier = createJwtVerifier({ algorithms: ["HS256"], key: JWT_SECRET });
+const verifier = createJwtVerifier({
+  algorithms: ["HS256"],
+  key: JWT_SECRET,
+  maxLifetimeSeconds: 3600,
+});
 
 const problem = (status: number, title: string, detail?: string) =>
   new Response(
@@ -89,6 +104,30 @@ function requireAdmin() {
       const scopes = Array.isArray(claims.payload.scopes) ? claims.payload.scopes : [];
       if (!scopes.includes("admin")) return problem(403, "Forbidden", "insufficient scope");
       ctx.state.user = claims.payload;
+      return undefined;
+    },
+  };
+}
+
+/**
+ * Route guard: verify a Bearer JWT and accept ANY authenticated identity.
+ *
+ * Added for the wave-5 reasoning-layer findings: object and money routes
+ * that mounted no authorization decision at all (BOLA / unauthenticated
+ * payment). Claim shapes are type-checked before anything reads them, so a
+ * `scopes: "admin"` string can never impersonate an array claim.
+ */
+function requireAuth() {
+  return {
+    async beforeHandle(ctx: any) {
+      const m = /^Bearer\s+(.+)$/i.exec(ctx.request.headers.get("authorization") ?? "");
+      if (!m) return problem(401, "Unauthorized");
+      try {
+        const claims = await verifier.verify(m[1]!);
+        ctx.state.user = claims.payload;
+      } catch {
+        return problem(403, "Forbidden", "invalid token");
+      }
       return undefined;
     },
   };
@@ -138,16 +177,25 @@ app.route({
   method: "POST",
   path: "/login",
   operationId: "login",
-  hooks: rateLimit({ windowMs: 60_000, max: 5, keyGenerator: () => "login" }),
+  // Wave-5 fix: the bucket must never be a global constant — one attacker
+  // burning a shared bucket locked EVERY user out (availability finding).
+  // trustedHops: 1 keys on the rightmost X-Forwarded-For entry (the hop your
+  // LB appends), so rotating spoofed left entries cannot evade the throttle.
+  hooks: rateLimit({ windowMs: 60_000, max: 5, trustedHops: 1 }),
   request: { body: z.object({ user: z.string(), pass: z.string() }).strict() as any },
   responses: {
     200: { description: "ok", body: z.object({ token: z.string() }) as any },
     401: { description: "bad creds", body: z.object({ error: z.string() }) as any },
   },
   handler: async ({ body }: any) => {
-    if (body.user === "alice" && body.pass === "correct-horse-battery") {
+    // Two tenants so black-box probes can prove cross-tenant isolation.
+    const creds: Record<string, string> = {
+      alice: "correct-horse-battery",
+      bob: "bob-hunter2-passphrase",
+    };
+    if (creds[body.user] === body.pass) {
       const token = await signer.sign({
-        sub: "alice",
+        sub: body.user,
         scopes: ["user"], // NEVER admin — privilege escalation must be forged
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 600,
@@ -173,24 +221,56 @@ app.route({
   method: "GET",
   path: "/users/:id",
   operationId: "getUser",
+  // Wave-5 fix: BOLA. This route mounted NO authorization decision — any
+  // anonymous caller could enumerate any user's PII by walking the id space.
+  // Now: a verified token is required, and the caller may only read their own
+  // record (admins excepted). The response-body schema still strips the
+  // carelessly-returned passwordHash (OWASP API3 defense-in-depth).
+  hooks: requireAuth(),
   request: { params: z.object({ id: z.string() }) as any },
   responses: {
     200: {
       description: "ok",
       body: z.object({ id: z.string(), name: z.string(), email: z.string() }) as any,
     },
+    403: {
+      description: "forbidden — not your record",
+      // Declared problem+json body so the refusal stays INSIDE the response
+      // contract (a raw Response return would be refused closed by design).
+      body: z.object({
+        type: z.string(),
+        title: z.string(),
+        status: z.number(),
+        detail: z.string().optional(),
+      }) as any,
+    },
   },
-  handler: async ({ params }: any) => ({
-    status: 200 as const,
-    // The handler carelessly returns a sensitive field; the response-body
-    // schema is a FILTER, so it must never reach the client (OWASP API3).
-    body: {
-      id: params.id,
-      name: "User " + params.id,
-      email: `u${params.id}@x.test`,
-      passwordHash: "$2b$10$LEAKED",
-    } as any,
-  }),
+  handler: async ({ params, state }: any) => {
+    const caller = state.user as { sub?: string; scopes?: unknown };
+    const scopes = Array.isArray(caller.scopes) ? caller.scopes : [];
+    if (caller.sub !== params.id && !scopes.includes("admin")) {
+      return {
+        status: 403 as const,
+        body: {
+          type: "about:blank",
+          title: "Forbidden",
+          status: 403,
+          detail: "you may only read your own record",
+        },
+      };
+    }
+    return {
+      status: 200 as const,
+      // The handler carelessly returns a sensitive field; the response-body
+      // schema is a FILTER, so it must never reach the client (OWASP API3).
+      body: {
+        id: params.id,
+        name: "User " + params.id,
+        email: `u${params.id}@x.test`,
+        passwordHash: "$2b$10$LEAKED",
+      } as any,
+    };
+  },
 });
 
 // ---- create item (strict schema → mass-assignment / proto-pollution target) ----
@@ -313,20 +393,26 @@ app.route({
   method: "POST",
   path: "/pay",
   operationId: "pay",
-  hooks: idempotency({ store: idemStore }),
+  // Wave-5 fix: a money route mounted no auth and took the "owner" identity
+  // from the raw Authorization STRING — any anonymous caller could move money
+  // as "Bearer CEO-OF-THE-COMPANY". Auth now runs first, and the owner comes
+  // exclusively from verified JWT claims. Idempotency then scopes stored
+  // responses per verified identity, so a guessed key never discloses another
+  // tenant's receipt.
+  hooks: every(requireAuth(), idempotency({ store: idemStore })),
   // Money must be sign/range-constrained at the schema boundary: reject
-  // negative, zero, and out-of-domain amounts (refund-fraud / ledger-
-  // corruption class) before the handler ever runs. Zod v4 already rejects
-  // NaN/Infinity by default, and amounts are decimal (not integer), so
-  // `.finite()`/`.safe()` are deliberately omitted here — both are no-ops or
-  // wrong for money in v4 (`.safe()` now means `.int()`).
-  request: { body: z.object({ amount: z.number().positive().max(1_000_000) }) as any },
+  // negative, zero, sub-cent dust (ledger-rounding fraud class), and
+  // out-of-domain amounts before the handler ever runs. Zod v4 already
+  // rejects NaN/Infinity by default, and amounts are decimal (not integer),
+  // so `.finite()`/`.safe()` are deliberately omitted here — both are no-ops
+  // or wrong for money in v4 (`.safe()` now means `.int()`).
+  request: { body: z.object({ amount: z.number().min(0.01).max(1_000_000) }) as any },
   responses: {
     201: { description: "ok", body: z.object({ owner: z.string(), call: z.number() }) as any },
   },
-  handler: async ({ request }: any) => ({
+  handler: async ({ state }: any) => ({
     status: 201 as const,
-    body: { owner: request.headers.get("authorization") ?? "anon", call: ++payCalls },
+    body: { owner: (state.user as { sub: string }).sub, call: ++payCalls },
   }),
 });
 
@@ -463,6 +549,57 @@ appB.route({
   handler: async () => ({ status: 200 as const, body: { ok: true } }),
 });
 
+// ---------------------------------------------------------------------------
+// A THIRD app: autoBan behind `trustedProxies` — peer-verified forwarded
+// trust. The declared proxy range (10.0.0.0/8) deliberately does NOT include
+// the loopback peer every harness request arrives from, so this app models
+// "origin reachable directly": spoofed XFF must be IGNORED, strikes must
+// land on the unspoofable real peer, and neither victim-IP framing nor
+// rotation evasion can work. Two independent instances (separate groupIds)
+// keep the framing and evasion probes from sharing a store.
+// ---------------------------------------------------------------------------
+const appC = new App({ env: "development", logger: false });
+const banOpts = {
+  trustedProxies: ["10.0.0.0/8"],
+  windowMs: 60_000,
+  maxStrikes: 3,
+  banMs: 30_000,
+  watchStatuses: [401],
+  banStatus: 429 as const,
+};
+// Per-route mounting (never app-wide) so the framing and evasion instances
+// share no store and never gate each other's routes.
+const framingBan = autoBan({ ...banOpts, groupId: "c-framing" });
+appC.route({
+  method: "GET",
+  path: "/c-login",
+  operationId: "cLogin",
+  hooks: framingBan,
+  responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+  handler: async () => {
+    throw new UnauthorizedError("bad credentials");
+  },
+});
+appC.route({
+  method: "GET",
+  path: "/c-public",
+  operationId: "cPublic",
+  hooks: framingBan,
+  responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+  handler: async () => ({ status: 200 as const, body: { ok: true } }),
+});
+const evasionBan = autoBan({ ...banOpts, groupId: "c-evasion" });
+appC.route({
+  method: "GET",
+  path: "/c-ev-login",
+  operationId: "cEvLogin",
+  hooks: evasionBan,
+  responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+  handler: async () => {
+    throw new UnauthorizedError("bad credentials");
+  },
+});
+
 const handle = serve(app, {
   port: Number(process.env.PORT) || 0,
   hostname: "127.0.0.1",
@@ -470,6 +607,7 @@ const handle = serve(app, {
   connectionTimeoutMs: 2000,
 });
 const handleB = serve(appB, { port: 0, hostname: "127.0.0.1", connectionTimeoutMs: 2000 });
+const handleC = serve(appC, { port: 0, hostname: "127.0.0.1", connectionTimeoutMs: 2000 });
 
 const portOf = (s: typeof handle.server) => {
   const addr = s.address();
@@ -477,10 +615,11 @@ const portOf = (s: typeof handle.server) => {
 };
 let readyA = handle.server.listening;
 let readyB = handleB.server.listening;
+let readyC = handleC.server.listening;
 const announce = () => {
-  if (readyA && readyB) {
+  if (readyA && readyB && readyC) {
     process.stdout.write(
-      `RED_TEAM_TARGET_READY ${portOf(handle.server)} ${portOf(handleB.server)}\n`
+      `RED_TEAM_TARGET_READY ${portOf(handle.server)} ${portOf(handleB.server)} ${portOf(handleC.server)}\n`
     );
   }
 };
@@ -488,3 +627,5 @@ if (readyA) announce();
 else handle.server.once("listening", () => ((readyA = true), announce()));
 if (readyB) announce();
 else handleB.server.once("listening", () => ((readyB = true), announce()));
+if (readyC) announce();
+else handleC.server.once("listening", () => ((readyC = true), announce()));

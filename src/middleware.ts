@@ -9,7 +9,13 @@ import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
 import { assertCookieAttributes, readRequestCookie, serializeCookie } from "./cookie.js";
 import { TooManyRequestsError, ForbiddenError } from "./errors.js";
 import { randomId, sanitizeHeaderName, timingSafeEqual } from "./security.js";
-import { resolveForwardedClientIp, resolveForwardedTrust } from "./conn-info.js";
+import {
+  getConnInfo,
+  resolveForwardedClientIp,
+  resolveForwardedTrust,
+  resolveTrustedProxyMatchers,
+} from "./conn-info.js";
+import type { IpMatcher } from "./ip-match.js";
 
 // ---------- Request ID ----------
 
@@ -932,7 +938,7 @@ export type RateLimitContext = PreBodyContext<any> | BaseContext<any, any>;
 
 /** Options for {@link rateLimit}. */
 export interface RateLimitOptions {
-  /** Rolling-window width in milliseconds (e.g. `60_000` for one minute). */
+  /** Fixed-window width in milliseconds (e.g. `60_000` for one minute). */
   windowMs: number;
   /** Maximum allowed requests per `windowMs` per key. */
   max: number;
@@ -953,7 +959,9 @@ export interface RateLimitOptions {
    * When enabled, the key is the **rightmost** `X-Forwarded-For` entry — the
    * one your immediate proxy appended — never the attacker-influenceable
    * leftmost one, so rotating spoofed left entries cannot evade the limit.
-   * Behind more than one proxy hop, set {@link trustedHops} instead.
+   * Behind more than one proxy hop, set {@link trustedHops} instead; to also
+   * verify the peer is one of YOUR proxies (required when the origin itself
+   * can be reached), set {@link trustedProxies}.
    */
   trustProxyHeaders?: boolean;
   /**
@@ -965,6 +973,18 @@ export interface RateLimitOptions {
    * is supplied.
    */
   trustedHops?: number;
+  /**
+   * Declare WHICH proxies are yours: an IP/CIDR allowlist for the immediate
+   * peer's address. Forwarded headers feed the bucket key only when the TCP
+   * socket actually talking to the adapter matches the list — the one
+   * property a remote client cannot spoof — so a direct-to-origin attacker
+   * can neither evade the limit with rotating spoofed XFF nor burn another
+   * identity's bucket. Implies proxy-header trust at one hop unless
+   * {@link trustedHops} says otherwise; validated and compiled at
+   * construction. On peer-less edge platforms verification fails closed.
+   * Ignored when a custom `keyGenerator` is supplied.
+   */
+  trustedProxies?: readonly string[];
   /** When true, set Retry-After header on 429. Default: true. */
   retryAfter?: boolean;
   /**
@@ -1081,7 +1101,8 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   }
   const groupPrefix = opts.groupId ? `${opts.groupId}:` : "";
   const hops = resolveForwardedTrust("rateLimit()", opts);
-  const keyOf = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops);
+  const proxyMatchers = resolveTrustedProxyMatchers("rateLimit()", opts);
+  const keyOf = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops, proxyMatchers);
 
   const enforce = async (ctx: RateLimitContext) => {
     const key = `${groupPrefix}${keyOf(ctx)}`;
@@ -1133,6 +1154,17 @@ export interface LoginThrottleOptions {
    * supplied.
    */
   trustedHops?: number;
+  /**
+   * Declare WHICH proxies are yours: an IP/CIDR allowlist for the immediate
+   * peer's address. Forwarded headers feed the throttle key only when the
+   * TCP socket actually talking to the adapter matches the list, so a
+   * direct-to-origin attacker cannot dodge the slowdown with spoofed XFF.
+   * Implies proxy-header trust at one hop unless {@link trustedHops} says
+   * otherwise; validated and compiled at construction. On peer-less edge
+   * platforms verification fails closed. Ignored when a custom
+   * `keyGenerator` is supplied.
+   */
+  trustedProxies?: readonly string[];
   /** When true, set Retry-After header on 429. Default: true. */
   retryAfter?: boolean;
   /** Start slowing responses after this many attempts in the same window. Default: 2. */
@@ -1157,19 +1189,37 @@ function assertPositiveInteger(name: string, value: number): void {
 
 /**
  * Default rate-limit / login-throttle key: the spoof-resistant forwarded client
- * IP, or the shared `"global"` bucket when proxy-header trust is off or the
- * request carries no trustworthy forwarded identity.
+ * IP, the unspoofable TCP peer when no trustworthy forwarded identity exists,
+ * or the shared `"global"` bucket only when proxy-header trust is off or the
+ * adapter attached no peer metadata.
  *
  * @param hops - Trusted proxy hop count from
  *   {@link "./conn-info.js".resolveForwardedTrust}, or `undefined` when
  *   forwarded-header trust is disabled.
+ * @param trustedPeers - Compiled `trustedProxies` allowlist from
+ *   {@link "./conn-info.js".resolveTrustedProxyMatchers}; when supplied, the
+ *   forwarded identity is honoured only for a verified proxy peer.
  * @returns A key generator suitable for {@link rateLimit} and
  *   {@link loginThrottle}.
  * @internal
  */
-function defaultForwardedRateLimitKey(hops: number | undefined): (ctx: RateLimitContext) => string {
+function defaultForwardedRateLimitKey(
+  hops: number | undefined,
+  trustedPeers?: readonly IpMatcher[]
+): (ctx: RateLimitContext) => string {
   if (hops === undefined) return () => "global";
-  return (ctx) => resolveForwardedClientIp(ctx.request, hops) ?? "global";
+  return (ctx) => {
+    const forwarded = resolveForwardedClientIp(ctx.request, hops, trustedPeers);
+    if (forwarded !== undefined) return forwarded;
+    // Fail safe, not silent: missing/untrusted XFF must not collapse every
+    // caller into one shared bucket (attacker-induced global lockout). Key on
+    // the unspoofable TCP peer when the adapter exposed one — including the
+    // plain `trustProxyHeaders: true` path, not only `trustedProxies`. Only a
+    // truly peer-less request shares "global".
+    const peer = getConnInfo(ctx.request)?.remoteAddress;
+    if (peer !== undefined) return `peer:${peer}`;
+    return "global";
+  };
 }
 
 function wait(ms: number): Promise<void> {
@@ -1207,7 +1257,8 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
 
   const groupId = opts.groupId ?? "login";
   const hops = resolveForwardedTrust("loginThrottle()", opts);
-  const keyGenerator = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops);
+  const proxyMatchers = resolveTrustedProxyMatchers("loginThrottle()", opts);
+  const keyGenerator = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops, proxyMatchers);
   const limiter = rateLimit({
     windowMs,
     max,

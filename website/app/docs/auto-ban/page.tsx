@@ -249,6 +249,52 @@ app.use(autoBan({ trustedHops: 2, onUnresolvedIdentity: "skip" }));`}
 app.use(autoBan({ trustProxyHeaders: false, trustedHops: 2 }));`}
       />
 
+      <h3 id="verify-the-peer-trustedproxies">
+        Verify the peer: trustedProxies
+      </h3>
+      <p>
+        <code>trustedHops</code> answers &quot;how many proxies are in front
+        of me&quot;. It cannot answer &quot;is the socket talking to me one of
+        MY proxies&quot;. Any client that can reach your origin directly,
+        through a misconfigured firewall, a leaked origin IP, or a
+        neighbouring internal service, can still hand you any{" "}
+        <code>X-Forwarded-For</code> it likes: rotate entries to shed
+        strikes, or spoof a victim&apos;s address to get them banned.{" "}
+        <code>trustedProxies</code> closes that at the framework layer by
+        checking the <strong>immediate TCP peer</strong>, the one thing a
+        remote caller cannot spoof, against a CIDR allowlist before a single
+        forwarded header is believed:
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`// Only believe X-Forwarded-For when the peer socket is one of YOUR proxies.
+app.use(autoBan({ trustedProxies: ["10.0.0.0/8", "203.0.113.10"] }));
+
+// Composes with trustedHops for longer chains: verify the peer, then walk 2 hops.
+app.use(autoBan({ trustedProxies: ["10.0.0.0/8"], trustedHops: 2 }));`}
+      />
+      <p>
+        A peer outside the allowlist gets <em>no forwarded identity at
+        all</em>: the spoofed header is ignored, and <code>autoBan</code>{" "}
+        falls back to the <code>peer:</code> bucket described above, which in
+        exactly this direct-to-origin case is the attacker themselves. On
+        peer-less edge platforms verification fails closed. Declaring{" "}
+        <code>trustedProxies</code> implies proxy-header trust (one hop
+        unless <code>trustedHops</code> says otherwise), so pairing it with{" "}
+        <code>trustProxyHeaders: false</code> throws at construction, as do
+        an empty list and malformed CIDR entries. The same option exists on{" "}
+        <code>rateLimit()</code>, <code>loginThrottle()</code>,{" "}
+        <code>concurrencyLimit()</code>, <code>geoBlock()</code>,{" "}
+        <code>ipRestriction()</code>, <code>ipReputation()</code>, and{" "}
+        <code>botGuard()</code>.
+      </p>
+      <p>
+        Honest proxies see no behaviour change: requests arriving through a
+        listed proxy resolve exactly as before. The allowlist only bites
+        traffic that bypassed your proxy chain, which is precisely the
+        traffic whose headers were never trustworthy.
+      </p>
+
       <h2 id="how-escalation-and-decay-work">
         How escalation &amp; decay work
       </h2>

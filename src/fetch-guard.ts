@@ -89,8 +89,13 @@
  * @module
  */
 
-import { compileCidrMatcher, matchesMatcher, parseIp } from "./ip-restriction.js";
-import type { IpMatcher, ParsedIp } from "./ip-restriction.js";
+import {
+  compileCidrMatcher,
+  matchesMatcher,
+  parseIp,
+  type IpMatcher,
+  type ParsedIp,
+} from "./ip-match.js";
 
 /**
  * Reason an SSRF guard refused to dispatch a request. Surfaced on

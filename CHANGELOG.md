@@ -17,6 +17,90 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-07
+
+**Hardening, one additive verifier option, and peer-verified proxy trust.**
+Every change is additive or a tightened refusal; existing code keeps working
+unchanged when the new options are left unset. No security advisory: the JWT
+items require a valid signature under a trusted key, the lifetime cap is
+opt-in, and `trustedProxies` is opt-in.
+
+### Added
+
+- **`createJwtVerifier({ maxLifetimeSeconds })`** — optional cap on accepted
+  token lifetime (`exp - (iat ?? now)`). When set, over-long tokens fail with
+  `lifetime_exceeded` and tokens without `exp` fail with `missing_exp`.
+  Unset preserves 1.0.0 behavior (long-lived tokens still verify). Useful for
+  shared-key or multi-issuer setups that want a verifier-side ceiling matching
+  the signer's existing `maxLifetimeSeconds` requirement.
+- **`trustedProxies` on IP-identity middleware** — optional CIDR allowlist of
+  your reverse-proxy peer addresses, accepted by `autoBan()`, `rateLimit()`,
+  `loginThrottle()`, `concurrencyLimit()`, `geoBlock()`, `ipRestriction()`,
+  `ipReputation()`, and `botGuard()`. Forwarded headers are honoured only when
+  the immediate TCP peer matches the list (the one property a remote client
+  cannot spoof), so a direct-to-origin attacker can neither frame a victim IP
+  nor rotate spoofed `X-Forwarded-For` to evade bans/limits. Implies
+  proxy-header trust at one hop unless `trustedHops` says otherwise; empty or
+  malformed lists and `trustProxyHeaders: false` + `trustedProxies` refuse at
+  construction. Peer-less edge platforms fail closed.
+
+### Security
+
+- **JWT: refuse `crit` at sign and verify (RFC 7515 §4.1.11).** Daloy
+  implements no JWS extensions, so any `crit` header is rejected with
+  `unsupported_crit` instead of verifying while ignoring critical semantics.
+  The signer refuses to emit `crit` so it cannot mint tokens its own verifier
+  would reject. Fail-closed interop/compliance; not an unauthenticated bypass
+  (`crit` is signature-covered).
+- **Node adapter: `431` when the parser header-count cap is reached (HTTP and
+  WebSocket upgrades).** Node's llhttp parser silently truncates headers past
+  `server.maxHeadersCount`. At the default cap of 100 that lands at or below
+  the portable app-level guard (`count > limit`), so a flood could look
+  in-budget. The adapter now refuses any request *or* WebSocket upgrade whose
+  raw field count is `>=` the cap (upgrades never hit `App.dispatch`, so they
+  need the same check on the `upgrade` path). Tradeoff: usable default budget
+  is 99 fields (exact-cap requests get 431).
+- **`resolveClientIp({ cidrs })` now peer-verifies before honouring XFF.** The
+  exported resolver previously always returned the peer (documented stub). It
+  now returns the forwarded identity only when the immediate peer sits inside
+  the declared proxy CIDRs — the same spoof-resistant posture as
+  `trustedProxies`. Direct-to-origin callers still get their real peer address;
+  invalid CIDR entries refuse at `assertBehindProxy` construction.
+- **Rate-limit / login-throttle default key no longer collapses missing XFF
+  into a shared `"global"` bucket when a TCP peer is available.** With
+  `trustProxyHeaders` / `trustedHops` / `trustedProxies` enabled, an absent or
+  untrusted forwarded identity keys on `peer:<addr>` so one caller cannot
+  lock out every other client. Peer-less edge platforms still share
+  `"global"`. The same peer fallback applies to `concurrencyLimit({ scope:
+  "client" })`, which previously skipped limiting entirely when XFF was
+  missing/untrusted (fail-open evasion).
+
+### Fixed
+
+- `red-team-live` extended suite: a pre-body `403` (CSRF/WAF before reading an
+  advertised oversized body) is treated as defended, not vulnerable.
+- `red-team-live` target: authenticated ownership on `/users/:id` (BOLA),
+  claims-derived owner + auth on `/pay`, and per-hop login rate-limit keys
+  (global-bucket lockout). Wave-5 live probes are the regression suite.
+
+### Tests / tooling
+
+- `tests/jwt-crit-and-lifetime.test.ts` — `crit` refusal and verifier lifetime
+  cap (happy + unhappy paths).
+- `tests/node-adapter.test.ts` — header-flood 431 (HTTP + WebSocket upgrade),
+  exact-cap boundary (100 → 431, 99 → 200), and `maxHeaderCount: 0` opt-out /
+  app-level defense-in-depth.
+- `tests/trusted-proxies.test.ts` — peer verification (including IPv4-mapped
+  IPv6 peers), construction refusals, autoBan framing/evasion defeat,
+  rateLimit rotation / missing-XFF lockout defeat, geoBlock spoof defeat, and
+  `behindProxy: { cidrs }` resolution.
+- `src/ip-match.ts` — leaf IP/CIDR matcher shared by peer trust, ipRestriction,
+  and fetchGuard (breaks a would-be `conn-info` ↔ `ip-restriction` cycle).
+- `red-team-live` — four `v1.1.0 hardening` live probes (crit token, long-lived
+  token with cap enabled, header-flood 431, unmasked WebSocket frame) plus
+  wave-5 reasoning-layer battery (BOLA, lockout, unauth pay, `trustedProxies`
+  framing/evasion on a third target app).
+
 ## [1.0.0] - 2026-08-03
 
 **Public API freeze.** No code changes from `1.0.0-rc.9`; this release promotes
@@ -2895,7 +2979,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.6...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/daloyjs/daloy/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.9...v1.0.0
 [1.0.0-rc.9]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.8...v1.0.0-rc.9
 [1.0.0-rc.8]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.7...v1.0.0-rc.8

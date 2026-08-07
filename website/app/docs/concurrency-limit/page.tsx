@@ -138,12 +138,19 @@ app.use(concurrencyLimit({
         <li>
           <code>&quot;client&quot;</code>
           {": "}a separate budget per client identity (requires{" "}
-          <code>trustProxyHeaders</code>, <code>trustedHops</code>, or a{" "}
-          <code>keyGenerator</code>), so a heavy client can&apos;t consume
-          everyone else&apos;s slots. The identity is the{" "}
-          <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
-          your proxy appended), so rotating spoofed left entries cannot hop
-          buckets.
+          <code>trustProxyHeaders</code>, <code>trustedHops</code>,{" "}
+          <code>trustedProxies</code>, or a <code>keyGenerator</code>), so a
+          heavy client can&apos;t consume everyone else&apos;s slots. The
+          identity is the <strong>rightmost</strong>{" "}
+          <code>X-Forwarded-For</code> entry (the one your proxy appended), so
+          rotating spoofed left entries cannot hop buckets. When the origin
+          itself can be reached, set{" "}
+          <code>trustedProxies</code> so the peer socket is verified against a
+          CIDR allowlist before any forwarded header is read (see{" "}
+          <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
+            the autoBan note
+          </a>
+          ).
         </li>
         <li>
           a <strong>function</strong>
@@ -154,12 +161,13 @@ app.use(concurrencyLimit({
       <CodeBlock
         language="ts"
         code={`// Per-client fairness behind a trusted proxy.
+// Prefer trustedProxies when the origin can be reached without the proxy.
 app.use(concurrencyLimit({
   maxConcurrent: 10,
   maxQueue: 20,
   queueTimeoutMs: 1000,
   scope: "client",
-  trustProxyHeaders: true,
+  trustedProxies: ["10.0.0.0/8"],
 }));
 
 // Custom partition (e.g. per API tenant); undefined => unlimited.

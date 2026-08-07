@@ -46,6 +46,7 @@
 import { spawn } from "node:child_process";
 import net from "node:net";
 import { gzipSync } from "node:zlib";
+import { createHmac } from "node:crypto";
 
 const HOST = "127.0.0.1";
 type Verdict = "DEFENDED" | "VULNERABLE" | "INFO";
@@ -538,8 +539,13 @@ async function wireLevel(port: number) {
     severity: "high",
     attack: "Raw POST advertising a 1 GiB Content-Length",
     observed: `response: ${bigBody.statusLine || "(connection dropped)"}`,
+    // 403 is also a defense: the CSRF/WAF gate refuses the request before a
+    // single byte of the advertised 1 GiB body is read.
     verdict:
-      bigBody.status === 413 || bigBody.status === 400 || bigBody.status === 0
+      bigBody.status === 413 ||
+      bigBody.status === 400 ||
+      bigBody.status === 403 ||
+      bigBody.status === 0
         ? "DEFENDED"
         : "VULNERABLE",
   });
@@ -1475,6 +1481,121 @@ async function undocumentedAttacks(port: number, portB: number) {
 // Main
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// v1.1.0 hardening probes — regression coverage for the live-pentest findings
+// that produced the 1.1.0 release (JWT crit, verifier lifetime cap, parser
+// header-cap truncation, WS frame-protocol discipline).
+// ---------------------------------------------------------------------------
+
+/** Validly-signed HS256 token (harness-known secret — models a compromised / misconfigured issuer sharing the key). */
+function signHs256(header: object, payload: object, secret: string): string {
+  const h = Buffer.from(JSON.stringify(header)).toString("base64url");
+  const p = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = createHmac("sha256", secret).update(`${h}.${p}`).digest();
+  return `${h}.${p}.${sig.toString("base64url")}`;
+}
+
+async function v101HardeningProbes(port: number) {
+  const cat = "v1.1.0 hardening";
+  // Mirrors target.ts — a *validly signed* but malicious token. Threat model:
+  // a second issuer sharing the key, or a signing-side bug; the verifier must
+  // still refuse structurally abusive tokens.
+  const SECRET = "live-target-jwt-secret-32-bytes!!";
+  const now = Math.floor(Date.now() / 1000);
+
+  const critTok = signHs256(
+    { alg: "HS256", typ: "JWT", crit: ["exp"], exp: now + 300 },
+    { sub: "alice", scopes: ["admin"], exp: now + 300 },
+    SECRET
+  );
+  const critRes = await http("GET", "/admin", { headers: { authorization: `Bearer ${critTok}` } });
+  record({
+    category: cat,
+    title: "JWT crit header rejected despite valid signature (RFC 7515 §4.1.11)",
+    severity: "high",
+    attack: 'GET /admin with validly-signed {crit:["exp"], exp} token',
+    observed:
+      `status ${critRes.status}` + (critRes.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : ""),
+    verdict:
+      critRes.status >= 400 && !critRes.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
+  });
+
+  const centuryTok = signHs256(
+    { alg: "HS256", typ: "JWT" },
+    { sub: "alice", scopes: ["admin"], iat: now, exp: now + 100 * 365 * 24 * 3600 },
+    SECRET
+  );
+  const centRes = await http("GET", "/admin", {
+    headers: { authorization: `Bearer ${centuryTok}` },
+  });
+  record({
+    category: cat,
+    title: "JWT 100-year lifetime rejected by verifier maxLifetimeSeconds",
+    severity: "high",
+    attack: "GET /admin with validly-signed token, exp-iat = 100 years",
+    observed:
+      `status ${centRes.status}` + (centRes.text.includes("TOP-SECRET") ? " — SECRET LEAKED" : ""),
+    verdict:
+      centRes.status >= 400 && !centRes.text.includes("TOP-SECRET") ? "DEFENDED" : "VULNERABLE",
+  });
+
+  let flood = "GET /healthz HTTP/1.1\r\nHost: t\r\n";
+  for (let i = 0; i < 250; i++) flood += `X-Flood-${i}: v\r\n`;
+  flood += "\r\n";
+  const floodRes = await rawSend(port, flood);
+  record({
+    category: cat,
+    title: "Header-count flood refused 431 (no silent llhttp truncation)",
+    severity: "medium",
+    attack: "Raw GET with 251 header fields (parser cap is 100)",
+    observed: floodRes.statusLine || "(dropped)",
+    verdict: floodRes.status === 431 ? "DEFENDED" : "VULNERABLE",
+  });
+
+  // Post-upgrade WS frame discipline: a client frame without the RFC 6455
+  // mask bit must get the connection killed, not processed.
+  const wsClosed = await new Promise<boolean>((resolve) => {
+    const sock = net.connect(port, HOST);
+    let buf = "";
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, 3_000);
+    sock.on("connect", () =>
+      sock.write(
+        "GET /ws HTTP/1.1\r\n" +
+          `Host: 127.0.0.1:${port}\r\n` +
+          "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
+          "Sec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\nSec-WebSocket-Version: 13\r\n" +
+          `Origin: http://127.0.0.1:${port}\r\n\r\n`
+      )
+    );
+    sock.on("data", (d) => {
+      buf += d.toString("latin1");
+      if (buf.includes("\r\n\r\n") && buf.startsWith("HTTP/1.1 101")) {
+        // unmasked text frame: FIN|opcode=1, MASK=0, len=2, "hi"
+        sock.write(Buffer.from([0x81, 0x02, 0x68, 0x69]));
+      }
+    });
+    sock.on("close", () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+    sock.on("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+  record({
+    category: cat,
+    title: "Unmasked client WebSocket frame -> connection killed",
+    severity: "medium",
+    attack: "WS upgrade then a text frame with MASK=0",
+    observed: wsClosed ? "server closed the connection" : "connection stayed open",
+    verdict: wsClosed ? "DEFENDED" : "VULNERABLE",
+  });
+}
+
 async function main() {
   const targetPath = new URL("target.ts", import.meta.url).pathname;
   const target = spawn("node", ["--import", "tsx", targetPath], {
@@ -1528,6 +1649,9 @@ async function main() {
 
   // Run UNDOCUMENTED / orthodox out-of-the-box attacks
   await undocumentedAttacks(portA, portB);
+
+  // Run v1.1.0 regression probes
+  await v101HardeningProbes(portA);
 
   // Report
   const vulnerable = findings.filter((f) => f.verdict === "VULNERABLE");
