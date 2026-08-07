@@ -44,9 +44,10 @@ allowBuilds:
 # is part of the published `@daloyjs/core` surface:
 #   * esbuild (via tsx)            >=0.28.1 — GHSA-gv7w-rqvm-qjhr (High),
 #                                              GHSA-g7r4-m6w7-qqqr
-#   * js-yaml (via @hey-api/openapi-ts) >=4.2.0 — GHSA-h67p-54hq-rp68
+#   * js-yaml (via @hey-api/openapi-ts) >=4.3.1 — GHSA-5p4m-2wfm-xmqj (High),
+#                                              GHSA-h67p-54hq-rp68
 # Keep both at or above the fixed versions; drop an entry only once the
 # advisory no longer matches any version in range.
 overrides:
   esbuild: "^0.28.1"
-  js-yaml: "^4.2.0"
+  js-yaml: "^4.3.1"
