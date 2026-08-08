@@ -11,7 +11,6 @@ export const ogImageContentType = "image/png";
 
 type PageOgImageInput = {
   title: string;
-  description: string;
   label: string;
   path: string;
 };
@@ -21,9 +20,13 @@ function clampText(value: string, maxLength: number): string {
   return `${value.slice(0, maxLength - 1).trim()}...`;
 }
 
+/**
+ * Renders a dark brand Open Graph card for docs and blog pages.
+ * Title-only layout (no body description) so long headlines stay readable at
+ * social-preview size without competing secondary copy.
+ */
 export function renderPageOgImage(input: PageOgImageInput): ImageResponse {
   const title = clampText(input.title, 112);
-  const description = clampText(input.description, 190);
 
   return new ImageResponse(
     (
@@ -131,20 +134,10 @@ export function renderPageOgImage(input: PageOgImageInput): ImageResponse {
               fontWeight: 800,
               lineHeight: 1.05,
               letterSpacing: 0,
+              maxWidth: "1040px",
             }}
           >
             {title}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              maxWidth: "1010px",
-              color: "#d4d4d4",
-              fontSize: "28px",
-              lineHeight: 1.35,
-            }}
-          >
-            {description}
           </div>
         </div>
 

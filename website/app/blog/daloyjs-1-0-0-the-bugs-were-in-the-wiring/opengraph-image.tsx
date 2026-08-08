@@ -68,19 +68,11 @@ export default function Image() {
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-          fontSize: "27px",
-          color: "#a1a1aa",
+          color: "#71717a",
+          fontSize: "24px",
         }}
       >
-        <div style={{ display: "flex" }}>
-          A cache mounted ahead of a gate turned the gate off. Same order left
-          rateLimit counting nothing.
-        </div>
-        <div style={{ display: "flex", color: "#71717a", fontSize: "24px" }}>
-          Public API frozen · semver from here · daloyjs.dev
-        </div>
+        Public API frozen · semver from here · daloyjs.dev
       </div>
     </div>,
     { ...size }

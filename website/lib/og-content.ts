@@ -6,7 +6,6 @@ import { getAllDocPages, getDocPage } from "@/lib/docs-content";
 
 export type OgPageContent = {
   title: string;
-  description: string;
   path: string;
 };
 
@@ -104,9 +103,6 @@ export async function getBlogPostOgContent(slug: string): Promise<OgPageContent 
 
   return {
     title: parseStringProperty(source, "title") ?? titleFromSlug(slug),
-    description:
-      parseStringProperty(source, "description") ??
-      "A DaloyJS field note from the framework blog.",
     path: `/blog/${slug}`,
   };
 }
@@ -116,7 +112,6 @@ export async function getAllDocOgContent(): Promise<OgPageContent[]> {
 
   return pages.map((page) => ({
     title: page.title,
-    description: page.description,
     path: page.href,
   }));
 }
@@ -127,7 +122,6 @@ export async function getDocOgContent(route: string): Promise<OgPageContent | nu
 
   return {
     title: page.title,
-    description: page.description,
     path: page.href,
   };
 }

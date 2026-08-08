@@ -37,7 +37,6 @@ export default async function Image({
   return renderPageOgImage({
     label: "Blog",
     title: post.title,
-    description: post.description,
     path: post.path,
   });
 }

@@ -12,8 +12,6 @@ export default function Image() {
   return renderPageOgImage({
     label: "Docs",
     title: "Documentation",
-    description:
-      "Guides, API references, runtime adapters, and secure-by-default patterns for building contract-first TypeScript services with DaloyJS.",
     path: "/docs",
   });
 }

@@ -39,7 +39,6 @@ export default async function Image({
   return renderPageOgImage({
     label: "Docs",
     title: page.title,
-    description: page.description,
     path: page.path,
   });
 }

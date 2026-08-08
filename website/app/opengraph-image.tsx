@@ -77,29 +77,18 @@ export default function Image() {
           <span style={{ color: "#38bdf8" }}>JS</span>
         </div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        <div
-          style={{
-            fontSize: "58px",
-            fontWeight: 800,
-            lineHeight: 1.05,
-            letterSpacing: 0,
-          }}
-        >
-          The first TypeScript REST API framework built for secure AI-assisted
-          services.
-        </div>
-        <div
-          style={{
-            maxWidth: "1000px",
-            color: "#d4d4d4",
-            fontSize: "30px",
-            lineHeight: 1.35,
-          }}
-        >
-          Runtime portability, contract-first OpenAPI, generated typed clients,
-          zero-dependency guardrails, and supply-chain-aware defaults.
-        </div>
+      <div
+        style={{
+          display: "flex",
+          fontSize: "58px",
+          fontWeight: 800,
+          lineHeight: 1.05,
+          letterSpacing: 0,
+          maxWidth: "1040px",
+        }}
+      >
+        The first TypeScript REST API framework built for secure AI-assisted
+        services.
       </div>
       <div style={{ color: "#a3a3a3", fontSize: "28px" }}>daloyjs.dev</div>
     </div>,
