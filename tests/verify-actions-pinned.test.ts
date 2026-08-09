@@ -83,7 +83,7 @@ test("flags reviewdog/action-setup (the upstream of the tj-actions compromise)",
 });
 
 test("accepts a properly SHA-pinned third-party action", () => {
-  const sha = "de0fac2e4500dabe0009e67214ff5f5447ce83dd";
+  const sha = "d23441a48e516b6c34aea4fa41551a30e30af803";
   const yaml = `      - uses: actions/checkout@${sha} # v6\n`;
   const out = findUnpinnedActions("wf.yml", yaml);
   assert.deepEqual(out, []);
