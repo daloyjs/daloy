@@ -31,8 +31,9 @@ export function buildApp(): App {
     //   GET /openapi.yaml — OpenAPI 3.1 spec (YAML, served inline as text/yaml)
     //   GET /docs         — Scalar API reference UI that loads the spec
     // Customize via `docs: { openapiYamlPath: false }` to disable the YAML route.
-    // `info.title` / `info.version` are pulled from package.json by default;
-    // set `openapi.info` here to override them.
+    // `info.title` / `info.version` default to the top-level `title` /
+    // `version` App options, then to "DaloyJS API" / "0.0.0". They are not
+    // read from package.json; set `openapi.info` here to control them.
     openapi: {
       // Leave `servers` unset so the Scalar "Try it" panel and the generated
       // client target the origin the docs are served from — the deployed

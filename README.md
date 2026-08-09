@@ -584,7 +584,7 @@ The core only ever sees `Request → Response`. Adapters live at the edge.
 
 ## Status
 
-DaloyJS is at **`1.1.0`** — the public API is frozen and follows SemVer from here: no `1.x` minor changes the API, and any deprecation gets at least one minor cycle before removal. `@daloyjs/core` (npm), `create-daloy` (npm), and [`@daloyjs/daloy`](https://jsr.io/@daloyjs/daloy) (JSR) ship together at matching versions.
+DaloyJS is at **`1.1.1`** — the public API is frozen and follows SemVer from here: no `1.x` minor changes the API, and any deprecation gets at least one minor cycle before removal. `@daloyjs/core` (npm), `create-daloy` (npm), and [`@daloyjs/daloy`](https://jsr.io/@daloyjs/daloy) (JSR) ship together at matching versions.
 
 The release-candidate train that led here was largely adversarial: `rc.1` through `rc.9` carried remediations from live over-the-wire engagements against realistic multi-tenant apps, and the findings clustered in one place worth naming — **composition**, not individual modules. A `responseCache()` mounted ahead of the network-identity gates silently disabled them; the same order left `rateLimit()` never counting the requests a cache hit or an idempotent replay served; a forwarded-header resolver read the one `X-Forwarded-For` slot an attacker controls; `idempotency()` replayed a stored `Set-Cookie`. Each is fixed, each has a regression test, and several are now refuse-to-boot guards so the unsafe wiring cannot ship quietly. See the [CHANGELOG](CHANGELOG.md) for the full train and [boot guards](https://daloyjs.dev/docs/security/boot-guards) for the orders the framework now refuses.
 

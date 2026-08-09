@@ -207,8 +207,10 @@ test("node-basic template opts into the auto-mounted /docs and /openapi.json", a
     "utf8"
   );
   // The framework auto-mounts /docs and /openapi.json when `docs: true` is
-  // set on the App constructor. info.title / info.version are auto-filled
-  // from package.json so the template no longer hardcodes them.
+  // set on the App constructor. info.title / info.version fall back to the
+  // top-level title / version App options and then to "DaloyJS API" / "0.0.0"
+  // (they are NOT read from package.json), so the template leaves them unset
+  // rather than hardcoding a name.
   assert.match(source, /docs:\s*true/);
   assert.match(source, /openapi:\s*\{/);
   assert.doesNotMatch(source, /info:\s*\{\s*title:\s*"My Daloy API"/);

@@ -36,8 +36,9 @@ export function buildApp(): App {
     // `NODE_ENV !== "production"`, or `docs: false` to disable entirely.
     // Customize paths via `docs: { openapiPath, openapiYamlPath, path, ui }`,
     // or pass `openapiYamlPath: false` to disable just the YAML route.
-    // `info.title` / `info.version` are pulled from package.json by default;
-    // set `openapi.info` here to override them.
+    // `info.title` / `info.version` default to the top-level `title` /
+    // `version` App options, then to "DaloyJS API" / "0.0.0". They are not
+    // read from package.json; set `openapi.info` here to control them.
     openapi: {
       // Leave `servers` unset so the Scalar "Try it" panel and the generated
       // client target the origin the docs are served from — the deployed

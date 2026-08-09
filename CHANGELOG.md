@@ -17,6 +17,23 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-09
+
+**Documentation accuracy in the scaffolded templates.** No runtime code changed,
+so upgrading is a version bump with nothing to migrate.
+
+### Fixed
+
+- `create-daloy` templates told new projects that the OpenAPI `info.title` and
+  `info.version` are read from the project manifest. They are not. The values
+  fall back to the top-level `title` / `version` `App` options and then to
+  `"DaloyJS API"` / `"0.0.0"`, which is what a freshly scaffolded project
+  actually serves from `/openapi.json`. Corrected in the `node-basic` and
+  `bun-basic` templates (which claimed `package.json`) and in `deno-basic`
+  (which claimed `deno.json`), along with a test comment in
+  `packages/create-daloy/test/templates.test.mjs` that repeated the same claim.
+  Set `openapi.info`, or the `title` / `version` options, to control them.
+
 ## [1.1.0] - 2026-08-07
 
 **Hardening, one additive verifier option, and peer-verified proxy trust.**
