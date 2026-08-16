@@ -1,12 +1,13 @@
 ---
 name: daloyjs-best-practices
 description: >-
-  Best practices for building, testing, and hardening this DaloyJS REST API on
-  the Deno runtime. Use when adding or changing HTTP routes, Zod/Standard
-  Schema validation schemas, middleware, route metadata, or error handling;
-  regenerating the OpenAPI spec; running contract gates; managing Deno
-  permissions and tasks; or working on auth, rate limits, secrets, and
-  security defaults.
+  Build, test, and harden this DaloyJS REST API on Deno. Use when the user
+  asks to add or change an endpoint, route, Zod/Standard Schema,
+  middleware, error handling, OpenAPI spec, contract gate, Deno
+  permission, deno.json import, auth, or rate limit. Also use for phrasing
+  like "add GET /...", "new route", "deno task", "fix the 401", or "allow
+  net". Do not use for frontend UI, npm/pnpm package.json work, or
+  unrelated docs.
 license: MIT
 ---
 
@@ -27,8 +28,15 @@ Use this skill when you need to:
 - Wire up new middleware, validation, or error handling.
 - Add or update tests, run typecheck, or build the project.
 - Harden the API (auth, CORS, rate limits, permissions, secrets).
+- User phrasing such as "add GET /books", "new endpoint", "deno task", or
+  "fix the 401".
 
-Do **not** use this skill for tasks unrelated to the API itself.
+Do **not** use this skill for frontend UI, npm/pnpm `package.json` work,
+or unrelated docs. Rare topics live under `references/`: **read**
+[references/mcp.md](references/mcp.md) only when adding an MCP endpoint,
+and **read** [references/ci-workflows.md](references/ci-workflows.md) only
+when editing `.github/` or a `--with-ci` workflow. Do not load those files
+up front.
 
 ## Core principles
 
@@ -274,18 +282,9 @@ Aim for complete happy- and unhappy-path test coverage of the routes you add.
 
 ## CI and workflows (`--with-ci` scaffolds)
 
-If this project was scaffolded with `--with-ci`, `.github/` holds a hardened
-GitHub Actions bundle alongside `CODEOWNERS`, `SECURITY.md`, and a
-`verify:runtime-eol` task added to `deno.json`. Those files carry the same
-weight as the secure defaults above — an agent asked to "make CI pass" must
-not soften them.
-
-- Keep every `uses:` pinned to a full commit SHA with its version comment. Never move an action to a tag or a branch, and never add an unpinned one.
-- Keep `permissions: {}` at the top of each workflow and grant scopes per job. If a step needs more, give that one job the narrowest scope that works — never widen the workflow default.
-- Keep `persist-credentials: false` on `actions/checkout` and keep caching off; a shared cache can bridge fork PRs into trusted branches.
-- `deno.lock` is committed and CI installs with `deno install --frozen=true`. Deno ships no `audit` command, so the lockfile is this project's integrity anchor: when a dependency changes, update it deliberately with `deno install` and commit the result. Never drop `--frozen` to make CI pass.
-- `verify:runtime-eol`, the contract check, and the scanners are gates. When one fails, fix the finding — do not delete the step, add `continue-on-error`, or lower a severity threshold to go green.
-- Read `SECURITY.md` before deleting a workflow. On a private repository without GitHub Advanced Security, some of them are _expected_ to be removed, and it lists exactly which.
+Only when editing `.github/` or a `--with-ci` workflow: **read**
+[references/ci-workflows.md](references/ci-workflows.md) as reference.
+Skip that file for ordinary route work.
 
 ## Logging & observability
 
@@ -330,26 +329,9 @@ not soften them.
 
 ## Exposing this API over MCP
 
-`@daloyjs/core` ships a dependency-free Model Context Protocol (Streamable
-HTTP) server helper — also available from the `@daloyjs/core/mcp` subpath.
-To expose selected capabilities to MCP clients (AI agents), build a handler
-with `createMcpHandler({ tools, resources, prompts })` and mount it with
-`mcpRoutes("/mcp", handler)`. Throw `McpToolError` for caller-correctable
-tool failures. The handler ships protocol-level guards (body cap, UTF-8/JSON
-validation, `Origin` checks against DNS rebinding) and composes with the
-existing middleware chain — put `bearerAuth()` / `rateLimit()` in front of
-it like any other route. See <https://daloyjs.dev/docs> for the MCP guide.
-
-The handler speaks the stateless MCP `2026-07-28` revision and every earlier
-one on the same endpoint: modern clients get `server/discover`, per-request
-`_meta`, `resultType` results, caching hints, and multi round-trip requests
-(return `{ resultType: "input_required", inputRequests, requestState }` instead
-of a final result), while legacy clients keep the `initialize` handshake. The
-required `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers are
-validated against the body — never relax that check. Treat an incoming
-`requestState` as attacker-controlled: sign it, bind it to the principal and
-the originating request, and give it a short expiry before it influences
-anything.
+Only when adding or changing an MCP endpoint: **read**
+[references/mcp.md](references/mcp.md) as reference (do not treat it as a
+script to run). Skip that file for ordinary HTTP route work.
 
 ## More
 

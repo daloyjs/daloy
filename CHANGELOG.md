@@ -17,6 +17,15 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Changed
+
+- `create-daloy` template skills now put MCP and `--with-ci` workflow guidance
+  in `references/` instead of the hot `SKILL.md` body, and the YAML
+  descriptions name both what the skill does and the user phrasing that
+  should trigger it. Root `AGENTS.md` documents the `_agents` / `_gitignore`
+  template-authoring gotchas so agents editing the scaffolder stop writing
+  real dotfolders that `npm pack` would drop.
+
 ## [1.1.1] - 2026-08-09
 
 **Documentation accuracy in the scaffolded templates.** No runtime code changed,

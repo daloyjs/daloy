@@ -2439,6 +2439,13 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
     assert.match(skill, /When to use this skill/i, `${template} SKILL.md should define boundaries`);
     assert.match(skill, /workflow/i, `${template} SKILL.md should describe workflows`);
     assert.match(skill, /Pitfalls|guardrails/i, `${template} SKILL.md should list guardrails`);
+    // Description is the trigger: what + when + a negative, so the agent
+    // can decide from frontmatter alone without loading the body.
+    assert.match(
+      skill,
+      /Do not use for/i,
+      `${template} SKILL.md description should include a negative trigger`
+    );
     // The expanded best-practices skill must cover testing and security.
     assert.match(
       skill,
@@ -2449,6 +2456,35 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
       skill,
       /Security best practices/i,
       `${template} SKILL.md should describe security best practices`
+    );
+    // Rare topics stay in references/ (progressive disclosure). The body
+    // must point at them with an explicit "read" so the agent does not
+    // treat those files as scripts to run.
+    assert.match(
+      skill,
+      /references\/mcp\.md/,
+      `${template} SKILL.md should point at references/mcp.md`
+    );
+    assert.match(
+      skill,
+      /references\/ci-workflows\.md/,
+      `${template} SKILL.md should point at references/ci-workflows.md`
+    );
+    await access(
+      path.join(
+        pkgRoot,
+        "templates",
+        template,
+        "_agents/skills/daloyjs-best-practices/references/mcp.md"
+      )
+    );
+    await access(
+      path.join(
+        pkgRoot,
+        "templates",
+        template,
+        "_agents/skills/daloyjs-best-practices/references/ci-workflows.md"
+      )
     );
   }
 });
@@ -2489,6 +2525,20 @@ test("scaffolded projects include AGENTS.md and SKILL.md at the conventional pat
       await access(path.join(tmpDir, projectName, "AGENTS.md"));
       await access(
         path.join(tmpDir, projectName, ".agents/skills/daloyjs-best-practices/SKILL.md")
+      );
+      await access(
+        path.join(
+          tmpDir,
+          projectName,
+          ".agents/skills/daloyjs-best-practices/references/mcp.md"
+        )
+      );
+      await access(
+        path.join(
+          tmpDir,
+          projectName,
+          ".agents/skills/daloyjs-best-practices/references/ci-workflows.md"
+        )
       );
       // The `_agents` placeholder must be renamed to `.agents` on copy.
       await assert.rejects(access(path.join(tmpDir, projectName, "_agents")));

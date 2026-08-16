@@ -37,7 +37,7 @@ The `verify:*` scripts run the individual CI gates (see the guardrails section b
 - `tests/` — the framework test suite, including `red-team-attacks*.test.ts`.
 - `scripts/` — codegen (`dump-openapi.ts`, `generate-sbom.ts`) and the `verify-*.ts` CI gates.
 - `bench/` — performance benchmarks; validate hot-path changes here (see the performance rule under "Editing the codebase").
-- `packages/create-daloy/` — the scaffolder CLI (`bin/`), its tests (`test/templates.test.mjs`), and the five project templates (`templates/`). Has no separate agent guide; this file governs it.
+- `packages/create-daloy/` — the scaffolder CLI (`bin/`), its tests (`test/templates.test.mjs`), and the five project templates (`templates/`). Has no separate agent guide; this file governs it. See **Editing create-daloy templates** below before touching `_agents`, `_gitignore`, or other underscore-prefixed template files.
 - `website/` — the docs/marketing site. **Read [`website/AGENTS.md`](website/AGENTS.md) before editing anything under it.**
 - `workshop/` — the hands-on workshop; has its own [`workshop/AGENTS.md`](workshop/AGENTS.md).
 
@@ -79,7 +79,7 @@ If a change touches `website/`, also run `cd website && pnpm typecheck && pnpm b
 - Documentation updates should be clear, concise, and accurate, and should be reviewed for quality along with the code changes
 - Code reviews should be thorough and constructive, providing feedback on both the implementation and the tests, and should ensure that all quality gates are met before approving the changes
 - Code coverage targets are **90% lines / 90% functions** on the tsx run and **92% branches** on the compiled-JS run (enforced by `pnpm coverage` and `pnpm coverage:branches`; the branch floor is being ratcheted back up from a temporary 90% relaxation toward the former 95%). Any change that adds code should include tests that cover that code, but **do not burn cycles chasing the last few percent on complex security features** — useless coverage of unreachable defensive branches, tsx phantom source-map lines, or signal/shutdown paths that can't be unit-tested is explicitly not worth blocking a release on. If coverage on a hard security task is taking too long, ship the feature and revisit tests later.
-- Any new features should be well documenbted in the `website` documentation, and the documentation should be updated to reflect any changes in behavior or new capabilities introduced by the feature
+- Any new features should be well documented in the `website` documentation, and the documentation should be updated to reflect any changes in behavior or new capabilities introduced by the feature
 - Making the repo and the app itself secure are top priorities; any change that has security implications must be carefully reviewed for potential vulnerabilities and should include updates to `SECURITY.md` or related documentation when relevant
 
 ## Editing the codebase (non-negotiable)
@@ -104,6 +104,27 @@ That risk exists for human contributors and AI coding agents alike. When a test 
 - Do not add runtime dependencies to `@daloyjs/core`; `verify:no-runtime-deps` is the floor.
 
 If a guardrail blocks a legitimate use case, raise it in the PR description and add a scoped knob — do not delete the guardrail to ship faster.
+
+## Editing create-daloy templates
+
+`packages/create-daloy/` has no separate `AGENTS.md`. The gotchas below are
+the ones agents miss when they treat a template like a normal app.
+
+- Author dotfolders with a `_` prefix so `npm pack` keeps them:
+  `_agents` → `.agents`, `_gitignore` → `.gitignore`, `_npmrc` → `.npmrc`,
+  `_github` → `.github`, `_vscode` → `.vscode`, `_Dockerfile` → `Dockerfile`,
+  `_dockerignore` → `.dockerignore`, `_env.example` → `.env.example`. Never
+  commit a real `.agents/` or `.gitignore` inside a template directory.
+- Keep each template `AGENTS.md` under 6KB (enforced by
+  `packages/create-daloy/test/templates.test.mjs`).
+- Template `AGENTS.md` is the always-on security tripwire. Do not move the
+  "do not strip these" list into the skill only — agents skip skills.
+- The skill body stays lean. Rare topics (MCP, `--with-ci` workflows) live
+  under `_agents/skills/daloyjs-best-practices/references/` and are opened
+  only when the skill says to **read** them.
+- After template or CLI changes, update assertions in
+  `packages/create-daloy/test/templates.test.mjs` and run
+  `pnpm --filter create-daloy test`.
 
 ## Website and Blog Authoring
 
