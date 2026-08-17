@@ -13,6 +13,12 @@
       "skillPath": "passive/SKILL.md",
       "computedHash": "6471362e172d09f289d4eeec8bf42d1beb1adc9c9be6e98847f1cc59d14a2d21"
     },
+    "next-cache-components-adoption": {
+      "source": "vercel/next.js",
+      "sourceType": "github",
+      "skillPath": "skills/next-cache-components-adoption/SKILL.md",
+      "computedHash": "15dcef9cfce611ba5a9ca467ed0d4eeae8de16fadb91b66df892a5ca63c57829"
+    },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",

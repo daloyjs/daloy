@@ -21,6 +21,13 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 
+// instant = false: kept on purpose. Nonce-based CSP: this layout reads
+// headers() for the per-request x-nonce that proxy.ts mints, so next-themes
+// and analytics scripts satisfy script-src 'nonce-…' without 'unsafe-inline'.
+// A nonce cannot be baked into a prerendered shell (Next.js: nonce CSP
+// requires dynamic rendering).
+export const instant = false;
+
 const DEFAULT_TITLE = `${SITE_NAME} - ${HOME_TITLE}`;
 const DEFAULT_DESCRIPTION = HOME_DESCRIPTION;
 const COPYRIGHT_YEAR = 2026;

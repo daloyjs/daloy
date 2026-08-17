@@ -9,9 +9,10 @@ const isProduction = process.env.NODE_ENV === "production";
  * `'unsafe-inline'`: only scripts tagged with the request's fresh nonce (and
  * scripts they subsequently load — Google Analytics, Vercel Analytics) may run,
  * which blocks the injected-inline-script class of XSS. Because a nonce must be
- * unique per request, using it forces every page into dynamic rendering (see
- * {@link https://nextjs.org/docs/app/guides/content-security-policy}); that is
- * why the site no longer enables `cacheComponents`/PPR.
+ * unique per request, the root layout that reads it must stay dynamically
+ * rendered (see {@link https://nextjs.org/docs/app/guides/content-security-policy}).
+ * `cacheComponents` is on; the root layout is a documented `instant = false`
+ * Block so the nonce can still be stamped onto next-themes and analytics.
  *
  * `style-src` intentionally keeps `'unsafe-inline'`: React emits inline `style`
  * attributes that a nonce cannot cover, and inline-style injection is not the

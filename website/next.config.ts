@@ -38,6 +38,7 @@ const serviceWorkerHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  cacheComponents: true,
   typedRoutes: true,
   // The /mcp documentation endpoint reads the docs `page.tsx` sources from disk
   // at runtime (via lib/docs-content). Trace those files into its serverless

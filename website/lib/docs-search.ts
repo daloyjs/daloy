@@ -1,4 +1,5 @@
 import type { Route } from "next";
+import { cacheLife } from "next/cache";
 import { readFile } from "node:fs/promises";
 import { docsNav } from "@/components/docs-nav";
 import {
@@ -123,23 +124,14 @@ async function computeDocsSearchSections(): Promise<DocsSearchSection[]> {
 }
 
 /**
- * Process-lifetime memo for {@link getDocsSearchSections}. The search index is
- * derived from the static docs tree, so it is built at most once per process.
- */
-let docsSearchSectionsPromise: Promise<DocsSearchSection[]> | undefined;
-
-/**
- * Build the grouped docs search index. Memoized for the lifetime of the
- * deployment since the docs tree is static at runtime.
- *
- * The memoization replaces a `"use cache"` directive: nonce-based CSP requires
- * dropping the `cacheComponents`/PPR flag that `"use cache"` depends on, and a
- * module-level promise gives the same once-per-deployment caching for this
- * build-invariant computation.
+ * Build the grouped docs search index. Cached for the lifetime of the
+ * deployment (`cacheLife("max")`) because the docs tree is static at runtime
+ * and only changes when a new build ships.
  *
  * @returns The docs search sections in navigation order.
  */
 export async function getDocsSearchSections(): Promise<DocsSearchSection[]> {
-  docsSearchSectionsPromise ??= computeDocsSearchSections();
-  return docsSearchSectionsPromise;
+  "use cache";
+  cacheLife("max");
+  return computeDocsSearchSections();
 }

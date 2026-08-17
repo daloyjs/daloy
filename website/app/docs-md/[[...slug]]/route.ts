@@ -25,8 +25,9 @@ import { SITE_URL } from "@/lib/seo";
  * built at most once per deployment. Failures are intentionally not cached so a
  * transient self-fetch error does not stick for the life of the process.
  *
- * Replaces a `"use cache"` directive: nonce-based CSP requires dropping the
- * `cacheComponents`/PPR flag that `"use cache"` depends on.
+ * This is a Route Handler (not a Cache Components page segment), so a module
+ * Map is the right memo: `"use cache"` would re-run the self-fetch of HTML
+ * through the page renderer, which is the expensive part we are avoiding.
  */
 const markdownCache = new Map<string, string>();
 
