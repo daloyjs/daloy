@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../../components/code-block";
 import { FlowDiagram, SequenceDiagram } from "../../../../components/diagram";
+import { AuthRole } from "@/components/auth-role";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -40,6 +41,15 @@ export default function Page() {
         separate requirement: if an attacker can run script in your origin, they
         can read the CSRF token too.
       </p>
+
+      <AuthRole role="client-rp">
+        <p>
+          CSRF is a cookie-session problem, so it belongs to whichever server
+          holds the browser session. If your provider hosts the session for you,
+          it already handles this. If you run a backend-for-frontend, the
+          session is yours and so is this middleware.
+        </p>
+      </AuthRole>
 
       <SequenceDiagram
         title="Double-submit cookie"

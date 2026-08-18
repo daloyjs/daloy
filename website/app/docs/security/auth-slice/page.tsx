@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../../components/code-block";
 import { FlowDiagram, SequenceDiagram } from "../../../../components/diagram";
+import { AuthRole } from "@/components/auth-role";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -34,6 +35,14 @@ export default function Page() {
         the <code>verify</code> hook on every request, and adds{" "}
         <code>Cache-Control: no-store</code> to authentication failures.
       </blockquote>
+
+      <AuthRole role="resource-server">
+        <p>
+          Everything below is verification and enforcement. The provider you
+          pair with owns the other half: accounts, credentials, MFA, consent,
+          and the tokens themselves.
+        </p>
+      </AuthRole>
 
       <h2 id="daloyjs-is-a-relying-party-not-an-auth-server">
         DaloyJS is a Relying Party, not an auth server

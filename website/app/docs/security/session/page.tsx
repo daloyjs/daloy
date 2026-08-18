@@ -1,6 +1,7 @@
 import { CodeBlock } from "../../../../components/code-block";
 import { SequenceDiagram } from "../../../../components/diagram";
 
+import { AuthRole } from "@/components/auth-role";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -41,6 +42,17 @@ export default function Page() {
         runs on Node, Bun, Deno, Cloudflare and Workers because it only uses{" "}
         <code>WebCrypto</code> and standard <code>Set-Cookie</code> headers.
       </p>
+
+      <AuthRole role="client-rp">
+        <p>
+          <code>session()</code> is for the server that sits between your
+          frontend and your provider. It holds a session for a user who has{" "}
+          <em>already</em> authenticated somewhere else. It is not a login
+          system: it will not check a password, enrol a second factor, or tell
+          you whether an account is locked. If you find yourself adding those,
+          you have started writing an identity provider.
+        </p>
+      </AuthRole>
 
       <SequenceDiagram
         title="Login + fixation defense"

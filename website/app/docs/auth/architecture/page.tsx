@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
 import { SequenceDiagram } from "../../../../components/diagram";
+import { IdpBoundary } from "@/components/auth-role";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -63,6 +64,56 @@ export default function Page() {
           vetted provider instead.
         </li>
       </ul>
+
+      <IdpBoundary
+        featureName="a DaloyJS API"
+        safe={[
+          <>
+            Verifying a token your provider issued, with <code>jwk()</code> or{" "}
+            <code>createJwtVerifier()</code>. Verification is always yours.
+          </>,
+          <>
+            Deciding what a verified caller may do: scopes, roles, tenant
+            checks, per-record ownership.
+          </>,
+          <>
+            Holding a browser session in a backend-for-frontend you own, after
+            the provider finished the login.
+          </>,
+          <>
+            Signing short-lived internal artifacts: service-to-service tokens,
+            download URLs, webhook payloads.
+          </>,
+        ]}
+        delegate={[
+          <>
+            Storing passwords, running the reset flow, or implementing MFA and
+            recovery codes.
+          </>,
+          <>
+            Hosting a login or consent screen, or registering and managing
+            OAuth2 clients.
+          </>,
+          <>
+            Issuing user access and refresh tokens, and building rotation and
+            revocation for them.
+          </>,
+          <>
+            Publishing your own <code>/.well-known/jwks.json</code> or discovery
+            document.
+          </>,
+        ]}
+        footer={
+          <>
+            None of the right-hand column is impossible. It is just far larger
+            and far less forgiving than it looks, and every provider on this
+            page has already solved it, been audited on it, and been attacked on
+            it. Pick one from{" "}
+            <Link href="/docs/auth">Authentication &amp; authorization</Link>{" "}
+            and spend your time on the left-hand column instead.
+          </>
+        }
+      />
 
       <h2 id="roles">The three OAuth2 / OpenID Connect roles</h2>
       <p>

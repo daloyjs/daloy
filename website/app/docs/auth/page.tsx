@@ -3,6 +3,7 @@ import type { Route } from "next";
 
 import { BranchDiagram, FlowDiagram } from "../../../components/diagram";
 import { CodeBlock } from "../../../components/code-block";
+import { AuthRole } from "@/components/auth-role";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -48,6 +49,17 @@ export default function Page() {
         Duende IdentityServer, whether you actually need Auth0/Okta/Clerk or can
         self-host an open-source IdP, and the two architectures we recommend.
       </p>
+
+      <AuthRole role="resource-server">
+        <p>
+          Every page in this section wires DaloyJS up as the thing that{" "}
+          <em>checks</em> a token. The provider owns the accounts, the login
+          screen, the password resets, and the token lifetime. That split is not
+          a limitation to work around: it is the part of the design that keeps
+          the hard, high-blast-radius problems with a team whose full-time job
+          is solving them.
+        </p>
+      </AuthRole>
 
       <h2 id="supported-providers">Supported providers</h2>
       <ul>

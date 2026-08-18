@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../../components/code-block";
 import { SequenceDiagram } from "../../../../components/diagram";
+import { AuthRole } from "@/components/auth-role";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -36,6 +37,16 @@ export default function Page() {
         boundaries, and WebSocket upgrades with first-party helpers instead of
         copy-pasted local policy.
       </p>
+
+      <AuthRole role="client-rp">
+        <p>
+          <code>loginThrottle()</code> guards an authentication endpoint that
+          you expose. That is a normal thing to have in front of a
+          backend-for-frontend that proxies to your provider, or on a
+          machine-to-machine credential exchange. If it is guarding a password
+          check you wrote yourself, throttling is not the thing to fix first.
+        </p>
+      </AuthRole>
 
       <h2 id="1-wsratelimit">
         1. <code>wsRateLimit()</code>

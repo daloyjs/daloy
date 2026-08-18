@@ -1,6 +1,7 @@
 import { CodeBlock } from "../../../../components/code-block";
 import { BranchDiagram, FlowDiagram } from "../../../../components/diagram";
 
+import { AuthRole } from "@/components/auth-role";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -32,6 +33,26 @@ export default function Page() {
         checks. Applications store the encoded hash and verify candidates
         without handling the low-level parameters themselves.
       </blockquote>
+
+      <AuthRole role="authorization-server">
+        <p>
+          Read this before you use the page. If you are hashing passwords, you
+          are storing credentials, which means you have taken on the
+          authorization-server role whether you meant to or not. Password
+          storage is the small, easy part. What follows it is the hard part:
+          reset tokens that cannot be replayed, enumeration-safe error messages,
+          breached-password checks, lockout that does not become a denial of
+          service, MFA enrolment and recovery, and a credible answer when a
+          customer asks how you handle a leak.
+        </p>
+        <p>
+          Use <code>passwordHash()</code> when credentials genuinely have to
+          live in your database: an internal tool, an air-gapped deployment, a
+          migration off a legacy store, a seeded admin account. For a product
+          with real users, let a provider hold the passwords and let DaloyJS
+          verify the tokens it issues.
+        </p>
+      </AuthRole>
       <p>
         Daloy ships exactly one correct way to hash a password. The API is two
         functions with <strong>no knobs</strong>

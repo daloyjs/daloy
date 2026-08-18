@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
 import { LayerStack } from "../../../../components/diagram";
 
+import { AuthRole } from "@/components/auth-role";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -61,6 +62,22 @@ export default function Page() {
       />
 
       <h2 id="built-in-middleware">Built-in middleware</h2>
+      <AuthRole role="resource-server">
+        <p>
+          The authentication middleware on this page (<code>bearerAuth()</code>
+          {", "}
+          <code>jwk()</code>
+          {", "}
+          <code>requireScopes()</code>
+          {", "}
+          <code>basicAuth()</code>) all sit on the receiving end of a token.
+          They read a credential that something else issued and decide whether
+          this request continues. None of them issue credentials, and{" "}
+          <code>basicAuth()</code> in particular is for machine-to-machine and
+          internal endpoints, not for logging in end users.
+        </p>
+      </AuthRole>
+
       <CodeBlock
         code={`requestId(opts?: RequestIdOptions): Hooks
 secureHeaders(opts?: SecureHeadersOptions): Hooks

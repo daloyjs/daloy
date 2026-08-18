@@ -30,6 +30,22 @@ Run `pnpm lint` and `pnpm typecheck` before finishing code changes when relevant
 - Every new documentation page under `app/docs/` must have its own Open Graph image. Create or wire the page-specific `opengraph-image` route so shared links resolve to `/docs/<slug>/opengraph-image` instead of the homepage image.
 - Database docs split SQL ORMs (`/docs/orm`) from ODMs (`/docs/odm`); Supabase is treated as a platform client, not an ORM.
 
+## Identity-adjacent docs must declare their OAuth2 role
+
+Any docs page describing an auth, credential, session, or token capability **must** open with an `<AuthRole>` callout from [components/auth-role.tsx](components/auth-role.tsx). The point is educational: readers arrive from search engines on a single page, and they need to know whether DaloyJS owns the capability or whether an identity provider should. Without the label, `createJwtSigner()` reads like an invitation to build an auth server.
+
+- `role="resource-server"` — DaloyJS's home turf. Verifying tokens, enforcing scopes, gating routes. Example: `jwk()`, `bearerAuth()`, `requireScopes()`.
+- `role="client-rp"` — yours **if** you run a backend-for-frontend. Browser sessions, CSRF, login-endpoint throttling. Example: `session()`, `csrf()`, `loginThrottle()`.
+- `role="authorization-server"` — **not** DaloyJS. Password storage, login UI, consent, MFA, token issuance and revocation. Tell the reader to use a provider and link to [/docs/auth](app/docs/auth/page.tsx).
+
+Rules:
+
+- Use the three role names verbatim. `app/docs/auth/architecture/page.tsx` is the canonical definition; every callout links back to it automatically. Do not invent a fourth role or a plain "this is an IdP feature" banner.
+- Never label a capability "not our job" without naming what to use instead. A label with no destination is just scolding.
+- **Do not** add `<AuthRole>` to middleware with no identity dimension (`rateLimit`, `cors`, `secureHeaders`, `requestId`). Over-tagging dilutes the signal on the pages where it matters.
+- For APIs that are legitimate in narrow cases but become a home-grown IdP when overused, pair the callout with `<IdpBoundary>` (two columns: reasonable to implement yourself / you are building an identity provider). `createJwtSigner()` on [app/docs/api-reference/security/page.tsx](app/docs/api-reference/security/page.tsx) is the reference example.
+- Verification is always the reader's job even when the provider owns the login. Do not let a callout imply that consuming a JWKS is IdP territory; publishing one is.
+
 ## Blog authoring
 
 When writing a new blog post under `app/blog/<slug>/page.tsx`, follow these rules.

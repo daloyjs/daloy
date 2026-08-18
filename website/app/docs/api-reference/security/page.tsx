@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CodeBlock } from "../../../../components/code-block";
 import { BranchDiagram } from "../../../../components/diagram";
 
+import { AuthRole, IdpBoundary } from "@/components/auth-role";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -174,6 +175,15 @@ assertCookieAttributes(opts: {
       />
 
       <h2 id="jwt-signer-and-verifier">JWT signer &amp; verifier</h2>
+      <AuthRole role="resource-server">
+        <p>
+          <code>createJwtVerifier()</code> and <code>jwk()</code> are
+          resource-server tools, and you should reach for them freely.{" "}
+          <code>createJwtSigner()</code> is the exception on this page: minting
+          a token is an <strong>authorization-server</strong> verb, so read the
+          boundary below before you use it to log a human being in.
+        </p>
+      </AuthRole>
       <CodeBlock
         code={`type JwtAlgorithm =
   | "HS256" | "HS384" | "HS512"
@@ -196,6 +206,52 @@ interface JwtVerified { readonly header: Record<string, unknown>; readonly paylo
 class JwtError extends Error { readonly code: string }
 
 const DEFAULT_JWT_MAX_LIFETIME_SECONDS = 30 * 24 * 60 * 60;  // 30d`}
+      />
+
+      <IdpBoundary
+        featureName={<code>createJwtSigner()</code>}
+        safe={[
+          <>
+            Service-to-service tokens between backends you own and deploy
+            together.
+          </>,
+          <>
+            Short-lived signed URLs for a download, an upload, or a one-time
+            confirmation link.
+          </>,
+          <>Signing a webhook payload so the receiver can verify the sender.</>,
+          <>
+            Test fixtures and local development, where you need a valid token
+            without reaching a provider.
+          </>,
+        ]}
+        delegate={[
+          <>
+            Minting an access or refresh token after checking a password you
+            stored yourself.
+          </>,
+          <>
+            Adding refresh-token rotation, reuse detection, and a revocation
+            list on top of it.
+          </>,
+          <>
+            Serving the public half of your signing key as a JWKS for other
+            services to trust.
+          </>,
+          <>
+            Adding sessions per device, step-up authentication, or sign-out
+            everywhere.
+          </>,
+        ]}
+        footer={
+          <>
+            The moment the right-hand column starts appearing in your backlog,
+            you are maintaining an identity provider as a side project. Hand the
+            issuing role to a real one and keep <code>createJwtVerifier()</code>{" "}
+            on the receiving end. See{" "}
+            <Link href="/docs/auth/architecture">Auth architecture</Link>.
+          </>
+        }
       />
 
       <h2 id="jwk-jwks-verification">JWK / JWKS verification</h2>
