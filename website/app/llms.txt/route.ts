@@ -56,14 +56,18 @@ const PROJECT_LINKS: ReadonlyArray<{
 ];
 
 /**
- * Serve an llms.txt index (https://llmstxt.org) of the site.
+ * Serve the site-wide llms.txt index (https://llmstxt.org, v2).
  *
  * Lists the project's non-docs entry points (hosted MCP server, packages,
  * repository), then every docs page with its title and description grouped by
- * the same sections as the sidebar, then the blog under the spec's `Optional`
- * heading so agents can drop it when they need a shorter context. The heavy
+ * the same sections as the sidebar, then the blog under `Optional`. The heavy
  * lifting (page discovery and metadata extraction) is cached via
  * `getDocsSearchSections`.
+ *
+ * This is the least specific of the site's llms.txt files: under v2 a file
+ * covers the pages beneath its own path, so agents working inside `/docs/`
+ * should prefer `/docs/llms.txt`, which is what the `rel="describedby"`
+ * relation on those pages points at.
  *
  * @returns A `text/plain; charset=utf-8` markdown response.
  */
@@ -78,6 +82,10 @@ export async function GET() {
     `Current release: \`@daloyjs/core@${CORE_PACKAGE_VERSION}\` on npm, published to JSR as \`@daloyjs/daloy\` from the same source. It has zero runtime dependencies. Start a new project with \`pnpm create daloy@latest\`.`,
     "",
     "Every docs page is also available as markdown: append `.md` to its URL (the links below point at the markdown versions; drop the `.md` suffix for the canonical HTML). Blog posts are HTML only.",
+    "",
+    'Following llms.txt v2, every page advertises those siblings with standard link relations, as both HTML `<link>` elements and an HTTP `Link:` response header: `rel="alternate" type="text/markdown"` points at the markdown version of the page, and `rel="describedby"` points at the llms.txt file covering it. So an agent holding any URL on this site can find both without guessing.',
+    "",
+    `There is also a documentation-only index at ${SITE_URL}/docs/llms.txt, covering the pages under \`/docs/\`. Prefer it when you only need the framework reference; this file is the whole site.`,
     "",
     `Agents can also query these docs over the Model Context Protocol instead of fetching pages: \`${SITE_URL}/mcp\` is a read-only MCP server with \`search_docs\`, \`get_doc\`, and \`list_docs\` tools.`,
     "",
@@ -96,21 +104,23 @@ export async function GET() {
 
     for (const item of section.items) {
       lines.push(
-        `- [${item.title}](${SITE_URL}${item.href}.md): ${item.description}`
+        `- [${item.title}](${SITE_URL}${item.href}.md): ${item.description}`,
       );
     }
 
     lines.push("");
   }
 
-  // Per the llms.txt spec, `Optional` must be the final section: its links can
-  // be skipped when a shorter context is needed. The blog is background
-  // reading, so it belongs here rather than alongside the docs.
+  // `Optional` is the spec's convention for secondary links an agent can skip
+  // when it needs a shorter context. Since v2 dropped the context-expansion
+  // tooling, the heading no longer carries mechanical semantics, so this is a
+  // hint to the reader rather than an instruction to a parser. The blog is
+  // background reading, so it belongs here rather than alongside the docs.
   lines.push("## Optional", "");
 
   for (const post of BLOG_POSTS) {
     lines.push(
-      `- [${post.title}](${SITE_URL}/blog/${post.slug}): ${post.description} (${post.date})`
+      `- [${post.title}](${SITE_URL}/blog/${post.slug}): ${post.description} (${post.date})`,
     );
   }
 

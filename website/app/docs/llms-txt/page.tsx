@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "llms.txt for agent-readable docs",
   description:
-    "Ship a curated /llms.txt map so coding agents and LLM tools find DaloyJS docs without scraping HTML. Spec shape, Optional section, .md siblings, and how daloyjs.dev generates its index from the same nav as the human docs UI.",
+    "Ship a curated /llms.txt map so coding agents and LLM tools find DaloyJS docs without scraping HTML. Covers the v2 spec: link relations for discovery, both markdown URL forms, subpath coverage, and how daloyjs.dev generates its index from the same nav as the human docs UI.",
   path: "/docs/llms-txt",
   keywords: [
     "llms.txt",
@@ -18,6 +18,9 @@ export const metadata = buildMetadata({
     "DaloyJS llms.txt",
     "markdown docs for LLMs",
     "robots.txt vs llms.txt",
+    "llms.txt v2",
+    "rel=describedby",
+    "rel=alternate text/markdown",
     "MCP docs",
   ],
   type: "article",
@@ -46,6 +49,12 @@ Current release notes and package pins live on the homepage and CHANGELOG.
 - [Blog](https://daloyjs.dev/blog): design write-ups and release posts
 `;
 
+const LINK_HEADER = `Link: </docs/routing.md>; rel="alternate"; type="text/markdown",
+      </docs/llms.txt>; rel="describedby"`;
+
+const LINK_ELEMENTS = `<link rel="alternate" type="text/markdown" href="/docs/routing.md">
+<link rel="describedby" href="/docs/llms.txt">`;
+
 export default function Page() {
   return (
     <>
@@ -60,6 +69,18 @@ export default function Page() {
         a ranking signal. It is a token-efficient index: project summary, the
         links that matter, and optional secondary material agents can skip when
         context is tight.
+      </p>
+      <p>
+        This page tracks <strong>v2</strong> of the proposal, published on 10
+        August 2026 and the first revision since the format appeared in 2024.
+        The file skeleton did not change, so a valid v1 file is still a valid v2
+        file. What changed is everything <em>around</em> the file:{" "}
+        <a href="https://llmstxt.org/changes.html" rel="noopener noreferrer">
+          how agents discover it
+        </a>
+        {", "}where markdown versions are allowed to live, and what a file in a
+        subpath means. See{" "}
+        <Link href="/docs/llms-txt#v2">What changed in v2</Link> below.
       </p>
       <p>
         DaloyJS already ships one for the project site at{" "}
@@ -152,8 +173,12 @@ export default function Page() {
           <code>- [title](url): optional note</code> entries.
         </li>
         <li>
-          A final H2 named <strong>Optional</strong> for secondary links that a
-          short context budget may drop.
+          By convention an H2 named <strong>Optional</strong> for secondary
+          links an agent can skip when it needs a shorter context. In v1 this
+          heading was machine-readable: it told the context-expansion tool which
+          links to omit. v2 dropped that tool, so <code>Optional</code> is now a
+          hint to the reader rather than an instruction to a parser. It is still
+          worth using, and still belongs last.
         </li>
       </ol>
       <CodeBlock language="markdown" code={EXAMPLE} />
@@ -162,6 +187,77 @@ export default function Page() {
         historical material under <code>Optional</code>. Curate aggressively: a
         thousand-link index recreates the context-window problem the file exists
         to solve.
+      </p>
+
+      <h2 id="v2">What changed in v2</h2>
+      <p>
+        v1 told you what to put <em>in</em> the file but left the surrounding
+        questions open. The spec now poses the one that mattered most: given a
+        page, how does an agent find its markdown version, or the llms.txt file
+        that covers it, without guessing? Five changes answer it.
+      </p>
+      <ol>
+        <li>
+          <strong>Link relations for discovery.</strong> The headline change.{" "}
+          <code>rel=&quot;alternate&quot; type=&quot;text/markdown&quot;</code>{" "}
+          points from a page to its markdown version, and{" "}
+          <code>rel=&quot;describedby&quot;</code> points to the llms.txt file
+          covering it. Both can be HTML <code>&lt;link&gt;</code> elements or an
+          HTTP <code>Link:</code> response header.
+        </li>
+        <li>
+          <strong>Two markdown URL forms.</strong> v1 allowed only{" "}
+          <code>.md</code> appended to the full page URL (
+          <code>page.html.md</code>). Many publishing tools replace the
+          extension instead (<code>page.md</code>), so v2 permits both. URLs
+          without a file name append <code>index.html.md</code> or{" "}
+          <code>index.md</code>.
+        </li>
+        <li>
+          <strong>Subpath coverage is defined.</strong> v1 permitted files at
+          subpaths without saying what they meant. v2 states it: a file covers
+          the pages under its path, and where several apply the most specific
+          one wins. So <code>/docs/llms.txt</code> covers everything in{" "}
+          <code>/docs/</code>. This is what lets a project that controls only a
+          path, such as a GitHub Pages site, participate properly.
+        </li>
+        <li>
+          <strong>The consumption model is stated.</strong> v1 said nothing
+          about how the file should be read and shipped an{" "}
+          <code>llms_txt2ctx</code> tool that expanded it into one large
+          context. v2 drops the tool and states the expectation instead: agents
+          view or search the llms.txt, then follow the links they need. The file
+          stays small; the detail lives behind the links.
+        </li>
+        <li>
+          <strong>
+            <code>Optional</code> lost its mechanical meaning.
+          </strong>{" "}
+          It existed to tell the expansion tool what to leave out. With the tool
+          gone, the section remains a useful convention and nothing more.
+        </li>
+      </ol>
+      <p>
+        Nothing here invalidates an existing file. If you already publish a v1
+        llms.txt, adding the two link relations is the whole upgrade.
+      </p>
+
+      <h2 id="link-relations">Link relations</h2>
+      <p>
+        The header form is usually the better one to reach for. It works on
+        non-HTML resources, including the markdown files themselves, and can be
+        added in web-server or CDN configuration without touching a single
+        template:
+      </p>
+      <CodeBlock language="http" code={LINK_HEADER} />
+      <p>
+        The equivalent in a page&apos;s <code>&lt;head&gt;</code>:
+      </p>
+      <CodeBlock language="html" code={LINK_ELEMENTS} />
+      <p>
+        Relative URLs are fine in both forms. Point{" "}
+        <code>rel=&quot;describedby&quot;</code> at the most specific llms.txt
+        that covers the page, not always the one at the site root.
       </p>
 
       <h2 id="daloyjs-dev">How daloyjs.dev implements it</h2>
@@ -182,6 +278,22 @@ export default function Page() {
           Blog posts under the final <code>## Optional</code> section.
         </li>
       </ul>
+      <p>
+        Two more surfaces implement the v2 half. There is a second, narrower
+        index at{" "}
+        <a href="https://daloyjs.dev/docs/llms.txt" rel="noopener noreferrer">
+          /docs/llms.txt
+        </a>{" "}
+        covering just the documentation, built from the same{" "}
+        <code>getDocsSearchSections()</code> call. And{" "}
+        <code>website/proxy.ts</code> stamps the <code>Link:</code> header onto
+        every response, so a docs page advertises its <code>.md</code> sibling
+        and points at <code>/docs/llms.txt</code>, while the rest of the site
+        points at the root <code>/llms.txt</code>. The matching{" "}
+        <code>&lt;link rel=&quot;alternate&quot;&gt;</code> element comes from{" "}
+        <code>buildMetadata()</code> in <code>website/lib/seo.ts</code>, so
+        every docs page gets it without per-page wiring.
+      </p>
       <p>
         Agents that prefer structured tools over page fetches can use{" "}
         <code>https://daloyjs.dev/mcp</code> (
@@ -236,7 +348,20 @@ export default function Page() {
           low-chrome content.
         </li>
         <li>
-          <code>## Optional</code> is last when you include secondary material.
+          <code>## Optional</code> is last when you include secondary material
+          (a convention now, not a parser directive).
+        </li>
+        <li>
+          Pages advertise their markdown sibling with{" "}
+          <code>rel=&quot;alternate&quot; type=&quot;text/markdown&quot;</code>{" "}
+          and their index with <code>rel=&quot;describedby&quot;</code>, as a{" "}
+          <code>Link:</code> header, <code>&lt;link&gt;</code> elements, or
+          both.
+        </li>
+        <li>
+          A file at a subpath covers the pages beneath it. If you publish{" "}
+          <code>/docs/llms.txt</code>, point the docs pages&apos;{" "}
+          <code>describedby</code> at it rather than at the root file.
         </li>
         <li>
           <code>robots.txt</code> still allows the bots you intend to read docs;

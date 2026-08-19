@@ -15,7 +15,9 @@
  * `website/` tree and fails (exit 1) on any of:
  *
  *   1. **Broken internal link** — an `href="/docs/..."` inside a docs page
- *      that does not resolve to a real `website/app/docs/<route>/page.tsx`.
+ *      that does not resolve to a real `website/app/docs/<route>/page.tsx`
+ *      or `route.ts` (route handlers such as the `/docs/llms.txt` subpath
+ *      index are linkable routes too, they are just not pages).
  *   2. **Dangling nav entry** — a `docsNav` `href` with no backing page.
  *   3. **Dangling sitemap entry** — a `STATIC_PATHS` `/docs/...` path with no
  *      backing page.
@@ -25,6 +27,11 @@
  *   5. **Nav / sitemap drift** — a nav `href` that is not also in the sitemap.
  *   6. **Broken anchor** — a link to `/docs/page#fragment` whose target page
  *      contains no element with `id="fragment"`.
+ *
+ * A `/docs/<route>.md` link resolves against `/docs/<route>`: those are the
+ * markdown siblings the llms.txt v2 `rel="alternate"` relation points at,
+ * served by `app/docs-md/[[...slug]]/route.ts` via a rewrite. Linking the
+ * markdown sibling of a page that no longer exists is still a broken link.
  *
  * Pure read-only static analysis over file text (the same approach as the
  * other `verify:*` gates) — it does not import the Next app or run a build, so
@@ -63,8 +70,17 @@ export interface DocsLinkProblem {
   readonly detail: string;
 }
 
-/** Recursively collect every `page.tsx` under a directory URL. */
-async function collectPageFiles(dir: URL): Promise<URL[]> {
+/**
+ * Recursively collect every file with the given name under a directory URL.
+ *
+ * @param dir - Directory to walk.
+ * @param fileName - Route-defining file to match, `page.tsx` by default.
+ *   Pass `route.ts` to collect route handlers instead.
+ */
+async function collectPageFiles(
+  dir: URL,
+  fileName = "page.tsx",
+): Promise<URL[]> {
   const out: URL[] = [];
   let entries: string[];
   try {
@@ -76,8 +92,8 @@ async function collectPageFiles(dir: URL): Promise<URL[]> {
     const child = new URL(`${name}`, dir);
     const info = await stat(child);
     if (info.isDirectory()) {
-      out.push(...(await collectPageFiles(new URL(`${name}/`, dir))));
-    } else if (name === "page.tsx") {
+      out.push(...(await collectPageFiles(new URL(`${name}/`, dir), fileName)));
+    } else if (name === fileName) {
       out.push(child);
     }
   }
@@ -85,13 +101,16 @@ async function collectPageFiles(dir: URL): Promise<URL[]> {
 }
 
 /**
- * Map a `website/app/.../page.tsx` URL to its route path, e.g.
- * `website/app/docs/email/resend/page.tsx` -> `/docs/email/resend` and
- * `website/app/docs/page.tsx` -> `/docs`.
+ * Map a `website/app/.../page.tsx` or `.../route.ts` URL to its route path,
+ * e.g. `website/app/docs/email/resend/page.tsx` -> `/docs/email/resend`,
+ * `website/app/docs/page.tsx` -> `/docs`, and
+ * `website/app/docs/llms.txt/route.ts` -> `/docs/llms.txt`.
  */
 function pageUrlToRoute(page: URL): string {
   const rel = relative(fileURLToPath(WEBSITE_APP), fileURLToPath(page));
-  const noPage = rel.replace(/[/\\]page\.tsx$/, "").replace(/\\/g, "/");
+  const noPage = rel
+    .replace(/[/\\](?:page\.tsx|route\.ts)$/, "")
+    .replace(/\\/g, "/");
   return `/${noPage}`;
 }
 
@@ -159,23 +178,37 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
     sourceByPage.set(fileURLToPath(page), source);
   }
 
+  // Route handlers under `app/docs` (currently the `/docs/llms.txt` subpath
+  // index) are real, linkable routes, but they are not pages: they render no
+  // markup, so they declare no element ids, and they are machine files that
+  // deliberately stay out of the human-facing sitemap the way `/llms.txt`
+  // does. Track them separately so they satisfy link checks without tripping
+  // the sitemap-completeness rule below.
+  const handlerRoutes = await collectPageFiles(DOCS_DIR, "route.ts");
+  const handlerRouteSet = new Set(
+    handlerRoutes.map((file) => normalizeRoute(pageUrlToRoute(file))),
+  );
+
   // 2. Internal docs links inside docs pages (+ anchor checks).
   for (const [pagePath, source] of sourceByPage) {
     for (const href of extractHrefStrings(source)) {
       if (!href.startsWith("/docs")) continue; // external / non-docs handled elsewhere
       const [pathPart, fragment] = href.split("#", 2);
       const target = normalizeRoute(pathPart!);
-      if (!routeSet.has(target)) {
+      // A .md sibling is a real URL (rewritten to the markdown route
+      // handler) whose existence is determined by its base page.
+      const resolved = target.endsWith(".md") ? target.slice(0, -3) : target;
+      if (!routeSet.has(resolved) && !handlerRouteSet.has(target)) {
         problems.push({
           kind: "broken-link",
           source: rel(pagePath),
           target: href,
-          detail: `links to "${target}" but no website/app${target}/page.tsx exists`,
+          detail: `links to "${target}" but no website/app${resolved}/page.tsx or route.ts exists`,
         });
         continue;
       }
       if (fragment) {
-        const ids = idsByRoute.get(target);
+        const ids = idsByRoute.get(resolved);
         if (!ids || !ids.has(fragment)) {
           problems.push({
             kind: "broken-anchor",
@@ -209,7 +242,7 @@ export async function scanDocsLinks(): Promise<DocsLinkProblem[]> {
   const sitemapPaths = new Set(
     extractSitemapPaths(sitemapSource)
       .filter((p) => p.startsWith("/docs"))
-      .map(normalizeRoute)
+      .map(normalizeRoute),
   );
   for (const path of sitemapPaths) {
     if (!routeSet.has(path)) {
@@ -251,11 +284,13 @@ async function main(): Promise<void> {
   const problems = await scanDocsLinks();
   if (problems.length === 0) {
     console.log(
-      "verify-docs-links: all docs links, nav entries, sitemap entries, and anchors resolve."
+      "verify-docs-links: all docs links, nav entries, sitemap entries, and anchors resolve.",
     );
     return;
   }
-  console.error(`verify-docs-links: found ${problems.length} docs link/nav/sitemap problem(s):\n`);
+  console.error(
+    `verify-docs-links: found ${problems.length} docs link/nav/sitemap problem(s):\n`,
+  );
   for (const p of problems) {
     console.error(`  [${p.kind}] ${p.source}\n    -> ${p.target}: ${p.detail}`);
   }

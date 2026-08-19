@@ -91,20 +91,46 @@ function getDefaultImage(path: string): string {
  * Build a Next.js `Metadata` object with consistent SEO defaults:
  * canonical URL, OpenGraph, Twitter card, robots, and keyword merging.
  */
+/**
+ * Whether a site path is a documentation page, and therefore has a markdown
+ * sibling served by `app/docs-md/[[...slug]]/route.ts`.
+ *
+ * `/docs/llms.txt` is a route handler rather than a docs page, so it is
+ * excluded; it never calls {@link buildMetadata}, but the check keeps the
+ * predicate honest for callers that might.
+ *
+ * @param path - Site-absolute path, e.g. `/docs/routing`.
+ * @returns `true` when a `.md` sibling exists for the path.
+ */
+function isDocsPath(path: string): boolean {
+  return (
+    (path === "/docs" || path.startsWith("/docs/")) &&
+    !path.endsWith(".md") &&
+    !path.endsWith("/llms.txt")
+  );
+}
+
 export function buildMetadata(input: PageSeoInput): Metadata {
   const path = input.path.startsWith("/") ? input.path : `/${input.path}`;
   const url = `${SITE_URL}${path}`;
   const fullTitle = `${input.title} · ${SITE_NAME}`;
   const image = input.image ?? getDefaultImage(path);
   const keywords = Array.from(
-    new Set([...(input.keywords ?? []), ...DEFAULT_KEYWORDS])
+    new Set([...(input.keywords ?? []), ...DEFAULT_KEYWORDS]),
   );
 
   return {
     title: input.title,
     description: input.description,
     keywords,
-    alternates: { canonical: path },
+    alternates: {
+      canonical: path,
+      // llms.txt v2 link relation: every docs page has a markdown sibling at
+      // the same URL with `.md` appended, and says so in its `<head>`. The
+      // matching `rel="describedby"` pointer, and the header form of both
+      // relations, are set in proxy.ts.
+      ...(isDocsPath(path) ? { types: { "text/markdown": `${path}.md` } } : {}),
+    },
     openGraph: {
       type: input.type ?? "website",
       url,

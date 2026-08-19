@@ -39,7 +39,58 @@ function buildContentSecurityPolicy(nonce: string): string {
 }
 
 /**
- * Next.js Proxy that attaches a fresh CSP nonce to every HTML navigation.
+ * Paths under `/docs` that are not documentation pages and therefore have no
+ * markdown sibling to advertise.
+ */
+const NON_PAGE_DOCS_SEGMENTS = new Set(["llms.txt", "opengraph-image"]);
+
+/**
+ * Build the RFC 8288 `Link` header value implementing llms.txt v2 discovery.
+ *
+ * v2 added standard link relations so an agent holding a page can find that
+ * page's markdown version, and the llms.txt file covering it, without guessing:
+ * `rel="alternate" type="text/markdown"` points at the markdown, and
+ * `rel="describedby"` points at the llms.txt. Emitting them as a response
+ * header (rather than only as HTML `<link>` elements) means the relations also
+ * reach non-HTML resources such as the `.md` files themselves, and that an
+ * agent never has to parse HTML to follow them.
+ *
+ * Because an llms.txt file covers the pages under its own path and agents use
+ * the most specific match, docs URLs are described by `/docs/llms.txt` and
+ * everything else by the site-wide `/llms.txt`.
+ *
+ * @param pathname - Request pathname, before any rewrite is applied.
+ * @returns The serialized `Link` header value.
+ */
+function buildLlmsTxtLinkHeader(pathname: string): string {
+  const path =
+    pathname.length > 1 && pathname.endsWith("/")
+      ? pathname.slice(0, -1)
+      : pathname;
+  const isDocs = path === "/docs" || path.startsWith("/docs/");
+  const relations: string[] = [];
+
+  // A docs page advertises its markdown sibling. The markdown files, the
+  // llms.txt files, and the generated OG images have no sibling of their own.
+  const lastSegment = path.slice(path.lastIndexOf("/") + 1);
+  if (
+    isDocs &&
+    !path.endsWith(".md") &&
+    !NON_PAGE_DOCS_SEGMENTS.has(lastSegment)
+  ) {
+    relations.push(`<${path}.md>; rel="alternate"; type="text/markdown"`);
+  }
+
+  relations.push(
+    `<${isDocs ? "/docs/llms.txt" : "/llms.txt"}>; rel="describedby"`,
+  );
+
+  return relations.join(", ");
+}
+
+/**
+ * Next.js Proxy that attaches a fresh CSP nonce to every HTML navigation, and
+ * the llms.txt v2 discovery relations to every response.
  *
  * A cryptographically random nonce is minted per request, forwarded to the app
  * on the `x-nonce` request header (so the root layout can stamp it onto
@@ -51,8 +102,13 @@ function buildContentSecurityPolicy(nonce: string): string {
  * scripts and websocket connections that a strict policy would reject, so dev
  * keeps the relaxed default while still receiving the `x-nonce` header.
  *
+ * The `Link` header is set in every environment: it carries no secrets, and
+ * agents reading a preview deployment should get the same discovery relations
+ * as agents reading production. See {@link buildLlmsTxtLinkHeader}.
+ *
  * @param request - The incoming request.
- * @returns The response with the nonce and (in production) the CSP applied.
+ * @returns The response with the nonce, the llms.txt relations, and (in
+ *   production) the CSP applied.
  */
 export function proxy(request: NextRequest): NextResponse {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
@@ -75,6 +131,11 @@ export function proxy(request: NextRequest): NextResponse {
       buildContentSecurityPolicy(nonce),
     );
   }
+
+  response.headers.set(
+    "link",
+    buildLlmsTxtLinkHeader(request.nextUrl.pathname),
+  );
 
   return response;
 }
