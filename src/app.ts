@@ -31,6 +31,7 @@ import {
   isForbiddenObjectKey,
 } from "./security.js";
 import { createLogger, noopLogger, sanitizeUrlForLog, type Logger } from "./logger.js";
+import { createAppTelemetry, type AppTelemetry, type TelemetryOptions } from "./otlp.js";
 import type {
   BaseContext,
   HttpMethod,
@@ -272,6 +273,19 @@ export interface AppOptions {
 
   /** Validate handler responses against declared response schemas. Default: true. */
   validateResponses?: boolean;
+
+  /**
+   * OpenTelemetry OTLP push export. `true` (or an options object) exports the
+   * app logger's output as OTLP logs and records `http.server.request.duration`
+   * per the OTel HTTP semantic conventions, pushed to the collector named by
+   * the standard `OTEL_EXPORTER_OTLP_*` environment variables. A silent no-op
+   * when no endpoint is configured, so it is safe to keep enabled in
+   * development. Export failures never affect request serving. See
+   * {@link TelemetryOptions}.
+   *
+   * @since 1.2.0
+   */
+  telemetry?: boolean | TelemetryOptions;
 
   /** Hard cap on request body size in bytes. Default: 1 MiB. */
   bodyLimitBytes?: number;
@@ -1431,6 +1445,13 @@ export class App<
   /** Structured logger for the app. Defaults to a JSON-lines console logger; override via `options.logger`. */
   readonly log: Logger;
   /**
+   * OTLP telemetry wiring created by the `telemetry` option; `undefined` when
+   * the option is off. Exposed for tests and advanced flushing.
+   *
+   * @since 1.2.0
+   */
+  readonly telemetry?: AppTelemetry;
+  /**
    * Public registry: enables OpenAPI gen, typed-client gen, dead-route detection.
    *
    * Statically the property is typed as the `Routes` tuple so that
@@ -1572,12 +1593,23 @@ export class App<
       jsonMaxDepth: resolved.jsonMaxDepth ?? DEFAULTS.jsonMaxDepth,
       ...resolved,
     };
+    // Telemetry is resolved before the logger so the logger's write sink can
+    // tee into the OTLP log exporter. Inert when no endpoint is configured.
+    const telemetryOpt = options.telemetry;
+    this.telemetry =
+      telemetryOpt === undefined || telemetryOpt === false
+        ? undefined
+        : createAppTelemetry(telemetryOpt === true ? {} : telemetryOpt);
+    const telemetryWrite = this.telemetry?.logWrite;
     this.log =
       options.logger === false
         ? noopLogger
         : options.logger && typeof (options.logger as Logger).info === "function"
           ? (options.logger as Logger)
-          : createLogger({ level: (options.logger as any)?.level ?? "info" });
+          : createLogger({
+              level: (options.logger as any)?.level ?? "info",
+              ...(telemetryWrite !== undefined ? { write: telemetryWrite } : {}),
+            });
 
     this.warnOnEnvMismatch();
     this.assertDisconnectStatusCode();
@@ -1589,6 +1621,22 @@ export class App<
     this.maybeInstallCrashHandlers();
     this.maybeMountDocs();
     this.maybeMountAsyncAPI();
+    if (this.telemetry !== undefined) {
+      if (this.telemetry.hooks !== undefined) this.use(this.telemetry.hooks);
+      const telemetry = this.telemetry;
+      this.onClose(() => telemetry.flush());
+      this.log.info(
+        {
+          event: "telemetry.otlp",
+          active: telemetry.endpoint !== null,
+          // Endpoint only — OTLP headers may carry tenant credentials.
+          endpoint: telemetry.endpoint ?? undefined,
+        },
+        telemetry.endpoint !== null
+          ? "OTLP telemetry export active"
+          : "Telemetry enabled but no OTEL_EXPORTER_OTLP_ENDPOINT configured; export disabled"
+      );
+    }
   }
 
   /**
@@ -4102,6 +4150,8 @@ export class App<
       // perimeter hooks can reject unauthenticated callers without consuming
       // an attacker-controlled request stream.
       ctx = createPreBodyContext(request, getUrl, match.params);
+      // Matched route template for low-cardinality labels (`http.route`).
+      ctx.routePath = def.path as string;
       // Stable two-field write keeps `ctx.state`'s hidden class consistent across
       // requests for the common no-decorator case. The decorations spread only
       // fires when `app.decorate()` was actually called.
@@ -4943,17 +4993,18 @@ function finalizeResponse(
     if (isPromiseLike(sentResult)) {
       return sentResult.then((sent) => {
         if (sent instanceof Response) final = sent;
-        return finishFinalize(final, hooks, stripFingerprint);
+        return finishFinalize(final, ctx, hooks, stripFingerprint);
       });
     }
     if (sentResult instanceof Response) final = sentResult;
   }
 
-  return finishFinalize(final, hooks, stripFingerprint);
+  return finishFinalize(final, ctx, hooks, stripFingerprint);
 }
 
 function finishFinalize(
   res: Response,
+  ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onResponse">,
   stripFingerprint: boolean
 ): Response | PromiseLike<Response> {
@@ -4962,7 +5013,7 @@ function finishFinalize(
     res.headers.delete("x-powered-by");
   }
   if (hooks.onResponse !== undefined) {
-    const onResponseResult = hooks.onResponse(res);
+    const onResponseResult = hooks.onResponse(res, ctx);
     if (isPromiseLike(onResponseResult)) {
       return onResponseResult.then(() => res);
     }
@@ -5157,6 +5208,7 @@ class RequestContext {
   body: any = undefined;
   state: any;
   set: LazyResponseSet;
+  routePath: string | undefined = undefined;
   _q: any = undefined;
   _qBuilder: (() => any) | undefined = undefined;
   _qSet: boolean = false;

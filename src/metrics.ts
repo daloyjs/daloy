@@ -502,6 +502,9 @@ export function httpMetrics(opts: HttpMetricsOptions): Hooks {
 
   const routeLabel = (ctx: BaseContext<any, any>): string => {
     if (opts.route) return opts.route(ctx) ?? "<unknown>";
+    // The router stamps the matched route template on the context; it is
+    // low-cardinality by construction, so no cap bookkeeping is needed.
+    if (typeof ctx.routePath === "string") return ctx.routePath;
     let path = "/";
     try {
       path = new URL(ctx.request.url).pathname;

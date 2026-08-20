@@ -17,8 +17,55 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-20
+
+**Native OpenTelemetry OTLP push export.** Purely additive: nothing changes
+unless you set the new `telemetry` App option or call the new `otlp` module.
+Motivated by production DaloyJS services on collector-based platforms
+(injected `OTEL_EXPORTER_OTLP_*` variables, nothing scraping stdout or
+`/metrics`), where the OTel Node SDK's ESM loader hooks are fragile on native
+TS/ESM Node and unavailable on edge runtimes.
+
+### Added
+
+- **`new App({ telemetry: true })`** — one flag exports the app logger's
+  output as OTLP logs and records `http.server.request.duration` per the OTel
+  HTTP semantic conventions, pushed as OTLP/HTTP JSON to the collector named
+  by the standard `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS`
+  / `OTEL_RESOURCE_ATTRIBUTES` / `OTEL_SERVICE_NAME` environment variables —
+  zero configuration on platforms that inject them, and a silent no-op when
+  they are absent (safe to keep enabled in development). Fine-grained control
+  via `telemetry: { logs?, metrics?, exporter? }` (see `TelemetryOptions`);
+  the wiring is exposed as `app.telemetry` and flushed on shutdown.
+- **`@daloyjs/core/otlp`** — dependency-free OTLP/HTTP JSON exporters usable
+  standalone: `createOtlpLogExporter()` (batched, drop-oldest queue cap,
+  severity mapping, JSON-line decomposition into body + attributes) and
+  `createOtlpMetricsExporter()` (cumulative monotonic sums + explicit-bounds
+  histograms, so totals survive failed pushes). Fail-safe by contract: a
+  dead or misconfigured collector never affects request serving — bounded
+  memory, dropped-batch counters, no retry storms. Header values (multi-tenant
+  collector credentials) are never logged.
+- **`semconvHttpMetrics(sink)`** — a `Hooks` bundle emitting
+  `http.server.request.duration` with spec-exact attributes
+  (`http.request.method` normalized to the well-known set else `_OTHER`,
+  `http.route` as the matched route **template**, `http.response.status_code`,
+  `url.scheme`, `error.type` on `5xx`) and spec bucket boundaries
+  (`HTTP_SERVER_REQUEST_DURATION_BUCKETS`), so standard OTel dashboards work
+  unchanged. Series cardinality is capped and attribute values are
+  length-truncated; unmatched 404s record nothing (the framework's 404 fast
+  path builds no context), so raw paths can never mint metric series.
+- **`ctx.routePath`** — the matched route's path template (e.g.
+  `/books/:id`), stamped on the request context at routing time and available
+  to every context-bearing hook. `httpMetrics()`'s default `route` label now
+  prefers it, replacing the capped pathname fallback with the correct
+  low-cardinality template.
+
 ### Changed
 
+- **`Hooks.onResponse` now receives the request context** as an optional
+  second argument (`(res, ctx?) => ...`). Backwards-compatible: existing
+  single-parameter observers keep working unchanged; `ctx` is `undefined` on
+  paths where no context was built (early-guard rejections, unmatched 404s).
 - `create-daloy` template skills now put MCP and `--with-ci` workflow guidance
   in `references/` instead of the hot `SKILL.md` body, and the YAML
   descriptions name both what the skill does and the user phrasing that
@@ -3005,7 +3052,9 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/daloyjs/daloy/compare/v1.1.1...v1.2.0
+[1.1.1]: https://github.com/daloyjs/daloy/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/daloyjs/daloy/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.9...v1.0.0
 [1.0.0-rc.9]: https://github.com/daloyjs/daloy/compare/v1.0.0-rc.8...v1.0.0-rc.9

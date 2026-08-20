@@ -1,6 +1,6 @@
 {
   "name": "@daloyjs/daloy",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
@@ -31,6 +31,7 @@
     "./response-cache": "./src/response-cache.ts",
     "./pagination": "./src/pagination.ts",
     "./metrics": "./src/metrics.ts",
+    "./otlp": "./src/otlp.ts",
     "./fetch-resilience": "./src/fetch-resilience.ts",
     "./webhook-delivery": "./src/webhook-delivery.ts",
     "./scheduler": "./src/scheduler.ts",

@@ -96,6 +96,7 @@ export const docsNav: DocsNavSection[] = [
     items: [
       { title: "Tracing (OpenTelemetry)", href: "/docs/tracing" },
       { title: "Metrics (Prometheus)", href: "/docs/metrics" },
+      { title: "OTLP export (OTel push)", href: "/docs/otlp" },
     ],
   },
   {

@@ -219,7 +219,7 @@ test("httpMetrics exclude predicate skips instrumentation but still balances in-
   assert.match(out, /\ndaloy_http_requests_in_flight 0\n/);
 });
 
-test("default route label cardinality collapses overflow to <other>", async () => {
+test("default route label prefers the matched template; pathname cap applies only without one", async () => {
   const reg = new MetricsRegistry();
   const app = new App({ env: "development" });
   app.use(httpMetrics({ registry: reg, maxRouteCardinality: 1 }));
@@ -232,8 +232,11 @@ test("default route label cardinality collapses overflow to <other>", async () =
   await app.fetch(new Request("http://x/a/1"));
   await app.fetch(new Request("http://x/a/2"));
   const out = reg.render();
-  assert.match(out, /route="\/a\/1"/);
-  assert.match(out, /route="&lt;other&gt;"|route="<other>"/);
+  // ctx.routePath supplies the low-cardinality template, so distinct params
+  // collapse into one series and the <other> overflow label never appears.
+  assert.match(out, /route="\/a\/:id"\} 2/);
+  assert.doesNotMatch(out, /route="\/a\/1"/);
+  assert.doesNotMatch(out, /route="<other>"/);
 });
 
 // ---------- app.metrics() route ----------

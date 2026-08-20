@@ -532,6 +532,23 @@ export {
 export type { MetricLabels, MetricsRegistryOptions, HttpMetricsOptions } from "./metrics.js";
 
 export {
+  createOtlpLogExporter,
+  createOtlpMetricsExporter,
+  createAppTelemetry,
+  semconvHttpMetrics,
+  HTTP_SERVER_REQUEST_DURATION_BUCKETS,
+} from "./otlp.js";
+export type {
+  OtlpExporterOptions,
+  OtlpLogExporter,
+  OtlpMetricsExporter,
+  OtlpHistogramOptions,
+  SemconvHttpMetricsOptions,
+  TelemetryOptions,
+  AppTelemetry,
+} from "./otlp.js";
+
+export {
   fileField,
   multipartObject,
   isFileFieldSchema,

@@ -290,6 +290,15 @@ export interface BaseContext<P extends string, R extends RequestSchemas | undefi
   body: InferRequest<R, P>["body"];
   /** Mutable per-request state. Plugin-augmented context lives here. */
   state: AppState & Record<string, unknown>;
+  /**
+   * The matched route's path **template** (e.g. `/books/:id`), set as soon as
+   * routing succeeds. `undefined` on framework-synthesised contexts (404/405
+   * error contexts, OPTIONS preflight). Use it for low-cardinality metric
+   * labels (`http.route`) instead of the raw request path.
+   *
+   * @since 1.2.0
+   */
+  routePath?: string;
   /** Convenience response helpers (do not bypass schema validation). */
   set: {
     status?: number;
@@ -322,6 +331,13 @@ export interface PreBodyContext<P extends string = string> {
   body: undefined;
   /** Mutable per-request state shared with later hooks and the handler. */
   state: AppState & Record<string, unknown>;
+  /**
+   * The matched route's path template (routing has already succeeded when
+   * `preBody` runs). See {@link BaseContext.routePath}.
+   *
+   * @since 1.2.0
+   */
+  routePath?: string;
   /** Response headers/status available to a short-circuiting perimeter hook. */
   set: {
     status?: number;
@@ -412,8 +428,11 @@ export interface Hooks {
     res: Response,
     ctx: BaseContext<any, any> | undefined
   ) => void | Response | Promise<void | Response>;
-  /** Fire-and-forget observer of the final outgoing `Response` (logging, metrics). Runs last; cannot alter the response. */
-  onResponse?: (res: Response) => void | Promise<void>;
+  /** Fire-and-forget observer of the final outgoing `Response` (logging, metrics). Runs last; cannot alter the response. `ctx` is `undefined` when the error occurred before context was built. */
+  onResponse?: (
+    res: Response,
+    ctx?: BaseContext<any, any> | undefined
+  ) => void | Promise<void>;
 }
 
 // ---------- Route definition ----------
