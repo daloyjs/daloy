@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { Noto_Sans, Playfair_Display } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
@@ -119,12 +119,15 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-const playfairDisplayHeading = Playfair_Display({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-heading",
+  variable: "--font-sans",
 });
 
-const notoSans = Noto_Sans({ subsets: ["latin"], variable: "--font-sans" });
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+});
 
 export default async function RootLayout({
   children,
@@ -143,8 +146,8 @@ export default async function RootLayout({
       className={cn(
         "antialiased",
         "font-sans",
-        notoSans.variable,
-        playfairDisplayHeading.variable
+        inter.variable,
+        geistMono.variable
       )}
     >
       <body className="flex min-h-screen flex-col bg-background font-sans antialiased">
