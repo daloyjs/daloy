@@ -101,6 +101,14 @@ serve(app, { port: 3000 });`;
 
 const CREATE_COMMAND = "pnpm create daloy@latest my-api";
 
+const HERO_FACTS = [
+  "2,357/2,357 tests passing",
+  "≥90% line/function and ≥92% branch coverage gates",
+  "0 runtime dependencies",
+  "Node 24 LTS, Node 26+, Bun, Deno, Cloudflare",
+  "MIT licensed",
+] as const;
+
 const MCP_ENDPOINT_URL = "https://daloyjs.dev/mcp";
 
 const MCP_CLIENT_CONFIG = `{
@@ -323,20 +331,20 @@ export default function HomePage() {
               </code>
               <CodeCopyButton code={CREATE_COMMAND} />
             </div>
-            <div
-              className='float-up flex flex-wrap justify-center gap-x-6 gap-y-2 font-features-["tnum"] text-xs text-muted-foreground'
+            <ul
+              aria-label="Project facts"
+              className='float-up flex flex-wrap justify-center gap-2 font-features-["tnum"] text-xs text-muted-foreground'
               style={{ animationDelay: "240ms" }}
             >
-              <span>2,357/2,357 tests passing</span>
-              <span aria-hidden>·</span>
-              <span>≥90% line/function and ≥92% branch coverage gates</span>
-              <span aria-hidden>·</span>
-              <span>0 runtime dependencies</span>
-              <span aria-hidden>·</span>
-              <span>Node 24 LTS, Node 26+, Bun, Deno, Cloudflare</span>
-              <span aria-hidden>·</span>
-              <span>MIT licensed</span>
-            </div>
+              {HERO_FACTS.map((fact) => (
+                <li
+                  key={fact}
+                  className="rounded-md border border-border/70 bg-muted/30 px-2.5 py-1"
+                >
+                  {fact}
+                </li>
+              ))}
+            </ul>
             <ContractFlowVisual />
             <p
               className="float-up max-w-2xl text-lg leading-8 text-muted-foreground"
