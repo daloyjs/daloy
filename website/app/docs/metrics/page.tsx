@@ -42,9 +42,26 @@ export default function Page() {
       </p>
       <p>
         Everything is built on Web-standard primitives (plus optional{" "}
-        <code>process.*</code> gauges guarded for non-Node runtimes), so it runs
-        unchanged on Node, Bun, Deno, and Cloudflare Workers.
+        <code>process.*</code> gauges guarded for non-Node runtimes). The
+        registry runs on Node, Bun, Deno, and Cloudflare Workers. Pull
+        scraping is a different question, see below.
       </p>
+      <div className="my-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+        <p className="font-semibold">
+          Pull scrape is not a service-wide signal on ephemeral compute
+        </p>
+        <p className="mt-2">
+          A <code>GET /metrics</code> on Cloudflare Workers, Vercel, or AWS
+          Lambda returns whatever one isolate happened to accumulate. Isolates
+          are many and short-lived, so that number is not a measurement of
+          your service. Use{" "}
+          <a href="/docs/otlp">
+            <code>telemetry: true</code> (OTLP push)
+          </a>{" "}
+          on those runtimes. Long-lived Node, Bun, and Deno processes are
+          the ones <code>app.metrics()</code> is for.
+        </p>
+      </div>
 
       <FlowDiagram
         title="From request to scrape"
@@ -106,10 +123,10 @@ app.get(
 );
 
 // GET /metrics  (Authorization: Bearer <METRICS_TOKEN>)
-// # TYPE daloy_http_requests_total counter
-// daloy_http_requests_total{method="GET",route="/books",status="200"} 1
-// # TYPE daloy_http_request_duration_seconds histogram
-// daloy_http_request_duration_seconds_bucket{method="GET",route="/books",le="0.005"} 1
+// # TYPE http_requests_total counter
+// http_requests_total{method="GET",route="/books",status="200"} 1
+// # TYPE http_request_duration_seconds histogram
+// http_request_duration_seconds_bucket{method="GET",route="/books",le="0.005"} 1
 // ...`}
         language="ts"
       />
@@ -117,33 +134,42 @@ app.get(
         Because the instrumentation is installed as a group hook, it only wraps
         matched routes registered <em>after</em> the <code>app.metrics()</code>{" "}
         call, the same ordering rule as any <code>app.use(...)</code>{" "}
-        middleware. Unmatched <code>404</code> paths and synthetic{" "}
-        <code>OPTIONS</code> preflights are not counted.
+        middleware. Calling it after routes already exist logs a{" "}
+        <code>metrics.late_install</code> warning listing the uninstrumented
+        paths (auto-mounted docs and health routes are ignored). Unmatched{" "}
+        <code>404</code> paths and synthetic <code>OPTIONS</code> preflights
+        are not counted.
       </p>
 
       <h2 id="what-gets-exported">What gets exported</h2>
       <p>Out of the box, the scrape route exposes:</p>
       <ul>
         <li>
-          <code>daloy_http_requests_total{`{method,route,status}`}</code>
+          <code>http_requests_total{`{method,route,status}`}</code>
           {": "}a request counter (rate; the error rate is the subset with a{" "}
           <code>4xx</code>/<code>5xx</code> status).
         </li>
         <li>
-          <code>daloy_http_request_duration_seconds{`{method,route}`}</code>
+          <code>http_request_duration_seconds{`{method,route}`}</code>
           {": "}a latency histogram with conventional Prometheus buckets.
         </li>
         <li>
-          <code>daloy_http_requests_in_flight</code>
+          <code>http_requests_in_flight</code>
           {": "}a gauge of concurrently-handled requests.
         </li>
         <li>
-          process gauges (<code>daloy_process_resident_memory_bytes</code>
+          process gauges (<code>process_resident_memory_bytes</code>
           {", "}
-          <code>daloy_process_heap_used_bytes</code>
+          <code>process_heap_used_bytes</code>
           {", "}
-          <code>daloy_process_uptime_seconds</code>) collected at scrape time on
-          Node-like runtimes.
+          <code>process_uptime_seconds</code>) collected at scrape time on
+          Node-like runtimes. These use the unprefixed names stock Grafana
+          memory panels already query.
+        </li>
+        <li>
+          <code>daloy_metrics_series_dropped_total</code>
+          {": "}the only <code>daloy_</code>-prefixed series by default, because
+          it is framework-specific (cardinality-cap overflow).
         </li>
       </ul>
 
@@ -226,10 +252,15 @@ app.get(
               <td>
                 <code>(ctx) =&gt; string | undefined</code>
               </td>
-              <td>pathname (capped)</td>
               <td>
-                Resolve the low-cardinality <code>route</code> label. Always
-                prefer the route template over the raw pathname.
+                matched template (<code>ctx.routePath</code>)
+              </td>
+              <td>
+                Resolve the low-cardinality <code>route</code> label. The
+                default is the route template (e.g.{" "}
+                <code>/books/:id</code>), bounded by your route table, so a
+                hostile client cannot mint series from raw paths. Override
+                only when you need a different grouping.
               </td>
             </tr>
             <tr>
@@ -243,8 +274,10 @@ app.get(
                 <code>100</code>
               </td>
               <td>
-                Hard cap on distinct pathname-derived route labels. Overflow
-                collapses to <code>&lt;other&gt;</code>.
+                Hard cap on the pathname fallback (used only when no route
+                template is on the context). Overflow collapses to{" "}
+                <code>&lt;other&gt;</code>. Ignored when you pass{" "}
+                <code>route</code>.
               </td>
             </tr>
             <tr>
@@ -304,27 +337,32 @@ app.get(
 
       <h2 id="the-route-label">The route label</h2>
       <p>
-        High-cardinality labels are the classic way to melt a Prometheus server.
-        By default the <code>route</code> label uses the request pathname,
-        capped at <code>maxRouteCardinality</code> (100) distinct values before
-        further paths collapse to <code>&lt;other&gt;</code>
-        {". "}For templated routes, supply a resolver that returns the route{" "}
-        <strong>template</strong>
+        High-cardinality labels are the classic way to melt a Prometheus
+        server. The default <code>route</code> label is the matched route{" "}
+        <strong>template</strong> from <code>ctx.routePath</code>
         {": "}
+        <code>/books/1</code> and <code>/books/2</code> both record as{" "}
+        <code>/books/:id</code>. That space is bounded by the route table at
+        boot, so an attacker hitting <code>/aaa</code>, <code>/aab</code>,{" "}
+        <code>/aac</code> cannot burn the cardinality budget. Unmatched{" "}
+        <code>404</code>s mint nothing.
       </p>
-      <CodeBlock
-        code={`app.metrics({
-  token: process.env.METRICS_TOKEN!,
-  // Group "/books/1", "/books/2", ... into a single series.
-  route: (ctx) => new URL(ctx.request.url).pathname.replace(/\\/books\\/[^/]+/, "/books/:id"),
-});`}
-        language="ts"
-      />
+      <p>
+        Override <code>route</code> only when you want a different grouping
+        (for example <code>operationId</code>). If your resolver returns a
+        raw pathname, keep it bounded yourself;{" "}
+        <code>maxRouteCardinality</code> only caps the no-template fallback.
+      </p>
 
       <h2 id="custom-application-metrics">Custom application metrics</h2>
       <p>
         Pass your own <code>MetricsRegistry</code> to register business metrics
-        that render alongside the built-in HTTP series.
+        that render alongside the built-in HTTP series. Names are unprefixed
+        by default. Pass{" "}
+        <code>{`new MetricsRegistry({ prefix: "demo_" })`}</code> if you want
+        a namespace. The cardinality-drop counter stays{" "}
+        <code>daloy_metrics_series_dropped_total</code> when the prefix is
+        empty.
       </p>
       <CodeBlock
         code={`import { App, MetricsRegistry } from "@daloyjs/core";
@@ -486,19 +524,19 @@ app.get(
       <h3 id="useful-promql-queries">Useful PromQL queries</h3>
       <CodeBlock
         code={`# Request rate (req/s) by route over the last 5 minutes
-sum by (route) (rate(daloy_http_requests_total[5m]))
+sum by (route) (rate(http_requests_total[5m]))
 
 # 5xx error rate as a fraction
-sum(rate(daloy_http_requests_total{status=~"5.."}[5m]))
-  / sum(rate(daloy_http_requests_total[5m]))
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+  / sum(rate(http_requests_total[5m]))
 
 # p99 latency per route
 histogram_quantile(0.99,
-  sum by (le, route) (rate(daloy_http_request_duration_seconds_bucket[5m]))
+  sum by (le, route) (rate(http_request_duration_seconds_bucket[5m]))
 )
 
 # Currently in-flight requests
-daloy_http_requests_in_flight`}
+http_requests_in_flight`}
         language="promql"
       />
 
@@ -511,16 +549,22 @@ daloy_http_requests_in_flight`}
       </p>
       <ul>
         <li>
-          Bearer token (<code>opts.token</code>) compared with{" "}
-          <code>timingSafeEqual</code>
-          {". "}Missing token is a <code>401</code> with{" "}
+          Bearer token (<code>opts.token</code>) compared with DaloyJS&apos;s
+          portable <code>timingSafeEqual</code> (a constant-time string
+          compare, not <code>node:crypto</code>
+          {", "}so it does not need <code>nodejs_compat</code> on Workers).
+          Missing token is a <code>401</code> with{" "}
           <code>WWW-Authenticate</code>; wrong token is a <code>403</code>.
         </li>
         <li>
           Per-IP rate limit (default{" "}
           <code>{`{ limit: 60, windowMs: 60_000 }`}</code>) returning{" "}
-          <code>429</code> with <code>Retry-After</code> on overflow. Pass{" "}
-          <code>rateLimit: false</code> to disable.
+          <code>429</code> with <code>Retry-After</code> on overflow. A
+          Prometheus scrape every 15s is 4/min; an HA pair at 10s is 12/min;
+          60/min leaves headroom for a Collector plus Prometheus. Stacking
+          Alloy + Collector + Prometheus can surprise you: a 429 looks like
+          an outage in Grafana. Pass <code>rateLimit: false</code> behind a
+          private scrape network, or raise <code>limit</code>.
         </li>
         <li>
           Refuse-to-boot

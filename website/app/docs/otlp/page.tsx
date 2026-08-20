@@ -139,7 +139,8 @@ await app.telemetry?.flush();`}
         (<code>http://host:4317</code>); a trailing <code>:4317</code> is
         rewritten to <code>:4318</code>, the collector&apos;s OTLP/HTTP port.
         Header values often carry multi-tenant routing credentials; DaloyJS
-        never logs them.
+        never logs them. Spec values are percent-encoded (
+        <code>tenant_id=a%2Cb</code> arrives as <code>a,b</code>).
       </p>
 
       <h2 id="fail-safety">Fail-safe by contract</h2>
@@ -147,7 +148,15 @@ await app.telemetry?.flush();`}
         <li>
           A dead or misconfigured collector never affects request serving:
           export errors are swallowed and counted in{" "}
-          <code>droppedBatches</code>.
+          <code>droppedBatches</code>. That counter mixes overflowed log
+          lines, failed POSTs, and series refused at the cardinality cap, so
+          do not treat it as &quot;POSTs that failed&quot; alone.
+        </li>
+        <li>
+          Every export POST is aborted after 5 seconds (override with{" "}
+          <code>exporter.flushTimeoutMs</code>) so a blackholed collector
+          cannot latch the flusher forever. Redirects are refused, so tenant
+          headers cannot follow a 302 off-box.
         </li>
         <li>
           The log queue is bounded (drop-oldest); metric series are capped and
@@ -184,6 +193,67 @@ metrics?.record("checkout_amount", { currency: "USD" }, 129.99, {
 // or install just the semconv HTTP hook on an existing app
 const app = new App({ hooks: metrics ? semconvHttpMetrics(metrics) : {} });`}
       />
+
+      <h2 id="serverless">Serverless and isolate runtimes</h2>
+      <p>
+        Long-lived Node, Bun, and Deno processes flush on an{" "}
+        <code>unref</code>&apos;d interval and again on graceful shutdown.
+        Cloudflare Workers, Vercel isolates, and AWS Lambda freeze when the
+        handler returns, so the interval never runs. Use the adapters:
+      </p>
+      <ul>
+        <li>
+          <code>toFetchHandler</code> from{" "}
+          <code>@daloyjs/core/cloudflare</code> calls{" "}
+          <code>ctx.waitUntil(app.telemetry.flush())</code> after each
+          request.
+        </li>
+        <li>
+          <code>toFetchHandler</code> / <code>toWebHandler</code> from{" "}
+          <code>@daloyjs/core/vercel</code> uses{" "}
+          <code>globalThis.waitUntil</code> when the runtime provides it.
+        </li>
+        <li>
+          <code>toLambdaHandler</code> awaits the flush before returning, so
+          the export is billed as part of the invocation.
+        </li>
+      </ul>
+      <p>
+        Workers without <code>nodejs_compat</code> cannot read{" "}
+        <code>process.env</code>. Pass{" "}
+        <code>telemetry: {"{ exporter: { endpoint, headers } }"}</code> from
+        the Worker bindings instead of relying on <code>OTEL_*</code>.
+      </p>
+
+      <h2 id="limits">What this does not do</h2>
+      <ul>
+        <li>
+          A caller-supplied <code>Logger</code> instance (pino, winston, a
+          custom sink) is not intercepted. Tee it yourself with{" "}
+          <code>createOtlpLogExporter</code> and your logger&apos;s write
+          hook. The built-in logger, or <code>{"{ level }"}</code>, is teed
+          automatically.
+        </li>
+        <li>
+          Export uses raw <code>fetch</code>, not <code>fetchGuard</code>.
+          The collector URL is operator config (the same trust class as a
+          database URL), and in-cluster collectors are typically private
+          IPs that SSRF defaults would refuse.
+        </li>
+        <li>
+          There is no OTLP trace export yet. Keep using{" "}
+          <a href="/docs/tracing">
+            <code>otelTracing()</code>
+          </a>{" "}
+          with a bring-your-own tracer.
+        </li>
+        <li>
+          Calling <code>app.fetch</code> directly on an isolate, skipping
+          the adapter, will queue telemetry and mostly never send it. Use{" "}
+          <code>toFetchHandler</code> / <code>toLambdaHandler</code>, or
+          call <code>await app.telemetry.flush()</code> yourself.
+        </li>
+      </ul>
 
       <h2 id="relationship">Pull vs push, and tracing</h2>
       <ul>

@@ -28,18 +28,43 @@ export interface FetchHandler {
   fetch: WebHandler;
 }
 
-const NEXT_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"] as const;
+const NEXT_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "OPTIONS",
+  "HEAD",
+] as const;
 /** Record of per-method handlers expected by a Next.js App Router `route.ts` file. */
 export type RouteHandlers = Record<(typeof NEXT_METHODS)[number], WebHandler>;
 
 /**
  * Wrap an {@link App} as a single web-standard fetch handler.
  *
+ * After the response is produced, any OTLP telemetry is flushed. When the
+ * runtime exposes `globalThis.waitUntil` (Vercel Fluid / Edge), that is used
+ * so the export can finish after the response is sent; otherwise the flush
+ * is started fire-and-forget.
+ *
  * @param app - The DaloyJS {@link App} that serves each incoming request.
  * @returns A {@link WebHandler} delegating to {@link App.fetch}.
  */
 export function toWebHandler(app: App): WebHandler {
-  return (req) => app.fetch(req);
+  return async (req) => {
+    const res = await app.fetch(req);
+    const telemetry = app.telemetry;
+    if (telemetry !== undefined) {
+      const pending = telemetry.flush();
+      const waitUntil = (
+        globalThis as { waitUntil?: (promise: Promise<unknown>) => void }
+      ).waitUntil;
+      if (typeof waitUntil === "function") waitUntil(pending);
+      else void pending;
+    }
+    return res;
+  };
 }
 
 /**

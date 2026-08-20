@@ -17,8 +17,11 @@
  *   `http_requests_in_flight`) into a registry.
  *
  * Everything is built on Web-standard primitives (plus optional `process.*`
- * gauges guarded for non-Node runtimes), so it runs unchanged on Node, Bun,
- * Deno, Cloudflare Workers, and Vercel.
+ * gauges guarded for non-Node runtimes). The registry and renderer run on
+ * Node, Bun, Deno, Cloudflare Workers, and Vercel; **pull scraping
+ * (`GET /metrics`) is only a service-wide signal on a long-lived process**.
+ * On ephemeral isolates use `new App({ telemetry: true })` (OTLP push)
+ * instead of scraping `/metrics`.
  *
  * @module
  * @since 0.37.0
@@ -58,7 +61,10 @@ function escapeHelp(value: string): string {
  * out of the `{...}` block and injecting forged samples.
  */
 function escapeLabelValue(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n");
 }
 
 /**
@@ -70,7 +76,9 @@ function escapeLabelValue(value: string): string {
  *
  * @throws {Error} If a label name is invalid or reserved.
  */
-function normalizeLabels(labels: MetricLabels | undefined): Array<[string, string]> {
+function normalizeLabels(
+  labels: MetricLabels | undefined,
+): Array<[string, string]> {
   if (!labels) return [];
   const entries: Array<[string, string]> = [];
   for (const key of Object.keys(labels)) {
@@ -95,7 +103,10 @@ function seriesKey(entries: Array<[string, string]>): string {
 }
 
 /** Render the `{k="v",...}` label block (already-sorted entries). */
-function renderLabelBlock(entries: Array<[string, string]>, extra?: [string, string]): string {
+function renderLabelBlock(
+  entries: Array<[string, string]>,
+  extra?: [string, string],
+): string {
   const all = extra ? [...entries, extra] : entries;
   if (all.length === 0) return "";
   const parts: string[] = [];
@@ -129,7 +140,10 @@ abstract class Metric {
 
 /** A monotonically increasing counter (RED "Rate" + "Errors"). */
 export class Counter extends Metric {
-  private series = new Map<string, { labels: Array<[string, string]>; value: number }>();
+  private series = new Map<
+    string,
+    { labels: Array<[string, string]>; value: number }
+  >();
 
   /**
    * Increment the counter for the given label set.
@@ -153,7 +167,10 @@ export class Counter extends Metric {
 
   /** @internal */
   render(): string {
-    const lines = [`# HELP ${this.name} ${escapeHelp(this.help)}`, `# TYPE ${this.name} counter`];
+    const lines = [
+      `# HELP ${this.name} ${escapeHelp(this.help)}`,
+      `# TYPE ${this.name} counter`,
+    ];
     for (const { labels, value } of this.series.values()) {
       lines.push(`${this.name}${renderLabelBlock(labels)} ${value}`);
     }
@@ -168,7 +185,10 @@ export class Counter extends Metric {
 
 /** A gauge that can move up and down (RED/USE "Utilization", "Saturation"). */
 export class Gauge extends Metric {
-  private series = new Map<string, { labels: Array<[string, string]>; value: number }>();
+  private series = new Map<
+    string,
+    { labels: Array<[string, string]>; value: number }
+  >();
 
   /** Set the gauge to an absolute value for the given label set. */
   set(labels: MetricLabels | undefined, value: number): void {
@@ -203,7 +223,10 @@ export class Gauge extends Metric {
 
   /** @internal */
   render(): string {
-    const lines = [`# HELP ${this.name} ${escapeHelp(this.help)}`, `# TYPE ${this.name} gauge`];
+    const lines = [
+      `# HELP ${this.name} ${escapeHelp(this.help)}`,
+      `# TYPE ${this.name} gauge`,
+    ];
     for (const { labels, value } of this.series.values()) {
       lines.push(`${this.name}${renderLabelBlock(labels)} ${value}`);
     }
@@ -230,11 +253,18 @@ export class Histogram extends Metric {
   readonly bounds: readonly number[];
   private series = new Map<string, HistogramSeries>();
 
-  constructor(registry: MetricsRegistry, name: string, help: string, buckets: readonly number[]) {
+  constructor(
+    registry: MetricsRegistry,
+    name: string,
+    help: string,
+    buckets: readonly number[],
+  ) {
     super(registry, name, help);
     const sorted = [...new Set(buckets)].sort((a, b) => a - b);
     if (sorted.length === 0 || sorted.some((b) => !Number.isFinite(b))) {
-      throw new Error("Histogram buckets must be a non-empty list of finite numbers.");
+      throw new Error(
+        "Histogram buckets must be a non-empty list of finite numbers.",
+      );
     }
     this.bounds = sorted;
   }
@@ -250,7 +280,12 @@ export class Histogram extends Metric {
     let s = this.series.get(key);
     if (!s) {
       if (!this.registry._admitSeries(this.series.size)) return;
-      s = { labels: entries, counts: new Array(this.bounds.length).fill(0), sum: 0, count: 0 };
+      s = {
+        labels: entries,
+        counts: new Array(this.bounds.length).fill(0),
+        sum: 0,
+        count: 0,
+      };
       this.series.set(key, s);
     }
     s.count += 1;
@@ -262,14 +297,19 @@ export class Histogram extends Metric {
 
   /** @internal */
   render(): string {
-    const lines = [`# HELP ${this.name} ${escapeHelp(this.help)}`, `# TYPE ${this.name} histogram`];
+    const lines = [
+      `# HELP ${this.name} ${escapeHelp(this.help)}`,
+      `# TYPE ${this.name} histogram`,
+    ];
     for (const s of this.series.values()) {
       for (let i = 0; i < this.bounds.length; i++) {
         lines.push(
-          `${this.name}_bucket${renderLabelBlock(s.labels, ["le", String(this.bounds[i])])} ${s.counts[i]}`
+          `${this.name}_bucket${renderLabelBlock(s.labels, ["le", String(this.bounds[i])])} ${s.counts[i]}`,
         );
       }
-      lines.push(`${this.name}_bucket${renderLabelBlock(s.labels, ["le", "+Inf"])} ${s.count}`);
+      lines.push(
+        `${this.name}_bucket${renderLabelBlock(s.labels, ["le", "+Inf"])} ${s.count}`,
+      );
       lines.push(`${this.name}_sum${renderLabelBlock(s.labels)} ${s.sum}`);
       lines.push(`${this.name}_count${renderLabelBlock(s.labels)} ${s.count}`);
     }
@@ -284,7 +324,14 @@ export class Histogram extends Metric {
 
 /** Options for {@link MetricsRegistry}. */
 export interface MetricsRegistryOptions {
-  /** Prefix applied to every metric name. Default `"daloy_"`. Pass `""` for none. */
+  /**
+   * Prefix applied to every metric name except the framework drop counter.
+   * Default `""` so process gauges (`process_resident_memory_bytes`) and HTTP
+   * RED series (`http_requests_total`) match the names stock Grafana panels
+   * already query. Pass `"daloy_"` (or any other prefix) to namespace them.
+   * The cardinality-drop meta-metric stays `daloy_metrics_series_dropped_total`
+   * when this is empty, because it is a DaloyJS-specific series.
+   */
   prefix?: string;
   /**
    * Hard cap on the number of distinct series **per metric**. Once reached,
@@ -305,7 +352,8 @@ export interface MetricsRegistryOptions {
  * The Prometheus / OpenMetrics content type, including the format version.
  * Served by {@link App.metrics}.
  */
-export const PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8";
+export const PROMETHEUS_CONTENT_TYPE =
+  "text/plain; version=0.0.4; charset=utf-8";
 
 /**
  * A registry of {@link Counter}, {@link Gauge}, and {@link Histogram} series
@@ -328,7 +376,7 @@ export class MetricsRegistry {
   private droppedCounter: Counter | undefined;
 
   constructor(opts: MetricsRegistryOptions = {}) {
-    this.prefix = opts.prefix ?? "daloy_";
+    this.prefix = opts.prefix ?? "";
     this.maxSeries = opts.maxSeries ?? 5000;
     if (!Number.isInteger(this.maxSeries) || this.maxSeries <= 0) {
       throw new Error("MetricsRegistry maxSeries must be a positive integer.");
@@ -348,24 +396,32 @@ export class MetricsRegistry {
 
   /** Get or create a {@link Counter}. */
   counter(name: string, help = name): Counter {
-    return this.getOrCreate(name, () => new Counter(this, this.prefix + name, help), Counter);
+    return this.getOrCreate(
+      name,
+      () => new Counter(this, this.prefix + name, help),
+      Counter,
+    );
   }
 
   /** Get or create a {@link Gauge}. */
   gauge(name: string, help = name): Gauge {
-    return this.getOrCreate(name, () => new Gauge(this, this.prefix + name, help), Gauge);
+    return this.getOrCreate(
+      name,
+      () => new Gauge(this, this.prefix + name, help),
+      Gauge,
+    );
   }
 
   /** Get or create a {@link Histogram} with the given (or default) buckets. */
   histogram(
     name: string,
     help = name,
-    buckets: readonly number[] = DEFAULT_DURATION_BUCKETS
+    buckets: readonly number[] = DEFAULT_DURATION_BUCKETS,
   ): Histogram {
     return this.getOrCreate(
       name,
       () => new Histogram(this, this.prefix + name, help, buckets),
-      Histogram
+      Histogram,
     );
   }
 
@@ -401,12 +457,14 @@ export class MetricsRegistry {
   private getOrCreate<T extends Metric>(
     name: string,
     make: () => T,
-    kind: new (...args: any[]) => T
+    kind: new (...args: any[]) => T,
   ): T {
     const existing = this.metrics.get(name);
     if (existing) {
       if (!(existing instanceof kind)) {
-        throw new Error(`Metric ${JSON.stringify(name)} already registered with a different type.`);
+        throw new Error(
+          `Metric ${JSON.stringify(name)} already registered with a different type.`,
+        );
       }
       return existing;
     }
@@ -417,13 +475,24 @@ export class MetricsRegistry {
 
   private registerDefaultMetrics(): void {
     this.droppedCounter = this.counter(
-      "metrics_series_dropped_total",
-      "Series dropped after hitting the per-metric cardinality cap."
+      this.prefix === ""
+        ? "daloy_metrics_series_dropped_total"
+        : "metrics_series_dropped_total",
+      "Series dropped after hitting the per-metric cardinality cap.",
     );
     if (typeof process === "undefined") return;
-    const rss = this.gauge("process_resident_memory_bytes", "Resident memory size in bytes.");
-    const heap = this.gauge("process_heap_used_bytes", "Node.js heap used in bytes.");
-    const uptime = this.gauge("process_uptime_seconds", "Process uptime in seconds.");
+    const rss = this.gauge(
+      "process_resident_memory_bytes",
+      "Resident memory size in bytes.",
+    );
+    const heap = this.gauge(
+      "process_heap_used_bytes",
+      "Node.js heap used in bytes.",
+    );
+    const uptime = this.gauge(
+      "process_uptime_seconds",
+      "Process uptime in seconds.",
+    );
     this.collect(() => {
       try {
         if (typeof process.memoryUsage === "function") {
@@ -431,7 +500,8 @@ export class MetricsRegistry {
           rss.set(undefined, mem.rss);
           heap.set(undefined, mem.heapUsed);
         }
-        if (typeof process.uptime === "function") uptime.set(undefined, process.uptime());
+        if (typeof process.uptime === "function")
+          uptime.set(undefined, process.uptime());
       } catch {
         /* memoryUsage/uptime unavailable on this runtime — skip silently */
       }
@@ -445,15 +515,19 @@ export interface HttpMetricsOptions {
   registry: MetricsRegistry;
   /**
    * Resolve the low-cardinality `route` label from the request context.
-   * Strongly recommended: return the route **template** (e.g. `/books/:id`),
-   * not the raw path, to keep series cardinality bounded. When omitted the
-   * request pathname is used, capped by {@link HttpMetricsOptions.maxRouteCardinality}.
+   * When omitted, the matched route **template** (`ctx.routePath`, e.g.
+   * `/books/:id`) is used. That is bounded by the route table, so a hostile
+   * client cannot mint series from raw paths. A custom resolver that returns
+   * a raw pathname should still keep cardinality bounded; the pathname
+   * fallback (no template on the context) is capped by
+   * {@link HttpMetricsOptions.maxRouteCardinality}.
    */
   route?: (ctx: BaseContext<any, any>) => string | undefined;
   /**
-   * Maximum distinct values for the default (pathname-derived) `route` label
-   * before further values collapse to `"<other>"`. Ignored when a custom
-   * {@link HttpMetricsOptions.route} resolver is supplied. Default `100`.
+   * Maximum distinct values for the pathname fallback `route` label (used
+   * only when {@link HttpMetricsOptions.route} is omitted **and**
+   * `ctx.routePath` is missing) before further values collapse to
+   * `"<other>"`. Ignored when a custom resolver is supplied. Default `100`.
    */
   maxRouteCardinality?: number;
   /** Skip instrumentation for matching request paths (e.g. the scrape route). */
@@ -464,7 +538,8 @@ export interface HttpMetricsOptions {
 
 /** Monotonic clock in milliseconds, falling back to `Date.now` where needed. */
 function nowMs(): number {
-  return typeof performance !== "undefined" && typeof performance.now === "function"
+  return typeof performance !== "undefined" &&
+    typeof performance.now === "function"
     ? performance.now()
     : Date.now();
 }
@@ -491,13 +566,19 @@ export function httpMetrics(opts: HttpMetricsOptions): Hooks {
   const { registry } = opts;
   const maxRouteCardinality = opts.maxRouteCardinality ?? 100;
   const buckets = opts.buckets ?? DEFAULT_DURATION_BUCKETS;
-  const requests = registry.counter("http_requests_total", "Total HTTP requests.");
+  const requests = registry.counter(
+    "http_requests_total",
+    "Total HTTP requests.",
+  );
   const duration = registry.histogram(
     "http_request_duration_seconds",
     "HTTP request latency in seconds.",
-    buckets
+    buckets,
   );
-  const inFlight = registry.gauge("http_requests_in_flight", "In-flight HTTP requests.");
+  const inFlight = registry.gauge(
+    "http_requests_in_flight",
+    "In-flight HTTP requests.",
+  );
   const seenRoutes = new Set<string>();
 
   const routeLabel = (ctx: BaseContext<any, any>): string => {

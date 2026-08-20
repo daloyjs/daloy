@@ -10,6 +10,7 @@ import {
   httpMetrics,
   DEFAULT_DURATION_BUCKETS,
   PROMETHEUS_CONTENT_TYPE,
+  createLogger,
 } from "../src/index.js";
 
 // ---------- MetricsRegistry: counters ----------
@@ -20,9 +21,9 @@ test("counter renders HELP/TYPE headers and a labelled sample", () => {
   c.inc({ method: "GET" });
   c.inc({ method: "GET" }, 2);
   const out = reg.render();
-  assert.match(out, /# HELP daloy_requests_total Total requests\./);
-  assert.match(out, /# TYPE daloy_requests_total counter/);
-  assert.match(out, /daloy_requests_total\{method="GET"\} 3/);
+  assert.match(out, /# HELP requests_total Total requests\./);
+  assert.match(out, /# TYPE requests_total counter/);
+  assert.match(out, /requests_total\{method="GET"\} 3/);
   assert.ok(out.endsWith("\n"), "exposition must end with a newline");
 });
 
@@ -37,7 +38,7 @@ test("counter is memoized by name and rejects negative increments", () => {
 test("counter default increment is 1 and unlabelled series render without braces", () => {
   const reg = new MetricsRegistry({ collectDefaultMetrics: false });
   reg.counter("ticks").inc();
-  assert.match(reg.render(), /\ndaloy_ticks 1\n/);
+  assert.match(reg.render(), /\nticks 1\n/);
 });
 
 // ---------- MetricsRegistry: gauges ----------
@@ -48,7 +49,7 @@ test("gauge supports set, inc, and dec", () => {
   g.set(undefined, 5);
   g.inc();
   g.dec(undefined, 2);
-  assert.match(reg.render(), /\ndaloy_queue_depth 4\n/);
+  assert.match(reg.render(), /\nqueue_depth 4\n/);
 });
 
 // ---------- MetricsRegistry: histograms ----------
@@ -60,12 +61,12 @@ test("histogram records cumulative buckets, sum, and count", () => {
   h.observe({ route: "/a" }, 0.4);
   h.observe({ route: "/a" }, 2);
   const out = reg.render();
-  assert.match(out, /daloy_latency_seconds_bucket\{route="\/a",le="0.1"\} 1/);
-  assert.match(out, /daloy_latency_seconds_bucket\{route="\/a",le="0.5"\} 2/);
-  assert.match(out, /daloy_latency_seconds_bucket\{route="\/a",le="1"\} 2/);
-  assert.match(out, /daloy_latency_seconds_bucket\{route="\/a",le="\+Inf"\} 3/);
-  assert.match(out, /daloy_latency_seconds_sum\{route="\/a"\} 2.45/);
-  assert.match(out, /daloy_latency_seconds_count\{route="\/a"\} 3/);
+  assert.match(out, /latency_seconds_bucket\{route="\/a",le="0.1"\} 1/);
+  assert.match(out, /latency_seconds_bucket\{route="\/a",le="0.5"\} 2/);
+  assert.match(out, /latency_seconds_bucket\{route="\/a",le="1"\} 2/);
+  assert.match(out, /latency_seconds_bucket\{route="\/a",le="\+Inf"\} 3/);
+  assert.match(out, /latency_seconds_sum\{route="\/a"\} 2.45/);
+  assert.match(out, /latency_seconds_count\{route="\/a"\} 3/);
 });
 
 test("histogram rejects empty or non-finite bucket lists", () => {
@@ -105,7 +106,7 @@ test("label values are escaped so they cannot break out of the label block", () 
 test("HELP text escapes backslash and newline", () => {
   const reg = new MetricsRegistry({ collectDefaultMetrics: false });
   reg.counter("c", "line1\nback\\slash").inc();
-  assert.match(reg.render(), /# HELP daloy_c line1\\nback\\\\slash/);
+  assert.match(reg.render(), /# HELP c line1\\nback\\\\slash/);
 });
 
 test("re-registering a name with a different metric type throws", () => {
@@ -123,15 +124,21 @@ test("per-metric series cap drops overflow and counts it", () => {
   c.inc({ id: "2" });
   c.inc({ id: "3" }); // dropped
   const out = reg.render();
-  assert.match(out, /daloy_c\{id="1"\} 1/);
-  assert.match(out, /daloy_c\{id="2"\} 1/);
+  assert.match(out, /c\{id="1"\} 1/);
+  assert.match(out, /c\{id="2"\} 1/);
   assert.doesNotMatch(out, /id="3"/);
   assert.match(out, /daloy_metrics_series_dropped_total 1/);
 });
 
 test("invalid maxSeries is rejected", () => {
-  assert.throws(() => new MetricsRegistry({ maxSeries: 0 }), /positive integer/);
-  assert.throws(() => new MetricsRegistry({ maxSeries: 1.5 }), /positive integer/);
+  assert.throws(
+    () => new MetricsRegistry({ maxSeries: 0 }),
+    /positive integer/,
+  );
+  assert.throws(
+    () => new MetricsRegistry({ maxSeries: 1.5 }),
+    /positive integer/,
+  );
 });
 
 // ---------- default / process metrics ----------
@@ -139,9 +146,11 @@ test("invalid maxSeries is rejected", () => {
 test("default metrics include process gauges on Node", () => {
   const reg = new MetricsRegistry();
   const out = reg.render();
-  assert.match(out, /# TYPE daloy_process_resident_memory_bytes gauge/);
-  assert.match(out, /# TYPE daloy_process_heap_used_bytes gauge/);
-  assert.match(out, /daloy_process_uptime_seconds /);
+  assert.match(out, /# TYPE process_resident_memory_bytes gauge/);
+  assert.match(out, /# TYPE process_heap_used_bytes gauge/);
+  assert.match(out, /process_uptime_seconds /);
+  assert.doesNotMatch(out, /daloy_process_/);
+  assert.match(out, /daloy_metrics_series_dropped_total /);
 });
 
 test("collectDefaultMetrics:false omits process gauges and the dropped counter", () => {
@@ -159,7 +168,7 @@ test("collect callbacks run at render time", () => {
   reg.collect(() => g.set(undefined, ++n));
   reg.render();
   reg.render();
-  assert.match(reg.render(), /\ndaloy_dynamic 3\n/);
+  assert.match(reg.render(), /\ndynamic 3\n/);
 });
 
 test("reset clears recorded series but keeps definitions and handles valid", () => {
@@ -167,13 +176,16 @@ test("reset clears recorded series but keeps definitions and handles valid", () 
   const c = reg.counter("c");
   c.inc();
   reg.reset();
-  assert.doesNotMatch(reg.render(), /\ndaloy_c /);
+  assert.doesNotMatch(reg.render(), /\nc /);
   c.inc(undefined, 7);
-  assert.match(reg.render(), /\ndaloy_c 7\n/);
+  assert.match(reg.render(), /\nc 7\n/);
 });
 
 test("custom prefix is applied to metric names", () => {
-  const reg = new MetricsRegistry({ collectDefaultMetrics: false, prefix: "myapp_" });
+  const reg = new MetricsRegistry({
+    collectDefaultMetrics: false,
+    prefix: "myapp_",
+  });
   reg.counter("hits").inc();
   assert.match(reg.render(), /\nmyapp_hits 1\n/);
 });
@@ -198,9 +210,15 @@ test("httpMetrics records counter, duration, and balances in-flight", async () =
   const res = await app.fetch(new Request("http://x/ping"));
   assert.equal(res.status, 200);
   const out = reg.render();
-  assert.match(out, /daloy_http_requests_total\{method="GET",route="\/ping",status="200"\} 1/);
-  assert.match(out, /daloy_http_request_duration_seconds_count\{method="GET",route="\/ping"\} 1/);
-  assert.match(out, /\ndaloy_http_requests_in_flight 0\n/);
+  assert.match(
+    out,
+    /http_requests_total\{method="GET",route="\/ping",status="200"\} 1/,
+  );
+  assert.match(
+    out,
+    /http_request_duration_seconds_count\{method="GET",route="\/ping"\} 1/,
+  );
+  assert.match(out, /\nhttp_requests_in_flight 0\n/);
 });
 
 test("httpMetrics custom route resolver controls the route label", async () => {
@@ -212,11 +230,13 @@ test("httpMetrics custom route resolver controls the route label", async () => {
 
 test("httpMetrics exclude predicate skips instrumentation but still balances in-flight", async () => {
   const reg = new MetricsRegistry();
-  const app = pingApp(httpMetrics({ registry: reg, exclude: (p) => p === "/ping" }));
+  const app = pingApp(
+    httpMetrics({ registry: reg, exclude: (p) => p === "/ping" }),
+  );
   await app.fetch(new Request("http://x/ping"));
   const out = reg.render();
-  assert.doesNotMatch(out, /daloy_http_requests_total\{/);
-  assert.match(out, /\ndaloy_http_requests_in_flight 0\n/);
+  assert.doesNotMatch(out, /http_requests_total\{/);
+  assert.match(out, /\nhttp_requests_in_flight 0\n/);
 });
 
 test("default route label prefers the matched template; pathname cap applies only without one", async () => {
@@ -256,7 +276,10 @@ test("app.metrics() exposes Prometheus text and records matched routes", async (
   assert.equal(res.headers.get("content-type"), PROMETHEUS_CONTENT_TYPE);
   assert.equal(res.headers.get("cache-control"), "no-store");
   const body = await res.text();
-  assert.match(body, /daloy_http_requests_total\{method="GET",route="\/ping",status="200"\} 1/);
+  assert.match(
+    body,
+    /http_requests_total\{method="GET",route="\/ping",status="200"\} 1/,
+  );
   // The scrape route itself must be excluded from instrumentation.
   assert.doesNotMatch(body, /route="\/metrics"/);
 });
@@ -268,7 +291,7 @@ test("app.metrics() renders custom metrics from a supplied registry", async () =
   app.metrics({ registry });
   const res = await app.fetch(new Request("http://x/metrics"));
   const body = await res.text();
-  assert.match(body, /daloy_widgets_built_total\{kind="a"\} 4/);
+  assert.match(body, /widgets_built_total\{kind="a"\} 4/);
 });
 
 test("app.metrics() enforces a bearer token (401 missing, 403 wrong, 200 correct)", async () => {
@@ -276,13 +299,20 @@ test("app.metrics() enforces a bearer token (401 missing, 403 wrong, 200 correct
   app.metrics({ token: "s3cret" });
   const missing = await app.fetch(new Request("http://x/metrics"));
   assert.equal(missing.status, 401);
-  assert.equal(missing.headers.get("www-authenticate"), 'Bearer realm="metrics"');
+  assert.equal(
+    missing.headers.get("www-authenticate"),
+    'Bearer realm="metrics"',
+  );
   const wrong = await app.fetch(
-    new Request("http://x/metrics", { headers: { authorization: "Bearer nope" } })
+    new Request("http://x/metrics", {
+      headers: { authorization: "Bearer nope" },
+    }),
   );
   assert.equal(wrong.status, 403);
   const ok = await app.fetch(
-    new Request("http://x/metrics", { headers: { authorization: "Bearer s3cret" } })
+    new Request("http://x/metrics", {
+      headers: { authorization: "Bearer s3cret" },
+    }),
   );
   assert.equal(ok.status, 200);
 });
@@ -305,7 +335,9 @@ test("app.metrics() boots in production with a token or explicit acknowledgement
   const withToken = new App({ env: "production" });
   assert.doesNotThrow(() => withToken.metrics({ token: "t" }));
   const acked = new App({ env: "production" });
-  assert.doesNotThrow(() => acked.metrics({ acknowledgeUnauthenticated: true }));
+  assert.doesNotThrow(() =>
+    acked.metrics({ acknowledgeUnauthenticated: true }),
+  );
 });
 
 test("exported metric classes are the concrete handle types", () => {
@@ -322,14 +354,14 @@ test("counter inc with value 0 is allowed (not a negative increment) and creates
   const c = reg.counter("noop");
   assert.doesNotThrow(() => c.inc(undefined, 0));
   // inc(0) is permitted — the series is created at value 0.
-  assert.match(reg.render(), /\ndaloy_noop 0\n/);
+  assert.match(reg.render(), /\nnoop 0\n/);
 });
 
 test("gauge dec produces a negative value (gauges are not bounded below zero)", () => {
   const reg = new MetricsRegistry({ collectDefaultMetrics: false });
   const g = reg.gauge("temp");
   g.dec();
-  assert.match(reg.render(), /\ndaloy_temp -1\n/);
+  assert.match(reg.render(), /\ntemp -1\n/);
 });
 
 test("histogram observation at exactly a bucket boundary counts as ≤ that bucket", () => {
@@ -337,10 +369,10 @@ test("histogram observation at exactly a bucket boundary counts as ≤ that buck
   const h = reg.histogram("lat", "Latency.", [0.1, 0.5, 1]);
   h.observe({}, 0.1); // exactly on the first boundary
   const out = reg.render();
-  assert.match(out, /daloy_lat_bucket\{le="0.1"\} 1/);
-  assert.match(out, /daloy_lat_bucket\{le="0.5"\} 1/);
-  assert.match(out, /daloy_lat_bucket\{le="\+Inf"\} 1/);
-  assert.match(out, /daloy_lat_count 1/);
+  assert.match(out, /lat_bucket\{le="0.1"\} 1/);
+  assert.match(out, /lat_bucket\{le="0.5"\} 1/);
+  assert.match(out, /lat_bucket\{le="\+Inf"\} 1/);
+  assert.match(out, /lat_count 1/);
 });
 
 test("histogram observation above all buckets lands only in +Inf", () => {
@@ -348,9 +380,9 @@ test("histogram observation above all buckets lands only in +Inf", () => {
   const h = reg.histogram("big", "Big values.", [0.1, 0.5]);
   h.observe({}, 99);
   const out = reg.render();
-  assert.match(out, /daloy_big_bucket\{le="0.1"\} 0/);
-  assert.match(out, /daloy_big_bucket\{le="0.5"\} 0/);
-  assert.match(out, /daloy_big_bucket\{le="\+Inf"\} 1/);
+  assert.match(out, /big_bucket\{le="0.1"\} 0/);
+  assert.match(out, /big_bucket\{le="0.5"\} 0/);
+  assert.match(out, /big_bucket\{le="\+Inf"\} 1/);
 });
 
 test("MetricsRegistry with empty prefix emits bare metric names", () => {
@@ -375,7 +407,7 @@ test("httpMetrics records 4xx and 5xx status codes in the requests counter", asy
   assert.equal(res.status, 500);
   assert.match(
     reg.render(),
-    /daloy_http_requests_total\{method="GET",route="\/fail",status="500"\} 1/
+    /http_requests_total\{method="GET",route="\/fail",status="500"\} 1/,
   );
 });
 
@@ -475,10 +507,12 @@ test("httpMetrics in-flight gauge is not decremented for OPTIONS preflight (bug-
     responses: { 200: { description: "ok" } },
     handler: () => ({ status: 200 as const, body: {} }),
   });
-  const res = await app.fetch(new Request("http://x/data", { method: "OPTIONS" }));
+  const res = await app.fetch(
+    new Request("http://x/data", { method: "OPTIONS" }),
+  );
   assert.equal(res.status, 204);
   // Gauge must not go negative.
-  assert.doesNotMatch(reg.render(), /daloy_http_requests_in_flight -\d/);
+  assert.doesNotMatch(reg.render(), /http_requests_in_flight -\d/);
   // And no spurious requests_total entry for OPTIONS.
   assert.doesNotMatch(reg.render(), /method="OPTIONS"/);
 });
@@ -501,22 +535,22 @@ test("httpMetrics in-flight stays balanced when OPTIONS preflight interleaves wi
   // Two real GET requests recorded.
   assert.match(
     out,
-    /daloy_http_requests_total\{method="GET",route="\/api\/v1\/items",status="200"\} 2/
+    /http_requests_total\{method="GET",route="\/api\/v1\/items",status="200"\} 2/,
   );
   // In-flight at zero after all requests completed.
-  assert.match(out, /\ndaloy_http_requests_in_flight 0\n/);
+  assert.match(out, /\nhttp_requests_in_flight 0\n/);
 });
 
 test("app.metrics() rate limit ignores spoofed X-Real-IP without trustProxy", async () => {
   const app = new App({ env: "development" });
   app.metrics({ rateLimit: { limit: 1, windowMs: 60_000 } });
   const first = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } })
+    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
   );
   assert.equal(first.status, 200);
   // Different spoofed IP must still share the global bucket when trustProxy is unset.
   const second = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "2.2.2.2" } })
+    new Request("http://x/metrics", { headers: { "x-real-ip": "2.2.2.2" } }),
   );
   assert.equal(second.status, 429);
 });
@@ -525,15 +559,67 @@ test("app.metrics() rate limit may key on X-Real-IP when trustProxy is true", as
   const app = new App({ env: "development", trustProxy: true });
   app.metrics({ rateLimit: { limit: 1, windowMs: 60_000 } });
   const a = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } })
+    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
   );
   assert.equal(a.status, 200);
   const b = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "2.2.2.2" } })
+    new Request("http://x/metrics", { headers: { "x-real-ip": "2.2.2.2" } }),
   );
-  assert.equal(b.status, 200, "distinct trusted-proxy client IPs get distinct buckets");
+  assert.equal(
+    b.status,
+    200,
+    "distinct trusted-proxy client IPs get distinct buckets",
+  );
   const a2 = await app.fetch(
-    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } })
+    new Request("http://x/metrics", { headers: { "x-real-ip": "1.1.1.1" } }),
   );
   assert.equal(a2.status, 429);
+});
+
+test("app.metrics() warns when routes were registered first", () => {
+  const lines: string[] = [];
+  const app = new App({
+    env: "development",
+    logger: createLogger({ write: (line) => lines.push(line) }),
+  });
+  app.route({
+    method: "GET",
+    path: "/ping",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  app.metrics();
+  assert.ok(
+    lines.some(
+      (l) => l.includes("metrics.late_install") && l.includes("/ping"),
+    ),
+    "late install must warn with the uninstrumented path",
+  );
+});
+
+test("app.metrics() does not warn when called before user routes", () => {
+  const lines: string[] = [];
+  const app = new App({
+    env: "development",
+    logger: createLogger({ write: (line) => lines.push(line) }),
+  });
+  app.metrics();
+  app.route({
+    method: "GET",
+    path: "/ping",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  assert.ok(!lines.some((l) => l.includes("metrics.late_install")));
+});
+
+test("app.metrics() does not warn about auto-mounted docs routes", () => {
+  const lines: string[] = [];
+  const app = new App({
+    env: "development",
+    docs: true,
+    logger: createLogger({ write: (line) => lines.push(line) }),
+  });
+  app.metrics();
+  assert.ok(!lines.some((l) => l.includes("metrics.late_install")));
 });

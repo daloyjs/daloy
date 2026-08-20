@@ -145,13 +145,16 @@ export interface LambdaStreamMetadata {
 export type LambdaStreamHandler = (
   event: LambdaEvent,
   responseStream: LambdaResponseStream,
-  context?: unknown
+  context?: unknown,
 ) => Promise<void>;
 
 interface LambdaStreamingRuntime {
   streamifyResponse(handler: LambdaStreamHandler): LambdaStreamHandler;
   HttpResponseStream: {
-    from(stream: LambdaResponseStream, metadata: LambdaStreamMetadata): LambdaResponseStream;
+    from(
+      stream: LambdaResponseStream,
+      metadata: LambdaStreamMetadata,
+    ): LambdaResponseStream;
   };
 }
 
@@ -177,6 +180,9 @@ export function toLambdaHandler(app: App): LambdaHandler {
       return responseToLambda(badRequestResponse(), isV2Event(event));
     }
     const response = await app.fetch(request);
+    // Lambda freezes when the handler resolves; await the export so OTLP
+    // actually leaves the isolate. `flush()` never rejects.
+    await app.telemetry?.flush();
     return responseToLambda(response, isV2Event(event));
   };
 }
@@ -206,6 +212,7 @@ export function toLambdaStreamHandler(app: App): LambdaStreamHandler {
       return;
     }
     await streamLambdaResponse(await app.fetch(request), rawStream, runtime);
+    await app.telemetry?.flush();
   });
 }
 
@@ -219,10 +226,14 @@ function eventToRequest(event: LambdaEvent): Request {
   if ("multiValueHeaders" in event) {
     for (const [k, values] of Object.entries(event.multiValueHeaders ?? {})) {
       if (!values?.length) continue;
-      headers.set(k, k.toLowerCase() === "cookie" ? values.join("; ") : values.join(", "));
+      headers.set(
+        k,
+        k.toLowerCase() === "cookie" ? values.join("; ") : values.join(", "),
+      );
     }
   }
-  if ("cookies" in event && event.cookies?.length) headers.set("cookie", event.cookies.join("; "));
+  if ("cookies" in event && event.cookies?.length)
+    headers.set("cookie", event.cookies.join("; "));
 
   const method = isV2Event(event)
     ? (event.requestContext?.http?.method ?? "GET")
@@ -230,16 +241,21 @@ function eventToRequest(event: LambdaEvent): Request {
   const rawPath = isV2Event(event)
     ? (event.rawPath ?? event.requestContext?.http?.path ?? "/")
     : (event.path ?? event.requestContext?.path ?? "/");
-  const host = headers.get("host") ?? event.requestContext?.domainName ?? "localhost";
+  const host =
+    headers.get("host") ?? event.requestContext?.domainName ?? "localhost";
   const proto = headers.get("x-forwarded-proto") ?? "https";
-  const rawQueryString = isV2Event(event) ? (event.rawQueryString ?? "") : queryStringForV1(event);
+  const rawQueryString = isV2Event(event)
+    ? (event.rawQueryString ?? "")
+    : queryStringForV1(event);
   const qs = rawQueryString ? `?${rawQueryString}` : "";
   const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
   const url = `${proto}://${host}${path}${qs}`;
 
   const init: RequestInit = { method, headers };
   if (method !== "GET" && method !== "HEAD" && event.body != null) {
-    init.body = event.isBase64Encoded ? (base64ToBytes(event.body) as BodyInit) : event.body;
+    init.body = event.isBase64Encoded
+      ? (base64ToBytes(event.body) as BodyInit)
+      : event.body;
   }
   const request = new Request(url, init);
   // Fulfil the conn-info contract with the caller address API Gateway saw
@@ -255,7 +271,10 @@ function eventToRequest(event: LambdaEvent): Request {
   return request;
 }
 
-async function responseToLambda(res: Response, useV2Response: boolean): Promise<LambdaResponse> {
+async function responseToLambda(
+  res: Response,
+  useV2Response: boolean,
+): Promise<LambdaResponse> {
   const { headers, cookies } = responseHeaders(res);
 
   const contentType = res.headers.get("content-type") ?? "";
@@ -298,11 +317,15 @@ function isV2Event(event: LambdaEvent): event is LambdaEventV2 {
 
 function queryStringForV1(event: LambdaEventV1): string {
   const values = new URLSearchParams();
-  for (const [key, list] of Object.entries(event.multiValueQueryStringParameters ?? {})) {
+  for (const [key, list] of Object.entries(
+    event.multiValueQueryStringParameters ?? {},
+  )) {
     for (const value of list ?? []) values.append(key, value);
   }
   if (values.size > 0) return values.toString();
-  for (const [key, value] of Object.entries(event.queryStringParameters ?? {})) {
+  for (const [key, value] of Object.entries(
+    event.queryStringParameters ?? {},
+  )) {
     if (value !== undefined) values.append(key, value);
   }
   return values.toString();
@@ -313,9 +336,14 @@ function cookieFallback(headers: Headers): string[] {
   return cookie ? [cookie] : [];
 }
 
-function responseHeaders(res: Response): { headers: Record<string, string>; cookies: string[] } {
+function responseHeaders(res: Response): {
+  headers: Record<string, string>;
+  cookies: string[];
+} {
   const headers: Record<string, string> = {};
-  const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  const getSetCookie = (
+    res.headers as Headers & { getSetCookie?: () => string[] }
+  ).getSetCookie;
   const cookies =
     typeof getSetCookie === "function"
       ? getSetCookie.call(res.headers)
@@ -333,20 +361,21 @@ function badRequestResponse(): Response {
       title: "Bad Request",
       status: 400,
     },
-    { status: 400, headers: { "content-type": "application/problem+json" } }
+    { status: 400, headers: { "content-type": "application/problem+json" } },
   );
 }
 
 function lambdaStreamingRuntime(): LambdaStreamingRuntime {
-  const runtime = (globalThis as typeof globalThis & { awslambda?: LambdaStreamingRuntime })
-    .awslambda;
+  const runtime = (
+    globalThis as typeof globalThis & { awslambda?: LambdaStreamingRuntime }
+  ).awslambda;
   if (
     !runtime ||
     typeof runtime.streamifyResponse !== "function" ||
     typeof runtime.HttpResponseStream?.from !== "function"
   ) {
     throw new Error(
-      "AWS Lambda response streaming runtime not detected; toLambdaStreamHandler requires the managed Node.js awslambda globals"
+      "AWS Lambda response streaming runtime not detected; toLambdaStreamHandler requires the managed Node.js awslambda globals",
     );
   }
   return runtime;
@@ -355,10 +384,13 @@ function lambdaStreamingRuntime(): LambdaStreamingRuntime {
 async function streamLambdaResponse(
   response: Response,
   rawStream: LambdaResponseStream,
-  runtime: LambdaStreamingRuntime
+  runtime: LambdaStreamingRuntime,
 ): Promise<void> {
   const { headers, cookies } = responseHeaders(response);
-  const metadata: LambdaStreamMetadata = { statusCode: response.status, headers };
+  const metadata: LambdaStreamMetadata = {
+    statusCode: response.status,
+    headers,
+  };
   if (cookies.length) metadata.multiValueHeaders = { "set-cookie": cookies };
   const responseStream = runtime.HttpResponseStream.from(rawStream, metadata);
 
@@ -368,7 +400,8 @@ async function streamLambdaResponse(
       for (;;) {
         const chunk = await reader.read();
         if (chunk.done) break;
-        if (!responseStream.write(chunk.value)) await waitForDrain(responseStream);
+        if (!responseStream.write(chunk.value))
+          await waitForDrain(responseStream);
       }
     } catch (error) {
       await reader.cancel(error).catch(() => undefined);
@@ -406,6 +439,7 @@ function base64ToBytes(b64: string): Uint8Array {
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  for (let i = 0; i < bytes.length; i++)
+    binary += String.fromCharCode(bytes[i]!);
   return btoa(binary);
 }

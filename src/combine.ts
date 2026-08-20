@@ -7,7 +7,10 @@
  */
 
 import type { Hooks, BaseContext, PreBodyContext } from "./types.js";
-import { _mergePreBodyWithEarlyRejections, EARLY_REJECTION_HOOK_MARKER } from "./middleware.js";
+import {
+  _mergePreBodyWithEarlyRejections,
+  EARLY_REJECTION_HOOK_MARKER,
+} from "./middleware.js";
 
 /**
  * Run every supplied {@link Hooks} bundle in order, pipeline-style.
@@ -75,15 +78,20 @@ export function every(...layers: Hooks[]): Hooks {
  */
 export function some(...layers: Hooks[]): Hooks {
   if (layers.length === 0) return {};
-  const stripped = layers.map(({ preBody: _p, beforeHandle: _b, ...rest }) => rest);
+  const stripped = layers.map(
+    ({ preBody: _p, beforeHandle: _b, ...rest }) => rest,
+  );
   const base = mergeCombineHooks(stripped);
   const preBodyCandidates = layers
     .map((h) => h.preBody)
     .filter((f): f is NonNullable<Hooks["preBody"]> => typeof f === "function");
   const beforeHandleCandidates = layers
     .map((h) => h.beforeHandle)
-    .filter((f): f is NonNullable<Hooks["beforeHandle"]> => typeof f === "function");
-  const usePreBody = preBodyCandidates.length > 0 && beforeHandleCandidates.length === 0;
+    .filter(
+      (f): f is NonNullable<Hooks["beforeHandle"]> => typeof f === "function",
+    );
+  const usePreBody =
+    preBodyCandidates.length > 0 && beforeHandleCandidates.length === 0;
   const candidates = usePreBody
     ? preBodyCandidates
     : layers.flatMap((hooks) => {
@@ -91,7 +99,9 @@ export function some(...layers: Hooks[]): Hooks {
           return [
             async (ctx: BaseContext<any, any>) => {
               const early = await hooks.preBody!(ctx);
-              return early instanceof Response ? early : hooks.beforeHandle!(ctx);
+              return early instanceof Response
+                ? early
+                : hooks.beforeHandle!(ctx);
             },
           ];
         }
@@ -101,7 +111,9 @@ export function some(...layers: Hooks[]): Hooks {
   if (candidates.length === 0) return base;
   const runCandidates = async (ctx: BaseContext<any, any>) => {
     let firstFailure:
-      { kind: "throw"; err: unknown } | { kind: "response"; res: Response } | undefined;
+      | { kind: "throw"; err: unknown }
+      | { kind: "response"; res: Response }
+      | undefined;
     for (const fn of candidates) {
       try {
         const r = await fn(ctx);
@@ -137,7 +149,9 @@ export function some(...layers: Hooks[]): Hooks {
 export type ExceptPredicate =
   | string
   | string[]
-  | ((ctx: PreBodyContext<any> | BaseContext<any, any>) => boolean | Promise<boolean>);
+  | ((
+      ctx: PreBodyContext<any> | BaseContext<any, any>,
+    ) => boolean | Promise<boolean>);
 
 /**
  * Run a hook bundle on every request EXCEPT those matching `when`. The
@@ -164,8 +178,15 @@ export type ExceptPredicate =
  * @since 0.19.0
  */
 export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
-  const earlyRejectionHooks = (hooks as Record<PropertyKey, unknown>)[EARLY_REJECTION_HOOK_MARKER];
-  if (!hooks.preBody && !hooks.beforeHandle && !Array.isArray(earlyRejectionHooks)) return hooks;
+  const earlyRejectionHooks = (hooks as Record<PropertyKey, unknown>)[
+    EARLY_REJECTION_HOOK_MARKER
+  ];
+  if (
+    !hooks.preBody &&
+    !hooks.beforeHandle &&
+    !Array.isArray(earlyRejectionHooks)
+  )
+    return hooks;
   const matches = compileExceptMatcher(when);
   const wrapped: Hooks = { ...hooks };
   if (Array.isArray(earlyRejectionHooks)) {
@@ -178,17 +199,19 @@ export function except(when: ExceptPredicate, hooks: Hooks): Hooks {
   }
   if (hooks.preBody) {
     const original = hooks.preBody;
-    wrapped.preBody = async (ctx) => ((await matches(ctx)) ? undefined : original(ctx));
+    wrapped.preBody = async (ctx) =>
+      (await matches(ctx)) ? undefined : original(ctx);
   }
   if (hooks.beforeHandle) {
     const original = hooks.beforeHandle;
-    wrapped.beforeHandle = async (ctx) => ((await matches(ctx)) ? undefined : original(ctx));
+    wrapped.beforeHandle = async (ctx) =>
+      (await matches(ctx)) ? undefined : original(ctx);
   }
   return wrapped;
 }
 
 function compileExceptMatcher(
-  when: ExceptPredicate
+  when: ExceptPredicate,
 ): (ctx: PreBodyContext<any> | BaseContext<any, any>) => Promise<boolean> {
   if (typeof when === "function") {
     return async (ctx) => Boolean(await when(ctx));
@@ -204,7 +227,7 @@ function compileExceptMatcher(
 function compilePathPattern(pattern: string): (path: string) => boolean {
   if (!pattern.startsWith("/")) {
     throw new Error(
-      `except(): path patterns must start with "/" (got ${JSON.stringify(pattern)}).`
+      `except(): path patterns must start with "/" (got ${JSON.stringify(pattern)}).`,
     );
   }
   if (!pattern.includes("*")) {
@@ -224,7 +247,9 @@ function compilePathPattern(pattern: string): (path: string) => boolean {
 
 function mergeCombineHooks(layers: Hooks[]): Hooks {
   const pick = <K extends keyof Hooks>(key: K): NonNullable<Hooks[K]>[] =>
-    layers.map((h) => h[key]).filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
+    layers
+      .map((h) => h[key])
+      .filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
 
   const merged: Hooks = {};
   const onRequest = pick("onRequest");
@@ -279,8 +304,8 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
   }
   const onResponse = pick("onResponse");
   if (onResponse.length > 0) {
-    merged.onResponse = async (res) => {
-      for (const fn of onResponse) await fn(res);
+    merged.onResponse = async (res, ctx) => {
+      for (const fn of onResponse) await fn(res, ctx);
     };
   }
   // Forward symbol-keyed security markers (CORS / CSRF / session /
@@ -289,7 +314,8 @@ function mergeCombineHooks(layers: Hooks[]): Hooks {
   for (const hooks of layers) {
     const record = hooks as Record<PropertyKey, unknown>;
     for (const key of Object.getOwnPropertySymbols(record)) {
-      if (key === EARLY_REJECTION_HOOK_MARKER && merged.preBody !== undefined) continue;
+      if (key === EARLY_REJECTION_HOOK_MARKER && merged.preBody !== undefined)
+        continue;
       if (key === EARLY_REJECTION_HOOK_MARKER) {
         const existing = (merged as Record<PropertyKey, unknown>)[key];
         const incoming = record[key];

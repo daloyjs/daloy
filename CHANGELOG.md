@@ -17,6 +17,57 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-20
+
+**OTLP production gaps and Prometheus naming.** Patch on 1.2.0: isolate
+flush, plugin/group clone, hung-collector timeout, and unprefixed scrape
+series so stock Grafana panels work.
+
+### Fixed
+
+- **OTLP `group()` / `register()`** — child App clones no longer construct a
+  second pair of exporters, flush timers, and a duplicate `telemetry.otlp`
+  boot line. The child shares the parent's `app.telemetry`.
+- **`every()` / `some()` `onResponse`** — the merged hook now forwards the
+  request context, so `every(semconvHttpMetrics(...), ...)` records
+  `http.route` instead of silently dropping the observation.
+- **OTLP hung-collector latch** — every export POST is aborted after 5s
+  (`exporter.flushTimeoutMs`; `0` waits forever). A blackholed collector
+  can no longer leave `flushing === true` until process restart. Redirects
+  are refused (`redirect: "error"`) so tenant-routing headers cannot follow
+  a 302 off-box.
+- **OTLP metrics dirty flag** — `dirty` is cleared *before* the in-flight
+  POST, so a `count()` / `record()` that races a successful flush is
+  exported on the next tick instead of waiting for another write.
+- **OTLP isolate flush** — Cloudflare `toFetchHandler` calls
+  `ctx.waitUntil(flush)`, Vercel uses `globalThis.waitUntil` when present,
+  and `toLambdaHandler` awaits the flush before returning. Skipping the
+  adapter on an isolate still queues and mostly never sends.
+
+### Changed
+
+- `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_RESOURCE_ATTRIBUTES` values are
+  percent-decoded per the OTel env spec (`a%2Cb` → `a,b`).
+- `droppedBatches` TSDoc now documents the mixed counter (overflowed log
+  lines + failed POSTs + refused metric series).
+- **`MetricsRegistry` prefix default is `""`.** Process gauges emit
+  `process_resident_memory_bytes` / `process_heap_used_bytes` /
+  `process_uptime_seconds` and HTTP RED series emit `http_requests_total` /
+  `http_request_duration_seconds` / `http_requests_in_flight`, matching
+  stock Grafana panels. The cardinality-drop meta-metric stays
+  `daloy_metrics_series_dropped_total` when the prefix is empty (it is
+  framework-specific). Pass `prefix: "daloy_"` to restore the 0.37–1.2.0
+  names.
+- **`httpMetrics` `route` label default** is documented as the matched
+  template (`ctx.routePath`). That was already the 1.2.0 runtime; the
+  docs no longer teach a pathname regex.
+
+### Added
+
+- **`metrics.late_install` boot warning** — `app.metrics()` after user
+  routes exist logs the uninstrumented paths. Auto-mounted docs / health /
+  observability routes are ignored.
+
 ## [1.2.0] - 2026-08-20
 
 **Native OpenTelemetry OTLP push export.** Purely additive: nothing changes
@@ -3052,7 +3103,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/daloyjs/daloy/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/daloyjs/daloy/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/daloyjs/daloy/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/daloyjs/daloy/compare/v1.0.0...v1.1.0

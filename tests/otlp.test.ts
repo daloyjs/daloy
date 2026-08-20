@@ -10,8 +10,12 @@ import {
   createAppTelemetry,
   semconvHttpMetrics,
   HTTP_SERVER_REQUEST_DURATION_BUCKETS,
+  every,
   type Hooks,
 } from "../src/index.js";
+import { toFetchHandler as toCloudflareFetchHandler } from "../src/adapters/cloudflare.js";
+import { toWebHandler } from "../src/adapters/vercel.js";
+import { toLambdaHandler } from "../src/adapters/lambda.js";
 
 // ---------- fixtures ----------
 
@@ -30,7 +34,10 @@ interface CapturedCall {
 
 function fakeCollector(status = 200) {
   const calls: CapturedCall[] = [];
-  const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+  const fetchImpl = (async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     calls.push({
       url: String(url),
       headers: (init?.headers ?? {}) as Record<string, string>,
@@ -41,12 +48,26 @@ function fakeCollector(status = 200) {
   return { calls, fetchImpl };
 }
 
-function logExporterWith(fetchImpl: typeof fetch, overrides: Record<string, unknown> = {}) {
-  return createOtlpLogExporter({ ...EXPORTER_ENV, fetch: fetchImpl, ...overrides })!;
+function logExporterWith(
+  fetchImpl: typeof fetch,
+  overrides: Record<string, unknown> = {},
+) {
+  return createOtlpLogExporter({
+    ...EXPORTER_ENV,
+    fetch: fetchImpl,
+    ...overrides,
+  })!;
 }
 
-function metricsExporterWith(fetchImpl: typeof fetch, overrides: Record<string, unknown> = {}) {
-  return createOtlpMetricsExporter({ ...EXPORTER_ENV, fetch: fetchImpl, ...overrides })!;
+function metricsExporterWith(
+  fetchImpl: typeof fetch,
+  overrides: Record<string, unknown> = {},
+) {
+  return createOtlpMetricsExporter({
+    ...EXPORTER_ENV,
+    fetch: fetchImpl,
+    ...overrides,
+  })!;
 }
 
 // ---------- log exporter ----------
@@ -55,8 +76,12 @@ test("log exporter posts batched records to /v1/logs with rewritten port and hea
   const { calls, fetchImpl } = fakeCollector();
   const exporter = logExporterWith(fetchImpl);
 
-  exporter.pushLine(JSON.stringify({ level: "warn", msg: "upstream slow", requestId: "r-1" }));
-  exporter.pushLine(JSON.stringify({ event: "user_feedback", verdict: "helpful" }));
+  exporter.pushLine(
+    JSON.stringify({ level: "warn", msg: "upstream slow", requestId: "r-1" }),
+  );
+  exporter.pushLine(
+    JSON.stringify({ event: "user_feedback", verdict: "helpful" }),
+  );
   exporter.pushLine("plain banner line");
   await exporter.flush();
 
@@ -75,11 +100,18 @@ test("log exporter posts batched records to /v1/logs with rewritten port and hea
   assert.equal(records[1].body.stringValue, "user_feedback"); // event fallback
   assert.equal(records[2].body.stringValue, "plain banner line"); // non-JSON verbatim
   const res = call.body.resourceLogs[0].resource.attributes;
-  assert.ok(res.some((a: any) => a.key === "service.name" && a.value.stringValue === "svc"));
+  assert.ok(
+    res.some(
+      (a: any) => a.key === "service.name" && a.value.stringValue === "svc",
+    ),
+  );
 });
 
 test("log exporter is null without an endpoint and fail-safe when the collector dies", async () => {
-  assert.equal(createOtlpLogExporter({ endpoint: undefined, flushIntervalMs: 0 }), null);
+  assert.equal(
+    createOtlpLogExporter({ endpoint: undefined, flushIntervalMs: 0 }),
+    null,
+  );
 
   const failing = (async () => {
     throw new Error("collector down");
@@ -104,7 +136,7 @@ test("log exporter counts non-2xx responses and drops oldest at the queue cap", 
   await bounded.flush();
   const total = calls.reduce(
     (n, c) => n + c.body.resourceLogs[0].scopeLogs[0].logRecords.length,
-    0
+    0,
   );
   assert.equal(total, 1_000);
 });
@@ -117,8 +149,14 @@ test("metrics exporter ships cumulative sums and histograms to /v1/metrics", asy
 
   exporter.count("requests_total", { user: "a" });
   exporter.count("requests_total", { user: "a" }, 2);
-  exporter.record("latency", { route: "/x" }, 0.007, { unit: "s", boundaries: [0.005, 0.01, 0.025] });
-  exporter.record("latency", { route: "/x" }, 9, { unit: "s", boundaries: [0.005, 0.01, 0.025] });
+  exporter.record("latency", { route: "/x" }, 0.007, {
+    unit: "s",
+    boundaries: [0.005, 0.01, 0.025],
+  });
+  exporter.record("latency", { route: "/x" }, 9, {
+    unit: "s",
+    boundaries: [0.005, 0.01, 0.025],
+  });
   await exporter.flush();
 
   assert.equal(calls.length, 1);
@@ -149,9 +187,14 @@ test("metrics exporter ships cumulative sums and histograms to /v1/metrics", asy
 test("metrics exporter buckets a value equal to a bound into that bound's bucket", async () => {
   const { calls, fetchImpl } = fakeCollector();
   const exporter = metricsExporterWith(fetchImpl);
-  exporter.record("edge", {}, 0.01, { unit: "s", boundaries: [0.005, 0.01, 0.025] });
+  exporter.record("edge", {}, 0.01, {
+    unit: "s",
+    boundaries: [0.005, 0.01, 0.025],
+  });
   await exporter.flush();
-  const dp = calls[0]!.body.resourceMetrics[0].scopeMetrics[0].metrics[0].histogram.dataPoints[0];
+  const dp =
+    calls[0]!.body.resourceMetrics[0].scopeMetrics[0].metrics[0].histogram
+      .dataPoints[0];
   assert.deepEqual(dp.bucketCounts, ["0", "1", "0", "0"]);
 });
 
@@ -171,21 +214,32 @@ test("metrics exporter keeps totals across collector failures (cumulative self-h
   await exporter.flush(); // fails, never throws
   assert.equal(exporter.droppedBatches, 1);
   await exporter.flush(); // succeeds, carries the total
-  assert.equal(calls[0]!.body.resourceMetrics[0].scopeMetrics[0].metrics[0].sum.dataPoints[0].asDouble, 1);
+  assert.equal(
+    calls[0]!.body.resourceMetrics[0].scopeMetrics[0].metrics[0].sum
+      .dataPoints[0].asDouble,
+    1,
+  );
 });
 
 test("metrics exporter is null without an endpoint, caps series cardinality, and rejects bad values", async () => {
-  assert.equal(createOtlpMetricsExporter({ endpoint: undefined, flushIntervalMs: 0 }), null);
+  assert.equal(
+    createOtlpMetricsExporter({ endpoint: undefined, flushIntervalMs: 0 }),
+    null,
+  );
 
   const { fetchImpl } = fakeCollector();
   const exporter = metricsExporterWith(fetchImpl);
   // Hostile-cardinality attack: distinct attribute values far past the cap.
-  for (let i = 0; i < 2_500; i++) exporter.count("attack_total", { victim: `path-${i}` });
+  for (let i = 0; i < 2_500; i++)
+    exporter.count("attack_total", { victim: `path-${i}` });
   assert.equal(exporter.droppedBatches, 500); // 2000 series cap held
 
   exporter.count("bad", {}, -1);
   exporter.count("bad", {}, Number.NaN);
-  exporter.record("bad_h", {}, Number.POSITIVE_INFINITY, { unit: "s", boundaries: [1] });
+  exporter.record("bad_h", {}, Number.POSITIVE_INFINITY, {
+    unit: "s",
+    boundaries: [1],
+  });
   // None of the invalid values may create state beyond the capped series.
   const before = exporter.droppedBatches;
   assert.equal(before, 500);
@@ -196,7 +250,9 @@ test("metrics exporter truncates oversized attribute values", async () => {
   const exporter = metricsExporterWith(fetchImpl);
   exporter.count("t", { k: "v".repeat(1_000) });
   await exporter.flush();
-  const attr = calls[0]!.body.resourceMetrics[0].scopeMetrics[0].metrics[0].sum.dataPoints[0].attributes[0];
+  const attr =
+    calls[0]!.body.resourceMetrics[0].scopeMetrics[0].metrics[0].sum
+      .dataPoints[0].attributes[0];
   assert.equal(attr.value.stringValue.length, 256);
 });
 
@@ -213,10 +269,14 @@ test("ctx.routePath carries the matched route template and onResponse receives t
     },
   };
   const app = new App({ env: "development", hooks });
-  app.get("/books/:id", { responses: { 200: { description: "ok" } } }, async ({ params }) => ({
-    status: 200 as const,
-    body: { id: (params as { id: string }).id },
-  }));
+  app.get(
+    "/books/:id",
+    { responses: { 200: { description: "ok" } } },
+    async ({ params }) => ({
+      status: 200 as const,
+      body: { id: (params as { id: string }).id },
+    }),
+  );
 
   const res = await app.request("/books/42");
   assert.equal(res.status, 200);
@@ -229,10 +289,14 @@ test("ctx.routePath carries the matched route template and onResponse receives t
 test("httpMetrics route label uses the matched template instead of the raw path", async () => {
   const registry = new MetricsRegistry({ collectDefaultMetrics: false });
   const app = new App({ env: "development", hooks: httpMetrics({ registry }) });
-  app.get("/books/:id", { responses: { 200: { description: "ok" } } }, async () => ({
-    status: 200 as const,
-    body: { ok: true },
-  }));
+  app.get(
+    "/books/:id",
+    { responses: { 200: { description: "ok" } } },
+    async () => ({
+      status: 200 as const,
+      body: { ok: true },
+    }),
+  );
 
   await app.request("/books/1");
   await app.request("/books/2");
@@ -246,11 +310,18 @@ test("httpMetrics route label uses the matched template instead of the raw path"
 async function semconvApp(exporterOverrides: Record<string, unknown> = {}) {
   const { calls, fetchImpl } = fakeCollector();
   const exporter = metricsExporterWith(fetchImpl, exporterOverrides);
-  const app = new App({ env: "development", hooks: semconvHttpMetrics(exporter) });
-  app.get("/books/:id", { responses: { 200: { description: "ok" } } }, async () => ({
-    status: 200 as const,
-    body: { ok: true },
-  }));
+  const app = new App({
+    env: "development",
+    hooks: semconvHttpMetrics(exporter),
+  });
+  app.get(
+    "/books/:id",
+    { responses: { 200: { description: "ok" } } },
+    async () => ({
+      status: 200 as const,
+      body: { ok: true },
+    }),
+  );
   app.get("/boom", { responses: { 200: { description: "ok" } } }, async () => {
     throw new Error("kaboom");
   });
@@ -263,7 +334,9 @@ function durationMetric(calls: CapturedCall[]) {
 }
 
 function attrsOf(dp: any): Record<string, string> {
-  return Object.fromEntries(dp.attributes.map((a: any) => [a.key, a.value.stringValue]));
+  return Object.fromEntries(
+    dp.attributes.map((a: any) => [a.key, a.value.stringValue]),
+  );
 }
 
 test("semconvHttpMetrics records http.server.request.duration with spec attributes and buckets", async () => {
@@ -275,7 +348,9 @@ test("semconvHttpMetrics records http.server.request.duration with spec attribut
   const metric = durationMetric(calls);
   assert.equal(metric.unit, "s");
   const dp = metric.histogram.dataPoints[0];
-  assert.deepEqual(dp.explicitBounds, [...HTTP_SERVER_REQUEST_DURATION_BUCKETS]);
+  assert.deepEqual(dp.explicitBounds, [
+    ...HTTP_SERVER_REQUEST_DURATION_BUCKETS,
+  ]);
   const attrs = attrsOf(dp);
   assert.equal(attrs["http.request.method"], "GET");
   assert.equal(attrs["http.route"], "/books/:id");
@@ -296,8 +371,14 @@ test("semconvHttpMetrics records nothing for unmatched 404s and sets error.type 
   const metric = durationMetric(calls);
   const all = metric.histogram.dataPoints.map(attrsOf);
   // The 404 fast path never builds a context → no series minted from raw paths.
-  assert.ok(all.every((a: Record<string, string>) => a["http.response.status_code"] !== "404"));
-  const p500 = all.find((a: Record<string, string>) => a["http.response.status_code"] === "500")!;
+  assert.ok(
+    all.every(
+      (a: Record<string, string>) => a["http.response.status_code"] !== "404",
+    ),
+  );
+  const p500 = all.find(
+    (a: Record<string, string>) => a["http.response.status_code"] === "500",
+  )!;
   assert.equal(p500["http.route"], "/boom");
   assert.equal(p500["error.type"], "500");
 });
@@ -305,12 +386,18 @@ test("semconvHttpMetrics records nothing for unmatched 404s and sets error.type 
 test("semconvHttpMetrics honors exclude and normalizes unknown methods to _OTHER", async () => {
   const { calls, fetchImpl } = fakeCollector();
   const exporter = metricsExporterWith(fetchImpl);
-  const excluding = semconvHttpMetrics(exporter, { exclude: (p) => p === "/healthz" });
+  const excluding = semconvHttpMetrics(exporter, {
+    exclude: (p) => p === "/healthz",
+  });
   const app = new App({ env: "development", hooks: excluding });
-  app.get("/healthz", { responses: { 200: { description: "ok" } } }, async () => ({
-    status: 200 as const,
-    body: { ok: true },
-  }));
+  app.get(
+    "/healthz",
+    { responses: { 200: { description: "ok" } } },
+    async () => ({
+      status: 200 as const,
+      body: { ok: true },
+    }),
+  );
 
   await app.request("/healthz");
   await exporter.flush();
@@ -363,17 +450,22 @@ test("App telemetry option exports logs and semconv metrics end to end", async (
   const logCalls = calls.filter((c) => c.url.endsWith("/v1/logs"));
   const metricCalls = calls.filter((c) => c.url.endsWith("/v1/metrics"));
   assert.ok(logCalls.length >= 1, "boot log line must be exported");
-  const bootRecords = logCalls.flatMap((c) => c.body.resourceLogs[0].scopeLogs[0].logRecords);
+  const bootRecords = logCalls.flatMap(
+    (c) => c.body.resourceLogs[0].scopeLogs[0].logRecords,
+  );
   assert.ok(
     bootRecords.some((r: any) =>
-      r.attributes.some((a: any) => a.key === "event" && a.value.stringValue === "telemetry.otlp")
-    )
+      r.attributes.some(
+        (a: any) =>
+          a.key === "event" && a.value.stringValue === "telemetry.otlp",
+      ),
+    ),
   );
   assert.ok(metricCalls.length >= 1, "semconv metric must be exported");
   const metric = metricCalls
     .at(-1)!
     .body.resourceMetrics[0].scopeMetrics[0].metrics.find(
-      (m: any) => m.name === "http.server.request.duration"
+      (m: any) => m.name === "http.server.request.duration",
     );
   assert.equal(attrsOf(metric.histogram.dataPoints[0])["http.route"], "/ping");
 });
@@ -392,7 +484,10 @@ test("App telemetry option is a silent no-op without an endpoint and can disable
   const { calls, fetchImpl } = fakeCollector();
   const logsOnly = new App({
     env: "development",
-    telemetry: { metrics: false, exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+    telemetry: {
+      metrics: false,
+      exporter: { ...EXPORTER_ENV, fetch: fetchImpl },
+    },
   });
   assert.equal(logsOnly.telemetry!.metrics, null);
   assert.ok(logsOnly.telemetry!.logs);
@@ -410,4 +505,268 @@ test("App telemetry option is a silent no-op without an endpoint and can disable
 test("App without the telemetry option allocates nothing", () => {
   const app = new App({ env: "development" });
   assert.equal(app.telemetry, undefined);
+});
+
+test("App group/register does not spawn a second OTLP pipeline", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const app = new App({
+    env: "development",
+    telemetry: { exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+  });
+  app.group("/admin", {}, (admin) => {
+    assert.equal(admin.telemetry, app.telemetry);
+    admin.get(
+      "/ping",
+      { responses: { 200: { description: "ok" } } },
+      async () => ({
+        status: 200 as const,
+        body: { ok: true },
+      }),
+    );
+  });
+  await app.telemetry!.flush();
+  const bootRecords = calls
+    .filter((c) => c.url.endsWith("/v1/logs"))
+    .flatMap((c) => c.body.resourceLogs[0].scopeLogs[0].logRecords);
+  const otlpBoots = bootRecords.filter(
+    (r: { attributes: { key: string; value: { stringValue: string } }[] }) =>
+      r.attributes.some(
+        (a) => a.key === "event" && a.value.stringValue === "telemetry.otlp",
+      ),
+  );
+  assert.equal(otlpBoots.length, 1);
+  const serialized = JSON.stringify(bootRecords);
+  assert.doesNotMatch(serialized, /tenant-a/);
+});
+
+test("every(semconvHttpMetrics) still records http.route", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const exporter = metricsExporterWith(fetchImpl);
+  const app = new App({
+    env: "development",
+    hooks: every(semconvHttpMetrics(exporter), { onResponse() {} }),
+  });
+  app.get(
+    "/books/:id",
+    { responses: { 200: { description: "ok" } } },
+    async () => ({
+      status: 200 as const,
+      body: { ok: true },
+    }),
+  );
+  await app.request("/books/1");
+  await exporter.flush();
+  const metric = durationMetric(calls);
+  assert.equal(
+    attrsOf(metric.histogram.dataPoints[0])["http.route"],
+    "/books/:id",
+  );
+});
+
+test("log exporter times out a hung collector and unlatches flushing", async () => {
+  let aborted = 0;
+  const fetchImpl = ((url: string | URL | Request, init?: RequestInit) => {
+    void url;
+    return new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (signal == null) return;
+      const onAbort = (): void => {
+        aborted += 1;
+        reject(signal.reason ?? new Error("aborted"));
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }) as typeof fetch;
+  const exporter = logExporterWith(fetchImpl, { flushTimeoutMs: 30 });
+  exporter.pushLine("line");
+  await exporter.flush();
+  assert.equal(exporter.droppedBatches, 1);
+  assert.equal(aborted, 1);
+  exporter.pushLine("line2");
+  await exporter.flush();
+  assert.equal(
+    exporter.droppedBatches,
+    2,
+    "flushing latch must clear after timeout",
+  );
+});
+
+test("metrics exporter keeps dirty true when record races an in-flight flush", async () => {
+  const calls: CapturedCall[] = [];
+  let firstResolve: ((res: Response) => void) | undefined;
+  const fetchImpl = (async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    const captured: CapturedCall = {
+      url: String(url),
+      headers: (init?.headers ?? {}) as Record<string, string>,
+      body: JSON.parse(String(init?.body)),
+    };
+    if (firstResolve === undefined) {
+      return await new Promise<Response>((resolve) => {
+        firstResolve = (res) => {
+          calls.push(captured);
+          resolve(res);
+        };
+      });
+    }
+    calls.push(captured);
+    return new Response(JSON.stringify({ partialSuccess: {} }), {
+      status: 200,
+    });
+  }) as typeof fetch;
+
+  const exporter = metricsExporterWith(fetchImpl, { flushTimeoutMs: 0 });
+  exporter.count("c", {});
+  const first = exporter.flush();
+  for (let i = 0; i < 40 && firstResolve === undefined; i++)
+    await Promise.resolve();
+  assert.ok(firstResolve, "in-flight flush must have reached fetch");
+  exporter.count("c", {});
+  firstResolve!(
+    new Response(JSON.stringify({ partialSuccess: {} }), { status: 200 }),
+  );
+  await first;
+  await exporter.flush();
+  assert.equal(calls.length, 2);
+  const last =
+    calls[1]!.body.resourceMetrics[0].scopeMetrics[0].metrics[0].sum
+      .dataPoints[0].asDouble;
+  assert.equal(last, 2);
+});
+
+test("OTEL_EXPORTER_OTLP_HEADERS are percent-decoded and never appear in log bodies", async () => {
+  const prevEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  const prevHeaders = process.env.OTEL_EXPORTER_OTLP_HEADERS;
+  process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://collector.local:4318";
+  process.env.OTEL_EXPORTER_OTLP_HEADERS =
+    "tenant_id=a%2Cb,Authorization=Bearer%20secret-token";
+  try {
+    const { calls, fetchImpl } = fakeCollector();
+    const exporter = createOtlpLogExporter({
+      fetch: fetchImpl,
+      flushIntervalMs: 0,
+    })!;
+    exporter.pushLine(JSON.stringify({ level: "info", msg: "hello" }));
+    await exporter.flush();
+    assert.equal(calls[0]!.headers["tenant_id"], "a,b");
+    assert.equal(calls[0]!.headers["Authorization"], "Bearer secret-token");
+    assert.doesNotMatch(JSON.stringify(calls[0]!.body), /secret-token/);
+  } finally {
+    if (prevEndpoint === undefined)
+      delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    else process.env.OTEL_EXPORTER_OTLP_ENDPOINT = prevEndpoint;
+    if (prevHeaders === undefined)
+      delete process.env.OTEL_EXPORTER_OTLP_HEADERS;
+    else process.env.OTEL_EXPORTER_OTLP_HEADERS = prevHeaders;
+  }
+});
+
+test("OTLP export refuses to follow redirects so tenant headers cannot leak", async () => {
+  let sawRedirectMode: RequestRedirect | undefined;
+  const fetchImpl = (async (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    sawRedirectMode = init?.redirect;
+    return new Response(null, {
+      status: 302,
+      headers: { location: "https://evil.test/steal" },
+    });
+  }) as typeof fetch;
+  const exporter = logExporterWith(fetchImpl);
+  exporter.pushLine("line");
+  await exporter.flush();
+  assert.equal(sawRedirectMode, "error");
+  assert.equal(exporter.droppedBatches, 1);
+});
+
+test("semconvHttpMetrics unmatched-path flood mints no series", async () => {
+  const { app, exporter, calls } = await semconvApp();
+  for (let i = 0; i < 200; i++) {
+    const res = await app.request(`/no/such/${i}`);
+    assert.equal(res.status, 404);
+  }
+  await exporter.flush();
+  assert.equal(calls.length, 0);
+});
+
+test("Cloudflare adapter waitUntil flushes telemetry after the response", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const app = new App({
+    env: "development",
+    telemetry: { exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+  });
+  app.get("/ping", { responses: { 200: { description: "ok" } } }, async () => ({
+    status: 200 as const,
+    body: { ok: true },
+  }));
+  const waited: Promise<unknown>[] = [];
+  const res = await toCloudflareFetchHandler(app).fetch(
+    new Request("http://test.local/ping"),
+    undefined,
+    {
+      waitUntil: (p) => {
+        waited.push(p);
+      },
+    },
+  );
+  assert.equal(res.status, 200);
+  assert.equal(waited.length, 1);
+  await waited[0];
+  assert.ok(calls.some((c) => c.url.endsWith("/v1/metrics")));
+});
+
+test("Vercel adapter uses globalThis.waitUntil when present", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const app = new App({
+    env: "development",
+    telemetry: { exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+  });
+  app.get("/ping", { responses: { 200: { description: "ok" } } }, async () => ({
+    status: 200 as const,
+    body: { ok: true },
+  }));
+  const waited: Promise<unknown>[] = [];
+  const g = globalThis as { waitUntil?: (promise: Promise<unknown>) => void };
+  const prev = g.waitUntil;
+  g.waitUntil = (p) => {
+    waited.push(p);
+  };
+  try {
+    const res = await toWebHandler(app)(new Request("http://test.local/ping"));
+    assert.equal(res.status, 200);
+    assert.equal(waited.length, 1);
+    await waited[0];
+    assert.ok(calls.some((c) => c.url.endsWith("/v1/metrics")));
+  } finally {
+    if (prev === undefined) delete g.waitUntil;
+    else g.waitUntil = prev;
+  }
+});
+
+test("Lambda adapter awaits telemetry flush before returning", async () => {
+  const { calls, fetchImpl } = fakeCollector();
+  const app = new App({
+    env: "development",
+    telemetry: { exporter: { ...EXPORTER_ENV, fetch: fetchImpl } },
+  });
+  app.get("/ping", { responses: { 200: { description: "ok" } } }, async () => ({
+    status: 200 as const,
+    body: { ok: true },
+  }));
+  const result = await toLambdaHandler(app)({
+    version: "2.0",
+    rawPath: "/ping",
+    rawQueryString: "",
+    headers: { host: "test.local" },
+    requestContext: {
+      http: { method: "GET", path: "/ping" },
+      domainName: "test.local",
+    },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.ok(calls.some((c) => c.url.endsWith("/v1/metrics")));
 });

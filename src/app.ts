@@ -30,8 +30,17 @@ import {
   timingSafeEqual,
   isForbiddenObjectKey,
 } from "./security.js";
-import { createLogger, noopLogger, sanitizeUrlForLog, type Logger } from "./logger.js";
-import { createAppTelemetry, type AppTelemetry, type TelemetryOptions } from "./otlp.js";
+import {
+  createLogger,
+  noopLogger,
+  sanitizeUrlForLog,
+  type Logger,
+} from "./logger.js";
+import {
+  createAppTelemetry,
+  type AppTelemetry,
+  type TelemetryOptions,
+} from "./otlp.js";
 import type {
   BaseContext,
   HttpMethod,
@@ -94,11 +103,17 @@ import {
   PROMETHEUS_CONTENT_TYPE,
   type HttpMetricsOptions,
 } from "./metrics.js";
-import { Scheduler, type TaskDefinition, type TaskHandler } from "./scheduler.js";
+import {
+  Scheduler,
+  type TaskDefinition,
+  type TaskHandler,
+} from "./scheduler.js";
 import { securitySchemeRequiresPayloadAuth } from "./security-schemes.js";
 import { assertBehindProxy, type BehindProxyConfig } from "./conn-info.js";
 
-const AUTO_SECURE_HEADERS_MARKER: unique symbol = Symbol.for("daloyjs.app.autoSecureHeaders");
+const AUTO_SECURE_HEADERS_MARKER: unique symbol = Symbol.for(
+  "daloyjs.app.autoSecureHeaders",
+);
 
 /**
  * Module-level latch shared across every {@link App} constructed in the same
@@ -280,8 +295,9 @@ export interface AppOptions {
    * per the OTel HTTP semantic conventions, pushed to the collector named by
    * the standard `OTEL_EXPORTER_OTLP_*` environment variables. A silent no-op
    * when no endpoint is configured, so it is safe to keep enabled in
-   * development. Export failures never affect request serving. See
-   * {@link TelemetryOptions}.
+   * development. Export failures never affect request serving. Isolate
+   * runtimes must go through `toFetchHandler` / `toLambdaHandler` so a
+   * per-request flush actually runs. See {@link TelemetryOptions}.
    *
    * @since 1.2.0
    */
@@ -541,7 +557,10 @@ export interface AppOptions {
   loadShedding?: boolean | LoadSheddingOptions;
 
   /** Pluggable logger. Default: structured JSON logger at "info" (or noop in test). */
-  logger?: Logger | { level?: "trace" | "debug" | "info" | "warn" | "error" | "fatal" } | false;
+  logger?:
+    | Logger
+    | { level?: "trace" | "debug" | "info" | "warn" | "error" | "fatal" }
+    | false;
 
   /**
    * Mock mode: instead of running handlers, return the first declared response example
@@ -782,7 +801,13 @@ export interface PluginExtension {
   /** Unique extension name. Referenced by `before` / `after` on siblings. */
   name: string;
   /** Lifecycle event the handler attaches to. */
-  event: "onRequest" | "preBody" | "beforeHandle" | "afterHandle" | "onSend" | "onError";
+  event:
+    | "onRequest"
+    | "preBody"
+    | "beforeHandle"
+    | "afterHandle"
+    | "onSend"
+    | "onError";
   /** Hook handler. The shape mirrors the matching {@link Hooks} entry. */
   handler: (...args: any[]) => any;
   /** Extension names this one must run before. */
@@ -878,15 +903,15 @@ export interface MetricsRouteOptions {
    */
   registry?: MetricsRegistry;
   /**
-   * Resolve the low-cardinality `route` label. Strongly recommended: return
-   * the route template (e.g. `/books/:id`) instead of the raw path.
-   * Forwarded to {@link httpMetrics}.
+   * Resolve the low-cardinality `route` label. When omitted, the matched
+   * route template (`ctx.routePath`, e.g. `/books/:id`) is used. Forwarded
+   * to {@link httpMetrics}.
    */
   route?: HttpMetricsOptions["route"];
   /**
-   * Maximum distinct values for the default pathname-derived `route` label
-   * before further values collapse to `"<other>"`. Forwarded to
-   * {@link httpMetrics}. Default `100`.
+   * Maximum distinct values for the pathname fallback `route` label (no
+   * template on the context). Forwarded to {@link httpMetrics}. Default
+   * `100`.
    */
   maxRouteCardinality?: number;
   /** Latency histogram buckets, in seconds. Forwarded to {@link httpMetrics}. */
@@ -928,7 +953,7 @@ export interface CspReportRouteOptions {
    */
   onReport?: (
     report: unknown,
-    ctx: { ip: string | null; userAgent: string | null }
+    ctx: { ip: string | null; userAgent: string | null },
   ) => void | Promise<void>;
   /**
    * When `false` (the default in production), the default logger
@@ -1064,7 +1089,9 @@ const MCP_ROUTE_MARKER = Symbol.for("daloyjs.mcp.route");
 const RESPONSE_CACHE_HOOK_MARKER = Symbol.for("daloyjs.response-cache.hook");
 const TENANCY_HOOK_MARKER = Symbol.for("daloyjs.tenancy.hook");
 const IDEMPOTENCY_HOOK_MARKER = Symbol.for("daloyjs.idempotency.hook");
-const EARLY_REJECTION_MARKER = Symbol.for("daloyjs.middleware.earlyRejectionHooks");
+const EARLY_REJECTION_MARKER = Symbol.for(
+  "daloyjs.middleware.earlyRejectionHooks",
+);
 
 interface BootGuardCache {
   checked: boolean;
@@ -1157,7 +1184,9 @@ export const DALOY_REQUEST_RAW_BODY = Symbol.for("daloyjs.request.rawBody");
  * and the timeout still resolves as a `408`. Module-public so first-party
  * adapters can opt in; not part of the userland API surface.
  */
-export const DALOY_REQUEST_ABORT: unique symbol = Symbol.for("daloyjs.request.abort");
+export const DALOY_REQUEST_ABORT: unique symbol = Symbol.for(
+  "daloyjs.request.abort",
+);
 
 /**
  * Internal Symbol an adapter may set to a callback that the framework invokes
@@ -1183,7 +1212,9 @@ export const DALOY_REQUEST_ABORT: unique symbol = Symbol.for("daloyjs.request.ab
  *
  * @since 1.0.0-rc.9
  */
-export const DALOY_REQUEST_BODY_SOLICIT: unique symbol = Symbol.for("daloyjs.request.bodySolicit");
+export const DALOY_REQUEST_BODY_SOLICIT: unique symbol = Symbol.for(
+  "daloyjs.request.bodySolicit",
+);
 
 /**
  * Internal Symbol set by handlers/serializers to attach a raw stream
@@ -1381,9 +1412,10 @@ type OperationSegment<S extends string> = S extends `:${infer Param}`
   ? `By${PascalWords<Param>}`
   : PascalWords<S>;
 
-type OperationPathTail<P extends string> = P extends `${infer Segment}/${infer Rest}`
-  ? `${OperationSegment<Segment>}${OperationPathTail<Rest>}`
-  : OperationSegment<P>;
+type OperationPathTail<P extends string> =
+  P extends `${infer Segment}/${infer Rest}`
+    ? `${OperationSegment<Segment>}${OperationPathTail<Rest>}`
+    : OperationSegment<P>;
 
 type AutoOperationId<
   M extends HttpMethod,
@@ -1396,7 +1428,10 @@ type ShorthandOptions<
   Req extends RequestSchemas | undefined,
   Res extends ResponsesMap,
   Op extends string | undefined,
-> = Omit<RouteDefinition<P, M, Req, Res>, "method" | "path" | "operationId" | "handler"> & {
+> = Omit<
+  RouteDefinition<P, M, Req, Res>,
+  "method" | "path" | "operationId" | "handler"
+> & {
   operationId?: Op;
 };
 
@@ -1426,12 +1461,8 @@ type ShorthandRoute<
  * @since 0.1.0
  */
 export class App<
-  Routes extends readonly RouteDefinition<any, any, any, any>[] = readonly RouteDefinition<
-    any,
-    any,
-    any,
-    any
-  >[],
+  Routes extends readonly RouteDefinition<any, any, any, any>[] =
+    readonly RouteDefinition<any, any, any, any>[],
 > {
   /**
    * Resolved constructor options. The security-relevant trio is always
@@ -1439,7 +1470,10 @@ export class App<
    * (default 1 MiB), and `requestTimeoutMs` (default 30_000 ms).
    */
   readonly options: Required<
-    Pick<AppOptions, "validateResponses" | "bodyLimitBytes" | "requestTimeoutMs">
+    Pick<
+      AppOptions,
+      "validateResponses" | "bodyLimitBytes" | "requestTimeoutMs"
+    >
   > &
     AppOptions;
   /** Structured logger for the app. Defaults to a JSON-lines console logger; override via `options.logger`. */
@@ -1500,9 +1534,12 @@ export class App<
   private scheduler?: Scheduler;
   /** Idle-connection close hooks (adapter-registered, sync). */
   private idleConnectionCloseHooks: Array<() => void> = [];
-  private pluginInstalledListeners: Array<(info: PluginInstalledEvent) => void | Promise<void>> =
-    [];
-  private shutdownListeners: Array<(info: ShutdownEvent) => void | Promise<void>> = [];
+  private pluginInstalledListeners: Array<
+    (info: PluginInstalledEvent) => void | Promise<void>
+  > = [];
+  private shutdownListeners: Array<
+    (info: ShutdownEvent) => void | Promise<void>
+  > = [];
   private shutdownListenersRun = false;
   private pendingPlugins = new Set<Promise<unknown>>();
   private pluginBootError: { failed: boolean; error: unknown } = {
@@ -1562,7 +1599,9 @@ export class App<
 
   private get globalCorsAllows(): CorsOriginAllow[] {
     if (this._globalCorsAllowsCache === undefined) {
-      this._globalCorsAllowsCache = corsOriginAllowsFromHooks([this.options.hooks ?? {}]);
+      this._globalCorsAllowsCache = corsOriginAllowsFromHooks([
+        this.options.hooks ?? {},
+      ]);
     }
     return this._globalCorsAllowsCache;
   }
@@ -1577,7 +1616,10 @@ export class App<
 
   private get coldPathHooks(): Hooks {
     if (this._coldPathHooksCache === undefined) {
-      this._coldPathHooksCache = mergeHooks([this.options.hooks ?? {}, ...this.groupHooks]);
+      this._coldPathHooksCache = mergeHooks([
+        this.options.hooks ?? {},
+        ...this.groupHooks,
+      ]);
     }
     return this._coldPathHooksCache;
   }
@@ -1585,7 +1627,8 @@ export class App<
   constructor(options: AppOptions = {}) {
     const resolved = applySecurityPreset(options);
     this.options = {
-      validateResponses: resolved.validateResponses ?? DEFAULTS.validateResponses,
+      validateResponses:
+        resolved.validateResponses ?? DEFAULTS.validateResponses,
       bodyLimitBytes: resolved.bodyLimitBytes ?? DEFAULTS.bodyLimitBytes,
       requestTimeoutMs: resolved.requestTimeoutMs ?? DEFAULTS.requestTimeoutMs,
       maxHeaderCount: resolved.maxHeaderCount ?? DEFAULTS.maxHeaderCount,
@@ -1604,11 +1647,14 @@ export class App<
     this.log =
       options.logger === false
         ? noopLogger
-        : options.logger && typeof (options.logger as Logger).info === "function"
+        : options.logger &&
+            typeof (options.logger as Logger).info === "function"
           ? (options.logger as Logger)
           : createLogger({
               level: (options.logger as any)?.level ?? "info",
-              ...(telemetryWrite !== undefined ? { write: telemetryWrite } : {}),
+              ...(telemetryWrite !== undefined
+                ? { write: telemetryWrite }
+                : {}),
             });
 
     this.warnOnEnvMismatch();
@@ -1634,7 +1680,7 @@ export class App<
         },
         telemetry.endpoint !== null
           ? "OTLP telemetry export active"
-          : "Telemetry enabled but no OTEL_EXPORTER_OTLP_ENDPOINT configured; export disabled"
+          : "Telemetry enabled but no OTEL_EXPORTER_OTLP_ENDPOINT configured; export disabled",
       );
     }
   }
@@ -1650,7 +1696,7 @@ export class App<
     if (v === undefined || v === 0) return;
     if (!Number.isInteger(v) || v < 400 || v > 499) {
       throw new Error(
-        `disconnectStatusCode must be an integer in [400, 499] or 0; got ${String(v)}.`
+        `disconnectStatusCode must be an integer in [400, 499] or 0; got ${String(v)}.`,
       );
     }
   }
@@ -1680,7 +1726,7 @@ export class App<
           "acknowledgeInsecureDefaults: true to confirm. Prefer per-feature opt-outs " +
           "(secureHeaders: false, corsCrossOriginGuard: false, crashOnUnhandledRejection: false, " +
           'trustProxy: false, csrf: "off") instead. ' +
-          "See https://daloyjs.dev/docs/security/secure-defaults-enforcement."
+          "See https://daloyjs.dev/docs/security/secure-defaults-enforcement.",
       );
     }
     if (!insecureDefaultsLoggedThisProcess) {
@@ -1692,7 +1738,7 @@ export class App<
           acknowledged: this.options.acknowledgeInsecureDefaults === true,
           disabled: DISABLED_BY_INSECURE_DEFAULTS,
         },
-        `app({ secureDefaults: false }) disables: ${DISABLED_BY_INSECURE_DEFAULTS.join(", ")}.`
+        `app({ secureDefaults: false }) disables: ${DISABLED_BY_INSECURE_DEFAULTS.join(", ")}.`,
       );
     }
   }
@@ -1712,13 +1758,16 @@ export class App<
   private logSecurityPresetIfApplied(originalOptions: AppOptions): void {
     if (originalOptions.preset !== "internal-service") return;
     const userOverrode: string[] = [];
-    if (originalOptions.secureHeaders !== undefined) userOverrode.push("secureHeaders");
+    if (originalOptions.secureHeaders !== undefined)
+      userOverrode.push("secureHeaders");
     if (originalOptions.corsCrossOriginGuard !== undefined) {
       userOverrode.push("corsCrossOriginGuard");
     }
     if (originalOptions.csrf !== undefined) userOverrode.push("csrf");
-    if (originalOptions.trustProxy !== undefined) userOverrode.push("trustProxy");
-    if (originalOptions.behindProxy !== undefined) userOverrode.push("behindProxy");
+    if (originalOptions.trustProxy !== undefined)
+      userOverrode.push("trustProxy");
+    if (originalOptions.behindProxy !== undefined)
+      userOverrode.push("behindProxy");
     this.log.info(
       {
         event: "security.preset.applied",
@@ -1727,7 +1776,7 @@ export class App<
         kept: INTERNAL_SERVICE_PRESET_KEPT,
         userOverrode,
       },
-      `Applied security preset "internal-service": disabled ${INTERNAL_SERVICE_PRESET_DISABLED.length} topology-dependent guards; kept ${INTERNAL_SERVICE_PRESET_KEPT.length} input/credential/SSRF guards on. See app.getSecurityPosture() for the live snapshot.`
+      `Applied security preset "internal-service": disabled ${INTERNAL_SERVICE_PRESET_DISABLED.length} topology-dependent guards; kept ${INTERNAL_SERVICE_PRESET_KEPT.length} input/credential/SSRF guards on. See app.getSecurityPosture() for the live snapshot.`,
     );
   }
 
@@ -1761,10 +1810,13 @@ export class App<
       preset: o.preset,
       secureDefaults: o.secureDefaults !== false,
       secureHeaders: o.secureDefaults !== false && o.secureHeaders !== false,
-      corsCrossOriginGuard: o.secureDefaults !== false && o.corsCrossOriginGuard !== false,
+      corsCrossOriginGuard:
+        o.secureDefaults !== false && o.corsCrossOriginGuard !== false,
       csrf: o.csrf === "off" ? "off" : "on",
       crashOnUnhandledRejection:
-        o.crashOnUnhandledRejection === undefined ? "default" : o.crashOnUnhandledRejection,
+        o.crashOnUnhandledRejection === undefined
+          ? "default"
+          : o.crashOnUnhandledRejection,
       trustProxy: o.trustProxy === undefined ? "unconfigured" : o.trustProxy,
       bodyLimitBytes: this.options.bodyLimitBytes,
       requestTimeoutMs: this.options.requestTimeoutMs,
@@ -1791,7 +1843,8 @@ export class App<
     if (this.options.secureDefaults === false) return;
     if (this.options.secureHeaders !== false) {
       const opts =
-        this.options.secureHeaders && typeof this.options.secureHeaders === "object"
+        this.options.secureHeaders &&
+        typeof this.options.secureHeaders === "object"
           ? this.options.secureHeaders
           : {};
       const auto = secureHeadersMiddleware(opts);
@@ -1800,7 +1853,10 @@ export class App<
     }
     // Opt-in load-shedding pressure monitor.
     if (this.options.loadShedding) {
-      const lsOpts = typeof this.options.loadShedding === "object" ? this.options.loadShedding : {};
+      const lsOpts =
+        typeof this.options.loadShedding === "object"
+          ? this.options.loadShedding
+          : {};
       this.groupHooks.push(loadSheddingMiddleware(lsOpts));
     }
   }
@@ -1834,7 +1890,7 @@ export class App<
       try {
         log.fatal(
           { event: "process.unhandledRejection", err: serializeErr(reason) },
-          "Unhandled promise rejection — exiting (crashOnUnhandledRejection)"
+          "Unhandled promise rejection — exiting (crashOnUnhandledRejection)",
         );
       } catch {
         /* swallow logger failure so we still exit */
@@ -1846,7 +1902,7 @@ export class App<
       try {
         log.fatal(
           { event: "process.uncaughtException", err: serializeErr(err) },
-          "Uncaught exception — exiting (crashOnUnhandledRejection)"
+          "Uncaught exception — exiting (crashOnUnhandledRejection)",
         );
       } catch {
         /* swallow logger failure so we still exit */
@@ -1870,7 +1926,7 @@ export class App<
     if (nodeEnv && nodeEnv !== env) {
       this.log.warn(
         { event: "env.mismatch", env, nodeEnv },
-        `app({ env: "${env}" }) disagrees with NODE_ENV="${nodeEnv}"`
+        `app({ env: "${env}" }) disagrees with NODE_ENV="${nodeEnv}"`,
       );
     }
   }
@@ -1914,11 +1970,16 @@ export class App<
     request: Request,
     requestUrl: string | URL,
     method: HttpMethod,
-    corsOriginAllows: CorsOriginAllow[]
+    corsOriginAllows: CorsOriginAllow[],
   ): void {
     if (this.options.secureDefaults === false) return;
     if (this.options.corsCrossOriginGuard === false) return;
-    if (method !== "POST" && method !== "PUT" && method !== "PATCH" && method !== "DELETE") {
+    if (
+      method !== "POST" &&
+      method !== "PUT" &&
+      method !== "PATCH" &&
+      method !== "DELETE"
+    ) {
       return;
     }
     const origin = request.headers.get("origin");
@@ -1933,14 +1994,16 @@ export class App<
     const fastHeaderOrigin = getOriginFast(origin);
     if (fastHeaderOrigin !== undefined) {
       const fastReqOrigin =
-        typeof requestUrl === "string" ? getOriginFast(requestUrl) : requestUrl.origin;
+        typeof requestUrl === "string"
+          ? getOriginFast(requestUrl)
+          : requestUrl.origin;
       if (fastReqOrigin !== undefined) {
         if (fastHeaderOrigin === fastReqOrigin) return;
         if (corsOriginAllows.some((allows) => allows(origin))) return;
         throw new ForbiddenError(
           `Cross-origin ${method} from "${fastHeaderOrigin}" rejected: no registered cors() policy allows that origin. ` +
             `Register cors({ origin: [...] }) via app.use(...) to allow it, or pass ` +
-            `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`
+            `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`,
         );
       }
     }
@@ -1950,17 +2013,19 @@ export class App<
     } catch {
       // Malformed Origin header — refuse loudly.
       throw new ForbiddenError(
-        "Cross-origin state-changing request rejected: malformed Origin header."
+        "Cross-origin state-changing request rejected: malformed Origin header.",
       );
     }
     const reqOrigin =
-      typeof requestUrl === "string" ? new URL(requestUrl).origin : requestUrl.origin;
+      typeof requestUrl === "string"
+        ? new URL(requestUrl).origin
+        : requestUrl.origin;
     if (originUrl.origin === reqOrigin) return;
     if (corsOriginAllows.some((allows) => allows(origin))) return;
     throw new ForbiddenError(
       `Cross-origin ${method} from "${originUrl.origin}" rejected: no registered cors() policy allows that origin. ` +
         `Register cors({ origin: [...] }) via app.use(...) to allow it, or pass ` +
-        `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`
+        `app({ corsCrossOriginGuard: false }) / app({ secureDefaults: false }) to disable this guard.`,
     );
   }
 
@@ -1997,7 +2062,7 @@ export class App<
         "onResponse",
       ] as const;
       const carriesAHook = HOOK_KEYS.some(
-        (k) => typeof (hooks as Record<string, unknown>)[k] === "function"
+        (k) => typeof (hooks as Record<string, unknown>)[k] === "function",
       );
       if (!carriesAHook) {
         if (Array.isArray(hooks)) {
@@ -2006,7 +2071,7 @@ export class App<
               "hook bundles (e.g. ipRestriction + bearerAuth) on one route, compose " +
               "them with every(...) (all must pass) or some(...) (any may pass) from " +
               "@daloyjs/core. Passing an array silently applies NO hooks, leaving the " +
-              "route unguarded."
+              "route unguarded.",
           );
         }
         if (Object.keys(hooks).length > 0) {
@@ -2014,7 +2079,7 @@ export class App<
             "Hooks object carries none of the recognized hook keys (onRequest, preBody, " +
               "beforeHandle, afterHandle, onError, onSend, onResponse), so it would " +
               "silently apply no hooks. To compose multiple hook bundles use " +
-              "every(...) / some(...) from @daloyjs/core."
+              "every(...) / some(...) from @daloyjs/core.",
           );
         }
         // An empty object `{}` carries no hook and makes no false promise of one;
@@ -2043,7 +2108,7 @@ export class App<
       throw new Error(
         'cors({ origin: "*" }) refused in production: a wildcard CORS origin exposes every state-changing route cross-origin. ' +
           "Replace the wildcard with an explicit allowlist (string[] or predicate), or pass " +
-          "app({ secureDefaults: false }) to disable this guard."
+          "app({ secureDefaults: false }) to disable this guard.",
       );
     }
     if (record[SESSION_HOOK_MARKER] === true) {
@@ -2069,7 +2134,10 @@ export class App<
    * `test`, which is a known, non-production answer).
    */
   private isEnvIndeterminate(): boolean {
-    if (this.options.env !== undefined || this.options.production !== undefined) {
+    if (
+      this.options.env !== undefined ||
+      this.options.production !== undefined
+    ) {
       return false;
     }
     const nodeEnv =
@@ -2091,7 +2159,9 @@ export class App<
    * @param record - The hook object, carrying the wildcard-CORS / session
    * markers used by {@link assertSecureHookConfig}.
    */
-  private warnIndeterminateEnvSecurity(record: Record<PropertyKey, unknown>): void {
+  private warnIndeterminateEnvSecurity(
+    record: Record<PropertyKey, unknown>,
+  ): void {
     if (indeterminateEnvSecurityWarnedThisProcess) return;
     const risky: string[] = [];
     if (record[CORS_WILDCARD_ORIGIN_MARKER] === true) {
@@ -2117,11 +2187,13 @@ export class App<
       { event: "secure_defaults.env_indeterminate", risky },
       `DaloyJS: ${risky.join(" and ")} present, but the runtime environment is indeterminate ` +
         `(no env option and no NODE_ENV). The production-only refuse-to-boot guard is therefore ` +
-        `inactive. If this is production (e.g. an edge runtime), set app({ env: "production" }).`
+        `inactive. If this is production (e.g. an edge runtime), set app({ env: "production" }).`,
     );
   }
 
-  private assertRouteAuthPayloadConfig(route: RouteDefinition<any, any, any, any>): void {
+  private assertRouteAuthPayloadConfig(
+    route: RouteDefinition<any, any, any, any>,
+  ): void {
     const auth = route.auth;
     if (!auth || auth.payload !== false) return;
     const scheme = this.options.openapi?.securitySchemes?.[auth.scheme];
@@ -2129,7 +2201,7 @@ export class App<
     throw new Error(
       `Route ${route.method} ${route.path} declares auth.payload: false, ` +
         `but security scheme "${auth.scheme}" requires payload authentication. ` +
-        `Remove the route-level opt-out or use a scheme without requirePayloadAuth: true.`
+        `Remove the route-level opt-out or use a scheme without requirePayloadAuth: true.`,
     );
   }
 
@@ -2177,7 +2249,9 @@ export class App<
     if (!this.isProduction()) return;
 
     // Guard 1: shadow auth — declared `auth:` with nothing enforcing it.
-    const shadowAuth = this.routeSecurityMarkers.find((r) => r.declaresAuth && !r.hasAuth);
+    const shadowAuth = this.routeSecurityMarkers.find(
+      (r) => r.declaresAuth && !r.hasAuth,
+    );
     if (shadowAuth) {
       const err = new Error(
         `Route ${shadowAuth.method} ${shadowAuth.path} declares an auth requirement (auth: ...) ` +
@@ -2186,14 +2260,16 @@ export class App<
           `Install an auth middleware (bearerAuth/basicAuth/jwk/httpSignatureAuth/clientCertAuth), ` +
           `wrap a custom auth hook with markAuthHook(...), remove the route's auth: declaration, ` +
           `or pass app({ secureDefaults: false }) to disable this guard. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`
+          `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
       this.bootGuard.error = err;
       throw err;
     }
 
     // Guard 2: unauthenticated MCP tool endpoint.
-    const mcpNoAuth = this.routeSecurityMarkers.find((r) => r.isMcp && !r.hasAuth);
+    const mcpNoAuth = this.routeSecurityMarkers.find(
+      (r) => r.isMcp && !r.hasAuth,
+    );
     if (mcpNoAuth) {
       const err = new Error(
         `MCP route ${mcpNoAuth.method} ${mcpNoAuth.path} (from mcpRoutes()) has no authentication ` +
@@ -2202,7 +2278,7 @@ export class App<
           `Install an auth middleware covering the MCP route (e.g. app.use(bearerAuth({ ... }))), ` +
           `wrap a custom auth hook with markAuthHook(...), pass mcpRoutes(path, handler, { public: true }) ` +
           `to intentionally expose it, or pass app({ secureDefaults: false }) to disable this guard. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`
+          `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
       this.bootGuard.error = err;
       throw err;
@@ -2213,7 +2289,9 @@ export class App<
     // ctx.state when the key is built. Mounted first, it would key every
     // tenant's response identically and serve one tenant's private body to the
     // next caller (CWE-524) — silently, with a normal-looking cache HIT.
-    const cacheBeforeTenancy = this.routeSecurityMarkers.find((r) => r.cacheBeforeTenancy);
+    const cacheBeforeTenancy = this.routeSecurityMarkers.find(
+      (r) => r.cacheBeforeTenancy,
+    );
     if (cacheBeforeTenancy) {
       const err = new Error(
         `Route ${cacheBeforeTenancy.method} ${cacheBeforeTenancy.path} runs responseCache() ` +
@@ -2222,7 +2300,7 @@ export class App<
           `would be served to the next caller (CWE-524 cross-tenant cached-response disclosure). ` +
           `Register tenancy() first — as a global hook (new App({ hooks: tenancy(...) })) or an ` +
           `earlier app.use(...) — so the tenant is in ctx.state before the cache reads it. ` +
-          `See https://daloyjs.dev/docs/security/boot-guards.`
+          `See https://daloyjs.dev/docs/security/boot-guards.`,
       );
       this.bootGuard.error = err;
       throw err;
@@ -2239,8 +2317,13 @@ export class App<
     // the five network-identity gates moved to `preBody`; `rateLimit` cannot
     // follow them there because its `keyGenerator` is caller-supplied and may
     // read `ctx.state`, so the unsafe order is refused instead.
-    const replayBeforeBudget = this.routeSecurityMarkers.find((r) => r.replayBeforeBudget !== null);
-    if (replayBeforeBudget !== undefined && this.bootGuard.error === undefined) {
+    const replayBeforeBudget = this.routeSecurityMarkers.find(
+      (r) => r.replayBeforeBudget !== null,
+    );
+    if (
+      replayBeforeBudget !== undefined &&
+      this.bootGuard.error === undefined
+    ) {
       this.bootGuard.error = new Error(
         `Route ${replayBeforeBudget.method} ${replayBeforeBudget.path} runs ` +
           `${replayBeforeBudget.replayBeforeBudget} before rateLimit() / loginThrottle() in its ` +
@@ -2249,7 +2332,7 @@ export class App<
           `the declared budget is never spent on repeat traffic and is effectively unlimited. ` +
           `Register rateLimit() first — as a global hook (new App({ hooks: rateLimit(...) })) or ` +
           `an earlier app.use(...) — so every request is counted before a stored response can ` +
-          `short-circuit it. See https://daloyjs.dev/docs/security/boot-guards.`
+          `short-circuit it. See https://daloyjs.dev/docs/security/boot-guards.`,
       );
       throw this.bootGuard.error;
     }
@@ -2257,7 +2340,7 @@ export class App<
     // Guard 4: session() + state-changing route without csrf().
     if (this.options.csrf === "off") return;
     const stateChanging = this.routeSecurityMarkers.find(
-      (r) => isStateChangingMethod(r.method) && r.hasSession && !r.hasCsrf
+      (r) => isStateChangingMethod(r.method) && r.hasSession && !r.hasCsrf,
     );
     if (!stateChanging) return;
 
@@ -2268,7 +2351,7 @@ export class App<
         `state-changing requests cross-site. ` +
         `Register csrf() via app.use(csrf({ strategy: "fetch-metadata", allowedOrigins: [...] })), ` +
         `or pass app({ csrf: "off" }) to acknowledge that this app is not browser-facing. ` +
-        `See https://daloyjs.dev/docs/security/boot-guards.`
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
     );
     this.bootGuard.error = err;
     throw err;
@@ -2323,7 +2406,7 @@ export class App<
       this.trustProxyWarned = true;
       this.log.warn(
         { event: "trust-proxy.unconfigured", header: found },
-        `Request carried ${found} but app({ trustProxy }) is unset; refusing to honour spoofable proxy headers.`
+        `Request carried ${found} but app({ trustProxy }) is unset; refusing to honour spoofable proxy headers.`,
       );
     }
     const refusal = new InternalError(
@@ -2333,7 +2416,7 @@ export class App<
         `Pass app({ trustProxy: true }) when running behind a trusted reverse proxy, ` +
         `or app({ trustProxy: false }) to ignore forwarded headers, ` +
         `or app({ secureDefaults: false }) to disable this guard. ` +
-        `See https://daloyjs.dev/docs/security/boot-guards.`
+        `See https://daloyjs.dev/docs/security/boot-guards.`,
     );
     // Every refused request throws from this one line, so the stack is
     // identical each time and names framework internals rather than anything
@@ -2341,7 +2424,8 @@ export class App<
     // refusal must stay visible — but drop the stack, so a client cannot
     // multiply the bytes it pushes into the error tier by replaying the header.
     // The actionable message is logged once per process by the warn above.
-    (refusal as unknown as Record<PropertyKey, unknown>)[OMIT_STACK_IN_LOG] = true;
+    (refusal as unknown as Record<PropertyKey, unknown>)[OMIT_STACK_IN_LOG] =
+      true;
     throw refusal;
   }
 
@@ -2396,11 +2480,15 @@ export class App<
     const generate = async (): Promise<Record<string, unknown>> =>
       generateOpenAPI(this, {
         info: resolveInfo(),
-        ...(this.options.openapi?.servers ? { servers: this.options.openapi.servers } : {}),
+        ...(this.options.openapi?.servers
+          ? { servers: this.options.openapi.servers }
+          : {}),
         ...(this.options.openapi?.securitySchemes
           ? { securitySchemes: this.options.openapi.securitySchemes }
           : {}),
-        ...(this.options.openapi?.webhooks ? { webhooks: this.options.openapi.webhooks } : {}),
+        ...(this.options.openapi?.webhooks
+          ? { webhooks: this.options.openapi.webhooks }
+          : {}),
       });
 
     this.route({
@@ -2430,7 +2518,9 @@ export class App<
         summary: "OpenAPI 3.1 document (YAML)",
         acknowledgeNoResponseBodySchema: true,
         responses: {
-          200: { description: "OpenAPI 3.1 document for this application, in YAML." },
+          200: {
+            description: "OpenAPI 3.1 document for this application, in YAML.",
+          },
         },
         handler: async () => ({
           status: 200 as const,
@@ -2460,7 +2550,9 @@ export class App<
       ...(ui === "redoc"
         ? { ...opts.csp, allowBlobWorkers: opts.csp?.allowBlobWorkers ?? true }
         : opts.csp),
-      ...(docsConnectOrigins.length ? { connectOrigins: docsConnectOrigins } : {}),
+      ...(docsConnectOrigins.length
+        ? { connectOrigins: docsConnectOrigins }
+        : {}),
     });
 
     this.route({
@@ -2497,7 +2589,7 @@ export class App<
                   title,
                   configuration: scalarConfigurationWithPreferredAuth(
                     opts.scalar,
-                    this.options.openapi?.securitySchemes
+                    this.options.openapi?.securitySchemes,
                   ),
                   assets: opts.assets,
                   auth: opts.auth,
@@ -2549,7 +2641,9 @@ export class App<
   private mountAsyncAPI(opts: AsyncAPIRouteOptions): void {
     const jsonPath = (opts.jsonPath ?? "/asyncapi.json") as PathString;
     const yamlPath =
-      opts.yamlPath === false ? null : ((opts.yamlPath ?? "/asyncapi.yaml") as PathString);
+      opts.yamlPath === false
+        ? null
+        : ((opts.yamlPath ?? "/asyncapi.yaml") as PathString);
     const uiPath = (opts.path ?? "/asyncapi") as PathString;
     const tags = opts.tags ?? ["AsyncAPI"];
 
@@ -2577,7 +2671,10 @@ export class App<
       // Framework-owned bodies on the AsyncAPI surface, like mountDocs above.
       acknowledgeNoResponseBodySchema: true,
       responses: {
-        200: { description: "AsyncAPI 3.0 document for this application's WebSocket channels." },
+        200: {
+          description:
+            "AsyncAPI 3.0 document for this application's WebSocket channels.",
+        },
       },
       handler: async () => ({ status: 200 as const, body: await generate() }),
     });
@@ -2591,7 +2688,9 @@ export class App<
         summary: "AsyncAPI 3.0 document (YAML)",
         acknowledgeNoResponseBodySchema: true,
         responses: {
-          200: { description: "AsyncAPI 3.0 document for this application, in YAML." },
+          200: {
+            description: "AsyncAPI 3.0 document for this application, in YAML.",
+          },
         },
         handler: async () => ({
           status: 200 as const,
@@ -2644,7 +2743,8 @@ export class App<
    * name-keyed server map, so an app that already declares HTTP servers gets
    * sensible AsyncAPI servers for free. Returns `undefined` when none apply.
    */
-  private asyncapiServersFromOpenAPI(): Record<string, AsyncAPIServer> | undefined {
+  private asyncapiServersFromOpenAPI():
+    Record<string, AsyncAPIServer> | undefined {
     const servers = this.options.openapi?.servers;
     if (!servers || servers.length === 0) return undefined;
     const out: Record<string, AsyncAPIServer> = {};
@@ -2654,7 +2754,8 @@ export class App<
         const host = u.host || u.pathname;
         // Map http(s) → ws(s); leave other schemes as-is minus the trailing ":".
         const scheme = u.protocol.replace(/:$/, "");
-        const protocol = scheme === "https" ? "wss" : scheme === "http" ? "ws" : scheme;
+        const protocol =
+          scheme === "https" ? "wss" : scheme === "http" ? "ws" : scheme;
         out[`server${i + 1}`] = { host, protocol };
       } catch {
         /* skip malformed server URLs */
@@ -2704,8 +2805,10 @@ export class App<
     Res extends ResponsesMap,
     const Op extends string | undefined = undefined,
   >(
-    def: RouteDefinition<P, M, Req, Res> & { operationId?: Op }
-  ): App<AppendRoute<Routes, RouteDefinition<P, M, Req, Res> & { operationId: Op }>> {
+    def: RouteDefinition<P, M, Req, Res> & { operationId?: Op },
+  ): App<
+    AppendRoute<Routes, RouteDefinition<P, M, Req, Res> & { operationId: Op }>
+  > {
     // Refuse non-canonical HTTP methods at runtime.
     // The TypeScript `HttpMethod` union already constrains the public
     // surface, but an unsafe cast (or a runtime caller in plain JS)
@@ -2719,7 +2822,7 @@ export class App<
           `${[...CANONICAL_HTTP_METHODS].join(", ")}. Custom methods ` +
           `(TRACE, CONNECT, WebDAV verbs, etc.) bypass the strict ` +
           `Content-Type, body-on-GET, and TRACE/CONNECT refusal ` +
-          `defaults and are not supported.`
+          `defaults and are not supported.`,
       );
     }
     if (def.hooks) this.assertSecureHookConfig(def.hooks);
@@ -2749,14 +2852,18 @@ export class App<
       ...corsOriginAllowsFromHooks([globalHookLayer]),
       ...corsOriginAllows,
     ];
-    const securityMarkers = securityMarkersFromHooks([globalHookLayer, ...sources]);
+    const securityMarkers = securityMarkersFromHooks([
+      globalHookLayer,
+      ...sources,
+    ]);
     // Capture the decorations of this route's scope at registration time so the
     // dispatch hot path reads the scope-local bag rather than the root app's.
     // `this.decorations` is this scope's own bag (the root's, or the child's
     // copy created in `group()`), so plugin-local decorations never leak to
     // sibling plugins or the root. `undefined` when empty keeps the per-request
     // `Object.assign` skipped for the common no-decoration case.
-    const decorations = this.decorationsCount === 0 ? undefined : this.decorations;
+    const decorations =
+      this.decorationsCount === 0 ? undefined : this.decorations;
     this.router.add(
       def.method,
       fullPath,
@@ -2769,18 +2876,23 @@ export class App<
         fullCorsOriginAllows,
         decorations,
       },
-      def.operationId
+      def.operationId,
     );
     // `routes` is statically a readonly tuple so the typed client can infer
     // per-route methods; at runtime it is a growable array, so we push through
     // a mutable view.
-    (this.routes as unknown as RouteDefinition<any, any, any, any>[]).push(merged);
+    (this.routes as unknown as RouteDefinition<any, any, any, any>[]).push(
+      merged,
+    );
     this.routeSecurityMarkers.push({
       method: merged.method,
       path: merged.path,
       ...securityMarkers,
       declaresAuth: merged.auth !== undefined && merged.auth !== null,
-      isMcp: (merged as unknown as Record<PropertyKey, unknown>)[MCP_ROUTE_MARKER] === true,
+      isMcp:
+        (merged as unknown as Record<PropertyKey, unknown>)[
+          MCP_ROUTE_MARKER
+        ] === true,
     });
     this.resetBootGuardCache();
     return this as unknown as App<
@@ -2800,9 +2912,9 @@ export class App<
    * @returns This App instance widened with every supplied route contract.
    * @since 1.0.0
    */
-  registerRoutes<const Added extends readonly RouteDefinition<any, any, any, any>[]>(
-    definitions: Added
-  ): App<AppendRoutes<Routes, Added>> {
+  registerRoutes<
+    const Added extends readonly RouteDefinition<any, any, any, any>[],
+  >(definitions: Added): App<AppendRoutes<Routes, Added>> {
     for (const definition of definitions) this.route(definition);
     return this as unknown as App<AppendRoutes<Routes, Added>>;
   }
@@ -2823,7 +2935,7 @@ export class App<
   >(
     path: P,
     options: ShorthandOptions<P, "GET", Req, Res, Op>,
-    handler: RouteDefinition<P, "GET", Req, Res>["handler"]
+    handler: RouteDefinition<P, "GET", Req, Res>["handler"],
   ): App<AppendRoute<Routes, ShorthandRoute<P, "GET", Req, Res, Op>>>;
   get(path: PathString, options: unknown, handler: unknown): App<any> {
     return this.addHttpShorthand("GET", path, options, handler);
@@ -2845,7 +2957,7 @@ export class App<
   >(
     path: P,
     options: ShorthandOptions<P, "POST", Req, Res, Op>,
-    handler: RouteDefinition<P, "POST", Req, Res>["handler"]
+    handler: RouteDefinition<P, "POST", Req, Res>["handler"],
   ): App<AppendRoute<Routes, ShorthandRoute<P, "POST", Req, Res, Op>>>;
   post(path: PathString, options: unknown, handler: unknown): App<any> {
     return this.addHttpShorthand("POST", path, options, handler);
@@ -2867,7 +2979,7 @@ export class App<
   >(
     path: P,
     options: ShorthandOptions<P, "PUT", Req, Res, Op>,
-    handler: RouteDefinition<P, "PUT", Req, Res>["handler"]
+    handler: RouteDefinition<P, "PUT", Req, Res>["handler"],
   ): App<AppendRoute<Routes, ShorthandRoute<P, "PUT", Req, Res, Op>>>;
   put(path: PathString, options: unknown, handler: unknown): App<any> {
     return this.addHttpShorthand("PUT", path, options, handler);
@@ -2889,7 +3001,7 @@ export class App<
   >(
     path: P,
     options: ShorthandOptions<P, "PATCH", Req, Res, Op>,
-    handler: RouteDefinition<P, "PATCH", Req, Res>["handler"]
+    handler: RouteDefinition<P, "PATCH", Req, Res>["handler"],
   ): App<AppendRoute<Routes, ShorthandRoute<P, "PATCH", Req, Res, Op>>>;
   patch(path: PathString, options: unknown, handler: unknown): App<any> {
     return this.addHttpShorthand("PATCH", path, options, handler);
@@ -2911,7 +3023,7 @@ export class App<
   >(
     path: P,
     options: ShorthandOptions<P, "DELETE", Req, Res, Op>,
-    handler: RouteDefinition<P, "DELETE", Req, Res>["handler"]
+    handler: RouteDefinition<P, "DELETE", Req, Res>["handler"],
   ): App<AppendRoute<Routes, ShorthandRoute<P, "DELETE", Req, Res, Op>>>;
   delete(path: PathString, options: unknown, handler: unknown): App<any> {
     return this.addHttpShorthand("DELETE", path, options, handler);
@@ -2933,7 +3045,7 @@ export class App<
   >(
     path: P,
     options: ShorthandOptions<P, "HEAD", Req, Res, Op>,
-    handler: RouteDefinition<P, "HEAD", Req, Res>["handler"]
+    handler: RouteDefinition<P, "HEAD", Req, Res>["handler"],
   ): App<AppendRoute<Routes, ShorthandRoute<P, "HEAD", Req, Res, Op>>>;
   head(path: PathString, options: unknown, handler: unknown): App<any> {
     return this.addHttpShorthand("HEAD", path, options, handler);
@@ -2943,11 +3055,15 @@ export class App<
     method: HttpMethod,
     path: PathString,
     options: unknown,
-    possibleHandler: unknown
+    possibleHandler: unknown,
   ): App<any> {
-    if (options === null || typeof options !== "object" || typeof possibleHandler !== "function") {
+    if (
+      options === null ||
+      typeof options !== "object" ||
+      typeof possibleHandler !== "function"
+    ) {
       throw new TypeError(
-        `app.${method.toLowerCase()}(): expected (path, contract, handler); opaque responses require an explicit contract with acknowledgeNoResponseBodySchema: true`
+        `app.${method.toLowerCase()}(): expected (path, contract, handler); opaque responses require an explicit contract with acknowledgeNoResponseBodySchema: true`,
       );
     }
     const contract = options as Record<string, unknown>;
@@ -2972,7 +3088,7 @@ export class App<
    */
   ws<P extends PathString, TData = unknown>(
     path: P,
-    handler: WebSocketHandler<P, any, TData>
+    handler: WebSocketHandler<P, any, TData>,
   ): this {
     const fullPath = joinPath(this.prefix, path) as PathString;
     const production = this.isProduction();
@@ -2996,7 +3112,7 @@ export class App<
         `app.ws(${JSON.stringify(fullPath)}): production WebSocket routes must ` +
           "authenticate or reject clients before the RFC 6455 upgrade. Add a " +
           "beforeUpgrade hook for authenticated routes, or pass " +
-          "{ acknowledgeUnauthenticated: true } for an intentionally public route."
+          "{ acknowledgeUnauthenticated: true } for an intentionally public route.",
       );
     }
     // Cross-Site WebSocket Hijacking (CSWSH) guard. Storybook's
@@ -3018,7 +3134,7 @@ export class App<
           '{ allowedOrigins: "same-origin" } or an explicit origin allowlist, ' +
           "or pass { acknowledgeCrossOriginUpgrade: true } for an intentionally " +
           "public route. See https://daloyjs.dev/docs/websocket " +
-          "and CVE-2026-27148 (Storybook) for the attack pattern."
+          "and CVE-2026-27148 (Storybook) for the attack pattern.",
       );
     }
     // WebSocket post-upgrade header immutability. Once the RFC
@@ -3040,7 +3156,7 @@ export class App<
             "route, but no response headers can be added after the RFC 6455 " +
             "upgrade. Either move the middleware below the WebSocket scope, " +
             "or pass { acknowledgeHeaderMutatingMiddleware: true } after " +
-            "confirming the middleware does not run on Upgrade requests."
+            "confirming the middleware does not run on Upgrade requests.",
         );
       }
     }
@@ -3048,7 +3164,7 @@ export class App<
       fullPath,
       handler as WebSocketHandler<any, any, any>,
       () => ({ ...this.decorations }),
-      options
+      options,
     );
     return this;
   }
@@ -3095,7 +3211,11 @@ export class App<
    */
   readinesscheck(opts: HealthRouteOptions = {}): this {
     this.registerHealthRoute("readinesscheck", opts, () => {
-      if (this.draining || this.pendingPlugins.size > 0 || this.pluginBootError.failed) {
+      if (
+        this.draining ||
+        this.pendingPlugins.size > 0 ||
+        this.pluginBootError.failed
+      ) {
         return {
           status: 503 as const,
           body: { status: "not-ready" as const },
@@ -3131,8 +3251,13 @@ export class App<
    *
    * Call this **before** registering the routes you want measured — like any
    * `app.use(...)` middleware, the instrumentation only wraps routes added
-   * afterwards. Pass `opts.registry` to register custom application metrics
-   * that are rendered alongside the built-in HTTP series.
+   * afterwards. Calling it after routes already exist logs a
+   * `metrics.late_install` warning listing the uninstrumented paths.
+   * Pass `opts.registry` to register custom application metrics that are
+   * rendered alongside the built-in HTTP series. Default series names are
+   * unprefixed (`http_requests_total`, `process_resident_memory_bytes`);
+   * construct the registry with `prefix: "daloy_"` if you want the old
+   * names.
    *
    * @param opts - Path, auth, rate-limit, registry, and label configuration.
    * @returns `this` for chaining.
@@ -3142,7 +3267,9 @@ export class App<
     const path = (opts.path ?? "/metrics") as PathString;
     const registry = opts.registry ?? new MetricsRegistry();
     const rateLimitConfig =
-      opts.rateLimit === false ? null : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
+      opts.rateLimit === false
+        ? null
+        : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
     const token = opts.token;
 
     // Refuse-to-boot: an unauthenticated metrics scrape in production is a
@@ -3158,14 +3285,40 @@ export class App<
       throw new Error(
         `app.metrics() refused in production: provide opts.token to require ` +
           `Authorization: Bearer <token>, or pass acknowledgeUnauthenticated: true ` +
-          `to acknowledge that this scrape endpoint is reachable without credentials.`
+          `to acknowledge that this scrape endpoint is reachable without credentials.`,
+      );
+    }
+
+    // Group hooks only wrap routes registered *after* this call. Framework
+    // auto-mounts (docs / health / metrics / reporting) are tagged and
+    // ignored; anything else already on `this.routes` is a footgun.
+    const skipLateTags = new Set([
+      "Docs",
+      "Observability",
+      "Health",
+      "Reporting",
+    ]);
+    const late = this.routes.filter((r) => {
+      const tags = r.tags ?? [];
+      return !tags.some((t) => skipLateTags.has(t));
+    });
+    if (late.length > 0) {
+      const listed = late.slice(0, 20).map((r) => `${r.method} ${r.path}`);
+      this.log.warn(
+        {
+          event: "metrics.late_install",
+          count: late.length,
+          routes: listed,
+        },
+        `app.metrics() was called after ${late.length} route(s) were registered; those routes are not RED-instrumented. Call app.metrics() before app.get/post/...`,
       );
     }
 
     // Install RED instrumentation as a group hook so it wraps every route
     // registered after this call. Always exclude the scrape path itself, plus
     // any caller-supplied predicate.
-    const exclude = (p: string): boolean => p === path || (opts.exclude ? opts.exclude(p) : false);
+    const exclude = (p: string): boolean =>
+      p === path || (opts.exclude ? opts.exclude(p) : false);
     this.groupHooks.push(
       httpMetrics({
         registry,
@@ -3173,11 +3326,13 @@ export class App<
         maxRouteCardinality: opts.maxRouteCardinality,
         buckets: opts.buckets,
         exclude,
-      })
+      }),
     );
     this._coldPathHooksCache = undefined;
 
-    const buckets = rateLimitConfig ? new Map<string, { count: number; resetMs: number }>() : null;
+    const buckets = rateLimitConfig
+      ? new Map<string, { count: number; resetMs: number }>()
+      : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.route({
@@ -3194,11 +3349,16 @@ export class App<
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
-            buckets.set(key, { count: 1, resetMs: now + rateLimitConfig.windowMs });
+            buckets.set(key, {
+              count: 1,
+              resetMs: now + rateLimitConfig.windowMs,
+            });
           } else {
             entry.count++;
             if (entry.count > rateLimitConfig.limit) {
-              throw new TooManyRequestsError(Math.ceil((entry.resetMs - now) / 1000));
+              throw new TooManyRequestsError(
+                Math.ceil((entry.resetMs - now) / 1000),
+              );
             }
           }
         }
@@ -3213,7 +3373,7 @@ export class App<
                 title: "Unauthorized",
                 detail: "Metrics scrape requires a bearer token.",
               },
-              { "www-authenticate": 'Bearer realm="metrics"' }
+              { "www-authenticate": 'Bearer realm="metrics"' },
             );
           }
           if (!timingSafeEqual(m[1]!, token)) {
@@ -3266,7 +3426,9 @@ export class App<
    */
   cron(def: TaskDefinition, handler: TaskHandler): this {
     if (this.scheduler === undefined) {
-      const scheduler = new Scheduler({ logger: this.log.child({ component: "scheduler" }) });
+      const scheduler = new Scheduler({
+        logger: this.log.child({ component: "scheduler" }),
+      });
       this.scheduler = scheduler;
       scheduler.start();
       // Drain the scheduler during the post-drain close phase so periodic
@@ -3291,14 +3453,24 @@ export class App<
     kind: "healthcheck" | "readinesscheck",
     opts: HealthRouteOptions,
     handler: () =>
-      | { status: 200; body: { status: string }; headers?: Record<string, string> }
-      | { status: 503; body: { status: string }; headers?: Record<string, string> }
+      | {
+          status: 200;
+          body: { status: string };
+          headers?: Record<string, string>;
+        }
+      | {
+          status: 503;
+          body: { status: string };
+          headers?: Record<string, string>;
+        },
   ): void {
     const isHealth = kind === "healthcheck";
     const defaultPath = (isHealth ? "/healthz" : "/readyz") as PathString;
     const path = (opts.path ?? defaultPath) as PathString;
     const rateLimitConfig =
-      opts.rateLimit === false ? null : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
+      opts.rateLimit === false
+        ? null
+        : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
     const token = opts.token;
 
     // Refuse-to-boot: unauthenticated health/ready probes in
@@ -3314,11 +3486,13 @@ export class App<
       throw new Error(
         `app.${kind}() refused in production: provide opts.token to require ` +
           `Authorization: Bearer <token>, or pass acknowledgeUnauthenticated: true ` +
-          `to acknowledge that this probe is reachable without credentials.`
+          `to acknowledge that this probe is reachable without credentials.`,
       );
     }
 
-    const buckets = rateLimitConfig ? new Map<string, { count: number; resetMs: number }>() : null;
+    const buckets = rateLimitConfig
+      ? new Map<string, { count: number; resetMs: number }>()
+      : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
 
     this.route({
@@ -3335,11 +3509,16 @@ export class App<
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
-            buckets.set(key, { count: 1, resetMs: now + rateLimitConfig.windowMs });
+            buckets.set(key, {
+              count: 1,
+              resetMs: now + rateLimitConfig.windowMs,
+            });
           } else {
             entry.count++;
             if (entry.count > rateLimitConfig.limit) {
-              throw new TooManyRequestsError(Math.ceil((entry.resetMs - now) / 1000));
+              throw new TooManyRequestsError(
+                Math.ceil((entry.resetMs - now) / 1000),
+              );
             }
           }
         }
@@ -3354,7 +3533,7 @@ export class App<
                 title: "Unauthorized",
                 detail: "Health probe requires a bearer token.",
               },
-              { "www-authenticate": 'Bearer realm="health"' }
+              { "www-authenticate": 'Bearer realm="health"' },
             );
           }
           if (!timingSafeEqual(m[1]!, token)) {
@@ -3395,11 +3574,17 @@ export class App<
     // policy cannot turn the receiver into a DoS-via-report-flood amplifier.
     const HARD_MAX = 65536;
     if (!Number.isInteger(maxBytes) || maxBytes <= 0 || maxBytes > HARD_MAX) {
-      throw new Error(`cspReportRoute(): maxBodyBytes must be a positive integer <= ${HARD_MAX}.`);
+      throw new Error(
+        `cspReportRoute(): maxBodyBytes must be a positive integer <= ${HARD_MAX}.`,
+      );
     }
     const rateLimitConfig =
-      opts.rateLimit === false ? null : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
-    const buckets = rateLimitConfig ? new Map<string, { count: number; resetMs: number }>() : null;
+      opts.rateLimit === false
+        ? null
+        : { limit: 60, windowMs: 60_000, ...(opts.rateLimit ?? {}) };
+    const buckets = rateLimitConfig
+      ? new Map<string, { count: number; resetMs: number }>()
+      : null;
     const trustProxyHeaders = appTrustsProxyHeaders(this.options);
     const log = this.log;
     // Only log report bodies when explicitly enabled. In
@@ -3419,11 +3604,16 @@ export class App<
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
-            buckets.set(key, { count: 1, resetMs: now + rateLimitConfig.windowMs });
+            buckets.set(key, {
+              count: 1,
+              resetMs: now + rateLimitConfig.windowMs,
+            });
           } else {
             entry.count++;
             if (entry.count > rateLimitConfig.limit) {
-              throw new TooManyRequestsError(Math.ceil((entry.resetMs - now) / 1000));
+              throw new TooManyRequestsError(
+                Math.ceil((entry.resetMs - now) / 1000),
+              );
             }
           }
         }
@@ -3464,13 +3654,13 @@ export class App<
               includeReportBody
                 ? { event: "csp.report", ip, userAgent, report: parsed }
                 : { event: "csp.report", ip, userAgent },
-              "CSP violation report received"
+              "CSP violation report received",
             );
           }
         } catch (err) {
           log.error(
             { err: serializeErr(err), event: "csp.report.sinkFailed" },
-            "cspReportRoute onReport sink failed"
+            "cspReportRoute onReport sink failed",
           );
         }
         return { status: 204 as const, body: undefined };
@@ -3512,13 +3702,16 @@ export class App<
   group(
     prefix: PathString,
     config: { tags?: string[]; hooks?: Hooks; auth?: RouteDefinition["auth"] },
-    register: (app: App) => void
+    register: (app: App) => void,
   ): this {
     if (config.hooks) this.assertSecureHookConfig(config.hooks);
     // Child apps share the parent's router/routes/etc. Disable docs auto-mount
     // on the child so it does not re-register the parent's `/openapi.json` and
-    // `/docs` routes (which would throw "Duplicate route").
-    const child = new App({ ...this.options, docs: false });
+    // `/docs` routes (which would throw "Duplicate route"). Disable telemetry
+    // too: spreading `this.options` would otherwise construct a second pair of
+    // OTLP exporters, `unref`'d flush timers, and a duplicate `telemetry.otlp`
+    // boot line per group/plugin. The parent's wiring is copied below.
+    const child = new App({ ...this.options, docs: false, telemetry: false });
     (child as any).router = this.router;
     (child as any).routes = this.routes;
     (child as any).webSocketRoutes = this.webSocketRoutes;
@@ -3526,8 +3719,13 @@ export class App<
     (child as any).bootGuard = this.bootGuard;
     (child as any).log = this.log;
     (child as any).prefix = joinPath(this.prefix, prefix);
-    (child as any).groupHooks = [...this.groupHooks, ...(config.hooks ? [config.hooks] : [])];
-    (child as any).corsOriginAllows = corsOriginAllowsFromHooks((child as any).groupHooks);
+    (child as any).groupHooks = [
+      ...this.groupHooks,
+      ...(config.hooks ? [config.hooks] : []),
+    ];
+    (child as any).corsOriginAllows = corsOriginAllowsFromHooks(
+      (child as any).groupHooks,
+    );
     (child as any).groupTags = [...this.groupTags, ...(config.tags ?? [])];
     (child as any).groupAuth = config.auth ?? this.groupAuth;
     // Encapsulate decorations (Fastify-style): the child gets its OWN bag
@@ -3546,6 +3744,7 @@ export class App<
     (child as any).shutdownListeners = this.shutdownListeners;
     (child as any).pendingPlugins = this.pendingPlugins;
     (child as any).pluginBootError = this.pluginBootError;
+    (child as any).telemetry = this.telemetry;
     register(child);
     return this;
   }
@@ -3579,9 +3778,13 @@ export class App<
     // being shadowed (the auto one runs first and the per-header
     // "set only if absent" semantics mean the second installation would be
     // a silent no-op).
-    if ((hooks as Record<PropertyKey, unknown>)[SECURE_HEADERS_MARKER] === true) {
+    if (
+      (hooks as Record<PropertyKey, unknown>)[SECURE_HEADERS_MARKER] === true
+    ) {
       const autoIdx = this.groupHooks.findIndex(
-        (h) => (h as Record<PropertyKey, unknown>)[AUTO_SECURE_HEADERS_MARKER] === true
+        (h) =>
+          (h as Record<PropertyKey, unknown>)[AUTO_SECURE_HEADERS_MARKER] ===
+          true,
       );
       if (autoIdx >= 0) this.groupHooks.splice(autoIdx, 1);
     }
@@ -3654,20 +3857,30 @@ export class App<
    * @returns This `App` instance for chaining.
    * @throws Error if `key` is already decorated and `opts.override` is not `true`.
    */
-  decorate<K extends string, V>(key: K, value: V, opts: { override?: boolean } = {}): this {
-    if (Object.prototype.hasOwnProperty.call(this.decorations, key) && opts.override !== true) {
+  decorate<K extends string, V>(
+    key: K,
+    value: V,
+    opts: { override?: boolean } = {},
+  ): this {
+    if (
+      Object.prototype.hasOwnProperty.call(this.decorations, key) &&
+      opts.override !== true
+    ) {
       // Namespace-protected decorators. Refuse to silently
       // shadow an existing decoration; emit a once-per-process warn naming
       // both decorators on the explicit-override path.
       throw new Error(
         `decorate(): key "${key}" is already decorated. ` +
-          `Pass { override: true } to replace, or rename to avoid the collision.`
+          `Pass { override: true } to replace, or rename to avoid the collision.`,
       );
     }
-    if (opts.override === true && Object.prototype.hasOwnProperty.call(this.decorations, key)) {
+    if (
+      opts.override === true &&
+      Object.prototype.hasOwnProperty.call(this.decorations, key)
+    ) {
       this.log.warn(
         { event: "decorate.override", key },
-        `decorate("${key}") replaced an existing decoration.`
+        `decorate("${key}") replaced an existing decoration.`,
       );
     }
     const hadKey = Object.prototype.hasOwnProperty.call(this.decorations, key);
@@ -3698,7 +3911,9 @@ export class App<
    * for observability plugins that want to enumerate everything else that
    * was installed without polluting the route registry.
    */
-  onPluginInstalled(listener: (info: PluginInstalledEvent) => void | Promise<void>): this {
+  onPluginInstalled(
+    listener: (info: PluginInstalledEvent) => void | Promise<void>,
+  ): this {
     this.pluginInstalledListeners.push(listener);
     return this;
   }
@@ -3750,9 +3965,10 @@ export class App<
       tags?: string[];
       hooks?: Hooks;
       auth?: RouteDefinition["auth"];
-    } = {}
+    } = {},
   ): this {
-    const fn = typeof plugin === "function" ? plugin : (plugin.register ?? (() => {}));
+    const fn =
+      typeof plugin === "function" ? plugin : (plugin.register ?? (() => {}));
     const descriptor = typeof plugin === "function" ? undefined : plugin;
     const name = descriptor?.name;
     const seed = descriptor?.seed;
@@ -3760,17 +3976,22 @@ export class App<
     const dependencies = descriptor?.dependencies ?? [];
     const stateful = descriptor?.stateful ?? false;
 
-    if (stateful && !name && this.isProduction() && this.options.secureDefaults !== false) {
+    if (
+      stateful &&
+      !name &&
+      this.isProduction() &&
+      this.options.secureDefaults !== false
+    ) {
       throw new Error(
         "register(): anonymous stateful plugin refused in production. " +
-          "Declare { name } (and optional { seed }) so the plugin can be deduplicated."
+          "Declare { name } (and optional { seed }) so the plugin can be deduplicated.",
       );
     }
     for (const dep of dependencies) {
       if (!this.installedPlugins.has(dep)) {
         throw new Error(
           `register(): plugin ${JSON.stringify(name ?? "<anonymous>")} declares ` +
-            `dependency on "${dep}" but no plugin with that name has been registered yet.`
+            `dependency on "${dep}" but no plugin with that name has been registered yet.`,
         );
       }
     }
@@ -3795,7 +4016,7 @@ export class App<
       if (r && typeof (r as Promise<unknown>).then === "function") {
         // Plugin is async - caller should await app.ready().
         this.trackPendingPlugin(
-          (r as Promise<unknown>).then(() => this.firePluginInstalled(event))
+          (r as Promise<unknown>).then(() => this.firePluginInstalled(event)),
         );
       } else {
         // Sync plugin: fire listeners immediately. Any returned promise from a
@@ -3816,10 +4037,14 @@ export class App<
       throw err;
     });
     this.pendingPlugins.add(tracked);
-    void tracked.finally(() => this.pendingPlugins.delete(tracked)).catch(() => {});
+    void tracked
+      .finally(() => this.pendingPlugins.delete(tracked))
+      .catch(() => {});
   }
 
-  private firePluginInstalled(event: PluginInstalledEvent): Promise<void> | undefined {
+  private firePluginInstalled(
+    event: PluginInstalledEvent,
+  ): Promise<void> | undefined {
     if (this.pluginInstalledListeners.length === 0) return undefined;
     const promises: Array<Promise<unknown>> = [];
     for (const listener of this.pluginInstalledListeners) {
@@ -3828,15 +4053,23 @@ export class App<
         if (r && typeof (r as Promise<unknown>).then === "function") {
           promises.push(
             (r as Promise<unknown>).catch((err) => {
-              this.log.error({ err, plugin: event.name }, "onPluginInstalled listener failed");
-            })
+              this.log.error(
+                { err, plugin: event.name },
+                "onPluginInstalled listener failed",
+              );
+            }),
           );
         }
       } catch (err) {
-        this.log.error({ err, plugin: event.name }, "onPluginInstalled listener failed");
+        this.log.error(
+          { err, plugin: event.name },
+          "onPluginInstalled listener failed",
+        );
       }
     }
-    return promises.length > 0 ? Promise.all(promises).then(() => undefined) : undefined;
+    return promises.length > 0
+      ? Promise.all(promises).then(() => undefined)
+      : undefined;
   }
 
   /**
@@ -3913,7 +4146,7 @@ export class App<
 
   private dispatch = async (
     request: Request,
-    opts: { allowInternal?: boolean } = {}
+    opts: { allowInternal?: boolean } = {},
   ): Promise<Response> => {
     if (this.draining) {
       return new Response(
@@ -3932,7 +4165,7 @@ export class App<
             // rather than coming back to a dying one.
             connection: "close",
           },
-        }
+        },
       );
     }
     this.inflight++;
@@ -3966,7 +4199,7 @@ export class App<
       // three-Headers.get() pass plus a separate walk.
       assertInboundHeaderGuards(
         request.headers,
-        this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT
+        this.options.maxHeaderCount ?? DEFAULT_MAX_HEADER_COUNT,
       );
       this.assertTrustProxyConfigured(request);
       this.assertBootGuards();
@@ -3988,14 +4221,15 @@ export class App<
       // Hide internal routes from the public adapter surface. The router
       // still finds them so app.inject() can dispatch normally, but
       // app.fetch() responds 404 to avoid leaking existence.
-      const internalHidden = match?.handler.def.internal === true && opts.allowInternal !== true;
+      const internalHidden =
+        match?.handler.def.internal === true && opts.allowInternal !== true;
 
       if (match && !internalHidden) {
         this.assertCrossOriginAllowed(
           request,
           requestUrl,
           method,
-          match.handler.fullCorsOriginAllows
+          match.handler.fullCorsOriginAllows,
         );
       } else {
         this.assertCrossOriginAllowed(request, requestUrl, method, [
@@ -4026,8 +4260,10 @@ export class App<
         // `decorations`, iterate headers, or materialize a `Headers`
         // instance just to be thrown away. The 204 OPTIONS preflight branch
         // below uses its own `synthCtx`, so this skip is safe for it too.
-        const coldPreBody = method === "OPTIONS" ? undefined : this.coldPathHooks.preBody;
-        const coldGuards = method === "OPTIONS" ? undefined : this.coldPathHooks.beforeHandle;
+        const coldPreBody =
+          method === "OPTIONS" ? undefined : this.coldPathHooks.preBody;
+        const coldGuards =
+          method === "OPTIONS" ? undefined : this.coldPathHooks.beforeHandle;
         const needsCtx =
           allowed.length > 0 && method === "OPTIONS"
             ? false // OPTIONS path builds synthCtx
@@ -4052,8 +4288,11 @@ export class App<
               const qi = reqUrl.indexOf("?");
               if (qi === -1) return (_query = {}) as any;
               const hi = reqUrl.indexOf("#", qi + 1);
-              const qs = hi === -1 ? reqUrl.slice(qi + 1) : reqUrl.slice(qi + 1, hi);
-              return (_query = Object.fromEntries(new URLSearchParams(qs))) as any;
+              const qs =
+                hi === -1 ? reqUrl.slice(qi + 1) : reqUrl.slice(qi + 1, hi);
+              return (_query = Object.fromEntries(
+                new URLSearchParams(qs),
+              )) as any;
             },
             set query(v: any) {
               _query = v;
@@ -4075,25 +4314,39 @@ export class App<
         }
         if (coldPreBody !== undefined) {
           const guardResult = coldPreBody(ctx!);
-          const guarded = isPromiseLike(guardResult) ? await guardResult : guardResult;
+          const guarded = isPromiseLike(guardResult)
+            ? await guardResult
+            : guardResult;
           if (guarded instanceof Response) {
             copyContextHeaders(ctx!, guarded);
             if (!guarded.headers.has("x-request-id")) {
               guarded.headers.set("x-request-id", requestId);
             }
-            const fin = finalizeResponse(guarded, ctx!, this.coldPathHooks, stripFingerprint);
+            const fin = finalizeResponse(
+              guarded,
+              ctx!,
+              this.coldPathHooks,
+              stripFingerprint,
+            );
             return isPromiseLike(fin) ? await fin : fin;
           }
         }
         if (coldGuards !== undefined) {
           const guardResult = coldGuards(ctx!);
-          const guarded = isPromiseLike(guardResult) ? await guardResult : guardResult;
+          const guarded = isPromiseLike(guardResult)
+            ? await guardResult
+            : guardResult;
           if (guarded instanceof Response) {
             copyContextHeaders(ctx!, guarded);
             if (!guarded.headers.has("x-request-id")) {
               guarded.headers.set("x-request-id", requestId);
             }
-            const fin = finalizeResponse(guarded, ctx!, this.coldPathHooks, stripFingerprint);
+            const fin = finalizeResponse(
+              guarded,
+              ctx!,
+              this.coldPathHooks,
+              stripFingerprint,
+            );
             return isPromiseLike(fin) ? await fin : fin;
           }
         }
@@ -4119,7 +4372,12 @@ export class App<
               : interceptedResult;
             if (intercepted instanceof Response) {
               copyContextHeaders(synthCtx, intercepted);
-              const fin = finalizeResponse(intercepted, synthCtx, preflightHooks, stripFingerprint);
+              const fin = finalizeResponse(
+                intercepted,
+                synthCtx,
+                preflightHooks,
+                stripFingerprint,
+              );
               return isPromiseLike(fin) ? await fin : fin;
             }
             const res = new Response(null, {
@@ -4128,7 +4386,12 @@ export class App<
             });
             copyContextHeaders(synthCtx, res);
             res.headers.set("x-request-id", requestId);
-            const fin2 = finalizeResponse(res, synthCtx, preflightHooks, stripFingerprint);
+            const fin2 = finalizeResponse(
+              res,
+              synthCtx,
+              preflightHooks,
+              stripFingerprint,
+            );
             return isPromiseLike(fin2) ? await fin2 : fin2;
           }
           throw new MethodNotAllowedError(allowed);
@@ -4136,7 +4399,12 @@ export class App<
         throw new NotFoundError(`No route for ${request.method} ${pathname}`);
       }
 
-      const { def, hooks, mergedHooks: allHooks, hasFinalizeHook } = match.handler;
+      const {
+        def,
+        hooks,
+        mergedHooks: allHooks,
+        hasFinalizeHook,
+      } = match.handler;
       activeErrorHook = allHooks.onError;
       activeResponseHook = allHooks.onResponse;
       activeSendHook = allHooks.onSend;
@@ -4163,11 +4431,14 @@ export class App<
       // plugin's decorations reach only that plugin's routes. `undefined` when
       // the scope had none keeps the common case allocation-free.
       const routeDecorations = match.handler.decorations;
-      if (routeDecorations !== undefined) Object.assign(state, routeDecorations);
+      if (routeDecorations !== undefined)
+        Object.assign(state, routeDecorations);
 
       if (allHooks.preBody !== undefined) {
         const preBodyResult = allHooks.preBody(ctx);
-        const preBody = isPromiseLike(preBodyResult) ? await preBodyResult : preBodyResult;
+        const preBody = isPromiseLike(preBodyResult)
+          ? await preBodyResult
+          : preBodyResult;
         const overriddenId = state.requestId;
         if (typeof overriddenId === "string" && overriddenId.length > 0) {
           requestId = overriddenId;
@@ -4175,9 +4446,15 @@ export class App<
         if (preBody instanceof Response) {
           assertAcknowledgedSuccessfulHookResponse(preBody, def, "preBody");
           copyContextHeaders(ctx, preBody);
-          if (!preBody.headers.has("x-request-id")) preBody.headers.set("x-request-id", requestId);
+          if (!preBody.headers.has("x-request-id"))
+            preBody.headers.set("x-request-id", requestId);
           if (hasFinalizeHook) {
-            const fin = finalizeResponse(preBody, ctx, allHooks, stripFingerprint);
+            const fin = finalizeResponse(
+              preBody,
+              ctx,
+              allHooks,
+              stripFingerprint,
+            );
             return isPromiseLike(fin) ? await fin : fin;
           }
           return finalizeFast(preBody, stripFingerprint);
@@ -4187,12 +4464,18 @@ export class App<
       // Validation remains sync-first; only an async schema or an actual body
       // stream read suspends. `beforeHandle` still receives the fully validated
       // context for compatibility with body-aware middleware.
-      const validatedCtx = validateContext(ctx as RequestContext, def, this.options);
+      const validatedCtx = validateContext(
+        ctx as RequestContext,
+        def,
+        this.options,
+      );
       ctx = isPromiseLike(validatedCtx) ? await validatedCtx : validatedCtx;
 
       if (allHooks.beforeHandle !== undefined) {
         const beforeResult = allHooks.beforeHandle(ctx);
-        const before = isPromiseLike(beforeResult) ? await beforeResult : beforeResult;
+        const before = isPromiseLike(beforeResult)
+          ? await beforeResult
+          : beforeResult;
         // Honor any request id override applied by middleware (e.g. the
         // `requestId()` Hooks bundle replaces the framework-generated value
         // with a trusted incoming header or a user-supplied generator).
@@ -4203,9 +4486,15 @@ export class App<
         if (before instanceof Response) {
           assertAcknowledgedSuccessfulHookResponse(before, def, "beforeHandle");
           copyContextHeaders(ctx, before);
-          if (!before.headers.has("x-request-id")) before.headers.set("x-request-id", requestId);
+          if (!before.headers.has("x-request-id"))
+            before.headers.set("x-request-id", requestId);
           if (hasFinalizeHook) {
-            const fin = finalizeResponse(before, ctx, allHooks, stripFingerprint);
+            const fin = finalizeResponse(
+              before,
+              ctx,
+              allHooks,
+              stripFingerprint,
+            );
             return isPromiseLike(fin) ? await fin : fin;
           }
           return finalizeFast(before, stripFingerprint);
@@ -4219,7 +4508,9 @@ export class App<
 
       if (allHooks.afterHandle !== undefined) {
         const afterResult = allHooks.afterHandle(ctx, result);
-        const afterReturn = isPromiseLike(afterResult) ? await afterResult : afterResult;
+        const afterReturn = isPromiseLike(afterResult)
+          ? await afterResult
+          : afterResult;
         if (afterReturn !== undefined) result = afterReturn;
       }
 
@@ -4234,7 +4525,7 @@ export class App<
         if (def.acknowledgeNoResponseBodySchema !== true) {
           throw new InternalError(
             "Raw Response refused: set acknowledgeNoResponseBodySchema: true on the route " +
-              "to explicitly accept that its response body bypasses schema validation."
+              "to explicitly accept that its response body bypasses schema validation.",
           );
         }
         copyContextHeaders(ctx, result);
@@ -4265,7 +4556,9 @@ export class App<
         // Adapter shims set this marker on their request prototype to declare
         // that the response consumer only reads status/headers/raw-body — see
         // DALOY_LIGHT_RESPONSE_OK. Everyone else gets a real Response.
-        (request as unknown as Record<symbol, unknown>)[DALOY_LIGHT_RESPONSE_OK] === true
+        (request as unknown as Record<symbol, unknown>)[
+          DALOY_LIGHT_RESPONSE_OK
+        ] === true,
       );
       let response: Response = isPromiseLike(serializeResultRes)
         ? await serializeResultRes
@@ -4302,7 +4595,8 @@ export class App<
       }
       if (handled instanceof Response) {
         if (ctx) copyContextHeaders(ctx, handled);
-        if (!handled.headers.has("x-request-id")) handled.headers.set("x-request-id", requestId);
+        if (!handled.headers.has("x-request-id"))
+          handled.headers.set("x-request-id", requestId);
         return finalizeResponse(
           handled,
           ctx,
@@ -4310,7 +4604,7 @@ export class App<
             onSend: activeSendHook,
             onResponse: activeResponseHook,
           },
-          stripFingerprint
+          stripFingerprint,
         );
       }
       // When the client has already disconnected, classify
@@ -4320,11 +4614,13 @@ export class App<
       // `err instanceof HttpError` first: the framework's own thrown
       // problem errors short-circuit before any signal/option lookup.
       const isHttp = err instanceof HttpError;
-      const disconnectCode = isHttp ? 0 : (this.options.disconnectStatusCode ?? 499);
+      const disconnectCode = isHttp
+        ? 0
+        : (this.options.disconnectStatusCode ?? 499);
       if (disconnectCode > 0 && request.signal?.aborted === true) {
         log.info(
           { event: "request.disconnected", status: disconnectCode },
-          "Client disconnected before response was sent"
+          "Client disconnected before response was sent",
         );
         const res = new Response(null, {
           status: disconnectCode,
@@ -4341,20 +4637,25 @@ export class App<
             onSend: activeSendHook,
             onResponse: activeResponseHook,
           },
-          stripFingerprint
+          stripFingerprint,
         );
       }
       const httpErr: HttpError = isHttp
         ? (err as HttpError)
-        : new InternalError(err instanceof Error ? err.message : "Unexpected error");
-      if (httpErr.status >= 500) log.error({ err: serializeErr(err) }, httpErr.problem.title);
-      if (httpErr.status < 500) log.warn({ status: httpErr.status }, httpErr.problem.title);
+        : new InternalError(
+            err instanceof Error ? err.message : "Unexpected error",
+          );
+      if (httpErr.status >= 500)
+        log.error({ err: serializeErr(err) }, httpErr.problem.title);
+      if (httpErr.status < 500)
+        log.warn({ status: httpErr.status }, httpErr.problem.title);
       const res = httpErr.toResponse({
         production: this.isProduction(),
         requestId,
       });
       if (ctx) copyContextHeaders(ctx, res);
-      if (!res.headers.has("x-request-id")) res.headers.set("x-request-id", requestId);
+      if (!res.headers.has("x-request-id"))
+        res.headers.set("x-request-id", requestId);
       return finalizeResponse(
         res,
         ctx,
@@ -4362,7 +4663,7 @@ export class App<
           onSend: activeSendHook,
           onResponse: activeResponseHook,
         },
-        stripFingerprint
+        stripFingerprint,
       );
     } finally {
       this.inflight--;
@@ -4385,9 +4686,14 @@ export class App<
    * @param init - Standard `RequestInit` (ignored if `input` is a `Request`).
    * @returns Fulfills with the `Response` produced by the matching handler.
    */
-  request(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  request(
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> {
     const url =
-      typeof input === "string" && input.startsWith("/") ? `http://test.local${input}` : input;
+      typeof input === "string" && input.startsWith("/")
+        ? `http://test.local${input}`
+        : input;
     const req = url instanceof Request ? url : new Request(url as any, init);
     return this.fetch(req);
   }
@@ -4416,7 +4722,7 @@ export class App<
         "returns undeclared fields will leak them. Declare a response body schema, or set " +
         "`acknowledgeNoResponseBodySchema: true` on routes that intentionally return an opaque " +
         "or body-less response. Run `daloy doctor` to list them. " +
-        "See https://daloyjs.dev/docs/security/owasp-api-top-10#api3"
+        "See https://daloyjs.dev/docs/security/owasp-api-top-10#api3",
     );
   }
 
@@ -4543,7 +4849,9 @@ function inferOperationId(method: HttpMethod, path: PathString): string {
     .slice(1)
     .split("/")
     .map((segment) =>
-      segment.startsWith(":") ? `By${capitalizeWords(segment.slice(1))}` : capitalizeWords(segment)
+      segment.startsWith(":")
+        ? `By${capitalizeWords(segment.slice(1))}`
+        : capitalizeWords(segment),
     )
     .join("");
   return `${method.toLowerCase()}${suffix}`;
@@ -4573,11 +4881,18 @@ function joinPath(a: string, b: string): string {
  */
 function healthRouteKey(request: Request, trustProxyHeaders: boolean): string {
   if (!trustProxyHeaders) return "global";
-  return request.headers.get("x-real-ip") ?? request.headers.get("fly-client-ip") ?? "global";
+  return (
+    request.headers.get("x-real-ip") ??
+    request.headers.get("fly-client-ip") ??
+    "global"
+  );
 }
 
 /** True when the app declared a trusted reverse-proxy posture. */
-function appTrustsProxyHeaders(options: { trustProxy?: boolean; behindProxy?: unknown }): boolean {
+function appTrustsProxyHeaders(options: {
+  trustProxy?: boolean;
+  behindProxy?: unknown;
+}): boolean {
   return options.trustProxy === true || options.behindProxy !== undefined;
 }
 
@@ -4613,7 +4928,8 @@ function detectHeaderMutatingMiddleware(layers: Hooks[]): string[] {
     // installed by every App and only sets headers that are missing, so it
     // never conflicts with a WebSocket upgrade in practice.
     const isAuto = record[AUTO_SECURE_HEADERS_MARKER] === true;
-    if (!isAuto && record[SECURE_HEADERS_MARKER] === true) found.push("secureHeaders()");
+    if (!isAuto && record[SECURE_HEADERS_MARKER] === true)
+      found.push("secureHeaders()");
     if (record[CORS_HOOK_MARKER] === true) found.push("cors()");
     if (record[CSRF_HOOK_MARKER] === true) found.push("csrf()");
     if (record[COMPRESSION_HOOK_MARKER] === true) found.push("compression()");
@@ -4632,11 +4948,15 @@ function detectHeaderMutatingMiddleware(layers: Hooks[]): string[] {
  * header without declaring an ordering between each other.
  * @internal
  */
-export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): PluginExtension[] {
+export function topoSortExtensions(
+  exts: ReadonlyArray<PluginExtension>,
+): PluginExtension[] {
   const byName = new Map<string, PluginExtension>();
   for (const e of exts) {
     if (byName.has(e.name)) {
-      throw new Error(`Duplicate plugin extension name: ${JSON.stringify(e.name)}.`);
+      throw new Error(
+        `Duplicate plugin extension name: ${JSON.stringify(e.name)}.`,
+      );
     }
     byName.set(e.name, e);
   }
@@ -4670,9 +4990,11 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
     }
   }
   if (out.length !== exts.length) {
-    const remaining = Array.from(byName.keys()).filter((n) => !out.some((e) => e.name === n));
+    const remaining = Array.from(byName.keys()).filter(
+      (n) => !out.some((e) => e.name === n),
+    );
     throw new Error(
-      `Plugin extension cycle detected among: ${remaining.map((n) => JSON.stringify(n)).join(", ")}.`
+      `Plugin extension cycle detected among: ${remaining.map((n) => JSON.stringify(n)).join(", ")}.`,
     );
   }
   // Refuse pairs of extensions that mutate the same response
@@ -4688,7 +5010,9 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
       const b = exts[j]!;
       const bHeaders = b.responseHeaders;
       if (!bHeaders || bHeaders.length === 0) continue;
-      const overlap = bHeaders.map((h) => h.toLowerCase()).filter((h) => aSet.has(h));
+      const overlap = bHeaders
+        .map((h) => h.toLowerCase())
+        .filter((h) => aSet.has(h));
       if (overlap.length === 0) continue;
       const declared =
         (a.before ?? []).includes(b.name) ||
@@ -4701,7 +5025,7 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
             `${JSON.stringify(b.name)} both mutate response header(s) ` +
             `${overlap.map((h) => JSON.stringify(h)).join(", ")} but neither ` +
             "declares a `before` or `after` relationship to the other. Add the " +
-            "missing ordering to make the merged header value deterministic."
+            "missing ordering to make the merged header value deterministic.",
         );
       }
     }
@@ -4710,10 +5034,14 @@ export function topoSortExtensions(exts: ReadonlyArray<PluginExtension>): Plugin
 }
 
 function securityMarkersFromHooks(
-  layers: Hooks[]
+  layers: Hooks[],
 ): Pick<
   RouteSecurityMarkers,
-  "hasSession" | "hasCsrf" | "hasAuth" | "cacheBeforeTenancy" | "replayBeforeBudget"
+  | "hasSession"
+  | "hasCsrf"
+  | "hasAuth"
+  | "cacheBeforeTenancy"
+  | "replayBeforeBudget"
 > {
   let hasSession = false;
   let hasCsrf = false;
@@ -4733,8 +5061,10 @@ function securityMarkersFromHooks(
     if (record[SESSION_HOOK_MARKER] === true) hasSession = true;
     if (record[CSRF_HOOK_MARKER] === true) hasCsrf = true;
     if (record[AUTH_HOOK_MARKER] === true) hasAuth = true;
-    if (cacheIndex === -1 && record[RESPONSE_CACHE_HOOK_MARKER] === true) cacheIndex = i;
-    if (tenancyIndex === -1 && record[TENANCY_HOOK_MARKER] === true) tenancyIndex = i;
+    if (cacheIndex === -1 && record[RESPONSE_CACHE_HOOK_MARKER] === true)
+      cacheIndex = i;
+    if (tenancyIndex === -1 && record[TENANCY_HOOK_MARKER] === true)
+      tenancyIndex = i;
     if (replayIndex === -1) {
       if (record[RESPONSE_CACHE_HOOK_MARKER] === true) {
         replayIndex = i;
@@ -4744,20 +5074,29 @@ function securityMarkersFromHooks(
         replayName = "idempotency()";
       }
     }
-    if (budgetIndex === -1 && Array.isArray(record[EARLY_REJECTION_MARKER])) budgetIndex = i;
+    if (budgetIndex === -1 && Array.isArray(record[EARLY_REJECTION_MARKER]))
+      budgetIndex = i;
   }
   return {
     hasSession,
     hasCsrf,
     hasAuth,
-    cacheBeforeTenancy: cacheIndex !== -1 && tenancyIndex !== -1 && cacheIndex < tenancyIndex,
+    cacheBeforeTenancy:
+      cacheIndex !== -1 && tenancyIndex !== -1 && cacheIndex < tenancyIndex,
     replayBeforeBudget:
-      replayIndex !== -1 && budgetIndex !== -1 && replayIndex < budgetIndex ? replayName : null,
+      replayIndex !== -1 && budgetIndex !== -1 && replayIndex < budgetIndex
+        ? replayName
+        : null,
   };
 }
 
 function isStateChangingMethod(method: HttpMethod): boolean {
-  return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+  return (
+    method === "POST" ||
+    method === "PUT" ||
+    method === "PATCH" ||
+    method === "DELETE"
+  );
 }
 
 /**
@@ -4856,16 +5195,22 @@ function getOriginFast(url: string): string | undefined {
     // above 65535 make the URL constructor *throw* (the guard's malformed-
     // origin rejection) — both must take the exact WHATWG path.
     if (port.length > 1 && port.charCodeAt(0) === 48 /* 0 */) return undefined;
-    if (port.length > 5 || (port.length === 5 && Number(port) > 65535)) return undefined;
+    if (port.length > 5 || (port.length === 5 && Number(port) > 65535))
+      return undefined;
   }
   return url.slice(0, end);
 }
 
 function mergeHooks(layers: Hooks[]): Hooks {
   const pick = <K extends keyof Hooks>(key: K): NonNullable<Hooks[K]>[] =>
-    layers.map((h) => h[key]).filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
+    layers
+      .map((h) => h[key])
+      .filter((f): f is NonNullable<Hooks[K]> => typeof f === "function");
   const requiredScopes = requiredScopesFromHooks(layers);
-  const beforeHandle = mergeBeforeHandle(firstResponse(pick("beforeHandle")), requiredScopes);
+  const beforeHandle = mergeBeforeHandle(
+    firstResponse(pick("beforeHandle")),
+    requiredScopes,
+  );
   const hooks: Hooks = {
     onRequest: chain(pick("onRequest")),
     preBody: _mergePreBodyWithEarlyRejections(layers),
@@ -4882,7 +5227,9 @@ function mergeHooks(layers: Hooks[]): Hooks {
 function requiredScopesFromHooks(layers: Hooks[]): string[] {
   const out: string[] = [];
   for (const hooks of layers) {
-    const scopes = (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER];
+    const scopes = (hooks as Record<PropertyKey, unknown>)[
+      REQUIRE_SCOPES_HOOK_MARKER
+    ];
     if (!Array.isArray(scopes)) continue;
     for (const scope of scopes) {
       if (typeof scope === "string" && !out.includes(scope)) out.push(scope);
@@ -4893,13 +5240,15 @@ function requiredScopesFromHooks(layers: Hooks[]): string[] {
 
 function stampRequiredScopes(hooks: Hooks, scopes: readonly string[]): void {
   if (scopes.length > 0) {
-    (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER] = [...scopes];
+    (hooks as Record<PropertyKey, unknown>)[REQUIRE_SCOPES_HOOK_MARKER] = [
+      ...scopes,
+    ];
   }
 }
 
 function mergeBeforeHandle(
   beforeHandle: NonNullable<Hooks["beforeHandle"]> | undefined,
-  requiredScopes: readonly string[]
+  requiredScopes: readonly string[],
 ): NonNullable<Hooks["beforeHandle"]> | undefined {
   if (!beforeHandle && requiredScopes.length === 0) return undefined;
   // No scope aggregation needed → return the inner fn as-is so the dispatch
@@ -4921,7 +5270,7 @@ function mergeBeforeHandle(
 }
 
 function responsePipeline(
-  fns: NonNullable<Hooks["onSend"]>[]
+  fns: NonNullable<Hooks["onSend"]>[],
 ): NonNullable<Hooks["onSend"]> | undefined {
   if (fns.length === 0) return undefined;
   if (fns.length === 1) return fns[0];
@@ -4935,7 +5284,9 @@ function responsePipeline(
   };
 }
 
-function serverConnectOrigins(servers: OpenAPIOptions["servers"] | undefined): string[] {
+function serverConnectOrigins(
+  servers: OpenAPIOptions["servers"] | undefined,
+): string[] {
   if (!servers) return [];
   const origins: string[] = [];
   for (const server of servers) {
@@ -4956,7 +5307,7 @@ function serverConnectOrigins(servers: OpenAPIOptions["servers"] | undefined): s
 
 function scalarConfigurationWithPreferredAuth(
   configuration: ScalarReferenceConfiguration | undefined,
-  schemes: OpenAPIOptions["securitySchemes"] | undefined
+  schemes: OpenAPIOptions["securitySchemes"] | undefined,
 ): ScalarReferenceConfiguration | undefined {
   const preferredSecurityScheme = schemes ? Object.keys(schemes)[0] : undefined;
   if (!preferredSecurityScheme) return configuration;
@@ -4972,7 +5323,9 @@ function scalarConfigurationWithPreferredAuth(
   return {
     ...(configuration ?? {}),
     authentication: {
-      ...(authentication && typeof authentication === "object" && !Array.isArray(authentication)
+      ...(authentication &&
+      typeof authentication === "object" &&
+      !Array.isArray(authentication)
         ? authentication
         : {}),
       preferredSecurityScheme,
@@ -4984,7 +5337,7 @@ function finalizeResponse(
   res: Response,
   ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onSend" | "onResponse">,
-  stripFingerprint: boolean = true
+  stripFingerprint: boolean = true,
 ): Response | PromiseLike<Response> {
   let final = res;
 
@@ -5006,7 +5359,7 @@ function finishFinalize(
   res: Response,
   ctx: BaseContext<any, any> | undefined,
   hooks: Pick<Hooks, "onResponse">,
-  stripFingerprint: boolean
+  stripFingerprint: boolean,
 ): Response | PromiseLike<Response> {
   if (stripFingerprint) {
     res.headers.delete("server");
@@ -5021,8 +5374,14 @@ function finishFinalize(
   return res;
 }
 
-function isPromiseLike<T = unknown>(value: T | PromiseLike<T>): value is PromiseLike<T> {
-  return value !== null && typeof value === "object" && typeof (value as any).then === "function";
+function isPromiseLike<T = unknown>(
+  value: T | PromiseLike<T>,
+): value is PromiseLike<T> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as any).then === "function"
+  );
 }
 
 /**
@@ -5048,7 +5407,9 @@ function chain<F extends (...args: any[]) => any>(fns: F[]): F | undefined {
   }) as unknown as F;
 }
 
-function firstResponse<F extends (...args: any[]) => any>(fns: F[]): F | undefined {
+function firstResponse<F extends (...args: any[]) => any>(
+  fns: F[],
+): F | undefined {
   if (fns.length === 0) return undefined;
   if (fns.length === 1) return fns[0];
   return (async (...args: any[]) => {
@@ -5060,7 +5421,9 @@ function firstResponse<F extends (...args: any[]) => any>(fns: F[]): F | undefin
   }) as unknown as F;
 }
 
-function pipeline<F extends (ctx: any, value: any) => any>(fns: F[]): F | undefined {
+function pipeline<F extends (ctx: any, value: any) => any>(
+  fns: F[],
+): F | undefined {
   if (fns.length === 0) return undefined;
   if (fns.length === 1) return fns[0];
   return (async (ctx: any, value: any) => {
@@ -5118,7 +5481,7 @@ function copyContextHeaders(ctx: BaseContext<any, any>, res: Response): void {
 function assertAcknowledgedSuccessfulHookResponse(
   response: Response,
   def: RouteDefinition<any, any, any, any>,
-  phase: "preBody" | "beforeHandle"
+  phase: "preBody" | "beforeHandle",
 ): void {
   if (
     response.status >= 400 ||
@@ -5129,11 +5492,14 @@ function assertAcknowledgedSuccessfulHookResponse(
   }
   throw new InternalError(
     `Raw ${phase} Response refused: set acknowledgeNoResponseBodySchema: true on the route ` +
-      "to explicitly accept that its successful response body bypasses schema validation."
+      "to explicitly accept that its successful response body bypasses schema validation.",
   );
 }
 
-function hasRequestSchema(request: RequestSchemas | undefined, key: keyof RequestSchemas): boolean {
+function hasRequestSchema(
+  request: RequestSchemas | undefined,
+  key: keyof RequestSchemas,
+): boolean {
   return !!request && !!request[key];
 }
 
@@ -5165,13 +5531,17 @@ export function findRoutesMissingResponseBodySchema(
   routes: readonly Pick<
     RouteDefinition<any, any, any, any>,
     "method" | "path" | "responses" | "acknowledgeNoResponseBodySchema"
-  >[]
+  >[],
 ): Array<{ method: string; path: string; statuses: number[] }> {
-  const offending: Array<{ method: string; path: string; statuses: number[] }> = [];
+  const offending: Array<{ method: string; path: string; statuses: number[] }> =
+    [];
   for (const route of routes) {
     if (route.acknowledgeNoResponseBodySchema === true) continue;
     const statuses: number[] = [];
-    const responses = route.responses as Record<number, { body?: unknown } | undefined>;
+    const responses = route.responses as Record<
+      number,
+      { body?: unknown } | undefined
+    >;
     for (const key of Object.keys(responses)) {
       const status = Number(key);
       // Only successful responses can carry an over-exposing body, and 204/205
@@ -5246,7 +5616,7 @@ class RequestContext {
 function createPreBodyContext(
   request: Request,
   getUrl: () => URL,
-  rawParams: Record<string, string>
+  rawParams: Record<string, string>,
 ): RequestContext {
   let headersObj: Record<string, string> | undefined;
   let queryObj: Record<string, string | string[]> | undefined;
@@ -5265,7 +5635,7 @@ function validateContext(
     multipart?: AppOptions["multipart"];
     jsonMaxKeys?: number;
     jsonMaxDepth?: number;
-  }
+  },
 ): BaseContext<any, any> | PromiseLike<BaseContext<any, any>> {
   const hasHeadersSchema = !!def.request?.headers;
   const hasQuerySchema = !!def.request?.query;
@@ -5275,9 +5645,13 @@ function validateContext(
   const buildQuery = (): Record<string, string | string[]> => ctx.query;
 
   const hasSchema =
-    def.request?.params || def.request?.query || def.request?.headers || def.request?.body;
+    def.request?.params ||
+    def.request?.query ||
+    def.request?.headers ||
+    def.request?.body;
 
-  const finishContext = (): BaseContext<any, any> => ctx as unknown as BaseContext<any, any>;
+  const finishContext = (): BaseContext<any, any> =>
+    ctx as unknown as BaseContext<any, any>;
 
   if (!hasSchema) {
     return finishContext();
@@ -5292,7 +5666,10 @@ function validateContext(
   // body, each throwing the same ValidationError on failure.
   type Ctx = BaseContext<any, any>;
   type StdResult = { issues?: unknown; value?: unknown };
-  const applyChecked = (r: StdResult, part: "params" | "query" | "headers" | "body"): unknown => {
+  const applyChecked = (
+    r: StdResult,
+    part: "params" | "query" | "headers" | "body",
+  ): unknown => {
     if (r.issues) throw new ValidationError(part, toIssues(r.issues as any));
     return r.value;
   };
@@ -5331,7 +5708,10 @@ function validateContext(
     const declared = request.headers.get("content-length");
     if (declared !== null) {
       const declaredBytes = Number(declared);
-      if (Number.isFinite(declaredBytes) && declaredBytes > opts.bodyLimitBytes) {
+      if (
+        Number.isFinite(declaredBytes) &&
+        declaredBytes > opts.bodyLimitBytes
+      ) {
         throw new PayloadTooLargeError(opts.bodyLimitBytes);
       }
     }
@@ -5344,7 +5724,7 @@ function validateContext(
       opts.bodyLimitBytes,
       opts.multipart,
       opts.jsonMaxKeys,
-      opts.jsonMaxDepth
+      opts.jsonMaxDepth,
     );
     if (isPromiseLike(raw)) return raw.then(validateBodyAndFinish);
     return validateBodyAndFinish(raw);
@@ -5411,11 +5791,15 @@ function queryToObject(s: URLSearchParams): Record<string, string | string[]> {
   return o;
 }
 
-function toIssues(issues: ReadonlyArray<{ message: string; path?: ReadonlyArray<any> }>) {
+function toIssues(
+  issues: ReadonlyArray<{ message: string; path?: ReadonlyArray<any> }>,
+) {
   return issues.map((i) => ({
     message: i.message,
     path: (i.path ?? [])
-      .map((p) => (typeof p === "object" && p && "key" in p ? (p as any).key : p))
+      .map((p) =>
+        typeof p === "object" && p && "key" in p ? (p as any).key : p,
+      )
       .join("."),
   }));
 }
@@ -5436,14 +5820,20 @@ const TEXT_DECODER = new TextDecoder();
  * @throws {BadRequestError} When `Content-Length` is present but invalid.
  * @throws {PayloadTooLargeError} When the declared or actual size exceeds `limit`.
  */
-function readBodyBytesFast(req: Request, limit: number): Uint8Array | undefined {
+function readBodyBytesFast(
+  req: Request,
+  limit: number,
+): Uint8Array | undefined {
   const cl = req.headers.get("content-length");
   if (cl) {
     const n = Number(cl);
-    if (!Number.isFinite(n) || n < 0) throw new BadRequestError("Invalid Content-Length");
+    if (!Number.isFinite(n) || n < 0)
+      throw new BadRequestError("Invalid Content-Length");
     if (n > limit) throw new PayloadTooLargeError(limit);
   }
-  const cached = (req as unknown as Record<symbol, unknown>)[DALOY_REQUEST_RAW_BODY];
+  const cached = (req as unknown as Record<symbol, unknown>)[
+    DALOY_REQUEST_RAW_BODY
+  ];
   if (cached instanceof Uint8Array) {
     if (cached.byteLength > limit) throw new PayloadTooLargeError(limit);
     return cached;
@@ -5451,7 +5841,11 @@ function readBodyBytesFast(req: Request, limit: number): Uint8Array | undefined 
   return undefined;
 }
 
-function parseJsonBodyBytes(bytes: Uint8Array, maxKeys: number, maxDepth: number): unknown {
+function parseJsonBodyBytes(
+  bytes: Uint8Array,
+  maxKeys: number,
+  maxDepth: number,
+): unknown {
   if (bytes.byteLength === 0) return undefined;
   const text = TEXT_DECODER.decode(bytes);
   // Use the limited parser when limits are enabled; falls back to safe behavior
@@ -5485,13 +5879,14 @@ function readBody(
   limit: number,
   multipart?: AppOptions["multipart"],
   jsonMaxKeys = 10_000,
-  jsonMaxDepth = 50
+  jsonMaxDepth = 50,
 ): unknown | Promise<unknown> {
   if (ct.includes("application/json")) {
     const fast = readBodyBytesFast(req, limit);
-    if (fast !== undefined) return parseJsonBodyBytes(fast, jsonMaxKeys, jsonMaxDepth);
+    if (fast !== undefined)
+      return parseJsonBodyBytes(fast, jsonMaxKeys, jsonMaxDepth);
     return readBodyLimited(req, limit).then((b) =>
-      parseJsonBodyBytes(b, jsonMaxKeys, jsonMaxDepth)
+      parseJsonBodyBytes(b, jsonMaxKeys, jsonMaxDepth),
     );
   }
   if (ct.includes("application/x-www-form-urlencoded")) {
@@ -5506,7 +5901,7 @@ async function readBodySlow(
   req: Request,
   ct: string,
   limit: number,
-  multipart?: AppOptions["multipart"]
+  multipart?: AppOptions["multipart"],
 ): Promise<unknown> {
   if (ct.includes("multipart/form-data")) {
     // Fast-fail on an honestly-declared oversize body.
@@ -5559,7 +5954,10 @@ async function readBodySlow(
         typeof (v as Blob).arrayBuffer === "function";
       if (isFile) {
         files++;
-        if (multipart?.maxFileBytes !== undefined && (v as Blob).size > multipart.maxFileBytes) {
+        if (
+          multipart?.maxFileBytes !== undefined &&
+          (v as Blob).size > multipart.maxFileBytes
+        ) {
           throw new PayloadTooLargeError(multipart.maxFileBytes);
         }
       }
@@ -5571,10 +5969,14 @@ async function readBodySlow(
       out[k] = v;
     });
     if (multipart?.maxFields !== undefined && fields > multipart.maxFields) {
-      throw new BadRequestError(`Too many form fields (${fields} > ${multipart.maxFields})`);
+      throw new BadRequestError(
+        `Too many form fields (${fields} > ${multipart.maxFields})`,
+      );
     }
     if (multipart?.maxFiles !== undefined && files > multipart.maxFiles) {
-      throw new BadRequestError(`Too many file uploads (${files} > ${multipart.maxFiles})`);
+      throw new BadRequestError(
+        `Too many file uploads (${files} > ${multipart.maxFiles})`,
+      );
     }
     return out;
   }
@@ -5590,13 +5992,17 @@ async function readBodySlow(
  *
  * @internal
  */
-function normalizeSunset(value: string | Date, method: string, path: string): string {
+function normalizeSunset(
+  value: string | Date,
+  method: string,
+  path: string,
+): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     throw new Error(
       `app.route(): invalid sunset date for ${method} ${path}: ` +
         `${JSON.stringify(value)}. Provide an ISO-8601 string, an HTTP date, ` +
-        `or a Date instance.`
+        `or a Date instance.`,
     );
   }
   return date.toUTCString();
@@ -5606,12 +6012,12 @@ function serializeResult(
   result: { status: number; body: unknown; headers?: Record<string, string> },
   def: RouteDefinition<any, any, any, any>,
   validateResponses: boolean,
-  lightOk = false
+  lightOk = false,
 ): Response | PromiseLike<Response> {
   const spec = def.responses[result.status];
   if (!spec) {
     throw new InternalError(
-      `Handler returned status ${result.status} which is not declared in responses for ${def.method} ${def.path}`
+      `Handler returned status ${result.status} which is not declared in responses for ${def.method} ${def.path}`,
     );
   }
 
@@ -5672,7 +6078,11 @@ function serializeResult(
     // buffer-backed bodies qualify — streams keep the real Response so the
     // adapter's stream plumbing is untouched.
     if (lightOk && !isStream) {
-      return new LightResponse(result.status, headers, rawBody) as unknown as Response;
+      return new LightResponse(
+        result.status,
+        headers,
+        rawBody,
+      ) as unknown as Response;
     }
     const response = new Response(body, { status: result.status, headers });
     if (!isStream) {
@@ -5693,7 +6103,7 @@ function serializeResult(
           throw new InternalError(
             `Response body for ${def.method} ${def.path} failed schema validation: ${resolved.issues
               .map((i: { message: string }) => i.message)
-              .join("; ")}`
+              .join("; ")}`,
           );
         }
         // Serialize the validated (and, for object schemas, key-stripped)
@@ -5703,9 +6113,11 @@ function serializeResult(
     } else {
       if ((r as any).issues) {
         throw new InternalError(
-          `Response body for ${def.method} ${def.path} failed schema validation: ${(r as any).issues
+          `Response body for ${def.method} ${def.path} failed schema validation: ${(
+            r as any
+          ).issues
             .map((i: any) => i.message)
-            .join("; ")}`
+            .join("; ")}`,
         );
       }
       return finish((r as { value: unknown }).value);
@@ -5716,13 +6128,15 @@ function serializeResult(
 }
 
 function setContentLength(headers: Headers, byteLength: number): void {
-  if (!headers.has("content-length")) headers.set("content-length", String(byteLength));
+  if (!headers.has("content-length"))
+    headers.set("content-length", String(byteLength));
 }
 
 function mockResponseFor(def: RouteDefinition<any, any, any, any>) {
   const statuses = Object.keys(def.responses).map(Number).sort();
   const status = statuses.find((s) => s >= 200 && s < 300) ?? statuses[0];
-  if (status === undefined) throw new InternalError("Mock mode: no responses declared");
+  if (status === undefined)
+    throw new InternalError("Mock mode: no responses declared");
   const spec = def.responses[status]!;
   const example =
     spec.examples && Object.values(spec.examples)[0] !== undefined
@@ -5734,7 +6148,7 @@ function mockResponseFor(def: RouteDefinition<any, any, any, any>) {
 function runHandler(
   def: RouteDefinition<any, any, any, any>,
   ctx: BaseContext<any, any>,
-  requestTimeoutMs: number
+  requestTimeoutMs: number,
 ): unknown {
   const result = def.handler(ctx);
   if (requestTimeoutMs === 0 || !isPromiseLike(result)) {
@@ -5778,10 +6192,17 @@ function abortRequest(request: Request, reason: unknown): void {
  * @param request - The in-flight request, used to fire the abort hook.
  * @returns A promise that settles with the handler result or a 408 timeout.
  */
-function withTimeout<T>(p: PromiseLike<T>, ms: number, request: Request): Promise<T> {
+function withTimeout<T>(
+  p: PromiseLike<T>,
+  ms: number,
+  request: Request,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => {
-      abortRequest(request, new DOMException(`Request exceeded ${ms}ms`, "TimeoutError"));
+      abortRequest(
+        request,
+        new DOMException(`Request exceeded ${ms}ms`, "TimeoutError"),
+      );
       reject(new RequestTimeoutError(ms));
     }, ms);
     p.then(
@@ -5792,7 +6213,7 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number, request: Request): Promis
       (e) => {
         clearTimeout(t);
         reject(e);
-      }
+      },
     );
   });
 }
@@ -5814,7 +6235,10 @@ const OMIT_STACK_IN_LOG = Symbol.for("daloyjs.error.omitStackInLog");
 
 function serializeErr(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {
-    if ((err as unknown as Record<PropertyKey, unknown>)[OMIT_STACK_IN_LOG] === true) {
+    if (
+      (err as unknown as Record<PropertyKey, unknown>)[OMIT_STACK_IN_LOG] ===
+      true
+    ) {
       return { name: err.name, message: err.message };
     }
     return { name: err.name, message: err.message, stack: err.stack };

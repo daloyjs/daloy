@@ -25,7 +25,10 @@
  * Everything is transport-portable (`fetch` + web-standard primitives) and
  * **fail-safe by contract**: a dead or misconfigured collector never affects
  * request serving — bounded queues, dropped-batch counters, no retry storms,
- * and cumulative metric temporality so totals survive failed pushes.
+ * a timeout on every export POST, and cumulative metric temporality so
+ * totals survive failed pushes. Long-lived runtimes flush on an `unref`'d
+ * interval plus graceful shutdown; isolate runtimes (Workers, Vercel, Lambda)
+ * flush per request via the adapters' `waitUntil` / handler-await path.
  *
  * @module
  * @since 1.2.0
@@ -71,9 +74,16 @@ export interface OtlpExporterOptions {
   /**
    * Flush cadence in ms on runtimes with timers (`unref`'d — never keeps the
    * process alive). Defaults: 5000 (logs), 15000 (metrics). Set `0` to
-   * disable the timer and flush manually / on shutdown only.
+   * disable the timer and flush manually / on shutdown / via the serverless
+   * adapters' per-request flush.
    */
   flushIntervalMs?: number;
+  /**
+   * Abort an in-flight export POST after this many ms so a blackholed
+   * collector cannot latch `flushing` forever. Default `5000`. Set `0` to
+   * wait indefinitely (tests that drive `fetch` themselves).
+   */
+  flushTimeoutMs?: number;
   /** Injectable transport for tests. Default `globalThis.fetch`. */
   fetch?: typeof fetch;
 }
@@ -95,7 +105,12 @@ export interface OtlpLogExporter {
   pushLine(line: string): void;
   /** Push pending records now. Never rejects; failures count as drops. */
   flush(): Promise<void>;
-  /** Batches dropped because the queue overflowed or the collector errored. */
+  /**
+   * Mixed drop counter: overflowed log *lines* (one per `shift()` at the
+   * queue cap) plus failed export *POSTs* (collector 4xx/5xx, network error,
+   * timeout, or disallowed redirect). Not a count of failed HTTP batches
+   * alone — compare against queue depth under load, not "POSTs that failed".
+   */
   readonly droppedBatches: number;
 }
 
@@ -127,11 +142,16 @@ export interface OtlpMetricsExporter {
     name: string,
     attributes: Record<string, string>,
     value: number,
-    options: OtlpHistogramOptions
+    options: OtlpHistogramOptions,
   ): void;
   /** Push the current state now. Never rejects; failures count as drops. */
   flush(): Promise<void>;
-  /** Pushes dropped because the collector rejected/errored, plus series dropped at the cardinality cap. */
+  /**
+   * Mixed drop counter: failed export *POSTs* (collector 4xx/5xx, network
+   * error, timeout, or disallowed redirect) plus *series* refused at the
+   * cardinality cap. A cardinality attack inflates this without any POST
+   * failing.
+   */
   readonly droppedBatches: number;
 }
 
@@ -143,6 +163,8 @@ const LOG_FLUSH_INTERVAL_MS = 5_000;
 const LOG_MAX_FIELD_LENGTH = 8_192;
 
 const METRICS_FLUSH_INTERVAL_MS = 15_000;
+/** Default abort timeout for an in-flight OTLP POST. */
+const DEFAULT_FLUSH_TIMEOUT_MS = 5_000;
 /**
  * Cardinality guard: total metric series (counter + histogram) before new
  * series are dropped and counted. A hostile client must not be able to mint
@@ -187,12 +209,26 @@ const KNOWN_METHODS = new Set([
 
 /** Portable environment lookup (Node/Bun/Deno-with-node-compat; undefined elsewhere). */
 function envVar(name: string): string | undefined {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env;
+  const env = (
+    globalThis as { process?: { env?: Record<string, string | undefined> } }
+  ).process?.env;
   return env?.[name];
 }
 
-/** Parse `key=value,key2=value2` lists (OTEL_EXPORTER_OTLP_HEADERS / OTEL_RESOURCE_ATTRIBUTES). */
+/** Decode one OTEL env-list component; invalid percent-encoding is kept raw. */
+function decodeOtelComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Parse `key=value,key2=value2` lists (`OTEL_EXPORTER_OTLP_HEADERS` /
+ * `OTEL_RESOURCE_ATTRIBUTES`). Spec values are percent-encoded; commas in a
+ * value must be `%2C`.
+ */
 function parseKvList(raw: string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!raw) return out;
@@ -200,7 +236,9 @@ function parseKvList(raw: string | undefined): Record<string, string> {
     const trimmed = pair.trim();
     const idx = trimmed.indexOf("=");
     if (idx <= 0) continue;
-    out[trimmed.slice(0, idx)] = trimmed.slice(idx + 1);
+    const key = decodeOtelComponent(trimmed.slice(0, idx).trim());
+    if (key.length === 0) continue;
+    out[key] = decodeOtelComponent(trimmed.slice(idx + 1).trim());
   }
   return out;
 }
@@ -209,7 +247,10 @@ function truncate(value: string, max: number): string {
   return value.length <= max ? value : value.slice(0, max);
 }
 
-function toAttrList(record: Record<string, string>, maxLength: number): OtlpAttr[] {
+function toAttrList(
+  record: Record<string, string>,
+  maxLength: number,
+): OtlpAttr[] {
   return Object.entries(record).map(([key, value]) => ({
     key,
     value: { stringValue: truncate(value, maxLength) },
@@ -224,13 +265,24 @@ interface OtlpTransport {
   fetchImpl: typeof fetch;
 }
 
-function resolveTransport(signalPath: string, opts: OtlpExporterOptions): OtlpTransport | null {
+function resolveTransport(
+  signalPath: string,
+  opts: OtlpExporterOptions,
+): OtlpTransport | null {
   const rawEndpoint = opts.endpoint ?? envVar("OTEL_EXPORTER_OTLP_ENDPOINT");
   if (!rawEndpoint) return null;
   const base = rawEndpoint.replace(/\/+$/, "").replace(/:4317$/, ":4318");
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  Object.assign(headers, parseKvList(envVar("OTEL_EXPORTER_OTLP_HEADERS")), opts.headers ?? {});
-  const resource: Record<string, string> = parseKvList(envVar("OTEL_RESOURCE_ATTRIBUTES"));
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  Object.assign(
+    headers,
+    parseKvList(envVar("OTEL_EXPORTER_OTLP_HEADERS")),
+    opts.headers ?? {},
+  );
+  const resource: Record<string, string> = parseKvList(
+    envVar("OTEL_RESOURCE_ATTRIBUTES"),
+  );
   const serviceName = envVar("OTEL_SERVICE_NAME");
   if (serviceName && resource["service.name"] === undefined) {
     resource["service.name"] = serviceName;
@@ -247,8 +299,44 @@ function resolveTransport(signalPath: string, opts: OtlpExporterOptions): OtlpTr
 /** Start an `unref`'d repeating flush where the runtime supports timers. */
 function startFlushTimer(intervalMs: number, flush: () => Promise<void>): void {
   if (intervalMs <= 0 || typeof setInterval !== "function") return;
-  const timer = setInterval(() => void flush(), intervalMs) as { unref?: () => unknown };
+  const timer = setInterval(() => void flush(), intervalMs) as {
+    unref?: () => unknown;
+  };
   timer.unref?.();
+}
+
+/** AbortSignal that fires after `timeoutMs`, or `undefined` when timeout is disabled. */
+function flushSignal(timeoutMs: number): AbortSignal | undefined {
+  if (timeoutMs <= 0) return undefined;
+  if (
+    typeof AbortSignal !== "undefined" &&
+    typeof AbortSignal.timeout === "function"
+  ) {
+    return AbortSignal.timeout(timeoutMs);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs) as {
+    unref?: () => unknown;
+  };
+  timer.unref?.();
+  return controller.signal;
+}
+
+/** Shared POST init: never follow redirects (tenant headers would leak). */
+function exportRequestInit(
+  headers: Record<string, string>,
+  body: string,
+  timeoutMs: number,
+): RequestInit {
+  const init: RequestInit = {
+    method: "POST",
+    headers,
+    body,
+    redirect: "error",
+  };
+  const signal = flushSignal(timeoutMs);
+  if (signal !== undefined) init.signal = signal;
+  return init;
 }
 
 /** Shape of one OTLP log record in the JSON protobuf mapping. */
@@ -266,7 +354,8 @@ function toLogRecord(line: string): OtlpLogRecord {
   const attributes: OtlpAttr[] = [];
   try {
     const parsed = JSON.parse(line) as Record<string, unknown>;
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+      throw new Error();
     if (typeof parsed.level === "string") level = parsed.level;
     const msg = parsed.msg ?? parsed.message ?? parsed.event;
     body = typeof msg === "string" ? msg : line;
@@ -276,8 +365,10 @@ function toLogRecord(line: string): OtlpLogRecord {
         key,
         value: {
           stringValue: truncate(
-            typeof value === "string" ? value : JSON.stringify(value) ?? "null",
-            LOG_MAX_FIELD_LENGTH
+            typeof value === "string"
+              ? value
+              : (JSON.stringify(value) ?? "null"),
+            LOG_MAX_FIELD_LENGTH,
           ),
         },
       });
@@ -307,10 +398,13 @@ function toLogRecord(line: string): OtlpLogRecord {
  * @returns The exporter, or `null` when no endpoint is configured.
  * @since 1.2.0
  */
-export function createOtlpLogExporter(opts: OtlpExporterOptions = {}): OtlpLogExporter | null {
+export function createOtlpLogExporter(
+  opts: OtlpExporterOptions = {},
+): OtlpLogExporter | null {
   const transport = resolveTransport("/v1/logs", opts);
   if (transport === null) return null;
   const { url, headers, resourceAttributes, fetchImpl } = transport;
+  const timeoutMs = opts.flushTimeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS;
 
   const queue: OtlpLogRecord[] = [];
   let dropped = 0;
@@ -330,11 +424,10 @@ export function createOtlpLogExporter(opts: OtlpExporterOptions = {}): OtlpLogEx
             },
           ],
         };
-        const res = await fetchImpl(url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-        });
+        const res = await fetchImpl(
+          url,
+          exportRequestInit(headers, JSON.stringify(payload), timeoutMs),
+        );
         if (!res.ok) dropped += 1;
       }
     } catch {
@@ -396,11 +489,12 @@ interface HistogramSeries {
  * @since 1.2.0
  */
 export function createOtlpMetricsExporter(
-  opts: OtlpExporterOptions = {}
+  opts: OtlpExporterOptions = {},
 ): OtlpMetricsExporter | null {
   const transport = resolveTransport("/v1/metrics", opts);
   if (transport === null) return null;
   const { url, headers, resourceAttributes, fetchImpl } = transport;
+  const timeoutMs = opts.flushTimeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS;
 
   const counters = new Map<string, CounterSeries>();
   const histograms = new Map<string, HistogramSeries>();
@@ -414,9 +508,14 @@ export function createOtlpMetricsExporter(
     return key;
   }
 
-  function sortedEntries(attributes: Record<string, string>): [string, string][] {
+  function sortedEntries(
+    attributes: Record<string, string>,
+  ): [string, string][] {
     return Object.entries(attributes)
-      .map(([k, v]): [string, string] => [k, truncate(v, METRICS_MAX_ATTR_LENGTH)])
+      .map(([k, v]): [string, string] => [
+        k,
+        truncate(v, METRICS_MAX_ATTR_LENGTH),
+      ])
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   }
 
@@ -429,6 +528,9 @@ export function createOtlpMetricsExporter(
   async function flush(): Promise<void> {
     if (flushing || !dirty) return;
     flushing = true;
+    // Clear before the POST so a concurrent count/record keeps the flag true
+    // and the next flush carries the in-flight increment.
+    dirty = false;
     try {
       const now = (BigInt(Date.now()) * 1_000_000n).toString();
       const sumsByName = new Map<string, CounterSeries[]>();
@@ -487,15 +589,17 @@ export function createOtlpMetricsExporter(
           },
         ],
       };
-      const res = await fetchImpl(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) dirty = false;
-      else dropped += 1;
+      const res = await fetchImpl(
+        url,
+        exportRequestInit(headers, JSON.stringify(payload), timeoutMs),
+      );
+      if (!res.ok) {
+        dropped += 1;
+        dirty = true;
+      }
     } catch {
-      dropped += 1; // totals retained; cumulative temporality self-heals
+      dropped += 1;
+      dirty = true; // totals retained; cumulative temporality self-heals
     } finally {
       flushing = false;
     }
@@ -513,7 +617,10 @@ export function createOtlpMetricsExporter(
         if (atCapacity()) return;
         s = {
           name,
-          attributes: entries.map(([k, v]) => ({ key: k, value: { stringValue: v } })),
+          attributes: entries.map(([k, v]) => ({
+            key: k,
+            value: { stringValue: v },
+          })),
           total: 0,
           startTimeUnixNano: (BigInt(Date.now()) * 1_000_000n).toString(),
         };
@@ -526,7 +633,7 @@ export function createOtlpMetricsExporter(
       name: string,
       attributes: Record<string, string>,
       value: number,
-      options: OtlpHistogramOptions
+      options: OtlpHistogramOptions,
     ): void {
       if (!Number.isFinite(value)) return;
       const entries = sortedEntries(attributes);
@@ -538,10 +645,15 @@ export function createOtlpMetricsExporter(
           name,
           unit: options.unit,
           boundaries: options.boundaries,
-          attributes: entries.map(([k, v]) => ({ key: k, value: { stringValue: v } })),
+          attributes: entries.map(([k, v]) => ({
+            key: k,
+            value: { stringValue: v },
+          })),
           count: 0,
           sum: 0,
-          bucketCounts: new Array<number>(options.boundaries.length + 1).fill(0),
+          bucketCounts: new Array<number>(options.boundaries.length + 1).fill(
+            0,
+          ),
           startTimeUnixNano: (BigInt(Date.now()) * 1_000_000n).toString(),
         };
         histograms.set(key, h);
@@ -568,7 +680,8 @@ export interface SemconvHttpMetricsOptions {
 
 /** Monotonic clock in milliseconds, falling back to `Date.now` where needed. */
 function nowMs(): number {
-  return typeof performance !== "undefined" && typeof performance.now === "function"
+  return typeof performance !== "undefined" &&
+    typeof performance.now === "function"
     ? performance.now()
     : Date.now();
 }
@@ -602,7 +715,7 @@ const SEMCONV_START_TIMES = new WeakMap<Request, number>();
  */
 export function semconvHttpMetrics(
   sink: OtlpMetricsExporter,
-  opts: SemconvHttpMetricsOptions = {}
+  opts: SemconvHttpMetricsOptions = {},
 ): Hooks {
   return {
     onRequest(req) {
@@ -614,19 +727,23 @@ export function semconvHttpMetrics(
       const started = SEMCONV_START_TIMES.get(request);
       if (started === undefined) return;
       SEMCONV_START_TIMES.delete(request);
-      let pathname = "/";
-      let scheme = "http";
-      try {
-        const parsed = new URL(request.url);
-        pathname = parsed.pathname;
-        scheme = parsed.protocol.replace(":", "");
-      } catch {
-        /* malformed URL — keep the fallbacks */
+      const url = request.url;
+      if (opts.exclude !== undefined) {
+        let pathname = "/";
+        try {
+          pathname = new URL(url).pathname;
+        } catch {
+          /* malformed URL — keep the fallback */
+        }
+        if (opts.exclude(pathname)) return;
       }
-      if (opts.exclude !== undefined && opts.exclude(pathname)) return;
+      const colon = url.indexOf(":");
+      const scheme = colon > 0 ? url.slice(0, colon) : "http";
       const rawMethod = request.method.toUpperCase();
       const attributes: Record<string, string> = {
-        "http.request.method": KNOWN_METHODS.has(rawMethod) ? rawMethod : "_OTHER",
+        "http.request.method": KNOWN_METHODS.has(rawMethod)
+          ? rawMethod
+          : "_OTHER",
         "http.response.status_code": String(res.status),
         "url.scheme": scheme,
       };
@@ -639,7 +756,7 @@ export function semconvHttpMetrics(
         "http.server.request.duration",
         attributes,
         (nowMs() - started) / 1000,
-        { unit: "s", boundaries: HTTP_SERVER_REQUEST_DURATION_BUCKETS }
+        { unit: "s", boundaries: HTTP_SERVER_REQUEST_DURATION_BUCKETS },
       );
     },
   };
@@ -650,7 +767,13 @@ export function semconvHttpMetrics(
  * equivalent to `{}` — everything defaults on, reading the standard `OTEL_*`
  * environment variables. When no `OTEL_EXPORTER_OTLP_ENDPOINT` is present
  * (and no explicit `exporter.endpoint` is given) the option is a silent
- * no-op, so it is safe to leave enabled in development.
+ * no-op, so it is safe to leave enabled in development. A caller-supplied
+ * `Logger` instance is not intercepted (it owns its own sink). On isolate
+ * runtimes use `toFetchHandler` / `toLambdaHandler` so a per-request flush
+ * actually runs; Node/Bun/Deno long-lived processes flush on the interval
+ * and on shutdown. The collector endpoint is operator config, so export
+ * uses raw `fetch` (not `fetchGuard`) — the same trust class as a database
+ * URL.
  *
  * @since 1.2.0
  */
@@ -703,8 +826,10 @@ export interface AppTelemetry {
  */
 export function createAppTelemetry(options: TelemetryOptions): AppTelemetry {
   const exporterOpts = options.exporter ?? {};
-  const logs = options.logs === false ? null : createOtlpLogExporter(exporterOpts);
-  const metrics = options.metrics === false ? null : createOtlpMetricsExporter(exporterOpts);
+  const logs =
+    options.logs === false ? null : createOtlpLogExporter(exporterOpts);
+  const metrics =
+    options.metrics === false ? null : createOtlpMetricsExporter(exporterOpts);
 
   const logWrite =
     logs === null
@@ -721,7 +846,8 @@ export function createAppTelemetry(options: TelemetryOptions): AppTelemetry {
           logs.pushLine(line);
         };
 
-  const endpointRaw = exporterOpts.endpoint ?? envVar("OTEL_EXPORTER_OTLP_ENDPOINT") ?? null;
+  const endpointRaw =
+    exporterOpts.endpoint ?? envVar("OTEL_EXPORTER_OTLP_ENDPOINT") ?? null;
 
   return {
     logs,
