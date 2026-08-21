@@ -7,11 +7,12 @@ import { BranchDiagram } from "../../../components/diagram";
 import { buildMetadata, CORE_PACKAGE_VERSION } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "API reference",
+  title: "DaloyJS API docs",
   description:
-    "Complete API reference for DaloyJS: App, routing, middleware, MCP, plugins, errors, security helpers, JWT/JWK, sessions, streaming, websockets, and runtime adapters, with TypeScript signatures.",
+    "DaloyJS API docs: complete public TypeScript surface for App, routing, middleware, MCP, plugins, errors, security helpers, JWT/JWK, sessions, streaming, websockets, and runtime adapters.",
   path: "/docs/api-reference",
   keywords: [
+    "DaloyJS API docs",
     "DaloyJS API reference",
     "DaloyJS docs",
     "TypeScript framework API",
@@ -22,7 +23,7 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>API reference</h1>
+      <h1>DaloyJS API docs</h1>
       <p>{`The complete public surface of DaloyJS v${CORE_PACKAGE_VERSION}, organized by import path. Every signature in this reference is generated from the same TypeScript types your editor reads on hover, open the source files for fuller TSDoc, examples, and security rationale.`}</p>
 
       <h2 id="reference-sections">Reference sections</h2>

@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import {
   ArrowRightIcon,
@@ -30,11 +31,12 @@ import { FlowHeroScene } from "../components/flow-hero-scene";
 import { ScalarPreview } from "../components/scalar-preview";
 import {
   buildMetadata,
-  CORE_PACKAGE_VERSION,
+  buildOrganizationJsonLd,
+  buildSoftwareApplicationJsonLd,
+  buildWebSiteJsonLd,
   HOME_DESCRIPTION,
   HOME_TITLE,
   serializeJsonLd,
-  SITE_URL,
 } from "@/lib/seo";
 
 export const metadata = buildMetadata({
@@ -219,63 +221,12 @@ export default function HomePage() {
   // the canonical GitHub/npm/JSR/social profiles tell Google that "DaloyJS" is a
   // distinct named entity, not a misspelling of the similarly named "dayjs".
   // `@id` references connect the Organization, WebSite, and SoftwareApplication
-  // into one graph rather than three unrelated nodes.
-  const orgId = `${SITE_URL}/#organization`;
-  const siteId = `${SITE_URL}/#website`;
-  const brandAlternateNames = ["DaloyJS", "Daloy.js", "Daloy JS", "Daloy"];
-  const brandProfiles = [
-    "https://github.com/daloyjs/daloy",
-    "https://www.npmjs.com/package/@daloyjs/core",
-    "https://jsr.io/@daloyjs/daloy",
-    "https://x.com/daloyjs",
-    "https://bsky.app/profile/daloyjs.dev",
-    "https://mastodon.social/@daloyjs",
-    "https://www.instagram.com/daloyjs",
-    "https://dev.to/daloyjs",
-    "https://opencollective.com/daloyjs",
-  ];
-
+  // into one graph rather than three unrelated nodes. Organization includes
+  // contactPoint + PostalAddress so agents can verify the project is real.
   const jsonLd = [
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "@id": orgId,
-      name: "DaloyJS",
-      alternateName: brandAlternateNames,
-      url: SITE_URL,
-      logo: `${SITE_URL}/opengraph-image`,
-      description: HOME_DESCRIPTION,
-      sameAs: brandProfiles,
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": siteId,
-      name: "DaloyJS",
-      alternateName: brandAlternateNames,
-      url: SITE_URL,
-      inLanguage: "en",
-      publisher: { "@id": orgId },
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      name: "DaloyJS",
-      alternateName: brandAlternateNames,
-      applicationCategory: "DeveloperApplication",
-      operatingSystem: "Cross-platform",
-      description: HOME_DESCRIPTION,
-      url: SITE_URL,
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      programmingLanguage: "TypeScript",
-      license: "https://opensource.org/licenses/MIT",
-      softwareVersion: CORE_PACKAGE_VERSION,
-      downloadUrl: "https://www.npmjs.com/package/@daloyjs/core",
-      codeRepository: "https://github.com/daloyjs/daloy",
-      author: { "@id": orgId },
-      publisher: { "@id": orgId },
-      sameAs: brandProfiles,
-    },
+    buildOrganizationJsonLd(),
+    buildWebSiteJsonLd(),
+    buildSoftwareApplicationJsonLd(),
   ];
 
   return (
@@ -368,10 +319,17 @@ export default function HomePage() {
               <span className="whitespace-nowrap text-foreground">da-loy</span>
               {". "}
               <Link
+                href={"/about" as Route}
+                className="underline underline-offset-4"
+              >
+                About
+              </Link>
+              {", "}
+              <Link
                 href="/about-the-name"
                 className="underline underline-offset-4"
               >
-                About the name
+                the name
               </Link>
             </p>
             <p

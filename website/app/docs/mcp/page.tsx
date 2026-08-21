@@ -4,11 +4,12 @@ import { FlowDiagram, SequenceDiagram } from "../../../components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Model Context Protocol (MCP)",
+  title: "DaloyJS MCP server",
   description:
-    "Build a dedicated Model Context Protocol server with DaloyJS. Expose tools, resources, and prompts over stateless MCP 2026-07-28 Streamable HTTP while keeping @daloyjs/core dependency-free and secure by default.",
+    "DaloyJS MCP server: build a dedicated Model Context Protocol server. Expose tools, resources, and prompts over stateless MCP 2026-07-28 Streamable HTTP while keeping @daloyjs/core dependency-free and secure by default.",
   path: "/docs/mcp",
   keywords: [
+    "DaloyJS MCP server",
     "DaloyJS MCP",
     "Model Context Protocol",
     "MCP 2026-07-28",
@@ -472,7 +473,7 @@ const mcp = createMcpHandler({
 export default function Page() {
   return (
     <>
-      <h1>Model Context Protocol (MCP)</h1>
+      <h1>DaloyJS MCP server</h1>
       <p>
         DaloyJS can host a dedicated{" "}
         <a

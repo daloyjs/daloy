@@ -288,6 +288,12 @@ export async function POST(request: Request): Promise<Response> {
           jsonrpc: "2.0",
           id: null,
           error: { code: -32600, message: "Request body too large." },
+          type: `${SITE_URL}/errors/payload-too-large`,
+          title: "Payload Too Large",
+          status: 413,
+          detail: "Request body too large.",
+          code: "payload_too_large",
+          hint: `Send a JSON-RPC body smaller than ${MAX_BODY_BYTES} bytes. See ${SITE_URL}/docs/mcp and GET ${SITE_URL}/openapi.json.`,
         }),
         {
           status: 413,
@@ -325,13 +331,19 @@ export async function POST(request: Request): Promise<Response> {
 export function GET(): Response {
   return new Response(
     JSON.stringify({
+      type: `${SITE_URL}/errors/method-not-allowed`,
+      title: "Method Not Allowed",
+      status: 405,
+      detail:
+        "The DaloyJS MCP server accepts JSON-RPC 2.0 over HTTP POST, not GET.",
+      code: "method_not_allowed",
+      hint:
+        "POST JSON-RPC 2.0 to this URL; call server/discover for capabilities. See " +
+        `${SITE_URL}/docs/mcp and GET ${SITE_URL}/openapi.json.`,
       name: "DaloyJS Documentation",
       transport: "streamable-http",
       endpoint: `${SITE_URL}/mcp`,
       tools: ["search_docs", "get_doc", "list_docs"],
-      hint:
-        "Send JSON-RPC 2.0 over HTTP POST to this URL; call server/discover for " +
-        "capabilities. See https://daloyjs.dev/#mcp for setup.",
     }),
     {
       status: 405,

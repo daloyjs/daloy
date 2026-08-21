@@ -8,11 +8,12 @@ import { AuthRole } from "@/components/auth-role";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Authentication & authorization for DaloyJS",
+  title: "DaloyJS auth docs",
   description:
-    "Protect a DaloyJS API with authentication and authorization from AWS Cognito, Microsoft Entra ID (MSAL), Auth0, Okta, Clerk, LoginRadius, or Better Auth. Compares SDKs, runtime support, and the common bearer-auth plugin pattern.",
+    "DaloyJS auth docs: protect an API with authentication and authorization from AWS Cognito, Microsoft Entra ID (MSAL), Auth0, Okta, Clerk, LoginRadius, or Better Auth. Compares SDKs, runtime support, and the common bearer-auth plugin pattern.",
   path: "/docs/auth",
   keywords: [
+    "DaloyJS auth docs",
     "DaloyJS authentication",
     "DaloyJS authorization",
     "AWS Cognito DaloyJS",
@@ -30,7 +31,7 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>Authentication &amp; authorization</h1>
+      <h1>DaloyJS auth docs</h1>
       <p>
         DaloyJS doesn&apos;t bundle a user database or login UI, instead, it
         ships primitives that make it easy to plug in a hosted identity provider

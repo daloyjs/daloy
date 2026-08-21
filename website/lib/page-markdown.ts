@@ -92,6 +92,8 @@ function convertibleTagName(node: Node): string | null {
  * from assistive tech (decorative connector arrows, tone dots, rules), which
  * are exactly the elements that carry no meaning in plain text either.
  */
+const SKIPPED_TAGS = new Set(["script", "style", "noscript", "template"]);
+
 function isSkippedNode(node: Node): boolean {
   if (node.nodeType === TEXT_NODE) {
     return false;
@@ -101,7 +103,10 @@ function isSkippedNode(node: Node): boolean {
     return true;
   }
 
-  return node.getAttribute("aria-hidden") === "true";
+  const tagName = node.tagName.toLowerCase();
+  return (
+    SKIPPED_TAGS.has(tagName) || node.getAttribute("aria-hidden") === "true"
+  );
 }
 
 /**

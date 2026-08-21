@@ -6,11 +6,12 @@ import { BranchDiagram } from "../../../components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "OpenAPI generation",
+  title: "DaloyJS OpenAPI spec",
   description:
-    "Auto-generate OpenAPI 3.1 specs from your DaloyJS routes. Powered by Hey API, the spec stays in sync with your contracts and powers the typed client.",
+    "DaloyJS OpenAPI spec generation: emit OpenAPI 3.1 from your routes. Powered by Hey API, the spec stays in sync with your contracts and powers the typed client.",
   path: "/docs/openapi",
   keywords: [
+    "DaloyJS OpenAPI spec",
     "OpenAPI 3.1",
     "OpenAPI generator TypeScript",
     "Hey API",
@@ -27,7 +28,7 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>OpenAPI generation</h1>
+      <h1>DaloyJS OpenAPI spec</h1>
       <p>
         DaloyJS emits a clean <strong>OpenAPI 3.1</strong> document straight
         from your route definitions, no plugins, no separate decorators.

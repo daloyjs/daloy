@@ -58,7 +58,7 @@ export const docsNav: DocsNavSection[] = [
   {
     title: "OpenAPI & typed clients",
     items: [
-      { title: "OpenAPI generation", href: "/docs/openapi" },
+      { title: "DaloyJS OpenAPI spec", href: "/docs/openapi" },
       { title: "API versioning", href: "/docs/api-versioning" as Route },
       { title: "Typed clients (Hey API)", href: "/docs/typed-client" },
       {
@@ -68,7 +68,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "Testing & contract tests", href: "/docs/testing" },
       { title: "AI-friendly route metadata", href: "/docs/ai-metadata" },
       { title: "llms.txt for agents", href: "/docs/llms-txt" as Route },
-      { title: "Model Context Protocol (MCP)", href: "/docs/mcp" as Route },
+      { title: "DaloyJS MCP server", href: "/docs/mcp" as Route },
       { title: "Vercel AI SDK", href: "/docs/ai-sdk" as Route },
     ],
   },
@@ -225,7 +225,7 @@ export const docsNav: DocsNavSection[] = [
         title: "Outbound resilience (fetch)",
         href: "/docs/fetch-resilience" as Route,
       },
-      { title: "Outbound webhooks", href: "/docs/webhook-delivery" as Route },
+      { title: "DaloyJS webhooks", href: "/docs/webhook-delivery" as Route },
     ],
   },
   {
@@ -289,7 +289,7 @@ export const docsNav: DocsNavSection[] = [
   {
     title: "Authentication",
     items: [
-      { title: "Overview", href: "/docs/auth" },
+      { title: "DaloyJS auth docs", href: "/docs/auth" },
       {
         title: "Architecture (OAuth2 / OIDC)",
         href: "/docs/auth/architecture" as Route,
@@ -334,7 +334,7 @@ export const docsNav: DocsNavSection[] = [
   {
     title: "Reference",
     items: [
-      { title: "API reference overview", href: "/docs/api-reference" },
+      { title: "DaloyJS API docs", href: "/docs/api-reference" },
       { title: "App & routing", href: "/docs/api-reference/app" as Route },
       {
         title: "Middleware & helpers",

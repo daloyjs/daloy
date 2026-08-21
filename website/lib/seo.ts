@@ -28,6 +28,42 @@ export const SITE_URL = (
 
 export const SITE_NAME = "DaloyJS";
 
+/** Public maintainer inbox. Also used in Organization JSON-LD. */
+export const ORGANIZATION_EMAIL = "daloyjs@gmail.com";
+
+/** JSON-LD `@id` for the DaloyJS Organization node. */
+export const ORGANIZATION_ID = `${SITE_URL}/#organization`;
+
+/** JSON-LD `@id` for the DaloyJS WebSite node. */
+export const WEBSITE_ID = `${SITE_URL}/#website`;
+
+/**
+ * Spellings of the project name. Used as `alternateName` so search engines and
+ * agents do not collapse "DaloyJS" into similarly named packages.
+ */
+export const BRAND_ALTERNATE_NAMES = [
+  "DaloyJS",
+  "Daloy.js",
+  "Daloy JS",
+  "Daloy",
+] as const;
+
+/**
+ * Canonical public profiles for the same Organization entity. `sameAs` is how
+ * agents verify the GitHub/npm/JSR/social accounts belong to this site.
+ */
+export const BRAND_PROFILES = [
+  "https://github.com/daloyjs/daloy",
+  "https://www.npmjs.com/package/@daloyjs/core",
+  "https://jsr.io/@daloyjs/daloy",
+  "https://x.com/daloyjs",
+  "https://bsky.app/profile/daloyjs.dev",
+  "https://mastodon.social/@daloyjs",
+  "https://www.instagram.com/daloyjs",
+  "https://dev.to/daloyjs",
+  "https://opencollective.com/daloyjs",
+] as const;
+
 export const CORE_PACKAGE_VERSION =
   process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.2.1";
 
@@ -157,5 +193,81 @@ export function buildMetadata(input: PageSeoInput): Metadata {
         "max-video-preview": -1,
       },
     },
+  };
+}
+
+/**
+ * Organization JSON-LD for DaloyJS.
+ *
+ * Includes `contactPoint` (email + contactType + url) and `address`
+ * (PostalAddress). The project is not a registered company with a public
+ * street office; the honest PostalAddress is the maintainer's country
+ * (Norway). Inventing a street number would fail the whole point of this
+ * node, which is that agents can verify who we are.
+ */
+export function buildOrganizationJsonLd(): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": ORGANIZATION_ID,
+    name: SITE_NAME,
+    alternateName: [...BRAND_ALTERNATE_NAMES],
+    url: SITE_URL,
+    logo: `${SITE_URL}/opengraph-image`,
+    description: HOME_DESCRIPTION,
+    email: ORGANIZATION_EMAIL,
+    sameAs: [...BRAND_PROFILES],
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "technical support",
+      email: ORGANIZATION_EMAIL,
+      url: `${SITE_URL}/contact`,
+      availableLanguage: ["English"],
+    },
+    address: {
+      "@type": "PostalAddress",
+      addressCountry: "NO",
+    },
+  };
+}
+
+/**
+ * WebSite JSON-LD pointing at the Organization publisher.
+ */
+export function buildWebSiteJsonLd(): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": WEBSITE_ID,
+    name: SITE_NAME,
+    alternateName: [...BRAND_ALTERNATE_NAMES],
+    url: SITE_URL,
+    inLanguage: "en",
+    publisher: { "@id": ORGANIZATION_ID },
+  };
+}
+
+/**
+ * SoftwareApplication JSON-LD for the DaloyJS package itself.
+ */
+export function buildSoftwareApplicationJsonLd(): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: SITE_NAME,
+    alternateName: [...BRAND_ALTERNATE_NAMES],
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Cross-platform",
+    description: HOME_DESCRIPTION,
+    url: SITE_URL,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    programmingLanguage: "TypeScript",
+    license: "https://opensource.org/licenses/MIT",
+    softwareVersion: CORE_PACKAGE_VERSION,
+    downloadUrl: "https://www.npmjs.com/package/@daloyjs/core",
+    codeRepository: "https://github.com/daloyjs/daloy",
+    author: { "@id": ORGANIZATION_ID },
+    publisher: { "@id": ORGANIZATION_ID },
+    sameAs: [...BRAND_PROFILES],
   };
 }

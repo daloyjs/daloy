@@ -87,10 +87,14 @@ export default function Page() {
         <a href="https://daloyjs.dev/llms.txt" rel="noopener noreferrer">
           https://daloyjs.dev/llms.txt
         </a>
-        . Every docs page also has a Markdown sibling (append <code>.md</code>{" "}
-        to the HTML URL). The index is generated from the same docs nav the
-        human UI uses, so the map and the site cannot silently disagree about
-        which pages exist.
+        . Every public page also negotiates Markdown on the canonical URL: send{" "}
+        <code>Accept: text/markdown</code> and expect{" "}
+        <code>Content-Type: text/markdown</code> plus <code>Vary: Accept</code>
+        {". "}
+        Docs pages still have a Markdown sibling (append <code>.md</code> to
+        the HTML URL). The index is generated from the same docs nav the human
+        UI uses, so the map and the site cannot silently disagree about which
+        pages exist.
       </p>
 
       <BranchDiagram

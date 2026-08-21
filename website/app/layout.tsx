@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata, Route, Viewport } from "next";
 import { headers } from "next/headers";
 import { Geist_Mono, Inter } from "next/font/google";
 import Link from "next/link";
@@ -183,6 +183,27 @@ export default async function RootLayout({
                   ·{" "}
                   <Link className="underline underline-offset-4" href="/blog">
                     Blog
+                  </Link>{" "}
+                  ·{" "}
+                  <Link
+                    className="underline underline-offset-4"
+                    href={"/about" as Route}
+                  >
+                    About
+                  </Link>{" "}
+                  ·{" "}
+                  <Link
+                    className="underline underline-offset-4"
+                    href={"/contact" as Route}
+                  >
+                    Contact
+                  </Link>{" "}
+                  ·{" "}
+                  <Link
+                    className="underline underline-offset-4"
+                    href={"/privacy" as Route}
+                  >
+                    Privacy
                   </Link>{" "}
                   ·{" "}
                   <Link

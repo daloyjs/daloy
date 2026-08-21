@@ -17,6 +17,21 @@ function articleFromHtml(html: string): Element {
   return article as unknown as Element;
 }
 
+test("buildPageMarkdown skips JSON-LD script tags", () => {
+  const article = articleFromHtml(`
+    <article data-docs-content>
+      <script type="application/ld+json">{"@type":"Organization"}</script>
+      <h1>About</h1>
+      <p>Hello.</p>
+    </article>
+  `);
+
+  assert.equal(
+    buildPageMarkdown(article, "https://daloyjs.dev/about"),
+    "# About\n\nHello.\n\n---\n\nSource: https://daloyjs.dev/about",
+  );
+});
+
 test("buildPageMarkdown converts headings, paragraphs, and inline markup", () => {
   const article = articleFromHtml(`
     <article data-docs-content>

@@ -33,6 +33,16 @@ export async function GET() {
     "",
     `Agents that prefer structured tools over page fetches can query these same docs over the Model Context Protocol: \`${SITE_URL}/mcp\` is a read-only MCP server with \`search_docs\`, \`get_doc\`, and \`list_docs\` tools.`,
     "",
+    "Canonical HTML URLs also negotiate Markdown: send `Accept: text/markdown` (and expect `Vary: Accept`). Website HTTP APIs return RFC 9457 problem+json errors; catalog at `/api`, OpenAPI at `/openapi.json`.",
+    "",
+    "## Developer resources",
+    "",
+    `- [DaloyJS API docs](${SITE_URL}/docs/api-reference.md): complete public TypeScript surface.`,
+    `- [DaloyJS OpenAPI spec](${SITE_URL}/docs/openapi.md): generate OpenAPI 3.1 from routes.`,
+    `- [DaloyJS auth docs](${SITE_URL}/docs/auth.md): bearer auth and identity providers.`,
+    `- [DaloyJS webhooks](${SITE_URL}/docs/webhook-delivery.md): signed outbound webhook delivery.`,
+    `- [DaloyJS MCP server](${SITE_URL}/mcp): live docs MCP. Guide: ${SITE_URL}/docs/mcp.md.`,
+    "",
   ];
 
   for (const section of sections) {

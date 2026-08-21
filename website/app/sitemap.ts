@@ -12,6 +12,9 @@ const STATIC_PATHS: Array<{
 }> = [
   { path: "/", changeFrequency: "weekly", priority: 1.0 },
   { path: "/blog", changeFrequency: "weekly", priority: 0.8 },
+  { path: "/about", changeFrequency: "yearly", priority: 0.6 },
+  { path: "/contact", changeFrequency: "yearly", priority: 0.6 },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.6 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
   {
     path: "/blog/daloyjs-1-0-0-the-bugs-were-in-the-wiring",

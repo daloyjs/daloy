@@ -4,11 +4,12 @@ import { SequenceDiagram } from "../../../components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Outbound webhook delivery",
+  title: "DaloyJS webhooks",
   description:
-    "Deliver signed, retried, dead-lettered webhooks from DaloyJS with createWebhookSender(). Timestamped HMAC signatures, exponential backoff, Retry-After, and SSRF-safe transport by default: the outbound counterpart to verifyWebhookSignature().",
+    "DaloyJS webhooks: deliver signed, retried, dead-lettered events with createWebhookSender(). Timestamped HMAC signatures, exponential backoff, Retry-After, and SSRF-safe transport by default: the outbound counterpart to verifyWebhookSignature().",
   path: "/docs/webhook-delivery",
   keywords: [
+    "DaloyJS webhooks",
     "outbound webhooks",
     "webhook delivery",
     "signed webhooks",
@@ -26,7 +27,7 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>Outbound webhook delivery</h1>
+      <h1>DaloyJS webhooks</h1>
       <p>
         DaloyJS already verifies <em>inbound</em> webhooks with{" "}
         <code>verifyWebhookSignature()</code> and signs payloads with{" "}

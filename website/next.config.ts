@@ -26,6 +26,10 @@ const securityHeaders = [
     value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
   },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // Content negotiation (Accept: text/markdown vs text/html). Applied here as
+  // well as in proxy.ts because Next.js overwrites Vary on HTML renders with
+  // its RSC tokens; a second Vary field is combined by RFC 9110 §12.5.5.
+  { key: "Vary", value: "Accept, Accept-Encoding" },
 ];
 
 const serviceWorkerHeaders = [
@@ -47,18 +51,45 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/mcp": ["./app/docs/**/*.tsx"],
     "/docs-md/[[...slug]]": ["./app/docs/**/*.tsx"],
+    "/md/[[...slug]]": ["./app/docs/**/*.tsx"],
   },
   turbopack: {
     root,
   },
+  async redirects() {
+    return [
+      {
+        source: "/docs/api",
+        destination: "/docs/api-reference",
+        permanent: true,
+      },
+      {
+        source: "/api-docs",
+        destination: "/docs/api-reference",
+        permanent: true,
+      },
+      {
+        source: "/docs/webhooks",
+        destination: "/docs/webhook-delivery",
+        permanent: true,
+      },
+      {
+        source: "/webhooks",
+        destination: "/docs/webhook-delivery",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
-      // Appending `.md` to a docs URL serves the page as markdown via the
-      // route handler in app/docs-md/[[...slug]]/route.ts (same pattern as
-      // nextjs.org). The dot is escaped because `.` is a regex-special
-      // character in path matching.
-      { source: "/docs\\.md", destination: "/docs-md" },
-      { source: "/docs/:path*\\.md", destination: "/docs-md/:path*" },
+      // Appending `.md` to a URL serves the page as markdown via
+      // app/md/[[...slug]]/route.ts. The same representation is also selected
+      // when the request sends `Accept: text/markdown` (see proxy.ts).
+      // The dot is escaped because `.` is a regex-special character in path
+      // matching. Docs keep a dedicated rewrite so `/docs.md` still resolves.
+      { source: "/docs\\.md", destination: "/md/docs" },
+      { source: "/docs/:path*\\.md", destination: "/md/docs/:path*" },
+      { source: "/:path*\\.md", destination: "/md/:path*" },
     ];
   },
   async headers() {

@@ -1,5 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import {
+  appendVaryAccept,
+  isRscNavigation,
+  PAGE_PRODUCES,
+  preferredType,
+  shouldNegotiatePage,
+} from "@/lib/accept";
+import { notAcceptableProblem, problemResponse } from "@/lib/problem-json";
+
 const isProduction = process.env.NODE_ENV === "production";
 
 /**
@@ -45,7 +54,8 @@ function buildContentSecurityPolicy(nonce: string): string {
 const NON_PAGE_DOCS_SEGMENTS = new Set(["llms.txt", "opengraph-image"]);
 
 /**
- * Build the RFC 8288 `Link` header value implementing llms.txt v2 discovery.
+ * Build the RFC 8288 `Link` header value implementing llms.txt v2 discovery
+ * plus RFC 9727 API catalog discovery.
  *
  * v2 added standard link relations so an agent holding a page can find that
  * page's markdown version, and the llms.txt file covering it, without guessing:
@@ -59,6 +69,9 @@ const NON_PAGE_DOCS_SEGMENTS = new Set(["llms.txt", "opengraph-image"]);
  * the most specific match, docs URLs are described by `/docs/llms.txt` and
  * everything else by the site-wide `/llms.txt`.
  *
+ * `rel="api-catalog"` points at the RFC 9727 linkset so agents that never
+ * parse HTML still find `/openapi.json` and `/mcp`.
+ *
  * @param pathname - Request pathname, before any rewrite is applied.
  * @returns The serialized `Link` header value.
  */
@@ -70,27 +83,46 @@ function buildLlmsTxtLinkHeader(pathname: string): string {
   const isDocs = path === "/docs" || path.startsWith("/docs/");
   const relations: string[] = [];
 
-  // A docs page advertises its markdown sibling. The markdown files, the
+  // A page advertises its markdown sibling. The markdown files, the
   // llms.txt files, and the generated OG images have no sibling of their own.
   const lastSegment = path.slice(path.lastIndexOf("/") + 1);
   if (
-    isDocs &&
     !path.endsWith(".md") &&
-    !NON_PAGE_DOCS_SEGMENTS.has(lastSegment)
+    !NON_PAGE_DOCS_SEGMENTS.has(lastSegment) &&
+    shouldNegotiatePage(path)
   ) {
     relations.push(`<${path}.md>; rel="alternate"; type="text/markdown"`);
   }
 
   relations.push(
     `<${isDocs ? "/docs/llms.txt" : "/llms.txt"}>; rel="describedby"`,
+    `</.well-known/api-catalog>; rel="api-catalog"`,
+    `</openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json;version=3.1"`,
   );
 
   return relations.join(", ");
 }
 
+function applySecurityHeaders(response: NextResponse, nonce: string): void {
+  if (isProduction) {
+    response.headers.set(
+      "content-security-policy",
+      buildContentSecurityPolicy(nonce),
+    );
+  }
+}
+
+function markdownRewritePath(pathname: string): string {
+  const htmlPath = pathname.endsWith(".md")
+    ? pathname.slice(0, -3) || "/"
+    : pathname;
+  return htmlPath === "/" ? "/md" : `/md${htmlPath}`;
+}
+
 /**
- * Next.js Proxy that attaches a fresh CSP nonce to every HTML navigation, and
- * the llms.txt v2 discovery relations to every response.
+ * Next.js Proxy that attaches a fresh CSP nonce to every HTML navigation,
+ * negotiates `Accept: text/markdown`, and adds llms.txt v2 plus API-catalog
+ * discovery relations to every response.
  *
  * A cryptographically random nonce is minted per request, forwarded to the app
  * on the `x-nonce` request header (so the root layout can stamp it onto
@@ -106,9 +138,14 @@ function buildLlmsTxtLinkHeader(pathname: string): string {
  * agents reading a preview deployment should get the same discovery relations
  * as agents reading production. See {@link buildLlmsTxtLinkHeader}.
  *
+ * Markdown negotiation follows acceptmarkdown.com: parse `Accept` by q-value
+ * and specificity, rewrite the canonical URL to `/md/...` when Markdown wins,
+ * return 406 problem+json when the header cannot be satisfied, and always
+ * `Vary: Accept` so CDNs do not mix variants.
+ *
  * @param request - The incoming request.
- * @returns The response with the nonce, the llms.txt relations, and (in
- *   production) the CSP applied.
+ * @returns The response with the nonce, the llms.txt relations, negotiation,
+ *   and (in production) the CSP applied.
  */
 export function proxy(request: NextRequest): NextResponse {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
@@ -123,20 +160,45 @@ export function proxy(request: NextRequest): NextResponse {
     );
   }
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const pathname = request.nextUrl.pathname;
+  const negotiate =
+    shouldNegotiatePage(pathname) && !isRscNavigation(request.headers);
 
-  if (isProduction) {
-    response.headers.set(
-      "content-security-policy",
-      buildContentSecurityPolicy(nonce),
-    );
+  if (negotiate) {
+    const acceptHeader = request.headers.get("accept");
+    const chosen = pathname.endsWith(".md")
+      ? "text/markdown"
+      : preferredType(acceptHeader);
+
+    if (chosen === "text/markdown") {
+      const url = request.nextUrl.clone();
+      url.pathname = markdownRewritePath(pathname);
+      const rewritten = NextResponse.rewrite(url, {
+        request: { headers: requestHeaders },
+      });
+      applySecurityHeaders(rewritten, nonce);
+      rewritten.headers.set("link", buildLlmsTxtLinkHeader(pathname));
+      appendVaryAccept(rewritten.headers);
+      return rewritten;
+    }
+
+    if (chosen === null && acceptHeader) {
+      const problem = problemResponse(
+        notAcceptableProblem(pathname, PAGE_PRODUCES),
+      );
+      const response = new NextResponse(problem.body, {
+        status: 406,
+        headers: problem.headers,
+      });
+      response.headers.set("link", buildLlmsTxtLinkHeader(pathname));
+      return response;
+    }
   }
 
-  response.headers.set(
-    "link",
-    buildLlmsTxtLinkHeader(request.nextUrl.pathname),
-  );
-
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  applySecurityHeaders(response, nonce);
+  response.headers.set("link", buildLlmsTxtLinkHeader(pathname));
+  appendVaryAccept(response.headers);
   return response;
 }
 
