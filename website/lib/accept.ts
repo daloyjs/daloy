@@ -177,6 +177,8 @@ export function shouldNegotiatePage(pathname: string): boolean {
     pathname.startsWith("/docs-md/") ||
     pathname === "/api" ||
     pathname.startsWith("/api/") ||
+    pathname === "/oauth" ||
+    pathname.startsWith("/oauth/") ||
     pathname.startsWith("/.well-known/") ||
     pathname === "/openapi.json" ||
     pathname.endsWith("/llms.txt") ||

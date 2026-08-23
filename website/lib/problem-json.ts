@@ -165,3 +165,24 @@ export function badRequestProblem(
     instance,
   };
 }
+
+/**
+ * 429 problem when a caller has exhausted the advertised rate limit.
+ *
+ * @param instance - Request pathname.
+ * @param retryAfterSec - Seconds the caller should wait (also sent as Retry-After).
+ */
+export function tooManyRequestsProblem(
+  instance: string,
+  retryAfterSec: number,
+): ProblemDetails {
+  return {
+    type: problemType("rate_limited"),
+    title: "Too Many Requests",
+    status: 429,
+    detail: `Rate limit exceeded. Wait ${retryAfterSec} seconds before retrying.`,
+    code: "rate_limited",
+    hint: `Honor Retry-After and the RateLimit headers, then retry. The default quota is documented in GET ${SITE_URL}/openapi.json.`,
+    instance,
+  };
+}

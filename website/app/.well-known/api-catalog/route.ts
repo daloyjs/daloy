@@ -24,7 +24,11 @@ export function GET(): Response {
             type: "application/json",
           },
           {
-            href: `${SITE_URL}/api`,
+            href: `${SITE_URL}/api/v1`,
+            type: "application/json",
+          },
+          {
+            href: `${SITE_URL}/oauth/token`,
             type: "application/json",
           },
           {

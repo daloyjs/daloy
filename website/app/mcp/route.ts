@@ -3,6 +3,11 @@ import { z } from "zod";
 import { getAllDocPages, getDocPage } from "@/lib/docs-content";
 import { rankDocPages, tokenize } from "@/lib/docs-ranking";
 import { SITE_URL } from "@/lib/seo";
+import {
+  SITE_API_RATE_LIMIT,
+  SITE_API_RATE_WINDOW_SEC,
+  SITE_API_VERSION,
+} from "@/lib/site-api";
 
 /**
  * Public Model Context Protocol (MCP) endpoint for the DaloyJS documentation.
@@ -351,6 +356,12 @@ export function GET(): Response {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "no-store",
         allow: "POST, OPTIONS",
+        "API-Version": SITE_API_VERSION,
+        RateLimit: `"default";r=${SITE_API_RATE_LIMIT};t=${SITE_API_RATE_WINDOW_SEC}`,
+        "RateLimit-Policy": `"default";q=${SITE_API_RATE_LIMIT};w=${SITE_API_RATE_WINDOW_SEC}`,
+        "RateLimit-Limit": String(SITE_API_RATE_LIMIT),
+        "RateLimit-Remaining": String(SITE_API_RATE_LIMIT),
+        "RateLimit-Reset": String(SITE_API_RATE_WINDOW_SEC),
         ...CORS_HEADERS,
       },
     }

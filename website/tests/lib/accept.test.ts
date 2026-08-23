@@ -64,6 +64,8 @@ test("API and markdown handler paths skip page negotiation", () => {
   assert.equal(shouldNegotiatePage("/mcp"), false);
   assert.equal(shouldNegotiatePage("/api"), false);
   assert.equal(shouldNegotiatePage("/api/v1"), false);
+  assert.equal(shouldNegotiatePage("/oauth/token"), false);
+  assert.equal(shouldNegotiatePage("/.well-known/oauth-authorization-server"), false);
   assert.equal(shouldNegotiatePage("/md/about"), false);
   assert.equal(shouldNegotiatePage("/openapi.json"), false);
   assert.equal(shouldNegotiatePage("/llms.txt"), false);

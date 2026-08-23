@@ -247,14 +247,14 @@ export default function HomePage() {
               The first TypeScript REST API framework built for secure
               AI-assisted services
             </h1>
-            <p
+            <h2
               className="float-up max-w-3xl text-base font-medium text-foreground/80 text-pretty sm:text-lg"
               style={{ animationDelay: "120ms" }}
             >
               DaloyJS combines runtime portability, contract-first OpenAPI,
               generated typed clients, zero-dependency runtime guardrails, and
               supply-chain-aware project defaults in one framework.
-            </p>
+            </h2>
             <div
               className="float-up mt-2 flex flex-col gap-3 sm:flex-row"
               style={{ animationDelay: "160ms" }}
