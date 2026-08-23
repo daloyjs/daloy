@@ -203,6 +203,72 @@ daloy diff --json openapi.published.json openapi.json`}
 pnpm verify:breaking-changes  # fail CI if the published contract is broken`}
       />
 
+      <h2 id="this-site-runs-the-same-policy">
+        This site runs the same policy
+      </h2>
+      <p>
+        The HTTP APIs on <code>daloyjs.dev</code> itself follow the rules above,
+        so you can watch the headers on a live origin instead of trusting a code
+        sample. Majors live in the URL path (<code>/api/v1</code>), every
+        response echoes <code>API-Version</code>, and the unversioned{" "}
+        <code>/api</code> alias permanently redirects to the current major with
+        RFC 5829 <code>rel=&quot;successor-version&quot;</code> and{" "}
+        <code>rel=&quot;latest-version&quot;</code> link relations.
+      </p>
+      <p>
+        Send <code>API-Version: 1</code> to pin the major you were built
+        against. A value this origin does not serve is a{" "}
+        <code>400 unsupported_api_version</code> problem+json rather than a
+        silent switch to a different shape, so an agent written for a future
+        major fails loudly.
+      </p>
+      <FlowDiagram
+        title="Where the policy is published"
+        caption="One source of truth in lib/site-deprecation.ts feeds all four surfaces, so the headers, the catalog, and the spec cannot drift apart."
+        steps={[
+          { label: "Response headers", detail: "Deprecation, Sunset, Link" },
+          { label: "GET /api/v1", detail: "versioning.surfaces[]" },
+          {
+            label: "GET /openapi.json",
+            detail: "info.x-api-lifecycle",
+            tone: "accent",
+          },
+          { label: "This page", detail: "the prose version", tone: "success" },
+        ]}
+      />
+      <p>
+        A surface on the way out carries the machine signals from the start of
+        its retirement, not at the end of it: an RFC 9745{" "}
+        <code>Deprecation</code> date, a{" "}
+        <code>rel=&quot;deprecation&quot;</code> link back to this page, and a{" "}
+        <code>rel=&quot;successor-version&quot;</code> pointer to the
+        replacement. The legacy <code>/docs-md/*</code> Markdown handler is the
+        live example. An RFC 8594 <code>Sunset</code> date is added only when a
+        retirement is actually scheduled, and never less than 180 days ahead.
+      </p>
+      <CodeBlock
+        language="bash"
+        code={`curl -sI https://daloyjs.dev/docs-md/routing | grep -iE 'deprecation|link'
+# Deprecation: @1787443200
+# Link: <https://daloyjs.dev/docs/api-lifecycle>; rel="deprecation"; type="text/html",
+#       </md>; rel="successor-version", </api/v1>; rel="latest-version"
+
+curl -s https://daloyjs.dev/api/v1 | jq .versioning.surfaces
+curl -s https://daloyjs.dev/openapi.json | jq '.info["x-api-lifecycle"]'`}
+      />
+      <p>
+        Rate limits are published the same way. Every response from these APIs
+        carries the IETF <code>RateLimit</code> and{" "}
+        <code>RateLimit-Policy</code> fields, and a <code>429</code> adds{" "}
+        <code>Retry-After</code> alongside an RFC 9457 problem body, so an agent
+        can self-throttle from the response instead of backing off blindly. See{" "}
+        <Link href={"/docs/api-reference/middleware" as Route}>
+          the middleware reference
+        </Link>{" "}
+        for the <code>rateLimit()</code> middleware that does this in your own
+        app.
+      </p>
+
       <p>
         See also <Link href="/docs/openapi">OpenAPI generation</Link> for how
         the spec is produced and{" "}

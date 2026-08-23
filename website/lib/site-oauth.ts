@@ -25,6 +25,7 @@ import {
   DOCS_READ_SCOPE,
   OAUTH_AS_METADATA_PATH,
   OAUTH_AUTHORIZATION_ENDPOINT,
+  OAUTH_INTROSPECTION_ENDPOINT,
   OAUTH_ISSUER,
   OAUTH_TOKEN_ENDPOINT,
 } from "@/lib/site-api";
@@ -57,6 +58,8 @@ export function buildAuthorizationServerMetadata(): Record<string, unknown> {
     issuer: OAUTH_ISSUER,
     authorization_endpoint: OAUTH_AUTHORIZATION_ENDPOINT,
     token_endpoint: OAUTH_TOKEN_ENDPOINT,
+    introspection_endpoint: OAUTH_INTROSPECTION_ENDPOINT,
+    introspection_endpoint_auth_methods_supported: ["none"],
     scopes_supported: [DOCS_READ_SCOPE],
     response_types_supported: ["token"],
     grant_types_supported: ["client_credentials"],
@@ -70,20 +73,158 @@ export function buildAuthorizationServerMetadata(): Record<string, unknown> {
 }
 
 /**
+ * Resources that publish their own RFC 9728 metadata document.
+ *
+ * RFC 9728 §3.1 locates a resource's metadata by inserting the resource path
+ * after `/.well-known/oauth-protected-resource`, so `https://daloyjs.dev/mcp`
+ * is described at `/.well-known/oauth-protected-resource/mcp`. MCP clients look
+ * that exact URL up before they will attach a token, which is why `/mcp` is
+ * listed here rather than relying on the origin-wide document alone.
+ *
+ * Keys are the resource path with no trailing slash; `/` is the origin-wide
+ * default served at the bare well-known path.
+ */
+const PROTECTED_RESOURCES: Record<string, { name: string; docs: string }> = {
+  "/": {
+    name: "DaloyJS website APIs",
+    docs: `${SITE_URL}/openapi.json`,
+  },
+  "/mcp": {
+    name: "DaloyJS documentation MCP server",
+    docs: `${SITE_URL}/docs/mcp`,
+  },
+  "/api/v1": {
+    name: "DaloyJS website JSON catalog (v1)",
+    docs: `${SITE_URL}/openapi.json`,
+  },
+  "/openapi.json": {
+    name: "DaloyJS website OpenAPI document",
+    docs: `${SITE_URL}/docs/openapi`,
+  },
+};
+
+/**
+ * Resource paths that publish RFC 9728 metadata, excluding the origin-wide
+ * default. Used by the catalog and the OpenAPI document.
+ */
+export const PROTECTED_RESOURCE_PATHS: readonly string[] = Object.keys(
+  PROTECTED_RESOURCES,
+).filter((path) => path !== "/");
+
+/**
  * RFC 9728 protected-resource metadata. `scopes_supported` is the
  * machine-readable permission list agents need; the resource stays usable
  * without a bearer token.
+ *
+ * @param resourcePath - Path of the resource being described, e.g. `/mcp`.
+ *   Defaults to the origin-wide document.
+ * @returns The metadata document, or `null` when no resource is registered at
+ *   that path.
  */
-export function buildProtectedResourceMetadata(): Record<string, unknown> {
+export function buildProtectedResourceMetadata(
+  resourcePath = "/",
+): Record<string, unknown> | null {
+  const normalized =
+    resourcePath.length > 1 && resourcePath.endsWith("/")
+      ? resourcePath.slice(0, -1)
+      : resourcePath;
+  const resource = PROTECTED_RESOURCES[normalized];
+  if (!resource) {
+    return null;
+  }
+
   return {
-    resource: `${SITE_URL}/`,
+    resource: normalized === "/" ? `${SITE_URL}/` : `${SITE_URL}${normalized}`,
     authorization_servers: [OAUTH_ISSUER],
     bearer_methods_supported: ["header"],
     scopes_supported: [DOCS_READ_SCOPE],
-    resource_name: "DaloyJS website APIs",
-    resource_documentation: `${SITE_URL}/openapi.json`,
+    resource_name: resource.name,
+    resource_documentation: resource.docs,
     resource_policy_uri: `${SITE_URL}/privacy`,
   };
+}
+
+/**
+ * RFC 7662 token introspection for a token minted by this origin.
+ *
+ * The authorization server is public and the only scope it issues covers
+ * already-public documentation, so introspection needs no client
+ * authentication. An unparseable, forged, or expired token is reported as
+ * `{ active: false }` with no further detail, exactly as RFC 7662 §2.2
+ * requires, so the endpoint cannot be used as an oracle.
+ *
+ * @param params - `application/x-www-form-urlencoded` fields.
+ * @returns Either the introspection response or an OAuth error to return.
+ */
+export function introspectToken(
+  params: URLSearchParams,
+):
+  | { ok: true; body: Record<string, unknown> }
+  | { ok: false; status: number; body: Record<string, string> } {
+  const token = params.get("token");
+  if (!token) {
+    return {
+      ok: false,
+      status: 400,
+      body: oauthErrorBody(
+        "invalid_request",
+        "token is required. POST token=<access token> as application/x-www-form-urlencoded.",
+      ),
+    };
+  }
+
+  const hint = params.get("token_type_hint");
+  if (hint && hint !== "access_token") {
+    return {
+      ok: false,
+      status: 400,
+      body: oauthErrorBody(
+        "unsupported_token_type",
+        "This authorization server issues access tokens only. Omit token_type_hint or send access_token.",
+      ),
+    };
+  }
+
+  if (!verifyDocsReadAccessToken(token)) {
+    return { ok: true, body: { active: false } };
+  }
+
+  const claims = decodeTokenClaims(token);
+  return {
+    ok: true,
+    body: {
+      active: true,
+      scope: DOCS_READ_SCOPE,
+      token_type: "Bearer",
+      iss: OAUTH_ISSUER,
+      aud: OAUTH_ISSUER,
+      exp: claims?.exp,
+      iat: claims?.iat,
+    },
+  };
+}
+
+/**
+ * Read the `iat` / `exp` claims from a token this origin already verified.
+ *
+ * @param token - Compact JWT whose signature has been checked.
+ * @returns The two timestamps, or `null` when the payload will not parse.
+ */
+function decodeTokenClaims(
+  token: string,
+): { iat?: number; exp?: number } | null {
+  const payload = token.split(".")[1];
+  if (!payload) {
+    return null;
+  }
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      iat?: number;
+      exp?: number;
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -107,9 +248,7 @@ export function issueDocsReadAccessToken(
     }),
   );
   const signingInput = `${header}.${payload}`;
-  const sig = createHmac("sha256", hmacSecret())
-    .update(signingInput)
-    .digest();
+  const sig = createHmac("sha256", hmacSecret()).update(signingInput).digest();
   return `${signingInput}.${base64url(sig)}`;
 }
 
@@ -152,7 +291,10 @@ export function verifyDocsReadAccessToken(token: string): boolean {
     if (payload.scope !== DOCS_READ_SCOPE) {
       return false;
     }
-    if (typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) {
+    if (
+      typeof payload.exp !== "number" ||
+      payload.exp < Math.floor(Date.now() / 1000)
+    ) {
       return false;
     }
     return true;

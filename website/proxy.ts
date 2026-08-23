@@ -8,6 +8,7 @@ import {
   shouldNegotiatePage,
 } from "@/lib/accept";
 import { notAcceptableProblem, problemResponse } from "@/lib/problem-json";
+import { findApiSurface, surfaceLinkRelations } from "@/lib/site-deprecation";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -72,6 +73,12 @@ const NON_PAGE_DOCS_SEGMENTS = new Set(["llms.txt", "opengraph-image"]);
  * `rel="api-catalog"` points at the RFC 9727 linkset so agents that never
  * parse HTML still find `/openapi.json` and `/mcp`.
  *
+ * Versioned and aliased API surfaces additionally carry their lifecycle
+ * relations (`deprecation`, `sunset`, `successor-version`, `latest-version`)
+ * from `lib/site-deprecation.ts`. They are added here rather than only in the
+ * route handler because this proxy owns the `Link` field for those paths, so a
+ * handler-set value would be replaced.
+ *
  * @param pathname - Request pathname, before any rewrite is applied.
  * @returns The serialized `Link` header value.
  */
@@ -99,6 +106,11 @@ function buildLlmsTxtLinkHeader(pathname: string): string {
     `</.well-known/api-catalog>; rel="api-catalog"`,
     `</openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json;version=3.1"`,
   );
+
+  const surface = findApiSurface(path);
+  if (surface) {
+    relations.push(...surfaceLinkRelations(surface));
+  }
 
   return relations.join(", ");
 }

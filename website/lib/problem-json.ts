@@ -167,6 +167,33 @@ export function badRequestProblem(
 }
 
 /**
+ * 400 problem when the caller pins an API major this origin does not serve.
+ *
+ * Returned instead of silently answering with a different major: an agent that
+ * asked for v2 must find out that v2 does not exist, not receive v1 shaped
+ * data it cannot validate.
+ *
+ * @param instance - Request pathname.
+ * @param requested - The rejected `API-Version` request-header value.
+ * @param supported - Majors this origin currently serves.
+ */
+export function unsupportedApiVersionProblem(
+  instance: string,
+  requested: string,
+  supported: readonly string[],
+): ProblemDetails {
+  return {
+    type: problemType("unsupported_api_version"),
+    title: "Unsupported API Version",
+    status: 400,
+    detail: `This origin does not serve API major "${requested}". Supported: ${supported.join(", ")}.`,
+    code: "unsupported_api_version",
+    hint: `Send API-Version: ${supported[0] ?? "1"}, or drop the header and use the versioned path ${SITE_URL}/api/v1. The versioning and deprecation policy is published at GET ${SITE_URL}/api/v1 and ${SITE_URL}/docs/api-lifecycle.`,
+    instance,
+  };
+}
+
+/**
  * 429 problem when a caller has exhausted the advertised rate limit.
  *
  * @param instance - Request pathname.

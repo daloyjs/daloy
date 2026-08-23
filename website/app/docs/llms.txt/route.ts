@@ -1,5 +1,7 @@
 import { getDocsSearchSections } from "@/lib/docs-search";
 import { CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
+import { consumeSiteApiQuota } from "@/lib/site-api-response";
+import { siteApiHeaders } from "@/lib/site-rate-limit";
 
 /**
  * Serve the `/docs/` subpath llms.txt index (https://llmstxt.org, v2).
@@ -15,9 +17,19 @@ import { CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
  * via `getDocsSearchSections`, so this file cannot silently disagree with the
  * sidebar about which pages exist.
  *
- * @returns A `text/plain; charset=utf-8` markdown response.
+ * Responses carry the same RFC RateLimit headers as the JSON APIs, so an agent
+ * that starts here can read the advertised quota before it begins fetching the
+ * pages this file lists.
+ *
+ * @param request - The inbound request, used for the rate-limit key.
+ * @returns A `text/plain; charset=utf-8` markdown response, or 429 problem+json.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const quota = consumeSiteApiQuota(request);
+  if (quota.limited) {
+    return quota.response;
+  }
+
   const sections = await getDocsSearchSections();
 
   const lines: string[] = [
@@ -33,7 +45,7 @@ export async function GET() {
     "",
     `Agents that prefer structured tools over page fetches can query these same docs over the Model Context Protocol: \`${SITE_URL}/mcp\` is a read-only MCP server with \`search_docs\`, \`get_doc\`, and \`list_docs\` tools.`,
     "",
-    "Canonical HTML URLs also negotiate Markdown: send `Accept: text/markdown` (and expect `Vary: Accept`). Website HTTP APIs return RFC 9457 problem+json errors; catalog at `/api`, OpenAPI at `/openapi.json`.",
+    "Canonical HTML URLs also negotiate Markdown: send `Accept: text/markdown` (and expect `Vary: Accept`). Website HTTP APIs return RFC 9457 problem+json errors and RFC RateLimit headers; versioned catalog at `/api/v1` (unversioned `/api` redirects there), OpenAPI at `/openapi.json`, versioning and deprecation policy under `versioning.surfaces` and at `/docs/api-lifecycle`.",
     "",
     "## Developer resources",
     "",
@@ -61,6 +73,7 @@ export async function GET() {
     headers: {
       "content-type": "text/plain; charset=utf-8",
       "cache-control": "public, max-age=3600",
+      ...siteApiHeaders(quota.snapshot),
     },
   });
 }

@@ -1,6 +1,8 @@
 import { BLOG_POSTS } from "@/lib/blog-posts";
 import { getDocsSearchSections } from "@/lib/docs-search";
 import { CORE_PACKAGE_VERSION, SITE_URL } from "@/lib/seo";
+import { consumeSiteApiQuota } from "@/lib/site-api-response";
+import { siteApiHeaders } from "@/lib/site-rate-limit";
 
 /**
  * Entry points that are not docs pages but that an agent reading `llms.txt`
@@ -87,9 +89,19 @@ const PROJECT_LINKS: ReadonlyArray<{
  * should prefer `/docs/llms.txt`, which is what the `rel="describedby"`
  * relation on those pages points at.
  *
- * @returns A `text/plain; charset=utf-8` markdown response.
+ * Responses carry the same RFC RateLimit headers as the JSON APIs, so an agent
+ * that starts here can read the advertised quota before it begins fetching the
+ * pages this file lists.
+ *
+ * @param request - The inbound request, used for the rate-limit key.
+ * @returns A `text/plain; charset=utf-8` markdown response, or 429 problem+json.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const quota = consumeSiteApiQuota(request);
+  if (quota.limited) {
+    return quota.response;
+  }
+
   const sections = await getDocsSearchSections();
 
   const lines: string[] = [
@@ -99,7 +111,7 @@ export async function GET() {
     "",
     `Current release: \`@daloyjs/core@${CORE_PACKAGE_VERSION}\` on npm, published to JSR as \`@daloyjs/daloy\` from the same source. It has zero runtime dependencies. Start a new project with \`pnpm create daloy@latest\`.`,
     "",
-    "Every public page also negotiates Markdown on the same URL: send `Accept: text/markdown` (or append `.md`). Responses set `Vary: Accept`. Errors from the HTTP APIs are RFC 9457 problem+json with `code` and `hint` fields. The JSON catalog is versioned at GET /api/v1 (unversioned /api redirects there). OAuth 2.0 client_credentials at POST /oauth/token issues an optional docs:read Bearer token; metadata lives at /.well-known/oauth-authorization-server and /.well-known/oauth-protected-resource. API responses send RateLimit headers.",
+    "Every public page also negotiates Markdown on the same URL: send `Accept: text/markdown` (or append `.md`). Responses set `Vary: Accept`. Errors from the HTTP APIs are RFC 9457 problem+json with `code` and `hint` fields. The JSON catalog is versioned at GET /api/v1 (unversioned /api redirects there); send `API-Version: 1` to pin the major, and read `versioning.surfaces` for the deprecation and sunset policy. OAuth 2.0 client_credentials at POST /oauth/token issues an optional docs:read Bearer token; check one with POST /oauth/introspect (RFC 7662). Metadata lives at /.well-known/oauth-authorization-server (RFC 8414) and /.well-known/oauth-protected-resource (RFC 9728), with per-resource documents such as /.well-known/oauth-protected-resource/mcp. Every API response sends RFC RateLimit headers, and a 429 adds Retry-After.",
     "",
     "Every docs page is also available as markdown: append `.md` to its URL (the links below point at the markdown versions; drop the `.md` suffix for the canonical HTML).",
     "",
@@ -113,7 +125,8 @@ export async function GET() {
     "",
     `- [DaloyJS API docs](${SITE_URL}/docs/api-reference.md): complete public TypeScript surface (App, routing, middleware, security, adapters). Also at /docs/api and /api-docs.`,
     `- [DaloyJS OpenAPI spec](${SITE_URL}/docs/openapi.md): generate OpenAPI 3.1 from routes. Machine-readable website API catalog: ${SITE_URL}/openapi.json (v1 path ${SITE_URL}/api/v1).`,
-    `- [OAuth 2.0 authorization server](${SITE_URL}/.well-known/oauth-authorization-server): RFC 8414 metadata. Token endpoint ${SITE_URL}/oauth/token (client_credentials, scope docs:read). Protected-resource metadata: ${SITE_URL}/.well-known/oauth-protected-resource.`,
+    `- [OAuth 2.0 authorization server](${SITE_URL}/.well-known/oauth-authorization-server): RFC 8414 metadata. Token endpoint ${SITE_URL}/oauth/token (client_credentials, scope docs:read), introspection at ${SITE_URL}/oauth/introspect. Protected-resource metadata: ${SITE_URL}/.well-known/oauth-protected-resource, per resource at ${SITE_URL}/.well-known/oauth-protected-resource/mcp.`,
+    `- [API versioning and deprecation policy](${SITE_URL}/docs/api-lifecycle.md): how this origin versions (/api/v1 plus the API-Version header) and how retirement is signalled (RFC 9745 Deprecation, RFC 8594 Sunset, rel="successor-version"). Machine-readable at ${SITE_URL}/api/v1 and in openapi.json under info.x-api-lifecycle.`,
     `- [DaloyJS auth docs](${SITE_URL}/docs/auth.md): bearer auth and identity providers (Cognito, Entra ID, Auth0, Okta, Clerk, LoginRadius, Better Auth).`,
     `- [DaloyJS webhooks](${SITE_URL}/docs/webhook-delivery.md): signed outbound webhook delivery. Also at /docs/webhooks.`,
     `- [DaloyJS MCP server](${SITE_URL}/mcp): live docs MCP (\`search_docs\`, \`get_doc\`, \`list_docs\`). Guide: ${SITE_URL}/docs/mcp.md.`,
@@ -159,6 +172,7 @@ export async function GET() {
     headers: {
       "content-type": "text/plain; charset=utf-8",
       "cache-control": "public, max-age=3600",
+      ...siteApiHeaders(quota.snapshot),
     },
   });
 }

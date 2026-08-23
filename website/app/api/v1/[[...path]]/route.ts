@@ -8,11 +8,18 @@ import {
   OAUTH_AS_METADATA_PATH,
   OAUTH_PROTECTED_RESOURCE_PATH,
   OAUTH_TOKEN_ENDPOINT,
-  SITE_API_V1_PATH,
   SITE_API_VERSION,
   SITE_API_VERSIONING_POLICY,
 } from "@/lib/site-api";
-import { consumeSiteApiQuota } from "@/lib/site-api-response";
+import {
+  checkRequestedApiVersion,
+  consumeSiteApiQuota,
+} from "@/lib/site-api-response";
+import {
+  apiLifecycleSummary,
+  findApiSurface,
+  surfaceLinkRelations,
+} from "@/lib/site-deprecation";
 import { siteApiHeaders } from "@/lib/site-rate-limit";
 import { SITE_URL } from "@/lib/seo";
 
@@ -37,9 +44,7 @@ function apiIndex(): Record<string, unknown> {
       "Agent-facing HTTP APIs on daloyjs.dev. Errors are RFC 9457 problem+json with `code` and `hint` fields. Page URLs also negotiate Accept: text/markdown.",
     version: SITE_API_VERSION,
     versioning: {
-      current: SITE_API_VERSION,
-      path: SITE_API_V1_PATH,
-      header: "API-Version",
+      ...apiLifecycleSummary(),
       policy: SITE_API_VERSIONING_POLICY,
     },
     oauth: {
@@ -56,6 +61,7 @@ function apiIndex(): Record<string, unknown> {
       docs: `${SITE_URL}/docs`,
       apiDocs: `${SITE_URL}/docs/api-reference`,
       openApiDocs: `${SITE_URL}/docs/openapi`,
+      lifecycle: `${SITE_URL}/docs/api-lifecycle`,
       authDocs: `${SITE_URL}/docs/auth`,
       webhooks: `${SITE_URL}/docs/webhook-delivery`,
       mcpDocs: `${SITE_URL}/docs/mcp`,
@@ -76,7 +82,19 @@ export async function GET(
 
   const { path } = await params;
   const pathname = pathnameOf(request);
-  const headers = siteApiHeaders(quota.snapshot);
+  const surface = findApiSurface(pathname);
+  const headers = siteApiHeaders(quota.snapshot, {
+    link: [
+      ...(surface ? surfaceLinkRelations(surface) : []),
+      `<${SITE_URL}/openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json;version=3.1"`,
+      `<${SITE_URL}/docs/api-lifecycle>; rel="describedby"; type="text/html"`,
+    ].join(", "),
+  });
+
+  const versionMismatch = checkRequestedApiVersion(request, headers);
+  if (versionMismatch) {
+    return versionMismatch;
+  }
 
   if (path && path.length > 0) {
     return problemResponse(notFoundProblem(pathname), headers);
@@ -85,7 +103,7 @@ export async function GET(
   return Response.json(apiIndex(), {
     headers: {
       "cache-control": "public, max-age=3600",
-      vary: "Accept, Accept-Encoding",
+      vary: "Accept, Accept-Encoding, API-Version",
       ...headers,
     },
   });
