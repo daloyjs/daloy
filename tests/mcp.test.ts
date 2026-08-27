@@ -947,6 +947,94 @@ test("createMcpHandler maps template read failures and non-matching URIs to inva
   assert.match(noMatch.json.error?.message ?? "", /Unknown resource/);
 });
 
+test("resources/read refuses file:// URIs and template path traversal (CWE-22)", async () => {
+  const APP_INFO_MARKER = "should-not-leak";
+  const handler = createMcpHandler({
+    serverInfo: { name: "exfil", version: "1.0.0" },
+    resources: [
+      {
+        uri: "config://app/info",
+        name: "app-info",
+        read: () => ({
+          uri: "config://app/info",
+          mimeType: "application/json",
+          text: JSON.stringify({ kind: "app-info", secret: APP_INFO_MARKER }),
+        }),
+      },
+    ],
+    resourceTemplates: [
+      {
+        uriTemplate: "db://records/{id}",
+        name: "record-by-id",
+        read: (uri, variables) => ({
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ kind: "record", id: variables.id ?? "" }),
+        }),
+      },
+    ],
+  });
+
+  const listed = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "resources/read",
+    params: { uri: "config://app/info" },
+  });
+  assert.equal(listed.json.error, undefined);
+  assert.match(listed.json.result.contents[0].text, new RegExp(APP_INFO_MARKER));
+
+  const passwd = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "resources/read",
+    params: { uri: "file:///etc/passwd" },
+  });
+  assert.equal(passwd.json.error?.code, -32602);
+  assert.equal(JSON.stringify(passwd.json).includes("root:"), false);
+
+  // `{id}` is one URI segment (`[^/]+`). Slash-bearing traversal cannot match
+  // the template, and percent-encoded dots are a literal id — never decoded
+  // into `../` that could walk onto another resource.
+  const traversalUris = [
+    "db://records/../../config/app/info",
+    "db://records/%2e%2e%2f%2e%2e%2fsecret",
+    "db://records/..%5c..%5csecret",
+    "config://app/../info",
+    "config://app/info%00.json",
+  ];
+  for (const [index, uri] of traversalUris.entries()) {
+    const res = await rpc(handler, {
+      jsonrpc: "2.0",
+      id: index + 10,
+      method: "resources/read",
+      params: { uri },
+    });
+    const envelope = JSON.stringify(res.json);
+    const contents = res.json.result?.contents;
+    const contentsText =
+      Array.isArray(contents) && typeof contents[0]?.text === "string" ? contents[0].text : "";
+    assert.equal(
+      envelope.includes(APP_INFO_MARKER) || contentsText.includes(APP_INFO_MARKER),
+      false,
+      `traversal URI leaked app-info: ${uri}`
+    );
+    assert.notEqual(res.res.status, 500, `traversal URI crashed: ${uri}`);
+  }
+
+  const encoded = await rpc(handler, {
+    jsonrpc: "2.0",
+    id: 20,
+    method: "resources/read",
+    params: { uri: "db://records/%2e%2e%2fsecret" },
+  });
+  assert.equal(encoded.json.error, undefined, "a single-segment encoded id still matches the template");
+  assert.deepEqual(JSON.parse(encoded.json.result.contents[0].text), {
+    kind: "record",
+    id: "%2e%2e%2fsecret",
+  });
+});
+
 test("createMcpHandler refuses duplicate, unterminated, and operator URI templates", () => {
   const base = { serverInfo: { name: "x", version: "1.0.0" } };
   const read = () => ({ uri: "u", text: "" });

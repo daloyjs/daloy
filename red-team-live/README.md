@@ -108,6 +108,35 @@ It prints a bounty-hunter-style report and exits non-zero if any finding is
 `VULNERABLE`. The current run is **196 probes over the wire** across **three**
 target apps (primary, `except()` second port, and `trustedProxies` third port).
 
+## Sibling batteries
+
+`run.ts` is the main campaign; six sibling batteries run the same way
+(`node --import tsx red-team-live/<file>.ts`) and each exits non-zero on any
+`VULNERABLE` finding:
+
+- `skill-attacks.ts` — probes mapped to the `.claude/skills` offensive
+  playbooks (cure53 / Trail of Bits patterns).
+- `extended-attacks.ts`, `custom-attacks.ts`, `blackhat-attacks.ts` —
+  off-script parser-differential, business-logic, and campaign-style waves.
+- `skill-wave2-attacks.ts` (`pnpm red-team:live:wave2`) — second skill wave
+  against a loopback-only bookstore (`bookstore-target.ts`) plus `target.ts`,
+  covering CORS/headers/clickjacking, HPP, cache poisoning/deception, XXE,
+  deserialization, race, JWT, CSWSH, CSRF, IDOR/BOLA, smuggling, and the
+  production refuse-to-boot of `cors({ origin: "*" })`.
+- `mcp-attacks.ts` (`pnpm red-team:live:mcp`) — attacks the **MCP surface**:
+  it spawns `mcp-target.ts` (a daloyjs app exposing a bearer-authenticated
+  Streamable HTTP MCP endpoint) and fires tool-poisoning hygiene scans,
+  tool-call abuse (type confusion, mass-assignment args, prototype-pollution
+  keys, oversized bodies), resource-exfiltration attempts (`file://`,
+  template path traversal), prompt abuse, JSON-RPC protocol abuse (downgrade,
+  header/body disagreement, batch, notification storms, oversized
+  `requestState`), and DNS-rebinding Origin probes over the wire. Driven by
+  the community skill `auditing-mcp-servers-for-tool-poisoning`
+  (mukul975/Anthropic-Cybersecurity-Skills). The protocol and URI-matching
+  classes are also locked in-process by `tests/mcp.test.ts` and
+  `tests/mcp-2026-07-28.test.ts` so they run on every PR; this battery is the
+  real-socket complement (Origin vs Host, 413 keep-alive, process survival).
+
 ## What is covered live vs. in-process
 
 This harness fires every attack class from the `tests/red-team-attacks-*.test.ts`
@@ -136,5 +165,6 @@ That fix has its own regression test in
 [`tests/node-adapter.test.ts`](../tests/node-adapter.test.ts).
 
 > This directory is not part of the published package (`files` in
-> `package.json` ships only `dist/`, `bin/`, `README.md`) and is excluded from
-> the build/typecheck.
+> `package.json` ships only `dist/`, `bin/`, `README.md`). It is type-checked
+> via `pnpm typecheck` / `pnpm typecheck:red-team-live` (`red-team-live/tsconfig.json`)
+> but is not part of the `tsc` build that emits `dist/`.

@@ -740,28 +740,59 @@ async function statefulMiddleware() {
     verdict: bomb.status === 413 ? "DEFENDED" : "VULNERABLE",
   });
 
+  // Wave 5 put verified-JWT auth on /pay: the two tenants are real logins
+  // (alice / bob), not arbitrary Bearer strings. Each identity logs in through
+  // its own stable X-Forwarded-For hop (mirroring run.ts) so the brute-force
+  // campaigns elsewhere in this file can never exhaust these buckets.
+  const loginAs = async (user: string, pass: string, proxyHop: string): Promise<string> => {
+    const r = await http("POST", "/login", {
+      headers: { "content-type": "application/json", "x-forwarded-for": proxyHop },
+      body: JSON.stringify({ user, pass }),
+    });
+    if (r.status !== 200)
+      throw new Error(`loginAs(${user}) failed with ${r.status}: ${r.text.slice(0, 120)}`);
+    return JSON.parse(r.text).token as string;
+  };
+  const [tokA, tokB] = await Promise.all([
+    loginAs("alice", "correct-horse-battery", "10.0.0.1"),
+    loginAs("bob", "bob-hunter2-passphrase", "10.0.0.2"),
+  ]);
   const pay = (key: string, auth: string, amount = 10) =>
     http("POST", "/pay", {
       headers: { "content-type": "application/json", "idempotency-key": key, authorization: auth },
       body: JSON.stringify({ amount }),
     });
-  const a1 = await pay("k1", "Bearer USER_A");
-  const replay = await pay("k1", "Bearer USER_A");
-  const reuse = await pay("k1", "Bearer USER_A", 999);
-  const crossTenant = await pay("k1", "Bearer USER_B");
-  const aOwner = JSON.parse(a1.text).owner;
-  const bOwner = JSON.parse(crossTenant.text).owner ?? "";
+  const a1 = await pay("k1", `Bearer ${tokA}`);
+  const replay = await pay("k1", `Bearer ${tokA}`);
+  const reuse = await pay("k1", `Bearer ${tokA}`, 999);
+  const crossTenant = await pay("k1", `Bearer ${tokB}`);
+  // Parse defensively: a 401/500 must record VULNERABLE, not crash the battery
+  // with exit 2 before the verdict is written.
+  const ownerOf = (text: string): string => {
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (parsed && typeof parsed === "object" && "owner" in parsed) {
+        const owner = (parsed as { owner: unknown }).owner;
+        return typeof owner === "string" ? owner : "";
+      }
+    } catch {
+      /* non-JSON error page */
+    }
+    return "";
+  };
+  const aOwner = ownerOf(a1.text);
+  const bOwner = ownerOf(crossTenant.text);
   record({
     category: cat,
     title: "Idempotency replay + cross-tenant response disclosure (CWE-524)",
     severity: "high",
     attack: "Replay a key; reuse with a new body; reuse another user's key",
-    observed: `replayed=${replay.headers.get("idempotency-replayed")}, key+newbody=${reuse.status}, B-got-own=${bOwner !== aOwner}`,
+    observed: `replayed=${replay.headers.get("idempotency-replayed")}, key+newbody=${reuse.status}, alice=${aOwner}, bob-got=${bOwner}`,
     verdict:
       replay.headers.get("idempotency-replayed") &&
       reuse.status === 422 &&
-      bOwner !== aOwner &&
-      bOwner === "Bearer USER_B"
+      aOwner === "alice" &&
+      bOwner === "bob"
         ? "DEFENDED"
         : "VULNERABLE",
   });

@@ -418,11 +418,26 @@ async function wireLevel(port: number) {
 async function businessLogic() {
   const cat = "Business-logic validation gaps";
 
+  // Wave 5 put verified-JWT auth on /pay: log in as alice first (own
+  // X-Forwarded-For hop so the dosVectors() brute-force burst — which logs
+  // in without XFF and keys on the direct peer — can never exhaust this
+  // bucket). Without a token every probe below would 401 at the auth wall
+  // and never exercise the schema boundary it claims to test.
+  const login = await http("POST", "/login", {
+    headers: { "content-type": "application/json", "x-forwarded-for": "10.0.0.1" },
+    body: JSON.stringify({ user: "alice", pass: "correct-horse-battery" }),
+  });
+  if (login.status !== 200) {
+    throw new Error(`alice login failed with ${login.status}: ${login.text.slice(0, 120)}`);
+  }
+  const token = JSON.parse(login.text).token as string;
+  const auth = { authorization: `Bearer ${token}` };
+
   // Regression guard: the /pay route now constrains amount to a finite, safe,
   // positive number capped at a domain ceiling. A negative amount (refund-fraud
   // / balance-manipulation class) MUST be rejected at the schema boundary.
   const neg = await http("POST", "/pay", {
-    headers: { "content-type": "application/json", "idempotency-key": "custom-negative" },
+    headers: { "content-type": "application/json", "idempotency-key": "custom-negative", ...auth },
     body: JSON.stringify({ amount: -100 }),
   });
   record({
@@ -431,12 +446,12 @@ async function businessLogic() {
     severity: "high",
     attack: "POST /pay {amount:-100}",
     observed: `status ${neg.status}, body=${neg.text.slice(0, 100)}`,
-    verdict: neg.status >= 400 ? "DEFENDED" : "VULNERABLE",
+    verdict: neg.status === 422 ? "DEFENDED" : "VULNERABLE",
   });
 
   // Extreme positive amount must also be rejected (overflow / out-of-domain).
   const huge = await http("POST", "/pay", {
-    headers: { "content-type": "application/json", "idempotency-key": "custom-huge" },
+    headers: { "content-type": "application/json", "idempotency-key": "custom-huge", ...auth },
     body: JSON.stringify({ amount: 1e308 }),
   });
   record({
@@ -445,13 +460,13 @@ async function businessLogic() {
     severity: "medium",
     attack: "POST /pay {amount:1e308}",
     observed: `status ${huge.status}, body=${huge.text.slice(0, 100)}`,
-    verdict: huge.status >= 400 ? "DEFENDED" : "VULNERABLE",
+    verdict: huge.status === 422 ? "DEFENDED" : "VULNERABLE",
   });
 
   // Happy path: a legitimate positive amount must still be accepted, proving
   // the tightened schema did not over-block valid payments.
   const ok = await http("POST", "/pay", {
-    headers: { "content-type": "application/json", "idempotency-key": "custom-valid" },
+    headers: { "content-type": "application/json", "idempotency-key": "custom-valid", ...auth },
     body: JSON.stringify({ amount: 100 }),
   });
   record({
