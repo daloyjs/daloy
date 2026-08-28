@@ -26,13 +26,14 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Allow RFC 6455 WebSocket test vectors in WebSocket tests."
+description = "Allow RFC 6455 WebSocket test vectors (the spec's sample nonce `dGhlIHNhbXBsZSBub25jZQ==` and its matching accept key). `Sec-WebSocket-Key` is a per-handshake nonce the client generates in the clear, not a credential. Covers unit tests and live red-team drivers that open a raw upgrade with the same vector."
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "match"
 paths = [
   '''(?:^|/)tests/websocket(?:-cswsh)?\.test\.ts$''',
   '''(?:^|/)tests/node-adapter\.test\.ts$''',
+  '''(?:^|/)red-team-live/[^/]+\.ts$''',
 ]
 regexes = [
   '''(?i)(?:sec-websocket-key["': =]+|acceptKey,?\s*)(?:"|')?(?:dGhlIHNhbXBsZSBub25jZQ==|s3pPLMBiTxaQ9kYGzzhZRbK\+xOo=)(?:"|')?''',
