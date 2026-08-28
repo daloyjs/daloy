@@ -84,6 +84,7 @@ export const docsNav: DocsNavSection[] = [
       { title: "WebSocket primitives", href: "/docs/websocket" },
       { title: "AsyncAPI for WebSockets", href: "/docs/asyncapi" },
       { title: "Scheduled tasks (cron)", href: "/docs/scheduler" as Route },
+      { title: "Background jobs", href: "/docs/jobs" as Route },
       {
         title: "Modular monolith",
         href: "/docs/architecture/modular-monolith",

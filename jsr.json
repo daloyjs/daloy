@@ -35,6 +35,7 @@
     "./fetch-resilience": "./src/fetch-resilience.ts",
     "./webhook-delivery": "./src/webhook-delivery.ts",
     "./scheduler": "./src/scheduler.ts",
+    "./jobs": "./src/jobs.ts",
     "./mtls": "./src/mtls.ts",
     "./http-signatures": "./src/http-signatures.ts",
     "./auto-ban": "./src/auto-ban.ts",

@@ -42,6 +42,7 @@ The typed Hey API SDK is generated outside Deno (Hey API has no Deno entrypoint 
 7. Keep operation IDs stable and examples schema-valid; `deno task contract` must pass after route, metadata, or OpenAPI-facing changes.
 8. Every new route ships with a test that covers a happy path and at least one unhappy path.
 9. After any route change: `deno task gen:openapi && deno task contract && deno task typecheck && deno task test`.
+10. Side effects that must outlive a request: enqueue a job (`app.useJobs` + idempotency key); pattern in the skill.
 
 ## Secure-by-default (do not let an AI strip these)
 
@@ -63,4 +64,4 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - Bug fixes include a regression test.
 - Use `deno task ...`, not `npm`/`pnpm`. There is no `package.json` here.
 
-For the full workflow — adding routes step-by-step, schema conventions, testing patterns, security guidance, and deployment notes — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).
+For the full workflow — routes, background jobs, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

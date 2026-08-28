@@ -170,6 +170,10 @@
       "types": "./dist/scheduler.d.ts",
       "import": "./dist/scheduler.js"
     },
+    "./jobs": {
+      "types": "./dist/jobs.d.ts",
+      "import": "./dist/jobs.js"
+    },
     "./mtls": {
       "types": "./dist/mtls.d.ts",
       "import": "./dist/mtls.js"

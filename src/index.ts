@@ -271,6 +271,34 @@ export type {
   CronFields,
 } from "./scheduler.js";
 export {
+  createJobQueue,
+  createJobWorker,
+  computeBackoffMs,
+  jobIdempotencyKey,
+  MemoryJobStore,
+  JobConfigError,
+  JobIdempotencyConflictError,
+  JobFatalError,
+  JobTimeoutError,
+} from "./jobs.js";
+export type {
+  Job,
+  JobStatus,
+  JobStore,
+  JobQueue,
+  JobQueueOptions,
+  JobWorker,
+  JobWorkerOptions,
+  JobContext,
+  JobHandler,
+  JobHandlerMap,
+  JobBackoffOptions,
+  EnqueueOptions,
+  EnqueueResult,
+  MemoryJobStoreOptions,
+  JobConfigErrorCode,
+} from "./jobs.js";
+export {
   clientCertAuth,
   setClientCertificate,
   getClientCertificate,

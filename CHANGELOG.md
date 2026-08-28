@@ -17,6 +17,18 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Added
+
+- **Background jobs (queue-agnostic)** — `createJobQueue`, `createJobWorker`,
+  `MemoryJobStore`, and `JobStore` SPI at `@daloyjs/core/jobs` (also exported
+  from `@daloyjs/core`). Enqueue JSON jobs with idempotency keys, delayed
+  `runAt`, retries with full-jitter backoff, leases/heartbeats, and dead
+  letters. `app.useJobs({ store, handlers, startWorker })` drains the worker
+  on graceful shutdown. `app.cronEnqueue()` turns a scheduler tick into an
+  idempotent enqueue so multi-replica crons do not double-fire. Zero runtime
+  dependencies; durable backends are user-supplied `JobStore` adapters.
+  This is not a workflow/replay engine.
+
 ## [1.2.1] - 2026-08-20
 
 **OTLP production gaps and Prometheus naming.** Patch on 1.2.0: isolate

@@ -17,6 +17,11 @@ const STATIC_PATHS: Array<{
   { path: "/privacy", changeFrequency: "yearly", priority: 0.6 },
   { path: "/about-the-name", changeFrequency: "yearly", priority: 0.5 },
   {
+    path: "/blog/background-jobs-that-outlive-the-request",
+    changeFrequency: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/blog/daloyjs-1-0-0-the-bugs-were-in-the-wiring",
     changeFrequency: "monthly",
     priority: 0.7,
@@ -330,6 +335,7 @@ const STATIC_PATHS: Array<{
   { path: "/docs/fetch-resilience", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/webhook-delivery", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/scheduler", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/docs/jobs", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/mtls", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/http-signatures", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs/auto-ban", changeFrequency: "monthly", priority: 0.8 },

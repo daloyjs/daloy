@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel** on the **Node.js runtime**. **Contract-first**: routes use validation schemas (Zod here; DaloyJS also supports Standard Schema-compatible validators) and generate OpenAPI 3.1. With `docs: true`, DaloyJS auto-mounts `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
+A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel** on the **Node.js runtime**. **Contract-first**: routes use validation schemas (Zod here; DaloyJS also supports Standard Schema-compatible validators) and generate OpenAPI 3.1. `docs: true` auto-mounts `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
 
 - Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).
 - Runtime: Vercel Node.js Functions on Fluid Compute (Web Standard `Request`/`Response`).
@@ -14,7 +14,7 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel** on the **Node.j
 
 ## Commands
 
-- `pnpm dev` — local Node dev server (`src/dev.ts`) on http://localhost:3000 (no `vercel dev` / login needed; serves the same app the Vercel Function runs)
+- `pnpm dev` — local Node dev server (`src/dev.ts`) on http://localhost:3000 (no `vercel dev` needed)
 - `pnpm typecheck` — `tsc --noEmit`
 - `pnpm test` — run test suite
 - `pnpm contract` — run `daloy inspect --check api/index.ts`
@@ -51,6 +51,7 @@ You import the file you see. Vercel resolves `.ts` at deploy time; Node runs it 
 7. Keep a single `api/index.ts` entry and the `vercel.json` `/(.*)` → `/api` rewrite so DaloyJS handles all routing at the site root.
 8. Keep operation IDs stable and examples schema-valid; `pnpm contract` must pass after route, metadata, or OpenAPI-facing changes.
 9. Every new route ships with a test that covers a happy path and at least one unhappy path.
+10. Side effects that must outlive a request: `app.useJobs` + remote store; enqueue only, no worker loop in the Function.
 
 ## Secure-by-default (do not let an AI strip these)
 
@@ -73,4 +74,4 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - For deploys, ensure the user has run `vercel login`; do not authenticate on their behalf.
 - Never bypass safety checks without a clear reason.
 
-For the full workflow — adding routes step-by-step, schema conventions, testing patterns, security guidance, and deployment notes — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).
+For the full workflow — routes, background jobs, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

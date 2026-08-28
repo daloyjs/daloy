@@ -108,6 +108,18 @@ import {
   type TaskDefinition,
   type TaskHandler,
 } from "./scheduler.js";
+import {
+  createJobQueue,
+  createJobWorker,
+  JobConfigError,
+  MemoryJobStore,
+  type JobHandler,
+  type JobQueue,
+  type JobQueueOptions,
+  type JobStore,
+  type JobWorker,
+  type JobWorkerOptions,
+} from "./jobs.js";
 import { securitySchemeRequiresPayloadAuth } from "./security-schemes.js";
 import { assertBehindProxy, type BehindProxyConfig } from "./conn-info.js";
 
@@ -1532,6 +1544,13 @@ export class App<
    * is tied to graceful shutdown.
    */
   private scheduler?: Scheduler;
+  /**
+   * Job queue / worker attached by {@link App.useJobs}. Both stay `undefined`
+   * unless the app opts in — serverless isolates must never start a poll
+   * loop implicitly.
+   */
+  private jobQueue?: JobQueue;
+  private jobWorkerRef?: JobWorker;
   /** Idle-connection close hooks (adapter-registered, sync). */
   private idleConnectionCloseHooks: Array<() => void> = [];
   private pluginInstalledListeners: Array<
@@ -3447,6 +3466,187 @@ export class App<
    */
   get scheduledTasks(): Scheduler | undefined {
     return this.scheduler;
+  }
+
+  /**
+   * Attach a queue-agnostic background-job queue (and optionally a worker)
+   * to this app. Opt-in by design: nothing in `new App()` starts a poll
+   * loop, so serverless isolates that only ever *enqueue* never pay for (or
+   * accidentally run) a worker.
+   *
+   * The queue answers *&ldquo;run this work somewhere, eventually&rdquo;* —
+   * durable, retried, at-least-once units of `{ name, payload }` that
+   * outlive the HTTP request and, with a durable {@link JobStore} adapter,
+   * the process itself. This is not a workflow engine: there is no replay,
+   * no durable function, no `await sleep("7 days")`.
+   *
+   * - `startWorker: true` creates a {@link JobWorker} over the same store,
+   *   starts it, and registers an `onClose` hook so in-flight jobs are
+   *   drained (then aborted past the grace period) on graceful shutdown.
+   *   Use it on long-lived Node/Bun/Deno processes only — never on Lambda /
+   *   Cloudflare Workers isolates.
+   * - {@link MemoryJobStore} under production config logs a high-severity
+   *   warning (it is process-local and loses every job on restart); pass
+   *   `strictProduction: true` to refuse to boot instead.
+   *
+   * @example
+   * ```ts
+   * app.useJobs({
+   *   store: new MemoryJobStore(), // production: your Redis/Postgres JobStore
+   *   handlers: {
+   *     "email.welcome": async ({ job, signal }) => {
+   *       await sendEmail(job.payload, { signal });
+   *     },
+   *   },
+   *   startWorker: true,
+   * });
+   *
+   * app.post("/users", contract, async (ctx) => {
+   *   const user = await db.insertUser(ctx.body);
+   *   await app.jobs!.enqueue({
+   *     name: "email.welcome",
+   *     payload: { userId: user.id },
+   *     idempotencyKey: jobIdempotencyKey({ tenant: ctx.state.tenant, name: "email.welcome", key: user.id }),
+   *   });
+   *   return { status: 201 as const, body: user };
+   * });
+   * ```
+   *
+   * @param opts - Store, optional handlers, worker and queue tuning.
+   * @returns This `App` instance for chaining.
+   * @throws {@link JobConfigError} when jobs are already configured, when
+   *   `startWorker` lacks handlers, or when `strictProduction` rejects a
+   *   {@link MemoryJobStore} under production config.
+   * @since 1.3.0
+   */
+  useJobs(opts: {
+    store: JobStore;
+    handlers?: Record<string, JobHandler<any>>;
+    startWorker?: boolean;
+    worker?: Omit<JobWorkerOptions, "queue" | "handlers">;
+    queue?: Omit<JobQueueOptions, "store">;
+    strictProduction?: boolean;
+  }): this {
+    if (this.jobQueue !== undefined) {
+      throw new JobConfigError(
+        "invalid_option",
+        "app.useJobs() was called twice; jobs are already configured on this app."
+      );
+    }
+    if (opts.store instanceof MemoryJobStore && this.isProduction()) {
+      const message =
+        "app.useJobs(): MemoryJobStore is not durable — jobs are lost on process restart " +
+        "and invisible to other replicas. Supply a shared JobStore (Redis/Postgres/SQS adapter) " +
+        "in production, or pass strictProduction: false to keep this warning-only posture.";
+      if (opts.strictProduction === true) {
+        throw new JobConfigError("invalid_option", message);
+      }
+      this.log.warn({ event: "jobs.memory_store_production", component: "jobs" }, message);
+    }
+    const logger = this.log.child({ component: "jobs" });
+    const queue = createJobQueue({ store: opts.store, logger, ...opts.queue });
+    let worker: JobWorker | undefined;
+    if (opts.startWorker === true) {
+      const handlers = opts.handlers;
+      if (handlers === undefined || Object.keys(handlers).length === 0) {
+        throw new JobConfigError(
+          "invalid_option",
+          "app.useJobs(): startWorker: true requires a non-empty handlers map."
+        );
+      }
+      worker = createJobWorker({
+        ...opts.worker,
+        queue,
+        handlers,
+        logger: opts.worker?.logger ?? logger,
+      });
+      worker.start();
+      // Drain the worker during the post-drain close phase so an in-flight
+      // job settles (or fails back to the queue) alongside other resources.
+      const startedWorker = worker;
+      this.onClose(() => startedWorker.stop());
+    }
+    this.jobQueue = queue;
+    this.jobWorkerRef = worker;
+    return this;
+  }
+
+  /**
+   * The {@link JobQueue} attached by {@link App.useJobs}, or `undefined`
+   * when jobs are not configured. Route handlers enqueue through this;
+   * delivery is at-least-once, so handlers must be idempotent.
+   *
+   * @since 1.3.0
+   */
+  get jobs(): JobQueue | undefined {
+    return this.jobQueue;
+  }
+
+  /**
+   * The {@link JobWorker} created by {@link App.useJobs} with
+   * `startWorker: true`, or `undefined`. Exposed for inspection
+   * (`getState()`) and tests (`runOnce()`); the lifecycle is owned by the app.
+   *
+   * @since 1.3.0
+   */
+  get jobWorker(): JobWorker | undefined {
+    return this.jobWorkerRef;
+  }
+
+  /**
+   * Register a cron task whose tick enqueues a job instead of running the
+   * side effect in-process. This is the production posture for scheduled
+   * work with global side effects (nightly reconciliation, invoice runs):
+   * every replica may tick, but the deterministic idempotency key
+   * `cron:{taskName}:{floor(scheduledFor / tickGranularity)}` collapses the
+   * duplicate enqueues into one job, and exactly one worker claims it.
+   *
+   * `tickGranularity` is the task's `intervalMs` for interval schedules and
+   * one minute for cron expressions (the finest cadence a cron expression
+   * can fire), so two replicas ticking the same slot always derive the same
+   * key. Use plain {@link App.cron} for process-local maintenance (cache
+   * sweeps that must happen in *this* process); use `cronEnqueue` for work
+   * that must happen once, cluster-wide, and survive a restart.
+   *
+   * @example
+   * ```ts
+   * app.cronEnqueue(
+   *   { name: "nightly-reconcile", cron: "0 2 * * *" },
+   *   { name: "ops.reconcile", payload: {} },
+   * );
+   * ```
+   *
+   * @param def - The task definition (schedule), same shape as {@link App.cron}.
+   * @param job - The job to enqueue on each tick. `payload` defaults to
+   *   `{ scheduledFor: <ISO time of the tick> }`.
+   * @returns This `App` instance for chaining.
+   * @throws {@link JobConfigError} (`store_required`) when called before
+   *   {@link App.useJobs} — fail fast at registration, not at the first tick.
+   * @since 1.3.0
+   */
+  cronEnqueue(
+    def: TaskDefinition,
+    job: { name: string; payload?: unknown; queue?: string; priority?: number }
+  ): this {
+    const queue = this.jobQueue;
+    if (queue === undefined) {
+      throw new JobConfigError(
+        "store_required",
+        "app.cronEnqueue() requires app.useJobs() first: attach a JobStore before scheduling job-producing ticks."
+      );
+    }
+    const granularityMs =
+      def.intervalMs !== undefined && def.intervalMs > 0 ? def.intervalMs : 60_000;
+    return this.cron(def, async ({ name, scheduledFor }) => {
+      const slot = Math.floor(scheduledFor.getTime() / granularityMs);
+      await queue.enqueue({
+        name: job.name,
+        payload: job.payload ?? { scheduledFor: scheduledFor.toISOString() },
+        ...(job.queue !== undefined ? { queue: job.queue } : {}),
+        ...(job.priority !== undefined ? { priority: job.priority } : {}),
+        idempotencyKey: `cron:${encodeURIComponent(name)}:${slot}`,
+      });
+    });
   }
 
   private registerHealthRoute(

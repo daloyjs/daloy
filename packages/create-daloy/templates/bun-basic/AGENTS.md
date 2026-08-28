@@ -53,6 +53,7 @@ Do not write `.js` here — that's the Node NodeNext convention and will fail to
 6. Keep operation IDs stable and examples schema-valid; `bun run contract` must pass after route, metadata, or OpenAPI-facing changes.
 7. Every new route ships with a test that covers a happy path and at least one unhappy path.
 8. After any route change: `bun run gen:openapi && bun run gen:client && bun run contract && bun run typecheck && bun test`.
+9. Side effects that must outlive a request: enqueue a job (`app.useJobs` + idempotency key); pattern in the skill.
 
 ## Secure-by-default (do not let an AI strip these)
 
@@ -74,4 +75,4 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - Bug fixes include a regression test.
 - Never bypass safety checks without a clear reason.
 
-For the full workflow — adding routes step-by-step, schema conventions, testing patterns, security guidance, and deployment notes — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).
+For the full workflow — routes, background jobs, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

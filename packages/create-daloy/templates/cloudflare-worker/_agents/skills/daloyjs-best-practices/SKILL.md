@@ -4,7 +4,8 @@ description: >-
   Build, test, and harden this DaloyJS REST API on Cloudflare Workers. Use
   when the user asks to add or change an endpoint, route, Zod/Standard
   Schema, middleware, error handling, Worker binding (KV, D1, R2, Queues,
-  env), contract gate, auth, or rate limit. Also use for phrasing like
+  env), contract gate, auth, rate limit, or background jobs. Also use for
+  phrasing like
   "add GET /...", "new route", "wrangler", "fix the 401", or "add a KV
   binding". Do not use for frontend UI, infra-only work, or unrelated
   docs.
@@ -225,6 +226,49 @@ Add CORS only when needed, with an explicit `origin` allowlist.
    closure or factory argument. **Never read bindings via globals.**
 4. Store secrets via `wrangler secret put` — they appear on `env` but
    are not committed to `wrangler.toml`.
+
+## Background jobs
+
+Side effects that must outlive the HTTP request (welcome emails, webhook
+fan-out, thumbnails, nightly reconciliation) belong in a **job**, not
+inline in the handler and not in a fire-and-forget promise.
+
+- `app.useJobs({ store, handlers, startWorker })` wires a queue (and an
+  optional in-process worker) into the app lifecycle, including the
+  graceful-shutdown drain.
+- Enqueue **after** the DB commit, always with an idempotency key:
+
+```ts
+import { jobIdempotencyKey } from "@daloyjs/core";
+
+await app.jobs!.enqueue({
+  name: "email.welcome",
+  payload: { userId: user.id, to: user.email }, // ids, never file bytes
+  idempotencyKey: jobIdempotencyKey({ name: "email.welcome", key: user.id }),
+});
+```
+
+- Delivery is **at-least-once**: handlers must be idempotent. Pass a key
+  through to downstream APIs (e.g. Stripe's `Idempotency-Key`) when a
+  duplicate run would move money or send email.
+- Throw `JobFatalError` for permanent failures (no retry); any other throw
+  retries with full-jitter backoff, then dead-letters.
+- `app.cronEnqueue(def, { name, payload })` turns a cron tick into an
+  idempotent enqueue. Use it for side effects that must run once
+  cluster-wide; keep plain `app.cron()` for process-local maintenance
+  (other replicas have their own memory to sweep).
+- Payloads are plain JSON capped at 64 KiB: enqueue ids and blob URLs,
+  never file contents.
+- `MemoryJobStore` is for tests (`worker.runOnce()`) and single-process
+  dev. Production needs a shared `JobStore` adapter (Redis/Postgres/SQS)
+  in app code; `useJobs` warns on Memory in production, and
+  `strictProduction: true` refuses to boot.
+- A Workers isolate **enqueues only**: never `startWorker: true` here —
+  the isolate is torn down once the response flushes. Run the worker as a
+  separate long-lived Node service (same app code, `useJobs` with
+  `startWorker`) against the same remote store.
+
+Full reference: <https://daloyjs.dev/docs/jobs>
 
 ## Testing best practices
 

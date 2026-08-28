@@ -2434,6 +2434,24 @@ test("every template ships AGENTS.md and SKILL.md helper files for AI coding age
       `${template} AGENTS.md should link to the new SKILL.md path`
     );
     assert.match(agents, /DaloyJS/, `${template} AGENTS.md should describe the project`);
+    // Background jobs ship in @daloyjs/core 1.3.0: the AGENTS.md tripwire
+    // routes durable side effects to `app.useJobs`, and the skill carries
+    // the full pattern (enqueue-after-commit, at-least-once + idempotency).
+    assert.match(
+      agents,
+      /useJobs/,
+      `${template} AGENTS.md should route durable side effects to app.useJobs`
+    );
+    assert.match(
+      skill,
+      /## Background jobs/i,
+      `${template} SKILL.md should document the background-jobs pattern`
+    );
+    assert.match(
+      skill,
+      /at-least-once/i,
+      `${template} SKILL.md should teach at-least-once delivery + idempotency`
+    );
 
     // SKILL.md must declare scope, structure, and at least one workflow.
     assert.match(skill, /When to use this skill/i, `${template} SKILL.md should define boundaries`);

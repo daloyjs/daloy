@@ -8,6 +8,16 @@
  */
 export const BLOG_POSTS = [
   {
+    slug: "background-jobs-that-outlive-the-request",
+    title:
+      "Background Jobs That Outlive the Request: Why DaloyJS Grew a Queue, Not a Workflow Engine",
+    description:
+      "HTTP handlers should return. Side effects should survive deploys. This post is the why, when, and where of the DaloyJS queue-agnostic job interface, and why we did not embed Temporal, Inngest, or Eve.",
+    date: "2026-08-28",
+    readingTime: "12 min read",
+    author: "Devlin Duldulao",
+  },
+  {
     slug: "daloyjs-1-0-0-the-bugs-were-in-the-wiring",
     title: "DaloyJS 1.0.0 Is Out, and Almost Every Late Bug Was in the Wiring",
     description:

@@ -155,6 +155,7 @@ Capabilities a contract-first, production-grade API framework is expected to shi
 
 - [x] **Outbound webhook delivery** — counterpart to the existing inbound `verifyWebhookSignature` / `signWebhookPayload`: signed delivery with retry/backoff, timestamped signatures, and dead-letter semantics. _(Shipped in 0.37.0: `createWebhookSender()` + `MemoryWebhookDeadLetterSink` at `@daloyjs/core/webhook-delivery` — timestamped HMAC-signed POSTs reused across retries, exponential backoff honouring `Retry-After`, per-attempt timeout, dead-letter sink, and SSRF-safe `fetchGuard()` transport by default.)_
 - [x] **Scheduled tasks / in-process cron** — a queue-agnostic schedule primitive (distinct from the "background-job interface" research bullet below), with graceful-shutdown integration and single-flight guarantees. _(Shipped in 0.37.0: `app.cron()` + standalone `Scheduler` at `@daloyjs/core/scheduler` — interval or 5-field cron schedules with aliases/named fields/IANA `timeZone`, arithmetic cron parsing, fixed-rate single-flight, per-run `timeoutMs` with `AbortSignal`, `unref`'d timers, graceful-shutdown drain, and exported `parseCron()` / `nextCronRun()`. Zero runtime deps.)_
+- [x] **First-class background-job interface (queue-agnostic)** — the "background-job interface" research bullet, graduated: durable `{ name, payload }` units that outlive the request and the process, with the store SPI in core and durable backends (Redis/Postgres/SQS) as user-supplied adapters. Not a workflow/replay engine. _(Shipped in 1.3.0: `@daloyjs/core/jobs` — `JobStore` SPI, `MemoryJobStore` (tests / single process), `createJobQueue` (validation, payload caps, idempotency-key dedupe with conflict-on-reuse, delayed `runAt`, priority), `createJobWorker` (leases, auto-heartbeat + `ctx.heartbeat()`, concurrency, per-attempt timeout via `AbortSignal`, retries with full-jitter backoff, dead letters, graceful `stop()` drain, `runOnce()` for tests), `jobIdempotencyKey()` tenant-safe keys, `computeBackoffMs()`; plus `app.useJobs({ store, handlers, startWorker })` with a production Memory-store warning and `app.cronEnqueue()` so multi-replica cron ticks collapse to one idempotent enqueue. Zero runtime deps.)_
 - [x] **mTLS / client-certificate auth** — `conn-info.ts` already detects TLS; add a client-certificate authentication path for zero-trust / service-to-service deployments. _(Shipped in 0.37.0: `clientCertAuth()` middleware at `@daloyjs/core/mtls` — authenticates by TLS client certificate from native TLS (Node adapter lazily reads the peer cert off the socket; plain requests pay nothing) or a TLS-terminating proxy (Envoy `X-Forwarded-Client-Cert`, nginx/HAProxy structured headers). `requireVerified` by default, exact `allowSubjectCNs` / `allowIssuerCNs`, constant-time `allowFingerprints`, `allowSANs` (SPIFFE/DNS/URI/IP), validity-window enforcement, custom async `verify()`. Missing cert → `401` problem+json + `Cache-Control: no-store`; failed check → `403`. Accepted `ClientCertificate` stamped on `ctx.state`; `parseForwardedClientCert()` / `normalizePeerCertificate()` exported. Zero runtime deps.)_
 
 ### Edge / WAF-parity hardening (in-app layer)
@@ -296,7 +297,6 @@ Items we want but don't yet have a concrete design for. Fair game to prototype; 
 - [ ] **Portable `pnpm verify:supply-chain` umbrella** — single script callable from any CI host (GitLab, Bitbucket, Azure Pipelines, Jenkins, Drone, on-prem) that runs the non-GitHub-Actions-specific supply-chain checks: `pnpm verify:lockfile`, `pnpm audit --prod`, `pnpm verify:sbom`, zero-runtime-dep gate. Makes the portable half of the marketing claim _runnable_, not just documented. _(SBOM generation + `verify:sbom` shipped in `0.34.0`; the umbrella aggregator is still open.)_
 - [ ] HTTP/2 + HTTP/3 adapters (Node h2; explore Workers AutoHTTP/3).
 - [ ] Pluggable serialization (CBOR, MessagePack) gated by `Accept`.
-- [ ] First-class background-job interface (queue-agnostic).
 - [ ] **SPIFFE / SPIRE workload identity** — zero-trust service-to-service identity (SVID issuance/validation) as a deeper alternative to the planned mTLS + RFC 9421 paths. Heavy; needs a concrete integration design before committing.
 - [ ] **Runtime artifact / plugin signature verification (Sigstore / cosign)** — releases are already cosign-signed with provenance; explore optionally verifying third-party plugin artifacts at load time rather than only at install/CI time.
 
@@ -309,6 +309,8 @@ Avoiding scope creep is part of the design. Explicit non-goals:
 - A built-in ORM or query builder.
 - A bundled UI / view layer.
 - Project-wide DI containers.
+- Durable-execution / Temporal-style workflows (deterministic replay, worlds,
+  park-for-days). Integrate via jobs + HTTP callbacks; do not embed an engine.
 - Anything that requires patching `globalThis` or monkey-patching `Request` / `Response`.
 
 ---

@@ -56,6 +56,7 @@ You import the file you see. On `pnpm build`, TypeScript rewrites the `.ts` spec
 6. Keep operation IDs stable and examples schema-valid; `pnpm contract` must pass after route, metadata, or OpenAPI-facing changes.
 7. Every new route ships with a test that covers a happy path and at least one unhappy path.
 8. After any route change: `pnpm gen && pnpm contract && pnpm typecheck && pnpm test`.
+9. Side effects that must outlive a request: enqueue a job (`app.useJobs` + idempotency key); pattern in the skill.
 
 ## Secure-by-default (do not let an AI strip these)
 
@@ -74,4 +75,4 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 
 - Bug fixes include a regression test.
 
-For the full workflow — adding routes step-by-step, schema conventions, testing patterns, security guidance, and deployment notes — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).
+For the full workflow — routes, background jobs, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

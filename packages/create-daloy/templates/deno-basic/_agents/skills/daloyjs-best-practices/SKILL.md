@@ -4,7 +4,8 @@ description: >-
   Build, test, and harden this DaloyJS REST API on Deno. Use when the user
   asks to add or change an endpoint, route, Zod/Standard Schema,
   middleware, error handling, OpenAPI spec, contract gate, Deno
-  permission, deno.json import, auth, or rate limit. Also use for phrasing
+  permission, deno.json import, auth, rate limit, or background jobs.
+  Also use for phrasing
   like "add GET /...", "new route", "deno task", "fix the 401", or "allow
   net". Do not use for frontend UI, npm/pnpm package.json work, or
   unrelated docs.
@@ -213,6 +214,48 @@ app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 ```
 
 Add CORS only when needed, with an explicit `origin` allowlist.
+
+## Background jobs
+
+Side effects that must outlive the HTTP request (welcome emails, webhook
+fan-out, thumbnails, nightly reconciliation) belong in a **job**, not
+inline in the handler and not in a fire-and-forget promise.
+
+- `app.useJobs({ store, handlers, startWorker })` wires a queue (and an
+  optional in-process worker) into the app lifecycle, including the
+  graceful-shutdown drain.
+- Enqueue **after** the DB commit, always with an idempotency key:
+
+```ts
+import { jobIdempotencyKey } from "@daloyjs/core";
+
+await app.jobs!.enqueue({
+  name: "email.welcome",
+  payload: { userId: user.id, to: user.email }, // ids, never file bytes
+  idempotencyKey: jobIdempotencyKey({ name: "email.welcome", key: user.id }),
+});
+```
+
+- Delivery is **at-least-once**: handlers must be idempotent. Pass a key
+  through to downstream APIs (e.g. Stripe's `Idempotency-Key`) when a
+  duplicate run would move money or send email.
+- Throw `JobFatalError` for permanent failures (no retry); any other throw
+  retries with full-jitter backoff, then dead-letters.
+- `app.cronEnqueue(def, { name, payload })` turns a cron tick into an
+  idempotent enqueue. Use it for side effects that must run once
+  cluster-wide; keep plain `app.cron()` for process-local maintenance
+  (other replicas have their own memory to sweep).
+- Payloads are plain JSON capped at 64 KiB: enqueue ids and blob URLs,
+  never file contents.
+- `MemoryJobStore` is for tests (`worker.runOnce()`) and single-process
+  dev. Production needs a shared `JobStore` adapter (Redis/Postgres/SQS)
+  in app code; `useJobs` warns on Memory in production, and
+  `strictProduction: true` refuses to boot.
+- `startWorker: true` in the same process is fine for small deployments;
+  split a dedicated worker process (same app, `useJobs` with
+  `startWorker`, no public ingress) as you grow.
+
+Full reference: <https://daloyjs.dev/docs/jobs>
 
 ## Testing best practices
 

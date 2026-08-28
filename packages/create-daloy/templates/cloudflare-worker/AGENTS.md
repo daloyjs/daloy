@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **Contract-first**: routes are defined with validation schemas (Zod in this template; DaloyJS also supports Standard Schema-compatible validators) and OpenAPI 3.1 is generated from them. `docs: true` is set in `new App({...})`, so `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI) are auto-mounted. DaloyJS is dependency-free and the Scalar UI loads from a CDN, so this adds negligible Worker bundle size; drop `docs` (and the `openapi` block) if you want the smallest possible bundle.
+A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **Contract-first**: routes are defined with validation schemas (Zod in this template; DaloyJS also supports Standard Schema-compatible validators) and OpenAPI 3.1 is generated from them. `docs: true` is set in `new App({...})`, so `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI) are auto-mounted. DaloyJS is dependency-free and the Scalar UI loads from a CDN, so bundle cost is negligible; drop `docs` (and the `openapi` block) for the smallest bundle.
 
 - Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).
 - Runtime: Cloudflare Workers (Web Standard `Request`/`Response`).
@@ -37,7 +37,7 @@ A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **
 5. Keep `requestId()`, `secureHeaders()`, and `rateLimit()` enabled. The in-memory limiter resets per isolate.
 6. Stay on the Workers runtime: only Web Standards APIs + Cloudflare bindings. No `node:` modules unless you explicitly add `nodejs_compat` and require it.
 7. Bindings flow through `env`. Read KV/D1/R2/secrets from the `env` argument; never read them via globals.
-8. Long-running work belongs in `ctx.waitUntil(...)`, not blocking the response.
+8. Long-running work: `ctx.waitUntil(...)` or a remote-store job via `app.useJobs` (enqueue only, no worker loop on an isolate); never block the response.
 9. Keep operation IDs stable and examples schema-valid; `pnpm contract` must pass after route, metadata, or OpenAPI-facing changes.
 10. Every new route ships with a test that covers a happy path and at least one unhappy path.
 
@@ -64,4 +64,4 @@ Per Supabase + Aikido on [secure-by-default development](https://www.aikido.dev/
 - For deploys, ensure the user has run `wrangler login`; do not authenticate on their behalf.
 - Never bypass safety checks without a clear reason.
 
-For the full workflow — adding routes step-by-step, bindings, testing patterns, security guidance, and deployment notes — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).
+For the full workflow — routes, background jobs, bindings, testing, security, and deployment — read [.agents/skills/daloyjs-best-practices/SKILL.md](.agents/skills/daloyjs-best-practices/SKILL.md).

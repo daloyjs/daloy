@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { CodeBlock } from "../../../components/code-block";
 import { FlowDiagram } from "../../../components/diagram";
 
@@ -180,8 +182,7 @@ app.cron({ name: "first-of-month", cron: "@monthly" }, run);    // 00:00 on the 
         <code>getState(name).skipped</code>
         {". "}This guarantees at most one concurrent run per task: a slow task
         degrades to &ldquo;runs back-to-back&rdquo; instead of fanning out.
-      </p>
-      <CodeBlock
+      </p>      <CodeBlock
         language="ts"
         code={`const state = app.scheduledTasks!.getState("purge-sessions")!;
 state.runs;            // total completed runs
@@ -254,6 +255,20 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
         durable queue or a leader-elected external scheduler and have the
         elected instance call <code>runNow()</code>
         {". "}The single-flight guarantee is per-process, not cluster-wide.
+      </p>
+      <p>
+        For the middle ground (work that must survive a restart and run{" "}
+        <em>once, cluster-wide</em>, without adopting an external workflow
+        engine) use{" "}
+        <Link href="/docs/jobs">background jobs</Link>
+        {": "}
+        <code>app.cronEnqueue()</code> keeps the scheduler as the clock but
+        turns each tick into an idempotent enqueue, so eight replicas firing
+        the same <code>0 2 * * *</code> collapse into one job that exactly
+        one worker runs. Keep <code>app.cron()</code> for process-local
+        maintenance (the other replicas have their own memory to sweep);
+        reach for <code>cronEnqueue</code> the moment the tick&apos;s work is
+        a global side effect.
       </p>
     </>
   );
