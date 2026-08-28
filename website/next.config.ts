@@ -78,6 +78,11 @@ const nextConfig: NextConfig = {
         destination: "/docs/webhook-delivery",
         permanent: true,
       },
+      {
+        source: "/blog/background-jobs-that-outlive-the-request",
+        destination: "/blog/background-jobs-after-the-http-response",
+        permanent: true,
+      },
     ];
   },
   async rewrites() {

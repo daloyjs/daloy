@@ -7,10 +7,10 @@ import { Separator } from "@/components/ui/separator";
 import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const POST = {
-  slug: "background-jobs-that-outlive-the-request",
+  slug: "background-jobs-after-the-http-response",
   title: "Background Jobs After the HTTP Response",
   description:
-    "A rolling deploy once ate a welcome email I sent from inside POST /users. DaloyJS 1.3.0 ships a queue-agnostic job interface so the handler can return while the work lives in a store. Use Temporal, Inngest, or Eve when a function has to pause for hours and resume.",
+    "A rolling deploy killed a welcome email I sent from POST /users. DaloyJS 1.3.0 adds a job queue so the HTTP handler can return and the email still goes out. Reach for Temporal, Inngest, or Eve if the function has to pause for hours and resume.",
   date: "2026-08-28",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
@@ -29,7 +29,6 @@ export const metadata = buildMetadata({
     "cron vs queue",
     "at-least-once delivery",
     "JobStore SPI",
-    "not a workflow engine",
     "AKS worker pods",
     "serverless enqueue",
   ],

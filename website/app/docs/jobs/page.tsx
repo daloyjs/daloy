@@ -9,7 +9,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Background jobs (queue-agnostic)",
   description:
-    "Enqueue JSON jobs that outlive the HTTP request. JobStore SPI, MemoryJobStore for tests, a leased worker with retries and dead letters, and cronEnqueue for cluster-wide schedules. Zero runtime dependencies. Redis, Postgres, and SQS adapters live in your app.",
+    "Enqueue JSON jobs after the HTTP response. JobStore SPI, MemoryJobStore for tests, a leased worker with retries and dead letters, and cronEnqueue for cluster-wide schedules. Zero runtime dependencies. Redis, Postgres, and SQS adapters live in your app.",
   path: "/docs/jobs",
   keywords: [
     "background jobs",
@@ -97,7 +97,7 @@ export default function Page() {
 
       <p>
         The companion post{" "}
-        <Link href={"/blog/background-jobs-that-outlive-the-request" as Route}>
+        <Link href={"/blog/background-jobs-after-the-http-response" as Route}>
           Background Jobs After the HTTP Response
         </Link>{" "}
         covers the design argument. This page is the reference.
@@ -1538,7 +1538,7 @@ export class RedisJobStore implements JobStore {
             </td>
             <td>any worker, any runtime</td>
             <td>yes, via the store</td>
-            <td>Side effects that must outlive the request</td>
+            <td>Side effects after the HTTP response</td>
           </tr>
           <tr>
             <td>Workflow engines (Temporal / Inngest / Eve)</td>
@@ -1622,7 +1622,7 @@ export class RedisJobStore implements JobStore {
       <p>
         Until those land, implement <code>JobStore</code> in your repo and
         keep the handler registry explicit. The{" "}
-        <Link href={"/blog/background-jobs-that-outlive-the-request" as Route}>
+        <Link href={"/blog/background-jobs-after-the-http-response" as Route}>
           companion blog post
         </Link>{" "}
         covers the design argument. <code>examples/jobs-basic.ts</code> is
