@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
@@ -100,7 +101,7 @@ export default function Page() {
 
       <p>
         Want the argument, not the API? The companion essay{" "}
-        <Link href="/blog/background-jobs-that-outlive-the-request">
+        <Link href={"/blog/background-jobs-that-outlive-the-request" as Route}>
           Background Jobs That Outlive the Request
         </Link>{" "}
         retells the why / when / where in prose. This page is the reference.
@@ -1628,7 +1629,7 @@ export class RedisJobStore implements JobStore {
       <p>
         Until then: implement <code>JobStore</code> in your repo, keep the
         handler registry explicit, and read the{" "}
-        <Link href="/blog/background-jobs-that-outlive-the-request">
+        <Link href={"/blog/background-jobs-that-outlive-the-request" as Route}>
           companion blog post
         </Link>{" "}
         for the argument behind the shape. The runnable reference is{" "}

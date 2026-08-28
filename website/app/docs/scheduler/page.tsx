@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { CodeBlock } from "../../../components/code-block";
@@ -260,7 +261,7 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
         For the middle ground (work that must survive a restart and run{" "}
         <em>once, cluster-wide</em>, without adopting an external workflow
         engine) use{" "}
-        <Link href="/docs/jobs">background jobs</Link>
+        <Link href={"/docs/jobs" as Route}>background jobs</Link>
         {": "}
         <code>app.cronEnqueue()</code> keeps the scheduler as the clock but
         turns each tick into an idempotent enqueue, so eight replicas firing

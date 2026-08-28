@@ -9,10 +9,9 @@
 export const BLOG_POSTS = [
   {
     slug: "background-jobs-that-outlive-the-request",
-    title:
-      "Background Jobs That Outlive the Request: Why DaloyJS Grew a Queue, Not a Workflow Engine",
+    title: "Background Jobs That Outlive the Request",
     description:
-      "HTTP handlers should return. Side effects should survive deploys. This post is the why, when, and where of the DaloyJS queue-agnostic job interface, and why we did not embed Temporal, Inngest, or Eve.",
+      "A rolling deploy once ate a welcome email I sent from inside POST /users. DaloyJS 1.3.0 ships a queue-agnostic job interface so the handler can return while the work lives in a store. Use Temporal, Inngest, or Eve when a function has to pause for hours and resume.",
     date: "2026-08-28",
     readingTime: "12 min read",
     author: "Devlin Duldulao",
