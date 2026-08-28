@@ -69,7 +69,7 @@ export default function Page() {
           A configurable <code>requiredComponents</code> set must be covered
           (default <code>[&quot;@method&quot;, &quot;@target-uri&quot;]</code>),
           so a peer cannot sign an empty or irrelevant component set. The
-          default binds scheme, authority, path, <strong>and query</strong>; a
+          default binds scheme, authority, path, <strong>and query</strong>. A
           path-only signature (<code>@path</code>) no longer satisfies a default
           verify, so an attacker cannot swap the query string under a signature
           that left it unbound. Pass{" "}
@@ -123,7 +123,7 @@ export default function Page() {
           <code>rsa-pss-sha512</code>
           {", "}
           <code>rsa-v1_5-sha256</code>
-          {": "}RSA (2048-bit modulus floor; see below).
+          {": "}RSA (2048-bit modulus floor, see below).
         </li>
       </ul>
 
@@ -152,7 +152,7 @@ export default function Page() {
             kind: "note",
             label: "Resolve keyid -> key (alg pinned to key)",
             detail:
-              "alg not in allowlist -> alg_not_allowed; key missing -> key_not_found",
+              "alg not in allowlist -> alg_not_allowed. Key missing -> key_not_found",
           },
           {
             from: "httpSignatureAuth()",

@@ -649,7 +649,7 @@ export default function BlogPostPage() {
                 Fire-and-forget observer. By design, it cannot change the
                 response, the bytes are already on the wire. This is your
                 logging, metrics, and audit-event slot. Safe to put slow stuff
-                here (within reason); it won&apos;t block the client.
+                here (within reason). It won&apos;t block the client.
               </>
             }
           />
@@ -847,9 +847,9 @@ export default function BlogPostPage() {
             <Link href="/blog/problem-details-done-right-rfc-9457-errors">
               RFC 9457 errors
             </Link>{" "}
-            is the contract <code>onError</code> serializes into;{" "}
-            <Link href="/blog/sessions-on-the-edge">sessions</Link> is the most
-            common <code>beforeHandle</code> consumer you&apos;ll write; and the{" "}
+            is the contract <code>onError</code> serializes into.{" "}
+            <Link href="/blog/sessions-on-the-edge">Sessions</Link> is the most
+            common <code>beforeHandle</code> consumer you&apos;ll write, and the{" "}
             <Link href="/blog/building-a-bookstore-api-with-daloyjs-from-scratch">
               bookstore tutorial
             </Link>{" "}

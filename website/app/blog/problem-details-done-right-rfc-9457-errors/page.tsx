@@ -742,7 +742,7 @@ export default function BlogPostPage() {
             Whoever named these two status codes did the field a disservice.{" "}
             <em>Unauthorized</em> means &quot;we don&apos;t know who you
             are&quot; (a.k.a. unauthenticated). <em>Forbidden</em> means
-            &quot;we know who you are; you can&apos;t do this&quot;. The
+            &quot;we know who you are, you can&apos;t do this&quot;. The
             framework picks the right one based on which middleware triggered
             it, and your bearerAuth automatically attaches the{" "}
             <code>WWW-Authenticate</code> challenge:
@@ -788,9 +788,9 @@ export default function BlogPostPage() {
           <p>
             The <code>urn:request:&lt;ULID&gt;</code> instance is the single
             most useful thing on a production error page. The user gives you
-            that ULID; you paste it into Datadog or Loki; the full stack and
+            that ULID. You paste it into Datadog or Loki. The full stack and
             detail come back. The customer-facing message stays useless to
-            attackers and helpful to humans. Both win.
+            attackers and helpful to humans.
           </p>
 
           <h2>Your own domain errors are five lines</h2>
@@ -798,7 +798,7 @@ export default function BlogPostPage() {
           <p>
             Anything more specific than the built-in catalogue is a five-line
             subclass. The framework cares about the status code and the document
-            shape; everything else is yours. Use a URI you own for the{" "}
+            shape. Everything else is yours. Use a URI you own for the{" "}
             <code>type</code> so the frontend can branch on it without parsing
             strings:
           </p>

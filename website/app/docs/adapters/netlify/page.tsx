@@ -57,7 +57,7 @@ export default function Page() {
             tone: "muted",
           },
         ]}
-        caption="Edge and Functions v2 both speak Request -> Response, so they share toWebHandler; only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2."
+        caption="Edge and Functions v2 both speak Request -> Response, so they share toWebHandler. Only the file location and config export change. The v1 lambda shape is legacy and only for codebases that cannot move to v2."
       />
 
       <h2 id="when-to-choose-netlify">When to choose Netlify</h2>

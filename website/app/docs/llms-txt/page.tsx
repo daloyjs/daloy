@@ -65,10 +65,10 @@ export default function Page() {
           llmstxt.org
         </a>
         ) for a Markdown file at a well-known path that gives LLMs and coding
-        agents a short, curated map of a site. It is not a sitemap dump and not
-        a ranking signal. It is a token-efficient index: project summary, the
-        links that matter, and optional secondary material agents can skip when
-        context is tight.
+        agents a short, curated map of a site. The file is a token-efficient
+        index with a project summary, the links that matter, and optional
+        secondary material agents can skip when context is tight. It does not
+        replace <code>sitemap.xml</code> and it is not a ranking signal.
       </p>
       <p>
         This page tracks <strong>v2</strong> of the proposal, published on 10
@@ -126,10 +126,10 @@ export default function Page() {
             detail: "authenticated actions agents call live",
           },
         ]}
-        caption="llms.txt answers where to read. AGENTS.md answers how to edit. OpenAPI answers how to call HTTP. MCP answers which tools exist at runtime. Keep those jobs separate."
+        caption="llms.txt answers where to read. AGENTS.md answers how to edit. OpenAPI answers how to call HTTP. MCP answers which tools exist at runtime. Treat those as four separate jobs."
       />
 
-      <h2 id="what-it-is">What it is (and is not)</h2>
+      <h2 id="what-it-is">What it is</h2>
       <ul>
         <li>
           <strong>Is:</strong> a curated Markdown index at{" "}
@@ -149,7 +149,7 @@ export default function Page() {
           citations. Major model providers have not committed to treating it
           like <code>robots.txt</code>. Chrome Lighthouse includes an
           experimental agentic-browsing check that fails only on server errors
-          for the path; a missing file is treated as not applicable.
+          for the path. A missing file is treated as not applicable.
         </li>
       </ul>
       <p>
@@ -231,7 +231,7 @@ export default function Page() {
           <code>llms_txt2ctx</code> tool that expanded it into one large
           context. v2 drops the tool and states the expectation instead: agents
           view or search the llms.txt, then follow the links they need. The file
-          stays small; the detail lives behind the links.
+          stays small. The detail lives behind the links.
         </li>
         <li>
           <strong>
@@ -261,7 +261,8 @@ export default function Page() {
       <p>
         Relative URLs are fine in both forms. Point{" "}
         <code>rel=&quot;describedby&quot;</code> at the most specific llms.txt
-        that covers the page, not always the one at the site root.
+        that covers the page. That is often a subpath file rather than the one
+        at the site root.
       </p>
 
       <h2 id="daloyjs-dev">How daloyjs.dev implements it</h2>
@@ -288,7 +289,7 @@ export default function Page() {
         <a href="https://daloyjs.dev/docs/llms.txt" rel="noopener noreferrer">
           /docs/llms.txt
         </a>{" "}
-        covering just the documentation, built from the same{" "}
+        covering the documentation only, built from the same{" "}
         <code>getDocsSearchSections()</code> call. And{" "}
         <code>website/proxy.ts</code> stamps the <code>Link:</code> header onto
         every response, so a docs page advertises its <code>.md</code> sibling
@@ -331,7 +332,7 @@ export default function Page() {
         </li>
         <li>
           In-repo <code>AGENTS.md</code> for agents that edit the codebase (the
-          scaffolder ships one; see the scaffolder docs).
+          scaffolder ships one. See the scaffolder docs).
         </li>
       </ul>
       <p>
@@ -353,7 +354,7 @@ export default function Page() {
         </li>
         <li>
           <code>## Optional</code> is last when you include secondary material
-          (a convention now, not a parser directive).
+          (a convention now. It is no longer a parser directive).
         </li>
         <li>
           Pages advertise their markdown sibling with{" "}

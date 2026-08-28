@@ -235,8 +235,7 @@ export const prisma = new PrismaClient({ adapter });`}
         rather than ad-hoc <code>ALTER TABLE</code>
         {". "}Pair this with your CI: run migrations against a development
         branch, open a deploy request, and merge to <code>main</code>
-        {". "}The same Daloy app code works against any branch, just swap the
-        host.
+        {". "}The same Daloy app code works against any branch. Swap the host.
       </p>
 
       <p>

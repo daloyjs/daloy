@@ -367,7 +367,7 @@ export default function Page() {
           <a href="/docs/security/secure-defaults-enforcement">
             secureDefaults enforcement
           </a>
-          ), not just documented.
+          ), not only documented.
         </li>
         <li>
           A.8.15 Logging
@@ -467,7 +467,7 @@ export default function Page() {
 
       <h2 id="gdpr-regulation-2016-679">GDPR (Regulation 2016/679)</h2>
       <p>
-        GDPR is risk-based; Article 32 (&ldquo;security of processing&rdquo;)
+        GDPR is risk-based. Article 32 (&ldquo;security of processing&rdquo;)
         and Article 25 (&ldquo;data protection by design and by default&rdquo;)
         are where the framework helps most.
       </p>

@@ -149,7 +149,7 @@ CMD ["dist/server.js"]`}
         </li>
         <li>
           Bun&apos;s built-in <code>routes</code> option is not used by the
-          adapter; routing is owned by DaloyJS so the same REST API stays
+          adapter. Routing is owned by DaloyJS so the same REST API stays
           portable across runtimes.
         </li>
       </ul>

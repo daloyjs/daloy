@@ -107,8 +107,8 @@ verify-store-integrity=true`}
         2. Build a shared <code>buildApp</code> factory
       </h2>
       <p>
-        Sharing the App between server, codegen, and tests is the secret to
-        never having spec drift:
+        Share the App between the server, codegen, and tests so the spec, the
+        client, and the tests stay aligned:
       </p>
       <CodeBlock
         code={`// src/build-app.ts
@@ -294,7 +294,7 @@ test("POST /books rejects without token", async () => {
         <li>A typed, validated, secured HTTP API.</li>
         <li>
           A real OpenAPI 3.1 document and a generated typed SDK, both staying in
-          sync forever.
+          sync.
         </li>
         <li>Contract tests guarding against drift in CI.</li>
         <li>

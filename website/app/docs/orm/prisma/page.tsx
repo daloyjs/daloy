@@ -236,7 +236,7 @@ serve(app, { port: 3000 });`}
       <h2 id="transactions">Transactions</h2>
       <p>
         Use <code>$transaction</code> for atomic units of work. Throwing inside
-        the callback rolls back; a successful return commits.
+        the callback rolls back. A successful return commits.
       </p>
       <CodeBlock
         code={`handler: async ({ body, state }) => {

@@ -149,10 +149,10 @@ export function buildApp() {
         Point <code>inspect</code>
         {", "}
         <code>doctor</code>
-        {", "}and <code>diff</code> at import-safe app construction files, not
-        files that call <code>serve(...)</code> as a module side effect. When
-        redirecting JSON or YAML to a file, keep app-construction logs off
-        stdout so the output stays parseable.
+        {", "}and <code>diff</code> at import-safe app construction files.
+        Do not point them at files that call <code>serve(...)</code> as a
+        module side effect. When redirecting JSON or YAML to a file, keep
+        app-construction logs off stdout so the output stays parseable.
       </p>
 
       <h2 id="flags">Flags</h2>
@@ -249,8 +249,8 @@ pnpm exec daloy dev ./src/server.ts`}
           Node
           {": "}
           <code>node --watch &lt;entry&gt;</code> (Node.js 22.18+ runs
-          TypeScript entries natively via built-in type stripping; no loader
-          needed).
+          TypeScript entries natively via built-in type stripping, with no
+          loader needed).
         </li>
         <li>
           Bun

@@ -416,7 +416,7 @@ export default function BlogPostPage() {
           <RiskCard
             risk="OWASP ASI05: The agent operates without sufficient boundaries, a compromised agent has free rein."
             framework="Daloy's multi-App pattern is the framework-level sandboxing primitive. High-blast-radius tools (refundAll, deleteUser, exportEverything) live on a separate App, mounted on a separate hostname, behind ipRestriction() + strong auth. They are not in the public OpenAPI, so the agent's tool-discovery layer never sees them. Add response-body schema validation and the handler cannot return fields the contract didn't promise. Add ipRestriction() + bearerAuth() and the model-facing app literally cannot reach the destructive code path."
-            user="Decide what the agent is allowed to do, then put the rest somewhere it can't reach. The framework can give you the multi-App split; it can't pick which tools are dangerous. (Hint: anything ending in -All, -Everything, or Delete probably belongs on the other App.)"
+            user="Decide what the agent is allowed to do, then put the rest somewhere it can't reach. The framework can give you the multi-App split. It can't pick which tools are dangerous. (Hint: anything ending in -All, -Everything, or Delete probably belongs on the other App.)"
           />
 
           <CodeBlock language="ts" code={SCOPED_TOOL} />
@@ -511,7 +511,7 @@ export default function BlogPostPage() {
 
           <p>
             ASI02 through ASI09 map to controls that already exist in DaloyJS.
-            ASI01 and ASI10 live upstream; the framework supports investigation
+            ASI01 and ASI10 live upstream. The framework supports investigation
             with typed contracts, request logs, and scaffolded agent guidance.
           </p>
 

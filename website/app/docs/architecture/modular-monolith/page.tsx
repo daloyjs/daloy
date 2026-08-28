@@ -147,12 +147,11 @@ generated/                   # Hey API typed client output
       <p>
         The whole point of a modular monolith is that the rules are{" "}
         <em>enforceable</em>
-        {", "}not just documented. There are only three rules and a linter can
-        enforce those boundaries.
+        {", "}and a linter can check them. There are only three rules.
       </p>
       <LayerStack
         title="Dependency direction"
-        caption="Dependencies only ever point downward. app.ts wires the modules; each module may use shared/ and other modules' public contracts; shared/ never reaches back up into a module. The exact allow/forbid rules follow below."
+        caption="Dependencies only ever point downward. app.ts wires the modules. Each module may use shared/ and other modules' public contracts. shared/ never reaches back up into a module. The exact allow/forbid rules follow below."
         layers={[
           {
             title: "app.ts",
@@ -205,8 +204,8 @@ generated/                   # Hey API typed client output
 
       <h2 id="anatomy-of-a-module">Anatomy of a module</h2>
       <p>
-        A module is just a DaloyJS plugin. The folder structure is what gives it
-        long-term shape; the framework only cares about the{" "}
+        A module is a DaloyJS plugin. The folder structure is what gives it
+        long-term shape. The framework only cares about the{" "}
         <code>register()</code> function in <code>index.ts</code>.
       </p>
       <CodeBlock
@@ -434,7 +433,7 @@ await app.ready();`}
       <h2 id="testing-layout">Testing layout</h2>
       <p>
         Tests follow the module boundary. Each module owns its unit and
-        integration tests; the repository keeps a small top-level{" "}
+        integration tests. The repository keeps a small top-level{" "}
         <code>tests/contract</code> suite that runs against the generated
         OpenAPI document so any unintended schema change fails CI.
       </p>
@@ -466,7 +465,7 @@ tests/e2e/checkout.e2e.ts                  # cross-module user journeys`}
           original repo, the callsites do not change.
         </li>
         <li>
-          Re-run <code>generateOpenAPI</code> in both repos; the contract-test
+          Re-run <code>generateOpenAPI</code> in both repos. The contract-test
           suite immediately tells you if anything drifted.
         </li>
       </ol>

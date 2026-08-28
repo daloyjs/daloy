@@ -98,7 +98,7 @@ export default function Page() {
       <p>
         The companion post{" "}
         <Link href={"/blog/background-jobs-that-outlive-the-request" as Route}>
-          Background Jobs That Outlive the Request
+          Background Jobs After the HTTP Response
         </Link>{" "}
         covers the design argument. This page is the reference.
       </p>
@@ -114,7 +114,7 @@ export default function Page() {
           },
           {
             label: "JobStore.put",
-            detail: "durable record; idempotency key checked",
+            detail: "durable record, idempotency key checked",
             eyebrow: "persist",
           },
           {
@@ -129,7 +129,7 @@ export default function Page() {
           },
           {
             label: "Completed",
-            detail: "terminal; optional result stored",
+            detail: "terminal, optional result stored",
             tone: "success",
           },
           {
@@ -221,7 +221,7 @@ await worker.runOnce(); // true: claimed, ran, completed
         <code>examples/jobs-basic.ts</code>.
       </p>
 
-      <h2 id="when-to-use">When to use (and when not)</h2>
+      <h2 id="when-to-use">When to use</h2>
       <p>
         Jobs are for work that must survive the HTTP request, or the process.
         If the work fits in the request, do not enqueue.
@@ -343,7 +343,7 @@ await worker.runOnce(); // true: claimed, ran, completed
           <tr>
             <td>
               Multi-step saga with compensations (charge, then book, then
-              email; undo charge if book fails)
+              email, and undo the charge if book fails)
             </td>
             <td>
               Workflow engine, or an explicit job chain plus your own
@@ -352,19 +352,19 @@ await worker.runOnce(); // true: claimed, ran, completed
           </tr>
           <tr>
             <td>CPU-heavy ML inference / GPU</td>
-            <td>Separate service; the job can call it</td>
+            <td>Separate service. The job can call it.</td>
           </tr>
           <tr>
             <td>Huge blobs (video files)</td>
             <td>
-              Object-storage URL in the payload; the job processes the URL.
+              Object-storage URL in the payload. The job processes the URL.
               Payloads cap at 64 KiB.
             </td>
           </tr>
           <tr>
             <td>Exactly-once banking ledger</td>
             <td>
-              Database transaction + an outbox table you own; the job consumer
+              Database transaction + an outbox table you own. The job consumer
               is still at-least-once
             </td>
           </tr>
@@ -377,8 +377,8 @@ await worker.runOnce(); // true: claimed, ran, completed
           <tr>
             <td>Run the worker loop on Cloudflare Workers isolates</td>
             <td>
-              You can <strong>enqueue</strong> to a remote store from Workers;
-              do not poll there in v1
+              You can <strong>enqueue</strong> to a remote store from Workers.
+              Do not poll there in v1.
             </td>
           </tr>
         </tbody>
@@ -474,8 +474,9 @@ await worker.runOnce(); // true: claimed, ran, completed
         <code>startWorker: false</code>). Deployment <code>worker</code>: M
         pods, claim and run (<code>startWorker: true</code>, no public
         ingress). The store is Azure Cache for Redis or Azure Database for
-        PostgreSQL through a <code>JobStore</code> adapter in your repo, not
-        in core. Ingress exposes only <code>api</code>. Workers need egress
+        PostgreSQL through a <code>JobStore</code> adapter in your repo.
+        Core does not ship that adapter. Ingress exposes only <code>api</code>.
+        Workers need egress
         to the store plus SMTP, Stripe, or OpenAI. Set{" "}
         <code>terminationGracePeriodSeconds</code> above the worker&apos;s{" "}
         <code>stop(graceMs)</code> so SIGTERM drains instead of killing
@@ -680,7 +681,7 @@ completed / dead / cancelled: no transitions`}
               <code>
                 {"{ baseDelayMs?, maxDelayMs?, random? }"}
               </code>{" "}
-              retry policy; <code>random</code> is injectable for tests.
+              retry policy. <code>random</code> is injectable for tests.
             </td>
           </tr>
           <tr>
@@ -688,7 +689,7 @@ completed / dead / cancelled: no transitions`}
               <code>logger</code>, <code>now</code>
             </td>
             <td></td>
-            <td>Structured logger; injectable clock for deterministic tests.</td>
+            <td>Structured logger. Injectable clock for deterministic tests.</td>
           </tr>
         </tbody>
       </table>
@@ -733,7 +734,7 @@ completed / dead / cancelled: no transitions`}
             <td></td>
             <td>
               Unique per queue. Same key + deep-equal payload returns{" "}
-              <code>{"{ job, duplicate: true }"}</code>; different payload
+              <code>{"{ job, duplicate: true }"}</code>. Different payload
               throws. Build tenant-safe keys with{" "}
               <code>jobIdempotencyKey</code>.
             </td>
@@ -778,7 +779,7 @@ completed / dead / cancelled: no transitions`}
             </td>
             <td>30000</td>
             <td>
-              Per-attempt timeout; aborts the handler&apos;s{" "}
+              Per-attempt timeout. Aborts the handler&apos;s{" "}
               <code>signal</code>. <code>0</code> disables (dangerous).
             </td>
           </tr>
@@ -796,7 +797,7 @@ completed / dead / cancelled: no transitions`}
             <td></td>
             <td>
               Tenant discriminator copied onto the record for partitioning
-              and logs. Data, not authz.
+              and logs. This is a data partition field. It is not authorization.
             </td>
           </tr>
         </tbody>
@@ -873,7 +874,7 @@ completed / dead / cancelled: no transitions`}
               <code>onDead</code>, <code>onComplete</code>, <code>onFail</code>
             </td>
             <td></td>
-            <td>Lifecycle callbacks; wire <code>onDead</code> to alerting.</td>
+            <td>Lifecycle callbacks. Wire <code>onDead</code> to alerting.</td>
           </tr>
           <tr>
             <td>
@@ -954,7 +955,7 @@ completed / dead / cancelled: no transitions`}
               <code>JobTimeoutError</code>
             </td>
             <td>
-              A per-attempt <code>timeoutMs</code> elapsed; retried like any
+              A per-attempt <code>timeoutMs</code> elapsed. Retried like any
               other throw.
             </td>
           </tr>
@@ -1063,7 +1064,7 @@ completed / dead / cancelled: no transitions`}
             <td>
               Insert. Idempotency key present and seen: return the existing
               job with <code>duplicate: true</code> (first writer wins, even
-              if terminal); fingerprint differs: throw{" "}
+              if terminal). If the fingerprint differs, throw{" "}
               <code>JobIdempotencyConflictError</code>. Must be atomic.
             </td>
           </tr>
@@ -1084,7 +1085,7 @@ completed / dead / cancelled: no transitions`}
             </td>
             <td>
               Extend the lease while still owned. <code>false</code> means the
-              lease was lost; the caller must stop touching the job.
+              lease was lost. The caller must stop touching the job.
             </td>
           </tr>
           <tr>
@@ -1110,14 +1111,14 @@ completed / dead / cancelled: no transitions`}
             <td>
               <code>cancel(id, now)</code>
             </td>
-            <td>Cancel a non-terminal job; terminal returns false.</td>
+            <td>Cancel a non-terminal job. Terminal returns false.</td>
           </tr>
           <tr>
             <td>
               <code>get(id, now)</code>
             </td>
             <td>
-              Read one job; reap an expired lease lazily before the snapshot.
+              Read one job. Reap an expired lease lazily before the snapshot.
             </td>
           </tr>
           <tr>
@@ -1126,7 +1127,7 @@ completed / dead / cancelled: no transitions`}
             </td>
             <td>
               Optional filtered listing (queue/status/name/tenant). Required
-              on Memory for tests; production adapters may omit it.
+              on Memory for tests. Production adapters may omit it.
             </td>
           </tr>
         </tbody>
@@ -1272,34 +1273,34 @@ export class RedisJobStore implements JobStore {
       <ol>
         <li>
           <strong>Welcome email after <code>POST /users</code></strong>:
-          payload <code>{"{ userId, to, locale }"}</code>; key per user;
-          fatal on permanent bounce.
+          payload <code>{"{ userId, to, locale }"}</code>. Key per user.
+          Fatal on permanent bounce.
         </li>
         <li>
           <strong>Provider webhook processing</strong>: signature at HTTP, 202
-          immediately; payload <code>{"{ providerEventId, type }"}</code>;
-          key = provider event id.
+          immediately. Payload <code>{"{ providerEventId, type }"}</code>.
+          Key = provider event id.
         </li>
         <li>
           <strong>Outbound webhook that must live 24h</strong>:{" "}
           <code>webhook.deliver</code> with{" "}
-          <code>{"{ url, eventType, bodyId }"}</code>; the handler calls{" "}
-          <code>createWebhookSender()</code> once; <code>JobFatalError</code>{" "}
+          <code>{"{ url, eventType, bodyId }"}</code>. The handler calls{" "}
+          <code>createWebhookSender()</code> once. <code>JobFatalError</code>{" "}
           when the sender dead-letters so you do not retry forever in two
           systems.
         </li>
         <li>
           <strong>Search reindex</strong>:{" "}
           <code>search.index_article</code> with{" "}
-          <code>{"{ articleId }"}</code>; key articleId + version (or
-          last-write-wins in the handler); <code>delayMs: 500</code> coalesces
+          <code>{"{ articleId }"}</code>. Key articleId + version (or
+          last-write-wins in the handler). <code>delayMs: 500</code> coalesces
           bursts.
         </li>
         <li>
           <strong>Thumbnail / PDF / image variant</strong>:{" "}
           <code>media.derive</code> with{" "}
           <code>{"{ blobUrl, ownerId, variant }"}</code>, a URL on blob
-          storage, never bytes; fatal on unsupported MIME.
+          storage, never bytes. Fatal on unsupported MIME.
         </li>
         <li>
           <strong>Fan-out notifications</strong>: one domain event enqueues N
@@ -1321,8 +1322,8 @@ export class RedisJobStore implements JobStore {
         </li>
         <li>
           <strong>Graph / Entra invite user</strong>: <code>entra.invite</code>{" "}
-          with <code>{"{ userId }"}</code>; your 201 is the local user row;
-          fatal on 404 user deleted.
+          with <code>{"{ userId }"}</code>. Your 201 is the local user row.
+          Fatal on 404 user deleted.
         </li>
         <li>
           <strong>Data export (GDPR dump)</strong>: the worker writes the zip
@@ -1379,7 +1380,7 @@ export class RedisJobStore implements JobStore {
           <tr>
             <td>Vercel / Lambda</td>
             <td>yes, with a remote store</td>
-            <td>no; use a separate Node worker service</td>
+            <td>no. Use a separate Node worker service</td>
           </tr>
           <tr>
             <td>
@@ -1423,8 +1424,8 @@ export class RedisJobStore implements JobStore {
           <tr>
             <td>Tenant key injection</td>
             <td>
-              Tenant grammar shared with <code>tenancy()</code>;{" "}
-              <code>jobIdempotencyKey</code> builds prefixed keys
+              Tenant grammar shared with <code>tenancy()</code>.{" "}
+              <code>jobIdempotencyKey</code> builds prefixed keys.
             </td>
           </tr>
           <tr>
@@ -1469,7 +1470,7 @@ export class RedisJobStore implements JobStore {
           <tr>
             <td>PII in logs</td>
             <td>
-              Log job id, name, queue, attempts; payloads at debug level only
+              Log job id, name, queue, attempts. Payloads at debug level only.
             </td>
           </tr>
           <tr>
@@ -1583,8 +1584,8 @@ export class RedisJobStore implements JobStore {
         <li>
           <strong>Jobs as a distributed cron lock without keys.</strong>{" "}
           &ldquo;Only one nightly run in the cluster&rdquo; works because of
-          the per-slot idempotency key, not because of the queue. No key, no
-          guarantee.
+          the per-slot idempotency key. The queue alone does not provide that
+          uniqueness. Without a key there is no uniqueness guarantee.
         </li>
         <li>
           <strong>
@@ -1616,7 +1617,7 @@ export class RedisJobStore implements JobStore {
         <li>
           Cloudflare <code>waitUntil</code> run-once semantics
         </li>
-        <li>Workflow engines as store backends; batch enqueue</li>
+        <li>Workflow engines as store backends, and batch enqueue</li>
       </ul>
       <p>
         Until those land, implement <code>JobStore</code> in your repo and

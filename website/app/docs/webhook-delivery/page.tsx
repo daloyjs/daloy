@@ -100,7 +100,7 @@ export default function Page() {
             to: "Subscriber",
             kind: "async",
             label: "Retry with backoff + jitter",
-            detail: "same webhook-id/signature reused; honours Retry-After",
+            detail: "same webhook-id/signature reused. Honours Retry-After",
           },
           {
             from: "Subscriber",
@@ -210,7 +210,7 @@ app.post(
         {". "}A <code>Retry-After</code> header on a <code>429</code>/
         <code>503</code> takes precedence (capped at{" "}
         <code>maxRetryDelayMs</code>). Only transient statuses and
-        network/timeout errors are retried; a <code>400</code> or any other
+        network/timeout errors are retried. A <code>400</code> or any other
         non-retryable status fails immediately.
       </p>
       <CodeBlock
@@ -236,7 +236,7 @@ app.post(
         non-retryable status or an SSRF refusal), it is handed to the configured{" "}
         <code>WebhookDeadLetterSink</code>
         {". "}The built-in <code>MemoryWebhookDeadLetterSink</code> is a bounded
-        ring buffer; in production, implement the one-method interface to
+        ring buffer. In production, implement the one-method interface to
         persist to your queue or table:
       </p>
       <CodeBlock

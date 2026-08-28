@@ -54,7 +54,7 @@ export default function Page() {
       <p>
         Every <code>App</code> exposes a <code>request()</code> method that
         round-trips a fetch <code>Request</code> through the same pipeline real
-        traffic uses, no socket, no port:
+        traffic uses, without opening a socket or binding a port:
       </p>
       <CodeBlock
         code={`import test from "node:test";
@@ -186,7 +186,7 @@ console.log(\`\${report.checked} routes - all clean\`);`}
           label: "report.ok",
           detail: "false only for error-level issues",
         }}
-        caption="A single walk over your routes produces one report. Error-level issues make report.ok false; warnings, such as safe-method body schemas, stay in report.issues without failing the gate."
+        caption="A single walk over your routes produces one report. Error-level issues make report.ok false. Warnings, such as safe-method body schemas, stay in report.issues without failing the gate."
       />
 
       <p>The report flags:</p>

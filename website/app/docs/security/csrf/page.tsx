@@ -30,7 +30,7 @@ export default function Page() {
       <p>
         DaloyJS ships a small, framework-agnostic <code>csrf()</code> middleware
         that implements the <strong>double-submit cookie</strong> pattern. The
-        server stamps a random token in a cookie on safe requests; the client
+        server stamps a random token in a cookie on safe requests. The client
         mirrors that token in a request header on mutating requests. The
         middleware then compares the cookie and header in constant time and
         rejects mismatches with <strong>403 Forbidden</strong>.
@@ -128,7 +128,7 @@ app.post(
 
       <h2 id="how-clients-send-the-token">How clients send the token</h2>
       <p>
-        Browsers cache the token cookie automatically; your client code only
+        Browsers cache the token cookie automatically. Your client code only
         needs to read it and echo it on the next mutating call. From a SPA:
       </p>
       <CodeBlock
@@ -369,7 +369,7 @@ await fetch("/transfer", {
       <ul>
         <li>
           <code>Sec-Fetch-Site</code> is <code>same-origin</code> or{" "}
-          <code>none</code>; or
+          <code>none</code>, or
         </li>
         <li>
           <code>Sec-Fetch-Site</code> is missing (legacy browser) <em>and</em>{" "}

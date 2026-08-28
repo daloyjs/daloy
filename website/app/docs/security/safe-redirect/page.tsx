@@ -77,7 +77,7 @@ export default function Page() {
             tone: "danger",
           },
         ]}
-        caption="Every candidate runs the full gauntlet before any Location header is built. Dangerous schemes, protocol-relative escapes, and control characters are refused outright; only an exact allowlist match is emitted. A rejected target either falls back or throws."
+        caption="Every candidate runs the full gauntlet before any Location header is built. Dangerous schemes, protocol-relative escapes, and control characters are refused outright. Only an exact allowlist match is emitted. A rejected target either falls back or throws."
       />
 
       <h2 id="quick-start">Quick start</h2>
@@ -224,7 +224,7 @@ try {
         {", "}
         <code>307</code>
         {", "}and <code>308</code>
-        {". "}You can also merge extra response headers; the{" "}
+        {". "}You can also merge extra response headers. The{" "}
         <code>Location</code> header is always overwritten with the validated
         target.
       </p>

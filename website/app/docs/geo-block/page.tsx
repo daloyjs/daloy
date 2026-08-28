@@ -60,7 +60,7 @@ export default function Page() {
           <code>trustProxyHeaders</code>) as the other network guards. The
           client IP is read from the <strong>rightmost</strong> XFF entry (the
           one your immediate proxy appended), never an attacker-prepended left
-          entry; multi-hop chains declare their length with{" "}
+          entry. Multi-hop chains declare their length with{" "}
           <code>trustedHops</code>.
         </li>
       </ul>
@@ -100,7 +100,7 @@ export default function Page() {
           },
           {
             label: "Unknown country?",
-            detail: "allow-list -> blocked (fail closed); deny-only -> allowed",
+            detail: "allow-list -> blocked (fail closed). Deny-only -> allowed",
             tone: "accent",
           },
           {
@@ -117,7 +117,7 @@ export default function Page() {
       </h2>
       <p>
         Use any GeoIP reader as an operator dependency. Daloy resolves the
-        client IP and hands it to <code>lookupCountry</code>; return an ISO
+        client IP and hands it to <code>lookupCountry</code>. Return an ISO
         3166-1 alpha-2 code (or nothing when the IP can&apos;t be mapped).
       </p>
       <CodeBlock
@@ -197,12 +197,12 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
       <ul>
         <li>
           deny
-          {": "}listed countries are always rejected; a deny match wins over an
+          {": "}listed countries are always rejected. A deny match wins over an
           allow match (least privilege).
         </li>
         <li>
           allow
-          {": "}when non-empty, only listed countries pass; everything else
+          {": "}when non-empty, only listed countries pass. Everything else
           (including an unresolved country) is rejected.
         </li>
         <li>
@@ -292,7 +292,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
       <ul>
         <li>
           Geo-blocking is a <strong>compliance / abuse-reduction</strong> tool,
-          not an authentication control. VPNs and proxies defeat it; pair it
+          not an authentication control. VPNs and proxies defeat it. Pair it
           with real auth.
         </li>
         <li>
@@ -308,7 +308,7 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
           ).
         </li>
         <li>
-          Keep your GeoIP database current; stale data misclassifies reassigned
+          Keep your GeoIP database current. Stale data misclassifies reassigned
           ranges.
         </li>
       </ul>

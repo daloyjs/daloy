@@ -257,7 +257,7 @@ const app = createApp({
         their default assets from the jsDelivr CDN, so a strict
         Content-Security-Policy must allow those assets or the docs UI can
         render blank. The auto-mounted route and <code>htmlResponse()</code>{" "}
-        both add a compatible CSP automatically; if you build your own response,
+        both add a compatible CSP automatically. If you build your own response,
         import <code>docsContentSecurityPolicy</code> from{" "}
         <code>@daloyjs/core/docs</code> and pass the result as the response
         header:

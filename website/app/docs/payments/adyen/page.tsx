@@ -380,9 +380,9 @@ app.post(
       <p>
         The event you care about most is <code>AUTHORISATION</code> with{" "}
         <code>success === &quot;true&quot;</code>
-        {": "}that&apos;s the canonical &quot;the money is good&quot; signal.
+        {". "}That is the canonical &quot;the money is good&quot; signal.
         The HTTP response from <code>/payments</code> or the Sessions success
-        callback is only a hint; webhooks are the source of truth.
+        callback is only a hint. Webhooks are the source of truth.
       </p>
 
       <h2 id="7-modifications-capture-refund-cancel">
@@ -444,7 +444,7 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         <code>message</code>
         {", "}and <code>errorType</code>
         {". "}The SDK throws <code>HttpClientException</code> with those fields
-        on the <code>.error</code> object; map them through{" "}
+        on the <code>.error</code> object. Map them through{" "}
         <Link href="/docs/errors">problem+json</Link> like other providers.
       </p>
 
@@ -458,7 +458,7 @@ await checkout.ModificationsApi.refundCapturedPayment(item.pspReference, {
         </li>
         <li>
           Use Web v5+ on the client. v5 expects a session response shape
-          identical to what <code>PaymentsApi.sessions</code> returns; older
+          identical to what <code>PaymentsApi.sessions</code> returns. Older
           Drop-in versions required wiring up <code>onSubmit</code> /{" "}
           <code>onAdditionalDetails</code> callbacks by hand.
         </li>

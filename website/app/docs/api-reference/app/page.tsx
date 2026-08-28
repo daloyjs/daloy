@@ -54,7 +54,7 @@ export default function Page() {
           { eyebrow: "hook", label: "afterHandle", detail: "(ctx, result)" },
           { eyebrow: "hook", label: "onSend / onResponse", detail: "(res)" },
         ]}
-        caption="Header-only auth runs in preBody before the body is ever read; body-aware guards (WAF, idempotency) run in beforeHandle with the parsed body."
+        caption="Header-only auth runs in preBody before the body is ever read. Body-aware guards (WAF, idempotency) run in beforeHandle with the parsed body."
       />
 
       <h2 id="class-app">

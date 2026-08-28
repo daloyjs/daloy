@@ -29,7 +29,7 @@ export default function Page() {
         The Cloudflare adapter exports a Workers module entrypoint: the
         canonical <code>export default &#123; fetch &#125;</code> shape. Service
         Worker style (<code>addEventListener(&quot;fetch&quot;, ...)</code>) is
-        no longer recommended; the adapter does not emit it.
+        no longer recommended. The adapter does not emit it.
       </p>
 
       <FlowDiagram
@@ -104,7 +104,7 @@ export default toFetchHandler(app);`}
       <h2 id="wrangler-jsonc">wrangler.jsonc</h2>
       <p>
         Cloudflare now recommends <code>wrangler.jsonc</code> over{" "}
-        <code>wrangler.toml</code> for new projects; both are still supported.
+        <code>wrangler.toml</code> for new projects. Both are still supported.
         The single <code>nodejs_compat</code> flag is all you need on a recent
         compatibility date, there&apos;s no separate{" "}
         <code>nodejs_compat_v2</code> to add.
@@ -143,8 +143,8 @@ pnpm wrangler deploy`}
       />
       <p>
         <code>wrangler publish</code> was renamed to{" "}
-        <code>wrangler deploy</code> in 2024. Don&apos;t use the old name; some
-        CI templates still reference it.
+        <code>wrangler deploy</code> in 2024. Do not use the old name. Some CI
+        templates still reference it.
       </p>
 
       <h2 id="bindings-env">Bindings (env)</h2>
@@ -207,16 +207,16 @@ export default {
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          No raw TCP. Use <strong>Hyperdrive</strong> for Postgres/MySQL, or
-          HTTP drivers like Neon&apos;s serverless driver, PlanetScale&apos;s{" "}
-          <code>@planetscale/database</code>
+          Workers have no raw TCP. Use <strong>Hyperdrive</strong> for
+          Postgres/MySQL, or HTTP drivers like Neon&apos;s serverless driver,
+          PlanetScale&apos;s <code>@planetscale/database</code>
           {", "}or Turso/libSQL. See{" "}
           <Link href="/docs/databases">Database hosting</Link>.
         </li>
         <li>
-          No filesystem, so use{" "}
-          <Link href="/docs/multipart">multipart uploads</Link> with R2, not{" "}
-          <code>node:fs</code>.
+          Workers have no filesystem. Use{" "}
+          <Link href="/docs/multipart">multipart uploads</Link> with R2 rather
+          than <code>node:fs</code>.
         </li>
         <li>
           For background work, decorate the app with a <code>waitUntil</code>{" "}

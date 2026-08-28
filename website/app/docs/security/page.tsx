@@ -96,7 +96,7 @@ export default function Page() {
           {
             eyebrow: "route",
             label: "Router + method check",
-            detail: ".. resolved to canonical path; bad method 405",
+            detail: ".. resolved to canonical path. Bad method 405",
             tone: "danger",
           },
           {
@@ -155,7 +155,7 @@ export default function Page() {
             <td>
               <code>requestTimeoutMs</code> (default 30s) returns{" "}
               <code>408</code> and fires <code>ctx.request.signal</code> for
-              cooperative teardown; the Node adapter also sets socket timeouts.
+              cooperative teardown. The Node adapter also sets socket timeouts.
             </td>
           </tr>
           <tr>
@@ -218,7 +218,7 @@ app.use(timing());              // Server-Timing header for observability`}
         Put <code>rateLimit()</code> or <code>loginThrottle()</code> before
         bearer/basic/JWK/mTLS auth when it must count failed credentials. The
         limiter will still spend the attempt and return <code>429</code> after
-        the cap even though auth rejects in <code>preBody</code>; DaloyJS does
+        the cap even though auth rejects in <code>preBody</code>. DaloyJS does
         not read a declared request body to do it. A custom key generator on
         that path should use raw request data or state populated by an earlier{" "}
         <code>preBody</code> hook.
@@ -229,7 +229,7 @@ app.use(timing());              // Server-Timing header for observability`}
         <code>secureHeaders()</code>
         {", "}
         <code>requestId()</code>
-        {", "}and <code>rateLimit()</code>; Cloudflare Worker and Vercel enable{" "}
+        {", "}and <code>rateLimit()</code>. Cloudflare Worker and Vercel enable{" "}
         <code>secureHeaders()</code> and <code>requestId()</code> plus tighter
         edge-friendly body and timeout limits.
       </p>
@@ -264,7 +264,7 @@ app.use(timing());              // Server-Timing header for observability`}
             <td>Cloudflare Workers</td>
             <td>
               <code>requestId()</code> and <code>secureHeaders()</code> by
-              default; use <code>cors()</code> only when needed, and prefer an
+              default. Use <code>cors()</code> only when needed, and prefer an
               external/shared limiter over the in-memory default when traffic
               spans many isolates.
             </td>
@@ -273,7 +273,7 @@ app.use(timing());              // Server-Timing header for observability`}
             <td>Vercel</td>
             <td>
               <code>requestId()</code> and <code>secureHeaders()</code> by
-              default; add <code>cors()</code> only when needed, and use a
+              default. Add <code>cors()</code> only when needed, and use a
               shared limiter if you need durable counters across regions.
             </td>
           </tr>
@@ -317,7 +317,7 @@ app.use(timing());              // Server-Timing header for observability`}
         <li>
           Fetch Metadata (<code>strategy: &quot;fetch-metadata&quot;</code>) -
           tokenless protection that relies on the modern{" "}
-          <code>Sec-Fetch-Site</code> header. No cookie round-trip; no HTML
+          <code>Sec-Fetch-Site</code> header. No cookie round-trip. No HTML
           rendering coupling. Recommended for new browser-facing apps.
         </li>
       </ul>
@@ -554,7 +554,7 @@ app.use(basicAuth({
         <code>trustProxyHeaders: true</code> / <code>trustedProxies</code>{" "}
         behind a trusted proxy. When proxy headers are trusted, the key is the{" "}
         <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
-        your proxy appended), never an attacker-prepended left entry; multi-hop
+        your proxy appended), never an attacker-prepended left entry. Multi-hop
         chains declare their hop count with <code>trustedHops</code>. When the
         origin itself can be reached, set <code>trustedProxies</code> so the
         peer socket is verified against a CIDR allowlist before any forwarded

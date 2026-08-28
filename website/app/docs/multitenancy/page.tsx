@@ -119,7 +119,7 @@ app.get(
         Pass one resolver to <code>resolve</code>
         {", "}or an array tried in order until one returns a non-empty value
         (e.g. prefer a verified JWT claim, fall back to the subdomain). A
-        resolver is just a <code>(ctx) =&gt; string | undefined</code>
+        resolver is a <code>(ctx) =&gt; string | undefined</code>
         {", "}so you can write your own.
       </p>
 
@@ -210,7 +210,7 @@ app.get(
                 <code>/acme/orders</code> -&gt; <code>acme</code>
               </td>
               <td>
-                Reads the segment only (does not rewrite the path); your routes
+                Reads the segment only (does not rewrite the path). Your routes
                 still include the tenant segment.
               </td>
             </tr>
@@ -264,7 +264,7 @@ tenancy({
                 <code>TenantResolver | TenantResolver[]</code>
               </td>
               <td>(required)</td>
-              <td>Resolver(s) tried in order; first non-empty wins.</td>
+              <td>Resolver(s) tried in order. First non-empty wins.</td>
             </tr>
             <tr>
               <td>
@@ -449,10 +449,10 @@ await db.query("SET app.current_tenant = $1", [ctx.state.tenant]);
         Augment <code>AppState</code> so the resolved tenant is strongly typed
         in every handler and hook. Put the <code>declare module</code> block in
         a regular <code>.ts</code> module the compiler always checks (for
-        example the file where you register <code>tenancy()</code>), not in a
-        separate <code>.d.ts</code> file: declaration files are exempt from
-        type-checking when <code>skipLibCheck</code> is on (the scaffolded
-        default), so a mistake inside one fails silently.
+        example the file where you register <code>tenancy()</code>). A
+        separate <code>.d.ts</code> file is the wrong place. Declaration files
+        are exempt from type-checking when <code>skipLibCheck</code> is on (the
+        scaffolded default), so a mistake inside one fails silently.
       </p>
       <CodeBlock
         code={`// src/build-app.ts (same module where tenancy() is registered)
@@ -484,7 +484,8 @@ declare module "@daloyjs/core" {
           (key/log injection, cache poisoning).
         </li>
         <li>
-          No enumeration. A resolved-but-unknown tenant is <code>404</code> by
+          Unknown tenants are not enumerable. A resolved-but-unknown tenant is{" "}
+          <code>404</code> by
           default, indistinguishable from a missing route, so attackers cannot
           probe for valid tenant names.
         </li>

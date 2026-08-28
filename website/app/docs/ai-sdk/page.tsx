@@ -226,7 +226,7 @@ export default function Page() {
       <h2 id="install">Install</h2>
       <p>
         The AI SDK and your model provider are <em>your</em> dependencies.{" "}
-        <code>@daloyjs/core</code> stays at zero runtime dependencies; it does
+        <code>@daloyjs/core</code> stays at zero runtime dependencies. It does
         not bundle or re-export the AI SDK.
       </p>
       <CodeBlock language="bash" code={INSTALL} />
@@ -270,7 +270,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="The deployment-time layer (auth, limits, SSRF defense) holds even when the model is prompt-injected or hallucinating. That is the point: the guardrails do not depend on the model behaving."
+        caption="The deployment-time layer (auth, limits, SSRF defense) holds even when the model is prompt-injected or hallucinating. The guardrails do not depend on the model behaving."
       />
 
       <h2 id="streaming-chat">Streaming chat</h2>
@@ -324,13 +324,12 @@ export default function Page() {
 
       <h2 id="the-secure-by-default-layer">The secure-by-default layer</h2>
       <p>
-        None of the above is the interesting part. The interesting part is what
-        DaloyJS does <em>around</em> your AI endpoint without you asking: a 1
-        MiB body cap that limits prompt size, a request timeout so a stuck model
-        call cannot hang a worker, production-mode error redaction so an
-        upstream provider error never leaks internals, structured logs that
-        redact provider API keys, and the rate limiting and auth you add in one
-        line each. The model is a caller, not a user. Treat it like one.
+        DaloyJS also wraps the AI endpoint without extra setup: a 1 MiB body
+        cap that limits prompt size, a request timeout so a stuck model call
+        cannot hang a worker, production-mode error redaction so an upstream
+        provider error never leaks internals, structured logs that redact
+        provider API keys, and the rate limiting and auth you add in one line
+        each. Treat the model as a caller. Authenticate and rate-limit it.
       </p>
       <CodeBlock language="ts" code={HARDEN} />
       <p>
@@ -352,8 +351,8 @@ export default function Page() {
         the typed client treats it as such. Endpoints that return structured
         output (the <code>generateObject()</code> pattern above) get the full
         treatment: response schema, OpenAPI shape, typed client, and response
-        validation, all from the one Zod schema. Mix the two freely. Stream the
-        chat, contract the structured calls.
+        validation, all from the one Zod schema. You can mix the two. Stream the
+        chat and contract the structured calls.
       </p>
 
       <h2 id="next-steps">Next steps</h2>

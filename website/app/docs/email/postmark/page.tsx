@@ -27,8 +27,8 @@ export default function Page() {
         <a href="https://postmarkapp.com" target="_blank" rel="noreferrer">
           Postmark
         </a>{" "}
-        is a transactional-first email provider known for very high inbox
-        placement and detailed delivery analytics. This guide uses the official{" "}
+        is a transactional-first email provider known for high inbox placement
+        and detailed delivery analytics. This guide uses the official{" "}
         <a
           href="https://github.com/ActiveCampaign/postmark.js"
           target="_blank"

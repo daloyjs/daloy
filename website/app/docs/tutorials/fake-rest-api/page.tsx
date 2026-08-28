@@ -96,7 +96,10 @@ export default function Page() {
           Exercise typed SDK generation and sample integrations before exposing
           your own API.
         </li>
-        <li>Show prospective users that DaloyJS scales beyond toy examples.</li>
+        <li>
+          Exercise a catalog large enough that docs UI and codegen show their
+          real limits.
+        </li>
       </ul>
 
       <h2 id="recommended-information-architecture">

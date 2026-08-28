@@ -527,7 +527,7 @@ export default function BlogPostPage() {
               },
               { label: "Other AI-driven", value: 19 },
             ]}
-            caption="Source: IBM Cost of a Data Breach Report 2026. Over 25% of organizations saw a malicious AI-driven attack; deepfakes dominate the mix."
+            caption="Source: IBM Cost of a Data Breach Report 2026. Over 25% of organizations saw a malicious AI-driven attack. Deepfakes dominate the mix."
           />
 
           <p>
@@ -703,19 +703,19 @@ export default function BlogPostPage() {
                 {[
                   {
                     found:
-                      "92% of AI-related breaches lacked proper access controls; apps/APIs/plugins were common entry points",
+                      "92% of AI-related breaches lacked proper access controls. Apps, APIs, and plugins were common entry points",
                     daloy:
                       "Auth middleware (jwk() with asymmetric algorithm allowlists, bearerAuth, etc.) plus per-route schemas so tools only accept declared fields. MCP routes refuse to boot unauthenticated unless you opt out on purpose.",
                   },
                   {
                     found:
-                      "AI-driven attacks add ~$1M; deepfakes and AI malware compress attacker time",
+                      "AI-driven attacks add ~$1M. Deepfakes and AI malware compress attacker time",
                     daloy:
                       "You cannot stop a deepfake CFO call from TypeScript. You can rate-limit sensitive routes, require short-lived tokens, and keep side effects behind strict schemas so a rushed operator cannot grant god-mode with one bad request.",
                   },
                   {
                     found:
-                      "247-day lifecycle; every hour open costs ~$1,100",
+                      "247-day lifecycle. Every hour open costs ~$1,100",
                     daloy:
                       "requestId + structured logs + OTel hooks make correlation boring and fast. Fail closed on body size and timeouts so a stuck process does not sit invisible for weeks.",
                   },
@@ -733,7 +733,7 @@ export default function BlogPostPage() {
                   },
                   {
                     found:
-                      "NHIs in AI workflows often unsecured; agents need ephemeral, automated identity",
+                      "NHIs in AI workflows often unsecured. Agents need ephemeral, automated identity",
                     daloy:
                       "Treat agents as first-class principals: bearer/jwk auth per agent, scoped routes, exp-checked tokens, timingSafeEqual for shared secrets. No long-lived shared service password in three services.",
                   },

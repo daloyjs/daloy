@@ -71,14 +71,14 @@ export default function Page() {
             kind: "request",
             label:
               "Normalized ClientCertificate (subject, issuer, fingerprint, SANs, verified)",
-            detail: "read lazily; plain requests pay nothing",
+            detail: "read lazily. Plain requests pay nothing",
           },
           {
             from: "clientCertAuth()",
             to: "Peer",
             kind: "note",
             label:
-              "No certificate -> 401; unverified / allow-list miss / expired -> 403",
+              "No certificate -> 401. Unverified / allow-list miss / expired -> 403",
             detail: "403 never echoes which check failed",
           },
           {
@@ -90,7 +90,7 @@ export default function Page() {
               "ctx.state.clientCertificate stamped for downstream + audit",
           },
         ]}
-        caption="The TLS layer verifies the chain; clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook in preBody. Anything that fails is rejected before request-body I/O or the handler."
+        caption="The TLS layer verifies the chain. clientCertAuth() then enforces requireVerified, the subject/issuer/fingerprint/SAN allow-lists, the validity window, and any custom verify() hook in preBody. Anything that fails is rejected before request-body I/O or the handler."
       />
 
       <h2 id="quick-start">Quick start</h2>
@@ -263,7 +263,7 @@ app.post(
         </li>
         <li>
           <code>verify(cert, ctx)</code>
-          {": "}a custom async hook run last; returning <code>false</code>{" "}
+          {": "}a custom async hook run last. Returning <code>false</code>{" "}
           rejects with <code>403</code>.
         </li>
       </ul>

@@ -42,7 +42,7 @@ export default function Page() {
         algorithm allowlists, <code>timingSafeEqual</code> credential checks,
         prototype-pollution-safe parsers, <code>fetchGuard()</code> SSRF
         defaults, schema strictness, RFC 9457 problem+json with prod-mode
-        redaction, apply just as much to a service running behind a service mesh
+        redaction, apply equally to a service running behind a service mesh
         as to one facing the public internet. A compromised neighbour, an SSRF
         in another pod, or a leaked internal token will exercise those guards
         identically.
@@ -299,14 +299,14 @@ const app = new App({
         can reach, behind a VPN, firewall, or corporate proxy, is{" "}
         <em>browser-facing</em>
         {", "}not service-to-service. The firewall stops outsiders from
-        connecting to the server directly; it does nothing about what an
+        connecting to the server directly. It does nothing about what an
         employee&apos;s browser can be tricked into sending. That browser sits
         inside the perimeter and carries the corporate session cookie:
       </p>
       <ul>
         <li>
           CSRF is the textbook intranet attack. An employee visits a malicious
-          public site on a lunch break; that site fires a <code>POST</code> at{" "}
+          public site on a lunch break. That site fires a <code>POST</code> at{" "}
           <code>https://intranet.corp/transfer</code>
           {". "}The browser is inside the network and attaches the session
           cookie, so the request lands. The firewall never sees anything wrong.

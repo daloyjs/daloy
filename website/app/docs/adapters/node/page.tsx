@@ -84,7 +84,7 @@ pnpm dev    # hot-reload via daloy dev`}
       <h2 id="install">Install</h2>
       <p>
         Requires <strong>Node.js 24 LTS or Node.js 26+</strong>
-        {". "}The adapter ships with <code>@daloyjs/core</code>; no extra
+        {". "}The adapter ships with <code>@daloyjs/core</code>. No extra
         dependency.
       </p>
       <CodeBlock language="bash" code={`pnpm add @daloyjs/core`} />
@@ -155,7 +155,7 @@ await close();`}
         </li>
         <li>
           Make DaloyJS&apos;s <code>keepAliveTimeout</code>{" "}
-          <strong>greater</strong> than the load balancer&apos;s, the Node
+          <strong>greater</strong> than the load balancer&apos;s. The Node
           adapter does this for you.
         </li>
       </ul>
@@ -164,7 +164,7 @@ await close();`}
         Graceful degradation under overload
       </h2>
       <p>
-        Steady-state throughput is only half the story. Once a Node process is
+        Steady-state throughput is incomplete. Once a Node process is
         pushed <em>past</em> saturation, the multi-second part of the tail
         latency no longer lives in your handler, it lives in the{" "}
         <strong>accept queue</strong>
@@ -175,13 +175,13 @@ await close();`}
         still looks healthy.
       </p>
       <p>
-        The cheapest fix that actually works is{" "}
+        The practical fix is{" "}
         <strong>connection-layer admission control</strong>:{" "}
         <code>maxConnections</code> forwards to Node&apos;s{" "}
         <code>server.maxConnections</code>
         {", "}so once the cap is reached the server refuses additional sockets{" "}
         <strong>at accept time</strong> instead of queuing them into the event
-        loop. Admitted traffic stays fast; overflow is rejected fast. It is{" "}
+        loop. Admitted traffic stays fast. Overflow is rejected fast. It is{" "}
         <strong>off by default</strong> and sits off the request hot path, so it
         adds no per-request cost.
       </p>
@@ -200,18 +200,18 @@ serve(app, {
       />
       <p>
         Pick the cap empirically: run a connection sweep against your real
-        routes and set <code>maxConnections</code> at (or just below) the
+        routes and set <code>maxConnections</code> at (or slightly below) the
         concurrency where p99/p99.9 latency stays in its healthy range. The
-        right value is workload-specific, CPU-bound JSON validation saturates at
-        a very different point than I/O-bound proxying.
+        right value is workload-specific. CPU-bound JSON validation saturates at
+        a different point than I/O-bound proxying.
       </p>
 
       <h3 id="pair-it-with-an-upstream-gateway">
         Pair it with an upstream gateway
       </h3>
       <p>
-        When the cap is hit, the overflow socket is refused at the TCP layer,
-        the client sees a connection reset, not an HTTP response. In production
+        When the cap is hit, the overflow socket is refused at the TCP layer.
+        The client sees a connection reset, not an HTTP response. In production
         you want a load balancer or API gateway in front that translates that
         refusal into a clean <code>503 Service Unavailable</code> with a{" "}
         <code>Retry-After</code> header, so well-behaved clients back off and
@@ -248,10 +248,9 @@ serve(app, {
         multi-second tail actually lives.
       </p>
       <p>
-        Treat <code>maxConnections</code> as a resilience/latency lever, not a
-        throughput lever, under overload it turns &ldquo;everyone waits
-        seconds&rdquo; into &ldquo;admitted traffic stays fast, overflow is
-        refused fast.&rdquo;
+        Treat <code>maxConnections</code> as a latency cap, not a throughput
+        knob. Under overload it turns &ldquo;everyone waits seconds&rdquo; into
+        &ldquo;admitted traffic stays fast, overflow is refused fast.&rdquo;
       </p>
 
       <h2 id="dockerfile">Dockerfile</h2>
@@ -284,9 +283,9 @@ CMD ["dist/server.js"]`}
           the timeout.
         </li>
         <li>
-          Set <code>hostname: &quot;0.0.0.0&quot;</code> in containers; Node
-          binds to <code>localhost</code> by default and that&apos;s invisible
-          from outside the container.
+          Set <code>hostname: &quot;0.0.0.0&quot;</code> in containers. Node
+          binds to <code>localhost</code> by default and that is invisible from
+          outside the container.
         </li>
       </ul>
 

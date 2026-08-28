@@ -75,7 +75,7 @@ export default function Page() {
         steps={[
           {
             label: "On allowUserAgents?",
-            detail: "consulted first; bypasses every other rule",
+            detail: "consulted first. Bypasses every other rule",
             eyebrow: "allowlist",
             tone: "success",
           },
@@ -92,12 +92,12 @@ export default function Page() {
           {
             label: "Claims a verified crawler?",
             detail:
-              "reverse-DNS + forward-confirm; spoofed / unverifiable -> 403",
+              "reverse-DNS + forward-confirm. Spoofed / unverifiable -> 403",
             tone: "danger",
           },
           {
             label: "Allowed -> handler",
-            detail: "log mode never blocks; only fires onBlock",
+            detail: "log mode never blocks. Only fires onBlock",
             tone: "success",
           },
         ]}
@@ -127,7 +127,7 @@ app.use(
         verification resolves the client IP from the <strong>rightmost</strong>{" "}
         <code>X-Forwarded-For</code> entry (the one your immediate proxy
         appended), so an attacker-prepended left entry cannot impersonate a
-        verified crawler&apos;s address; multi-hop chains declare their length
+        verified crawler&apos;s address. Multi-hop chains declare their length
         with <code>trustedHops</code>. When the origin itself can be reached,
         set <code>trustedProxies</code> so the peer socket is verified against a
         CIDR allowlist before any forwarded header is believed (see{" "}
@@ -143,7 +143,7 @@ app.use(
       <p>
         <code>blockEmptyUserAgent</code> defaults to <code>true</code>
         {". "}A plain string in <code>blockedUserAgents</code> matches
-        case-insensitively as a substring; a <code>RegExp</code> is tested
+        case-insensitively as a substring. A <code>RegExp</code> is tested
         as-is.
       </p>
       <CodeBlock

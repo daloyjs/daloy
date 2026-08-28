@@ -10,7 +10,7 @@ const POST = {
   title:
     "The Ghost CMS / ClickFix Campaign, Mapped to DaloyJS, Plus the One Default We Just Tightened",
   description:
-    "A pre-auth SQL injection in Ghost CMS (CVE-2026-26980) is being exploited at scale to hijack 700+ sites, including Harvard, Oxford, and DuckDuckGo, and serve a fake Cloudflare \"verify you are human\" prompt that silently stuffs a PowerShell one-liner into the visitor's clipboard. Most of the chain was already blocked by DaloyJS defaults; the last mile (the clipboard write) wasn't. Stage-by-stage mapping and the one-line default we changed in response.",
+    "A pre-auth SQL injection in Ghost CMS (CVE-2026-26980) is being exploited at scale to hijack 700+ sites, including Harvard, Oxford, and DuckDuckGo, and serve a fake Cloudflare \"verify you are human\" prompt that silently stuffs a PowerShell one-liner into the visitor's clipboard. Most of the chain was already blocked by DaloyJS defaults. The last mile (the clipboard write) wasn't. Stage-by-stage mapping and the one-line default we changed in response.",
   date: "2026-06-16",
   readingTime: "8 min read",
   author: "Devlin Duldulao",
@@ -325,8 +325,8 @@ export default function BlogPostPage() {
           <CodeBlock language="text" code={DEFAULT_HEADERS} />
 
           <p>
-            The only changed line is the <code>permissions-policy</code> one;
-            everything else has been the default for releases. With{" "}
+            The only changed line is the <code>permissions-policy</code> one.
+            Everything else has been the default for releases. With{" "}
             <code>clipboard-write=()</code> in place, even if attacker JS slips
             past your CSP and runs in your origin, calling{" "}
             <code>navigator.clipboard.writeText()</code> throws a{" "}

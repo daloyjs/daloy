@@ -105,7 +105,7 @@ export default function Page() {
               <code>z.enum([...])</code>
               {", "}a tight regex, or <code>z.uuid()</code>
               {", "}attacker shell metacharacters don&apos;t reach your handler
-              in the first place; the request is rejected with{" "}
+              in the first place. The request is rejected with{" "}
               <strong>422 problem+json</strong>.
             </td>
           </tr>
@@ -129,7 +129,7 @@ export default function Page() {
               {", "}never a shell string. The <code>create-daloy</code>{" "}
               scaffolder does the same for <code>git init</code> and{" "}
               <code>&lt;pm&gt; install</code>
-              {": "}the command and arguments are constants; only the working
+              {": "}the command and arguments are constants. Only the working
               directory is derived from input, and <code>cwd</code> is not
               shell-parsed.
             </td>
@@ -230,11 +230,11 @@ app.post(
       <p>
         Even if <code>body.sourcePath</code> were{" "}
         <code>{`"foo.mp4; rm -rf /"`}</code>
-        {", "}the regex would reject it at the boundary; if you removed the
+        {", "}the regex would reject it at the boundary. If you removed the
         regex, <code>execFile</code> would still pass the whole string as a
         single argv element to <code>ffmpeg</code>
         {", "}
-        which would simply fail to open a file by that name. No shell ever runs.
+        which would fail to open a file by that name. No shell ever runs.
       </p>
 
       <h2 id="anti-patterns-to-grep-for">Anti-patterns to grep for</h2>
@@ -345,7 +345,7 @@ await execFileAsync("/usr/local/bin/upload-backup.sh", [
         </li>
         <li>
           Audit your runtime dependencies. Most real-world command-injection
-          CVEs in 2024 were not in application code; they were in transitive npm
+          CVEs in 2024 were not in application code. They were in transitive npm
           packages that wrapped <code>child_process.exec()</code>
           {". "}Use <code>pnpm audit</code> on a schedule, and prefer the
           supply-chain hardened install path documented in{" "}

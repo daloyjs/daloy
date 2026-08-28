@@ -62,7 +62,7 @@ export default function Page() {
         <li>
           Webhooks are signed now. Mollie sends{" "}
           <code>X-Mollie-Signature: sha256=...</code> on signed endpoints.
-          Verify with <code>SignatureValidator</code>; treat &quot;no signature
+          Verify with <code>SignatureValidator</code>. Treat &quot;no signature
           header&quot; as a legacy webhook (older subscriptions don&apos;t
           sign).
         </li>
@@ -74,7 +74,7 @@ export default function Page() {
         </li>
         <li>
           Test vs live is the API key. Keys are prefixed <code>test_</code> or{" "}
-          <code>live_</code>; there&apos;s no separate environment flag for
+          <code>live_</code>. There is no separate environment flag for
           normal API-key auth. <code>testmode: true</code> is only needed for
           organisation-level OAuth tokens.
         </li>
@@ -424,8 +424,8 @@ for await (const page of pages) {
         The SDK is built on the Fetch API and ships ESM + CJS, so it runs on
         Node 18+, Cloudflare Workers, Bun, and Deno without adapters. The
         webhook verifier is pure crypto using{" "}
-        <code>crypto.subtle.importKey</code> / <code>sign</code> under the hood
-        and works in every modern runtime.
+        <code>crypto.subtle.importKey</code> / <code>sign</code>
+        {" "}and works in every modern runtime.
       </p>
 
       <h2 id="errors">Errors</h2>

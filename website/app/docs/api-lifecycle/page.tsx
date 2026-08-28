@@ -34,8 +34,8 @@ export default function Page() {
         framework can answer two questions that usually need extra tooling:{" "}
         <em>&quot;how do I tell consumers an endpoint is going away?&quot;</em>{" "}
         and <em>&quot;did this change break my published API?&quot;</em> The
-        first is solved with a route-level deprecation lifecycle; the second
-        with an OpenAPI diff you can run in CI.
+        first is solved with a route-level deprecation lifecycle. The second
+        is solved with an OpenAPI diff you can run in CI.
       </p>
       <p>
         If you are deciding how to run <code>/api/v1</code> and{" "}
@@ -47,7 +47,7 @@ export default function Page() {
 
       <FlowDiagram
         title="Route deprecation lifecycle"
-        caption="A route moves through these states. deprecated: true announces the intent and adds the Deprecation header; a sunset date adds the Sunset header and a hard removal target; only then do you delete the route. diffOpenAPI catches the final step if a consumer still depends on it."
+        caption="A route moves through these states. deprecated: true announces the intent and adds the Deprecation header. A sunset date adds the Sunset header and a hard removal target. Only then do you delete the route. diffOpenAPI catches the final step if a consumer still depends on it."
         steps={[
           { label: "Active", detail: "no extra headers", tone: "success" },
           { label: "deprecated: true", detail: "Deprecation: true header" },
@@ -138,15 +138,15 @@ if (hasBreakingChanges(publishedSpec, currentSpec)) {
       <p>The diff flags these as breaking:</p>
       <ul>
         <li>
-          a path or operation (HTTP method) present in the baseline is removed;
+          a path or operation (HTTP method) present in the baseline is removed.
         </li>
-        <li>a documented response status code is removed from an operation;</li>
+        <li>a documented response status code is removed from an operation.</li>
         <li>
           a new <code>required</code> parameter is added to an existing
-          operation;
+          operation.
         </li>
         <li>
-          an existing optional parameter becomes <code>required</code>;
+          an existing optional parameter becomes <code>required</code>.
         </li>
         <li>
           an operation&apos;s request body becomes required when it was not.
@@ -185,7 +185,7 @@ daloy diff --json openapi.published.json openapi.json`}
       <FlowDiagram
         title="Breaking-change CI gate"
         numbered
-        caption="The same diff engine the library exposes runs as a CI gate. A breaking change fails the build (exit 1); additive changes pass. With no committed baseline the gate is a no-op, so adoption is incremental."
+        caption="The same diff engine the library exposes runs as a CI gate. A breaking change fails the build (exit 1). Additive changes pass. With no committed baseline the gate is a no-op, so adoption is incremental."
         steps={[
           { label: "pnpm gen", detail: "regenerate generated/openapi.json" },
           { label: "baseline", detail: "generated/openapi.baseline.json" },
@@ -238,7 +238,7 @@ pnpm verify:breaking-changes  # fail CI if the published contract is broken`}
       />
       <p>
         A surface on the way out carries the machine signals from the start of
-        its retirement, not at the end of it: an RFC 9745{" "}
+        its retirement. Those include an RFC 9745{" "}
         <code>Deprecation</code> date, a{" "}
         <code>rel=&quot;deprecation&quot;</code> link back to this page, and a{" "}
         <code>rel=&quot;successor-version&quot;</code> pointer to the

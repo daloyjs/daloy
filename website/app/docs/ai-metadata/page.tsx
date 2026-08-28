@@ -130,13 +130,13 @@ app.post(
           <code>summary</code> / <code>description</code> / <code>tags</code>
           {": "}
           augment the route-level fields of the same name. Route-level values
-          win when both are set; tags are de-duplicated and concatenated.
+          win when both are set. Tags are de-duplicated and concatenated.
         </li>
         <li>
           <code>examples</code>
           {": "}record of named{" "}
           <code>{`{ summary?, description?, request?: { params?, query?, headers?, body? }, response?: { status, body?, headers? } }`}</code>{" "}
-          pairs. Every field is optional individually; pass only the parts you
+          pairs. Every field is optional individually. Pass only the parts you
           want documented.
         </li>
         <li>
@@ -161,7 +161,7 @@ app.post(
         </li>
         <li>
           <code>response.body</code> against the response schema for the
-          declared <code>status</code>; an unknown status code is itself an
+          declared <code>status</code>. An unknown status code is itself an
           error.
         </li>
       </ul>

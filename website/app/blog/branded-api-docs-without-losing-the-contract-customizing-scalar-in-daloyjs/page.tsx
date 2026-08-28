@@ -43,7 +43,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
-const PAIN = `# The Slack thread that started this feature, only lightly fictionalised:
+const PAIN = `# This started as a Slack thread, only lightly fictionalised:
 #
 # - Marketing:  "Can the /docs page use our brand colours? It looks like
 #                a stranger's house. We have a design system."
@@ -417,7 +417,7 @@ export default function BlogPostPage() {
             without giving you a footgun.
           </p>
 
-          <h2>The Slack thread that started it</h2>
+          <h2>This started as a Slack thread</h2>
 
           <EditorFrame
             files={["slack · #api-team"]}

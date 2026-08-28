@@ -535,8 +535,8 @@ export default function BlogPostPage() {
             <code>regenerate</code>
             {". "}
             The interesting part is what the middleware does between your
-            handler returning and the response going out, if you wrote anything,
-            it persists to the store and re-issues the cookie; if you
+            handler returning and the response going out. If you wrote anything,
+            it persists to the store and re-issues the cookie. If you
             didn&apos;t, <code>saveUninitialized: false</code> means no cookie
             at all, which keeps your privacy banner&apos;s job small.
           </p>
@@ -557,7 +557,7 @@ export default function BlogPostPage() {
             on lives in the store. The cookie is a tiny tamper-evident pointer.
             This is why &quot;the store&quot; is pluggable and why you can
             change backends without invalidating cookies (the signature still
-            checks out; the new backend just has no record for that id, which is
+            checks out. The new backend has no record for that id, which is
             treated as &quot;no session&quot;).
           </p>
 
@@ -616,7 +616,7 @@ export default function BlogPostPage() {
             security work to feel.
           </p>
 
-          <h2>regenerate(): the one line that kills session fixation</h2>
+          <h2>regenerate() on privilege change</h2>
 
           <EditorFrame
             files={["NOTES.md"]}
@@ -676,11 +676,11 @@ export default function BlogPostPage() {
           <p>
             Sync or async. <code>touch()</code> is a perf hint for{" "}
             <code>rolling: true</code>
-            {": "}if your backend has a cheap &quot;just extend the TTL&quot;
-            operation (like Redis <code>EXPIRE</code>), implement it; if not,
+            {": "}if your backend has a cheap &quot;extend the TTL&quot;
+            operation (like Redis <code>EXPIRE</code>), implement it. If not,
             omit it and the middleware will fall back to <code>set()</code>
             {". "}The store contract stays independent of transactions, advisory
-            locks, and cookie handling; the middleware owns those details.
+            locks, and cookie handling. The middleware owns those details.
           </p>
 
           <h2>A Redis store in twenty lines</h2>
@@ -721,7 +721,7 @@ export default function BlogPostPage() {
           <StoreCard
             name="Workers KV"
             good="Edge deployments where you want session reads close to the user. Eventually consistent, but for sessions that's fine, you're reading your own writes by sid."
-            watchFor="Workers KV has a 60s minimum expirationTtl and eventually-consistent global propagation. Don't use it for sub-second auth flows; do use it for long-lived sessions."
+            watchFor="Workers KV has a 60s minimum expirationTtl and eventually-consistent global propagation. Don't use it for sub-second auth flows. It is fine for long-lived sessions."
           />
 
           <h2>Pre-launch checklist</h2>
@@ -747,7 +747,7 @@ export default function BlogPostPage() {
             mint session IDs. TLS stripping on a misconfigured subdomain can
             still expose a user&apos;s cookie, which is why <code>__Host-</code>{" "}
             and <code>Secure</code> are fixed defaults. A store outage logs
-            users out; the interface supports replicas or fallback layers when
+            users out. The interface supports replicas or fallback layers when
             that risk matters.
           </p>
 

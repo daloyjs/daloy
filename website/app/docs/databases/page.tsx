@@ -84,7 +84,7 @@ export default function Page() {
             tone: "muted",
           },
         ]}
-        caption="On edge runtimes only HTTP, fetch, or native bindings work, raw TCP does not. The driver style is the layer that decides whether a host can run on Workers."
+        caption="On edge runtimes only HTTP, fetch, or native bindings work. Raw TCP does not. The driver style is the layer that decides whether a host can run on Workers."
       />
 
       <h2 id="supported-providers">Supported providers</h2>
@@ -107,7 +107,7 @@ export default function Page() {
         <li>
           <Link href="/docs/databases/turso">Turso</Link>
           {": "}distributed libSQL (SQLite fork) via <code>@libsql/client</code>
-          ; works over HTTP for edge runtimes.
+          {". "}Works over HTTP for edge runtimes.
         </li>
         <li>
           <Link href={"/docs/databases/duckdb" as Route}>DuckDB</Link>

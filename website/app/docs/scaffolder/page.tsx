@@ -103,7 +103,7 @@ bun  create daloy           my-api`}
         the GitHub security bundle. The dependency-install prompt defaults to{" "}
         <code>no</code> for pnpm projects so you can review the generated{" "}
         <code>.npmrc</code> and <code>pnpm-workspace.yaml</code> guardrails
-        before the first install; other package managers default to{" "}
+        before the first install. Other package managers default to{" "}
         <code>yes</code>.
       </p>
 
@@ -196,7 +196,7 @@ bun  create daloy           my-api`}
         </li>
         <li>
           <code>--yes</code>
-          {": "}accept all defaults; never prompt.
+          {": "}accept all defaults. Never prompt.
         </li>
       </ul>
 
@@ -232,8 +232,8 @@ bun  create daloy           my-api`}
         printed.
       </p>
       <p>
-        The CLI also checks <strong>versions</strong>
-        {", "}not just presence. <code>npm create daloy</code> and{" "}
+        The CLI also checks <strong>versions</strong>.{" "}
+        <code>npm create daloy</code> and{" "}
         <code>npx</code> will run the scaffolder on an old Node.js because{" "}
         <code>engines</code> are only advisory there, so the CLI verifies it
         itself: if you are on a Node.js older than <strong>24</strong>
@@ -444,7 +444,7 @@ bun  create daloy           my-api`}
         </li>
         <li>
           Choose <code>cloudflare-worker</code> only when your deployment target
-          is Cloudflare Workers. The template supports that runtime; Cloudflare
+          is Cloudflare Workers. The template supports that runtime. Cloudflare
           is optional.
         </li>
         <li>
@@ -473,7 +473,7 @@ bun  create daloy           my-api`}
         starters include <code>secureHeaders</code>
         {", "}
         <code>requestId</code>
-        {", "}and <code>rateLimit</code>; the edge starters include{" "}
+        {", "}and <code>rateLimit</code>. The edge starters include{" "}
         <code>secureHeaders</code> and <code>requestId</code> plus tighter body
         and timeout limits.
       </p>
@@ -489,13 +489,13 @@ bun  create daloy           my-api`}
         {", "}and the CLI adds a <code>pnpm &gt;= 11</code> floor to{" "}
         <code>engines</code> (pnpm always enforces <code>engines.pnpm</code>).
         older pnpm silently ignores <code>minimumReleaseAge</code>
-        {", "}which would disable the 24h supply-chain cooldown; the CLI also
+        {", "}which would disable the 24h supply-chain cooldown. The CLI also
         warns up front if the installed pnpm is older. When you choose{" "}
         <code>npm</code>
         {", "}the CLI adds an <code>npm &gt;= 12</code> floor to{" "}
         <code>engines</code> and swaps in an npm-native <code>.npmrc</code> with{" "}
         <code>engine-strict=true</code> so that floor is a hard install-time
-        failure rather than a warning; yarn and bun scaffolds drop the
+        failure rather than a warning. Yarn and bun scaffolds drop the
         pnpm-specific config so installs stay warning-free. When you choose{" "}
         <code>--with-ci</code>
         {", "}it also adds the GitHub-side security files that a company repo
@@ -507,7 +507,7 @@ bun  create daloy           my-api`}
         After scaffolding, jump straight to{" "}
         <Link href="/docs/getting-started">Getting started</Link> for the route
         walkthrough, or <Link href="/docs/security">Security</Link> for the
-        guardrails and middleware you just inherited.
+        guardrails and middleware the scaffold installed.
       </p>
     </>
   );

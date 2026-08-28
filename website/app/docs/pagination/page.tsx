@@ -89,7 +89,7 @@ export default function Page() {
         Mount <code>paginationQuery()</code> as the route&apos;s{" "}
         <code>request.query</code>
         {". "}The handler receives a fully typed, validated{" "}
-        <code>{`{ limit, cursor }`}</code>; build the next cursor from the last
+        <code>{`{ limit, cursor }`}</code>. Build the next cursor from the last
         row and advertise it with a <code>Link</code> header.
       </p>
       <CodeBlock
@@ -244,10 +244,10 @@ set.headers.set("Link", linkHeader);
       <h2 id="security-notes">Security notes</h2>
       <ul>
         <li>
-          Cursors are <strong>opaque, not secret</strong>
-          {": "}they are encoded, not encrypted or signed. Never trust a decoded
-          cursor for authorization; always re-scope the underlying query by the
-          authenticated principal on the server.
+          Cursors are <strong>opaque</strong>
+          {". "}They are encoded without encryption or a signature. Never trust
+          a decoded cursor for authorization. Always re-scope the underlying
+          query by the authenticated principal on the server.
         </li>
         <li>
           <code>decodeCursor()</code> caps input length, rejects malformed

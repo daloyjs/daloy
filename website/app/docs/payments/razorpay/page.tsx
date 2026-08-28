@@ -74,7 +74,7 @@ export default function Page() {
         </li>
         <li>
           Don&apos;t roll your own HMAC. The SDK exposes both verifiers as plain
-          helpers; using them keeps you aligned when Razorpay tweaks the
+          helpers. Using them keeps you aligned when Razorpay tweaks the
           algorithm or adds new fields.
         </li>
       </ul>
@@ -108,7 +108,7 @@ export default function Page() {
           {", "}and <code>refund.processed</code>.
         </li>
         <li>
-          Activate the methods you need (UPI/cards are on by default; netbanking
+          Activate the methods you need (UPI/cards are on by default. Netbanking
           and wallets typically need explicit enabling).
         </li>
       </ol>
@@ -238,7 +238,7 @@ declare module "@daloyjs/core" {
         The verifier helpers live at{" "}
         <code>razorpay/dist/utils/razorpay-utils</code> in the published bundle,
         Razorpay&apos;s own README points there. They&apos;re plain functions
-        over <code>node:crypto</code>; no SDK instance needed.
+        over <code>node:crypto</code>. No SDK instance needed.
       </p>
 
       <h2 id="5-create-an-order">5. Create an order</h2>
@@ -535,7 +535,7 @@ await state.razorpay.refund({
         </li>
         <li>
           Verify both signatures. The client callback signature stops forged
-          success posts from the browser; the webhook signature stops spoofed
+          success posts from the browser. The webhook signature stops spoofed
           IPNs. Skipping either is a foot-gun.
         </li>
         <li>

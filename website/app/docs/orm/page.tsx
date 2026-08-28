@@ -29,9 +29,8 @@ export default function Page() {
       <h1>Using SQL ORMs with DaloyJS</h1>
       <p>
         DaloyJS is database-agnostic. Any SQL client that runs on your target
-        runtime works, so pick the ORM or query layer that fits your team. The
-        framework gives you two primitives that make integration boring (in a
-        good way):
+        runtime works, so pick the ORM or query layer that fits your team. Two
+        primitives attach the client and tie cleanup to shutdown:
       </p>
       <ul>
         <li>

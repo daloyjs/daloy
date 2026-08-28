@@ -28,7 +28,7 @@ export default function Page() {
         (never from the root barrel), so runtime-specific code such as{" "}
         <code>node:http</code> never leaks into an edge or Worker bundle. For
         guide-level setup per platform, see the{" "}
-        <Link href="/docs/adapters">adapters overview</Link>; for the module
+        <Link href="/docs/adapters">adapters overview</Link>. For the module
         map, see the{" "}
         <Link href="/docs/api-reference">API reference overview</Link>.
       </p>
@@ -87,7 +87,7 @@ interface NodeServerHandle { server: Server; port: number; close(): Promise<void
       <p>
         Pass <code>port: 0</code> when a test needs an ephemeral port. Because
         Node binds asynchronously, wait for the server&apos;s{" "}
-        <code>listening</code> event before reading <code>handle.port</code>; it
+        <code>listening</code> event before reading <code>handle.port</code>. It
         then reports the OS-assigned port instead of <code>0</code>.
       </p>
       <CodeBlock
@@ -184,7 +184,7 @@ type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;`}
       <h2 id="test-only-internal-helpers">Test-only / internal helpers</h2>
       <p>
         These are exported for internal tests and tooling. They are public-typed
-        but underscore-prefixed; they may change without a semver bump. Most
+        but underscore-prefixed. They may change without a semver bump. Most
         application code will never need them.
       </p>
       <CodeBlock

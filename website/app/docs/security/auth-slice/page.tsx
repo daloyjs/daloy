@@ -48,7 +48,7 @@ export default function Page() {
         DaloyJS is a Relying Party, not an auth server
       </h2>
       <p>
-        DaloyJS validates tokens; it does not mint user sessions through an
+        DaloyJS validates tokens. It does not mint user sessions through an
         authorization-code flow, host a consent screen, or store user/client
         credentials. Pair these middleware with a dedicated identity provider:
       </p>
@@ -93,7 +93,7 @@ export default function Page() {
         </li>
         <li>
           Webhook receivers
-          {": "}neither <code>bearerAuth()</code> nor <code>jwk()</code>; use
+          {": "}neither <code>bearerAuth()</code> nor <code>jwk()</code>. Use
           the dedicated HMAC verifier (see the{" "}
           <a href="/docs/security">security overview</a>).
         </li>
@@ -181,7 +181,7 @@ export default function Page() {
           {
             from: "jwk() middleware",
             to: "jwk() middleware",
-            label: "Cross-check JWT alg vs JWK alg; reject HS*",
+            label: "Cross-check JWT alg vs JWK alg. Reject HS*",
             detail: "asymmetric-only allowlist",
             kind: "note",
           },
@@ -224,7 +224,7 @@ app.use(
         <code>http://</code> JWKS URLs and non-finite / negative{" "}
         <code>fetchTtlSeconds</code> / <code>maxStaleSeconds</code> are refused
         at construction. The middleware stamps{" "}
-        <code>ctx.state.user = {"{ sub, scopes, claims }"}</code>; the scope
+        <code>ctx.state.user = {"{ sub, scopes, claims }"}</code>. The scope
         normalizer reads <code>scope</code> (RFC 6749 space-separated string),{" "}
         <code>scp</code> (Azure AD array), and <code>scopes</code> (array)
         claims and dedupes the result.
@@ -237,7 +237,7 @@ app.use(
         {", "}
         set <code>0</code> to disable) on top of <code>fetchTtlSeconds</code>
         {". "}
-        The very first fetch is never eligible for this fallback, so an
+        The first fetch is never eligible for this fallback, so an
         unreachable IdP at boot still fails closed, and tokens are always
         cryptographically verified and <code>exp</code>-checked regardless.
       </p>
@@ -315,7 +315,7 @@ app.use(
         Fires once <code>ctx.state.user.username</code> has been stamped, with
         the typed <code>(credentials, ctx)</code> tuple. The previous idiomatic
         workaround was a separate <code>beforeHandle</code> that re-parsed the{" "}
-        <code>Authorization</code> header in every handler; that is no longer
+        <code>Authorization</code> header in every handler. That is no longer
         necessary. The callback runs in <code>preBody</code>
         {", "}so move any logic that requires a validated request body into a
         later <code>beforeHandle</code>.

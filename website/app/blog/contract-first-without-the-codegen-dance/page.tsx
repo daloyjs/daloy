@@ -439,7 +439,7 @@ export default function BlogPostPage() {
           <p>
             One route, two declared responses (<code>200</code> and{" "}
             <code>404</code>), each with a real Zod schema. Hold that file in
-            your head, we&apos;ll come back to it three times.
+            your head. We&apos;ll come back to it three times.
           </p>
 
           <h2>Three projections, one input</h2>
@@ -506,8 +506,8 @@ export default function BlogPostPage() {
             </EditorFrame>
 
             <p>
-              The two things I want you to notice in that snippet are also the
-              two things I celebrate every time I see them at work. First, the{" "}
+              Two things in that snippet are also the two things I celebrate
+              every time I see them at work. First, the{" "}
               <code>res.body</code> inside the <code>200</code> branch is
               narrowed to the <code>Book</code> shape, not the union of every
               declared response, the actual <code>200</code> one. Second, the{" "}
@@ -628,7 +628,7 @@ export default function BlogPostPage() {
             out before the PR even opens, not after the user complains.
           </p>
 
-          <h2>The diff that doesn&apos;t exist</h2>
+          <h2>Nothing else needs a diff</h2>
 
           <p>Change one field in the route and watch what moves on its own.</p>
 

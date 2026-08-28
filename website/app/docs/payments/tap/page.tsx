@@ -28,12 +28,12 @@ export default function Page() {
         <a href="https://www.tap.company/" target="_blank" rel="noreferrer">
           Tap Payments
         </a>{" "}
-        is the default acquirer for the GCC and wider MENA region, it&apos;s how
+        is the default acquirer for the GCC and wider MENA region. It is how
         you accept <strong>KNET</strong> (Kuwait), <strong>Mada</strong>{" "}
         (Saudi), <strong>Benefit / BenefitPay</strong> (Bahrain),{" "}
         <strong>STC Pay</strong>
         {", "}plus cards, Apple Pay, Google Pay, and BNPL methods like Tabby and
-        Tamara. There&apos;s no first-party Node SDK; you integrate against the{" "}
+        Tamara. There is no first-party Node SDK. You integrate against the{" "}
         <a
           href="https://developers.tap.company/reference/api-endpoint"
           target="_blank"
@@ -50,7 +50,7 @@ export default function Page() {
           Bearer auth, secret key in the backend only.{" "}
           <code>Authorization: Bearer sk_test_...</code> or{" "}
           <code>sk_live_...</code>
-          {". "}Public keys (<code>pk_*</code>) are for the frontend SDKs; never
+          {". "}Public keys (<code>pk_*</code>) are for the frontend SDKs. Never
           send a secret key from the browser.
         </li>
         <li>
@@ -58,12 +58,12 @@ export default function Page() {
           <code>transaction.url</code>
           {", "}you redirect the customer. They come back via your{" "}
           <code>redirect.url</code> with <code>?tap_id=chg_xxx</code>
-          {": "}that&apos;s a UX hint, not proof of payment.
+          {". "}That is a UX hint, not proof of payment.
         </li>
         <li>
           Webhooks come with a <code>hashstring</code>. Tap sends an HMAC-SHA256
           over a specific concatenation of fields, base64-encoded, in the{" "}
-          <code>hashstring</code> header. Verify it on every request; never
+          <code>hashstring</code> header. Verify it on every request. Never
           trust the body alone.
         </li>
         <li>
@@ -479,7 +479,7 @@ app.post(
         Tap returns JSON like{" "}
         <code>{`{ "errors": [{ "code": "1101", "description": "..." }] }`}</code>{" "}
         with an HTTP error status. Map them through{" "}
-        <Link href="/docs/errors">problem+json</Link>; the most common ones are
+        <Link href="/docs/errors">problem+json</Link>. The most common ones are
         400 (bad body), 401 (wrong key or test/live mismatch), and 404 (asking
         for a charge that belongs to a different account).
       </p>
@@ -493,7 +493,7 @@ app.post(
         </li>
         <li>
           Always re-fetch on webhook. The body is signed but webhooks get
-          retried; treating GET <code>/charges/{`{id}`}</code> as the source of
+          retried. Treating GET <code>/charges/{`{id}`}</code> as the source of
           truth means out-of-order delivery can&apos;t flip a paid order back to
           pending.
         </li>

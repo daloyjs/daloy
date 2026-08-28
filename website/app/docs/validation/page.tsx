@@ -41,7 +41,7 @@ export default function Page() {
         {", "}
         <strong>ArkType</strong>
         {", "}and TypeBox via a Standard Schema adapter. Pick the validator that
-        fits your project; the DaloyJS contract is the same.
+        fits your project. The DaloyJS contract is the same.
       </p>
 
       <BranchDiagram
@@ -69,7 +69,7 @@ export default function Page() {
       <ul>
         <li>
           <code>request.params</code>
-          {": "}decoded path parameters. They start as strings; coerce in your
+          {": "}decoded path parameters. They start as strings. Coerce in your
           schema if you want numbers, UUIDs, or enums.
         </li>
         <li>
@@ -271,7 +271,7 @@ const Body = Type.Object({ sku: Type.String(), qty: Type.Integer({ minimum: 1 })
             tone: "success",
           },
         ]}
-        caption="Every declared schema runs before your handler. Invalid input never reaches handler code, it short-circuits to a 422 RFC 9457 response; valid input arrives fully typed."
+        caption="Every declared schema runs before your handler. Invalid input never reaches handler code. It short-circuits to a 422 RFC 9457 response. Valid input arrives fully typed."
       />
       <p>
         On invalid input, DaloyJS returns{" "}

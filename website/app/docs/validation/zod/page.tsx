@@ -68,7 +68,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="Because Zod implements Standard Schema, DaloyJS reuses one schema for runtime validation, handler type inference, and the OpenAPI document. No adapter, no second source of truth."
+        caption="Because Zod implements Standard Schema, DaloyJS reuses one schema for runtime validation, handler type inference, and the OpenAPI document. There is no adapter and no second source of truth."
       />
 
       <h2 id="install">Install</h2>
@@ -294,7 +294,7 @@ app.get(
         {", "}
         <code>query</code>
         {", "}and <code>headers</code> are inferred from your schemas. The
-        return value is also typed; TypeScript reports an error if you return a
+        return value is also typed. TypeScript reports an error if you return a
         status not declared in <code>responses</code>.
       </p>
       <CodeBlock

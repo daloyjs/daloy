@@ -46,7 +46,7 @@ export default function Page() {
         {", "}
         <strong>NoSQLi</strong> (Mongo-style operator injection), and{" "}
         <strong>command injection</strong>
-        {". "}Each rule that fires contributes an <em>anomaly score</em>; when
+        {". "}Each rule that fires contributes an <em>anomaly score</em>. When
         the total reaches the threshold, the request is rejected with a generic{" "}
         <code>403</code> (block mode) or merely reported (log mode).
       </p>
@@ -80,7 +80,7 @@ export default function Page() {
             tone: "danger",
           },
         ]}
-        caption="In the beforeHandle phase waf() scans the decoded path, query, optional headers, and schema-parsed body. Each firing rule adds its score once per request; reaching blockThreshold fires onMatch and returns a generic 403 in block mode (log mode only reports)."
+        caption="In the beforeHandle phase waf() scans the decoded path, query, optional headers, and schema-parsed body. Each firing rule adds its score once per request. Reaching blockThreshold fires onMatch and returns a generic 403 in block mode (log mode only reports)."
       />
 
       <h2 id="quick-start">Quick start</h2>
@@ -246,7 +246,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         CPU-DoS: <code>maxValueLength</code> (default <code>8192</code>) caps
         the length of any single scanned string, and <code>maxBodyNodes</code>{" "}
         (default <code>10000</code>) caps how many body nodes are walked. Only
-        own enumerable properties are followed; prototype keys are never
+        own enumerable properties are followed. Prototype keys are never
         inspected.
       </p>
 
@@ -260,7 +260,7 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
         </li>
         <li>
           This is a <strong>complement</strong> to input schemas and parameter
-          binding, not a substitute. Keep validating with Zod schemas; the WAF
+          binding, not a substitute. Keep validating with Zod schemas. The WAF
           is a second line for traffic that slips through application logic.
         </li>
         <li>

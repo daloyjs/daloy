@@ -27,7 +27,7 @@ export default function Page() {
         <a href="https://resend.com" target="_blank" rel="noreferrer">
           Resend
         </a>{" "}
-        is a developer-first email API with first-class TypeScript types,
+        is an email API with first-class TypeScript types,
         edge-runtime support, and tight integration with{" "}
         <a href="https://react.email" target="_blank" rel="noreferrer">
           React Email

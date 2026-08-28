@@ -193,7 +193,7 @@ export const createDb = (env: Env) => drizzle(env.DB);`}
         </li>
         <li>
           Local development uses <code>wrangler dev</code> with a local SQLite
-          file; behavior is close but not identical to production.
+          file. Behavior is close but not identical to production.
         </li>
         <li>
           For multi-runtime portability, prefer{" "}

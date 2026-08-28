@@ -512,16 +512,16 @@ await state.paytabs.refund({
         Secure failed, <code>500</code> generic decline). Surface declines
         through <Link href="/docs/errors">problem+json</Link> with the PayTabs{" "}
         <code>response_message</code> in the <code>detail</code> field,
-        don&apos;t pass it verbatim to end users; declines often include
+        do not pass it verbatim to end users. Declines often include
         scheme-specific text the customer can&apos;t act on.
       </p>
 
       <h2 id="modernisation-notes">Modernisation notes</h2>
       <ul>
         <li>
-          Wrap the SDK once, then forget it. The positional-array signatures are
-          easy to typo and harder to grep for than named-object arguments. The
-          plugin above pays that cost in one place.
+          Wrap the SDK in one plugin. The positional-array signatures are easy
+          to typo and harder to grep for than named-object arguments. The plugin
+          above pays that cost in one place.
         </li>
         <li>
           Verify the IPN signature, always. Don&apos;t fall back to &quot;the IP
@@ -530,7 +530,7 @@ await state.paytabs.refund({
         </li>
         <li>
           Fulfil on IPN, not on return URL. The customer can close the tab
-          mid-3DS. The IPN is the source of truth; the return URL just renders a
+          mid-3DS. The IPN is the source of truth. The return URL renders a
           confirmation page.
         </li>
         <li>

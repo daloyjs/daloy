@@ -31,7 +31,7 @@ export default function Page() {
         DaloyJS core deliberately does <strong>not</strong> decompress request
         bodies. It is <em>safe by omission</em>
         {". "}A <code>Content-Encoding: gzip</code> request body is read as-is,
-        and a schema parse simply fails on the compressed bytes. The moment you
+        and a schema parse fails on the compressed bytes. The moment you
         inflate attacker-supplied bytes, though, you inherit the classic{" "}
         <strong>decompression bomb</strong> (a.k.a. &quot;zip bomb&quot;): a few
         kilobytes of crafted gzip can expand to gigabytes and blow straight past{" "}

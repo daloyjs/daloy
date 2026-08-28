@@ -587,11 +587,11 @@ export default function BlogPostPage() {
 
           <p>
             Webhooks are subscriptions, you set them up out-of-band and they
-            fire whenever an event happens. Callbacks are different: they are
+            fire whenever an event happens. Callbacks are different. They are
             out-of-band requests <em>tied to a specific operation</em>
             {". "}The canonical example is payments. The consumer creates a
-            payment with a <code>callbackUrl</code>; you POST to that URL when
-            the payment settles.
+            payment with a <code>callbackUrl</code>, and you POST to that URL
+            when the payment settles.
           </p>
 
           <p>
@@ -642,10 +642,10 @@ export default function BlogPostPage() {
           <p>
             <code>discriminatedUnion()</code> is the daily-driver helper.
             It&apos;s a Standard Schema, so it validates request and response
-            bodies at runtime; it also exposes a <code>.toJSONSchema()</code>{" "}
+            bodies at runtime. It also exposes a <code>.toJSONSchema()</code>{" "}
             projection so the OpenAPI generator picks up the <code>oneOf</code>{" "}
-            + <code>discriminator</code> pair without any glue. One declaration;
-            both jobs done:
+            + <code>discriminator</code> pair without any glue. One declaration
+            does both jobs.
           </p>
 
           <EditorFrame
@@ -751,7 +751,7 @@ export default function BlogPostPage() {
             </li>
             <li>
               Webhook signing isn&apos;t the spec&apos;s job. The header lives
-              in the spec; the algorithm and the secret rotation strategy do
+              in the spec. The algorithm and the secret rotation strategy do
               not. Pick one (HMAC-SHA256 of the raw body, hex), document it in
               the operation <code>description</code>
               {", "}and ship a signing helper next to the client SDK so

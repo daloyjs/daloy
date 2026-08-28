@@ -193,7 +193,7 @@ app.readinesscheck({
         <code>
           new App({"{"} secureDefaults: false {"}"})
         </code>
-        {", "}or just the crash handlers with{" "}
+        {", "}or only the crash handlers with{" "}
         <code>
           new App({"{"} crashOnUnhandledRejection: false {"}"})
         </code>

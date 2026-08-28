@@ -270,7 +270,7 @@ const custom = fetchGuard({
         <code>https:</code> is intentionally not pinned by this knob (TLS SNI /
         certificate validation needs the hostname path). Pass{" "}
         <code>pinDns: false</code> on Workers and other edge runtimes only if
-        you had forced it on; the default is already off when{" "}
+        you had forced it on. The default is already off when{" "}
         <code>process.versions.node</code> is absent.
       </p>
 
@@ -317,7 +317,7 @@ const safeFetch = fetchGuard({
   },
 });`}
           />
-          The socket connects to the pre-resolved IP; TLS SNI and certificate
+          The socket connects to the pre-resolved IP. TLS SNI and certificate
           validation still use the original hostname.
         </li>
       </ol>

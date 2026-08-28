@@ -366,7 +366,7 @@ export default function BlogPostPage() {
 
           <CodeBlock language="ts" code={PKI_TLS} />
 
-          <h2>What the talk owns that no framework can</h2>
+          <h2>What a framework cannot cover</h2>
 
           <ul>
             <li>

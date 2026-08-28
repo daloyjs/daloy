@@ -148,7 +148,7 @@ app.get(
       <h2 id="embedded-replicas-node-bun">Embedded replicas (Node, Bun)</h2>
       <p>
         For ultra-low-latency reads, use an embedded replica that syncs with the
-        primary in the background. Writes still go to the primary; reads are
+        primary in the background. Writes still go to the primary. Reads are
         local.
       </p>
       <CodeBlock

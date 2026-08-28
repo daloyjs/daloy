@@ -35,7 +35,7 @@ export default function Page() {
         DaloyJS ships a small, runtime-portable <code>session()</code>{" "}
         middleware: a signed
         <code>__Host-</code> cookie carries the session id, the payload lives in
-        a pluggable <code>SessionStore</code> (in-memory by default; KV /
+        a pluggable <code>SessionStore</code> (in-memory by default, KV /
         Redis-shaped stores plug in directly), and per-request mutations are
         exposed on <code>ctx.state.session</code>
         {". "}There are no adapter-specific code paths - the same middleware
@@ -94,7 +94,7 @@ export default function Page() {
             kind: "response",
           },
         ]}
-        caption="The cookie only carries a signed id, never the payload. A tampered stub fails the HMAC check and loads nothing; on login regenerate() swaps the id and drops the old store record, so a fixated session id is useless after authentication."
+        caption="The cookie only carries a signed id, never the payload. A tampered stub fails the HMAC check and loads nothing. On login regenerate() swaps the id and drops the old store record, so a fixated session id is useless after authentication."
       />
 
       <h2 id="quick-start">Quick start</h2>
@@ -194,7 +194,7 @@ app.post(
         <li>
           <code>generateId</code>
           {": "}
-          <code>crypto.randomUUID()</code> when available; otherwise a
+          <code>crypto.randomUUID()</code> when available, otherwise a
           base64url-encoded 32-byte random string. Pass your own{" "}
           <code>generateId</code> to customize.
         </li>
@@ -266,7 +266,7 @@ app.post(
       <h2 id="key-rotation">Key rotation</h2>
       <p>
         Pass an array to <code>secret</code>
-        {". "}The first entry is always used to sign new cookies; any later
+        {". "}The first entry is always used to sign new cookies. Any later
         entry can verify (so older clients keep working until their next
         request) and triggers a transparent re-sign on the way out.
       </p>

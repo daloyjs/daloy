@@ -174,7 +174,7 @@ export default function BlogPostPage() {
             wiring my own documentation recommended.
           </p>
 
-          <h2>The one that made me put my coffee down</h2>
+          <h2>This one made me put my coffee down</h2>
           <p>
             DaloyJS has five middlewares that decide whether a request is allowed
             based on network identity: <code>geoBlock()</code>,{" "}
@@ -227,7 +227,7 @@ export default function BlogPostPage() {
           </p>
           <CodeBlock language="ts" code={BOOT_GUARD} />
 
-          <h2>The header bug that was my own bad habit</h2>
+          <h2>The header bug was my own bad habit</h2>
           <p>
             Separate finding, same flavour of blind spot. Every middleware that
             keys on client IP read the leftmost <code>X-Forwarded-For</code>{" "}

@@ -71,7 +71,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="Version the public resource contract, not necessarily the whole deployment. v1 and v2 can run side by side while sharing internal services. Operational routes such as health checks normally remain unversioned."
+        caption="Version the public resource contract. You do not have to version the whole deployment. v1 and v2 can run side by side while sharing internal services. Operational routes such as health checks normally remain unversioned."
       />
 
       <h2 id="quick-start">Create /api/v1/books</h2>
@@ -258,7 +258,7 @@ operationId: "listBooks"`}
         The OpenAPI <code>info.version</code> identifies the release of the
         document or API contract. It does not add a URL prefix and it does not
         select a route at runtime. Likewise, the route-level{" "}
-        <code>version</code> property is informational metadata; it is not a
+        <code>version</code> property is informational metadata. It is not a
         routing switch and is not emitted into OpenAPI. The URL prefix is what
         makes <code>/api/v1</code> real.
       </p>
@@ -377,13 +377,13 @@ const v1Spec = generateOpenAPI(v1Contract, {
       </p>
       <blockquote>
         <strong>Security:</strong> a group&apos;s <code>auth</code> option
-        documents the OpenAPI security requirement; it does not verify a
+        documents the OpenAPI security requirement. It does not verify a
         credential by itself. Install an enforcement hook such as{" "}
         <code>jwk()</code>
         {", "}
         <code>bearerAuth()</code>
         {", "}or a reviewed custom API-key hook. Key limits by a stable
-        authenticated customer ID, not by the raw secret, and use a shared store
+        authenticated customer ID. Do not key by the raw secret. Use a shared store
         when more than one instance serves traffic.
       </blockquote>
       <p>
@@ -433,7 +433,7 @@ const v1Spec = generateOpenAPI(v1Contract, {
               <td>
                 Query string: <code>?version=1</code>
               </td>
-              <td>Possible as ordinary input, not a versioning feature</td>
+              <td>Possible as ordinary input. It is not a versioning feature.</td>
               <td>
                 Avoid for public contracts because caches and docs are less
                 clear

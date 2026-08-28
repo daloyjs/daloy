@@ -372,7 +372,7 @@ for (const route of mcpRoutes("/mcp", mcp, { public: true })) {
         <code>responseCache()</code> folds the resolved tenant into its cache
         key automatically, which is what keeps one tenant&apos;s cached response
         from being served to another (CWE-524). That only works if the tenant is
-        already in <code>ctx.state</code> when the key is built — and both
+        already in <code>ctx.state</code> when the key is built, and both
         middlewares resolve in <code>beforeHandle</code>, in registration order.
         Mounted <em>before</em> <code>tenancy()</code>, the cache would key
         every tenant&apos;s response identically and leak silently, behind a

@@ -53,7 +53,7 @@ export default function Page() {
           {
             from: "Client app",
             to: "Okta Custom Auth Server",
-            label: "User signs in; Okta issues a scoped access token (RS256)",
+            label: "User signs in. Okta issues a scoped access token (RS256)",
             detail: "iss = https://{domain}/oauth2/{asId}",
             kind: "async",
           },
@@ -238,8 +238,8 @@ app.get(
       <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>@okta/jwt-verifier</code> is a <strong>Node-only</strong> library
-        (it imports Node modules transitively). For Node, Bun, and AWS Lambda it
-        works out of the box; for{" "}
+        (it imports Node modules transitively). It works on Node, Bun, and AWS
+        Lambda. For{" "}
         <Link href="/docs/adapters">Cloudflare Workers</Link>
         {", "}use <code>jose</code>&apos;s <code>createRemoteJWKSet</code> +{" "}
         <code>jwtVerify</code> against the same issuer (the{" "}
@@ -256,7 +256,7 @@ app.get(
         <code>https://&#123;domain&#125;/oauth2/&#123;asId&#125;</code>
         {". "}The Org Authorization Server (
         <code>https://&#123;domain&#125;</code>) issues opaque tokens that only
-        Okta should consume; validate those via the <code>/introspect</code>{" "}
+        Okta should consume. Validate those via the <code>/introspect</code>{" "}
         endpoint instead.
       </p>
 

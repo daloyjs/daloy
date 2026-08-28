@@ -32,7 +32,7 @@ export default function Page() {
       <p>
         <code>fetchGuard()</code> answers{" "}
         <em>&ldquo;is this outbound address safe?&rdquo;</em>
-        {": "}it blocks the SSRF chain to cloud metadata and internal ranges.{" "}
+        {". "}It blocks the SSRF chain to cloud metadata and internal ranges.{" "}
         <code>resilientFetch()</code> answers the operational other half:{" "}
         <em>
           &ldquo;is this upstream healthy, and how do we behave when it is
@@ -62,7 +62,7 @@ export default function Page() {
         </li>
       </ul>
       <p>
-        The two compose: wrap an SSRF-guarded <code>fetch</code> in a resilient
+        The two compose. Wrap an SSRF-guarded <code>fetch</code> in a resilient
         one and you get both safety <em>and</em> resilience with zero runtime
         dependencies.
       </p>
@@ -220,11 +220,11 @@ try {
         <code>CircuitOpenError</code> (no network round-trip) until{" "}
         <code>resetTimeoutMs</code> elapses. The breaker then enters{" "}
         <strong>half-open</strong> and admits a limited number of trial
-        requests; a success closes it again, a failure re-opens it. The breaker
+        requests. A success closes it again, a failure re-opens it. The breaker
         is shared across every call made through the returned function, so one
         hot upstream is protected process-wide. A <code>5xx</code> response
         counts as a failure (configurable via{" "}
-        <code>circuitBreakerFailureStatuses</code>); an SSRF refusal and a
+        <code>circuitBreakerFailureStatuses</code>). An SSRF refusal and a
         caller-initiated abort do <strong>not</strong>.
       </p>
       <CodeBlock

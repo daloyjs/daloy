@@ -198,7 +198,7 @@ const res = sseResponse(async function* () {
         Newline-delimited JSON (NDJSON)
       </h2>
       <p>
-        Yield any JSON-serializable value; each value is encoded with{" "}
+        Yield any JSON-serializable value. Each value is encoded with{" "}
         <code>JSON.stringify</code> and terminated with a single <code>\n</code>
         {". "}Strings are emitted as JSON strings, and values that cannot be
         represented as JSON throw instead of emitting invalid NDJSON.
@@ -263,7 +263,7 @@ app.get(
       <h2 id="openapi">OpenAPI</h2>
       <p>
         OpenAPI 3.1 has no rich schema for streamed event payloads. Document
-        streaming routes with a free-form <code>200</code> response (just{" "}
+        streaming routes with a free-form <code>200</code> response (
         <code>{`{ description }`}</code>) and describe the event shape in prose,
         or attach an example string showing one or two frames.
       </p>

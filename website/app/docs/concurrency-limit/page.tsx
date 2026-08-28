@@ -97,7 +97,7 @@ export default function Page() {
           },
           {
             label: "Queue full / timed out -> shed",
-            detail: "503 + Retry-After; onReject(queue-full | queue-timeout)",
+            detail: "503 + Retry-After. onReject(queue-full | queue-timeout)",
             tone: "danger",
           },
         ]}

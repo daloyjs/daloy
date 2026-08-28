@@ -492,7 +492,7 @@ app.post(
         that&apos;s OK, the inner <code>transactionResponse</code> still has a{" "}
         <code>responseCode</code> of <code>2</code> (decline), <code>3</code>{" "}
         (error), or <code>4</code> (held for review). The plugin above collapses
-        both into thrown errors; route them through{" "}
+        both into thrown errors. Route them through{" "}
         <Link href="/docs/errors">problem+json</Link>.
       </p>
 
@@ -518,7 +518,7 @@ app.post(
         </li>
         <li>
           Skip the <code>shopify-style</code> auto-retry config. The SDK has no
-          built-in retry; if you need it, wrap <code>runController</code> with
+          built-in retry. If you need it, wrap <code>runController</code> with
           your own back-off on transient network errors only, never on declines.
         </li>
         <li>

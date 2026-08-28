@@ -193,8 +193,8 @@ assertCookieAttributes({
       />
       <p>
         Common refusals: <code>sameSite: &quot;None&quot;</code> without{" "}
-        <code>secure: true</code>; a <code>__Host-</code> cookie with a{" "}
-        <code>Domain</code> or a non-root <code>path</code>; and (in production)
+        <code>secure: true</code>, a <code>__Host-</code> cookie with a{" "}
+        <code>Domain</code> or a non-root <code>path</code>, and (in production)
         a <code>__Secure-</code> cookie without <code>secure: true</code>.
       </p>
       <p>

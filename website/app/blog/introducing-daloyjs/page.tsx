@@ -323,7 +323,7 @@ export default function BlogPostPage() {
             a bit more like an IDE and a bit less like a wall of grey.
           </p>
 
-          <h2>The smallest end-to-end example that actually means something</h2>
+          <h2>A small end-to-end example</h2>
 
           <p>
             I&apos;m going to define a single route, start a server, hit{" "}
@@ -399,7 +399,7 @@ export default function BlogPostPage() {
 
           <p>
             That&apos;s the whole server. <code>serve</code> is the Node
-            adapter; we&apos;ll swap it in a minute. Run it:
+            adapter. We&apos;ll swap it in a minute. Run it:
           </p>
 
           <CodeBlock language="bash" code={`pnpm dev`} />

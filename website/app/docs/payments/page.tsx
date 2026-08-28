@@ -33,8 +33,7 @@ export default function Page() {
         <Link href="/docs/plugins">plugin</Link>
         {", "}attach it to <code>app.state</code>
         {", "}and call it from validated route handlers. That keeps your
-        business logic provider-agnostic and makes it easy to swap or A/B
-        providers later.
+        business logic provider-agnostic so you can swap or A/B providers later.
       </p>
 
       <h2 id="supported-providers">Supported providers</h2>

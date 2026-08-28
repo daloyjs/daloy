@@ -68,7 +68,7 @@ pnpm add -D @mikro-orm/cli @mikro-orm/migrations`}
       <h2 id="2-define-an-entity">2. Define an entity</h2>
       <p>
         <code>defineEntity</code> returns a schema object you can attach to a
-        real class. The class gives you a named type for your handlers; the
+        real class. The class gives you a named type for your handlers. The
         schema gives MikroORM its metadata.
       </p>
       <CodeBlock

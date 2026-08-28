@@ -113,7 +113,7 @@ export default function Page() {
             items: ["DAST / API scanning", "surface monitoring"],
           },
         ]}
-        caption="Each layer catches what the others miss. The framework keeps dangerous defaults out at build time; the scanners watch the registry, the diff, and the running service. None of them replaces keeping the framework controls on."
+        caption="Each layer catches what the others miss. The framework keeps dangerous defaults out at build time. The scanners watch the registry, the diff, and the running service. None of them replaces keeping the framework controls on."
       />
       <p>
         Facts on this page were checked against the vendors&apos; public docs on
@@ -274,7 +274,7 @@ export default function Page() {
             Socket Firewall Free
           </a>{" "}
           for local dependency changes. Keep DaloyJS&apos;s{" "}
-          <code>ignore-scripts=true</code> in place; Firewall decides whether a
+          <code>ignore-scripts=true</code> in place. Firewall decides whether a
           package should download, and <code>ignore-scripts</code> prevents
           lifecycle execution.
         </li>
@@ -361,7 +361,7 @@ export default function Page() {
           already know how to read.
         </li>
         <li>
-          It catches a different class of issue than Socket: not just suspicious
+          It catches a different class of issue than Socket, not only suspicious
           package behavior, but known vulnerable versions, first-party code
           findings, container base-image issues, Terraform/Kubernetes mistakes,
           and API/web findings.
@@ -633,7 +633,7 @@ export default function Page() {
             </td>
             <td>
               You want one operational workflow and fast triage across the whole
-              application, not just npm dependencies.
+              application, not only npm dependencies.
             </td>
           </tr>
         </tbody>
@@ -653,7 +653,7 @@ export default function Page() {
         </li>
         <li>
           Add either Snyk or Aikido for broader SAST/SCA/IaC/container/API
-          coverage. Teams with audit pressure usually start with Snyk; teams
+          coverage. Teams with audit pressure usually start with Snyk. Teams
           optimizing for one dashboard often start with Aikido.
         </li>
         <li>
@@ -670,7 +670,7 @@ export default function Page() {
       <h2 id="what-no-scanner-replaces">What no scanner replaces</h2>
       <p>
         Do not turn off framework controls after adding a scanner. The scanner
-        tells you what it can see; the framework still needs to refuse dangerous
+        tells you what it can see. The framework still needs to refuse dangerous
         behavior by default.
       </p>
       <ul>
@@ -690,7 +690,7 @@ export default function Page() {
           headers, rate limits, body limits, and request timeouts.
         </li>
         <li>
-          Keep reviewing lockfile diffs. A scanner comment is a signal; it is
+          Keep reviewing lockfile diffs. A scanner comment is a signal. It is
           not a substitute for ownership of what ships.
         </li>
       </ul>
@@ -699,7 +699,7 @@ export default function Page() {
       <p>
         To keep this page current, review the linked vendor docs when changing
         recommendations and before major DaloyJS releases. Avoid hardcoding plan
-        limits or seat counts; link to the vendors&apos; pricing pages instead:{" "}
+        limits or seat counts. Link to the vendors&apos; pricing pages instead:{" "}
         <a
           href="https://socket.dev/pricing"
           target="_blank"

@@ -145,7 +145,7 @@ export default function BlogPostPage() {
             case for that claim, including the parts where it does not hold.
           </p>
 
-          <h2>The axis everyone benchmarks is the one that matters least</h2>
+          <h2>Everyone benchmarks the wrong axis</h2>
           <p>
             Express is not slow, and neither are its alternatives. For the
             overwhelming majority of services, your bottleneck is a database
@@ -201,7 +201,7 @@ export default function BlogPostPage() {
             plugins you assemble.
           </p>
 
-          <h2>The part that should decide it: defaults</h2>
+          <h2>Defaults should decide it</h2>
           <p>
             Write the real security checklist for an internet-facing HTTP API.
             In practice: body-size caps, request and handler timeouts,

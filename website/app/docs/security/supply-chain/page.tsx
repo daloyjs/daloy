@@ -53,7 +53,7 @@ export default function Page() {
           {
             eyebrow: "trigger",
             label: "Signed tag push",
-            detail: "release.yml only; fork PRs can't",
+            detail: "release.yml only. Fork PRs can't",
           },
           {
             eyebrow: "gate",
@@ -107,7 +107,7 @@ export default function Page() {
         </li>
         <li>
           No <code>pull_request_target</code> that runs fork code
-          {". "}CI uses the safe <code>pull_request</code> trigger; the one
+          {". "}CI uses the safe <code>pull_request</code> trigger. The one
           narrow exception (a workflow that auto-closes external PRs) never
           checks out, installs, or runs any PR code. A <code>zizmor</code> check
           on every PR fails the build on the dangerous{" "}
@@ -177,10 +177,10 @@ export default function Page() {
         earns the OpenSSF Scorecard <strong>Fuzzing</strong> check.
       </p>
       <p>
-        Each target asserts the function&apos;s documented contract, not just
+        Each target asserts the function&apos;s documented contract, not only
         &quot;does not crash&quot;. A declared rejection (for example a{" "}
         <code>BadRequestError</code> on malformed input) is correct behavior and
-        is ignored; any other thrown error, or a hang, is a finding:
+        is ignored. Any other thrown error, or a hang, is a finding:
       </p>
       <ul>
         <li>
@@ -385,7 +385,7 @@ safe-chain setup`}
         runtime dependencies by policy and any install-time tool you run is your
         trust decision, not the framework&apos;s. Equivalent commercial
         offerings (Socket, Snyk Advisor, JFrog Curation, npm&apos;s own Package
-        Trust) sit at the same layer; pick one or run none, but understand that{" "}
+        Trust) sit at the same layer. Pick one or run none, but understand that{" "}
         <code>minimum-release-age=1440</code> is already doing most of the work
         the article recommends.
       </p>
@@ -436,7 +436,7 @@ safe-chain setup`}
             tone: "success",
           },
         ]}
-        caption="DaloyJS meets or exceeds the Select and Integrate controls as defaults; Monitor is daily SCA plus Dependabot; per-app CVE reachability triage in Mitigate is the consumer's job."
+        caption="DaloyJS meets or exceeds the Select and Integrate controls as defaults. Monitor is daily SCA plus Dependabot. Per-app CVE reachability triage in Mitigate is the consumer's job."
       />
       <table>
         <thead>

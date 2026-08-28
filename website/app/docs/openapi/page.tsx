@@ -416,7 +416,7 @@ const doc = generateOpenAPI(app, {
         <li>
           <code>discriminator(propertyName, mapping?)</code>
           {": "}the bare spec builder. Use it when you already have a
-          hand-rolled JSON Schema and just want to attach the field cleanly.
+          hand-rolled JSON Schema and want to attach the field cleanly.
         </li>
         <li>
           <code>discriminatedUnion(propertyName, variants, opts?)</code>

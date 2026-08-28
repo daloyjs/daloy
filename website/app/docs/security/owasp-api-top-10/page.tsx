@@ -118,10 +118,10 @@ export default function Page() {
             </td>
             <td>
               Per-route auth via <code>bearerAuth()</code> /{" "}
-              <code>basicAuth()</code> / <code>requireScopes()</code>; typed{" "}
+              <code>basicAuth()</code> / <code>requireScopes()</code>. Typed{" "}
               <code>ctx.state.auth</code> contract so the handler always knows
-              who the caller is; Standard Schema params let you validate ID
-              shape; <code>onAuthSuccess</code> hooks for attaching tenant/user
+              who the caller is. Standard Schema params let you validate ID
+              shape. <code>onAuthSuccess</code> hooks for attaching tenant/user
               context.
             </td>
             <td>
@@ -174,7 +174,7 @@ export default function Page() {
               ArkType / TypeBox). Only fields you declare in the response schema
               are emitted. Undeclared fields a handler returns (a stray{" "}
               <code>passwordHash</code>
-              {", "}a spread ORM row) are stripped at serialization, not just
+              {", "}a spread ORM row) are stripped at serialization, not only
               flagged. Only fields you declare in the request schema reach your
               handler. Surfaced in OpenAPI so reviewers can audit every payload.
             </td>
@@ -191,7 +191,7 @@ export default function Page() {
               <code>acknowledgeNoResponseBodySchema: true</code> on the route to
               record that intent and silence the finding. Successful raw{" "}
               <code>preBody</code>/<code>beforeHandle</code> short-circuits
-              require the same acknowledgement; error denials do not.
+              require the same acknowledgement. Error denials do not.
               Framework-mounted routes (<code>/openapi.json</code>
               {", "}
               <code>/docs</code>
@@ -207,12 +207,12 @@ export default function Page() {
             </td>
             <td>
               Body-size cap (default 1 MiB, <code>Content-Length</code> checked
-              first &rarr; <code>413</code>); per-route{" "}
-              <code>request.timeout</code>; <code>rateLimit()</code> with{" "}
+              first &rarr; <code>413</code>). Per-route{" "}
+              <code>request.timeout</code>. <code>rateLimit()</code> with{" "}
               <code>groupId</code> shared buckets;{" "}
               <code>@daloyjs/core/rate-limit-redis</code> for multi-instance
-              deploys; <code>loadShedding()</code>; <code>ipRestriction()</code>{" "}
-              with CIDR-aware allow/deny; multipart per-field size caps and MIME
+              deploys. <code>loadShedding()</code>. <code>ipRestriction()</code>{" "}
+              with CIDR-aware allow/deny. Multipart per-field size caps and MIME
               allowlist; <code>compression()</code> with BREACH-aware skips and{" "}
               <code>minimumSize</code> + negative-ratio guard;{" "}
               connection-draining shutdown.
@@ -228,9 +228,9 @@ export default function Page() {
             </td>
             <td>
               <code>requireScopes()</code> with RFC-6750 challenge and
-              per-request aggregation; per-route middleware via{" "}
+              per-request aggregation. Per-route middleware via{" "}
               <code>combine</code> (<code>every</code> / <code>some</code> /{" "}
-              <code>except</code>) so admin actions are explicit, not implicit;{" "}
+              <code>except</code>) so admin actions are explicit, not implicit.{" "}
               <code>internal: true</code> route flag (<code>404</code> via{" "}
               <code>app.fetch</code>
               {", "}dispatched only via <code>app.inject</code>);
@@ -291,17 +291,17 @@ export default function Page() {
             </td>
             <td>
               <code>secureHeaders()</code> auto-applied (CSP with nonce +
-              Trusted Types, HSTS, frame-defense); <code>Server</code> and{" "}
-              <code>X-Powered-By</code> stripped; duplicate <code>Host</code> /{" "}
-              <code>Content-Length</code> rejected; <code>safeJsonParse</code>{" "}
+              Trusted Types, HSTS, frame-defense). <code>Server</code> and{" "}
+              <code>X-Powered-By</code> stripped. Duplicate <code>Host</code> /{" "}
+              <code>Content-Length</code> rejected. <code>safeJsonParse</code>{" "}
               strips <code>__proto__</code> / <code>constructor</code> /{" "}
-              <code>prototype</code>; header injection / response splitting
-              guards; path-traversal rejection; per-route <code>accepts</code>{" "}
-              content-type opt-in; cross-origin state-changing requests refused
-              with <code>403</code> unless <code>cors()</code> allows;{" "}
+              <code>prototype</code>. Header injection / response splitting
+              guards. Path-traversal rejection. Per-route <code>accepts</code>{" "}
+              content-type opt-in. Cross-origin state-changing requests refused
+              with <code>403</code> unless <code>cors()</code> allows.{" "}
               <code>cors()</code> <code>methods: [&quot;*&quot;]</code> refused
               at construction and default <code>allowMethods</code> narrowed to{" "}
-              <code>[GET, HEAD, POST]</code>; CSP report receiver refuses non-
+              <code>[GET, HEAD, POST]</code>. CSP report receiver refuses non-
               <code>application/json</code> and bodies over 64 KiB;
               refuse-to-boot in production on{" "}
               <code>
@@ -356,7 +356,7 @@ export default function Page() {
               for HMAC-verified inbound webhooks (HMAC-SHA256 / 384 / 512,
               accepting GitHub-style <code>sha256=</code> prefixes or raw hex);
               Standard Schema validation on third-party response bodies so a
-              compromised vendor can&apos;t inject unexpected fields; request
+              compromised vendor can&apos;t inject unexpected fields. Request
               timeouts so a slow upstream can&apos;t exhaust your event loop.
             </td>
             <td>
@@ -371,8 +371,7 @@ export default function Page() {
       <h2 id="cross-cutting-best-practices">Cross-cutting best practices</h2>
       <p>
         The Aikido guide also calls out general defences that aren&apos;t in the
-        Top 10 list but matter for any API. Here&apos;s where Daloy addresses
-        each.
+        Top 10 list but matter for any API. Daloy covers those below.
       </p>
       <table>
         <thead>
@@ -396,7 +395,7 @@ export default function Page() {
               Standard Schema (Zod 4 / Valibot / ArkType / TypeBox) on{" "}
               <code>request.params</code> / <code>query</code> /{" "}
               <code>headers</code> / <code>json</code> / <code>form</code> /{" "}
-              <code>multipart</code>; rejected requests turn into RFC 9457
+              <code>multipart</code>. Rejected requests turn into RFC 9457
               problem+json.
             </td>
           </tr>
@@ -434,15 +433,15 @@ export default function Page() {
               <code>token</code>
               {", "}
               <code>cookie</code>
-              {","}...); request-id propagation; <code>requestId()</code>{" "}
+              {","}...). Request-id propagation. <code>requestId()</code>{" "}
               trust-default audit.
             </td>
           </tr>
           <tr>
             <td>Error handling without info leak</td>
             <td>
-              RFC 9457 problem+json with prod-mode redaction; stack traces never
-              leave the process in production;{" "}
+              RFC 9457 problem+json with prod-mode redaction. Stack traces never
+              leave the process in production.{" "}
               <code>
                 httpError({"{"} res {"}"})
               </code>{" "}
@@ -499,7 +498,7 @@ export default function Page() {
           response schema.
         </li>
         <li>
-          Penetration testing: automated scanners catch common issues; a human
+          Penetration testing. Automated scanners catch common issues. A human
           tester catches logic chains. Run both on a schedule.
         </li>
       </ul>

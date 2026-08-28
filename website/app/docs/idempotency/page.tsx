@@ -70,7 +70,7 @@ export default function Page() {
       <h2 id="quick-start">Quick start</h2>
       <p>
         Mount <code>idempotency()</code> ahead of the routes that need
-        exactly-once semantics. That is all: clients opt in per request by
+        exactly-once semantics. Clients opt in per request by
         sending an <code>Idempotency-Key</code> header.
       </p>
       <p>
@@ -164,7 +164,7 @@ app.post(
       <ul>
         <li>
           First request
-          {": "}the handler runs normally; the final response is captured and
+          {": "}the handler runs normally. The final response is captured and
           persisted under the key for <code>ttlSeconds</code>.
         </li>
         <li>
@@ -368,13 +368,13 @@ async function createChargeWithRetries(amount: number) {
           performed at login or on a privilege change. <code>Set-Cookie</code>{" "}
           is stripped on capture (so a credential never reaches the store) and
           re-checked on replay, alongside the hop-by-hop and per-request fields
-          — <code>Connection</code>
+          (<code>Connection</code>
           {", "}
           <code>Transfer-Encoding</code>
           {", "}
           <code>Age</code>
           {", "}
-          <code>X-Request-Id</code>. Your application headers replay unchanged.
+          <code>X-Request-Id</code>). Your application headers replay unchanged.
         </li>
         <li>
           <strong>The in-memory store is bounded.</strong>{" "}
@@ -384,8 +384,8 @@ async function createChargeWithRetries(amount: number) {
           bound, since a stream of unique keys inside the TTL grew the map
           linearly with each entry pinning a stored response body. Eviction can
           only cost exactly-once semantics for a retry that arrives after it, so
-          supply a shared (Redis) store when your key volume approaches the cap
-          — which you want anyway for multi-instance deployments.
+          supply a shared (Redis) store when your key volume approaches the cap,
+          which you want anyway for multi-instance deployments.
         </li>
       </ul>
     </>

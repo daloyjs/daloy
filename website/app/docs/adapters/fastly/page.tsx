@@ -87,7 +87,7 @@ import { app } from "./server.js";
 
 installFastlyListener(app);`}
       />
-      <p>Under the hood that&apos;s equivalent to:</p>
+      <p>That helper is equivalent to:</p>
       <CodeBlock
         language="ts"
         code={`addEventListener("fetch", (event) =>

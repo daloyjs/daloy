@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "OTLP export (OpenTelemetry push)",
   description:
-    "Push logs and OTel semantic-convention HTTP metrics to an OpenTelemetry collector with zero dependencies. One App option reads the standard OTEL_EXPORTER_OTLP_* variables; standalone exporters cover custom signals.",
+    "Push logs and OTel semantic-convention HTTP metrics to an OpenTelemetry collector with zero dependencies. One App option reads the standard OTEL_EXPORTER_OTLP_* variables. Standalone exporters cover custom signals.",
   path: "/docs/otlp",
   keywords: [
     "OTLP",
@@ -31,9 +31,9 @@ export default function Page() {
         <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> /{" "}
         <code>OTEL_EXPORTER_OTLP_HEADERS</code> /{" "}
         <code>OTEL_RESOURCE_ATTRIBUTES</code> / <code>OTEL_SERVICE_NAME</code>{" "}
-        variables into every container and scrape nothing, not stdout and not a{" "}
-        <code>/metrics</code> route. On such platforms, one App option turns on
-        a dependency-free OTLP/HTTP pipeline:
+        variables into every container and scrape nothing. They do not scrape
+        stdout or a <code>/metrics</code> route. On such platforms, one App
+        option turns on a dependency-free OTLP/HTTP pipeline:
       </p>
 
       <CodeBlock
@@ -51,14 +51,14 @@ const app = new App({
           <code>http.server.request.duration</code>
         </a>{" "}
         per the OTel HTTP semantic conventions. With no endpoint configured it
-        is a silent no-op, so it is safe to keep enabled in development. No
-        OTel SDK, no loader hooks, no runtime dependencies.
+        is a silent no-op, so it is safe to keep enabled in development. There
+        is no OTel SDK, loader hook, or runtime dependency.
       </p>
 
       <FlowDiagram
         title="Push pipeline"
         numbered
-        caption="The logger write sink and the semconv HTTP hook feed two batched exporters. Both post OTLP/HTTP JSON to the collector named by the platform-injected environment variables; the collector fans out to Loki-style log stores and Mimir/Prometheus-style metric stores."
+        caption="The logger write sink and the semconv HTTP hook feed two batched exporters. Both post OTLP/HTTP JSON to the collector named by the platform-injected environment variables. The collector fans out to Loki-style log stores and Mimir/Prometheus-style metric stores."
         steps={[
           {
             label: "OTEL_* env vars",
@@ -67,7 +67,7 @@ const app = new App({
           },
           {
             label: "logger + hooks",
-            detail: "log lines tee; http.server.request.duration per request",
+            detail: "log lines tee, http.server.request.duration per request",
             tone: "accent",
           },
           {
@@ -136,9 +136,9 @@ await app.telemetry?.flush();`}
       />
       <p>
         The conventional injected endpoint is the gRPC form
-        (<code>http://host:4317</code>); a trailing <code>:4317</code> is
+        (<code>http://host:4317</code>). A trailing <code>:4317</code> is
         rewritten to <code>:4318</code>, the collector&apos;s OTLP/HTTP port.
-        Header values often carry multi-tenant routing credentials; DaloyJS
+        Header values often carry multi-tenant routing credentials. DaloyJS
         never logs them. Spec values are percent-encoded (
         <code>tenant_id=a%2Cb</code> arrives as <code>a,b</code>).
       </p>
@@ -159,7 +159,7 @@ await app.telemetry?.flush();`}
           headers cannot follow a 302 off-box.
         </li>
         <li>
-          The log queue is bounded (drop-oldest); metric series are capped and
+          The log queue is bounded (drop-oldest). Metric series are capped and
           attribute values length-truncated, so hostile cardinality cannot grow
           memory.
         </li>
@@ -235,7 +235,8 @@ const app = new App({ hooks: metrics ? semconvHttpMetrics(metrics) : {} });`}
           automatically.
         </li>
         <li>
-          Export uses raw <code>fetch</code>, not <code>fetchGuard</code>.
+          Export uses raw <code>fetch</code>. It does not go through{" "}
+          <code>fetchGuard</code>.
           The collector URL is operator config (the same trust class as a
           database URL), and in-cluster collectors are typically private
           IPs that SSRF defaults would refuse.
@@ -263,7 +264,7 @@ const app = new App({ hooks: metrics ? semconvHttpMetrics(metrics) : {} });`}
           </a>{" "}
           is the <em>pull</em> pillar: a scrape endpoint with Prometheus
           naming. Use it when something scrapes you. Use <code>telemetry</code>{" "}
-          when a collector expects pushes. They coexist; the{" "}
+          when a collector expects pushes. They coexist. The{" "}
           <code>httpMetrics()</code> route label also benefits from{" "}
           <code>ctx.routePath</code> now.
         </li>

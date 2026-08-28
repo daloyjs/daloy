@@ -8,9 +8,9 @@ import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const POST = {
   slug: "rate-limiting-that-survives-multiple-instances",
-  title: "Rate Limiting That Survives Multiple Instances",
+  title: "Rate Limiting Across Multiple Instances",
   description:
-    "Why the default in-memory rateLimit() is a one-instance lie behind a load balancer, how @daloyjs/core/rate-limit-redis fixes it with an atomic Lua INCR+PEXPIRE script, and the three operational levers that matter in production: fail-open vs fail-closed, Retry-After accuracy, and where to host the counter on serverless, edge, and traditional Node deploys.",
+    "Why the default in-memory rateLimit() is a one-instance lie behind a load balancer, how @daloyjs/core/rate-limit-redis fixes it with an atomic Lua INCR+PEXPIRE script, and the production levers: fail-open vs fail-closed, Retry-After accuracy, and where to host the counter on serverless, edge, and traditional Node deploys.",
   date: "2026-06-02",
   readingTime: "12 min read",
   author: "Devlin Duldulao",
@@ -491,7 +491,7 @@ export default function BlogPostPage() {
             cold starts. It covers the default store and why it lies behind a
             load balancer, the Redis store DaloyJS ships, the small atomic Lua
             script that does the actual work, the two operational levers you
-            must decide on (fail-open vs fail-closed; what your key actually
+            must decide on (fail-open vs fail-closed, and what your key actually
             is), and deployment guidance per runtime.
           </p>
 
@@ -535,7 +535,7 @@ export default function BlogPostPage() {
           <p>
             That&apos;s the whole change. Same <code>rateLimit()</code>{" "}
             middleware, same <code>windowMs</code> and <code>max</code>
-            {", "}just a different store. Every replica now reads and writes the
+            {", "}with a different store. Every replica now reads and writes the
             same counter. The interesting bits are <em>inside</em> the store,
             and interesting in the &quot;fewer than 15 lines of Lua&quot; sense,
             which is the way I like my interesting bits.
@@ -571,11 +571,11 @@ export default function BlogPostPage() {
               same call lets the middleware produce an accurate{" "}
               <code>Retry-After</code> without a second hop. Two-RTT rate
               limiting is what people mean when they say &quot;Redis is
-              slow&quot; (it isn&apos;t; their limiter is just over-talkative).
+              slow&quot; (it isn&apos;t. Their limiter is over-talkative).
             </li>
           </ul>
 
-          <h2>The two levers that matter in production</h2>
+          <h2>Two production levers</h2>
 
           <p>Two questions, both worth thinking about before you ship:</p>
 
@@ -611,7 +611,7 @@ export default function BlogPostPage() {
           <p>
             A single per-IP cap is a starting point, not a finished answer.
             Modern abuse traffic spreads across thousands of IPs on residential
-            proxy networks; your job is to layer cheap wide limits with narrow
+            proxy networks. Your job is to layer cheap wide limits with narrow
             expensive ones. Two stores, two prefixes, two key generators:
           </p>
 

@@ -134,7 +134,7 @@ Deno.addSignalListener("SIGINT", () => ac.abort());`}
       <h2 id="deploy-to-deno-deploy">Deploy to Deno Deploy</h2>
       <p>
         Deno Deploy reads the entry script directly. Point your project at{" "}
-        <code>src/server.ts</code>; the same file you run locally is what runs
+        <code>src/server.ts</code>. The same file you run locally is what runs
         in production.
       </p>
       <CodeBlock
@@ -159,12 +159,12 @@ CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/server.ts"]`}
       <h2 id="gotchas">Gotchas</h2>
       <ul>
         <li>
-          Don&apos;t use <code>Deno.serveHttp</code>
-          {": "}it&apos;s deprecated. The DaloyJS adapter uses{" "}
+          Do not use <code>Deno.serveHttp</code>
+          {". "}It is deprecated. The DaloyJS adapter uses{" "}
           <code>Deno.serve</code> exclusively.
         </li>
         <li>
-          On Deno Deploy you don&apos;t get <code>SIGTERM</code>; the platform
+          On Deno Deploy you do not get <code>SIGTERM</code>. The platform
           manages shutdown. The <code>AbortController</code> wiring above is for
           self-hosted Deno only.
         </li>

@@ -119,8 +119,8 @@ export default function Page() {
               <td className="px-3 py-2">Server-side renderer (SSR)</td>
               <td className="px-3 py-2">No</td>
               <td className="px-3 py-2">
-                No JSX/hydration engine. Use Next.js / Remix / Astro and put
-                DaloyJS behind it.
+                There is no JSX or hydration engine. Use Next.js / Remix / Astro
+                and put DaloyJS behind it.
               </td>
             </tr>
             <tr>
@@ -141,8 +141,8 @@ export default function Page() {
               <td className="px-3 py-2">MCP server (HTTP transport)</td>
               <td className="px-3 py-2">Strong</td>
               <td className="px-3 py-2">
-                JSON-RPC over Streamable HTTP, DaloyJS handles the HTTP pieces;
-                the MCP framing is yours.
+                JSON-RPC over Streamable HTTP. DaloyJS handles the HTTP pieces.
+                The MCP framing is yours.
               </td>
             </tr>
             <tr>
@@ -155,7 +155,7 @@ export default function Page() {
             </tr>
             <tr>
               <td className="px-3 py-2">GraphQL server</td>
-              <td className="px-3 py-2">Possible, not native</td>
+              <td className="px-3 py-2">Possible as a mounted route</td>
               <td className="px-3 py-2">
                 You can mount Yoga/Apollo as a single route, but DaloyJS
                 isn&apos;t a GraphQL framework.
@@ -165,7 +165,7 @@ export default function Page() {
               <td className="px-3 py-2">SOAP server</td>
               <td className="px-3 py-2">No</td>
               <td className="px-3 py-2">
-                SOAP is XML/WSDL; DaloyJS speaks JSON contracts.
+                SOAP is XML/WSDL. DaloyJS speaks JSON contracts.
               </td>
             </tr>
           </tbody>
@@ -196,14 +196,14 @@ export default function Page() {
           Microservice
           {": "}one small service that does one thing (orders, payments, search)
           and talks to others over the network. &quot;Microservice
-          architecture&quot; just means you have many of them instead of one big
+          architecture&quot; means you have many of them instead of one big
           app.
         </li>
         <li>
           Service-to-service (S2S)
           {": "}when two of your own backend services call each other directly,
           with no human in the loop. Usually authenticated with a shared secret
-          or mTLS, not a user cookie.
+          or mTLS. A user cookie is the wrong credential here.
         </li>
         <li>
           Backend-for-Frontend (BFF)
@@ -222,7 +222,8 @@ export default function Page() {
           Load balancer
           {": "}a network-level box that takes one stream of requests and
           spreads them across many identical copies of your service. It cares
-          about TCP connections and health checks, not your routes or schemas.
+          about TCP connections and health checks. It does not inspect your
+          routes or schemas.
         </li>
         <li>
           Server-side renderer (SSR)
@@ -388,8 +389,7 @@ const app = new App({
       </p>
 
       <h3 id="5-api-gateway-strong-as-in-app-gateway-not-a-replacement-for-kong">
-        5. API gateway, strong as &quot;in-app gateway&quot;, not a replacement
-        for Kong
+        5. API gateway (in-app gateway, alongside Kong)
       </h3>
       <p>DaloyJS gives you almost everything an API gateway does:</p>
       <ul>
@@ -429,34 +429,37 @@ const app = new App({
         <li>Errors: RFC 9457 problem+json with prod redaction</li>
       </ul>
       <p>
-        What it does <strong>not</strong> do (and shouldn&apos;t):
+        What it does not do:
       </p>
       <ul>
         <li>
-          No dynamic upstream proxy. There is no{" "}
-          <code>proxyTo(&quot;http://upstream&quot;)</code>; every route binds
+          There is no dynamic upstream proxy and no{" "}
+          <code>proxyTo(&quot;http://upstream&quot;)</code>. Every route binds
           to in-process code.
         </li>
         <li>
-          No service discovery, circuit breakers, canary / weighted routing, or
-          traffic mirroring.
+          There is no service discovery, circuit breaker, canary or weighted
+          routing, or traffic mirroring.
         </li>
-        <li>No protocol translation (gRPC ↔ REST, SOAP ↔ REST).</li>
-        <li>No declarative gateway config (YAML, CRDs, admin API).</li>
+        <li>
+          There is no protocol translation (gRPC ↔ REST, SOAP ↔ REST).
+        </li>
+        <li>
+          There is no declarative gateway config (YAML, CRDs, admin API).
+        </li>
       </ul>
       <p>
-        <strong>Use it as:</strong> the smart edge inside one service, or the
-        front door for a small set of services you also own.{" "}
-        <strong>Don&apos;t use it as:</strong> the only gateway sitting in front
-        of a fleet of polyglot microservices. For that, run Kong / APISIX / Tyk
-        / Envoy and put DaloyJS services <em>behind</em> it.
+        Fit: the smart edge inside one service, or the front door for a small
+        set of services you also own. For a fleet of polyglot microservices, run
+        Kong / APISIX / Tyk / Envoy and put DaloyJS services <em>behind</em>{" "}
+        that gateway.
       </p>
 
       <h3 id="6-load-balancer-no">6. Load balancer: no</h3>
       <p>
         Load balancing is a TCP-level job. Use NGINX, HAProxy, AWS ALB/NLB, GCP
         Load Balancing, or Cloudflare. DaloyJS sits <em>behind</em> the LB and
-        serves requests; it doesn&apos;t distribute them. The framework does
+        serves requests. It does not distribute them. The framework does
         ship a <code>behindProxy</code> declarative model so it correctly reads{" "}
         <code>X-Forwarded-*</code> headers when the LB terminates TLS.
       </p>
@@ -465,10 +468,10 @@ const app = new App({
         7. Server-side renderer (SSR): no
       </h3>
       <p>
-        There is no JSX, React, Vue, or Svelte renderer in DaloyJS. No{" "}
-        <code>renderToString</code>
-        {", "}no hydration, no file-system page router, no React Server
-        Components. The framework deliberately stays in the REST/WS layer.
+        There is no JSX, React, Vue, or Svelte renderer in DaloyJS. There is
+        no <code>renderToString</code>
+        {", "}hydration, file-system page router, or React Server
+        Components. The framework stays in the REST/WS layer.
       </p>
       <p>
         <strong>Recommended pattern:</strong> Next.js / Remix / Astro for SSR,
@@ -478,7 +481,7 @@ const app = new App({
       </p>
 
       <h3 id="8-webhook-receiver-excellent">8. Webhook receiver: excellent</h3>
-      <p>Webhooks are just HTTP POSTs with a signature header. DaloyJS has:</p>
+      <p>Webhooks are HTTP POSTs with a signature header. DaloyJS has:</p>
       <ul>
         <li>
           <code>verifyWebhookSignature</code> / <code>signWebhookPayload</code>
@@ -567,7 +570,7 @@ const app = new App({
       </p>
 
       <h3 id="12-graphql-server-possible-not-the-framework-and-apos-s-shape">
-        12. GraphQL server: possible, not the framework&apos;s shape
+        12. GraphQL server (possible, outside the native shape)
       </h3>
       <p>
         DaloyJS is contract-first REST: one route, one schema, one OpenAPI
@@ -611,7 +614,7 @@ const app = new App({
               </td>
               <td className="px-3 py-2">NGINX, HAProxy, ALB, Cloudflare</td>
               <td className="px-3 py-2">
-                DaloyJS is the workload, not the router.
+                DaloyJS is the workload. It does not route traffic across copies.
               </td>
             </tr>
             <tr>
@@ -620,7 +623,7 @@ const app = new App({
               </td>
               <td className="px-3 py-2">Kong, APISIX, Envoy, Tyk</td>
               <td className="px-3 py-2">
-                No dynamic upstream proxy or service discovery.
+                There is no dynamic upstream proxy or service discovery.
               </td>
             </tr>
             <tr>
@@ -628,7 +631,9 @@ const app = new App({
                 Render React/Vue pages on the server
               </td>
               <td className="px-3 py-2">Next.js, Remix, Astro, Nuxt</td>
-              <td className="px-3 py-2">No component renderer or hydration.</td>
+              <td className="px-3 py-2">
+                There is no component renderer or hydration.
+              </td>
             </tr>
             <tr>
               <td className="px-3 py-2">
@@ -636,7 +641,7 @@ const app = new App({
               </td>
               <td className="px-3 py-2">gRPC, Connect</td>
               <td className="px-3 py-2">
-                No Protobuf/trailer-native RPC stack.
+                There is no Protobuf or trailer-native RPC stack.
               </td>
             </tr>
             <tr>
@@ -645,7 +650,7 @@ const app = new App({
               </td>
               <td className="px-3 py-2">GraphQL Yoga, Apollo</td>
               <td className="px-3 py-2">
-                Different paradigm; DaloyJS is one-route-per-operation.
+                Different paradigm. DaloyJS is one-route-per-operation.
               </td>
             </tr>
             <tr>
@@ -655,7 +660,7 @@ const app = new App({
               <td className="px-3 py-2">
                 A dedicated SOAP stack (or a translation adapter)
               </td>
-              <td className="px-3 py-2">No XML/WSDL primitives.</td>
+              <td className="px-3 py-2">There are no XML or WSDL primitives.</td>
             </tr>
             <tr>
               <td className="px-3 py-2">
@@ -773,7 +778,7 @@ const app = new App({
       />
       <p>
         Every box marked <em>DaloyJS</em> is the same framework, the same
-        contract style, the same security defaults, just configured for its
+        contract style, the same security defaults, each configured for its
         role. The boxes that aren&apos;t DaloyJS exist because they&apos;re
         better at their specific job.
       </p>

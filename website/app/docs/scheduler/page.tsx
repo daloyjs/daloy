@@ -35,7 +35,7 @@ export default function Page() {
         {": "}run periodic work inside <em>this</em> process on a fixed interval
         or a cron expression. It is the in-process counterpart to an external
         job queue. Reach for it for cache sweeps, token refresh, reconciliation,
-        and other housekeeping, not for distributed fan-out. It has zero runtime
+        and other housekeeping. It is not for distributed fan-out. It has zero runtime
         dependencies and three properties a production scheduler needs:
       </p>
       <ul>
@@ -92,7 +92,7 @@ export default function Page() {
             tone: "danger",
           },
         ]}
-        caption="Each tick is armed fixed-rate before the run starts. If the previous run is still in flight the overlapping tick is skipped, not started concurrently, so a slow task degrades to back-to-back runs instead of piling up."
+        caption="Each tick is armed fixed-rate before the run starts. If the previous run is still in flight the overlapping tick is skipped rather than started concurrently, so a slow task degrades to back-to-back runs instead of piling up."
       />
 
       <h2 id="quick-start-with-app-cron">
@@ -171,7 +171,7 @@ app.cron({ name: "first-of-month", cron: "@monthly" }, run);    // 00:00 on the 
         a malformed or unsatisfiable expression (for example{" "}
         <code>0 0 30 2 *</code>
         {", "}the 30th of February) throws a <code>CronParseError</code> at
-        registration time, not silently at runtime.
+        registration time.
       </p>
 
       <h2 id="single-flight-and-overruns">Single-flight &amp; overruns</h2>
@@ -197,7 +197,7 @@ state.nextRunAt;       // epoch ms of the next scheduled run`}
       <h2 id="per-run-timeouts">Per-run timeouts</h2>
       <p>
         Set <code>timeoutMs</code> to bound a run. When it elapses the
-        run&apos;s <code>signal</code> is aborted; forward it to your I/O so the
+        run&apos;s <code>signal</code> is aborted. Forward it to your I/O so the
         handler unwinds promptly. A timed-out run is recorded as a failure and
         reported to <code>onError</code> with <code>timedOut: true</code>.
       </p>
@@ -255,7 +255,8 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
         horizontally-scaled fleet (or that must survive a process restart) use a
         durable queue or a leader-elected external scheduler and have the
         elected instance call <code>runNow()</code>
-        {". "}The single-flight guarantee is per-process, not cluster-wide.
+        {". "}The single-flight guarantee is per-process. It does not coordinate
+        across a cluster.
       </p>
       <p>
         For work that must survive a restart and run once across the cluster,

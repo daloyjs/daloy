@@ -446,12 +446,12 @@ export default function BlogPostPage() {
             Hi, Devlin again. I want to talk about the CLI command that has
             saved me more pull-request meetings than any other tool in this
             framework: <code>daloy inspect</code>
-            {". "}The whole premise is small and a little stubborn, the reviewer
+            {". "}The whole premise is small and a little stubborn. The reviewer
             should see the API surface in plain text on every PR, while there is
             still time to fix it before merge.
           </p>
 
-          <h2>The PR review that taught me to write this post</h2>
+          <h2>A PR review taught me to write this</h2>
 
           <EditorFrame
             files={["postmortem-but-it's-a-12-line-diff.md"]}

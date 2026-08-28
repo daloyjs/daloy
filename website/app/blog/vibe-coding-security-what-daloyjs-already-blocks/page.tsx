@@ -511,7 +511,7 @@ export default function BlogPostPage() {
             </li>
           </ul>
 
-          <h2>The vibe-coder prompt that produces a defensible app</h2>
+          <h2>A vibe-coder prompt I would actually use</h2>
 
           <CodeBlock language="ts" code={VIBE_CODER_CHECKLIST} />
 

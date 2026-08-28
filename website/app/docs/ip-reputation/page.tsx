@@ -78,12 +78,12 @@ export default function Page() {
           },
           {
             label: "Listed -> block",
-            detail: "log mode never blocks; only fires onMatch",
+            detail: "log mode never blocks. Only fires onMatch",
             tone: "danger",
           },
           {
             label: "Not listed / unresolved IP -> allow",
-            detail: "feed outage retains last-known-good; fail-open",
+            detail: "feed outage retains last-known-good. Fail-open",
             tone: "success",
           },
         ]}
@@ -181,7 +181,7 @@ const reputation = ipReputation({
         </li>
         <li>
           A failed <strong>refresh</strong> keeps the previous, last-known-good
-          entries for that feed; the other feeds are unaffected.
+          entries for that feed. The other feeds are unaffected.
         </li>
         <li>
           An <strong>unresolvable client IP</strong> is treated as not-listed.
@@ -242,10 +242,10 @@ reputation.has("203.0.113.7");       // probe without side effects`}
 
       <h2 id="custom-ip-resolution">Custom IP resolution</h2>
       <p>
-        By default the client IP is resolved from the socket-supplied value; set{" "}
+        By default the client IP is resolved from the socket-supplied value. Set{" "}
         <code>trustProxyHeaders: true</code> or <code>trustedProxies</code> to
         read <code>X-Forwarded-For</code> / <code>X-Real-IP</code> (only behind
-        a proxy you trust to overwrite them; prefer{" "}
+        a proxy you trust to overwrite them. Prefer{" "}
         <code>trustedProxies</code> when the origin can be reached directly), or
         pass your own <code>resolveIp</code>
         {": "}

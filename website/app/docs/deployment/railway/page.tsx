@@ -7,7 +7,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Deploy to Railway",
   description:
-    "Deploy DaloyJS to Railway. Railway auto-detects from package.json; add an optional railway.json or railway.toml to pin the start command, health check, and pre-deploy migrations. Set TRUST_PROXY_HOPS=1 so the reverse-proxy guard accepts Railway's X-Forwarded-* headers instead of returning 500.",
+    "Deploy DaloyJS to Railway. Railway auto-detects from package.json. Add an optional railway.json or railway.toml to pin the start command, health check, and pre-deploy migrations. Set TRUST_PROXY_HOPS=1 so the reverse-proxy guard accepts Railway's X-Forwarded-* headers instead of returning 500.",
   path: "/docs/deployment/railway",
   keywords: [
     "Deploy DaloyJS to Railway",
@@ -30,7 +30,7 @@ export default function Page() {
       <h1>Railway</h1>
       <p>
         Railway auto-detects Node projects from <code>package.json</code>
-        {". "}A config file is <strong>optional</strong>; add one only when you
+        {". "}A config file is <strong>optional</strong>. Add one only when you
         want to pin the start command, set a health check, run pre-deploy
         migrations, or switch to a Dockerfile-based build.
       </p>

@@ -49,7 +49,7 @@ export default function Page() {
           {
             eyebrow: "request",
             label: "multipart/form-data body",
-            detail: "File / Blob entries kept, not buffered",
+            detail: "File / Blob entries kept as streams, without buffering",
           },
           {
             eyebrow: "app caps",
@@ -134,14 +134,14 @@ app.post(
           <code>magicBytes</code>
           {": "}verify file signatures before the handler receives the upload.{" "}
           <code>true</code> derives known signatures from <code>accept</code>{" "}
-          for PNG, JPEG, GIF, WebP, PDF, ZIP, and GZIP; custom signatures
+          for PNG, JPEG, GIF, WebP, PDF, ZIP, and GZIP. Custom signatures
           support domain-specific formats.
         </li>
         <li>
           <code>rejectScriptableImages</code>
           {": "}reject SVG, MVG, MSL, PostScript, and EPS payloads that can
           execute inside renderers such as ImageMagick. This is enabled
-          automatically when <code>magicBytes</code> is configured; set it to{" "}
+          automatically when <code>magicBytes</code> is configured. Set it to{" "}
           <code>false</code> only when the renderer is sandboxed.
         </li>
         <li>

@@ -26,7 +26,7 @@ export default function Page() {
       <h1>Routing</h1>
       <p>
         DaloyJS uses a trie/radix router with a static-route fast path. Static
-        routes resolve via a single <code>Map.get</code>; dynamic routes walk a
+        routes resolve via a single <code>Map.get</code>. Dynamic routes walk a
         trie in O(path-segments) regardless of how many routes you have.
       </p>
 
@@ -62,9 +62,9 @@ export default function Page() {
         contract. For an intentionally opaque body, pass{" "}
         <code>acknowledgeNoResponseBodySchema: true</code> explicitly.
         Successful raw responses returned by <code>preBody</code> or{" "}
-        <code>beforeHandle</code> require the same acknowledgement; ordinary{" "}
+        <code>beforeHandle</code> require the same acknowledgement. Ordinary{" "}
         <code>4xx</code>/<code>5xx</code> hook denials do not. Response
-        descriptions remain optional; omitted values become a stable{" "}
+        descriptions remain optional. Omitted values become a stable{" "}
         <code>HTTP &lt;status&gt; response</code> description in OpenAPI.
       </p>
 
@@ -212,7 +212,7 @@ export const app = new App().registerRoutes([
         <code>DELETE</code>
         {", "}and <code>HEAD</code>
         {". "}Register an explicit <code>OPTIONS</code> route with{" "}
-        <code>route()</code>; otherwise DaloyJS supplies automatic preflight
+        <code>route()</code>. Otherwise DaloyJS supplies automatic preflight
         handling.
       </p>
 
@@ -316,7 +316,7 @@ export const app = new App().registerRoutes([
         </li>
         <li>
           <code>auth</code>
-          {": "}OpenAPI security requirement for the route; pair it with an auth
+          {": "}OpenAPI security requirement for the route. Pair it with an auth
           hook such as <code>bearerAuth()</code>.
         </li>
         <li>
@@ -370,14 +370,14 @@ export const app = new App().registerRoutes([
         </li>
         <li>
           <code>onResponse</code>
-          {": "}final observer. Use it for logging and metrics, not response
-          mutation.
+          {": "}final observer. Use it for logging and metrics. Do not mutate
+          the response here.
         </li>
       </ul>
       <FlowDiagram
         title="Request lifecycle"
         numbered
-        caption="Hooks fire at fixed points around your handler. Cheap authentication can reject in preBody before request-body I/O; body-aware middleware keeps beforeHandle after validation. If anything throws, control jumps to onError, then onSend and onResponse still run."
+        caption="Hooks fire at fixed points around your handler. Cheap authentication can reject in preBody before request-body I/O. Body-aware middleware keeps beforeHandle after validation. If anything throws, control jumps to onError, then onSend and onResponse still run."
         steps={[
           { label: "onRequest", eyebrow: "earliest", detail: "before parsing" },
           {

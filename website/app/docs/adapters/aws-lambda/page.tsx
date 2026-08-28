@@ -174,8 +174,8 @@ CMD ["node", "dist/server.js"]`}
         <li>
           Callback-style handlers (
           <code>(event, context, callback) =&gt; ...</code>) are not supported
-          on supported Node versions. Always use <code>async</code> handlers;
-          the DaloyJS adapter does.
+          on supported Node versions. Always use <code>async</code> handlers.
+          The DaloyJS adapter does.
         </li>
         <li>
           For Function URLs with streaming, set{" "}

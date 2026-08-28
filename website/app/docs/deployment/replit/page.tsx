@@ -109,7 +109,7 @@ pnpm --version`}
       <h2 id="2-server-entrypoint">2. Server entrypoint</h2>
       <p>
         Bind to all interfaces and use the <code>PORT</code> value provided by
-        Replit. This matters for published apps, not just local preview.
+        Replit. This matters for published apps, not only local preview.
       </p>
       <CodeBlock
         language="ts"

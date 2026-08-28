@@ -8,7 +8,7 @@ import { buildMetadata, serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const POST = {
   slug: "background-jobs-that-outlive-the-request",
-  title: "Background Jobs That Outlive the Request",
+  title: "Background Jobs After the HTTP Response",
   description:
     "A rolling deploy once ate a welcome email I sent from inside POST /users. DaloyJS 1.3.0 ships a queue-agnostic job interface so the handler can return while the work lives in a store. Use Temporal, Inngest, or Eve when a function has to pause for hours and resume.",
   date: "2026-08-28",
@@ -98,7 +98,7 @@ export default function BlogPostPage() {
         <Separator className="mb-10" />
 
         <div className="docs-prose max-w-full">
-          <h2>The deploy that ate the welcome email</h2>
+          <h2>A rolling deploy ate the welcome email</h2>
 
           <p>
             Some years ago I shipped a <code>POST /users</code> that sent the
@@ -114,7 +114,7 @@ export default function BlogPostPage() {
 
           <CodeBlock
             language="ts"
-            code={`// The version that bites you at 2am.
+            code={`// Inline SMTP. A deploy can eat the email.
 app.post("/users", contract, async (ctx) => {
   const user = await db.insertUser(ctx.body);
   await sendWelcomeEmail(user.email); // inline: slow, and a deploy can eat it
@@ -517,7 +517,7 @@ app.post("/users", contract, async (ctx) => {
           </p>
 
           <p>
-            <strong>LLM work that outlives the request.</strong> A two-minute
+            <strong>LLM work after the HTTP response.</strong> A two-minute
             summarization cannot hold an API request, and on Workers it
             cannot even finish. Return 202 with the job id and let the client
             poll a status route you write. DaloyJS mounts no{" "}

@@ -628,7 +628,7 @@ export default function BlogPostPage() {
           <p>
             That means three nice things, automatically: the Scalar{" "}
             <code>/docs</code> UI shows a real file picker in the &quot;Try
-            it&quot; panel; the Hey API generated SDK exposes a typed function
+            it&quot; panel. The Hey API generated SDK exposes a typed function
             whose <code>body.file</code> is a browser <code>File</code>; and any
             third-party tool that grok&apos;d OpenAPI 3.1 (Postman, Bruno,
             Speakeasy) renders the upload correctly without help.
@@ -668,7 +668,7 @@ export default function BlogPostPage() {
             File uploads stop being a special case the moment you commit to two
             things: validate the file the same way you validate any other field,
             and never leave the Web standard <code>File</code> shape.{" "}
-            <code>fileField()</code> handles the first; the rest of the
+            <code>fileField()</code> handles the first. The rest of the
             framework handles the second. You get streaming on every runtime,
             OpenAPI binary schemas without extra work, RFC 9457 problem+json on
             every rejection, and an in-process test path that doesn&apos;t
@@ -677,13 +677,13 @@ export default function BlogPostPage() {
           </p>
 
           <p>
-            For more pieces in the same vein:{" "}
+            For more pieces in the same vein,{" "}
             <Link href="/blog/middleware-without-mystery-hooks-ordering-response-transformation">
               the middleware post
             </Link>{" "}
-            covers where to put auth around upload endpoints; the{" "}
+            covers where to put auth around upload endpoints. The{" "}
             <Link href="/blog/secure-by-default">secure-by-default</Link> post
-            covers the body limits and rate limits you get for free; and the{" "}
+            covers the body limits and rate limits you get for free, and the{" "}
             <Link href="/blog/building-a-bookstore-api-with-daloyjs-from-scratch">
               bookstore tutorial
             </Link>{" "}

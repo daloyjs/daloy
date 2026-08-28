@@ -78,7 +78,7 @@ app.use(ipRestriction({
       />
       <p>
         At least one of <code>allow</code> or <code>deny</code> must be
-        provided; passing neither throws at construction time.
+        provided. Passing neither throws at construction time.
       </p>
 
       <h2 id="how-matching-works">How matching works</h2>
@@ -129,7 +129,7 @@ app.use(ipRestriction({
           address does not match an entry is rejected with <code>403</code>.
         </li>
         <li>
-          Deny-only. With just a <code>deny</code> list, everything is permitted
+          Deny-only. With only a <code>deny</code> list, everything is permitted
           except the listed ranges.
         </li>
       </ul>

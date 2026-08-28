@@ -86,7 +86,7 @@ export default function Page() {
         URL. DaloyJS therefore pins the default Scalar, Swagger UI, Redoc, and
         AsyncAPI versions together with their SHA-384 digests. The default{" "}
         <code>/docs</code> and <code>/asyncapi</code> pages are protected
-        without configuration; framework releases update each URL and hash as
+        without configuration. Framework releases update each URL and hash as
         one reviewed pair.
       </p>
 
@@ -94,7 +94,7 @@ export default function Page() {
       <p>
         Use <code>assets</code> only when you want another version, another CDN,
         or self-hosting. When changing a URL, provide the digest of those exact
-        bytes; a custom URL does not inherit the default asset&apos;s hash.
+        bytes. A custom URL does not inherit the default asset&apos;s hash.
       </p>
       <CodeBlock
         language="ts"
@@ -227,7 +227,7 @@ scalarHtml({
         yourself. Multiple digests are supported: separate them with whitespace,
         and the strongest one the browser understands wins. The{" "}
         <code>crossOrigin</code> field defaults to{" "}
-        <code>&quot;anonymous&quot;</code>; set it to{" "}
+        <code>&quot;anonymous&quot;</code>. Set it to{" "}
         <code>&quot;use-credentials&quot;</code> only when the asset host needs
         credentialed requests.
       </p>

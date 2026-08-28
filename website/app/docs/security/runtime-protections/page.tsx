@@ -3,7 +3,7 @@ import { LayerStack } from "../../../../components/diagram";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Runtime protections that travel with your app",
+  title: "Runtime protections",
   description:
     "The runtime guardrails that ship inside @daloyjs/core and apply at request time, regardless of your CI host, repo platform, or whether you use the generated GitHub Actions bundle.",
   path: "/docs/security/runtime-protections",
@@ -21,10 +21,10 @@ export const metadata = buildMetadata({
 export default function Page() {
   return (
     <>
-      <h1>Runtime protections that travel with your app</h1>
+      <h1>Runtime protections</h1>
       <blockquote>
         Runtime protections ship with the application and behave the same way on
-        every adapter. CI controls protect the build and release path; these
+        every adapter. CI controls protect the build and release path. These
         controls protect requests after deployment.
       </blockquote>
       <p>
@@ -40,7 +40,7 @@ export default function Page() {
         <code>create-daloy</code>.
       </p>
       <p>
-        Think of DaloyJS supply-chain and security posture as three independent
+        DaloyJS splits supply-chain and security posture into three independent
         layers. This page documents the first one.
       </p>
 
@@ -72,7 +72,7 @@ export default function Page() {
           },
           {
             title: "CI / CD hardening",
-            detail: "GitHub Actions bundle only; translate elsewhere",
+            detail: "GitHub Actions bundle only. Translate elsewhere",
             tone: "muted",
             items: ["SHA-pinned actions", "harden-runner", "permissions: {}"],
           },
@@ -124,7 +124,7 @@ export default function Page() {
       </table>
 
       <h2 id="backend-footguns-the-framework-handles-by-default">
-        Backend footguns the framework handles by default
+        Backend footguns handled by default
       </h2>
       <p>
         Every row below describes behavior that is on by default in a fresh
@@ -191,7 +191,7 @@ export default function Page() {
           <tr>
             <td>Body-size abuse</td>
             <td>
-              Streamed reads with a hard cap (default 1 MiB); oversize requests
+              Streamed reads with a hard cap (default 1 MiB). Oversize requests
               return <code>413</code> before they hit your handler.
             </td>
           </tr>
@@ -200,7 +200,7 @@ export default function Page() {
             <td>
               <code>requestTimeoutMs</code> (default 30s) returns{" "}
               <code>408</code> and fires <code>ctx.request.signal</code> for
-              cooperative teardown; the Node adapter sets socket-level timeouts.
+              cooperative teardown. The Node adapter sets socket-level timeouts.
             </td>
           </tr>
           <tr>
@@ -216,7 +216,7 @@ export default function Page() {
               that cap instead of rejecting, the adapter additionally answers{" "}
               <code>431</code> for any HTTP request <em>or WebSocket upgrade</em>{" "}
               whose raw field count reaches the cap (usable default budget: 99
-              fields). Either way it is defence-in-depth; apply the vendor
+              fields). Either way it is defence-in-depth. Apply the vendor
               HTTP/2 fix at any proxy that terminates HTTP/2.
             </td>
           </tr>
@@ -287,7 +287,7 @@ export default function Page() {
             <td>Leaky production errors</td>
             <td>
               Production mode strips <code>detail</code> from <code>5xx</code>{" "}
-              problem+json automatically; stack traces never leak through the
+              problem+json automatically. Stack traces never leak through the
               default error path.
             </td>
           </tr>
@@ -347,14 +347,14 @@ export default function Page() {
       </ul>
 
       <h2 id="what-the-generated-github-actions-bundle-actually-does">
-        What the generated GitHub Actions bundle actually does
+        What the generated GitHub Actions bundle does
       </h2>
       <p>
         If you scaffold with <code>create-daloy --with-ci</code> and{" "}
         <strong>keep the generated workflows</strong>
         {", "}the YAML itself encodes these protections. They apply equally to
-        public repos, private repos, and private organizations, being private is
-        not a substitute for any of them:
+        public repos, private repos, and private organizations. Being private is
+        not a substitute for any of them.
       </p>
       <ul>
         <li>
@@ -459,7 +459,7 @@ export default function Page() {
             </td>
             <td>
               Out of scope. These are decisions of your repo host and deploy
-              platform; DaloyJS cannot enforce them from inside your code.
+              platform. DaloyJS cannot enforce them from inside your code.
             </td>
           </tr>
         </tbody>

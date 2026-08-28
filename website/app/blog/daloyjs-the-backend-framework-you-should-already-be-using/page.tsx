@@ -193,7 +193,7 @@ export default function BlogPostPage() {
           <p>
             The scaffolded pnpm defaults are some of the most practical parts of
             the whole package. They do not try to turn you into a full-time
-            security program. They just remove several easy ways to get hurt.
+            security program. They remove several easy ways to get hurt.
           </p>
 
           <CodeBlock language="ini" code={NPMRC} />

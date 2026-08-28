@@ -141,12 +141,12 @@ app.ws("/session", {
         <code>loginThrottle()</code> is the built-in preset for credential-entry
         routes. It combines a shared hard limit with a short progressive delay
         before the hard <code>429</code> response. By default it does not trust
-        proxy IP headers; pass a <code>keyGenerator</code> or opt in to{" "}
+        proxy IP headers. Pass a <code>keyGenerator</code> or opt in to{" "}
         <code>trustProxyHeaders: true</code> / <code>trustedProxies</code> only
         behind a trusted proxy. When proxy headers are trusted, the key is the{" "}
         <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
         your proxy appended), so rotating spoofed left entries cannot reset the
-        budget; multi-hop chains declare their length with{" "}
+        budget. Multi-hop chains declare their length with{" "}
         <code>trustedHops</code>. Prefer <code>trustedProxies</code> when the
         origin can be reached without the proxy (see{" "}
         <a href="/docs/auto-ban#verify-the-peer-trustedproxies">
@@ -235,7 +235,7 @@ fileField({
         OpenAPI security scheme builders accept{" "}
         <code>requirePayloadAuth: true</code> for schemes such as webhook
         signatures that must authenticate the request body. A route using that
-        scheme cannot set <code>auth.payload: false</code>; Daloy throws at
+        scheme cannot set <code>auth.payload: false</code>. Daloy throws at
         route registration. The public OpenAPI document uses{" "}
         <code>x-daloy-require-payload-auth</code> rather than leaking a non-spec
         field.

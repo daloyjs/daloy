@@ -38,7 +38,7 @@ export default function Page() {
           AWS SDK for JavaScript v3
         </a>
         {". "}Best fit when you already run on AWS (Lambda, ECS, Fargate, EC2)
-        or need very low per-message cost.
+        or need low per-message cost.
       </p>
 
       <SequenceDiagram
@@ -255,12 +255,12 @@ app.post(
       <ul>
         <li>
           Node / Bun / Deno / AWS Lambda
-          {": "}works out of the box. On Lambda, omit access keys and let the
-          execution role supply credentials.
+          {": "}works without extra config. On Lambda, omit access keys and let
+          the execution role supply credentials.
         </li>
         <li>
           Cloudflare Workers
-          {": "}the SDK can run there but uses a Web Crypto signer; pin{" "}
+          {": "}the SDK can run there but uses a Web Crypto signer. Pin{" "}
           <code>@aws-sdk/client-sesv2</code> ≥ 3.700 and pass{" "}
           <code>credentials</code> explicitly (the default provider chain
           expects Node APIs).

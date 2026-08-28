@@ -34,7 +34,7 @@ export default function Page() {
       <p>
         Daloy ships the composition & network slice of the secure-by-default
         initiative: four primitives that compose the security stack you already
-        have. Every item is opt-in; no existing behaviour changes unless you
+        have. Every item is opt-in. No existing behaviour changes unless you
         call the new helper.
       </p>
 
@@ -122,7 +122,7 @@ app.use(some(
           {", "}
           <code>jwk()</code>
           {", "}and <code>clientCertAuth()</code> now do), selection happens
-          before body I/O; mixed stacks defer to <code>beforeHandle</code>
+          before body I/O. Mixed stacks defer to <code>beforeHandle</code>
           {". "}A returned <code>Response</code> is treated as a denial, the
           next layer gets a turn. The first failure wins when every layer
           rejects, so place the auth scheme whose <code>WWW-Authenticate</code>{" "}
@@ -166,7 +166,7 @@ app.use(some(
       </blockquote>
       <ul>
         <li>
-          A flood of <code>404</code>s is now throttled / IP-fenced just like
+          A flood of <code>404</code>s is now throttled / IP-fenced like
           traffic to a real route.
         </li>
         <li>
@@ -178,7 +178,7 @@ app.use(some(
           answers the same way whether or not the route exists. Per-route hooks
           are unaffected, and no handler is ever reached. Need public unknown
           paths to stay plain <code>404</code>s instead? Avoid global{" "}
-          <code>app.use()</code> auth for that surface; use route/group-scoped
+          <code>app.use()</code> auth for that surface. Use route/group-scoped
           hooks for auth and reserve <code>App({"{ hooks }"})</code>{" "}
           <code>onRequest</code> for checks that should truly run before
           routing.
@@ -235,7 +235,7 @@ app.use(ipRestriction({
         <code>app.inject(request)</code>
         {", "}which is meant for cron jobs, admin scripts, and integration
         tests. Internal routes are also excluded from generated OpenAPI by
-        default; pass <code>includeInternal: true</code> to{" "}
+        default. Pass <code>includeInternal: true</code> to{" "}
         <code>generateOpenAPI()</code> (imported from the{" "}
         <code>@daloyjs/core/openapi</code> subpath) for private admin SDK
         generation. The framework also filters <code>Allow</code> headers so a
@@ -303,7 +303,7 @@ const adminSpec = generateOpenAPI(app, {
 
       <h2 id="opt-out">Opt-out</h2>
       <p>
-        Every primitive in this slice is additive; nothing changes unless you
+        Every primitive in this slice is additive. Nothing changes unless you
         call the helper. The earlier secure-defaults master opt-out flag still
         applies if you ever need to disable secure defaults in a development
         sandbox:

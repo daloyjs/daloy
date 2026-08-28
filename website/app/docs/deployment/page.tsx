@@ -117,7 +117,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="The same pipeline underpins every Node platform below. Only the packaging and platform config differ; the build, release, and run stages stay the same."
+        caption="The same pipeline underpins every Node platform below. Only the packaging and platform config differ. The build, release, and run stages stay the same."
       />
 
       <h2 id="node-platforms">Node platforms</h2>
@@ -155,7 +155,7 @@ export default function Page() {
         </li>
         <li>Run contract tests in CI, fail the build if the spec drifts.</li>
         <li>
-          Use <code>pnpm install --frozen-lockfile</code> in CI; never{" "}
+          Use <code>pnpm install --frozen-lockfile</code> in CI. Never{" "}
           <code>pnpm install</code>.
         </li>
       </ul>
@@ -209,7 +209,7 @@ CMD ["dist/server.js"]`}
         (keyless / OIDC, no long-lived signing key), generates an SPDX SBOM for
         the image, and uploads it as a Cosign attestation (
         <code>--type spdxjson</code>). The job grants{" "}
-        <code>id-token: write</code> alongside <code>packages: write</code>; the
+        <code>id-token: write</code> alongside <code>packages: write</code>. The
         top-level workflow keeps <code>permissions: {`{}`}</code>
         {". "}This closes the Aikido{" "}
         <a
@@ -263,7 +263,7 @@ await app.shutdown(15_000);`}
           Set <code>behindProxy: {"{ hops: N }"}</code> on{" "}
           <code>new App({"{ ... }"})</code>
           {", "}where <code>N</code> is the number of trusted proxy hops in
-          front of the app (a single edge proxy is <code>1</code>; Cloudflare in
+          front of the app (a single edge proxy is <code>1</code>. Cloudflare in
           front of one PaaS edge is <code>2</code>). In production an{" "}
           <strong>unconfigured</strong> posture makes DaloyJS return{" "}
           <code>500</code> on the first request carrying an{" "}
@@ -284,8 +284,8 @@ await app.shutdown(15_000);`}
         </li>
         <li>
           Make DaloyJS&apos;s <code>keepAliveTimeout</code>{" "}
-          <strong>greater</strong> than the LB&apos;s, Node adapter does this
-          for you.
+          <strong>greater</strong> than the LB&apos;s. The Node adapter does
+          this for you.
         </li>
       </ul>
 

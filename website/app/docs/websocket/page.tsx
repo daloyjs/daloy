@@ -140,7 +140,7 @@ app.ws("/chat/:room", chatHandler);`}
         </li>
         <li>
           <code>conn.ping(data?)</code> / <code>conn.pong(data?)</code>
-          {": "}control frames; payload must be ≤ 125 bytes per RFC 6455.
+          {": "}control frames. Payload must be ≤ 125 bytes per RFC 6455.
         </li>
         <li>
           <code>conn.close(code?, reason?)</code>
@@ -287,7 +287,7 @@ app.ws("/cli", {
       <p>
         Missing <code>Origin</code> is allowed by the{" "}
         <code>&quot;same-origin&quot;</code> and array policies because browsers
-        send <code>Origin</code> on WS handshakes; no <code>Origin</code>{" "}
+        send <code>Origin</code> on WS handshakes. No <code>Origin</code>{" "}
         usually means a CLI or server-to-server client. Use the predicate form
         when your route should reject clients that omit the header.
       </p>

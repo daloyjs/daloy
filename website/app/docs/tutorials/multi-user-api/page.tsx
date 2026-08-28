@@ -61,7 +61,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="The important test is not whether Alice can read a project. It is whether Alice can read Bob's project while holding a completely valid token."
+        caption="The test that matters is whether Alice can read Bob's project while holding a completely valid token."
       />
 
       <h2 id="1-scaffold">1. Scaffold the project</h2>
@@ -323,7 +323,7 @@ export function createMemoryProjectRepository(): ProjectRepository {
         and hope every caller remembers a separate ownership check.
       </p>
 
-      <h2 id="4-build-routes">4. Build routes that cannot choose an owner</h2>
+      <h2 id="4-build-routes">4. Bind ownership from the principal</h2>
       <p>
         Request schemas expose only ordinary editable properties. Ownership
         comes from <code>state.principal</code>
@@ -552,9 +552,7 @@ curl http://localhost:3000/projects/bob-1 \
 # 404`}
       />
 
-      <h2 id="6-adversarial-tests">
-        6. Add the tests the happy-path tutorial usually forgets
-      </h2>
+      <h2 id="6-adversarial-tests">6. Add adversarial tests</h2>
       <CodeBlock
         language="ts"
         code={`// tests/projects.test.ts

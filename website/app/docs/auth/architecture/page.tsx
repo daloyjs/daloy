@@ -45,7 +45,7 @@ export default function Page() {
       <ul>
         <li>
           DaloyJS is a resource server (and a toolkit for building a relying
-          party). It checks tokens; it does not issue them.
+          party). It checks tokens. It does not issue them.
         </li>
         <li>
           It is not an &quot;IdentityServer&quot;. It cannot, on its own, do
@@ -105,8 +105,8 @@ export default function Page() {
         ]}
         footer={
           <>
-            None of the right-hand column is impossible. It is just far larger
-            and far less forgiving than it looks, and every provider on this
+            None of the right-hand column is impossible. It is far larger and
+            far less forgiving than it looks, and every provider on this
             page has already solved it, been audited on it, and been attacked on
             it. Pick one from{" "}
             <Link href="/docs/auth">Authentication &amp; authorization</Link>{" "}
@@ -133,7 +133,7 @@ export default function Page() {
         <tbody>
           <tr>
             <td>
-              Owns login, consent, and clients; mints &amp; refreshes tokens
+              Owns login, consent, and clients. Mints and refreshes tokens.
             </td>
             <td>
               <strong>Authorization Server</strong> / OpenID Provider (OP)
@@ -185,7 +185,7 @@ export default function Page() {
             from: "Authorization Server (IdP)",
             to: "Client (RP)",
             label: "Issue access token (a signed JWT)",
-            detail: "the IdP mints tokens; nobody else does",
+            detail: "the IdP mints tokens. Nobody else does",
             kind: "response",
           },
           {
@@ -305,7 +305,7 @@ export default function Page() {
       </p>
       <h3 id="managed-providers">Managed (fastest to ship)</h3>
       <p>
-        Someone else runs the IdP; you configure it. Good default for most
+        Someone else runs the IdP. You configure it. Good default for most
         teams.
       </p>
       <ul>
@@ -489,7 +489,7 @@ app.use(csrf());
             from: "BFF (DaloyJS)",
             to: "Browser",
             label: "Set signed, encrypted session cookie",
-            detail: "tokens stay server-side; cookie holds only a session id",
+            detail: "tokens stay server-side. The cookie holds only a session id",
             kind: "response",
           },
           {
@@ -508,7 +508,7 @@ app.use(csrf());
           {
             from: "BFF (DaloyJS)",
             to: "Browser",
-            label: "Return data; the access token is never exposed",
+            label: "Return data. The access token is never exposed",
             kind: "response",
           },
         ]}

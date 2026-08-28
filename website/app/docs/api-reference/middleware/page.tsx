@@ -58,7 +58,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="Hooks compose top to bottom. every(), some(), and except() combine layers; defineDependency() injects per-request values into ctx.state."
+        caption="Hooks compose top to bottom. every(), some(), and except() combine layers. defineDependency() injects per-request values into ctx.state."
       />
 
       <h2 id="built-in-middleware">Built-in middleware</h2>

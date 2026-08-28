@@ -24,7 +24,7 @@ export default function Page() {
   return (
     <>
       <h1>DaloyJS API docs</h1>
-      <p>{`The complete public surface of DaloyJS v${CORE_PACKAGE_VERSION}, organized by import path. Every signature in this reference is generated from the same TypeScript types your editor reads on hover, open the source files for fuller TSDoc, examples, and security rationale.`}</p>
+      <p>{`The complete public surface of DaloyJS v${CORE_PACKAGE_VERSION}, organized by import path. Every signature in this reference is generated from the same TypeScript types your editor reads on hover. Open the source files for fuller TSDoc, examples, and security rationale.`}</p>
 
       <h2 id="reference-sections">Reference sections</h2>
       <p>
@@ -75,12 +75,12 @@ export default function Page() {
 
       <h2 id="minimal-server">Minimal server</h2>
       <p>
-        This page is a reference, the signatures below are the source of truth,
+        This page is a reference. The signatures below are the source of truth,
         not a step-by-step tutorial. If you are starting from scratch, the{" "}
         <Link href="/docs/getting-started">getting-started guide</Link> walks
         through scaffolding, validation, the typed client, and OpenAPI docs in
-        full. The snippet here is just enough to map the types below onto a
-        server you can actually run.
+        full. The snippet here is enough to map the types below onto a server
+        you can actually run.
       </p>
       <CodeBlock language="bash" code={`pnpm add @daloyjs/core zod`} />
       <CodeBlock
@@ -108,10 +108,10 @@ console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
         Run it with <code>node index.ts</code>
-        {": "}Node.js (22.18+) strips TypeScript types natively, no loader
+        {". "}Node.js (22.18+) strips TypeScript types natively. No loader is
         required. Every response already carries the secure-by-default headers (
         <code>secureHeaders</code>) and an <code>x-request-id</code> (
-        <code>requestId</code>); errors serialize to RFC 9457{" "}
+        <code>requestId</code>). Errors serialize to RFC 9457{" "}
         <code>application/problem+json</code>
         {". "}To serve <code>/docs</code> and <code>/openapi.json</code>
         {", "}pass <code>docs: true</code> to <code>new App(...)</code> (it

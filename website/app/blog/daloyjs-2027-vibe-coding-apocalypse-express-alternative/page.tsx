@@ -351,8 +351,8 @@ export default function BlogPostPage() {
               &quot;If you tell an AI to make something work, it might remove
               the very security checks that protect you.&quot;
             </em>{" "}
-            That is the whole problem in one sentence. The model optimizes for
-            the request, and &quot;make it work&quot; almost never includes
+            The model optimizes for the request, and &quot;make it work&quot;
+            almost never includes
             &quot;and also do not let strangers read my database.&quot;
           </p>
           <p>
@@ -446,7 +446,7 @@ export default function BlogPostPage() {
             absence is the bug.
           </p>
 
-          <h2>The framework that refuses to start</h2>
+          <h2>DaloyJS refuses to start on a dangerous config</h2>
           <p>
             This is my favorite feature and it sounds aggressive when you first
             hear it. DaloyJS refuses to boot on known-dangerous configuration.
@@ -857,9 +857,8 @@ export default function BlogPostPage() {
           </p>
           <CodeBlock language="text" code={MENTAL_MODEL} />
           <p>
-            The thing I want you to notice is how much code <em>disappears</em>{" "}
-            in the translation. Take a typical Express route with manual
-            validation and manual error handling:
+            A lot of code <em>disappears</em> in the translation. Take a typical
+            Express route with manual validation and manual error handling:
           </p>
           <CodeBlock language="ts" code={EXPRESS_ROUTE} />
           <p>
@@ -953,8 +952,8 @@ export default function BlogPostPage() {
             Go read the <Link href="/docs/security">security docs</Link>
             {", "}run <code>pnpm create daloy@latest</code>
             {", "}and try to make it boot with a wildcard-credentials CORS
-            config. It will tell you no. That &quot;no&quot; is the whole
-            product.
+            config. It will tell you no. I would rather hear that at boot than
+            in a postmortem.
           </p>
 
           <div className="not-prose mt-10 rounded-2xl border bg-muted/35 p-5">

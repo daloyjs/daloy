@@ -669,7 +669,7 @@ export default function BlogPostPage() {
             the entire point.
           </p>
 
-          <h2>The one rule that makes this work: read env the native way</h2>
+          <h2>Read env the native way</h2>
 
           <p>
             The most common cross-runtime bug I&apos;ve had to debug, in my own
@@ -693,7 +693,7 @@ export default function BlogPostPage() {
             this rule still matters is that the moment your shared{" "}
             <code>app.ts</code> reads from a globally-mutable environment, your
             tests need to mock that global, and your Workers deployment needs
-            you to remember which env vars get bundled when. Just hoist the
+            you to remember which env vars get bundled when. Hoist the
             reading. Future-you will apologize to current-you over an expensive
             Norwegian coffee.
           </p>

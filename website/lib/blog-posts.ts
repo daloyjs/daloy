@@ -9,7 +9,7 @@
 export const BLOG_POSTS = [
   {
     slug: "background-jobs-that-outlive-the-request",
-    title: "Background Jobs That Outlive the Request",
+    title: "Background Jobs After the HTTP Response",
     description:
       "A rolling deploy once ate a welcome email I sent from inside POST /users. DaloyJS 1.3.0 ships a queue-agnostic job interface so the handler can return while the work lives in a store. Use Temporal, Inngest, or Eve when a function has to pause for hours and resume.",
     date: "2026-08-28",
@@ -154,7 +154,7 @@ export const BLOG_POSTS = [
     title:
       "The Ghost CMS / ClickFix Campaign, Mapped to DaloyJS, Plus the One Default We Just Tightened",
     description:
-      "A pre-auth SQL injection in Ghost CMS (CVE-2026-26980) is being exploited at scale to hijack 700+ sites, including Harvard, Oxford, and DuckDuckGo, and serve a fake Cloudflare \"verify you are human\" prompt that silently stuffs a PowerShell one-liner into the visitor's clipboard. Most of the chain was already blocked by DaloyJS defaults; the last mile (the clipboard write) wasn't. Here's the stage-by-stage mapping and the one-line default we changed in response.",
+      "A pre-auth SQL injection in Ghost CMS (CVE-2026-26980) is being exploited at scale to hijack 700+ sites, including Harvard, Oxford, and DuckDuckGo, and serve a fake Cloudflare \"verify you are human\" prompt that silently stuffs a PowerShell one-liner into the visitor's clipboard. Most of the chain was already blocked by DaloyJS defaults. The last mile (the clipboard write) wasn't. Stage-by-stage mapping and the one-line default we changed in response.",
     date: "2026-06-16",
     readingTime: "8 min read",
     author: "Devlin Duldulao",
@@ -164,7 +164,7 @@ export const BLOG_POSTS = [
     title:
       "When the Security Scanner Is the Attacker: The LiteLLM / TeamPCP Compromise, Mapped to DaloyJS",
     description:
-      "On March 24, 2026 the litellm Python package was backdoored after a poisoned Trivy GitHub Action stole the maintainer's PyPI token. The same attack pattern (compromised scanner action, exfiltrated publish token, malicious release with a startup-time payload) would have to clear nine of DaloyJS's existing CI gates before it could ship. Here's the stage-by-stage mapping.",
+      "On March 24, 2026 the litellm Python package was backdoored after a poisoned Trivy GitHub Action stole the maintainer's PyPI token. The same attack pattern - compromised scanner action -> exfiltrated publish token -> malicious release with a startup-time payload - would have to clear nine of DaloyJS's existing CI gates before it could ship. Stage-by-stage mapping below.",
     date: "2026-06-15",
     readingTime: "9 min read",
     author: "Devlin Duldulao",
@@ -252,7 +252,7 @@ export const BLOG_POSTS = [
     title:
       "Designing for Coding Agents: Why DaloyJS Scaffolds AGENTS.md and Skills",
     description:
-      "Every project created by create-daloy ships with a short AGENTS.md and a focused .agents/skills/daloyjs-best-practices/SKILL.md. Here's why those two files matter, why they're intentionally small, and how they let Copilot, Claude Code, Cursor, Codex, and friends make safer edits in your scaffolded DaloyJS app from the first prompt.",
+      "Every project created by create-daloy ships with a short AGENTS.md and a focused .agents/skills/daloyjs-best-practices/SKILL.md. Those two files are intentionally small, and they help Copilot, Claude Code, Cursor, Codex, and friends make safer edits in your scaffolded DaloyJS app from the first prompt.",
     date: "2026-06-06",
     readingTime: "11 min read",
     author: "Devlin Duldulao",
@@ -288,9 +288,9 @@ export const BLOG_POSTS = [
   },
   {
     slug: "rate-limiting-that-survives-multiple-instances",
-    title: "Rate Limiting That Survives Multiple Instances",
+    title: "Rate Limiting Across Multiple Instances",
     description:
-      "Why the default in-memory rateLimit() is a one-instance lie behind a load balancer, how @daloyjs/core/rate-limit-redis fixes it with an atomic Lua INCR+PEXPIRE script, and the three operational levers that matter in production: fail-open vs fail-closed, Retry-After accuracy, and where to host the counter on serverless, edge, and traditional Node deploys.",
+      "Why the default in-memory rateLimit() is a one-instance lie behind a load balancer, how @daloyjs/core/rate-limit-redis fixes it with an atomic Lua INCR+PEXPIRE script, and the production levers: fail-open vs fail-closed, Retry-After accuracy, and where to host the counter on serverless, edge, and traditional Node deploys.",
     date: "2026-06-02",
     readingTime: "12 min read",
     author: "Devlin Duldulao",

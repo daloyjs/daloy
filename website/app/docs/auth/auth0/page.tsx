@@ -254,8 +254,8 @@ export function requirePermission(...perms: string[]): Hooks {
       <h2 id="runtimes">Runtimes</h2>
       <p>
         <code>jose</code> uses Web Crypto, so this setup runs everywhere DaloyJS
-        does: Node.js, Bun, Deno, Cloudflare Workers, and AWS Lambda. No need to
-        swap libraries between environments.
+        does: Node.js, Bun, Deno, Cloudflare Workers, and AWS Lambda. You do
+        not need to swap libraries between environments.
       </p>
 
       <h2 id="notes">Notes</h2>

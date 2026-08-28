@@ -69,7 +69,7 @@ export default function Page() {
           Use Stripe.js on the client, not raw card forms.{" "}
           <code>@stripe/stripe-js</code> is a small loader for Stripe&apos;s
           hosted <code>https://js.stripe.com</code> script. Stripe says this is
-          required for PCI compliance; do not bundle or self-host Stripe.js.
+          required for PCI compliance. Do not bundle or self-host Stripe.js.
         </li>
         <li>
           Webhook verification needs the raw body.{" "}
@@ -88,7 +88,7 @@ export default function Page() {
           Stripe is separate from PayPal. Keep this guide next to{" "}
           <Link href={"/docs/payments/braintree" as Route}>Braintree</Link>
           {", "}
-          not under it. Braintree is PayPal&apos;s gateway; Stripe is a separate
+          not under it. Braintree is PayPal&apos;s gateway. Stripe is a separate
           provider.
         </li>
       </ul>
@@ -481,7 +481,7 @@ app.post(
       />
       <p>
         The CLI prints a temporary <code>whsec_</code> secret. Use that local
-        secret for forwarded events; do not mix it with the Dashboard endpoint
+        secret for forwarded events. Do not mix it with the Dashboard endpoint
         secret.
       </p>
 

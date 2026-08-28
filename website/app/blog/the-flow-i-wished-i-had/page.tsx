@@ -15,7 +15,7 @@ const POST = {
   author: "Devlin Duldulao",
   authorRole: "software engineer & published book author",
   authorBio:
-    "Filipino dev living in Norway. Spends summers debugging, winters debugging; only the lighting changes.",
+    "Filipino dev living in Norway. Spends summers debugging, winters debugging. Only the lighting changes.",
 };
 
 export const metadata = buildMetadata({
@@ -188,7 +188,7 @@ export default function BlogPostPage() {
             more than my first PC mouse.
           </p>
 
-          <h2>The three problems that wouldn&apos;t go away</h2>
+          <h2>Three problems I kept paying for</h2>
 
           <p>
             In ten years of fullstack work, across startups, consultancies, and

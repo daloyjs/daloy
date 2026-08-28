@@ -129,7 +129,7 @@ serve(app, { port: config.PORT });`}
       <h2 id="choosing-a-source">Choosing a source</h2>
       <p>
         The <code>source</code> option selects where the raw object comes from.
-        The built-in sources are intentionally narrow; anything more elaborate
+        The built-in sources are intentionally narrow. Anything more elaborate
         (Vault, Doppler, AWS Secrets Manager) arrives through the{" "}
         <code>custom</code> source with an async resolver.
       </p>
@@ -243,7 +243,7 @@ try {
       />
       <p>
         The stderr summary is on by default. Set <code>stderr: false</code> to
-        suppress the printed output; the thrown{" "}
+        suppress the printed output. The thrown{" "}
         <code>ConfigValidationError</code> still carries <code>issues</code>.
       </p>
     </>

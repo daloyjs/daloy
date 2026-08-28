@@ -98,7 +98,7 @@ export default function Page() {
             <td>
               <code>redactRecord()</code> scrubs known credential-shaped fields
               before they hit logs, helpful when post-incident triage needs to
-              share logs without re-leaking the very secrets the injection
+              share logs without re-leaking the secrets the injection
               grabbed.
             </td>
           </tr>
@@ -125,7 +125,7 @@ export default function Page() {
       </h2>
       <p>
         Validated input + parameterized query is the whole pattern.
-        Aikido&apos;s report calls it out as defense #1 and #2; Daloy gives you
+        Aikido&apos;s report calls it out as defense #1 and #2. Daloy gives you
         both in one block.
       </p>
       <FlowDiagram
@@ -149,7 +149,7 @@ export default function Page() {
             tone: "success",
           },
         ]}
-        caption="The same attacker string takes two paths. Spliced into the SQL text it becomes executable syntax; passed as a bound parameter it is only ever data, so the query structure can never change."
+        caption="The same attacker string takes two paths. Spliced into the SQL text it becomes executable syntax. Passed as a bound parameter it is only ever data, so the query structure can never change."
       />
       <CodeBlock
         code={`import { App } from "@daloyjs/core";
@@ -474,7 +474,7 @@ git grep -nE '\\.raw\\(' -- '*.ts'`}
         </li>
         <li>
           A reverse-proxy WAF (Cloudflare, AWS WAF, Fastly) for coarse signature
-          matching at the edge. Cheap to deploy; not a substitute for
+          matching at the edge. Cheap to deploy, not a substitute for
           parameterized queries.
         </li>
       </ul>

@@ -87,7 +87,7 @@ const HEADER_MISMATCH = `{
 
 const CACHE = `const mcp = createMcpHandler({
   serverInfo: { name: "inventory-mcp", version: "1.0.0" },
-  // Defaults: { ttlMs: 0, scope: "private" } — clients revalidate every call and
+  // Defaults: { ttlMs: 0, scope: "private" }. Clients revalidate every call and
   // no shared proxy may store the response. Raise ttlMs once you are sure the
   // list is stable, and only use "public" when every caller sees the same tools.
   cache: { ttlMs: 300_000, scope: "private" },
@@ -155,7 +155,7 @@ const MRTR = `const mcp = createMcpHandler({
   ],
 });`;
 
-const MRTR_WIRE = `// 1. First call — the server cannot finish yet.
+const MRTR_WIRE = `// 1. First call. The server cannot finish yet.
 {
   "jsonrpc": "2.0",
   "id": 1,
@@ -168,7 +168,7 @@ const MRTR_WIRE = `// 1. First call — the server cannot finish yet.
   }
 }
 
-// 2. Retry — NEW JSON-RPC id, original params, plus the answers and state.
+// 2. Retry. NEW JSON-RPC id, original params, plus the answers and state.
 {
   "jsonrpc": "2.0",
   "id": 2,
@@ -540,7 +540,7 @@ export default function Page() {
         endpoint. A request is handled as <em>modern</em> when its{" "}
         <code>_meta</code> protocol version (or the{" "}
         <code>MCP-Protocol-Version</code> header) is <code>2026-07-28</code> or
-        later; everything else takes the unchanged legacy path. You do not
+        later. Everything else takes the unchanged legacy path. You do not
         configure this, and older clients keep working.
       </p>
       <p>
@@ -552,7 +552,7 @@ export default function Page() {
         something else. DaloyJS closes that.{" "}
         <a href="#request-headers">Header/body agreement</a> is validated in{" "}
         <strong>both</strong> eras. Legacy requests are not <em>required</em> to
-        carry the standard headers — those headers postdate them — but any they
+        carry the standard headers (those headers postdate them), but any they
         do carry must match the body, or the request is refused with{" "}
         <code>-32020</code>
         {". "}A genuine legacy client, which sends none of them, is unaffected.
@@ -579,7 +579,7 @@ export default function Page() {
                 <code>initialize</code> + <code>ping</code>
               </td>
               <td>
-                none; optional <code>server/discover</code>
+                none (optional <code>server/discover</code>)
               </td>
             </tr>
             <tr>
@@ -594,7 +594,7 @@ export default function Page() {
               <td>
                 <code>Mcp-Session-Id</code>
               </td>
-              <td>none; use explicit handles</td>
+              <td>none (use explicit handles)</td>
             </tr>
             <tr>
               <td>Required headers</td>
@@ -664,7 +664,7 @@ export default function Page() {
         Scalar is best for testing normal REST endpoints. If your app exposes a
         regular docs search route and an MCP route, use{" "}
         <code>POST /search</code> in Scalar for the normal API request. Do not
-        paste the search body into <code>POST /mcp</code>; MCP uses JSON-RPC
+        paste the search body into <code>POST /mcp</code>. MCP uses JSON-RPC
         envelopes, not plain REST request bodies.
       </p>
       <CodeBlock code={SCALAR_SEARCH_BODY} language="json" />
@@ -744,10 +744,10 @@ export default function Page() {
           MCP 2025-11-25 metadata: server <code>description</code>
           {", "}
           <code>websiteUrl</code>
-          {", "}and <code>icons</code>; tool <code>outputSchema</code>
+          {", "}and <code>icons</code>. Tool <code>outputSchema</code>
           {", "}
           <code>annotations</code> (read-only, destructive, idempotent,
-          open-world hints), and <code>icons</code>; icons on resources,
+          open-world hints), and <code>icons</code>. Icons on resources,
           templates, and prompts. Tool results that return only{" "}
           <code>structuredContent</code> get a serialized text block backfilled
           for older clients.
@@ -784,7 +784,7 @@ export default function Page() {
         <code>-32601</code>
         {", "}and modern clients that call <code>initialize</code> or{" "}
         <code>ping</code> get <code>-32601</code> with HTTP <code>404</code>
-        {" — "}the status the spec reserves for &ldquo;modern server, unknown
+        {", "}the status the spec reserves for &ldquo;modern server, unknown
         method&rdquo; so a client can tell it apart from a legacy endpoint.
       </p>
 
@@ -808,13 +808,13 @@ export default function Page() {
         DaloyJS rejects a missing or disagreeing header with HTTP{" "}
         <code>400</code> and JSON-RPC <code>-32020</code> (
         <code>HeaderMismatch</code>). This is a security control, not
-        bookkeeping: without it a gateway can authorize, route, or rate-limit on
+        bookkeeping. Without it a gateway can authorize, route, or rate-limit on
         the header value while the server executes the body value.
       </p>
       <p>
         The agreement check also runs on <strong>legacy</strong> requests, which
         is stricter than the specification requires. Those revisions predate the
-        headers, so a legacy request may omit them — but one that sends them is
+        headers, so a legacy request may omit them, but one that sends them is
         held to them. Without that, declaring an old protocol version would be
         enough to keep a gateway-satisfying <code>Mcp-Method</code>
         {", "}
@@ -826,9 +826,9 @@ export default function Page() {
       <p>
         Values that cannot be represented as plain ASCII arrive in the Base64
         sentinel form <code>=?base64?&lt;payload&gt;?=</code>
-        {"; "}DaloyJS decodes them before comparing, and treats an undecodable
+        {". "}DaloyJS decodes them before comparing, and treats an undecodable
         payload as a mismatch. <code>Mcp-Session-Id</code> and{" "}
-        <code>Last-Event-ID</code> from older clients are ignored: no session is
+        <code>Last-Event-ID</code> from older clients are ignored. No session is
         ever minted or echoed, and streams are not resumable.
       </p>
 
@@ -964,7 +964,7 @@ export default function Page() {
       <p>
         With protocol sessions gone, a server that needs state across calls
         returns an explicit handle from one tool and accepts it as an ordinary
-        argument on the next. The model carries the handle forward; the protocol
+        argument on the next. The model carries the handle forward. The protocol
         does not.
       </p>
       <CodeBlock code={STATE_HANDLE} />
@@ -983,11 +983,11 @@ export default function Page() {
         <code>Origin</code> header so a malicious web page cannot use DNS
         rebinding to drive a local MCP server. <code>createMcpHandler()</code>{" "}
         does this on every request. Non-browser clients that send no{" "}
-        <code>Origin</code> header work unchanged; browser clients must be
+        <code>Origin</code> header work unchanged. Browser clients must be
         loopback or explicitly allowlisted, and everything else receives{" "}
         <code>403</code>
         {". "}A same-origin <code>Origin</code> is deliberately{" "}
-        <strong>not</strong> treated as sufficient on its own: under DNS
+        <strong>not</strong> treated as sufficient on its own. Under DNS
         rebinding the attacker&apos;s hostname resolves to your host, so{" "}
         <code>Origin.host</code> can equal the request <code>Host</code>. The{" "}
         <code>allowedOrigins</code> allowlist is the real gate for public
@@ -1057,13 +1057,13 @@ export default function Page() {
 
       <h2 id="resource-templates">Resource templates</h2>
       <p>
-        Concrete resources cover fixed documents; resource templates cover
+        Concrete resources cover fixed documents. Resource templates cover
         families of them. A template advertises an RFC 6570 style URI pattern
         through <code>resources/templates/list</code>
         {", "}and <code>resources/read</code> matches non-listed URIs against
         your templates, passing the extracted variables to your{" "}
         <code>read</code> handler. Only simple <code>{"{name}"}</code> variables
-        are supported, and each matches a single URI segment; operator
+        are supported, and each matches a single URI segment. Operator
         expressions like <code>{"{+path}"}</code> are rejected at construction
         so the server never advertises a pattern it cannot serve.
       </p>
@@ -1075,7 +1075,7 @@ export default function Page() {
         OAuth server metadata, or the <code>subscriptions/listen</code>{" "}
         notification stream (so no <code>listChanged</code> capability). It also
         does not implement the <code>io.modelcontextprotocol/tasks</code> or MCP
-        Apps extensions — you can advertise an extension you implement yourself
+        Apps extensions. You can advertise an extension you implement yourself
         through the <code>extensions</code> option, but core ships none. Those
         pieces either add dependency weight or need a product-specific security
         model.
@@ -1169,7 +1169,7 @@ export default function Page() {
           Pin <code>protocolVersions</code> to{" "}
           <code>[&quot;2026-07-28&quot;]</code> once your clients have migrated.
           Header/body agreement is already enforced in both eras, so this is
-          defense in depth rather than a fix — it just means nothing reaches a
+          defense in depth rather than a fix. It means nothing reaches a
           tool without the full modern contract (required headers, per-request{" "}
           <code>_meta</code>
           {", "}declared capabilities).
@@ -1181,8 +1181,8 @@ export default function Page() {
         </li>
         <li>
           Re-authorize state handles on every call. Without protocol sessions, a
-          handle passed as a tool argument is just a string the model carries —
-          treat it as a name, not a capability.
+          handle passed as a tool argument is a string the model carries.
+          Treat it as a name, not a capability.
         </li>
         <li>
           Leave <code>cacheScope</code> at <code>&quot;private&quot;</code>{" "}

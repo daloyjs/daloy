@@ -54,7 +54,7 @@ export default function Page() {
       <p>
         DSQL tokens expire (default ~15 minutes), so build a connection helper
         that refreshes the password before opening a connection. For Lambda,
-        create one client per invocation; for long-lived Node processes, refresh
+        create one client per invocation. For long-lived Node processes, refresh
         on a timer or on auth errors.
       </p>
 

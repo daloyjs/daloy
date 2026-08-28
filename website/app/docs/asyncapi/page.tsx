@@ -189,7 +189,7 @@ printStartupBanner({
         you run with secure defaults in production, each <code>app.ws()</code>{" "}
         route still needs an <code>allowedOrigins</code> policy or an explicit{" "}
         <code>acknowledgeCrossOriginUpgrade: true</code>
-        {". "}AsyncAPI generation is descriptive; it never relaxes Cross-Site
+        {". "}AsyncAPI generation is descriptive. It never relaxes Cross-Site
         WebSocket Hijacking defenses.
       </p>
 
@@ -246,7 +246,7 @@ app.ws("/chat/:room", {
       <p>
         Schemas that expose a <code>toJSONSchema()</code> method are converted
         to JSON Schema for the message payload. Zod 4 schemas expose that method
-        directly; other validators may need the same adapter they use for
+        directly. Other validators may need the same adapter they use for
         OpenAPI output. Anything else still validates at runtime, but the
         generated AsyncAPI payload falls back to a permissive{" "}
         <code>{`{}`}</code> placeholder rather than throwing.
@@ -323,7 +323,7 @@ daloy inspect --asyncapi --format yaml > asyncapi.yaml`}
         </li>
         <li>
           Channel keys are derived from the path (<code>/chat/:room/feed</code>{" "}
-          -&gt; <code>chatRoomFeed</code>); collisions are de-duplicated with a
+          -&gt; <code>chatRoomFeed</code>). Collisions are de-duplicated with a
           numeric suffix. Set <code>meta.operationId</code> for a stable,
           explicit key.
         </li>

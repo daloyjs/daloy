@@ -26,7 +26,7 @@ export default function Page() {
     <>
       <h1>Using ODMs with DaloyJS</h1>
       <p>
-        DaloyJS works just as well with document databases as it does with SQL
+        DaloyJS works with document databases the same way it works with SQL
         databases, but the abstractions are different. Use an ODM when your
         persistence layer is document-shaped and you want schemas, validation,
         middleware, and query helpers around collections or buckets.
@@ -46,7 +46,7 @@ export default function Page() {
 
       <h2 id="the-recommended-pattern">The recommended pattern</h2>
       <p>
-        Just like SQL clients, ODM connections belong in a plugin. Decorate your
+        Like SQL clients, ODM connections belong in a plugin. Decorate your
         app with a small database surface and close the connection on shutdown.
       </p>
 

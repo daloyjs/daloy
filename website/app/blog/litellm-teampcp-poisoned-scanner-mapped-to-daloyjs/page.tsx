@@ -316,7 +316,7 @@ export default function BlogPostPage() {
           <StageCard
             stage="Credential theft"
             litellm="The compromised Trivy action ran in the same job as the publish step, so it could read PYPI_PUBLISH from the process environment, base64-encode it, and POST it to the attacker's C2 domain."
-            daloyjs="Three separate defenses. (1) Scanners and publish are in different workflows; the publish workflow has zero scanner steps. (2) The publish job runs in a GitHub Environment ('npm-publish') gated on manual maintainer approval. (3) Publishing uses npm Trusted Publishing via OIDC, there is no long-lived NPM_TOKEN sitting in repo secrets to steal."
+            daloyjs="Three separate defenses. (1) Scanners and publish are in different workflows. The publish workflow has zero scanner steps. (2) The publish job runs in a GitHub Environment ('npm-publish') gated on manual maintainer approval. (3) Publishing uses npm Trusted Publishing via OIDC, there is no long-lived NPM_TOKEN sitting in repo secrets to steal."
           />
 
           <CodeBlock language="bash" code={SCANNER_ISOLATION} />
@@ -377,7 +377,7 @@ export default function BlogPostPage() {
           <p>
             This is the single most boring decision in DaloyJS, and it&apos;s
             the one I&apos;m proudest of. Frameworks that pull in 30 transitive
-            packages at runtime cannot claim a hardened supply chain; the
+            packages at runtime cannot claim a hardened supply chain. The
             attacker only has to compromise the smallest of those 30. A
             zero-runtime-deps core has exactly one supply-chain target: the core
             itself, published through the gated OIDC pipeline above.
@@ -435,7 +435,7 @@ export default function BlogPostPage() {
           </ol>
 
           <p>
-            A determined attacker may still find another way; security is never
+            A determined attacker may still find another way. Security is never
             finished. The path of least resistance in the LiteLLM compromise
             took (rewrite an action tag, steal a static token, ship a release
             that auto-runs on install) is shut on all four steps in this repo.

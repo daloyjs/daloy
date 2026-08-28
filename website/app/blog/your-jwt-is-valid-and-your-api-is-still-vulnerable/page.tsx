@@ -259,7 +259,7 @@ export default function BlogPostPage() {
             The missing feature is the one the prompt did not name.
           </p>
 
-          <h2>The working endpoint that is not safe</h2>
+          <h2>This working endpoint is still not safe</h2>
 
           <CodeBlock language="ts" code={VULNERABLE_ROUTE} />
 
@@ -380,8 +380,7 @@ export default function BlogPostPage() {
             {", "}
             <code>role</code>
             {", "}or <code>isApproved</code>
-            {". "}Very efficient. The attacker appreciates the developer
-            experience.
+            {". "}The attacker appreciates the developer experience.
           </p>
 
           <CodeBlock language="ts" code={CREATE_ROUTE} />

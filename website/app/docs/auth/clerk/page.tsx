@@ -27,7 +27,7 @@ export default function Page() {
         <a href="https://clerk.com" target="_blank" rel="noreferrer">
           Clerk
         </a>{" "}
-        is a developer-first auth platform that bundles user management,
+        is an auth platform that bundles user management,
         organizations, billing, and embeddable UI components. For a backend API,
         the{" "}
         <a
@@ -57,7 +57,7 @@ export default function Page() {
           {
             from: "Frontend SDK",
             to: "Clerk",
-            label: "User signs in; SDK gets a session token via getToken()",
+            label: "User signs in. SDK gets a session token via getToken()",
             kind: "async",
           },
           {
@@ -70,7 +70,7 @@ export default function Page() {
             from: "DaloyJS API",
             to: "Clerk",
             label: "authenticateRequest() verifies the token",
-            detail: "networkless when jwtKey is set; otherwise calls Clerk",
+            detail: "networkless when jwtKey is set. Otherwise calls Clerk",
             kind: "async",
           },
           {

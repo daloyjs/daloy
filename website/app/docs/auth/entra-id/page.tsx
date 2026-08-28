@@ -62,7 +62,7 @@ export default function Page() {
           {
             from: "Client app",
             to: "Entra ID",
-            label: "User signs in; Entra ID mints a v2.0 access token (RS256)",
+            label: "User signs in. Entra ID mints a v2.0 access token (RS256)",
             detail: "aud = api://my-daloy-api",
             kind: "async",
           },

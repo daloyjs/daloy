@@ -265,7 +265,7 @@ app.post(
         page) so online guessing is rate-limited, and with the{" "}
         <a href="/docs/security/auth-slice">auth slice</a> for the full
         session/CSRF picture. The <code>DUMMY_HASH</code> pattern above keeps
-        the scrypt work constant whether or not the account exists; generate it
+        the scrypt work constant whether or not the account exists. Generate it
         once at boot with <code>await passwordHash(randomUUID())</code>.
       </p>
 

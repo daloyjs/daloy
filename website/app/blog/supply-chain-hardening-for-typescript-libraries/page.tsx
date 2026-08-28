@@ -534,7 +534,7 @@ export default function BlogPostPage() {
             cost="A handful of ms per script invocation. You will not notice."
           />
 
-          <h2>Layer 3: GitHub Actions: three rules that matter</h2>
+          <h2>Layer 3: GitHub Actions</h2>
 
           <p>
             Most of the Actions security advice on the internet is some variant
@@ -605,8 +605,8 @@ export default function BlogPostPage() {
           <p>
             <strong>OpenSSF Scorecard</strong> gives you a weekly numeric score
             of your security posture across ~18 checks (signed releases, branch
-            protection, dependency update tools, etc). It&apos;s not perfect;
-            it&apos;s a useful trend line. <strong>CodeQL</strong> is
+            protection, dependency update tools, etc). It is imperfect, and still
+            a useful trend line. <strong>CodeQL</strong> is
             GitHub&apos;s built-in static analysis for TS/JS. Both upload SARIF
             to the same code-scanning UI, which keeps the noise in one place.
           </p>
@@ -694,10 +694,10 @@ export default function BlogPostPage() {
             SHA-pinned with <code>permissions: &#123;&#125;</code>
             {", "}CODEOWNERS, Dependabot, SECURITY.md, and{" "}
             <code>verify-lockfile-sources.mjs</code> as a{" "}
-            <code>pnpm verify:lockfile</code> script. You don&apos;t opt into
-            security; you opt out of it (with <code>--no-ci</code>) if you
-            insist. It does not generate an npm publish workflow, because a
-            scaffolded Daloy app is a service, not a library release train.
+            <code>pnpm verify:lockfile</code> script. Pass{" "}
+            <code>--no-ci</code> if you insist on skipping that bundle. It does
+            not generate an npm publish workflow, because a scaffolded Daloy app
+            is a service, not a library release train.
           </p>
 
           <h2>The attack-path map, in one screen</h2>
@@ -748,7 +748,7 @@ export default function BlogPostPage() {
             with comments that explain <em>why</em>
             {", "}not just <em>what</em>
             {". "}The best place to start is <code>.npmrc</code> +{" "}
-            <code>pnpm-workspace.yaml</code>; the next best place is to copy{" "}
+            <code>pnpm-workspace.yaml</code>. The next best place is to copy{" "}
             <code>.github/workflows/release.yml</code> and adapt the package
             name if you are publishing a library. For an app, run{" "}
             <code>pnpm create daloy@latest --with-ci</code> and cherry-pick from

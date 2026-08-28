@@ -175,7 +175,7 @@ app.post(
           downstream log line.
         </li>
         <li>
-          The built-in <code>logger</code> emits structured JSON; attach the
+          The built-in <code>logger</code> emits structured JSON. Attach the
           authenticated admin&apos;s subject claim in your <code>hooks</code> so
           &quot;who did what, when, from where&quot; falls out for free.
         </li>
@@ -442,7 +442,7 @@ app.use(secureHeaders({
           verifies the resulting bearer tokens / JWTs.
         </li>
         <li>
-          Render an admin UI. The framework is API-first; pair it with any admin
+          Render an admin UI. The framework is API-first. Pair it with any admin
           framework (Refine, AdminJS, Retool, internal Next.js) and point that
           UI at the internal-only Daloy routes.
         </li>

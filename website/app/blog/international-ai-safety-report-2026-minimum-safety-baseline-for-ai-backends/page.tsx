@@ -472,7 +472,7 @@ export default function BlogPostPage() {
           <RequirementCard
             requirement="Report: 'Each layer must function independently. The deployment-time layer cannot rely on the model behaving.'"
             framework="The DaloyJS constructor ships secure-by-default for the deployment layer: 1 MiB body limit, 30s request timeout, prod-mode 5xx redaction, prototype-pollution-safe JSON parse, CRLF / header-splitting refusal, path-traversal rejection, method-confusion 405 (not 404), 415 on unsupported content types, __Host- / Secure / HttpOnly / SameSite=Lax cookies. None of these depend on the model behaving, they hold even when the calling agent is fully compromised."
-            user="Decide what the runtime layer does when the deployment layer fires: page someone, drop the request, fail open, fail closed. The framework gives you the signal; the runbook is yours."
+            user="Decide what the runtime layer does when the deployment layer fires: page someone, drop the request, fail open, fail closed. The framework gives you the signal. The runbook is yours."
           />
 
           <CodeBlock language="ts" code={LAYERED_DEFENSE} />
@@ -482,7 +482,7 @@ export default function BlogPostPage() {
           <RequirementCard
             requirement="Report: 'Trust the verifier, not the model. Independent verification must sit in front of every side effect.'"
             framework="Every DaloyJS route declares a schema (Zod, Valibot, ArkType, anything Standard Schema). The handler does not run until the request matches. .strict() is the project convention so unknown keys are rejected, not silently dropped into the database. Response schemas are validated too, so a handler cannot leak a field the contract didn't promise, useful when the consumer is an agent that will happily exfiltrate anything it sees."
-            user="Write the schema tight. min/max on numbers, min/max on string lengths, regex on identifiers, enum on choices. The framework runs whatever shape you give it; a permissive schema is permissive enforcement."
+            user="Write the schema tight. min/max on numbers, min/max on string lengths, regex on identifiers, enum on choices. The framework runs whatever shape you give it. A permissive schema is permissive enforcement."
           />
 
           <CodeBlock language="ts" code={SCHEMA_VERIFICATION} />
@@ -501,7 +501,7 @@ export default function BlogPostPage() {
           <RequirementCard
             requirement="Report: 'A backend the model can call must not be a path to internal infrastructure or the cloud metadata service.'"
             framework="fetchGuard() is a default-deny outbound wrapper around fetch / undici / Bun.fetch / Workers fetch. Cloud metadata IPs, localhost, RFC 1918 private ranges, link-local, and IPv6 equivalents are blocked. Redirects are re-validated against the same allow-list, so an attacker can't bounce off a public URL into the metadata service. ipRestriction() does the same job for inbound traffic on admin / kill-switch surfaces."
-            user="Write the allow-list. fetchGuard refuses to start without one, there is no '*' default. That refusal is on purpose; the most common AI tool SSRF is a 'we'll lock it down later' that never gets locked down."
+            user="Write the allow-list. fetchGuard refuses to start without one, there is no '*' default. That refusal is on purpose. The most common AI tool SSRF is a 'we'll lock it down later' that never gets locked down."
           />
 
           <CodeBlock language="ts" code={NETWORK_SCOPE} />
@@ -524,7 +524,7 @@ export default function BlogPostPage() {
           <RequirementCard
             requirement="Report: 'When the model goes off the rails you need the receipts and a way to stop it.'"
             framework="Per-request structured logs with a correlated ULID requestId. RFC 9457 problem+json errors carrying the same requestId. loadShedding sheds the cheapest traffic first when the event loop or queue is saturated. gracefulShutdown drains in-flight requests on SIGTERM. A killswitch is one ipRestriction line on / and a redeploy."
-            user="Wire the structured log stream to your SIEM (Datadog, CloudWatch, Loki, whatever). Decide the load-shedding thresholds for your workload. The framework gives you the primitives; the dashboards and the on-call rotation are yours."
+            user="Wire the structured log stream to your SIEM (Datadog, CloudWatch, Loki, whatever). Decide the load-shedding thresholds for your workload. The framework gives you the primitives. The dashboards and the on-call rotation are yours."
           />
 
           <CodeBlock language="ts" code={OBSERVABILITY_KILL_SWITCH} />
@@ -553,7 +553,7 @@ export default function BlogPostPage() {
 
           <RequirementCard
             requirement="Report: 'The backend should not become a path to internals via verbose error messages or leaked stack traces.'"
-            framework="In production, DaloyJS redacts 5xx response bodies by default, keeping stack traces, internal hostnames, and DB error messages off the wire. The agent sees a problem+json with a requestId; your SIEM sees the full structured detail under the same id. Same for header sanitisation, same for the JWT verifier (which never echoes the failing claim, only the reason)."
+            framework="In production, DaloyJS redacts 5xx response bodies by default, keeping stack traces, internal hostnames, and DB error messages off the wire. The agent sees a problem+json with a requestId. Your SIEM sees the full structured detail under the same id. Same for header sanitisation, same for the JWT verifier (which never echoes the failing claim, only the reason)."
             user="Don't paste raw error.message into a 200 response 'so the agent can self-correct'. The agent will self-correct from a 400 problem+json with a documented type URL just as well, and the type URL doesn't leak your DB schema."
           />
 

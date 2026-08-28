@@ -505,7 +505,7 @@ export default function BlogPostPage() {
           <p>
             None of this is the model&apos;s fault, by the way. The agent did
             the most plausible thing it could imagine from the prompt and the
-            file tree. The repo simply never told it which middleware was
+            file tree. The repo never told it which middleware was
             load-bearing, which file was the single source of truth, or that{" "}
             <code>generated/openapi.json</code> is machine-written.
           </p>
@@ -536,7 +536,7 @@ export default function BlogPostPage() {
             principles, project shape, commands, route recipes, schema
             conventions, testing patterns, security defaults, and deployment
             notes. Agents that speak the Anthropic Skills protocol load it when
-            the prompt matches the &quot;When to use&quot; section; agents that
+            the prompt matches the &quot;When to use&quot; section. Agents that
             don&apos;t follow the link from AGENTS.md.
           </TierCard>
 
@@ -645,7 +645,7 @@ export default function BlogPostPage() {
             Working well with coding agents looks a lot like onboarding a new
             human joiner: write down the load-bearing conventions, keep them
             short, link to the deeper manual when one is needed, and enforce
-            what you can in tooling. DaloyJS just makes sure the scaffold gives
+            what you can in tooling. DaloyJS makes sure the scaffold gives
             you a head start on all four.
           </p>
 

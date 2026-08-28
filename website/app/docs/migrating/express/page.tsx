@@ -67,8 +67,7 @@ export default function Page() {
         without extra code.
       </p>
       <p>
-        So the migration is not a find-and-replace. It is a small shift in
-        mental model:{" "}
+        The migration is a small shift in mental model:{" "}
         <strong>
           from &quot;mutate res and call next&quot; to &quot;declare a contract
           and return a value.&quot;
@@ -127,7 +126,7 @@ export default function Page() {
         </li>
         <li>
           You want secure defaults instead of a TODO list. Express ships almost
-          nothing; you remember to add <code>helmet</code>
+          nothing. You remember to add <code>helmet</code>
           {", "}a rate limiter, a body limit, a request timeout, and you hope
           nobody forgets. DaloyJS ships{" "}
           <Link href="/docs/security/secure-defaults">secure-by-default</Link>{" "}
@@ -153,13 +152,13 @@ export default function Page() {
       </p>
 
       <h3 id="when-should-you-migrate-and-when-should-you-not">
-        When should you migrate (and when should you not)?
+        When should you migrate?
       </h3>
       <p>Good times to migrate:</p>
       <ul>
         <li>
           You are starting a new service or a new API surface (greenfield is the
-          easiest case, just start in DaloyJS).
+          easiest case, start in DaloyJS).
         </li>
         <li>
           You are about to add OpenAPI docs or a client SDK to an Express app
@@ -183,7 +182,7 @@ export default function Page() {
         <li>
           You lean heavily on server-rendered HTML via{" "}
           <strong>view engines</strong> (EJS, Pug, Handlebars). DaloyJS is
-          API-first; it can return HTML, but it is not a templating framework.
+          API-first. It can return HTML, but it is not a templating framework.
           See{" "}
           <Link href={"/docs/migrating/express#views" as Route}>
             Views &amp; template engines
@@ -287,7 +286,7 @@ app.listen(3000)                      serve(app, { port: 3000 })  // from an ada
           handler is never called.
         </li>
         <li>
-          Order is structured, not positional. Express runs middleware in the
+          Order is structured. Express runs middleware in the
           exact order you call <code>app.use</code>
           {". "}DaloyJS runs hooks at named lifecycle points (global, then
           group, then route), which is more predictable and removes a whole
@@ -379,8 +378,8 @@ const { port } = serve(app, { port: 3000 });
 console.log(\`listening on http://localhost:\${port}\`);`}
       />
       <p>
-        That is the whole shape of a DaloyJS app. The rest of this guide is just
-        filling in routes and hooks. Want the interactive docs UI too? Add{" "}
+        That is the whole shape of a DaloyJS app. The rest of this guide fills
+        in routes and hooks. Want the interactive docs UI too? Add{" "}
         <code>docs: true</code> to the <code>App</code> options and you get{" "}
         <code>GET /docs</code>
         {", "}
@@ -393,7 +392,7 @@ console.log(\`listening on http://localhost:\${port}\`);`}
       <p>
         Every <code>app.get</code> / <code>app.post</code> / etc. becomes a
         matching <code>app.get(path, contract, handler)</code> /{" "}
-        <code>app.post(...)</code> call, the HTTP method is simply the function
+        <code>app.post(...)</code> call. The HTTP method is the function
         you call. Each route needs a unique <code>operationId</code> (this is
         what names the generated client method and the OpenAPI operation).
       </p>
@@ -450,7 +449,7 @@ app.post(
       <p>
         Express and DaloyJS use the same <code>:name</code> syntax in the path.
         The difference is where the value shows up: Express puts it on{" "}
-        <code>req.params</code> (always <code>string</code>); DaloyJS puts it on{" "}
+        <code>req.params</code> (always <code>string</code>). DaloyJS puts it on{" "}
         <code>ctx.params</code>
         {", "}and if you attach a schema, it is parsed and typed for you.
       </p>
@@ -485,7 +484,7 @@ app.get(
         <code>/files/*filepath</code> and brace-wrapped optional segments like{" "}
         <code>/:file{"{.:ext}"}</code>
         {". "}Note that Express 5 no longer supports inline regular-expression
-        characters inside path strings (they are reserved); you can still pass a
+        characters inside path strings (they are reserved). You can still pass a
         JavaScript <code>RegExp</code> object as the path. DaloyJS uses a
         trie/radix router with the conventional <code>:param</code> syntax and
         does <em>not</em> accept regex paths. If you rely on a regex route or a
@@ -573,7 +572,7 @@ app.post(
           },
           {
             label: "beforeHandle",
-            detail: "guard; return Response to stop",
+            detail: "guard. Return Response to stop",
           },
           {
             label: "handler",
@@ -653,7 +652,7 @@ app.post(
             <td>
               <code>onSend</code>
             </td>
-            <td>After the response is built; mutate headers or replace it.</td>
+            <td>After the response is built. Mutate headers or replace it.</td>
             <td>Middleware that rewrites the outgoing response.</td>
           </tr>
           <tr>
@@ -763,7 +762,7 @@ app.get(
               <code>express.json()</code>
             </td>
             <td>
-              Built in. Declare a <code>request.body</code> schema; JSON is
+              Built in. Declare a <code>request.body</code> schema. JSON is
               parsed and validated automatically.
             </td>
           </tr>
@@ -1299,9 +1298,9 @@ await app.ready();`}
         </tbody>
       </table>
       <p>
-        The big win: in Express, <code>res.status(201).json(...)</code> with a
-        status you never documented just works (and silently drifts from your
-        docs). In DaloyJS, returning <code>status: 201</code> only type-checks
+        In Express, <code>res.status(201).json(...)</code> with a
+        status you never documented still works, and silently drifts from your
+        docs. In DaloyJS, returning <code>status: 201</code> only type-checks
         if <code>201</code> is declared in that route&apos;s{" "}
         <code>responses</code>
         {". "}The compiler catches drift.
@@ -1430,8 +1429,8 @@ app.get(
           Render HTML strings yourself for the occasional page. Build the HTML
           (with any template library you like, or template literals) and return
           it with a <code>content-type: text/html</code> header. Good for
-          emails, a status page, or a handful of marketing routes, not for a
-          full server-rendered app.
+          emails, a status page, or a handful of marketing routes. It is a poor
+          fit for a full server-rendered app.
         </li>
       </ul>
 
@@ -1464,8 +1463,8 @@ console.log(\`up on \${port}\`);
         Deploying somewhere other than a long-running Node process? Swap the
         import for the matching <Link href="/docs/adapters">adapter</Link> (Bun,
         Deno, Cloudflare Workers, AWS Lambda, ...), the same <code>app</code>{" "}
-        object runs on all of them. That portability is something Express simply
-        cannot do, because it is bound to Node&apos;s <code>http</code> module.
+        object runs on all of them. Express cannot do that, because it is bound
+        to Node&apos;s <code>http</code> module.
       </p>
 
       <h2 id="a-full-before-after-example">A full before/after example</h2>
@@ -1610,7 +1609,7 @@ console.log(\`up on \${port}\`);`}
           the other.
         </li>
         <li>
-          Migrate by bounded slice, not by file. Move a whole resource (all of{" "}
+          Migrate by bounded slice. Move a whole resource (all of{" "}
           <code>/books</code>) at once so you don&apos;t split a feature across
           two frameworks. Mirror its routes in DaloyJS, point the proxy at the
           new one, delete the Express version.
@@ -1678,19 +1677,19 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </dt>
         <dd>
           Nowhere, you don&apos;t need it. Continuing the pipeline is the
-          default (a hook that returns nothing just falls through). To stop
+          default (a hook that returns nothing falls through). To stop
           early, return a <code>Response</code> from <code>beforeHandle</code>{" "}
           or throw an error. There is no &quot;forgot to call{" "}
           <code>next()</code> and the request hangs&quot; failure mode.
         </dd>
         <dt>
           <strong>
-            &quot;Can I just return a string like <code>res.send</code>?&quot;
+            &quot;Can I return a string like <code>res.send</code>?&quot;
           </strong>
         </dt>
         <dd>
           Yes: <code>return {'{ status: 200, body: "hi" }'}</code>
-          {". "}Objects are serialized as JSON; strings and buffers are sent
+          {". "}Objects are serialized as JSON. Strings and buffers are sent
           as-is. The shape is always <code>{`{ status, body, headers? }`}</code>
           {"."}
         </dd>
@@ -1733,7 +1732,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
         </dt>
         <dd>
           Use <code>app.decorate(...)</code> for app-wide shared resources
-          (typed onto <code>ctx.state</code>) and just set values on{" "}
+          (typed onto <code>ctx.state</code>) and set values on{" "}
           <code>ctx.state</code> within a request for per-request data.
         </dd>
         <dt>
@@ -1784,7 +1783,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
           <Link href="/docs/plugins">plugins</Link>.
         </li>
         <li>
-          Move static assets to a CDN/proxy; re-implement gated downloads as
+          Move static assets to a CDN/proxy. Re-implement gated downloads as
           streaming handlers.
         </li>
         <li>
@@ -1793,7 +1792,7 @@ test("GET /books/:id returns 404 for unknown id", async () => {
           {"."}
         </li>
         <li>
-          Port tests to <code>app.request(...)</code>; add OpenAPI snapshot
+          Port tests to <code>app.request(...)</code>. Add OpenAPI snapshot
           tests.
         </li>
         <li>

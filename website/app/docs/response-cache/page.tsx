@@ -42,8 +42,7 @@ export default function Page() {
         <code>GET</code>s with <code>304 Not Modified</code> but still runs the
         handler to produce the body it hashes; <code>compression()</code>{" "}
         shrinks the bytes on the wire but caches nothing.{" "}
-        <code>responseCache()</code> is the missing third piece: it caches the{" "}
-        <strong>body</strong>.
+        <code>responseCache()</code> caches the <strong>body</strong>.
       </p>
       <p>
         It is <strong>built-in and dependency-free</strong>
@@ -54,7 +53,7 @@ export default function Page() {
 
       <UseCaseGuide
         featureName="Response caching middleware"
-        recommendation="Use server-side response caching for public, high-read, and computationally expensive GET/HEAD endpoints. Credentialed requests bypass the cache by default; to cache personalized responses, identify the caller with principal() so each one gets its own entry instead of sharing yours."
+        recommendation="Use server-side response caching for public, high-read, and computationally expensive GET/HEAD endpoints. Credentialed requests bypass the cache by default. To cache personalized responses, identify the caller with principal() so each one gets its own entry instead of sharing yours."
         whenToUse={[
           "Public, non-personalized read endpoints (e.g., product lists, public profiles, configuration feeds).",
           "Handlers that perform expensive database operations, complex calculations, or third-party API fetches.",
@@ -62,7 +61,7 @@ export default function Page() {
           "Personalized reads, ONLY with a principal() that names the caller so the key partitions per user.",
         ]}
         whenNotToUse={[
-          "Personalized, user-specific data without a principal() — the request will simply bypass the cache, so you gain nothing and should not reach for the middleware.",
+          "Personalized, user-specific data without a principal(). The request bypasses the cache, so you gain nothing and should not reach for the middleware.",
           "Mutative requests (POST, PUT, PATCH, DELETE) which perform side-effects.",
           "Real-time data feeds (e.g., live stock prices, chat messages) where any latency is unacceptable.",
           "Endpoints that carry high-entropy security tokens in headers or response bodies.",
@@ -154,7 +153,7 @@ app.get(
             tone: "muted",
           },
         ]}
-        caption="A handled request's response carries an X-Cache marker (HIT, STALE, or MISS); a request that bypasses the cache (non-GET/HEAD, an Authorization header, or Cache-Control: no-store) carries none. On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry."
+        caption="A handled request's response carries an X-Cache marker (HIT, STALE, or MISS). A request that bypasses the cache (non-GET/HEAD, an Authorization header, or Cache-Control: no-store) carries none. On a fresh hit the handler is never invoked. STALE requires a revalidate callback and serves the old body immediately while a single de-duplicated refresh repopulates the entry."
       />
 
       <ul>
@@ -189,14 +188,14 @@ app.get(
           carry <code>Cache-Control: no-store</code>
           {", "}
           <code>private</code>
-          {", "}or <code>no-cache</code>;
+          {", "}or <code>no-cache</code>.
         </li>
         <li>
           include a <code>Set-Cookie</code> header (per-user / credentialed
           responses must not be shared);
         </li>
         <li>
-          fail <code>cacheableStatus</code> (default: only <code>200</code>); or
+          fail <code>cacheableStatus</code> (default: only <code>200</code>), or
         </li>
         <li>
           exceed <code>maxBodyBytes</code> (1&nbsp;MiB by default).
@@ -281,7 +280,7 @@ app.use(
         or serverless fleet, supply a shared backend by implementing{" "}
         <code>ResponseCacheStore</code>
         {". "}The contract mirrors <code>SessionStore</code> and the rate-limit
-        store; entries whose <code>staleUntil</code> is in the past should be
+        store. Entries whose <code>staleUntil</code> is in the past should be
         treated as missing.
       </p>
       <CodeBlock
@@ -333,8 +332,8 @@ Authorization or Cookie present, and neither handled nor identified?  →  bypas
         The authority is part of the key
       </h3>
       <p>
-        The key is built from the <strong>effective request URI</strong> —
-        scheme, authority, path, and query — per RFC&nbsp;9111&nbsp;§4. One
+        The key is built from the <strong>effective request URI</strong>{" "}
+        (scheme, authority, path, and query) per RFC&nbsp;9111&nbsp;§4. One
         process serving several hostnames (vanity domains,
         subdomain-per-customer, staging alongside production) therefore never
         shares an entry across them. A key covering only path and query would
@@ -345,12 +344,12 @@ Authorization or Cookie present, and neither handled nor identified?  →  bypas
         Requests carrying <code>Authorization</code> <strong>or</strong>{" "}
         <code>Cookie</code> bypass the shared cache entirely
         (RFC&nbsp;9111&nbsp;§3.5). <code>Cookie</code> counts because a session
-        cookie is the single most common way a response becomes private — a
+        cookie is the single most common way a response becomes private. A
         cache that only knew about <code>Authorization</code> would happily
         serve one logged-in user&apos;s page to the next visitor.
       </p>
       <p>
-        Rather than simply losing the cache on authenticated routes, name the
+        Rather than losing the cache on authenticated routes, name the
         caller with <code>principal</code>. The id is folded into the key, so
         each principal gets their own entry and hits still work:
       </p>
@@ -358,7 +357,7 @@ Authorization or Cookie present, and neither handled nor identified?  →  bypas
         code={`app.use(
   responseCache({
     ttlSeconds: 30,
-    // Return a stable id — never the raw credential. null means anonymous.
+    // Return a stable id, never the raw credential. null means anonymous.
     principal: (ctx) => ctx.state.session?.get<string>("userId") ?? null,
   }),
 );
@@ -394,7 +393,7 @@ app.use(
         <code>Access-Control-Allow-Origin</code>, and <code>compression()</code>{" "}
         adds <code>Vary: Accept-Encoding</code> alongside{" "}
         <code>Content-Encoding</code>. A cache that ignored those would serve
-        one caller&apos;s allowed origin — or their gzipped bytes — to the next.
+        one caller&apos;s allowed origin (or their gzipped bytes) to the next.
       </p>
       <p>
         Each distinct set of values is stored as its own variant, so several
@@ -413,7 +412,7 @@ app.use(
       </h3>
       <p>
         When <code>tenancy()</code> has resolved a tenant for the request, that
-        tenant is folded into the cache key with no wiring on your part — and
+        tenant is folded into the cache key with no wiring on your part, and
         the partition is applied <em>around</em> a custom{" "}
         <code>keyGenerator</code> too, so a hand-written generator cannot
         accidentally widen it. A caller that resolves to no tenant is kept in
@@ -438,13 +437,13 @@ app.use(
         A cache hit returns a response from <code>beforeHandle</code>, which
         ends the hook chain. Any gate running in that <em>same</em> phase could
         therefore be skipped by a hit above it. That is why the network-identity
-        gates — <code>geoBlock()</code>
+        gates (<code>geoBlock()</code>
         {", "}
         <code>ipRestriction()</code>
         {", "}
         <code>botGuard()</code>
         {", "}
-        <code>autoBan()</code> and <code>ipReputation()</code> — run in{" "}
+        <code>autoBan()</code> and <code>ipReputation()</code>) run in{" "}
         <code>preBody</code>
         {", "}which always precedes <code>beforeHandle</code>. They hold whether
         you mount them above or below the cache. Authentication (

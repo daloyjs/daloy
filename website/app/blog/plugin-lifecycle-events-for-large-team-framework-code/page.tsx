@@ -582,7 +582,7 @@ export default function BlogPostPage() {
             Devlin again, writing from Norway with the late-spring sun doing
             that thing where it pretends it&apos;s 4 p.m. when it&apos;s
             actually 9 p.m. This post is about a small, boring API surface that
-            solves a very large, very expensive problem: how do platform teams
+            solves a large, expensive problem. How do platform teams
             ship cross-cutting concerns (observability, registration, graceful
             drain, policy) without making every route file import the infra
             layer?
@@ -683,7 +683,7 @@ export default function BlogPostPage() {
             until drain completes.
           </p>
 
-          <h2>A metrics plugin that flushes before drain</h2>
+          <h2>A metrics plugin, flushed before drain</h2>
 
           <EditorFrame
             files={["platform/metrics-plugin.ts"]}
@@ -719,7 +719,7 @@ export default function BlogPostPage() {
             you the early window.
           </p>
 
-          <h2>A policy plugin that fails boot</h2>
+          <h2>A policy plugin, fail boot on violations</h2>
 
           <EditorFrame
             files={["platform/policy-plugin.ts"]}

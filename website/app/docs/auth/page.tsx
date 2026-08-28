@@ -33,12 +33,11 @@ export default function Page() {
     <>
       <h1>DaloyJS auth docs</h1>
       <p>
-        DaloyJS doesn&apos;t bundle a user database or login UI, instead, it
-        ships primitives that make it easy to plug in a hosted identity provider
-        (IdP). Your API receives a bearer token, verifies it with the
-        provider&apos;s JWKS or SDK, and gates routes by scope, role, or
-        organization. The pages in this section show how to wire up the seven
-        most common IdPs.
+        DaloyJS does not bundle a user database or login UI. It ships primitives
+        that plug in a hosted identity provider (IdP). Your API receives a
+        bearer token, verifies it with the provider&apos;s JWKS or SDK, and
+        gates routes by scope, role, or organization. The pages in this section
+        show how to wire up the seven most common IdPs.
       </p>
       <p>
         New to this? Start with{" "}
@@ -55,10 +54,9 @@ export default function Page() {
         <p>
           Every page in this section wires DaloyJS up as the thing that{" "}
           <em>checks</em> a token. The provider owns the accounts, the login
-          screen, the password resets, and the token lifetime. That split is not
-          a limitation to work around: it is the part of the design that keeps
-          the hard, high-blast-radius problems with a team whose full-time job
-          is solving them.
+          screen, the password resets, and the token lifetime. That split keeps
+          the high-blast-radius problems with a team whose full-time job is
+          solving them.
         </p>
       </AuthRole>
 
@@ -68,13 +66,13 @@ export default function Page() {
           <Link href="/docs/auth/aws-cognito">AWS Cognito</Link>
           {": "}pay-as-you-go user pools with hosted sign-in. Use{" "}
           <code>aws-jwt-verify</code> to verify access and ID tokens with zero
-          runtime dependencies; runs on Node, edge, and Lambda.
+          runtime dependencies. Runs on Node, edge, and Lambda.
         </li>
         <li>
           <Link href="/docs/auth/entra-id">Microsoft Entra ID (MSAL)</Link>
           {": "}
           enterprise SSO for Microsoft 365 / Azure AD users. Verify tokens with
-          the OIDC JWKS using <code>jose</code>; acquire downstream tokens with{" "}
+          the OIDC JWKS using <code>jose</code>. Acquire downstream tokens with{" "}
           <code>@azure/msal-node</code> when needed.
         </li>
         <li>
@@ -130,7 +128,7 @@ export default function Page() {
           { label: "LoginRadius", detail: "loginradius-sdk" },
           { label: "Better Auth", detail: "auth.handler + getSession" },
         ]}
-        caption="DaloyJS stays the resource server in every case. Most providers swap a verifier SDK behind the same interface; Better Auth is the exception (mount its handler + use getSession for cookie/session auth)."
+        caption="DaloyJS stays the resource server in every case. Most providers swap a verifier SDK behind the same interface. Better Auth is the exception (mount its handler and use getSession for cookie/session auth)."
       />
 
       <h2 id="runtime-compatibility-at-a-glance">
@@ -304,8 +302,8 @@ declare module "@daloyjs/core" {
       <h2 id="security-checklist">Security checklist</h2>
       <ul>
         <li>
-          Always verify the signature. Never trust an unverified JWT,
-          decode-only utilities are for debugging. Use the provider&apos;s JWKS
+          Always verify the signature. Never trust an unverified JWT.
+          Decode-only utilities are for debugging. Use the provider&apos;s JWKS
           endpoint with key caching and automatic rotation (every SDK on the
           following pages handles this).
         </li>
@@ -315,7 +313,7 @@ declare module "@daloyjs/core" {
           is still a token confusion attack.
         </li>
         <li>
-          Authorize, don&apos;t just authenticate. A valid token only proves the
+          Authorize after you authenticate. A valid token only proves the
           caller is who they say they are. Enforce scopes, roles, or
           organization membership for every privileged action, then apply{" "}
           <Link href={"/docs/security/resource-authorization" as Route}>

@@ -55,7 +55,7 @@ export default function Page() {
           { eyebrow: "Sinch", label: "Mailgun", detail: "mailgun.js" },
           { eyebrow: "sandbox", label: "Mailtrap", detail: "mailtrap" },
         ]}
-        caption="One tiny plugin decorates app.state with a provider client behind a shared EmailSender contract, so route handlers call state.email.send() and never know which provider is wired in. Swapping providers is a one-file change."
+        caption="A plugin decorates app.state with a provider client behind a shared EmailSender contract. Route handlers call state.email.send() without depending on which provider is wired in."
       />
 
       <h2 id="supported-providers">Supported providers</h2>
@@ -74,13 +74,13 @@ export default function Page() {
         </li>
         <li>
           <Link href="/docs/email/resend">Resend</Link>
-          {": "}modern, developer-first API via the <code>resend</code> SDK.
-          Great DX, React Email templating, edge-friendly.
+          {": "}email API via the <code>resend</code> SDK. React Email templates
+          and edge-runtime support.
         </li>
         <li>
           <Link href="/docs/email/postmark">Postmark</Link>
           {": "}transactional-first delivery via the <code>postmark</code> SDK.
-          Known for very high inbox placement.
+          Known for high inbox placement.
         </li>
         <li>
           <Link href="/docs/email/mailgun">Mailgun</Link>
@@ -235,7 +235,7 @@ declare module "@daloyjs/core" {
         </li>
         <li>
           Verify your sending domain. Add SPF, DKIM, and DMARC records before
-          going live; every provider here rejects unverified senders in
+          going live. Every provider here rejects unverified senders in
           production.
         </li>
         <li>

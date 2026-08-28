@@ -609,7 +609,7 @@ export default function BlogPostPage() {
           </EditorFrame>
 
           <p>
-            Two things to highlight. First, <code>trustIncoming: false</code> is
+            Two things. First, <code>trustIncoming: false</code> is
             the safe default, clients can send any header they want, and
             accepting an arbitrary id from the public internet lets them collide
             with (or impersonate) other requests in your log stream. Second,{" "}
@@ -726,7 +726,7 @@ export default function BlogPostPage() {
             If you do not need the OTel propagator, read{" "}
             <code>traceparent</code> from the headers and return a minimal
             parent context object. The framework does not care what shape the
-            parent context has; it passes it through to <code>startSpan</code>{" "}
+            parent context has. It passes it through to <code>startSpan</code>{" "}
             unchanged.
           </p>
 
@@ -784,8 +784,8 @@ export default function BlogPostPage() {
           <p>
             Observability is one of those areas where the bad decisions are
             invisible until you try to leave them. DaloyJS&apos;s answer is to
-            keep every contract small enough that &quot;leaving&quot; is just
-            &quot;swap one tiny implementation for another&quot;:{" "}
+            keep every contract small enough that &quot;leaving&quot; means
+            swapping one tiny implementation for another.{" "}
             <code>Logger</code> is seven methods, <code>TracingTracer</code> is
             one method, and <code>Hooks</code> follows the same lifecycle as
             other middleware. Your SDK stays in application code, without

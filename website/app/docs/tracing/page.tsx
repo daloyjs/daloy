@@ -252,7 +252,7 @@ curl localhost:3002/orders \\
         <code>trace.getTracer(&quot;svc&quot;)</code> from{" "}
         <code>@opentelemetry/api</code> backed by{" "}
         <code>@opentelemetry/sdk-node</code> and an OTLP exporter. The{" "}
-        <code>otelTracing()</code> call does not change; only the tracer you
+        <code>otelTracing()</code> call does not change. Only the tracer you
         pass in does.
       </p>
 
@@ -264,13 +264,14 @@ curl localhost:3002/orders \\
           <code>http.response.status_code</code> on the same span.
         </li>
         <li>
-          No global side effects. The hook never touches <code>globalThis</code>
-          {", "}never installs a propagator, and never imports an OTel SDK, it
+          The hook has no global side effects. It never touches{" "}
+          <code>globalThis</code>
+          {", "}never installs a propagator, and never imports an OTel SDK. It
           stays adapter-portable.
         </li>
         <li>
           Single end. If a handler throws, the same span is marked errored and
-          ended once during <code>onSend</code>; later <code>onError</code> /
+          ended once during <code>onSend</code>. Later <code>onError</code> /
           repeat <code>onSend</code> invocations are no-ops.
         </li>
         <li>

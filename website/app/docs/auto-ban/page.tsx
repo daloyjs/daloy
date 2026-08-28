@@ -37,7 +37,7 @@ export default function Page() {
         <em>any</em> response and temporarily bans a client that trips too many
         suspicious statuses (by default <code>401</code> / <code>403</code> /{" "}
         <code>429</code>) inside a rolling window. Repeat offenders earn
-        exponentially longer bans; the record decays once the client goes quiet,
+        exponentially longer bans. The record decays once the client goes quiet,
         so a one-off burst is forgiven while a persistent attacker is locked out
         for progressively longer. It is dependency-free and runtime-portable.
       </p>
@@ -72,7 +72,7 @@ export default function Page() {
           },
           {
             label: "Banned -> reject",
-            detail: "429 + Retry-After (or 403); handler never runs",
+            detail: "429 + Retry-After (or 403). Handler never runs",
             tone: "danger",
           },
           {
@@ -104,7 +104,7 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
         Mount it globally with <code>app.use()</code> so it observes every
         route. Because it reads the outgoing status, it counts failures produced
         by <em>any</em> downstream middleware or handler (auth rejections,
-        rate-limit <code>429</code>s, your own <code>403</code>s), not just its
+        rate-limit <code>429</code>s, your own <code>403</code>s), not only its
         own.
       </p>
 
@@ -114,10 +114,10 @@ app.use(autoBan({ trustProxyHeaders: true }));`}
         clients: pass a <code>keyGenerator</code>, set{" "}
         <code>trustProxyHeaders: true</code>, or declare{" "}
         <code>trustedHops</code>
-        {". "}This is deliberate: a shared <code>&quot;global&quot;</code>{" "}
+        {". "}This is deliberate. A shared <code>&quot;global&quot;</code>{" "}
         bucket would let a single offender ban every caller at once. A request
         the key generator cannot attribute (returns <code>undefined</code>) is
-        skipped: never counted, never banned.
+        skipped (never counted, never banned).
       </p>
       <CodeBlock
         language="ts"
@@ -153,7 +153,7 @@ app.use(
         accounting found nothing to attribute, and the ban silently never armed.
         Requests enforced by the second attempt are order-sensitive again, since{" "}
         <code>beforeHandle</code> is the phase a <code>responseCache()</code>{" "}
-        hit short-circuits — enforcing late still beats not enforcing. Returning{" "}
+        hit short-circuits. Enforcing late still beats not enforcing. Returning{" "}
         <code>undefined</code> from both attempts skips the request as
         documented.
       </p>
@@ -209,11 +209,11 @@ app.use(autoBan({ trustedHops: 2 }));
       <p>
         Resolving to no identity is right for <em>identity</em>, but discarding
         such a request is wrong for <em>abuse accounting</em>: an attacker who
-        reaches your origin directly would get unlimited strikes simply by
+        reaches your origin directly would get unlimited strikes by
         omitting a header. So <code>autoBan</code> falls back to the{" "}
         <strong>immediate TCP peer</strong> address, in its own{" "}
-        <code>peer:</code> keyspace. The peer cannot be spoofed — it is the
-        socket actually talking to your server — and in exactly the
+        <code>peer:</code> keyspace. The peer cannot be spoofed (it is the
+        socket actually talking to your server), and in exactly the
         direct-to-origin case that produced the bypass, the peer <em>is</em> the
         attacker, so accounting becomes precise rather than absent.
       </p>
@@ -227,14 +227,14 @@ app.use(autoBan({ trustedHops: 2, onUnresolvedIdentity: "skip" }));`}
       />
       <p>
         Choose <code>&quot;skip&quot;</code> only when unresolved requests are
-        known-benign and arrive from a shared address — a load balancer that
+        known-benign and arrive from a shared address (a load balancer that
         does not always set <code>X-Forwarded-For</code>, say, where every such
         request would otherwise share that balancer&apos;s single{" "}
-        <code>peer:</code> bucket and a few <code>401</code>s could ban the lot.
+        <code>peer:</code> bucket and a few <code>401</code>s could ban the lot).
         Fixing the proxy configuration is the better answer. On edge runtimes
         that expose no peer socket there is nothing to attribute to, and the
         request is skipped either way. A custom <code>keyGenerator</code> owns
-        its own posture: returning <code>undefined</code> still means skip.
+        its own posture. Returning <code>undefined</code> still means skip.
       </p>
       <p>
         Second, <code>trustedHops</code> already implies proxy-header trust, so

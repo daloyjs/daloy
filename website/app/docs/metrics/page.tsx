@@ -146,7 +146,7 @@ app.get(
       <ul>
         <li>
           <code>http_requests_total{`{method,route,status}`}</code>
-          {": "}a request counter (rate; the error rate is the subset with a{" "}
+          {": "}a request counter (rate). The error rate is the subset with a{" "}
           <code>4xx</code>/<code>5xx</code> status).
         </li>
         <li>
@@ -551,16 +551,16 @@ http_requests_in_flight`}
         <li>
           Bearer token (<code>opts.token</code>) compared with DaloyJS&apos;s
           portable <code>timingSafeEqual</code> (a constant-time string
-          compare, not <code>node:crypto</code>
+          compare that does not use <code>node:crypto</code>
           {", "}so it does not need <code>nodejs_compat</code> on Workers).
           Missing token is a <code>401</code> with{" "}
-          <code>WWW-Authenticate</code>; wrong token is a <code>403</code>.
+          <code>WWW-Authenticate</code>. A wrong token is a <code>403</code>.
         </li>
         <li>
           Per-IP rate limit (default{" "}
           <code>{`{ limit: 60, windowMs: 60_000 }`}</code>) returning{" "}
           <code>429</code> with <code>Retry-After</code> on overflow. A
-          Prometheus scrape every 15s is 4/min; an HA pair at 10s is 12/min;
+          Prometheus scrape every 15s is 4/min. An HA pair at 10s is 12/min.
           60/min leaves headroom for a Collector plus Prometheus. Stacking
           Alloy + Collector + Prometheus can surprise you: a 429 looks like
           an outage in Grafana. Pass <code>rateLimit: false</code> behind a
@@ -575,7 +575,7 @@ http_requests_in_flight`}
         <li>
           Cardinality cap
           {": "}every metric is bounded by <code>maxSeries</code> (default
-          5000); overflowing label combinations are dropped and counted in{" "}
+          5000). Overflowing label combinations are dropped and counted in{" "}
           <code>daloy_metrics_series_dropped_total</code>
           {", "}a memory-exhaustion defense.
         </li>

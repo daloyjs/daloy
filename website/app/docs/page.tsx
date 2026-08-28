@@ -114,8 +114,7 @@ export default function Page() {
       </p>
       <ul>
         <li>
-          OpenAPI ergonomics on par with FastAPI, built into the core, not
-          bolted on.
+          OpenAPI ergonomics on par with FastAPI, built into the core.
         </li>
         <li>
           Vercel/serverless/edge fit on par with{" "}

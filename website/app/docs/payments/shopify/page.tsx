@@ -465,7 +465,7 @@ const res = await fetch(
         </a>{" "}
         library, which adds OAuth for public/embedded apps and a built-in
         webhook registry. Reach for it when you&apos;re building a Shopify App
-        Store listing; reach for <code>shopify-api-node</code> when you&apos;re
+        Store listing. Reach for <code>shopify-api-node</code> when you&apos;re
         building a server-side integration for a single store and want a smaller
         surface.
       </p>

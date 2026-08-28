@@ -121,13 +121,13 @@ export default function Page() {
         <code>rateLimit()</code> accepts any object implementing the{" "}
         <code>RateLimitStore</code> contract, so each of these platforms can be
         wired up in a few lines using the same middleware. The Redis adapter
-        shown below is just the most common case.
+        shown below is the most common case.
       </p>
 
       <h2 id="install-your-redis-client">Install your Redis client</h2>
       <p>
         DaloyJS does not bundle a Redis client. Pick whichever is already in
-        your stack; there are first-class adapters for the two most common
+        your stack. There are first-class adapters for the two most common
         options.
       </p>
       <CodeBlock
@@ -139,7 +139,7 @@ pnpm add redis        # node-redis v4+`}
 
       <h2 id="run-a-redis-to-point-at">Run a Redis to point at</h2>
       <p>
-        The adapter needs a Redis it can reach; DaloyJS does not start one for
+        The adapter needs a Redis it can reach. DaloyJS does not start one for
         you. For local development the quickest path is a container:
       </p>
       <CodeBlock
@@ -232,7 +232,7 @@ app.use(
           since it cannot express a longer chain. When no trustworthy forwarded
           identity remains, the key falls back to the unspoofable TCP peer (
           <code>peer:&lt;addr&gt;</code>) so one caller cannot 429 the world via
-          a shared <code>global</code> bucket; only peer-less edge platforms
+          a shared <code>global</code> bucket. Only peer-less edge platforms
           still share <code>global</code>.
         </li>
       </ul>
@@ -295,7 +295,7 @@ redisRateLimitStore({
         <em>tens of seconds</em> (until the client&apos;s retry budget, then the
         app&apos;s <code>requestTimeoutMs</code>
         {", "}give up) before it ever reaches <code>onError</code>
-        {". "}That is neither fast-open nor fast-closed, just slow, and it will
+        {". "}That is neither fast-open nor fast-closed, only slow, and it will
         exhaust your connections under load. Construct the client to give up
         quickly:
       </blockquote>
@@ -318,7 +318,7 @@ const redis = createClient({
         With those options a Redis outage resolves in milliseconds: fail-open
         allows the request immediately, fail-closed rejects it with a{" "}
         <code>500</code> immediately. Without them you get the same decision
-        eventually, just after a long stall on every request.
+        eventually, after a long stall on every request.
       </p>
 
       <h2 id="custom-redis-clients">Custom Redis clients</h2>
@@ -352,7 +352,7 @@ const myAdapter: RedisCommands = {
       <ul>
         <li>
           It does not pool connections for you. Reuse a single client across
-          requests; do not create one per call.
+          requests. Do not create one per call.
         </li>
         <li>
           It does not synchronize clocks. The reset timestamp returned to

@@ -134,7 +134,7 @@ app.use(
       />
       <p>
         Defaults are off for the deployment-specific thresholds (heap, RSS) and
-        conservative for everything else; tighten them once you have real
+        conservative for everything else. Tighten them once you have real
         baselines from production.
       </p>
 
@@ -190,7 +190,7 @@ app.cspReportRoute({
         {", "}malformed JSON <code>400</code>
         {", "}and rate-limited callers <code>429</code>
         {". "}The default logger sink omits the parsed report body in production
-        unless <code>logCspReportBodies: true</code> is set explicitly; CSP
+        unless <code>logCspReportBodies: true</code> is set explicitly. CSP
         reports include violated URLs, and URLs are where PII likes to hide when
         nobody is looking. Sink errors are caught and logged at{" "}
         <code>error</code> through the pluggable redacted logger without
@@ -274,7 +274,7 @@ try {
       />
       <p>
         <code>defineConfig</code> reports <strong>every</strong> offending key
-        in one pass (not just the first one) so a cold-start deploy fixes a
+        in one pass (not only the first one) so a cold-start deploy fixes a
         misconfigured cluster on the first try. Suppress the stderr summary with{" "}
         <code>{`{ stderr: false }`}</code> if you want to handle the error
         structurally yourself.

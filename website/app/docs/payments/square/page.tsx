@@ -374,7 +374,7 @@ app.post(
         serialiser throws on BigInt. Map money to strings at the response edge (
         <code>amountMinor.toString()</code>) or use a custom replacer.
         DaloyJS&apos;s Zod responses already coerce BigInt to string when you
-        declare the response as <code>z.string()</code>; declare a{" "}
+        declare the response as <code>z.string()</code>. Declare a{" "}
         <code>z.bigint()</code> only when both ends agree on it.
       </p>
 
@@ -532,12 +532,12 @@ await state.square.refund({
           Iterate paginated endpoints with <code>for await</code>. List
           responses are async-iterable:{" "}
           <code>for (const item of pageable)</code> (synchronously) only gives
-          you the first page; use{" "}
+          you the first page. Use{" "}
           <code>for await (const item of pageable)</code> to walk all pages
           without manual cursor juggling.
         </li>
         <li>
-          Verify webhooks; don&apos;t trust the source IP. Square&apos;s IP
+          Verify webhooks. Do not trust the source IP. Square&apos;s IP
           ranges change. The HMAC + the registered notification URL together
           prove authenticity and that the request hit the right endpoint.
         </li>
