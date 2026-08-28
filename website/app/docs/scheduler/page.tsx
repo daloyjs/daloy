@@ -258,18 +258,16 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
         {". "}The single-flight guarantee is per-process, not cluster-wide.
       </p>
       <p>
-        For the middle ground (work that must survive a restart and run{" "}
-        <em>once, cluster-wide</em>, without adopting an external workflow
-        engine) use{" "}
-        <Link href={"/docs/jobs" as Route}>background jobs</Link>
-        {": "}
+        For work that must survive a restart and run once across the cluster,
+        use{" "}
+        <Link href={"/docs/jobs" as Route}>background jobs</Link>.{" "}
         <code>app.cronEnqueue()</code> keeps the scheduler as the clock but
         turns each tick into an idempotent enqueue, so eight replicas firing
-        the same <code>0 2 * * *</code> collapse into one job that exactly
-        one worker runs. Keep <code>app.cron()</code> for process-local
-        maintenance (the other replicas have their own memory to sweep);
-        reach for <code>cronEnqueue</code> the moment the tick&apos;s work is
-        a global side effect.
+        the same <code>0 2 * * *</code> collapse into one job that one
+        worker runs. Keep <code>app.cron()</code> for process-local
+        maintenance (the other replicas have their own memory to sweep). Use{" "}
+        <code>cronEnqueue</code> when the tick&apos;s work is a global side
+        effect.
       </p>
     </>
   );

@@ -9,7 +9,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Background jobs (queue-agnostic)",
   description:
-    "Enqueue JSON jobs that outlive the HTTP request: a JobStore SPI with a Memory implementation for tests, a leased worker with retries, full-jitter backoff and dead letters, and cronEnqueue for cluster-wide schedules. Zero runtime dependencies; durable stores (Redis, Postgres, SQS) are adapters you own.",
+    "Enqueue JSON jobs that outlive the HTTP request. JobStore SPI, MemoryJobStore for tests, a leased worker with retries and dead letters, and cronEnqueue for cluster-wide schedules. Zero runtime dependencies. Redis, Postgres, and SQS adapters live in your app.",
   path: "/docs/jobs",
   keywords: [
     "background jobs",
@@ -33,31 +33,28 @@ export default function Page() {
     <>
       <h1>Background jobs (queue-agnostic)</h1>
       <p>
-        DaloyJS ships a <strong>queue-agnostic background-job interface</strong>
-        {": "}work that must outlive the HTTP request (and maybe the process)
-        becomes one named handler plus a plain-JSON payload, persisted behind a{" "}
-        <code>JobStore</code> SPI and executed by a leased worker with bounded
-        retries. It is the durable counterpart to{" "}
-        <Link href="/docs/scheduler">in-process cron</Link>
-        {", "}with zero runtime dependencies and the three properties a
-        production job runner needs:
+        DaloyJS ships a background-job interface. Work that must outlive the
+        HTTP request (and maybe the process) becomes a named handler plus a
+        JSON payload, persisted behind a <code>JobStore</code> SPI and run by
+        a leased worker with bounded retries. It is the durable counterpart to{" "}
+        <Link href="/docs/scheduler">in-process cron</Link>, with zero runtime
+        dependencies.
       </p>
       <ul>
         <li>
-          Idempotent enqueue
-          {": "}a <code>(queue, idempotencyKey)</code> pair is unique. Retried
+          <strong>Idempotent enqueue.</strong> A{" "}
+          <code>(queue, idempotencyKey)</code> pair is unique. Retried
           producers (a client that re-POSTs, a cron tick firing on 8 replicas)
           collapse into one job instead of eight side effects.
         </li>
         <li>
-          At-least-once worker
-          {": "}atomic claims with leases and heartbeats, retries with
-          full-jitter backoff, per-attempt timeouts, and a dead-letter state
-          for poison jobs. Graceful shutdown drains in-flight work.
+          <strong>At-least-once worker.</strong> Atomic claims with leases and
+          heartbeats, retries with full-jitter backoff, per-attempt timeouts,
+          and a dead-letter state for poison jobs. Graceful shutdown drains
+          in-flight work.
         </li>
         <li>
-          Bring your own durability
-          {": "}
+          <strong>Bring your own durability.</strong>{" "}
           <code>MemoryJobStore</code> covers tests and single-process dev.
           Production plugs Redis, Postgres, or a cloud queue in through the
           same SPI, as application code. DaloyJS never takes a storage
@@ -67,14 +64,14 @@ export default function Page() {
 
       <div className="not-prose my-6 rounded-lg border border-primary/30 bg-primary/[0.05] p-4">
         <p className="text-sm leading-6 font-semibold text-foreground">
-          A queue, not a workflow engine
+          Boundary with Temporal, Inngest, and Eve
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          A job is <code>{"{ name, payload }"}</code> plus a store. There is no
-          deterministic replay, no parked workflow, no{" "}
+          A job is <code>{"{ name, payload }"}</code> plus a store. It does
+          not checkpoint, sleep for days, or park a workflow, so{" "}
           <code>await sleep(&quot;7 days&quot;)</code> in the middle of a
-          function. If the same TypeScript function must pause for hours and
-          resume, use{" "}
+          function is out of scope. If the same TypeScript function must pause
+          for hours and resume, use{" "}
           <a
             href="https://temporal.io"
             target="_blank"
@@ -92,19 +89,18 @@ export default function Page() {
           >
             Inngest
           </a>
-          {", "}or Eve for durable execution, and keep DaloyJS as the HTTP API
-          in front of it. Job chains (a handler enqueues the next job) are
-          fine; sagas with compensations are not what this primitive
-          pretends to be.
+          {", "}or Eve, and keep DaloyJS as the HTTP API in front of it. A
+          handler that enqueues the next job is a job chain. Sagas with
+          compensations belong in a workflow engine.
         </p>
       </div>
 
       <p>
-        Want the argument, not the API? The companion essay{" "}
+        The companion post{" "}
         <Link href={"/blog/background-jobs-that-outlive-the-request" as Route}>
           Background Jobs That Outlive the Request
         </Link>{" "}
-        retells the why / when / where in prose. This page is the reference.
+        covers the design argument. This page is the reference.
       </p>
 
       <FlowDiagram
@@ -142,16 +138,16 @@ export default function Page() {
             tone: "danger",
           },
         ]}
-        caption="A retry loops from the handler back to a delayed re-claim with full-jitter backoff. If the process dies after the handler succeeded but before complete, the lease expires and another worker runs the job again: delivery is at-least-once, so handlers must be idempotent."
+        caption="A retry loops from the handler back to a delayed re-claim with full-jitter backoff. If the process dies after the handler succeeded but before complete is persisted, the lease expires and another worker runs the job again. Delivery is at-least-once, so handlers must be idempotent."
       />
 
       <h2 id="quick-start">Quick start</h2>
       <p>
-        The easiest entry point is <code>app.useJobs()</code>
-        {", "}which creates the queue, optionally starts an in-process worker,
-        and registers the graceful-shutdown drain (in-flight jobs get the
-        grace period, then their <code>AbortSignal</code> fires and they are
-        failed back to the queue for another worker to claim).
+        Mount jobs with <code>app.useJobs()</code>. That creates the queue,
+        optionally starts an in-process worker, and registers the
+        graceful-shutdown drain. In-flight jobs get the grace period, then
+        their <code>AbortSignal</code> fires and they fail back to the queue
+        for another worker to claim.
       </p>
       <CodeBlock
         language="ts"
@@ -189,8 +185,8 @@ app.post("/users", contract, async (ctx) => {
       <p>
         Without an <code>App</code> (scripts, dedicated worker binaries,
         tests), drive the primitives directly. <code>worker.runOnce()</code>{" "}
-        claims and settles one job, which makes tests deterministic with no
-        timers and no Redis:
+        claims and settles one job, so tests stay deterministic without
+        timers or Redis:
       </p>
       <CodeBlock
         language="ts"
@@ -227,9 +223,8 @@ await worker.runOnce(); // true: claimed, ran, completed
 
       <h2 id="when-to-use">When to use (and when not)</h2>
       <p>
-        Product truth: jobs are for work that must survive the HTTP request
-        and/or the process. If the work fits in the request,{" "}
-        <strong>do not enqueue</strong>. Walk the tree:
+        Jobs are for work that must survive the HTTP request, or the process.
+        If the work fits in the request, do not enqueue.
       </p>
       <CodeBlock
         language="text"
@@ -241,25 +236,24 @@ await worker.runOnce(); // true: claimed, ran, completed
                   NO  -> workflow engine (Temporal / Inngest / Eve). Daloy stays the API.
                   YES -> JOBS (this feature).`}
       />
-      <p>The short version:</p>
       <ul>
         <li>
-          <strong>Now, in this request</strong> → handler
+          <strong>Now, in this request.</strong> Handler.
         </li>
         <li>
-          <strong>Now, in this process, on a clock</strong> →{" "}
+          <strong>Now, in this process, on a clock.</strong>{" "}
           <code>app.cron()</code>
         </li>
         <li>
-          <strong>Eventually, even if this process dies</strong> →{" "}
+          <strong>Eventually, even if this process dies.</strong>{" "}
           <code>jobs.enqueue</code>
         </li>
         <li>
-          <strong>Same function must pause for hours and resume</strong> → not
-          Daloy jobs
+          <strong>Same function must pause for hours and resume.</strong>{" "}
+          Temporal, Inngest, or Eve. Daloy stays the HTTP API.
         </li>
       </ul>
-      <p>Use a job if most of these are true:</p>
+      <p>A job is worth it when most of these hold:</p>
       <ol>
         <li>
           The HTTP response can succeed without the side effect having
@@ -274,8 +268,8 @@ await worker.runOnce(); // true: claimed, ran, completed
           A deploy, OOM, or rolling update must not drop the work.
         </li>
         <li>
-          The unit of work is one handler (or you are willing to enqueue the
-          next job at the end of this one: a job chain, not a saga engine).
+          The unit of work is one handler, or you are willing to enqueue the
+          next job at the end of this one (a job chain).
         </li>
         <li>
           Duplicate runs are safe because you pass an idempotency key through
@@ -353,7 +347,7 @@ await worker.runOnce(); // true: claimed, ran, completed
             </td>
             <td>
               Workflow engine, or an explicit job chain plus your own
-              compensation jobs. Do not pretend jobs are sagas.
+              compensation jobs.
             </td>
           </tr>
           <tr>
@@ -394,7 +388,7 @@ await worker.runOnce(); // true: claimed, ran, completed
       <p>
         The queue is producer-only and needs no timers, so any runtime can
         enqueue. The worker is a poll loop, so it belongs where a long-lived
-        process exists:
+        process exists.
       </p>
       <table>
         <thead>
@@ -457,32 +451,32 @@ await worker.runOnce(); // true: claimed, ran, completed
       <p>
         One Node process: <code>MemoryJobStore</code> +{" "}
         <code>createJobWorker</code> + <code>runOnce()</code> in tests, or{" "}
-        <code>startWorker: true</code> while developing. This is the topology
-        for every unit and integration test. Never claim it is
-        production-durable: the store dies with the process.
+        <code>startWorker: true</code> while developing. Use this for unit
+        and integration tests. The store dies with the process, so it is not
+        production-durable.
       </p>
 
       <h3 id="topology-b">B. Single VPS / one replica (small prod)</h3>
       <p>
         One long-lived Node process serves HTTP and runs the worker (
-        <code>useJobs({"{ startWorker: true }"})</code>). Fine when side
-        effects are light and brief deploy downtime is acceptable,{" "}
-        <strong>if</strong> the store is Redis/Postgres so jobs survive the
-        restart. Do not run Memory in prod (<code>useJobs</code> warns;{" "}
-        <code>strictProduction: true</code> refuses to boot). Still prefer{" "}
+        <code>useJobs({"{ startWorker: true }"})</code>). That is fine when
+        side effects are light and brief deploy downtime is acceptable, if
+        the store is Redis or Postgres so jobs survive the restart. Do not
+        run Memory in production. <code>useJobs</code> logs a warning.{" "}
+        <code>strictProduction: true</code> refuses to boot. Prefer{" "}
         <code>cronEnqueue</code> over <code>cron</code> for side effects, so a
-        mistaken second process cannot double-send.
+        second process cannot double-send.
       </p>
 
-      <h3 id="topology-c">C. Kubernetes (the AKS conversation)</h3>
+      <h3 id="topology-c">C. Kubernetes (AKS)</h3>
       <p>
         Deployment <code>api</code>: N pods, enqueue only (
         <code>startWorker: false</code>). Deployment <code>worker</code>: M
-        pods, claim/run (<code>startWorker: true</code>, no public ingress).
-        The store is Azure Cache for Redis or Azure Database for PostgreSQL
-        through a <code>JobStore</code> adapter in your repo, not in core.
-        Ingress exposes only <code>api</code>; workers need egress to the
-        store plus SMTP/Stripe/OpenAI. Set{" "}
+        pods, claim and run (<code>startWorker: true</code>, no public
+        ingress). The store is Azure Cache for Redis or Azure Database for
+        PostgreSQL through a <code>JobStore</code> adapter in your repo, not
+        in core. Ingress exposes only <code>api</code>. Workers need egress
+        to the store plus SMTP, Stripe, or OpenAI. Set{" "}
         <code>terminationGracePeriodSeconds</code> above the worker&apos;s{" "}
         <code>stop(graceMs)</code> so SIGTERM drains instead of killing
         in-flight jobs.
@@ -490,10 +484,11 @@ await worker.runOnce(); // true: claimed, ran, completed
 
       <h3 id="topology-d">D. Serverless API + always-on worker</h3>
       <p>
-        Vercel / Lambda / Cloudflare handlers enqueue to a remote store, then
-        the isolate dies. A Node container (Container Apps, a VM, Fly.io)
-        runs the worker. Never <code>startWorker: true</code> on
-        Lambda/Workers in v1: isolates are the wrong place for a poll loop.
+        Vercel, Lambda, or Cloudflare handlers enqueue to a remote store,
+        then the isolate dies. A Node container (Container Apps, a VM,
+        Fly.io) runs the worker. Do not set <code>startWorker: true</code> on
+        Lambda or Workers in v1. Isolates are the wrong place for a poll
+        loop.
       </p>
 
       <h3 id="topology-e">E. The queue is SQS / Service Bus already</h3>
@@ -502,28 +497,28 @@ await worker.runOnce(); // true: claimed, ran, completed
         <code>claim</code> → receive + visibility timeout,{" "}
         <code>complete</code> → delete, <code>fail</code> → native retry/DLQ.
         If Azure Functions or another consumer already drains the queue,
-        DaloyJS can be producer-only; the worker is optional.
+        DaloyJS can be producer-only. The worker is optional.
       </p>
 
       <h3 id="topology-f">F. Multi-tenant SaaS</h3>
       <p>
         Every enqueue sets <code>tenant</code> and builds its key with{" "}
         <code>jobIdempotencyKey({"{ tenant, name, key }"})</code>, so two
-        tenants can never collide on the same natural key. Share one{" "}
+        tenants cannot collide on the same natural key. Share one{" "}
         <code>queue: &quot;mail&quot;</code> with the tenant field on the
         record, or partition at the broker with a per-tenant queue name when
-        isolation demands it. Jobs are not HTTP: pass{" "}
-        <code>ctx.state.tenant</code> explicitly, nothing reads it for you.
+        isolation demands it. Jobs are not HTTP, so pass{" "}
+        <code>ctx.state.tenant</code> explicitly. Nothing reads it for you.
       </p>
 
       <div className="not-prose my-6 rounded-lg border bg-muted/30 p-4">
         <p className="text-sm leading-6 font-semibold text-foreground">
-          Example: AKS + Redis layout (one way, not the way)
+          Example: AKS + Redis layout
         </p>
         <p className="mt-1 mb-3 text-sm leading-6 text-muted-foreground">
-          DaloyJS is not Azure-specific; this is the sketch teams ask for.
-          Secrets come from Key Vault into env on both deployments; workload
-          identity lives in your handler (Graph, Azure OpenAI), jobs do not
+          DaloyJS is not Azure-specific. This is the sketch teams ask for.
+          Secrets come from Key Vault into env on both deployments. Workload
+          identity lives in your handler (Graph, Azure OpenAI). Jobs do not
           implement Entra.
         </p>
         <CodeBlock
@@ -537,27 +532,23 @@ Clock              ONE K8s CronJob -> authenticated POST that enqueues,
         />
       </div>
 
-      <h2 id="delivery-semantics">
-        Delivery semantics: at-least-once, honestly
-      </h2>
+      <h2 id="delivery-semantics">Delivery is at-least-once</h2>
       <p>
-        A job is delivered <strong>at least once</strong>, never exactly once.
-        The worker claims a record with an atomic lease (
-        <code>lockedBy</code> + <code>leaseUntil</code>), runs your handler,
-        then marks it complete. If the process dies between &ldquo;handler
-        succeeded&rdquo; and &ldquo;complete persisted&rdquo;, the lease
-        expires and another worker runs the handler again. The same applies
-        to duplicate producers: two enqueues with the same idempotency key
-        and a deep-equal payload return one job (
-        <code>duplicate: true</code>); the same key with a different payload
-        throws <code>JobIdempotencyConflictError</code>.
+        A job is delivered at least once. The worker claims a record with an
+        atomic lease (<code>lockedBy</code> + <code>leaseUntil</code>), runs
+        your handler, then marks it complete. If the process dies between
+        &ldquo;handler succeeded&rdquo; and &ldquo;complete persisted&rdquo;,
+        the lease expires and another worker runs the handler again. Two
+        enqueues with the same idempotency key and a deep-equal payload
+        return one job (<code>duplicate: true</code>). The same key with a
+        different payload throws <code>JobIdempotencyConflictError</code>.
       </p>
       <p>
-        The contract is therefore: <strong>handlers must be idempotent</strong>
-        {". "}For side effects that move money or send messages, pass a key
-        through to the downstream API so a duplicate run is a no-op there.
-        With Stripe, that is the <code>Idempotency-Key</code> header, and the
-        Daloy job key and the Stripe key should be the same natural value:
+        Handlers must be idempotent. For side effects that move money or send
+        messages, pass a key through to the downstream API so a duplicate run
+        is a no-op there. With Stripe, that is the{" "}
+        <code>Idempotency-Key</code> header. The Daloy job key and the Stripe
+        key should be the same natural value.
       </p>
       <CodeBlock
         language="ts"
@@ -581,13 +572,13 @@ const worker = createJobWorker({
 });`}
       />
       <p>
-        Long-running handlers get a heartbeat for free: the worker extends the
-        lease every <code>leaseMs / 3</code> automatically, and{" "}
-        <code>ctx.heartbeat()</code> extends it manually. If the lease is ever
+        Long-running handlers get a heartbeat: the worker extends the lease
+        every <code>leaseMs / 3</code> automatically, and{" "}
+        <code>ctx.heartbeat()</code> extends it manually. If the lease is
         lost (another worker fenced it), the handler&apos;s{" "}
         <code>signal</code> aborts so it stops touching the job. Keep{" "}
-        <code>leaseMs</code> comfortably above your slowest expected attempt,
-        or heartbeats will carry you.
+        <code>leaseMs</code> above your slowest expected attempt so the
+        automatic heartbeat can keep the lease.
       </p>
 
       <h2 id="status-machine">Job status machine</h2>
@@ -605,11 +596,11 @@ queued / delayed / running --cancel-> cancelled  (terminal)
 completed / dead / cancelled: no transitions`}
       />
       <p>
-        Terminal records are not deleted on the spot:{" "}
+        Terminal records are not deleted on the spot.{" "}
         <code>completed</code>/<code>cancelled</code> are retained 24h and{" "}
         <code>dead</code> 7d (for inspection) by default, swept lazily on
         mutating operations. A dead job keeps its <code>lastError</code>{" "}
-        message; wire <code>onDead</code> to your alerting.
+        message. Wire <code>onDead</code> to your alerting.
       </p>
 
       <h2 id="api-reference">API reference</h2>
@@ -906,17 +897,17 @@ completed / dead / cancelled: no transitions`}
       </h3>
       <p>
         A correct, full implementation of the SPI for tests and
-        single-process apps. Not durable across processes and invisible to
-        other replicas; <code>useJobs</code> warns when it sees this store
-        with production config. Holds payloads serialized and re-parses them
-        with the prototype-pollution-safe parser on every read, and returns
-        deep copies, so callers can never mutate store state. Options:{" "}
-        <code>capacity</code> (10,000 jobs; on overflow it sweeps expired
-        terminal records, then throws <code>store_full</code>, never evicting
-        queued work), <code>retentionMs</code> (24h for completed/cancelled),{" "}
-        <code>deadRetentionMs</code> (7d), and an injectable <code>now</code>.
-        Adds <code>list(filter)</code> and <code>dump()</code> for test
-        inspection.
+        single-process apps. It is not durable across processes and is
+        invisible to other replicas. <code>useJobs</code> warns when it sees
+        this store with production config. Payloads are serialized and
+        re-parsed with the prototype-pollution-safe parser on every read, and
+        returned as deep copies, so callers cannot mutate store state.
+        Options: <code>capacity</code> (10,000 jobs, overflow sweeps expired
+        terminal records then throws <code>store_full</code> without evicting
+        queued work), <code>retentionMs</code> (24h for
+        completed/cancelled), <code>deadRetentionMs</code> (7d), and an
+        injectable <code>now</code>. Adds <code>list(filter)</code> and{" "}
+        <code>dump()</code> for test inspection.
       </p>
 
       <h3 id="api-errors">Errors</h3>
@@ -1042,19 +1033,20 @@ completed / dead / cancelled: no transitions`}
 // otherwise, not silently at the first tick.`}
       />
       <p>
-        The counter-example: sweeping <em>this</em> isolate&apos;s{" "}
-        <code>MemoryResponseCacheStore</code> must stay <code>app.cron()</code>
-        {", "}because other replicas have their own memory. A job would run on
-        one random worker and sweep the wrong process&apos;s cache.
+        Sweeping <em>this</em> isolate&apos;s{" "}
+        <code>MemoryResponseCacheStore</code> must stay{" "}
+        <code>app.cron()</code>, because other replicas have their own
+        memory. A job would run on one random worker and sweep the wrong
+        process&apos;s cache.
       </p>
 
-      <h2 id="production-stores">Production stores: the JobStore SPI</h2>
+      <h2 id="production-stores">Production stores and the JobStore SPI</h2>
       <p>
         All durability lives behind <code>JobStore</code>. DaloyJS ships the
-        SPI and the Memory implementation; Redis, Postgres, SQS, and friends
-        are adapters in <strong>your</strong> repository, so the core keeps
-        zero runtime dependencies and your queue choice stays yours. The
-        contract, with the atomicity each method owes:
+        SPI and the Memory implementation. Redis, Postgres, SQS, and similar
+        backends are adapters in your repository, so the core keeps zero
+        runtime dependencies and your queue choice stays yours. Each method
+        owes this atomicity:
       </p>
       <table>
         <thead>
@@ -1140,8 +1132,8 @@ completed / dead / cancelled: no transitions`}
         </tbody>
       </table>
       <p>
-        A Redis adapter is an evening of work, sketched here as docs-only
-        example code (implement <code>JobStore</code>; we do not ship Redis):
+        A Redis adapter is application code. The sketch below is docs-only
+        (implement <code>JobStore</code>, DaloyJS does not ship Redis):
       </p>
       <CodeBlock
         language="ts"
@@ -1182,9 +1174,9 @@ export class RedisJobStore implements JobStore {
 
       <h2 id="recipes">Recipes</h2>
       <p>
-        Fourteen concrete instances, the six you will reach for first below,
-        all fourteen listed after. Each names the job, the payload shape, the
-        idempotency key, and the fatal-vs-retry split.
+        The recipes below cover the cases people hit first. Each names the
+        job, the payload shape, the idempotency key, and the fatal-vs-retry
+        split. The full list of fourteen is at the end of this section.
       </p>
 
       <h3 id="recipe-welcome-email">1. Welcome email after signup</h3>
@@ -1192,15 +1184,15 @@ export class RedisJobStore implements JobStore {
         Shown end to end in the <a href="#quick-start">quick start</a>. SMTP
         must not delay the 201. Payload is{" "}
         <code>{"{ userId, to, locale }"}</code>, never the password. Key per
-        user id. Retry SMTP 4xx/timeouts; <code>JobFatalError</code> on an
-        unknown user or a permanent bounce.
+        user id. Retry SMTP 4xx and timeouts. Throw{" "}
+        <code>JobFatalError</code> on an unknown user or a permanent bounce.
       </p>
 
       <h3 id="recipe-webhook-202">2. Stripe (or any provider) webhook → 202 + job</h3>
       <p>
         Providers demand a fast 2xx and will disable endpoints that time out.
-        Verify the signature, enqueue, return 202; entitlements and invoice
-        work run in the worker:
+        Verify the signature, enqueue, and return 202. Entitlements and
+        invoice work run in the worker.
       </p>
       <CodeBlock
         language="ts"
@@ -1224,10 +1216,10 @@ export class RedisJobStore implements JobStore {
 
       <h3 id="recipe-ai-202">9. LLM / Azure OpenAI batch → 202 + job id</h3>
       <p>
-        A two-minute summarization cannot hold an API request (and cannot run
-        on a Workers isolate at all). Return 202 with the job id and let the
-        client poll a status route <strong>you</strong> write; DaloyJS mounts
-        no <code>/jobs</code> HTTP API:
+        A two-minute summarization cannot hold an API request, and cannot run
+        on a Workers isolate at all. Return 202 with the job id and let the
+        client poll a status route you write. DaloyJS mounts no{" "}
+        <code>/jobs</code> HTTP API.
       </p>
       <CodeBlock
         language="ts"
@@ -1252,12 +1244,12 @@ export class RedisJobStore implements JobStore {
 
       <h3 id="recipe-payment-capture">12. Idempotent payment capture off the request</h3>
       <p>
-        Shown in <a href="#delivery-semantics">delivery semantics</a>: the
-        order returned 201 already, capture runs as a job, and the handler
+        Shown in <a href="#delivery-semantics">delivery semantics</a>. The
+        order already returned 201, capture runs as a job, and the handler
         sends Stripe <code>Idempotency-Key: orderId</code> so retries of the
         job are no-ops at Stripe. The Daloy job key and the Stripe key are
-        different systems; set them to the same natural value and forget
-        about both.
+        different systems. Set them to the same natural value so you never
+        confuse the two.
       </p>
 
       <h3 id="recipe-cron-global">7. Nightly reconciliation, once, cluster-wide</h3>
@@ -1268,12 +1260,12 @@ export class RedisJobStore implements JobStore {
         tonight&apos;s run never dedupes against tomorrow&apos;s.
       </p>
 
-      <h3 id="recipe-cache-sweep">8. Process-local cache sweep (the counter-recipe)</h3>
+      <h3 id="recipe-cache-sweep">8. Process-local cache sweep</h3>
       <p>
-        Not a job. <code>app.cron()</code> sweeps <em>this</em>{" "}
-        process&apos;s memory; the other replicas sweep their own. Enqueueing
-        this work would sweep one random worker&apos;s cache and leave the API
-        pods dirty.
+        This stays on <code>app.cron()</code>. It sweeps <em>this</em>{" "}
+        process&apos;s memory, and the other replicas sweep their own.
+        Enqueueing this work would sweep one random worker&apos;s cache and
+        leave the API pods dirty.
       </p>
 
       <h3 id="all-instances">All fourteen instances</h3>
@@ -1312,20 +1304,20 @@ export class RedisJobStore implements JobStore {
         <li>
           <strong>Fan-out notifications</strong>: one domain event enqueues N
           jobs (<code>notify.email</code>, <code>notify.sms</code>) or one{" "}
-          <code>notify.fanout</code> that enqueues children. Children are
-          jobs, not a workflow.
+          <code>notify.fanout</code> that enqueues children. That is a job
+          chain.
         </li>
         <li>
-          <strong>Nightly tenant reconciliation</strong>: <code>cronEnqueue</code>
-          {", "}not <code>app.cron()</code> on 8 replicas.
+          <strong>Nightly tenant reconciliation</strong>:{" "}
+          <code>cronEnqueue</code> on 8 replicas, instead of{" "}
+          <code>app.cron()</code>.
         </li>
         <li>
           <strong>Process-local cache sweep</strong>: <code>app.cron()</code>
-          {", "}not a job.
         </li>
         <li>
-          <strong>LLM batch off the API</strong>: 202 + job id; client polls
-          your status route.
+          <strong>LLM batch off the API</strong>: 202 + job id. The client
+          polls your status route.
         </li>
         <li>
           <strong>Graph / Entra invite user</strong>: <code>entra.invite</code>{" "}
@@ -1334,8 +1326,8 @@ export class RedisJobStore implements JobStore {
         </li>
         <li>
           <strong>Data export (GDPR dump)</strong>: the worker writes the zip
-          to blob storage, then enqueues <code>email.export_ready</code>. A
-          job chain, documented as such, not Temporal.
+          to blob storage, then enqueues <code>email.export_ready</code>.
+          That is a job chain.
         </li>
         <li>
           <strong>Idempotent payment capture</strong>: Stripe{" "}
@@ -1347,8 +1339,7 @@ export class RedisJobStore implements JobStore {
         </li>
         <li>
           <strong>MCP / agent tool that would time out the client</strong>:
-          return a job id fast; the agent polls. Still no parked workflow,
-          just an enqueue.
+          return a job id fast, then let the agent poll.
         </li>
       </ol>
 
@@ -1439,14 +1430,15 @@ export class RedisJobStore implements JobStore {
           <tr>
             <td>Handler RCE</td>
             <td>
-              Registry frozen at construction; no <code>eval</code>, no{" "}
-              <code>new Function</code>, no <code>import(job.name)</code>
+              The registry is frozen at construction, so a job record cannot{" "}
+              <code>eval</code>, <code>new Function</code>, or{" "}
+              <code>import(job.name)</code>
             </td>
           </tr>
           <tr>
             <td>SSRF in handlers</td>
             <td>
-              Not the job engine&apos;s layer; wrap handler fetches in{" "}
+              Wrap handler fetches in{" "}
               <Link href="/docs/security/fetch-guard">
                 <code>fetchGuard</code>
               </Link>
@@ -1462,15 +1454,15 @@ export class RedisJobStore implements JobStore {
           <tr>
             <td>Memory store in prod, jobs lost</td>
             <td>
-              Warning log from <code>useJobs</code>;{" "}
+              Warning log from <code>useJobs</code>.{" "}
               <code>strictProduction: true</code> refuses to boot
             </td>
           </tr>
           <tr>
             <td>Worker runs another tenant&apos;s jobs</td>
             <td>
-              <code>tenant</code> is data; store filtering is the
-              adapter&apos;s job; Memory supports{" "}
+              <code>tenant</code> is data. Store filtering is the
+              adapter&apos;s job. Memory supports{" "}
               <code>list({"{ tenant }"})</code>
             </td>
           </tr>
@@ -1498,7 +1490,7 @@ export class RedisJobStore implements JobStore {
         <code>concurrency &gt; 32</code>.
       </p>
 
-      <h2 id="comparison">Jobs vs the neighboring primitives</h2>
+      <h2 id="comparison">Jobs next to cron, idempotency, and webhooks</h2>
       <table>
         <thead>
           <tr>
@@ -1559,7 +1551,7 @@ export class RedisJobStore implements JobStore {
         </tbody>
       </table>
 
-      <h2 id="anti-patterns">Anti-patterns (do not do these)</h2>
+      <h2 id="anti-patterns">Anti-patterns</h2>
       <ol>
         <li>
           <strong>Enqueue before the DB commit.</strong> The job runs, the row
@@ -1585,8 +1577,8 @@ export class RedisJobStore implements JobStore {
             Catch-all handler (<code>handlers[job.name] = dynamicImport</code>
             ).
           </strong>{" "}
-          Forbidden: a store record must never pick the code that runs it.
-          The registry is frozen at construction for exactly this reason.
+          Forbidden. A store record must never pick the code that runs it.
+          The registry is frozen at construction for this reason.
         </li>
         <li>
           <strong>Jobs as a distributed cron lock without keys.</strong>{" "}
@@ -1605,12 +1597,12 @@ export class RedisJobStore implements JobStore {
         </li>
         <li>
           <strong>MemoryJobStore behind a load balancer.</strong> Each replica
-          gets its own private queue and you will wonder where the jobs went.
-          Shared store, or accept that jobs are process-local.
+          gets its own private queue. Use a shared store, or accept that jobs
+          are process-local.
         </li>
       </ol>
 
-      <h2 id="later">Later (deliberately not v1)</h2>
+      <h2 id="later">Not in v1</h2>
       <ul>
         <li>
           First-party <code>@daloyjs/jobs-postgres</code> / Redis adapters as
@@ -1627,13 +1619,13 @@ export class RedisJobStore implements JobStore {
         <li>Workflow engines as store backends; batch enqueue</li>
       </ul>
       <p>
-        Until then: implement <code>JobStore</code> in your repo, keep the
-        handler registry explicit, and read the{" "}
+        Until those land, implement <code>JobStore</code> in your repo and
+        keep the handler registry explicit. The{" "}
         <Link href={"/blog/background-jobs-that-outlive-the-request" as Route}>
           companion blog post
         </Link>{" "}
-        for the argument behind the shape. The runnable reference is{" "}
-        <code>examples/jobs-basic.ts</code>.
+        covers the design argument. <code>examples/jobs-basic.ts</code> is
+        the runnable reference.
       </p>
     </>
   );
