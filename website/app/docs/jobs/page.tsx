@@ -16,11 +16,16 @@ export const metadata = buildMetadata({
     "job queue",
     "queue-agnostic",
     "JobStore SPI",
+    "service provider interface",
     "DaloyJS jobs",
     "cronEnqueue",
     "at-least-once delivery",
     "job idempotency key",
     "job worker leases",
+    "lease fencing token",
+    "full jitter backoff",
+    "dead letter queue DLQ",
+    "job queue glossary",
     "retry backoff dead letter",
     "Redis Postgres job adapter",
     "serverless enqueue",
@@ -35,10 +40,21 @@ export default function Page() {
       <p>
         DaloyJS ships a background-job interface. Work that must outlive the
         HTTP request (and maybe the process) becomes a named handler plus a
-        JSON payload, persisted behind a <code>JobStore</code> SPI and run by
-        a leased worker with bounded retries. It is the durable counterpart to{" "}
+        JSON payload, persisted behind the <code>JobStore</code> SPI and run
+        by a leased worker with bounded retries. It is the durable
+        counterpart to{" "}
         <Link href="/docs/scheduler">in-process cron</Link>, with zero runtime
         dependencies.
+      </p>
+      <p>
+        <strong>SPI</strong> is short for <em>service provider interface</em>,
+        the mirror image of an API. An API is the surface you call; an SPI is
+        the surface you <em>implement</em> so the framework calls you. DaloyJS
+        defines <code>JobStore</code> and ships one implementation (
+        <code>MemoryJobStore</code>); your Redis, Postgres, or SQS adapter is
+        the other. Every other term here that reads like queue jargon (lease,
+        fencing, full jitter, dead letter, redrive, outbox) is defined in the{" "}
+        <a href="#glossary">glossary</a> at the end of the page.
       </p>
       <ul>
         <li>
@@ -496,7 +512,8 @@ await worker.runOnce(); // true: claimed, ran, completed
       <p>
         A <code>JobStore</code> adapter maps <code>put</code> → send message,{" "}
         <code>claim</code> → receive + visibility timeout,{" "}
-        <code>complete</code> → delete, <code>fail</code> → native retry/DLQ.
+        <code>complete</code> → delete, <code>fail</code> → the broker&apos;s
+        native retry and dead-letter queue (DLQ).
         If Azure Functions or another consumer already drains the queue,
         DaloyJS can be producer-only. The worker is optional.
       </p>
@@ -576,7 +593,8 @@ const worker = createJobWorker({
         Long-running handlers get a heartbeat: the worker extends the lease
         every <code>leaseMs / 3</code> automatically, and{" "}
         <code>ctx.heartbeat()</code> extends it manually. If the lease is
-        lost (another worker fenced it), the handler&apos;s{" "}
+        lost (it expired, another worker claimed the job, and this
+        worker&apos;s writes are now fenced off), the handler&apos;s{" "}
         <code>signal</code> aborts so it stops touching the job. Keep{" "}
         <code>leaseMs</code> above your slowest expected attempt so the
         automatic heartbeat can keep the lease.
@@ -833,7 +851,8 @@ completed / dead / cancelled: no transitions`}
             <td></td>
             <td>
               Name → handler map, frozen at construction. Unknown job names
-              dead-letter as poison pills. No dynamic registration, no{" "}
+              dead-letter as poison pills (a record no worker can ever run,
+              parked instead of retried). No dynamic registration, no{" "}
               <code>import(job.name)</code>.
             </td>
           </tr>
@@ -1062,9 +1081,12 @@ completed / dead / cancelled: no transitions`}
               <code>put(job, fingerprint)</code>
             </td>
             <td>
-              Insert. Idempotency key present and seen: return the existing
-              job with <code>duplicate: true</code> (first writer wins, even
-              if terminal). If the fingerprint differs, throw{" "}
+              Insert. <code>fingerprint</code> is a SHA-256 hex digest of the
+              serialized payload (<code>null</code> when no idempotency key is
+              set), supplied so adapters compare payloads without re-hashing.
+              Idempotency key present and seen: return the existing job with{" "}
+              <code>duplicate: true</code> (first writer wins, even if
+              terminal). If the fingerprint differs, throw{" "}
               <code>JobIdempotencyConflictError</code>. Must be atomic.
             </td>
           </tr>
@@ -1168,9 +1190,10 @@ export class RedisJobStore implements JobStore {
       />
       <p>
         SQS / Service Bus adapters map even more directly: <code>put</code> is
-        send-message, <code>claim</code> is receive with a visibility timeout,{" "}
-        <code>complete</code> is delete, <code>fail</code> is the native
-        redrive/DLQ policy.
+        send-message, <code>claim</code> is receive with a visibility timeout
+        (the broker&apos;s name for a lease), <code>complete</code> is delete,
+        and <code>fail</code> is the native redrive policy that moves the
+        message to a dead-letter queue.
       </p>
 
       <h2 id="recipes">Recipes</h2>
@@ -1602,6 +1625,389 @@ export class RedisJobStore implements JobStore {
           are process-local.
         </li>
       </ol>
+
+      <h2 id="glossary">Glossary</h2>
+      <p>
+        Queues borrow vocabulary from three unrelated worlds: Java service
+        loading, distributed locking, and cloud message brokers. A reader who
+        knows one of the three still trips on the other two. Every term this
+        page uses is defined below, in the sense DaloyJS means it.
+      </p>
+
+      <h3 id="glossary-interface">The interface</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Term</th>
+            <th>What it means here</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong>SPI</strong>
+            </td>
+            <td>
+              <em>Service provider interface.</em> An interface the framework
+              defines and <em>your</em> code implements, so the framework
+              calls you. It is the mirror image of an API, which is code you
+              call. <code>JobStore</code> is the only SPI in this feature:
+              DaloyJS ships the interface plus <code>MemoryJobStore</code>,
+              and your Redis, Postgres, or SQS class is the second
+              implementation. The term comes from Java, where JDBC drivers,{" "}
+              <code>ServiceLoader</code>, and SLF4J bindings all work this
+              way.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Adapter</strong>
+            </td>
+            <td>
+              One concrete implementation of the SPI for one backend. It
+              lives in your repository, not in <code>@daloyjs/core</code>,
+              which is how the core keeps zero runtime dependencies while
+              still supporting Redis, Postgres, SQS, or Service Bus.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Producer / consumer</strong>
+            </td>
+            <td>
+              The producer calls <code>enqueue</code> (an HTTP handler, a
+              cron tick, another job). The consumer is a worker that claims
+              and runs. One process can be both, or producer-only with{" "}
+              <code>startWorker: false</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Queue</strong> (partition)
+            </td>
+            <td>
+              A named subset of jobs. <code>claim(queue)</code> never crosses
+              partitions, so <code>&quot;mail&quot;</code> and{" "}
+              <code>&quot;video&quot;</code> can have separate workers,
+              concurrency, and priorities without competing for each
+              other&apos;s records.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Topology</strong>
+            </td>
+            <td>
+              How producers, workers, and the store are spread across
+              processes and machines. The six worth naming are{" "}
+              <a href="#topology-a">A through F</a> above.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="glossary-delivery">Delivery, retries, and failure</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Term</th>
+            <th>What it means here</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong>At-least-once</strong>
+            </td>
+            <td>
+              Every enqueued job runs one or more times, never zero. The gap
+              between &ldquo;handler succeeded&rdquo; and &ldquo;completion
+              persisted&rdquo; is a real crash window, and re-running is how
+              it is closed. There is no exactly-once mode.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Idempotent handler</strong>
+            </td>
+            <td>
+              Running it twice leaves the world in the same state as running
+              it once. Not a nice-to-have: it is the price of at-least-once
+              delivery.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Idempotency key</strong>
+            </td>
+            <td>
+              The dedupe token on <code>enqueue</code>, unique per{" "}
+              <code>(queue, key)</code>. Same key plus a deep-equal payload
+              returns the existing job with <code>duplicate: true</code>{" "}
+              instead of creating a second one.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Payload fingerprint</strong>
+            </td>
+            <td>
+              A SHA-256 hex digest of the serialized payload, handed to{" "}
+              <code>JobStore.put</code> alongside the record. It is how a
+              store detects &ldquo;same key, different payload&rdquo; and
+              throws <code>JobIdempotencyConflictError</code> without
+              re-hashing anything itself.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Attempt budget</strong>
+            </td>
+            <td>
+              <code>maxAttempts</code>. Every claim increments{" "}
+              <code>attempts</code>, including a claim that only happened
+              because a lease expired. When the budget is spent, the next
+              failure is terminal instead of another retry.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Backoff</strong>
+            </td>
+            <td>
+              The wait before a failed job becomes claimable again.
+              Exponential here: the ceiling doubles per attempt from{" "}
+              <code>baseDelayMs</code> until it reaches{" "}
+              <code>maxDelayMs</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Full jitter</strong>
+            </td>
+            <td>
+              The delay is a random point in the whole interval,{" "}
+              <code>
+                random(0, min(maxDelayMs, baseDelayMs * 2^attempt))
+              </code>
+              , rather than the ceiling itself. Without it, 500 jobs that
+              failed on one outage retry in lockstep and flatten the
+              dependency again the moment it recovers (a{" "}
+              <em>thundering herd</em>). &ldquo;Full&rdquo; distinguishes it
+              from the equal-jitter variant, which randomizes only half the
+              interval.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Dead letter</strong>
+            </td>
+            <td>
+              The <code>dead</code> status: a terminal parking state for a
+              job that spent its attempt budget or threw{" "}
+              <code>JobFatalError</code>. It is neither retried nor deleted
+              on the spot, and it keeps <code>lastError</code> for 7 days so
+              a human can read what happened. Used as a verb too: a job{" "}
+              <em>dead-letters</em>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>DLQ</strong>
+            </td>
+            <td>
+              Dead-letter queue: the broker-native form of the same idea in
+              SQS or Service Bus, where failed messages are moved to a
+              separate physical queue. A DLQ is a place; the DaloyJS{" "}
+              <code>dead</code> status is a field on the record. An adapter
+              maps one onto the other.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Redrive</strong>
+            </td>
+            <td>
+              The SQS term for moving messages back out of a DLQ into the
+              main queue once you have shipped the fix, so they get another
+              run.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Poison pill</strong>
+            </td>
+            <td>
+              A job that can never succeed however often it is retried: an
+              unregistered handler name, a payload the handler cannot parse,
+              a row somebody deleted. These dead-letter immediately instead
+              of burning the whole attempt budget and the backoff window.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Terminal</strong>
+            </td>
+            <td>
+              <code>completed</code>, <code>dead</code>, and{" "}
+              <code>cancelled</code>. No transition leaves these states.
+              Retention sweeps them later (24h, or 7d for <code>dead</code>).
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="glossary-ownership">Ownership and lifetime</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Term</th>
+            <th>What it means here</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong>Lease</strong>
+            </td>
+            <td>
+              A time-boxed exclusive claim on one job:{" "}
+              <code>lockedBy = workerId</code> plus <code>leaseUntil</code>. A
+              lock with a deadline, which is the point: when a worker dies
+              mid-job nobody is left to release a plain lock, but a lease
+              simply expires and the job becomes claimable again.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Heartbeat</strong>
+            </td>
+            <td>
+              Pushing <code>leaseUntil</code> further out while still
+              working, so a slow-but-healthy handler is not mistaken for a
+              dead one. The worker does it automatically every{" "}
+              <code>leaseMs / 3</code>; <code>ctx.heartbeat()</code> does it
+              on demand around an unusually slow step.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Fencing</strong>
+            </td>
+            <td>
+              Passing <code>workerId</code> on every write so a worker whose
+              lease already expired cannot clobber the job that another
+              worker now owns. The store returns <code>false</code> to the
+              loser and its <code>AbortSignal</code> fires. The{" "}
+              <code>workerId</code> is the fencing token, and the pattern is
+              what stops a process that was paused (GC, a stalled VM) from
+              writing stale results on resume.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Reap</strong>
+            </td>
+            <td>
+              Returning a job whose lease expired to <code>queued</code>{" "}
+              lazily, on the next read or mutation, rather than running a
+              background reaper loop.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Visibility timeout</strong>
+            </td>
+            <td>
+              What SQS calls a lease: a received message is hidden from other
+              consumers for N seconds and reappears if nobody deletes it in
+              time. An SQS adapter maps <code>claim</code> straight onto it.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Drain</strong>
+            </td>
+            <td>
+              Shutdown that stops claiming new jobs and gives in-flight ones
+              a grace period to finish. <code>stop(graceMs)</code> then
+              aborts the stragglers, which fail back to the queue for another
+              worker. Keep Kubernetes{" "}
+              <code>terminationGracePeriodSeconds</code> above{" "}
+              <code>graceMs</code> or the pod is killed mid-drain.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="glossary-patterns">Patterns named on this page</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Term</th>
+            <th>What it means here</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong>Job chain</strong>
+            </td>
+            <td>
+              A handler enqueues the next job as its last act. This is how
+              DaloyJS expresses multi-step work without becoming a workflow
+              engine: each link is retried independently, and there is no
+              shared execution history tying them together.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Fan-out</strong>
+            </td>
+            <td>
+              One domain event produces N jobs, either enqueued in a loop by
+              the producer or by a single parent job that enqueues the
+              children.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Coalesce</strong>
+            </td>
+            <td>
+              Collapsing a burst of near-identical enqueues into one run, by
+              pairing a small <code>delayMs</code> with a stable idempotency
+              key. Reindexing a document once after forty edits in a second,
+              instead of forty times.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Transactional outbox</strong>
+            </td>
+            <td>
+              Insert the business row and an outbox row in a single database
+              transaction, then let a drainer read the outbox and call{" "}
+              <code>JobStore.put</code>. It closes the window where the
+              commit succeeds and the enqueue does not, which no amount of
+              ordering in application code can close on its own.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Saga</strong> / compensation
+            </td>
+            <td>
+              A multi-step distributed transaction where every step carries
+              an explicit undo (the compensation), because the steps span
+              systems that share no rollback. Charge, then book, then undo
+              the charge when booking fails. Out of scope for jobs: use a
+              workflow engine, or write the compensations as jobs yourself
+              and own the correctness.
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       <h2 id="later">Not in v1</h2>
       <ul>
