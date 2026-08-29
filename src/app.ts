@@ -3618,7 +3618,9 @@ export class App<
    *
    * @param def - The task definition (schedule), same shape as {@link App.cron}.
    * @param job - The job to enqueue on each tick. `payload` defaults to
-   *   `{ scheduledFor: <ISO time of the tick> }`.
+   *   `{ scheduledFor: <ISO time of the tick slot> }`, floored to the same
+   *   slot the idempotency key uses so replicas ticking milliseconds apart
+   *   enqueue byte-identical payloads and dedupe instead of conflicting.
    * @returns This `App` instance for chaining.
    * @throws {@link JobConfigError} (`store_required`) when called before
    *   {@link App.useJobs} — fail fast at registration, not at the first tick.
@@ -3641,7 +3643,11 @@ export class App<
       const slot = Math.floor(scheduledFor.getTime() / granularityMs);
       await queue.enqueue({
         name: job.name,
-        payload: job.payload ?? { scheduledFor: scheduledFor.toISOString() },
+        // Derive the default payload from the slot, not the raw tick time:
+        // replicas tick a few milliseconds apart, and an identical key with
+        // a different payload is a JobIdempotencyConflictError, not a dedup.
+        payload:
+          job.payload ?? { scheduledFor: new Date(slot * granularityMs).toISOString() },
         ...(job.queue !== undefined ? { queue: job.queue } : {}),
         ...(job.priority !== undefined ? { priority: job.priority } : {}),
         idempotencyKey: `cron:${encodeURIComponent(name)}:${slot}`,

@@ -17,6 +17,19 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+### Fixed
+
+- **`app.cronEnqueue()` default payload** — the default `{ scheduledFor }`
+  payload is now floored to the same idempotency slot the key uses. Two
+  replicas ticking the same slot a few milliseconds apart previously
+  produced different payloads, so the second enqueue threw
+  `JobIdempotencyConflictError` — recorded as an error-level scheduled-task
+  failure — instead of deduping into one job.
+- **Scheduler `nextRunAt` drift** — arming a cron task now anchors the
+  delay and `nextRunAt` from a single clock read, so ticks land exactly on
+  the cron boundary instead of drifting by the milliseconds that elapsed
+  between the delay computation and the anchor.
+
 ## [1.3.0] - 2026-08-28
 
 ### Added

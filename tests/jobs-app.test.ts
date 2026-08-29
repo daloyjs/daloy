@@ -167,6 +167,42 @@ test("jobs app: cronEnqueue forwards an explicit payload and queue", async () =>
   await app.close();
 });
 
+test("jobs app: cronEnqueue default payload dedupes replicas ticking milliseconds apart", async () => {
+  // Regression: the default payload used to embed the raw tick time, so two
+  // replicas ticking the same slot a millisecond or two apart produced
+  // different payloads, and the second enqueue threw
+  // JobIdempotencyConflictError (an error-level scheduled-task failure)
+  // instead of returning duplicate: true. The default is now derived from
+  // the idempotency slot, so every replica enqueues an identical payload.
+  const store = new MemoryJobStore();
+  const appA = createApp();
+  const appB = createApp();
+  appA.useJobs({ store });
+  appB.useJobs({ store });
+  appA.cronEnqueue({ name: "nightly", intervalMs: 3_600_000 }, { name: "ops.reconcile" });
+  appB.cronEnqueue({ name: "nightly", intervalMs: 3_600_000 }, { name: "ops.reconcile" });
+
+  const realNow = Date.now;
+  const slotStart = Math.floor(realNow() / 3_600_000) * 3_600_000;
+  try {
+    Date.now = () => slotStart + 1; // replica A ticks 1ms into the slot
+    assert.equal(await appA.scheduledTasks!.runNow("nightly"), true);
+    Date.now = () => slotStart + 2; // replica B ticks 2ms into the same slot
+    assert.equal(await appB.scheduledTasks!.runNow("nightly"), true);
+  } finally {
+    Date.now = realNow;
+  }
+
+  assert.equal(store.size, 1); // deduped — no conflict, no second job
+  assert.deepEqual(store.list()[0]!.payload, {
+    scheduledFor: new Date(slotStart).toISOString(),
+  });
+  assert.equal(appA.scheduledTasks!.getState("nightly")!.failures, 0);
+  assert.equal(appB.scheduledTasks!.getState("nightly")!.failures, 0);
+  await appA.close();
+  await appB.close();
+});
+
 // ── production posture ──────────────────────────────────────────────
 
 test("jobs app: MemoryJobStore in production logs a warning", async () => {

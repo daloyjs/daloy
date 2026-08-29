@@ -263,6 +263,21 @@ test("Scheduler: a cron task arms a timer at the correct delay", () => {
   assert.equal(scheduler.getState("c")!.nextRunAt, nowMs + 270_000);
 });
 
+test("Scheduler: nextRunAt stays on the cron boundary when the clock advances between reads", () => {
+  // Regression: #arm used to read the clock twice — once inside #nextDelay
+  // and again to anchor nextRunAt — so a millisecond slipping between the
+  // reads pushed nextRunAt (and the tick's scheduledFor) off the boundary
+  // by a per-process delta, which broke cronEnqueue payload dedup across
+  // replicas. The arm must anchor delay and nextRunAt from one read.
+  const h = makeTimers();
+  let nowMs = Date.parse("2026-01-01T00:00:30Z");
+  const scheduler = new Scheduler({ timers: h.timers, now: () => (nowMs += 1) });
+  scheduler.define({ name: "c", cron: "*/5 * * * *" }, () => {});
+  scheduler.start();
+  // Exactly 00:05:00.000 — not 00:05:00.001 or .002.
+  assert.equal(scheduler.getState("c")!.nextRunAt, Date.parse("2026-01-01T00:05:00Z"));
+});
+
 test("Scheduler: a tick during an in-flight run is skipped", async () => {
   const h = makeTimers();
   let release!: () => void;

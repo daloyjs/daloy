@@ -744,17 +744,22 @@ export class Scheduler {
       }, 0);
       return;
     }
-    const delay = this.#nextDelay(task);
-    task.nextRunAt = this.#now() + delay;
+    // One clock read anchors both the delay and nextRunAt: splitting them
+    // let a millisecond slip between the two reads push nextRunAt (and so
+    // the tick's scheduledFor) off the cron boundary by a per-process
+    // delta, which broke cronEnqueue's cross-replica payload dedup.
+    const now = this.#now();
+    const delay = this.#nextDelay(task, now);
+    task.nextRunAt = now + delay;
     task.timer = this.#timers.set(() => {
       void this.#tick(task);
     }, delay);
   }
 
-  #nextDelay(task: RegisteredTask): number {
+  #nextDelay(task: RegisteredTask, now: number): number {
     if (task.fields !== undefined) {
-      const next = nextCronRun(task.fields, new Date(this.#now()), task.def.timeZone);
-      return Math.max(0, next.getTime() - this.#now());
+      const next = nextCronRun(task.fields, new Date(now), task.def.timeZone);
+      return Math.max(0, next.getTime() - now);
     }
     return task.def.intervalMs!;
   }
