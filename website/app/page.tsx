@@ -10,7 +10,6 @@ import {
   LockIcon,
   PackageIcon,
   PlugsConnectedIcon,
-  RobotIcon,
   SparkleIcon,
   RocketLaunchIcon,
   ShieldCheckIcon,
@@ -165,7 +164,7 @@ const FEATURES = [
     body: "Pick pnpm in create-daloy and the hardened .npmrc is already written: ignore-scripts=true blocks malicious post-install payloads, minimum-release-age=1440 waits out fresh-package attacks, and verify-store-integrity keeps installs honest. The optional security bundle adds hardened GitHub Actions, Dependabot, CODEOWNERS, SECURITY.md, lockfile source verification, non-root + tini container templates, and a daloy doctor production-posture validator.",
   },
   {
-    icon: RobotIcon,
+    icon: SparkleIcon,
     title: "AI-native scaffolding",
     body: "Every project scaffolded by create-daloy includes an AGENTS.md and context skills, and these docs are readable over MCP. Copilot, Claude, and Cursor automatically understand your framework's conventions, routing rules, and security primitives without a prompt-engineering ritual.",
   },
