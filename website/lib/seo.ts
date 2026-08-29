@@ -65,7 +65,7 @@ export const BRAND_PROFILES = [
 ] as const;
 
 export const CORE_PACKAGE_VERSION =
-  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.3.0";
+  process.env.NEXT_PUBLIC_CORE_PACKAGE_VERSION ?? "1.3.1";
 
 export const HOME_TITLE =
   "The first TypeScript REST API framework built for secure AI-assisted services";
