@@ -91,7 +91,7 @@ pnpm add -D typescript @types/node`}
       <CodeBlock
         code={`// src/index.ts
 import { z } from "zod";
-import { App, requestId, secureHeaders } from "@daloyjs/core";
+import { App, requestId, rateLimit } from "@daloyjs/core";
 import { serve } from "@daloyjs/core/node";
 
 const app = new App({
@@ -99,7 +99,7 @@ const app = new App({
   requestTimeoutMs: 5_000,
 })
   .use(requestId())
-  .use(secureHeaders())
+  .use(rateLimit({ windowMs: 60_000, max: 120 }))
   .get(
     "/greet/:name",
     {
@@ -118,6 +118,13 @@ const app = new App({
 const { port } = serve(app, { port: 3000 });
 console.log(\`listening on http://localhost:\${port}\`);`}
       />
+
+      <p>
+        <code>secureHeaders()</code> is already auto-applied by{" "}
+        <code>new App()</code>
+        {". "}
+        Register it only when you want to replace the defaults.
+      </p>
 
       <p>
         Prefer the colorized startup panel you get from{" "}
@@ -317,6 +324,39 @@ export default defineConfig({
 curl http://localhost:3000/openapi.json -o generated/openapi.json
 pnpm exec openapi-ts`}
       />
+
+      <h2 id="before-you-deploy">Before you deploy</h2>
+      <p>
+        <code>new App()</code> already turns on body limits, request timeouts,
+        prototype-pollution-safe JSON, production 5xx redaction, and{" "}
+        <code>secureHeaders()</code>
+        {". "}
+        Rate-limit keys and budgets are a deployment decision, so{" "}
+        <code>rateLimit()</code> stays explicit:
+      </p>
+      <CodeBlock
+        code={`app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+// In-memory default: per process. Two replicas means N * max.`}
+      />
+      <p>
+        When you run more than one instance, plug in the{" "}
+        <Link href="/docs/security/rate-limit-redis">
+          Redis rate-limit store
+        </Link>
+        {", "}
+        otherwise each replica keeps its own counter.
+      </p>
+      <p>
+        Authentication proves who called. It does not prove they may read this
+        row. DaloyJS cannot default object-level authorization because it does
+        not know your ownership model. Put the check in the handler or the
+        query, and follow{" "}
+        <Link href="/docs/security/resource-authorization">
+          resource authorization
+        </Link>
+        {", "}
+        including the Alice-versus-Bob tests.
+      </p>
 
       <h2 id="next-steps">Next steps</h2>
       <ul>

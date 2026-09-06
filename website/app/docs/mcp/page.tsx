@@ -521,7 +521,7 @@ export default function Page() {
             tone: "muted",
           },
         ]}
-        caption="Run MCP as its own DaloyJS service when it has a different trust boundary than your REST API. The app still gets body limits, request timeouts, rate limits, auth middleware, and problem+json errors."
+        caption="Run MCP as its own DaloyJS service when it has a different trust boundary than your REST API. The app still gets body limits, request timeouts, and problem+json errors, plus the same rate-limit and auth middleware you register on REST."
       />
 
       <h2 id="protocol-versions">Protocol versions and the stateless core</h2>

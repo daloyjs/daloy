@@ -683,7 +683,8 @@ export default function BlogPostPage() {
             </Link>{" "}
             covers where to put auth around upload endpoints. The{" "}
             <Link href="/blog/secure-by-default">secure-by-default</Link> post
-            covers the body limits and rate limits you get for free, and the{" "}
+            covers the body limits you get for free, and the rate-limit
+            middleware you add in one line. The{" "}
             <Link href="/blog/building-a-bookstore-api-with-daloyjs-from-scratch">
               bookstore tutorial
             </Link>{" "}

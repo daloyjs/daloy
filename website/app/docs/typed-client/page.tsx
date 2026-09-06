@@ -278,7 +278,10 @@ else if (data) console.log(data.title);`}
           <tr>
             <td>Security defaults</td>
             <td>Bring your own</td>
-            <td>Built-in headers, CSRF, rate limits, body limits, and more</td>
+            <td>
+              Headers and body limits on by default; CSRF and rate limits one
+              line away
+            </td>
           </tr>
         </tbody>
       </table>

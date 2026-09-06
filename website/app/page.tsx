@@ -151,7 +151,7 @@ const FEATURES = [
   {
     icon: ShieldCheckIcon,
     title: "Secure-by-default runtime",
-    body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: prototype-pollution-safe JSON, built-in load shedding, proper 405 Method Not Allowed responses, automatic 5xx info-disclosure stripping in production, and a rate-limited CSP violation receiver.",
+    body: "Unlike frameworks that leave basic protections to plugins or manual error routing, the DaloyJS core starts with guardrails on: prototype-pollution-safe JSON, proper 405 Method Not Allowed responses, automatic 5xx info-disclosure stripping in production, and a rate-limited CSP violation receiver.",
   },
   {
     icon: PackageIcon,
@@ -303,12 +303,14 @@ export default function HomePage() {
               Any framework can route a request. DaloyJS is built for
               what happens next: one route definition drives validation, types,
               OpenAPI 3.1, and a Hey API typed client, and the guardrails
-              AI-assisted code forgets (rate limits, body limits, timeouts,
-              prototype-pollution-safe parsing) ship already switched on. One
-              line on the <code>App</code> constructor,{" "}
-              <code>docs: true</code>
-              {": "}auto-mounts a Scalar API reference at <code>/docs</code>{" "}
-              and the live OpenAPI 3.1 spec at <code>/openapi.json</code>
+              AI-assisted code forgets (body limits, timeouts,
+              prototype-pollution-safe parsing, 5xx redaction) ship already
+              switched on. Rate limits, CORS allowlists, and CSRF are one{" "}
+              <code>app.use()</code> line, because those are policy. Set{" "}
+              <code>docs: true</code> on the <code>App</code> constructor
+              and DaloyJS auto-mounts a Scalar API reference at{" "}
+              <code>/docs</code> and the live OpenAPI 3.1 spec at{" "}
+              <code>/openapi.json</code>
               {", "}the same DX as FastAPI.
             </p>
             <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
