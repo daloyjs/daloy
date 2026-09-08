@@ -91,6 +91,18 @@ test("a per-user bearer token with incidental cookies is NOT refused", async () 
   assert.notEqual(await alice.text(), await bob.text(), "and it must still partition per user");
 });
 
+for (const authorization of ["", "   "]) {
+  test(`empty Authorization ${JSON.stringify(authorization)} does not bypass the cookie scope guard`, async () => {
+    const app = orderApp();
+    for (const owner of ["alice", "bob"]) {
+      const response = await placeOrder(app, "empty-auth-key", { authorization, cookie: `session=${owner}` });
+      assert.equal(response.status, 500, "unresolvable cookie identities must retain the existing fail-loud guard");
+      assert.equal(response.headers.get("idempotency-replayed"), null);
+      assert.doesNotMatch(await response.text(), /ord-\d+-for-/);
+    }
+  });
+}
+
 test("a shared Authorization is the app's job to scope, and cannot leak a session", async () => {
   // Documented residual: a per-tenant key with cookie-identified users resolves a
   // scope, so the guard cannot see that it is too coarse — it is indistinguishable
@@ -241,4 +253,20 @@ test("MemoryIdempotencyStore rejects a non-positive-integer cap", () => {
   for (const bad of [0, -1, 1.5, Number.NaN]) {
     assert.throws(() => new MemoryIdempotencyStore(bad), /maxEntries must be a positive integer/);
   }
+});
+
+test("late completions of evicted reservations cannot exceed the store cap", () => {
+  const store = new MemoryIdempotencyStore(2);
+  const createdAt = Date.now();
+  const record = { fingerprint: "test", status: "in-flight" as const, createdAt, expiresAt: createdAt + 60_000 };
+  for (let index = 0; index < 20; index++) store.reserve(`late-${index}`, record);
+  assert.equal(store.size(), 2);
+  for (let index = 0; index < 20; index++) {
+    store.complete(`late-${index}`, { ...record, status: "completed", response: { status: 200, headers: [], body: "" } });
+    assert.ok(store.size() <= 2, "late completion must use the same capacity policy as a new reservation");
+  }
+  assert.equal(store.reserve("late-19", record)?.status, "completed");
+  store.complete("late-19", { ...record, status: "completed", response: { status: 200, headers: [], body: "" } });
+  assert.equal(store.size(), 2, "overwriting a retained entry must not evict another entry");
+  assert.equal(store.reserve("late-18", record)?.status, "completed");
 });

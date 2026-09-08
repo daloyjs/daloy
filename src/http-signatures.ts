@@ -33,7 +33,7 @@
  */
 
 import { UnauthorizedError } from "./errors.js";
-import type { BaseContext, Hooks } from "./types.js";
+import type { Hooks } from "./types.js";
 
 /**
  * HTTP Signature algorithm identifiers from the RFC 9421 registry that this
@@ -49,7 +49,11 @@ export type HttpSignatureAlgorithm =
   | "rsa-pss-sha512"
   | "rsa-v1_5-sha256";
 
-/** Key material accepted by the signer/verifier. */
+/**
+ * Key material accepted by the signer/verifier. Imported keys must match the
+ * selected algorithm's family, hash and curve, with the same 32-byte HMAC and
+ * 2048-bit RSA minimums as raw keys.
+ */
 export type HttpSignatureKeyMaterial = CryptoKey | Uint8Array | JsonWebKey;
 
 /**
@@ -105,7 +109,9 @@ const ENC = new TextEncoder();
 function getCrypto(): Crypto {
   const c: Crypto | undefined = (globalThis as unknown as { crypto?: Crypto }).crypto;
   if (!c?.subtle) {
-    throw new Error("http-signatures: WebCrypto SubtleCrypto API is unavailable on this runtime.");
+    throw new Error(
+      "http-signatures: WebCrypto SubtleCrypto API is unavailable on this runtime."
+    );
   }
   return c;
 }
@@ -229,7 +235,7 @@ async function importKey(
   const spec = algSpec(alg);
   const c = getCrypto();
   if (isCryptoKey(material)) {
-    assertRsaModulusFloor(alg, material);
+    assertKeyPolicy(alg, material);
     return material;
   }
   if (material instanceof Uint8Array) {
@@ -243,14 +249,47 @@ async function importKey(
         `http-signatures: hmac-sha256 secret must be at least ${MIN_HMAC_KEY_BYTES} bytes (RFC 7518 §3.2); got ${material.byteLength}.`
       );
     }
-    return c.subtle.importKey("raw", material as BufferSource, spec.importParams, false, [usage]);
+    return c.subtle.importKey("raw", material as BufferSource, spec.importParams, false, [
+      usage,
+    ]);
   }
   if (isJsonWebKey(material)) {
     const key = await c.subtle.importKey("jwk", material, spec.importParams, false, [usage]);
-    assertRsaModulusFloor(alg, key);
+    assertKeyPolicy(alg, key);
     return key;
   }
   throw new TypeError("http-signatures: unsupported key material.");
+}
+
+function assertKeyPolicy(alg: HttpSignatureAlgorithm, key: CryptoKey): void {
+  const expected = algSpec(alg).importParams as {
+    name: string;
+    hash?: string;
+    namedCurve?: string;
+  };
+  const actual = key.algorithm as KeyAlgorithm & {
+    hash?: KeyAlgorithm;
+    namedCurve?: string;
+    length?: number;
+  };
+  if (
+    actual.name !== expected.name ||
+    (expected.hash !== undefined && actual.hash?.name !== expected.hash) ||
+    (expected.namedCurve !== undefined && actual.namedCurve !== expected.namedCurve)
+  ) {
+    throw new TypeError(
+      `http-signatures: key algorithm does not match ${alg}; family, hash and curve must match.`
+    );
+  }
+  if (
+    expected.name === "HMAC" &&
+    (!Number.isFinite(actual.length) || actual.length! < MIN_HMAC_KEY_BYTES * 8)
+  ) {
+    throw new TypeError(
+      `http-signatures: hmac-sha256 secret must be at least ${MIN_HMAC_KEY_BYTES} bytes (RFC 7518 §3.2).`
+    );
+  }
+  assertRsaModulusFloor(alg, key);
 }
 
 // ---------------------------------------------------------------------------
@@ -491,7 +530,9 @@ function resolveComponentValue(c: ComponentId, msg: MessageContext): string {
   }
   if (name.startsWith("@")) {
     if (c.req) {
-      throw new ComponentError(`the ;req parameter is not supported on ${name} in this context`);
+      throw new ComponentError(
+        `the ;req parameter is not supported on ${name} in this context`
+      );
     }
     switch (name) {
       case "@method":
@@ -675,7 +716,8 @@ function parseComponentSpec(spec: string): ComponentId {
  * @returns The `Signature-Input` / `Signature` header values plus the exact
  *   signature base that was signed.
  * @throws {TypeError} for unsupported algorithms, weak HMAC keys, or
- *   unserializable parameter values.
+ *   unserializable parameter values. Imported keys must match the selected
+ *   algorithm's family, hash and curve and meet its strength floor.
  * @throws {Error} when a covered component cannot be resolved (e.g. a covered
  *   header is missing) or WebCrypto is unavailable.
  * @since 0.37.0
@@ -721,7 +763,10 @@ export async function signMessage(opts: SignMessageOptions): Promise<MessageSign
  *
  * @since 0.37.0
  */
-export type SignRequestOptions = Omit<SignMessageOptions, "method" | "url" | "headers" | "status">;
+export type SignRequestOptions = Omit<
+  SignMessageOptions,
+  "method" | "url" | "headers" | "status"
+>;
 
 /**
  * Sign an outbound {@link Request} and return a new `Request` with the
@@ -735,7 +780,10 @@ export type SignRequestOptions = Omit<SignMessageOptions, "method" | "url" | "he
  * @returns A new `Request` carrying the signature headers.
  * @since 0.37.0
  */
-export async function signRequest(request: Request, opts: SignRequestOptions): Promise<Request> {
+export async function signRequest(
+  request: Request,
+  opts: SignRequestOptions
+): Promise<Request> {
   const sig = await signMessage({
     ...opts,
     method: request.method,
@@ -847,7 +895,8 @@ export interface VerifyMessageOptions {
   requiredTag?: string;
   /**
    * Replay check. When provided, a `nonce` is required and the signature is
-   * rejected if this returns `true`.
+   * rejected if this returns `true`. Called only after cryptographic verification
+   * succeeds; implementations that record nonces must check and record atomically.
    */
   isReplay?: (nonce: string, info: KeyResolutionInfo) => boolean | Promise<boolean>;
   /** Clock used for age checks. Returns milliseconds. Defaults to `Date.now`. */
@@ -862,6 +911,7 @@ function fail(reason: string): VerifyFailure {
  * Verify an HTTP Message Signature (RFC 9421) on a received message. Returns a
  * structured result and never throws on a bad/forged signature — only on a
  * programming error (e.g. WebCrypto unavailable).
+ * Imported keys that violate the algorithm or strength policy return invalid_key.
  *
  * @param opts - Received message plus verification policy (algorithm
  *   allowlist, key resolver, freshness / replay checks); see
@@ -948,10 +998,7 @@ export async function verifyMessage(opts: VerifyMessageOptions): Promise<VerifyR
   }
 
   // Replay check.
-  if (opts.isReplay) {
-    if (params.nonce === undefined) return fail("missing_nonce");
-    if (await opts.isReplay(params.nonce, info)) return fail("replay_detected");
-  }
+  if (opts.isReplay && params.nonce === undefined) return fail("missing_nonce");
 
   // Resolve the key + effective algorithm (defeating algorithm-confusion).
   const resolved = await opts.resolveKey(info);
@@ -1005,6 +1052,10 @@ export async function verifyMessage(opts: VerifyMessageOptions): Promise<VerifyR
     return fail("verify_threw");
   }
   if (!ok) return fail("invalid_signature");
+
+  if (opts.isReplay && (await opts.isReplay(params.nonce!, info))) {
+    return fail("replay_detected");
+  }
 
   return {
     valid: true,
@@ -1072,6 +1123,8 @@ export interface HttpSignatureAuthOptions extends Omit<
  * requests. On success the {@link VerifySuccess} is stamped on `ctx.state`; on
  * a missing (unless `optional`) or invalid signature it throws
  * {@link UnauthorizedError} (`401` + `Cache-Control: no-store`).
+ * Verification runs before body I/O and before stored-response middleware,
+ * so cache hits and idempotency replays cannot skip signature authentication.
  *
  * @param opts - Verification policy plus middleware knobs; see
  *   {@link HttpSignatureAuthOptions}.
@@ -1082,7 +1135,7 @@ export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
   const stateKey = opts.stateKey ?? "httpSignature";
   const message = opts.message ?? "Valid HTTP message signature required";
   const authHooks: Hooks = {
-    async beforeHandle(ctx: BaseContext<any, any>) {
+    async preBody(ctx) {
       const headers = ctx.request.headers;
       if (opts.optional && !headers.has("signature")) return undefined;
       const result = await verifyRequest(ctx.request, opts);

@@ -97,7 +97,11 @@ export interface JwtVerified {
   readonly payload: Record<string, unknown>;
 }
 
-/** Key material accepted by the signer/verifier. */
+/**
+ * Key material accepted by the signer/verifier. Imported keys must match the
+ * selected algorithm's family, hash and curve. Every HMAC key format must meet
+ * the 32-byte minimum, and every RSA key must have a 2048-bit modulus or larger.
+ */
 export type JwtKeyMaterial = CryptoKey | Uint8Array | JsonWebKey;
 
 /** Options for {@link createJwtSigner}. */
@@ -313,7 +317,7 @@ async function importKey(
   const params = algParams(alg);
   const c = getCrypto();
   if (isCryptoKey(material)) {
-    assertRsaModulusFloor(alg, material);
+    assertKeyPolicy(alg, material);
     return material;
   }
   if (material instanceof Uint8Array) {
@@ -353,10 +357,36 @@ async function importKey(
               ? { name: "RSASSA-PKCS1-v1_5", hash: params.hash! }
               : { name: "Ed25519" };
     const imported = await c.subtle.importKey("jwk", material, importAlgorithm, false, [usage]);
-    assertRsaModulusFloor(alg, imported);
+    assertKeyPolicy(alg, imported);
     return imported;
   }
   throw new JwtError("invalid_key", "jwt(): unsupported key material.");
+}
+
+function assertKeyPolicy(alg: JwtAlgorithm, key: CryptoKey): void {
+  const params = algParams(alg);
+  const algorithm = key.algorithm as KeyAlgorithm & {
+    hash?: KeyAlgorithm;
+    namedCurve?: string;
+    length?: number;
+  };
+  if (
+    algorithm.name !== params.name ||
+    (params.hash !== undefined && params.name !== "ECDSA" && algorithm.hash?.name !== params.hash) ||
+    (params.namedCurve !== undefined && algorithm.namedCurve !== params.namedCurve)
+  ) {
+    throw new JwtError(
+      "key_algorithm_mismatch",
+      `jwt(): key algorithm does not match ${alg}; the key family, hash and curve must match the declared JWT algorithm.`
+    );
+  }
+  if (params.name === "HMAC" && (!Number.isFinite(algorithm.length) || algorithm.length! < MIN_HS_KEY_BYTES * 8)) {
+    throw new JwtError(
+      "weak_hs_secret",
+      `jwt(): ${alg} secret must be at least ${MIN_HS_KEY_BYTES} bytes (RFC 7518 §3.2).`
+    );
+  }
+  assertRsaModulusFloor(alg, key);
 }
 
 /**
@@ -393,11 +423,14 @@ function buildSignAlgorithm(alg: JwtAlgorithm): AlgorithmIdentifier | RsaPssPara
  * function refuses payloads without an `exp` claim (unless
  * `acknowledgeNoExp: true` was set at construction outside production) and
  * refuses payloads whose `exp - (iat | now)` exceeds `maxLifetimeSeconds`.
+ * Imported keys must match the algorithm's family, hash and curve; HMAC and
+ * RSA strength floors apply to CryptoKey and JWK inputs as well as raw bytes.
  *
  * @param opts - Algorithm, key, and lifetime policy; see {@link JwtSignerOptions}.
  * @returns An object whose `sign(payload)` resolves to the compact JWS string.
  * @throws {JwtError} for `alg: "none"`, unknown algorithms, weak keys, a
  *   missing/invalid `maxLifetimeSeconds`, or `acknowledgeNoExp` in production.
+ *   `sign()` also rejects imported keys that violate algorithm or strength policy.
  * @since 0.21.0
  */
 export function createJwtSigner(opts: JwtSignerOptions): {
@@ -560,12 +593,15 @@ function normalizeStringSet(value: string | string[] | undefined): ReadonlySet<s
  * `alg: "none"` and any token whose header `alg` is not in the allowlist;
  * refuses-at-construction when a symmetric algorithm (`HS*`) is mixed with
  * a JWK / JWKS-shaped key source (the documented confused-deputy attack).
+ * Imported keys must match the algorithm's family, hash and curve; HMAC and
+ * RSA strength floors apply to CryptoKey and JWK inputs as well as raw bytes.
  *
  * @param opts - Allowlist, key source, and claim checks; see {@link JwtVerifierOptions}.
  * @returns An object whose `verify(token)` resolves to the decoded
  *   {@link JwtVerified} or rejects with {@link JwtError}.
  * @throws {JwtError} at construction for an empty/invalid allowlist, `"none"`
  *   in the allowlist, weak HS* secrets, or HS* mixed with a JWK source.
+ *   `verify()` also rejects imported keys that violate algorithm or strength policy.
  * @since 0.21.0
  */
 export function createJwtVerifier(opts: JwtVerifierOptions): {

@@ -1,5 +1,6 @@
 import { CodeBlock } from "../../../components/code-block";
 import { SequenceDiagram } from "../../../components/diagram";
+import { AuthRole } from "@/components/auth-role";
 
 import { buildMetadata } from "@/lib/seo";
 
@@ -29,6 +30,11 @@ export default function Page() {
   return (
     <>
       <h1>HTTP message signatures (RFC 9421)</h1>
+      <AuthRole role="resource-server">
+        HTTP message signatures authenticate service requests, not OAuth tokens.
+        Your API verifies the caller; trusted peer keys must be provisioned
+        separately. This is not a login or token-issuance service.
+      </AuthRole>
       <p>
         DaloyJS ships first-party <strong>HTTP Message Signatures</strong> (
         <a href="https://www.rfc-editor.org/rfc/rfc9421" rel="noreferrer">
@@ -86,7 +92,9 @@ export default function Page() {
           <code>@target-uri</code> instead when multiple values are legitimate.
         </li>
         <li>
-          Raw HMAC keys must be at least 32 bytes (RFC 7518 §3.2). SHA-1 and{" "}
+          HMAC keys must be at least 32 bytes (RFC 7518 §3.2), including imported
+          CryptoKey and JWK inputs. Imported keys must match the declared
+          algorithm&apos;s family, hash and curve. SHA-1 and{" "}
           <code>alg: &quot;none&quot;</code>-style escapes do not exist.
         </li>
         <li>
@@ -98,7 +106,10 @@ export default function Page() {
         </li>
         <li>
           Optional <code>nonce</code> replay defense via an{" "}
-          <code>isReplay</code> callback.
+          <code>isReplay</code> callback, called only after cryptographic
+          verification succeeds. Atomically check and record nonces in shared
+          storage when running multiple instances; forged signatures cannot
+          consume replay state.
         </li>
       </ul>
 
@@ -134,6 +145,11 @@ export default function Page() {
         <code>httpSignatureAuth()</code> rejects any request without a valid
         signature with a <code>401</code> (<code>Cache-Control: no-store</code>)
         and stamps the verified result on <code>ctx.state.httpSignature</code>.
+        Verification runs in <code>preBody</code>, before body I/O and
+        cache/idempotency replay hooks. Private stored responses still need
+        principal-specific keys. Signature verification alone does not verify
+        the body: check any signed Content-Digest against the received bytes
+        with <code>verifyContentDigest()</code>.
       </p>
       <SequenceDiagram
         title="Sign then verify"

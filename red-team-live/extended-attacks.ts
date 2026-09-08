@@ -47,6 +47,7 @@ import { spawn } from "node:child_process";
 import net from "node:net";
 import { gzipSync } from "node:zlib";
 import { createHmac } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const HOST = "127.0.0.1";
 type Verdict = "DEFENDED" | "VULNERABLE" | "INFO";
@@ -1628,7 +1629,7 @@ async function v101HardeningProbes(port: number) {
 }
 
 async function main() {
-  const targetPath = new URL("target.ts", import.meta.url).pathname;
+  const targetPath = fileURLToPath(new URL("target.ts", import.meta.url));
   const target = spawn("node", ["--import", "tsx", targetPath], {
     stdio: ["inherit", "pipe", "inherit"],
     cwd: process.cwd(),

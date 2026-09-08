@@ -517,6 +517,10 @@ function isAbortError(err: unknown): boolean {
  * Wrap a `fetch` with per-call timeout, retry-with-backoff, and a shared
  * circuit breaker. The returned function has the same call signature as
  * the global `fetch`.
+ * Response bodies discarded for a retry are cancelled before backoff without
+ * waiting for producer cancellation. The final response remains caller-owned.
+ * Caller cancellation preserves arbitrary abort reasons and never counts as
+ * an upstream failure or schedules another retry.
  *
  * Layer it over {@link fetchGuard} to keep SSRF protection underneath:
  *
@@ -589,6 +593,7 @@ export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetc
     // the caller's signal can be combined per attempt.
     const request = new Request(input as RequestInfo, init);
     const callerSignal = init?.signal ?? request.signal;
+    callerSignal?.throwIfAborted();
 
     const run = async (): Promise<Response> => {
       let lastError: unknown;
@@ -601,7 +606,7 @@ export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetc
         } catch (err) {
           cleanup();
           // Caller cancelled: never retry, never count as upstream failure.
-          if (isAbortError(err) && callerSignal?.aborted) throw err;
+          callerSignal?.throwIfAborted();
           // An SSRF refusal from an underlying fetchGuard is a hard, terminal
           // decision about the request itself — never retried.
           if (err instanceof Error && err.name === "SsrfBlockedError") throw err;
@@ -612,7 +617,7 @@ export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetc
             const delay = backoffFor(attempt);
             options.onRetry?.(ctx, delay);
             await sleep(delay, callerSignal ?? undefined);
-            if (callerSignal?.aborted) throw lastError;
+            callerSignal?.throwIfAborted();
             continue;
           }
           throw lastError;
@@ -622,8 +627,9 @@ export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetc
         if (attempt <= retries && shouldRetry(ctx)) {
           const delay = backoffFor(attempt, response);
           options.onRetry?.(ctx, delay);
+          void response.body?.cancel().catch(() => undefined);
           await sleep(delay, callerSignal ?? undefined);
-          if (callerSignal?.aborted) return response;
+          callerSignal?.throwIfAborted();
           continue;
         }
         return response;
@@ -644,7 +650,7 @@ export function resilientFetch(options: ResilientFetchOptions = {}): typeof fetc
     } catch (err) {
       // SSRF refusals and caller aborts are not upstream health signals.
       if (err instanceof CircuitOpenError) throw err;
-      const isCallerAbort = isAbortError(err) && callerSignal?.aborted;
+      const isCallerAbort = callerSignal?.aborted;
       const isSsrf = err instanceof Error && err.name === "SsrfBlockedError";
       if (isCallerAbort || isSsrf) breaker.release();
       else breaker.recordOutcome(false);

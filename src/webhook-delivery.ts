@@ -325,6 +325,8 @@ function randomId(): string {
  * dead-letters a single {@link WebhookEvent}, resolving to a
  * {@link WebhookDeliveryResult} (it does not throw on ordinary delivery
  * failure).
+ * Intermediate response bodies are cancelled before retry backoff without
+ * waiting for producer cancellation; the final response remains caller-owned.
  *
  * @example
  * ```ts
@@ -476,6 +478,7 @@ export function createWebhookSender(
           delayMs,
         });
         if (!retryable) break;
+        void response.body?.cancel().catch(() => undefined);
         await sleep(delayMs!);
         continue;
       }

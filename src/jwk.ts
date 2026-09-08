@@ -16,6 +16,7 @@
  *   `alg`, the two MUST agree (RFC 7517 §4.4 cross-check).
  * - `exp` / `nbf` / `iat` validated on every verify.
  * - JWKS URLs MUST be `https://` (refused at construction otherwise).
+ *   Redirects are refused so the HTTPS/key-authority boundary is not bypassed.
  * - Optional `verify(payload, ctx)` revalidation hook for
  *   revocation lists, token-version counters, etc.
  *
@@ -61,7 +62,8 @@ export interface JwkSet {
 
 /**
  * Source for the verifier's public keys. Either an in-memory JWKS, a
- * `https://` URL (fetched with TTL caching), or a custom async resolver.
+ * `https://` URL (fetched directly with TTL caching; redirects are refused),
+ * or a custom async resolver.
  */
 export type JwkSource = JwkSet | string | (() => JwkSet | Promise<JwkSet>);
 
@@ -118,7 +120,8 @@ export interface JwkOptions {
   maxStaleSeconds?: number;
   /**
    * Optional `fetch` implementation override (mainly for tests). Defaults
-   * to global `fetch`.
+    * to global `fetch`. Overrides must honor `redirect: "error"` to preserve
+    * the configured HTTPS signing-key authority.
    */
   fetch?: typeof fetch;
   /**
@@ -200,6 +203,7 @@ function makeJwksLoader(
         try {
           const res = await fetchImpl(source, {
             headers: { accept: "application/json" },
+            redirect: "error",
           });
           if (!res.ok) {
             throw new Error(`jwk(): JWKS fetch failed with status ${res.status}.`);
@@ -254,6 +258,8 @@ function makeJwksLoader(
  * algorithms at construction time, requires every token to carry a `kid`
  * header, matches that `kid` against the JWKS, and cross-checks the JWT
  * header `alg` against the JWK's own `alg` (when present).
+ * URL sources are fetched with redirects disabled; redirecting refreshes
+ * follow the existing last-good-key grace policy, never installing new keys.
  *
  * @example
  * ```ts

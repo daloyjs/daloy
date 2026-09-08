@@ -694,6 +694,35 @@ test("jwk: https URL fetch returning non-2xx → request fails 401", async () =>
   assert.equal(res.status, 401);
 });
 
+test("jwk: refuses redirected signing keys, including HTTPS to plaintext downgrade", async () => {
+  const pair = await genEs256Pair();
+  const pub = await publicJwkFor(pair, "redirected-key", "ES256");
+  const signer = createJwtSigner({
+    alg: "ES256",
+    key: await privateJwkFor(pair),
+    maxLifetimeSeconds: 60,
+    header: { kid: "redirected-key" },
+  });
+  const token = await signer.sign({ sub: "untrusted-key-owner", exp: Math.floor(Date.now() / 1000) + 30 });
+  let policy: RequestRedirect | undefined;
+  const fakeFetch: typeof fetch = async (_input, init) => {
+    policy = init?.redirect;
+    if (policy === "error") throw new TypeError("redirect mode is set to error");
+    return Response.json({ keys: [pub] });
+  };
+  const app = new App({ logger: false });
+  app.use(jwk({ jwks: "https://issuer/redirect-to-http", algorithms: ["ES256"], fetch: fakeFetch }));
+  app.route({
+    method: "GET",
+    path: "/",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const response = await app.request(new Request("https://service/", { headers: { authorization: `Bearer ${token}` } }));
+  assert.equal(response.status, 401, "a redirect must not delegate signing-key authority to its destination");
+  assert.equal(policy, "error");
+});
+
 test("jwk: https URL fetch returning malformed JSON → 401", async () => {
   const fakeFetch: typeof fetch = async () =>
     new Response(JSON.stringify({ notKeys: 1 }), {

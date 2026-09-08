@@ -321,7 +321,15 @@ const UNIQUE_LOCAL = ["fc00::/7"];
  * @param options - Guard configuration; see {@link FetchGuardOptions}. Omit
  *   for the strict default posture (public IPs over `http:`/`https:` only).
  * @returns A `fetch`-compatible function that validates every hop (including
- *   redirects) and throws {@link SsrfBlockedError} on refusal.
+ *   redirects). Cross-origin redirects remove `Authorization`, `Cookie`,
+ *   `Proxy-Authorization`, and explicit `Host` headers; same-origin redirects
+ *   preserve them. Custom credential headers must not be used with untrusted
+ *   redirect destinations; use `redirect: "error"` or `"manual"` in that case.
+ * @throws {Error} If no underlying fetch implementation is available.
+ * @throws {SsrfBlockedError} The returned function throws when a destination
+ *   or redirect chain violates the configured policy; network errors propagate.
+ * @throws {TypeError} The returned function throws on invalid requests or
+ *   redirects when `redirect: "error"` is selected.
  * @since 0.34.0
  */
 export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
@@ -507,6 +515,12 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
             referrerPolicy: request.referrerPolicy,
           })
         : new Request(next, request);
+      if (next.origin !== currentUrl.origin) {
+        request.headers.delete("authorization");
+        request.headers.delete("cookie");
+        request.headers.delete("proxy-authorization");
+        request.headers.delete("host");
+      }
       currentUrl = next;
     }
   };

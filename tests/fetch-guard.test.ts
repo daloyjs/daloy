@@ -180,6 +180,126 @@ test("fetchGuard: follows safe redirects up to maxRedirects", async () => {
   assert.equal(r.calls.length, 2);
 });
 
+for (const status of [301, 302, 303, 307, 308]) {
+  for (const destination of [
+    "https://other.example/destination",
+    "https://source.example:8443/destination",
+    "http://source.example/destination",
+    "https://source.example/destination",
+    "https://SOURCE.example:443/destination",
+  ]) {
+    test(`fetchGuard: ${status} redirect credentials are origin-bound (${destination})`, async () => {
+      const requests: Request[] = [];
+      const guarded = fetchGuard({
+        resolve: async () => ["8.8.8.8"],
+        fetch: async (input) => {
+          requests.push(new Request(input));
+          return requests.length === 1
+            ? new Response(null, { status, headers: { location: destination } })
+            : new Response("ok");
+        },
+      });
+      const headers = {
+        Authorization: "Bearer test-only",
+        Cookie: "session=test-only",
+        "Proxy-Authorization": "Basic test-only",
+        Host: "source.example",
+        Accept: "application/json",
+        "Content-Type": "text/plain",
+      };
+      const sendsBody = status !== 307 && status !== 308;
+      const response = await guarded("https://source.example/start", {
+        method: sendsBody ? "POST" : "GET",
+        headers,
+        ...(sendsBody ? { body: "test-body" } : {}),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(requests.length, 2);
+      const sameOrigin = new URL(destination).origin === "https://source.example";
+      for (const name of ["Authorization", "Cookie", "Proxy-Authorization", "Host"] as const) {
+        assert.equal(requests[0]!.headers.get(name), headers[name]);
+        assert.equal(requests[1]!.headers.get(name), sameOrigin ? headers[name] : null);
+      }
+      assert.equal(requests[1]!.headers.get("accept"), "application/json");
+      assert.equal(requests[1]!.method, "GET");
+      assert.equal(requests[1]!.headers.get("content-type"), sendsBody ? null : "text/plain");
+      assert.equal(await requests[1]!.text(), "");
+    });
+  }
+}
+
+test("fetchGuard: a redirect back to the original origin does not restore credentials", async () => {
+  const requests: Request[] = [];
+  const destinations = ["https://other.example/", "https://source.example/return"];
+  const guarded = fetchGuard({
+    resolve: async () => ["8.8.8.8"],
+    fetch: async (input) => {
+      requests.push(new Request(input));
+      const destination = destinations[requests.length - 1];
+      return destination
+        ? new Response(null, { status: 307, headers: { location: destination } })
+        : new Response("ok");
+    },
+  });
+  await guarded("https://source.example/start", {
+    headers: { authorization: "Bearer test-only", cookie: "session=test-only" },
+  });
+  assert.equal(requests.length, 3);
+  for (const request of requests.slice(1)) {
+    assert.equal(request.headers.get("authorization"), null);
+    assert.equal(request.headers.get("cookie"), null);
+  }
+});
+
+for (const pinDns of [false, true]) {
+  test(`fetchGuard: cross-origin credentials never reach the second socket (pinDns=${pinDns})`, async (context) => {
+    const destinationServer = createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(request.headers));
+    });
+    context.after(() => {
+      destinationServer.closeAllConnections();
+      destinationServer.close();
+    });
+    destinationServer.listen(0, "127.0.0.1");
+    await once(destinationServer, "listening");
+    const destinationPort = (destinationServer.address() as { port: number }).port;
+    const hostname = pinDns ? "redirect-test.invalid" : "127.0.0.1";
+    let sourceAuthorization: string | undefined;
+    const sourceServer = createServer((request, response) => {
+      sourceAuthorization = request.headers.authorization;
+      response.writeHead(302, { location: `http://${hostname}:${destinationPort}/` });
+      response.end();
+    });
+    context.after(() => {
+      sourceServer.closeAllConnections();
+      sourceServer.close();
+    });
+    sourceServer.listen(0, "127.0.0.1");
+    await once(sourceServer, "listening");
+    const sourcePort = (sourceServer.address() as { port: number }).port;
+    const guard = fetchGuard({
+      pinDns,
+      allowLoopback: true,
+      resolve: async () => ["127.0.0.1"],
+    });
+    const response = await guard(`http://${hostname}:${sourcePort}/`, {
+      headers: {
+        authorization: "Bearer test-only",
+        cookie: "session=test-only",
+        "proxy-authorization": "Basic test-only",
+      },
+    });
+    assert.equal(response.status, 200);
+    const received = (await response.json()) as Record<string, string>;
+    assert.equal(sourceAuthorization, "Bearer test-only");
+    assert.equal(received.authorization, undefined);
+    assert.equal(received.cookie, undefined);
+    assert.equal(received["proxy-authorization"], undefined);
+    assert.equal(received.host, `${hostname}:${destinationPort}`);
+  });
+}
+
 test("fetchGuard: refuses excessive redirect chains", async () => {
   // Loop: each response redirects to itself (different path).
   let count = 0;

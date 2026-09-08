@@ -142,7 +142,7 @@ for (const route of mcpRoutes("/mcp", mcp)) {
   app.route(route);
 }
 
-const handle = serve(app, { port: 0 });
+const handle = serve(app, { port: 0, hostname: "127.0.0.1" });
 // With port 0 the OS-assigned port is only known once `listening` fires.
 handle.server.on("listening", () => {
   // eslint-disable-next-line no-console

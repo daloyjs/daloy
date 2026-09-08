@@ -17,6 +17,79 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-09-08
+
+### Security
+
+- Invoke HTTP signature nonce-replay callbacks only after cryptographic
+  verification, preventing forged requests from poisoning replay state.
+- Cancel discarded response bodies before outbound fetch/webhook retries;
+  preserve the final response body and arbitrary caller abort reasons without
+  counting caller cancellation as an upstream circuit-breaker failure.
+- Run HTTP message signature authentication before body I/O, preventing
+  cache/idempotency hits from skipping signature verification. Enforce imported
+  signature-key family/hash/curve and existing strength floors.
+- Parse Node's quoted certificate SAN values without interpreting embedded
+  commas as additional allowlisted identities; reject malformed SAN lists.
+- Deny all certificates when `clientCertAuth({ allowFingerprints: [] })` is
+  configured. An omitted fingerprint allowlist remains unrestricted by
+  fingerprint, with all other certificate checks still enforced.
+- Treat empty Authorization values as unscoped in cookie-authenticated
+  idempotency requests, preserving the existing explicit-scope requirement.
+- Keep the in-memory idempotency entry cap enforced when late completions
+  arrive after their reservations were evicted.
+- Stored response replays from `responseCache()` and `idempotency()` now
+  respect all aggregated `requireScopes()` requirements, including guards
+  mounted after the replay hook. Revoked permissions cannot retrieve a
+  previously stored protected response.
+- Enforce response cache and idempotency byte limits during capture rather
+  than after reading the entire response. Compression also stops capture
+  without awaiting cancellation of an unread client tee branch.
+- Validate imported JWT keys against their declared algorithm's family,
+  hash and curve, and enforce the existing HMAC minimum on CryptoKey/JWK
+  inputs. These formats previously bypassed some raw-key policy checks.
+- Refuse JWKS URL redirects, preventing an HTTPS source from silently
+  delegating signing-key authority or downgrading to plaintext HTTP.
+- `fetchGuard()` now strips `Authorization`, `Cookie`, `Proxy-Authorization`,
+  and explicit `Host` headers on cross-origin redirects. Previously, a redirect
+  from an authenticated upstream to another permitted origin could disclose
+  credentials. Same-origin authentication and per-hop SSRF validation remain
+  intact. Custom secret headers require explicit redirect handling.
+- Bind the live MCP security-test target to loopback, matching the other local
+  attack fixtures and preventing unintended LAN exposure.
+- Update advisory-affected website transitive dependencies, including a
+  compatible Browserslist 4.x security floor. The website dependency audit
+  now reports zero known advisories.
+
+### Fixed
+
+- Use cross-platform quoting for coverage include patterns so Windows runs
+  measure source files rather than reporting an empty coverage result.
+- Repair the extended live security harness's Windows file-URL conversion,
+  and send the custom campaign's oversized request line over raw TCP so a
+  transport reset does not hide the server's HTTP rejection.
+
+### Compatibility Notes
+
+No public exports or option signatures were removed. These security fixes
+intentionally reject previously accepted unsafe behavior:
+
+- An explicitly empty mTLS fingerprint allowlist now returns 403 for presented
+  certificates. Omit the option only when fingerprint pinning is not intended;
+  otherwise supply the permitted fingerprints.
+- JWKS URLs must be final HTTPS endpoints; redirects are refused.
+- Imported JWT and HTTP signature keys must match the configured algorithm and
+  strength floors. Replace mismatched or undersized keys.
+- HTTP signature middleware now verifies in `preBody`, before body parsing and
+  replay hooks. Code manually invoking its `beforeHandle` hook must use the
+  middleware lifecycle instead. Nonce callbacks run after successful verification
+  and must atomically check and record replay state.
+- Cross-origin fetch redirects no longer forward standard credential headers.
+  Use explicit, destination-authorized handling when authenticated redirects are
+  necessary; custom credential headers and request bodies remain caller-owned.
+- Stored responses no longer bypass later `requireScopes()` guards, and empty
+  Authorization headers no longer satisfy cookie-authenticated idempotency scoping.
+
 ## [1.3.1] - 2026-08-29
 
 ### Fixed

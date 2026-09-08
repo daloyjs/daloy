@@ -151,6 +151,8 @@ export interface PeerCertificateLike {
  * Normalize a Node `getPeerCertificate(true)` result into a
  * {@link ClientCertificate}. Returns `undefined` for the empty object Node
  * returns when the peer presented no certificate.
+ * Quoted SAN values are decoded without treating their embedded commas as
+ * identity separators. Malformed SAN lists yield no identities for allowlists.
  *
  * @param raw - The structured peer-certificate object from the TLS socket.
  * @param verified - Whether the socket reported `authorized === true` (the
@@ -233,12 +235,50 @@ function parseCertDate(value: string | undefined): Date | undefined {
 
 function parseNodeSubjectAltName(san: string | undefined): readonly string[] {
   if (typeof san !== "string" || san.length === 0) return [];
-  // Node renders SANs as `DNS:a, IP Address:1.2.3.4, URI:spiffe://...`.
   const out: string[] = [];
-  for (const piece of san.split(",")) {
+  const quoted = san.includes('"');
+  const pieces: string[] = quoted ? [] : san.split(",");
+  if (quoted) {
+    let start = 0;
+    let inQuotes = false;
+    let escaped = false;
+    for (let index = 0; index < san.length; index++) {
+      const char = san[index];
+      if (escaped) {
+        escaped = false;
+      } else if (inQuotes && char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        pieces.push(san.slice(start, index));
+        start = index + 1;
+      }
+    }
+    if (inQuotes || escaped) return [];
+    pieces.push(san.slice(start));
+  }
+  for (const piece of pieces) {
     const trimmed = piece.trim();
     if (trimmed.length === 0) continue;
-    out.push(trimmed.replace(/^IP Address:/i, "IP:"));
+    const colon = trimmed.indexOf(":");
+    if (colon < 1) return [];
+    if (!quoted) {
+      out.push(trimmed.replace(/^IP Address:/i, "IP:"));
+      continue;
+    }
+    const type = trimmed.slice(0, colon);
+    let value = trimmed.slice(colon + 1);
+    if (value.startsWith('"')) {
+      try {
+        value = JSON.parse(value) as string;
+      } catch {
+        return [];
+      }
+    } else if (quoted && value.includes('"')) {
+      return [];
+    }
+    out.push(`${type.toLowerCase() === "ip address" ? "IP" : type}:${value}`);
   }
   return out;
 }
@@ -441,6 +481,8 @@ export interface ClientCertAuthOptions {
   /**
    * If set, the certificate's SHA-256 fingerprint must match one of these
    * (compared in constant time; colons/spaces and case are ignored).
+  * An empty list denies every certificate; omit this option to disable
+  * fingerprint restrictions while retaining the other certificate checks.
    */
   allowFingerprints?: readonly string[];
   /**
@@ -518,7 +560,7 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
   const message = opts.message ?? "Client certificate not permitted";
   const stateKey = opts.stateKey ?? "clientCertificate";
   const now = opts.now ?? Date.now;
-  const allowFingerprints = (opts.allowFingerprints ?? []).map(
+  const allowFingerprints = opts.allowFingerprints?.map(
     (f) => normalizeFingerprint(f) ?? ""
   );
   const allowSubjectCNs = opts.allowSubjectCNs;
@@ -562,7 +604,7 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
       if (allowIssuerCNs && !matchesAllowedCN(cert.issuerCN, allowIssuerCNs)) {
         throw new ForbiddenError(message);
       }
-      if (allowFingerprints.length > 0 && !matchesFingerprint(cert, allowFingerprints)) {
+      if (allowFingerprints !== undefined && !matchesFingerprint(cert, allowFingerprints)) {
         throw new ForbiddenError(message);
       }
       if (allowSANs && !matchesSAN(cert.subjectAltNames, allowSANs)) {

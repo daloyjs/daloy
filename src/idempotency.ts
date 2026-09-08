@@ -34,6 +34,8 @@
 
 import { BadRequestError, ConflictError, HttpError } from "./errors.js";
 import { markSchemaValidatedResponse } from "./internal-response.js";
+import { readResponseBodyUpTo } from "./internal-body.js";
+import { hasReplayScopes } from "./internal-replay.js";
 import type { BaseContext, Hooks } from "./types.js";
 
 const enc = new TextEncoder();
@@ -258,6 +260,8 @@ const DEFAULT_MAX_IDEMPOTENCY_ENTRIES = 10_000;
  * alone is not a bound — it only drops records that have *expired*, so a stream
  * of unique keys inside the TTL grew the map linearly no matter how often it ran,
  * with each entry pinning a stored response body.
+ * Late completions of evicted reservations use the same capacity policy;
+ * completing a retained entry updates it without evicting another record.
  *
  * Evicting a live record can only cost exactly-once semantics for a retry that
  * arrives after the eviction — it re-executes rather than replaying. That is the
@@ -305,8 +309,19 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
     return null;
   }
 
-  /** @inheritDoc */
+  /**
+   * Persist a completed response, enforcing capacity even if its reservation
+   * was evicted while the handler ran.
+   * @param key - Reservation key to complete.
+   * @param record - Completed record with response data and expiry.
+   * @param _ttlMs - Unused; expiry is derived from record.expiresAt.
+   * @returns Nothing. A new entry may evict the oldest retained record.
+   */
   complete(key: string, record: IdempotencyRecord, _ttlMs?: number): void {
+    if (!this.map.has(key)) {
+      this.reserve(key, record, _ttlMs);
+      return;
+    }
     this.map.set(key, record);
   }
 
@@ -477,8 +492,8 @@ async function captureResponse(
   res: Response,
   maxBytes: number
 ): Promise<StoredIdempotentResponse | null> {
-  const buf = new Uint8Array(await res.clone().arrayBuffer());
-  if (buf.byteLength > maxBytes) return null;
+  const buf = await readResponseBodyUpTo(res.clone(), maxBytes);
+  if (buf === null) return null;
   const headers: Array<[string, string]> = [];
   res.headers.forEach((value, name) => {
     // Filter on capture, not on replay, so a credential never reaches the store
@@ -540,6 +555,12 @@ export const IDEMPOTENCY_HOOK_MARKER: unique symbol = Symbol.for("daloyjs.idempo
  * Responses that fail {@link IdempotencyOptions.cacheableStatus} (server errors
  * by default) or exceed {@link IdempotencyOptions.maxResponseBytes} are not
  * cached and the reservation is released so the client can retry.
+ * The byte cap is enforced while reading the response clone; exceeding it
+ * stops capture without waiting for EOF or consuming the client's branch.
+ * Replays require every scope aggregated from the route's requireScopes hooks;
+ * callers without those scopes continue to the normal authorization chain.
+ * Empty Authorization headers do not resolve a principal and cannot bypass
+ * the default cookie-bearing-request scope guard.
  *
  * @example
  * ```ts
@@ -593,6 +614,7 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
 
   const hooks: Hooks = {
     async beforeHandle(ctx) {
+      if (!hasReplayScopes(ctx)) return undefined;
       const method = ctx.request.method.toUpperCase();
       if (!methods.has(method)) return undefined;
 
@@ -643,13 +665,13 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       // coarse namespace cannot escalate into handing over a live session.
       if (
         !opts.scope &&
-        scopeRaw === undefined &&
+        !scopeRaw &&
         !allowUnscopedCallers &&
         ctx.request.headers.has("cookie")
       ) {
         throw new Error(
           "idempotency(): cannot determine the calling principal for a cookie-bearing request. " +
-            "The default scope reads the Authorization header, which this request does not carry, " +
+            "The default scope reads the Authorization header, which this request does not carry with a non-empty value, " +
             "so every cookie-authenticated caller would share one idempotency namespace and could " +
             "replay another caller's stored response (CWE-524). Pass " +
             "`scope: (ctx) => ctx.state.session?.id` (or another stable per-caller id), or set " +

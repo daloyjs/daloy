@@ -171,6 +171,69 @@ DaloyJS is designed for the threat model of an **internet-facing HTTP API on a t
 
 Each subsection names the class, a one-line description, the framework primitive that defends it, and where the regression tests live.
 
+#### Stored-response authorization and capture limits
+
+`responseCache()` and `idempotency()` check the scopes aggregated from all
+`requireScopes()` hooks before replaying a response. Missing or revoked scopes
+defer to the normal authorization chain without reserving or capturing data.
+Custom resource-authorization hooks must still run before replay middleware;
+the framework cannot infer application ownership rules.
+
+`httpSignatureAuth()` runs in `preBody`, so stored-response hooks cannot skip
+signature verification. Explicit optional authentication remains optional.
+Applications must still partition private stored responses by the authenticated
+principal and verify signed Content-Digest headers against the received body.
+Cookie-authenticated idempotency requests with absent or empty Authorization
+must use the existing explicit scoping policy. The in-memory store applies its
+entry cap to late completions too; eviction does not guarantee exactly-once work.
+
+Response cache, idempotency and compression byte caps are enforced while
+reading the capture clone, not after an unbounded `arrayBuffer()` call. Capture
+stops when the cap is crossed without waiting for the unread client branch's
+cancellation. The original response remains readable. This bounds retained
+capture data, not producer allocations or the duration of a stream that stalls
+below the byte cap; retain request timeouts and upstream resource limits.
+
+#### Imported JWT key policy and JWKS transport
+
+JWT CryptoKey inputs must match the declared JOSE algorithm's family, hash and
+curve. The 32-byte HMAC minimum and 2048-bit RSA modulus floor apply to imported
+keys as well as raw material. Nonextractable keys are checked through metadata,
+not exported. This prevents weak or mismatched application-supplied keys from
+silently defeating the verifier's stated algorithm policy.
+
+JWKS URL fetches use `redirect: "error"`; configure the final HTTPS endpoint
+directly. A redirect cannot install a replacement key set or downgrade to
+plaintext transport. Failed refreshes retain only previously trusted keys
+within the configured stale-key grace period. Custom fetch implementations
+must honor the redirect policy.
+
+HTTP message signature keys enforce the corresponding family/hash/curve and
+HMAC/RSA floors too. Invalid imported keys produce `invalid_key` during verification.
+Nonce replay callbacks run only after cryptographic verification; applications
+must make their nonce check-and-record operation atomic across instances.
+
+#### Outbound retry resource handling
+
+`resilientFetch()` and webhook delivery cancel intermediate response bodies
+before retry backoff without waiting for stalled producers. Final responses
+remain caller-owned and must be consumed or cancelled by the application.
+Caller aborts, including custom reasons, do not trip the fetch circuit breaker.
+Per-attempt timeouts cover obtaining response headers, not complete body reads;
+callers must bound response consumption separately.
+
+#### Client-certificate identity parsing
+
+Node peer-certificate SAN parsing preserves commas and escaped quotes inside
+JSON-quoted values. Text embedded in one URI SAN cannot manufacture a separate
+DNS identity for `allowSANs`. Malformed quoted SAN lists provide no identities.
+Quote-free lists use a fast path with the same identity-separator validation.
+An explicitly empty `allowFingerprints` list denies every certificate; omitting
+the option skips only fingerprint restrictions. Chain verification, validity,
+other configured allowlists, and custom verification remain enforced.
+The TLS terminator must still validate the certificate chain; forwarded
+certificate headers require a trusted proxy that strips caller-supplied values.
+
 #### Body-size DoS + structural DoS
 
 Streamed body read with hard cap (default 1 MiB); `Content-Length` rejected pre-read when oversize. Core-enforced.
@@ -316,6 +379,23 @@ DaloyJS ships first-party middleware for the surface the "API security tools" ma
 #### Cloud metadata SSRF (Capital One 2019, Pandoc [CVE-2025-51591](https://www.aikido.dev/blog/top-cloud-security-vulnerabilities))
 
 `fetchGuard()` default-denies AWS/Azure/DO `169.254.169.254`, GCP `metadata.google.internal`, Alibaba `100.100.100.200`, Oracle `192.0.0.192`, loopback, RFC1918, link-local, unique-local, CGNAT, IANA-reserved, multicast, and non-http(s) schemes. Redirects follow manually with re-validation at every hop; IPv4-mapped IPv6 is recursively re-checked. Regression in [`tests/fetch-guard.test.ts`](tests/fetch-guard.test.ts). IMDSv2-only is still required on the underlying compute (operator concern).
+
+#### Cross-origin redirect credentials
+
+`fetchGuard()` strips `Authorization`, `Cookie`, `Proxy-Authorization`, and an
+explicit `Host` header before following a redirect to a different origin
+(scheme, hostname, or port). Same-origin redirects retain these headers. Once
+stripped, credentials are not restored if a later hop returns to the original
+origin. Destination validation still runs at every hop, independently of this
+credential boundary. Regression coverage includes both the Node DNS-pinned
+transport and standard fetch over real loopback sockets in
+[`tests/fetch-guard.test.ts`](tests/fetch-guard.test.ts).
+
+Custom secret headers such as `X-API-Key` are application-defined and are not
+automatically stripped. For those requests, use `redirect: "error"` or
+`redirect: "manual"` and explicitly authorize any next destination. An outbound
+request body can also contain secrets; header stripping is not a body-redaction
+policy. Do not send credentials or sensitive bodies to caller-selected URLs.
 
 ### Red-team verification (adversarial test suite)
 

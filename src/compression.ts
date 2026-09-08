@@ -22,6 +22,7 @@
  */
 
 import type { Hooks } from "./types.js";
+import { readResponseBodyUpTo } from "./internal-body.js";
 
 /** Supported response encodings, in default preference order (best → worst ratio). */
 export type CompressionEncoding = "br" | "gzip" | "deflate";
@@ -292,51 +293,6 @@ function normalizeOptionTokens(
   return Object.freeze(normalized);
 }
 
-/**
- * Read a response body up to `maxBytes`. Returns `null` if the stream
- * exceeds the cap (body is cancelled; caller should leave the response
- * uncompressed). Returns an empty buffer when there is no body.
- *
- * @param res - Response whose body will be consumed (pass a clone).
- * @param maxBytes - Inclusive upper bound on buffered size.
- */
-async function readBodyUpTo(res: Response, maxBytes: number): Promise<Uint8Array | null> {
-  if (!res.body) return new Uint8Array(0);
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value || value.byteLength === 0) continue;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  } catch {
-    try {
-      await reader.cancel();
-    } catch {
-      /* ignore */
-    }
-    return null;
-  }
-  if (chunks.length === 0) return new Uint8Array(0);
-  if (chunks.length === 1) return chunks[0]!;
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.byteLength;
-  }
-  return out;
-}
-
 async function compressBytes(
   bytes: Uint8Array,
   encoding: CompressionEncoding
@@ -396,6 +352,8 @@ async function compressBytes(
  * - response already declares a `Content-Encoding`;
  * - response declares a `Set-Cookie` (response is mutating auth state);
  * - response body byte length is below `minimumSize` (default `1024`);
+ * - response body exceeds `maxCompressibleBytes` while reading; only the
+ *   capture clone is cancelled, without waiting for the client to consume it;
  * - response `Content-Type` is in the always-on already-compressed
  *   deny-list (image/video/audio/archives/fonts/wasm/pdf, with
  *   `image/svg+xml` carved back in as compressible XML).
@@ -493,7 +451,7 @@ export function compression(opts: CompressionOptions = {}): Hooks {
         if (Number.isFinite(n) && n > maxCompressibleBytes) return undefined;
       }
 
-      const original = await readBodyUpTo(res.clone(), maxCompressibleBytes);
+      const original = await readResponseBodyUpTo(res.clone(), maxCompressibleBytes).catch(() => null);
       if (original === null) return undefined; // exceeded cap while streaming
       if (original.byteLength < minimumSize) return undefined;
       const compressed = await compressBytes(original, chosen);

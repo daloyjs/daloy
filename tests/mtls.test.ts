@@ -112,6 +112,62 @@ test("normalizePeerCertificate returns undefined for the empty cert object", () 
   assert.equal(normalizePeerCertificate(undefined, true), undefined);
 });
 
+test("quoted Node SAN values cannot inject an allowlisted identity", async () => {
+  const uri = "https://attacker.example/, DNS:allowed.internal, tail";
+  const cert = normalizePeerCertificate(
+    {
+      subject: { CN: "attacker" },
+      subjectaltname: `URI:${JSON.stringify(uri)}, DNS:actual.internal`,
+    },
+    true
+  );
+  assert.ok(cert);
+  const request = new Request("https://service.test/");
+  setClientCertificate(request, cert);
+  assert.equal(
+    (await guardedApp({ allowSANs: ["DNS:allowed.internal"] }).fetch(request)).status,
+    403
+  );
+  assert.deepEqual(cert.subjectAltNames, [`URI:${uri}`, "DNS:actual.internal"]);
+  const permitted = new Request("https://service.test/");
+  setClientCertificate(permitted, cert);
+  assert.equal((await guardedApp({ allowSANs: [`URI:${uri}`] }).fetch(permitted)).status, 200);
+});
+
+test("Node SAN decoding respects escaped quotes and rejects malformed quoted values", () => {
+  const uri = 'https://example.test/"quoted", DNS:fake.internal, end';
+  const cert = normalizePeerCertificate(
+    {
+      subject: { CN: "client" },
+      subjectaltname: `URI:${JSON.stringify(uri)}, IP Address:10.0.0.7`,
+    },
+    true
+  );
+  assert.deepEqual(cert?.subjectAltNames, [`URI:${uri}`, "IP:10.0.0.7"]);
+  for (const subjectaltname of [
+    'URI:"unterminated, DNS:fake.internal',
+    'URI:"bad\\q", DNS:fake.internal',
+  ]) {
+    assert.deepEqual(
+      normalizePeerCertificate({ subject: { CN: "client" }, subjectaltname }, true)
+        ?.subjectAltNames,
+      []
+    );
+  }
+});
+
+test("unquoted Node SAN fast path preserves identities and rejects malformed entries", () => {
+  const normalize = (subjectaltname: string) =>
+    normalizePeerCertificate({ subject: { CN: "client" }, subjectaltname }, true)
+      ?.subjectAltNames;
+  assert.deepEqual(normalize(" DNS:client.internal, , IP Address:192.0.2.1, URI:spiffe://example/service "), [
+    "DNS:client.internal", "IP:192.0.2.1", "URI:spiffe://example/service",
+  ]);
+  for (const malformed of ["missing-colon", ":missing-type"]) {
+    assert.deepEqual(normalize(`DNS:client.internal, ${malformed}`), []);
+  }
+});
+
 test("normalizePeerCertificate handles multi-valued DN entries", () => {
   const cert = normalizePeerCertificate(
     { subject: { CN: "svc-a", OU: ["payments", "eng"] } },
@@ -196,6 +252,15 @@ test("clientCertAuth enforces issuer-CN, fingerprint, and SAN allow-lists", asyn
   const req3 = new Request("http://x/");
   setClientCertificate(req3, VERIFIED_CERT);
   assert.equal((await badSan.fetch(req3)).status, 403);
+});
+
+test("clientCertAuth treats an explicit empty fingerprint allowlist as deny-all", async () => {
+  const request = new Request("https://service.test/");
+  setClientCertificate(request, VERIFIED_CERT);
+  assert.equal((await guardedApp({ allowFingerprints: [] }).fetch(request)).status, 403);
+  const unrestricted = new Request("https://service.test/");
+  setClientCertificate(unrestricted, VERIFIED_CERT);
+  assert.equal((await guardedApp().fetch(unrestricted)).status, 200);
 });
 
 test("clientCertAuth SAN match accepts both TYPE:value and bare value", async () => {

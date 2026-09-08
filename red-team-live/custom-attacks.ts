@@ -104,7 +104,7 @@ const forgeJwt = (header: object, payload: object, sig = "AAAA") =>
 // WAF evasion / injection bypasses
 // ---------------------------------------------------------------------------
 
-async function wafEvasion() {
+async function wafEvasion(port: number) {
   const cat = "WAF evasion / injection bypass";
 
   // The harness showed that URL-encoded SQLi returns 200 (INFO). Here we test
@@ -140,7 +140,10 @@ async function wafEvasion() {
   // The XSS signature has `[\s\S]{0,80}?` which can be slow on long payloads.
   const longXss = "<img" + " ".repeat(200_000) + "onerror=alert(1)>";
   const t0 = Date.now();
-  const r = await http("GET", `/search?q=${encodeURIComponent(longXss)}`);
+  const r = await rawSend(
+    port,
+    `GET /search?q=${encodeURIComponent(longXss)} HTTP/1.1\r\nHost: ${HOST}:${port}\r\nConnection: close\r\n\r\n`
+  );
   const elapsed = Date.now() - t0;
   // A 431/400/413 means the request was rejected by size limits, which defends
   // against the regex-DoS vector even if not via the regex itself.
@@ -772,7 +775,7 @@ async function main() {
   console.log(`🎯  Target live on ${BASE} (and ${BASE_B}) — commencing custom attacks.\n`);
 
   try {
-    await wafEvasion();
+    await wafEvasion(port);
     await ssrfBypass();
     await jwtBypass();
     await pathBypass();

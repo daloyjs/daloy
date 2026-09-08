@@ -67,6 +67,8 @@
 
 import type { BaseContext, Hooks } from "./types.js";
 import { markSchemaValidatedResponse } from "./internal-response.js";
+import { readResponseBodyUpTo } from "./internal-body.js";
+import { hasReplayScopes } from "./internal-replay.js";
 
 /** Internal `ctx.state` key carrying the pending cache key between hooks. */
 const PENDING_STATE_KEY = "__responseCachePending";
@@ -659,6 +661,10 @@ function isPromiseLike<T>(value: unknown): value is Promise<T> {
  * `no-store` / `private` / `no-cache`, carrying `Set-Cookie` or `Vary: *`,
  * failing {@link ResponseCacheOptions.cacheableStatus}, or larger than
  * {@link ResponseCacheOptions.maxBodyBytes} are never cached.
+ * The byte cap is enforced while reading the response clone; exceeding it
+ * stops capture without waiting for EOF or consuming the client's branch.
+ * Replays require every scope aggregated from the route's requireScopes hooks;
+ * callers without those scopes continue to the normal authorization chain.
  *
  * A response that declares `Vary` is stored as a **variant**: the request's
  * values for those fields are recorded alongside it, and the entry is replayed
@@ -769,6 +775,7 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
 
   const hooks: Hooks = {
     async beforeHandle(ctx) {
+      if (!hasReplayScopes(ctx)) return undefined;
       const method = ctx.request.method.toUpperCase();
       if (!methods.has(method)) return undefined;
 
@@ -897,8 +904,8 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
         return undefined;
       }
 
-      const buf = new Uint8Array(await res.clone().arrayBuffer());
-      if (buf.byteLength > maxBodyBytes) {
+      const buf = await readResponseBodyUpTo(res.clone(), maxBodyBytes);
+      if (buf === null) {
         if (statusHeaderName) res.headers.set(statusHeaderName, "MISS");
         return undefined;
       }

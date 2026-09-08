@@ -2,6 +2,9 @@ minimumReleaseAge: 1440
 blockExoticSubdeps: true
 strictDepBuilds: true
 
+overrides:
+  "browserslist@<4.28.7": "4.28.9"
+
 allowBuilds:
   esbuild: true
   msw: true
