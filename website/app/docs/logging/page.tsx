@@ -135,8 +135,8 @@ jobLog.info({ processed: 1280 }, "done");`}
 
       <h2 id="redaction-secure-by-default">Redaction (secure by default)</h2>
       <p>
-        Redaction is on by default. Keys are matched case-insensitively at any
-        depth and replaced with <code>[REDACTED]</code>
+        Redaction is on by default. Keys are matched case-insensitively within
+        the traversal budget and replaced with <code>[REDACTED]</code>
         {". "}The built-in <code>DEFAULT_REDACT_KEYS</code> list covers the
         usual suspects plus AI / LLM provider credential headers. In addition,
         any string value shaped like a JWT (<code>eyJ...</code>) or an opaque
@@ -144,7 +144,11 @@ jobLog.info({ processed: 1280 }, "done");`}
         {", "}AWS <code>AKIA...</code>
         {", "}Stripe <code>sk_live_...</code>
         {", "}OpenAI <code>sk-...</code>
-        {", "}and more) is scrubbed regardless of its key.
+        {", "}and more) is scrubbed regardless of its key. The default
+        <code> maxDepth: 6</code> limits traversal; objects and arrays beyond
+        that depth are replaced in full with the configured censor, never
+        passed through uninspected. Use a larger finite depth only when needed
+        for operational detail, and avoid logging credentials in the first place.
       </p>
       <FlowDiagram
         title="From log call to log line"

@@ -80,6 +80,19 @@ test("parseCron: dow 7 normalizes to Sunday (0)", () => {
   assert.deepEqual([...parseCron("0 0 * * 7").dayOfWeek], [0]);
 });
 
+test("parseCron: Sunday aliases preserve numeric ranges and steps", () => {
+  const weekdays = (field: string) =>
+    [...parseCron(`0 0 * * ${field}`).dayOfWeek].sort((left, right) => left - right);
+  assert.deepEqual(weekdays("0-7"), [0, 1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(weekdays("1-7"), [0, 1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(weekdays("1-7/2"), [0, 1, 3, 5]);
+  assert.deepEqual(weekdays("*/7"), [0]);
+  assert.deepEqual(weekdays("0,7"), [0]);
+  for (const field of ["17", "0-17", "7-1", "*/0"]) {
+    assert.throws(() => parseCron(`0 0 * * ${field}`), CronParseError);
+  }
+});
+
 test("parseCron: aliases expand", () => {
   assert.deepEqual([...parseCron("@hourly").minute], [0]);
   assert.equal(parseCron("@hourly").hour.size, 24);
@@ -132,6 +145,15 @@ test("nextCronRun: honours timezone wall clock", () => {
 test("nextCronRun: unsatisfiable expression throws", () => {
   // The 30th of February never occurs.
   assert.throws(() => nextCronRun("0 0 30 2 *", new Date("2026-01-01T00:00:00Z")), CronParseError);
+});
+
+test("nextCronRun: calendar rejection preserves leap days and weekday alternatives", () => {
+  const after = new Date("2028-02-28T23:59:00Z");
+  assert.equal(nextCronRun("0 0 29 2 *", after).toISOString(), "2028-02-29T00:00:00.000Z");
+  assert.equal(nextCronRun("0 0 30 2 2", after).toISOString(), "2028-02-29T00:00:00.000Z");
+  assert.throws(() => nextCronRun("0 0 30 2 *", after, "America/New_York"), CronParseError);
+  assert.throws(() => nextCronRun("* * * * *", new Date(NaN)), RangeError);
+  assert.throws(() => nextCronRun("* * * * *", after, "Invalid/Timezone"), RangeError);
 });
 
 // ── Scheduler via runNow (deterministic, no timers) ─────────────────

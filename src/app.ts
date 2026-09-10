@@ -1602,7 +1602,7 @@ export class App<
   private responseBodySchemaAuditDone = false;
 
   /**
-   * Cached merge of `options.hooks` only. Used on the cold 404/405 path
+  * Cached merge of `options.hooks` and secure-header response hooks. Used on the cold 404/405 path
    * and as the baseline for cross-origin guard decisions when no route
    * matches.
    */
@@ -1611,7 +1611,12 @@ export class App<
 
   private get globalHooks(): Hooks {
     if (this._globalHooksCache === undefined) {
-      this._globalHooksCache = mergeHooks([this.options.hooks ?? {}]);
+      this._globalHooksCache = mergeHooks([
+        this.options.hooks ?? {},
+        ...this.groupHooks
+          .filter(hook => (hook as Record<PropertyKey, unknown>)[SECURE_HEADERS_MARKER] === true)
+          .map(hook => ({ onSend: hook.onSend, onResponse: hook.onResponse })),
+      ]);
     }
     return this._globalHooksCache;
   }
@@ -2002,7 +2007,13 @@ export class App<
       return;
     }
     const origin = request.headers.get("origin");
-    if (!origin || origin === "null") return;
+    if (!origin) return;
+    if (origin === "null") {
+      if (corsOriginAllows.some((allows) => allows(origin))) return;
+      throw new ForbiddenError(
+        "Cross-origin state-changing request rejected: opaque Origin requires an allowing cors() policy.",
+      );
+    }
     // Fast path: when both the Origin header and the request URL are in the
     // trivially-normalized shape (lowercase ASCII scheme://host[:port] with
     // no userinfo / percent-escapes / IPv6 brackets), their origins can be
@@ -3196,7 +3207,9 @@ export class App<
    *
    * Defaults (secure-by-default):
    *  - path: `/healthz`
-   *  - rate-limit: 60 req/min per remote IP, in-memory (per-process)
+  *  - rate-limit: 60 req/min per trusted identity, or a shared global bucket,
+  *    in-memory (per-process). Verified-token and rejected requests use
+  *    separate budgets so unauthenticated traffic cannot exhaust probe capacity.
    *  - auth: opt-in via `token`. In production with `secureDefaults: true`,
    *    registration refuses to add the route without a `token` unless
    *    `acknowledgeUnauthenticated: true` is set, so an unguarded
@@ -3207,6 +3220,9 @@ export class App<
    * app.healthcheck({ token: process.env.HEALTH_TOKEN! });
    * ```
    *
+  * @param opts - Probe path, token, and rate-limit policy.
+  * @returns This app for chaining.
+  * @throws {Error} If production authentication is missing without acknowledgment.
    * @since 0.18.0
    */
   healthcheck(opts: HealthRouteOptions = {}): this {
@@ -3226,6 +3242,9 @@ export class App<
    *
    * Defaults match {@link App.healthcheck} (path defaults to `/readyz`).
    *
+  * @param opts - Probe path, token, and rate-limit policy.
+  * @returns This app for chaining.
+  * @throws {Error} If production authentication is missing without acknowledgment.
    * @since 0.18.0
    */
   readinesscheck(opts: HealthRouteOptions = {}): this {
@@ -3263,7 +3282,8 @@ export class App<
    *
    * The scrape route inherits the same hardened posture as
    * {@link App.healthcheck}: optional bearer token compared via
-   * {@link timingSafeEqual}, a per-IP fixed-window rate limit, and a
+  * {@link timingSafeEqual}, a per-trusted-identity (otherwise global) fixed-window
+  * rate limit with separate verified-token and rejected-request budgets, and a
    * refuse-to-boot guard in production (an unauthenticated `/metrics`
    * endpoint leaks internal route names, latency, and traffic volume) unless
    * a token is supplied or `acknowledgeUnauthenticated: true` is passed.
@@ -3280,6 +3300,7 @@ export class App<
    *
    * @param opts - Path, auth, rate-limit, registry, and label configuration.
    * @returns `this` for chaining.
+  * @throws {Error} If production authentication is missing without acknowledgment.
    * @since 0.37.0
    */
   metrics(opts: MetricsRouteOptions = {}): this {
@@ -3363,8 +3384,11 @@ export class App<
       // Prometheus text exposition rendered by the framework registry.
       acknowledgeNoResponseBodySchema: true,
       handler: async ({ request }: BaseContext<any, any>) => {
+        const authMatch = token === undefined ? null : /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "");
+        const tokenAccepted = token !== undefined && authMatch !== null && timingSafeEqual(authMatch[1]!, token);
         if (buckets && rateLimitConfig) {
-          const key = healthRouteKey(request, trustProxyHeaders);
+          const identity = healthRouteKey(request, trustProxyHeaders);
+          const key = token === undefined ? identity : `${tokenAccepted ? "verified" : "unverified"}\u0000${identity}`;
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
@@ -3382,9 +3406,7 @@ export class App<
           }
         }
         if (token !== undefined) {
-          const h = request.headers.get("authorization") ?? "";
-          const m = /^Bearer\s+(.+)$/i.exec(h);
-          if (!m) {
+          if (!authMatch) {
             throw new HttpError(
               401,
               {
@@ -3395,7 +3417,7 @@ export class App<
               { "www-authenticate": 'Bearer realm="metrics"' },
             );
           }
-          if (!timingSafeEqual(m[1]!, token)) {
+          if (!tokenAccepted) {
             throw new ForbiddenError("Invalid metrics scrape token.");
           }
         }
@@ -3710,8 +3732,11 @@ export class App<
       // Framework-serialized probe payload; missing schema is intentional.
       acknowledgeNoResponseBodySchema: true,
       handler: async ({ request }: BaseContext<any, any>) => {
+        const authMatch = token === undefined ? null : /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "");
+        const tokenAccepted = token !== undefined && authMatch !== null && timingSafeEqual(authMatch[1]!, token);
         if (buckets && rateLimitConfig) {
-          const key = healthRouteKey(request, trustProxyHeaders);
+          const identity = healthRouteKey(request, trustProxyHeaders);
+          const key = token === undefined ? identity : `${tokenAccepted ? "verified" : "unverified"}\u0000${identity}`;
           const now = Date.now();
           const entry = buckets.get(key);
           if (!entry || entry.resetMs <= now) {
@@ -3729,9 +3754,7 @@ export class App<
           }
         }
         if (token !== undefined) {
-          const h = request.headers.get("authorization") ?? "";
-          const m = /^Bearer\s+(.+)$/i.exec(h);
-          if (!m) {
+          if (!authMatch) {
             throw new HttpError(
               401,
               {
@@ -3742,7 +3765,7 @@ export class App<
               { "www-authenticate": 'Bearer realm="health"' },
             );
           }
-          if (!timingSafeEqual(m[1]!, token)) {
+          if (!tokenAccepted) {
             throw new ForbiddenError("Invalid health probe token.");
           }
         }
@@ -3970,6 +3993,7 @@ export class App<
    * ```
    *
    * @param hooks - Hook bundle applied to subsequent routes.
+  * Secure-header hooks also apply to unmatched routes and early rejections.
    * @returns This `App` instance for chaining.
    */
   use(hooks: Hooks): this {
@@ -3996,6 +4020,7 @@ export class App<
     }
     this.groupHooks.push(hooks);
     this._coldPathHooksCache = undefined;
+    this._globalHooksCache = undefined;
     if ((hooks as Record<PropertyKey, unknown>)[CORS_HOOK_MARKER] === true) {
       this.corsOriginAllows = corsOriginAllowsFromHooks(this.groupHooks);
     }

@@ -21,6 +21,56 @@ Please include:
 
 The RFC 9116 discovery entry point is [`security.txt`](https://daloyjs.dev/.well-known/security.txt). The maintainer rotation lives in [`SECURITY-CONTACTS.md`](SECURITY-CONTACTS.md) and is audit-gated quarterly by `pnpm verify:governance-audits`.
 
+## Deployment and inspection boundaries
+
+- Set `env: "production"` explicitly when the runtime does not reliably set
+  `NODE_ENV`. Environment-dependent boot diagnostics and error-detail redaction
+  do not infer production from a publicly reachable endpoint.
+- Trust forwarding headers only behind an enforced proxy topology. Prefer
+  `trustedProxies` for middleware or `behindProxy: { cidrs: [...] }` when adapter
+  peer metadata is available. IP syntax validation is not proxy authentication.
+- Header-mode mTLS requires a trusted certificate-verifying terminator that
+  strips incoming identity headers and replaces them. XFCC's first element is
+  parsed as a proxy assertion. Append-only forwarding and fingerprint allowlists
+  do not make client-supplied XFCC trustworthy; prevent direct origin access.
+- `responseCache()` is a public-response cache unless a verified `principal`
+  partitions it. Custom credential headers and mTLS cannot be inferred from
+  `Authorization`/`Cookie` detection. Authenticate before replay, provide a
+  stable principal for private content, or return `Cache-Control: no-store`.
+  Use `idempotency({ scope })` for custom-credential callers and tenants.
+- WAF signatures inspect bounded prefixes (default 8192 characters per value)
+  and a bounded body traversal. They are not injection prevention or a complete
+  payload scan. Use strict length-limited schemas, parameterized database APIs,
+  output encoding, and sink-specific path validation.
+- The multipart scriptable-image check inspects the first 512 bytes. It does
+  not sanitize or fully decode an image. Use `magicBytes`, explicit field/file
+  limits, and an isolated, maintained image decoder. Platform `formData()` may
+  allocate before part-count validation; a wire-byte cap is not a heap cap.
+- `fetchGuard()` does not pin HTTPS DNS resolution; runtime-portable validation
+  cannot eliminate the validation/connect race. Enforce outbound network policy
+  for untrusted destinations. Never treat a WAF or URL check as a network sandbox.
+- Tenant resolution selects a namespace; authorize the authenticated principal
+  against that tenant separately. Pin `baseDomain` in production; the bundled
+  public-suffix subset is not the complete PSL or an authorization boundary.
+- Configure Redis rate-limit `onError` to return `"fail-closed"` for endpoints
+  where availability must not override admission limits. `autoBan` store
+  read/modify/write accounting is not a distributed atomic counter; use an
+  atomic shared admission limiter for strict attempt budgets.
+- Keep health/readiness/metrics on a restricted management interface and use
+  tokens. Token-authenticated requests have separate rate budgets from rejected
+  requests; intentionally unauthenticated endpoints still share their configured
+  budget. Per-client concurrency caps do not replace a global resource limit.
+
+## Redaction and origin boundaries
+
+Deep log objects and arrays beyond `maxDepth` are censored in full. Do not log
+credentials deliberately or rely on credential-shape heuristics as a complete
+data-loss-prevention system. The default cross-origin write guard rejects opaque
+`Origin: null` unless a CORS policy allows it; it does not replace `csrf()` for
+cookie-authenticated state changes. HTTP message signatures cover only selected
+components: body integrity requires verifying the digest and requiring that
+digest component to be signed, plus replay policy where the operation needs it.
+
 ## Supported Versions
 
 Security fixes target the latest published minor of the current major line, plus `main`. Older minors are not patched in place: within a major line the upgrade path is always forward to its newest minor.

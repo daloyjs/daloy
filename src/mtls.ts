@@ -332,9 +332,10 @@ function cnFromDN(dn: string | undefined): string | undefined {
  * Parse an Envoy `X-Forwarded-Client-Cert` (XFCC) header value into a
  * {@link ClientCertificate}. XFCC is a comma-separated list of proxy elements,
  * each a `;`-delimited set of `Key=Value` pairs (`Hash`, `Subject`, `URI`,
- * `DNS`, `Cert`, …). The **first** element is the client closest to the origin
- * and is the one returned. Because Envoy only emits XFCC for connections it
- * mutually authenticated, the result is marked `verified: true`.
+ * `DNS`, `Cert`, …). The **first** element is returned. The `verified: true`
+ * result is a trusted-proxy assertion, not cryptographic verification by this
+ * parser. The terminator must verify client certificates, strip incoming XFCC,
+ * and replace it with its own value. Append-only forwarding is insufficient.
  *
  * @param headerValue Raw XFCC header value; `null`/`undefined` are tolerated.
  * @returns The certificate parsed from the first XFCC element, or `undefined`
@@ -527,6 +528,9 @@ const MISSING_CERT_BODY = JSON.stringify({
  * parsed from a trusted-proxy header, enforces verification + optional
  * allow-lists + validity window + a custom hook, and stamps the accepted
  * certificate on `ctx.state` for downstream handlers.
+ * Header mode requires an origin reachable only through a trusted terminator
+ * that strips and replaces identity headers after certificate verification.
+ * Fingerprint allowlists do not authenticate client-supplied header values.
  *
  * Rejection semantics:
  * - **No certificate presented** → `401` `application/problem+json` with

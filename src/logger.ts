@@ -70,7 +70,7 @@ export interface LoggerRedactionOptions {
    * @since 0.69.0
    */
   redactCredentialLikeStrings?: boolean;
-  /** Maximum recursion depth when walking nested objects. Default: 6. */
+  /** Maximum recursion depth when walking nested objects. Deeper objects and arrays are censored in full. Default: 6. */
   maxDepth?: number;
 }
 
@@ -223,6 +223,8 @@ function redactString(value: string, cfg: ResolvedRedaction): string {
  * matches `cfg.keys` and any string value shaped like a JWT (when
  * `cfg.redactJwt` is on) with `cfg.censor`. Exported for direct use by
  * custom logger implementations that want the same defaults.
+ * Objects and arrays beyond the depth budget are replaced with the censor,
+ * rather than serialized without inspecting their contents.
  *
  * @param record - Log record to redact. Mutated in place (cycle-safe, depth-capped).
  * @param cfg - Resolved redaction settings (key set, censor, JWT/credential toggles, max depth).
@@ -253,6 +255,8 @@ function walkRedact(
       if (typeof v === "string") {
         const replaced = redactString(v, cfg);
         if (replaced !== v) node[i] = replaced;
+      } else if (v !== null && typeof v === "object" && depth >= cfg.maxDepth) {
+        node[i] = cfg.censor;
       } else {
         walkRedact(v, cfg, depth + 1, seen);
       }
@@ -270,6 +274,8 @@ function walkRedact(
     if (typeof v === "string") {
       const replaced = redactString(v, cfg);
       if (replaced !== v) obj[key] = replaced;
+    } else if (v !== null && typeof v === "object" && depth >= cfg.maxDepth) {
+      obj[key] = cfg.censor;
     } else {
       walkRedact(v, cfg, depth + 1, seen);
     }

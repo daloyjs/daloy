@@ -179,6 +179,14 @@ app.post(
       <h3 id="envoy-x-forwarded-client-cert">
         Envoy (X-Forwarded-Client-Cert)
       </h3>
+      <p>
+        Configure the terminator to verify the client certificate and strip
+        incoming XFCC before writing its own value. Appending to untrusted
+        input is not sufficient: the parser returns the first element, and
+        its verified flag is a proxy assertion, not cryptographic verification.
+        Neither a fingerprint allowlist nor a proxy-trust boolean authenticates
+        this header. Restrict origin access to the terminator, or use native mTLS.
+      </p>
       <CodeBlock
         language="ts"
         code={`app.use(

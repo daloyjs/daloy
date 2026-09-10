@@ -327,7 +327,8 @@ const UNIQUE_LOCAL = ["fc00::/7"];
  *   redirect destinations; use `redirect: "error"` or `"manual"` in that case.
  * @throws {Error} If no underlying fetch implementation is available.
  * @throws {SsrfBlockedError} The returned function throws when a destination
- *   or redirect chain violates the configured policy; network errors propagate.
+ *   or redirect chain violates policy, including malformed URLs and userinfo.
+ *   Userinfo is removed from error URLs; network errors propagate.
  * @throws {TypeError} The returned function throws on invalid requests or
  *   redirects when `redirect: "error"` is selected.
  * @since 0.34.0
@@ -446,13 +447,13 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     // caller-supplied secret never leaks into logs. Malformed URLs fall
     // through to the handling below, which raises `SsrfBlockedError("invalid-url")`.
     if (typeof input === "string" || input instanceof URL) {
-      let pre: URL | undefined;
+      let pre: URL;
       try {
         pre = new URL(input as string | URL);
       } catch {
-        pre = undefined;
+        throw new SsrfBlockedError("[invalid URL]", "invalid-url");
       }
-      if (pre && (pre.username !== "" || pre.password !== "")) {
+      if (pre.username !== "" || pre.password !== "") {
         pre.username = "";
         pre.password = "";
         throw new SsrfBlockedError(pre.toString(), "credentials-in-url");
@@ -496,6 +497,12 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
         next = new URL(loc, currentUrl);
       } catch {
         throw new SsrfBlockedError(loc, "invalid-url");
+      }
+      if (next.username !== "" || next.password !== "") {
+        next.username = "";
+        next.password = "";
+        void res.body?.cancel().catch(() => undefined);
+        throw new SsrfBlockedError(next.toString(), "credentials-in-url");
       }
       // Per fetch spec: 303 (and 301/302 for non-GET/HEAD in practice) downgrade to GET.
       const method = request.method.toUpperCase();

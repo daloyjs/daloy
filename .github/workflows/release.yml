@@ -492,15 +492,12 @@ jobs:
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
         with:
           # Lock egress to exactly what a JSR OIDC publish needs:
-          #   registry.npmjs.org              — `npx jsr` fetches the JSR CLI
-          #   dl.deno.land                    — the `jsr` CLI downloads a Deno
-          #     runtime to perform the publish; dl.deno.land 302-redirects to
-          #     the Deno GitHub release asset (github.com → the githubusercontent
-          #     asset CDNs below), so all of those hosts must be reachable too.
+          #   registry.npmjs.org              — frozen dependency installation
+          #   github.com                     — checksum-pinned Deno release archive
           #   objects.githubusercontent.com /
           #   release-assets.githubusercontent.com
           #                                   — GitHub release-asset CDN that
-          #     dl.deno.land / github.com redirect to for the Deno binary.
+          #     github.com redirects to for the Deno binary.
           #   jsr.io / api.jsr.io             — the JSR registry + publish API
           #   *.actions.githubusercontent.com — the GitHub OIDC token endpoint
           #     ($ACTIONS_ID_TOKEN_REQUEST_URL lives on a dynamic subdomain),
@@ -605,13 +602,32 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Packaging signal (jsr publish dry-run)
+      - name: Install checksum-pinned Deno publisher
         if: steps.jsr_exists.outputs.exists != 'true'
-        run: npx --yes jsr publish --dry-run
+        run: |
+          set -eu
+          publisher_dir="$(mktemp -d "${RUNNER_TEMP}/daloy-deno.XXXXXX")"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            'https://github.com/denoland/deno/releases/download/v2.9.6/deno-x86_64-unknown-linux-gnu.zip' \
+            --output "${publisher_dir}/deno.zip"
+          echo '394f07f4da2bebe6ce6f1e7ce0fa16429b29b08c35e3fac3fe25972676dff4b2'"  ${publisher_dir}/deno.zip" | sha256sum --check --strict
+          unzip -q "${publisher_dir}/deno.zip" -d "${publisher_dir}"
+          chmod +x "${publisher_dir}/deno"
+          echo "${publisher_dir}" >> "$GITHUB_PATH"
+
+      - name: Packaging signal (deno publish dry-run)
+        if: steps.jsr_exists.outputs.exists != 'true'
+        env:
+          DENO_NO_UPDATE_CHECK: "1"
+          DENO_DISABLE_PEDANTIC_NODE_WARNINGS: "true"
+        run: deno publish --unstable-bare-node-builtins --unstable-sloppy-imports --unstable-byonm --no-check --dry-run
 
       - name: Publish @daloyjs/daloy to JSR (OIDC)
         if: steps.jsr_exists.outputs.exists != 'true'
-        run: npx --yes jsr publish
+        env:
+          DENO_NO_UPDATE_CHECK: "1"
+          DENO_DISABLE_PEDANTIC_NODE_WARNINGS: "true"
+        run: deno publish --unstable-bare-node-builtins --unstable-sloppy-imports --unstable-byonm --no-check
 
   # ---------------------------------------------------------------------------
   # Publish the GitHub Release object for the pushed tag.

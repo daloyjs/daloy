@@ -341,6 +341,7 @@ function parseField(
  * Supported syntax per field: `*`, lists (`1,2,3`), ranges (`1-5`), steps
  * (`*\/5`, `1-10/2`), and case-insensitive month (`JAN`–`DEC`) / day
  * (`SUN`–`SAT`) names. Day-of-week accepts both `0` and `7` for Sunday.
+ * Numeric weekday ranges are expanded before Sunday aliases are normalized.
  *
  * @param expression - A cron expression or alias.
  * @returns The compiled field sets.
@@ -366,7 +367,8 @@ export function parseCron(expression: string): CronFields {
   const dayOfMonth = parseField(dom, 1, 31, "day-of-month");
   const month = parseField(mon, 1, 12, "month", MONTH_NAMES);
   // Day-of-week allows 7 as an alias for Sunday; normalize 7 -> 0.
-  const dowRaw = parseField(dow.replace(/7/g, "0"), 0, 6, "day-of-week", DAY_NAMES);
+  const dowRaw = parseField(dow, 0, 7, "day-of-week", DAY_NAMES);
+  if (dowRaw.delete(7)) dowRaw.add(0);
 
   return {
     minute,
@@ -397,8 +399,8 @@ const WEEKDAY_INDEX: Readonly<Record<string, number>> = {
   Sat: 6,
 };
 
-function wallClockOf(date: Date, timeZone: string | undefined): WallClock {
-  if (timeZone === undefined || timeZone === "UTC") {
+function wallClockOf(date: Date, formatter: Intl.DateTimeFormat | undefined): WallClock {
+  if (formatter === undefined) {
     return {
       minute: date.getUTCMinutes(),
       hour: date.getUTCHours(),
@@ -407,16 +409,7 @@ function wallClockOf(date: Date, timeZone: string | undefined): WallClock {
       dayOfWeek: date.getUTCDay(),
     };
   }
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    weekday: "short",
-  }).formatToParts(date);
+  const parts = formatter.formatToParts(date);
   const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? "0";
   let hour = Number(get("hour"));
   if (hour === 24) hour = 0; // some ICU builds render midnight as 24
@@ -459,6 +452,7 @@ const MAX_LOOKAHEAD_MINUTES = 5 * 366 * 24 * 60;
  * @returns The next matching `Date`.
  * @throws {@link CronParseError} if no match occurs within five years
  *   (an unsatisfiable expression).
+ * @throws {RangeError} If `after` is invalid or the timezone is unsupported.
  * @since 0.37.0
  */
 export function nextCronRun(
@@ -467,11 +461,31 @@ export function nextCronRun(
   timeZone?: string
 ): Date {
   const fields = typeof expression === "string" ? parseCron(expression) : expression;
+  if (!Number.isFinite(after.getTime())) throw new RangeError("Invalid cron search date.");
+  const formatter = timeZone === undefined || timeZone === "UTC"
+    ? undefined
+    : new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        weekday: "short",
+      });
+  if (fields.domRestricted && !fields.dowRestricted) {
+    const possible = [...fields.month].some(month => {
+      const maxDay = new Date(Date.UTC(2000, month, 0)).getUTCDate();
+      return [...fields.dayOfMonth].some(day => day <= maxDay);
+    });
+    if (!possible) throw new CronParseError("Cron expression has no valid calendar day.");
+  }
   // Advance to the start of the next whole minute.
   const start = Math.floor(after.getTime() / 60_000) * 60_000 + 60_000;
   for (let i = 0; i < MAX_LOOKAHEAD_MINUTES; i++) {
     const candidate = new Date(start + i * 60_000);
-    if (matches(fields, wallClockOf(candidate, timeZone))) return candidate;
+    if (matches(fields, wallClockOf(candidate, formatter))) return candidate;
   }
   throw new CronParseError(`Cron expression matches no time within five years (unsatisfiable).`);
 }

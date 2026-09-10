@@ -7,7 +7,8 @@
  *   - Path normalization and splitting avoid regular expressions.
  *
  * Safety:
- *   - Path traversal (`..`) and empty segments are rejected at lookup time.
+ *   - Raw `/../`, trailing `/..`, and empty segments are rejected at lookup time.
+ *   - Decoded parameters are untrusted data, not sanitized filesystem paths.
  *   - Duplicate routes and duplicate operationIds throw at registration.
  *   - Wildcard segments must be terminal.
  */

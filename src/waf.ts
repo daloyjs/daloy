@@ -446,7 +446,7 @@ function inspectionVariants(value: string, maxValueLength: number): string[] {
 
   for (const v of decodedChain) {
     if (v.includes("+")) push(v.replace(/\+/g, " "));
-    if (v.includes("/*")) push(v.replace(/\/\*[\s\S]*?\*\//g, " "));
+    if (v.includes("/*")) push(stripBlockComments(v));
     // Control characters (notably NUL) are not `\s`, so `1'%00OR%001=1` split
     // `OR` from `1=1` and walked past the whitespace-anchored signatures. Scan
     // a control-char→space form; benign traffic carries almost no C0 bytes, so
@@ -462,6 +462,22 @@ function inspectionVariants(value: string, maxValueLength: number): string[] {
     }
   }
   return out;
+}
+
+function stripBlockComments(value: string): string {
+  let cursor = 0;
+  const parts: string[] = [];
+  for (;;) {
+    const start = value.indexOf("/*", cursor);
+    if (start < 0) break;
+    const end = value.indexOf("*/", start + 2);
+    if (end < 0) break;
+    parts.push(value.slice(cursor, start), " ");
+    cursor = end + 2;
+  }
+  if (cursor === 0) return value;
+  parts.push(value.slice(cursor));
+  return parts.join("");
 }
 
 /**

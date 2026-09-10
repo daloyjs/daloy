@@ -17,7 +17,7 @@
  * This script:
  *
  *   1. Reads the list of files staged for commit (`git diff --cached
- *      --name-only --diff-filter=AM -z`).
+ *      --name-only --diff-filter=ACMRT -z`).
  *   2. Refuses the commit if any staged file's basename matches one of
  *      the forbidden secret-shaped filename patterns (`.env`,
  *      `*.pem`, `id_rsa`, `.npmrc`, `credentials.json`, …) reused from
@@ -50,8 +50,6 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
 
 import {
   CREDENTIAL_CONTENT_PATTERNS,
@@ -145,14 +143,15 @@ function isBinary(path: string): boolean {
 
 /**
  * Return the list of files currently staged for commit (added or
- * modified). Uses the NUL-delimited form of `git diff` so filenames with
+ * modified, copied, renamed, or type-changed). Uses the NUL-delimited form of `git diff` so filenames with
  * spaces / newlines are unambiguous. Returns `null` if `git` is not
  * available or the working directory is not a git checkout — the caller
- * treats this as a soft failure (no commit is in progress, e.g. a CI
- * invocation against a tarball).
+ * rejects the scan rather than reporting a clean index.
+ * @param cwd - Repository working directory.
+ * @returns Staged paths, or null when Git cannot list them.
  */
 export function listStagedFiles(cwd: string = process.cwd()): readonly string[] | null {
-  const res = spawnSync("git", ["diff", "--cached", "--name-only", "--diff-filter=AM", "-z"], {
+  const res = spawnSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMRT", "-z"], {
     cwd,
     encoding: "utf8",
   });
@@ -165,10 +164,11 @@ export function listStagedFiles(cwd: string = process.cwd()): readonly string[] 
 
 /**
  * Scan one staged file's bytes for forbidden filename / content patterns.
- * Returns an empty array if the file is binary, unreadable, or clean.
- *
- * Exported so tests can drive the scan against a tempdir without needing
- * a real git index.
+ * Reads the index blob, never the possibly different working-tree file.
+ * @param cwd - Repository working directory.
+ * @param rel - Path relative to the working directory.
+ * @returns Findings, or an empty array for a binary extension or clean content.
+ * @throws {Error} If Git cannot read the staged blob.
  */
 export async function scanOneStagedFile(
   cwd: string,
@@ -185,21 +185,13 @@ export async function scanOneStagedFile(
     return findings;
   }
   if (isBinary(rel)) return findings;
-  const abs = resolve(cwd, rel);
-  try {
-    const s = await stat(abs);
-    if (!s.isFile()) return findings;
-  } catch {
-    // File was staged then deleted on disk; nothing to scan.
-    return findings;
+  const blob = spawnSync("git", ["show", `:./${rel}`], {
+    cwd, encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
+  });
+  if (blob.error || blob.status !== 0) {
+    throw new Error(`scan-staged-secrets: cannot read staged blob ${JSON.stringify(rel)}.`);
   }
-  let text: string;
-  try {
-    text = await readFile(abs, "utf8");
-  } catch {
-    return findings; // unreadable / non-UTF-8 — treat as binary.
-  }
-  for (const hit of scanFileContentForCredentials(text)) {
+  for (const hit of scanFileContentForCredentials(blob.stdout)) {
     findings.push({ file: rel, kind: "content", detail: hit.detail, line: hit.line });
   }
   return findings;
@@ -209,12 +201,16 @@ export async function scanOneStagedFile(
  * Run the staged-files scan and return every finding. Exported so the
  * unit tests can call it directly; the CLI wrapper at the bottom of
  * this file translates findings to stderr + an exit code.
+ * @param cwd - Repository working directory.
+ * @param staged - Explicit staged paths, or the paths listed by Git.
+ * @returns All detected findings.
+ * @throws {Error} If Git cannot list or read the index.
  */
 export async function scanStagedSecrets(
   cwd: string = process.cwd(),
   staged: readonly string[] | null = listStagedFiles(cwd)
 ): Promise<readonly StagedFinding[]> {
-  if (staged === null) return [];
+  if (staged === null) throw new Error("scan-staged-secrets: cannot list staged files.");
   const out: StagedFinding[] = [];
   for (const rel of staged) {
     const hits = await scanOneStagedFile(cwd, rel);

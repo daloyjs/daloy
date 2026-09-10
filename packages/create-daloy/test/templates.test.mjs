@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, readFile, readdir, rm, access, mkdir, writeFile, stat } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -438,7 +438,14 @@ test("every template ships an opt-in pre-push contract-gate hook", async () => {
     );
     // The template hook is the source of executability for the scaffold copy.
     const mode = (await stat(hookPath)).mode;
-    assert.ok((mode & 0o111) !== 0, `${template} pre-push hook template must be executable`);
+    if (process.platform === "win32") {
+      const entry = execFileSync("git", ["ls-files", "--stage", "--", `templates/${template}/_githooks/pre-push`], {
+        cwd: pkgRoot, encoding: "utf8",
+      });
+      assert.match(entry, /^100755 /, `${template} hook must carry Git's executable mode`);
+    } else {
+      assert.ok((mode & 0o111) !== 0, `${template} pre-push hook template must be executable`);
+    }
   }
 });
 
@@ -491,7 +498,11 @@ test("scaffolded projects keep the pre-push hook executable", async () => {
     const hookPath = path.join(tmpDir, projectName, ".githooks/pre-push");
     await access(hookPath);
     const mode = (await stat(hookPath)).mode;
-    assert.ok((mode & 0o111) !== 0, "scaffolded .githooks/pre-push must be executable");
+    if (process.platform === "win32") {
+      assert.equal(await readFile(hookPath, "utf8"), await readFile(path.join(pkgRoot, "templates/node-basic/_githooks/pre-push"), "utf8"));
+    } else {
+      assert.ok((mode & 0o111) !== 0, "scaffolded .githooks/pre-push must be executable");
+    }
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }

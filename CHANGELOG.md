@@ -17,6 +17,43 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-09-10
+
+### Security
+
+- Apply secure-header response hooks to unmatched routes and early errors.
+- Reject opaque-origin writes by default; an explicitly allowing CORS policy
+  is required for `Origin: null`.
+- Censor objects and arrays beyond the logger's redaction depth budget.
+- Validate forwarded IP identities without shifting empty hop slots or
+  falling back from malformed XFF to another header.
+- Separate authenticated health/readiness/metrics rate budgets from failed
+  authentication while retaining limits on both.
+- Replace WAF block-comment regex normalization with a forward-only scan.
+- Scan Git index blobs, not working-tree content, in the staged-secret gate;
+  fail closed when the index cannot be read.
+- Use a checksum-pinned Deno 2.9.6 publisher instead of a floating JSR npm
+  wrapper in the JSR release job. OIDC approval and egress restrictions remain.
+
+### Fixed
+
+- Expand numeric cron weekday ranges before normalizing Sunday aliases.
+  Reuse one timezone formatter per search and reject impossible calendar
+  dates early, preserving leap days and day-of-month/weekday OR semantics.
+- Report malformed URLs and redirect userinfo through typed, redacted
+  `fetchGuard()` errors rather than incidental `Request` constructor failures.
+
+### Compatibility
+
+- Proxies must emit valid IP literals in the selected forwarding slot.
+  Invalid or empty slots no longer become identities or shift the hop chain.
+- Deep log containers now appear as the configured censor rather than their
+  uninspected contents. Opaque-origin clients must have an allowing CORS policy.
+- The staged-secret scanner requires a readable Git index, including in tests
+  or automation that call its exported helpers directly.
+- Clarify that XFCC parsing trusts a proxy assertion, not certificate proof;
+  the terminator must verify certificates and strip/replace incoming XFCC.
+
 ## [1.3.2] - 2026-09-08
 
 ### Security

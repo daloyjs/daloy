@@ -244,6 +244,16 @@ process.on("SIGTERM", () => scheduler.stop(5_000));`}
         and <code>nextCronRun(expr, after?, timeZone?)</code> returns the next
         matching <code>Date</code>.
       </p>
+      <p>
+        Numeric weekday ranges expand before Sunday aliases are normalized:
+        <code> 0-7</code> and <code>1-7</code> both include every weekday.
+        Impossible calendar dates such as February 30 with an unrestricted
+        weekday throw <code>CronParseError</code> immediately. February 29
+        remains valid, and restricted day-of-month and weekday fields retain
+        their OR semantics. Invalid dates or unsupported timezones throw
+        <code> RangeError</code>. Timezone searches reuse one formatter per
+        search; sparse schedules still use a bounded minute-by-minute search.
+      </p>
 
       <h2 id="when-to-reach-for-a-real-queue-instead">
         When to reach for a real queue instead

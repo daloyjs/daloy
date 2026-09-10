@@ -93,6 +93,15 @@ test("clean body request passes through", async () => {
   assert.deepEqual(await res.json(), { value: "hello world" });
 });
 
+test("comment normalization preserves harmless complete and incomplete input", async () => {
+  const app = bodyApp();
+  for (const value of ["hello /* note */ world", "hello /* unfinished", "/* first */ middle /* second */ end", "hello /* nested /* note */ end"]) {
+    const response = await app.fetch(jsonRequest("/echo", { value }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { value });
+  }
+});
+
 test("clean query request passes through", async () => {
   const app = queryApp();
   const res = await app.fetch(new Request("http://x/search?q=typescript+books"));

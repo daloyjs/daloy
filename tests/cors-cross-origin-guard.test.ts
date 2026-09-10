@@ -177,8 +177,18 @@ test("cross-origin POST without Origin header is allowed", async () => {
   assert.equal(res.status, 200);
 });
 
-test("Origin: null is treated as opaque (allowed) by the guard", async () => {
+test("Origin: null is rejected by the default write guard", async () => {
   const app = newApp();
+  const res = await app.request("/write", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "null" },
+    body: JSON.stringify({ x: 1 }),
+  });
+  assert.equal(res.status, 403);
+});
+
+test("Origin: null is allowed only by an explicit matching CORS policy", async () => {
+  const app = newApp(undefined, cors({ origin: "null" }));
   const res = await app.request("/write", {
     method: "POST",
     headers: { "content-type": "application/json", origin: "null" },

@@ -85,11 +85,11 @@ describe("ConnInfo abstraction", () => {
   });
   it("resolveClientIp respects hops", () => {
     const req = new Request("http://t/", {
-      headers: { "x-forwarded-for": "client, lb1, lb2" },
+      headers: { "x-forwarded-for": "198.51.100.1, 192.0.2.1, 192.0.2.2" },
     });
     setConnInfo(req, { remoteAddress: "127.0.0.1" });
-    assert.equal(resolveClientIp(req, { hops: 3 }), "client");
-    assert.equal(resolveClientIp(req, { hops: 2 }), "lb1");
+    assert.equal(resolveClientIp(req, { hops: 3 }), "198.51.100.1");
+    assert.equal(resolveClientIp(req, { hops: 2 }), "192.0.2.1");
   });
   it("pickForwardedForByHops returns undefined when chain is too short", () => {
     assert.equal(pickForwardedForByHops("a, b", 5), undefined);

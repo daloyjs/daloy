@@ -134,8 +134,11 @@ app.use(
         <code>HEAD</code>
         {", "}
         <code>OPTIONS</code>), same-origin requests, and requests without an{" "}
-        <code>Origin</code> header (or with <code>Origin: null</code> from a
-        sandboxed iframe) pass through unchanged.
+        <code>Origin</code> header pass through unchanged. Opaque origins,
+        including <code>Origin: null</code> from sandboxed frames, are rejected
+        unless a registered CORS policy allows them. Only allow the literal
+        null origin when the application genuinely requires it; it does not
+        identify a particular trusted site. Keep CSRF protection on cookie-authenticated writes.
       </p>
 
       <FlowDiagram

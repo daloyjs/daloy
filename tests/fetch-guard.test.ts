@@ -22,6 +22,21 @@ function recordingFetch(
 
 const allowAllResolver = (addr: string) => async () => [addr];
 
+test("fetchGuard classifies malformed URLs before dispatch", async () => {
+  const guarded = fetchGuard();
+  await assert.rejects(guarded("not a URL"), (error: unknown) =>
+    error instanceof SsrfBlockedError && error.reason === "invalid-url");
+});
+
+test("fetchGuard reports redirect userinfo with a typed redacted error", async () => {
+  const stub = recordingFetch([{ status: 302, headers: { location: "https://sample:fixture@example.com/next" } }]);
+  const guarded = fetchGuard({ fetch: stub.fn, resolve: allowAllResolver("93.184.216.34") });
+  await assert.rejects(guarded("https://example.com/start"), (error: unknown) =>
+    error instanceof SsrfBlockedError && error.reason === "credentials-in-url" &&
+    error.url === "https://example.com/next");
+  assert.equal(stub.calls.length, 1);
+});
+
 test("fetchGuard: blocks AWS/Azure metadata 169.254.169.254 (link-local literal)", async () => {
   const guarded = fetchGuard();
   await assert.rejects(

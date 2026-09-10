@@ -47,7 +47,7 @@ test("createLogger redacts default sensitive keys", () => {
 test("createLogger redacts JWT-shaped strings anywhere", () => {
   const lines: string[] = [];
   const log = createLogger({ level: "info", write: (l) => lines.push(l) });
-  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc-DEF_123";
+  const jwt = ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxIn0", "abc-DEF_123"].join(".");
   log.info({ payload: jwt, list: [jwt, "ok"] });
   const obj = JSON.parse(lines[0]!);
   assert.equal(obj.payload, "[REDACTED]");
@@ -79,6 +79,32 @@ test("createLogger child inherits redaction config", () => {
   const obj = JSON.parse(lines[0]!);
   assert.equal(obj.password, "[REDACTED]");
   assert.equal(obj.requestId, "r1");
+});
+
+test("createLogger censors uninspected objects and arrays at the depth boundary", () => {
+  const lines: string[] = [];
+  const log = createLogger({
+    level: "info", write: line => lines.push(line),
+    redact: { maxDepth: 1, censor: "[omitted]" },
+  });
+  log.info({
+    nested: { keep: "ok", child: { password: "test-value" }, list: [{ token: "test-value" }], empty: null },
+    list: ["ok", { password: "test-value" }, ["test-value"], null],
+  });
+  const record = JSON.parse(lines[0]!);
+  assert.deepEqual(record.nested, { keep: "ok", child: "[omitted]", list: "[omitted]", empty: null });
+  assert.deepEqual(record.list, ["ok", "[omitted]", "[omitted]", null]);
+  assert.equal(lines[0]!.includes("test-value"), false);
+});
+
+test("createLogger default depth cannot pass through deeply nested secrets", () => {
+  const lines: string[] = [];
+  const log = createLogger({ write: line => lines.push(line) });
+  let nested: object = { password: "test-value" };
+  for (let depth = 0; depth < 8; depth++) nested = { child: nested };
+  log.info({ nested, keep: "ok" });
+  assert.equal(lines[0]!.includes("test-value"), false);
+  assert.equal(JSON.parse(lines[0]!).keep, "ok");
 });
 
 // Log4Shell-class regression: the default logger MUST NOT perform any
@@ -198,7 +224,7 @@ test("logger redacts whole-value GitHub / npm / Stripe / AWS / Slack / Google to
     a: "ghs_" + "a".repeat(40),
     b: "github_pat_" + "B".repeat(50),
     c: "xoxb-" + "1".repeat(20) + "-abcdef",
-    d: "AKIAABCDEFGHIJKLMNOP",
+    d: "AKIA" + "ABCDEFGHIJKLMNOP",
     e: "sk_live_" + "x".repeat(30),
     f: "npm_" + "y".repeat(36),
     g: "glpat-" + "z".repeat(25),
@@ -918,10 +944,11 @@ test("App child logger binds a redacted url (not the raw request URL)", async ()
 });
 
 test("sanitizeUrlForLog redacts AWS SigV4 presigned URL signature + credential", () => {
+  const credential = "AKIA" + "IOSFODNN7EXAMPLE";
   const raw =
     "https://bucket.s3.amazonaws.com/report.csv" +
     "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
-    "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20260719%2Fus-east-1%2Fs3%2Faws4_request" +
+    `&X-Amz-Credential=${credential}%2F20260719%2Fus-east-1%2Fs3%2Faws4_request` +
     "&X-Amz-Date=20260719T000000Z" +
     "&X-Amz-Expires=900" +
     "&X-Amz-SignedHeaders=host" +
@@ -929,7 +956,7 @@ test("sanitizeUrlForLog redacts AWS SigV4 presigned URL signature + credential",
   const safe = sanitizeUrlForLog(raw);
   // The signature and the credential (embeds the access-key id) must be gone.
   assert.doesNotMatch(safe, /deadbeefcafebabe/);
-  assert.doesNotMatch(safe, /AKIAIOSFODNN7EXAMPLE/);
+  assert.equal(safe.includes(credential), false);
   // Path is retained for operability.
   assert.match(safe, /\/report\.csv/);
 });

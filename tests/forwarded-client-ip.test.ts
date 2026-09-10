@@ -55,11 +55,11 @@ test("resolveForwardedClientIp reads the rightmost entry by default", () => {
 
 test("resolveForwardedClientIp walks N trusted hops from the right", () => {
   const req = new Request("http://t/", {
-    headers: { "x-forwarded-for": "spoofed, client, cdn, lb" },
+    headers: { "x-forwarded-for": "ignored, 198.51.100.1, 192.0.2.1, 192.0.2.2" },
   });
-  assert.equal(resolveForwardedClientIp(req, 1), "lb");
-  assert.equal(resolveForwardedClientIp(req, 2), "cdn");
-  assert.equal(resolveForwardedClientIp(req, 3), "client");
+  assert.equal(resolveForwardedClientIp(req, 1), "192.0.2.2");
+  assert.equal(resolveForwardedClientIp(req, 2), "192.0.2.1");
+  assert.equal(resolveForwardedClientIp(req, 3), "198.51.100.1");
 });
 
 test("resolveForwardedClientIp falls back to X-Real-IP only at one declared hop", () => {
@@ -77,12 +77,12 @@ test("[unhappy] resolveForwardedClientIp fails closed when the chain is shorter 
   // then just another attacker-settable header, so it must NOT be honored:
   // trusting it here would restore the rotating-identity evasion.
   const short = new Request("http://t/", {
-    headers: { "x-forwarded-for": "a, b", "x-real-ip": "10.9.9.9" },
+    headers: { "x-forwarded-for": "192.0.2.1, 192.0.2.2", "x-real-ip": "10.9.9.9" },
   });
   assert.equal(resolveForwardedClientIp(short, 5), undefined);
   assert.equal(resolveForwardedClientIp(short, 3), undefined);
   // Still correct at the declared depth the chain actually satisfies.
-  assert.equal(resolveForwardedClientIp(short, 2), "a");
+  assert.equal(resolveForwardedClientIp(short, 2), "192.0.2.1");
 
   const noXff = new Request("http://t/", { headers: { "x-real-ip": "10.9.9.9" } });
   assert.equal(resolveForwardedClientIp(noXff, 2), undefined);
@@ -103,6 +103,21 @@ test("resolveForwardedTrust validates the [1, 64] integer range", () => {
   assert.throws(() => check(Number.NaN), /trustedHops/);
   assert.equal(check(1), 1);
   assert.equal(check(64), 64);
+});
+
+test("forwarded IP resolution rejects malformed slots without shifting or fallback", () => {
+  for (const value of ["unknown", "invalid", "999.1.1.1", "192.0.2.1,", ""]) {
+    const request = new Request("http://t/", {
+      headers: { "x-forwarded-for": value, "x-real-ip": "192.0.2.2" },
+    });
+    assert.equal(resolveForwardedClientIp(request), undefined);
+  }
+  assert.equal(resolveForwardedClientIp(new Request("http://t/", {
+    headers: { "x-real-ip": "unknown" },
+  })), undefined);
+  assert.equal(resolveForwardedClientIp(new Request("http://t/", {
+    headers: { "x-forwarded-for": "2001:db8::1" },
+  })), "2001:db8::1");
 });
 
 test("resolveForwardedTrust resolves the trust decision to a hop count", () => {

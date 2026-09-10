@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, unlink } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -13,7 +14,13 @@ import {
 import { installPreCommitHook } from "../scripts/install-git-hooks.ts";
 
 async function fixture(): Promise<string> {
-  return mkdtemp(join(tmpdir(), "daloy-scan-staged-"));
+  const dir = await mkdtemp(join(tmpdir(), "daloy-scan-staged-"));
+  assert.equal(spawnSync("git", ["init", "--quiet"], { cwd: dir }).status, 0);
+  return dir;
+}
+
+function stage(dir: string, ...paths: string[]): void {
+  assert.equal(spawnSync("git", ["add", "--", ...paths], { cwd: dir }).status, 0);
 }
 
 test("isForbiddenStagedFilename flags secret-shaped basenames", () => {
@@ -48,6 +55,7 @@ test("scanOneStagedFile flags an AWS access key id inside a staged source file",
   // the gitleaks history sweep.
   const fake = "AKIA" + "ABCDEFGHIJKLMNOP";
   await writeFile(join(dir, "leaky.ts"), `export const k = "${fake}";\n`, "utf8");
+  stage(dir, "leaky.ts");
   const findings = await scanOneStagedFile(dir, "leaky.ts");
   assert.equal(findings.length, 1);
   assert.equal(findings[0]!.kind, "content");
@@ -71,23 +79,19 @@ test("scanOneStagedFile is clean on ordinary source", async () => {
     "export const greet = (name: string) => `hello, ${name}`;\n",
     "utf8"
   );
+  stage(dir, "ok.ts");
   const findings = await scanOneStagedFile(dir, "ok.ts");
   assert.deepEqual(findings, []);
 });
 
-test("scanOneStagedFile silently ignores a missing staged file (deleted after staging)", async () => {
+test("scanOneStagedFile rejects a missing index blob", async () => {
   const dir = await fixture();
-  const findings = await scanOneStagedFile(dir, "ghost.ts");
-  assert.deepEqual(findings, []);
+  await assert.rejects(scanOneStagedFile(dir, "ghost.ts"), /cannot read staged blob/);
 });
 
-test("scanStagedSecrets returns [] when git is unavailable / not a checkout", async () => {
+test("scanStagedSecrets fails closed when Git cannot list the index", async () => {
   const dir = await fixture();
-  // Force the "git unavailable / not a checkout" branch by passing
-  // staged=null explicitly. The CLI does the same when `git diff`
-  // exits non-zero (e.g. a CI sandbox without git installed).
-  const findings = await scanStagedSecrets(dir, null);
-  assert.deepEqual(findings, []);
+  await assert.rejects(scanStagedSecrets(dir, null), /cannot list staged files/);
 });
 
 test("scanStagedSecrets aggregates findings across multiple staged files", async () => {
@@ -96,10 +100,26 @@ test("scanStagedSecrets aggregates findings across multiple staged files", async
   const fake = "AKIA" + "1234567890ABCDEF";
   await writeFile(join(dir, "b.ts"), `const k = "${fake}";\n`, "utf8");
   await writeFile(join(dir, ".env"), "DATABASE_URL=...\n", "utf8");
+  stage(dir, "a.ts", "b.ts", ".env");
   const findings = await scanStagedSecrets(dir, ["a.ts", "b.ts", ".env"]);
   assert.equal(findings.length, 2);
   assert.ok(findings.some((f) => f.file === "b.ts" && f.kind === "content"));
   assert.ok(findings.some((f) => f.file === ".env" && f.kind === "filename"));
+});
+
+test("scanStagedSecrets inspects index bytes despite later worktree edits or deletion", async () => {
+  const dir = await fixture();
+  const fake = "AKIA" + "ABCDEFGHIJKLMNOP";
+  await writeFile(join(dir, "sample.ts"), `const value = "${fake}";\n`);
+  stage(dir, "sample.ts");
+  await writeFile(join(dir, "sample.ts"), "// clean\n");
+  assert.equal((await scanStagedSecrets(dir)).length, 1);
+  await unlink(join(dir, "sample.ts"));
+  assert.equal((await scanStagedSecrets(dir)).length, 1);
+  await writeFile(join(dir, "sample.ts"), "// clean\n");
+  stage(dir, "sample.ts");
+  await writeFile(join(dir, "sample.ts"), `const value = "${fake}";\n`);
+  assert.deepEqual(await scanStagedSecrets(dir), []);
 });
 
 test("installPreCommitHook refuses to run outside a git checkout", () => {
@@ -153,7 +173,7 @@ test("installPreCommitHook re-running on its own hook reports already-installed 
 });
 
 test("installPreCommitHook understands a `.git` file written by git worktree", async () => {
-  const dir = await fixture();
+  const dir = await mkdtemp(join(tmpdir(), "daloy-scan-worktree-"));
   // Create the real gitdir elsewhere.
   const realGitDir = await mkdtemp(join(tmpdir(), "daloy-worktree-gitdir-"));
   await mkdir(join(realGitDir, "hooks"), { recursive: true });

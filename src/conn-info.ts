@@ -154,19 +154,19 @@ export function assertBehindProxy(cfg: BehindProxyConfig | undefined): void {
  * @param header - Raw `X-Forwarded-For` header value, or `null` when absent.
  * @param hops - Declared number of trusted proxy hops (must be >= 1).
  * @returns The client IP at the declared hop, or `undefined` when the chain
- *   is too short or `hops < 1`.
+ *   is too short, the selected slot is not an IP, or `hops < 1`.
  * @internal
  */
 export function pickForwardedForByHops(header: string | null, hops: number): string | undefined {
   if (!header || hops < 1) return undefined;
   const parts = header
     .split(",")
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+    .map((p) => p.trim());
   if (parts.length < hops) return undefined;
   // Right-to-left: index 0 is the last hop closest to Daloy. The client
   // typically lives at parts[parts.length - hops].
-  return parts[parts.length - hops];
+  const selected = parts[parts.length - hops];
+  return selected && parseIp(selected) ? selected : undefined;
 }
 
 /**
@@ -334,7 +334,8 @@ function isTrustedPeer(request: Request, trustedPeers: readonly IpMatcher[]): bo
  *   {@link resolveTrustedProxyMatchers}. When supplied, forwarded headers
  *   are honoured only if the immediate peer matches; otherwise `undefined`.
  * @returns The resolved client IP, or `undefined` when no forwarded identity
- *   is available. Callers decide their own posture for `undefined`
+ *   is available. Placeholder and malformed identities are rejected without
+ *   shifting the selected hop. Callers decide their own posture for `undefined`
  *   (fail-closed 403, fail-open skip, or a shared `"global"` bucket).
  * @since 1.0.0-rc.7
  */
@@ -346,8 +347,8 @@ export function resolveForwardedClientIp(
   if (trustedPeers !== undefined && !isTrustedPeer(request, trustedPeers)) {
     return undefined;
   }
-  const picked = pickForwardedForByHops(request.headers.get("x-forwarded-for"), hops);
-  if (picked) return picked;
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded !== null) return pickForwardedForByHops(forwarded, hops);
   // Fail closed past one hop. A chain that produced fewer than `hops` entries
   // means the request never traversed the declared topology — a direct-to-origin
   // request that skipped the CDN, say — so no forwarded value it carries is
@@ -360,7 +361,8 @@ export function resolveForwardedClientIp(
   // requires bypassing the declared chain, and the safe answer there is "no
   // identity", not "the identity the caller asked me to believe".
   if (hops !== 1) return undefined;
-  return request.headers.get("x-real-ip") ?? undefined;
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  return realIp && parseIp(realIp) ? realIp : undefined;
 }
 
 /**
