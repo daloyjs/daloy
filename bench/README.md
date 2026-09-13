@@ -10,6 +10,9 @@
   benchmark, verifies every lookup scenario, and reports medians plus ranges.
   Raw samples and machine/git provenance are written to
   `bench/results.router.json`.
+  Includes warm `allowedMethods()` scenarios for static-only, mixed, and
+  dynamic routes, in addition to successful lookups and misses. Static method
+  caches are populated during warmup; these are not cold-registration timings.
 - `pnpm bench:serverless` measures the cold-path pieces that matter for
   serverless boot work: module import, `new App()` plus route registration,
   first `fetch()`, and warm `fetch()`. It builds first, measures the shipped

@@ -1,6 +1,6 @@
 {
   "name": "daloyjs.dev",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "type": "module",
   "packageManager": "pnpm@12.3.0",
   "private": true,

@@ -23,6 +23,11 @@ The RFC 9116 discovery entry point is [`security.txt`](https://daloyjs.dev/.well
 
 ## Deployment and inspection boundaries
 
+- Router method tables are isolated from object prototypes. Unregistered
+  methods cannot resolve inherited properties as handlers; internal routes
+  remain hidden from public dispatch and method discovery. Routing caches hold
+  only validated registered static paths, never arbitrary request paths, and
+  are invalidated when routes are registered.
 - Set `env: "production"` explicitly when the runtime does not reliably set
   `NODE_ENV`. Environment-dependent boot diagnostics and error-detail redaction
   do not infer production from a publicly reachable endpoint.

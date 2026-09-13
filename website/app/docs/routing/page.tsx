@@ -25,9 +25,19 @@ export default function Page() {
     <>
       <h1>Routing</h1>
       <p>
-        DaloyJS uses a trie/radix router with a static-route fast path. Static
-        routes resolve via a single <code>Map.get</code>. Dynamic routes walk a
-        trie in O(path-segments) regardless of how many routes you have.
+        DaloyJS uses a segment trie with a static-route fast path. After path
+        safety checks, exact static routes resolve via a single <code>Map.get</code>.
+        Dynamic lookups prefer literal segments, then parameters, then wildcards.
+        A lookup without backtracking is linear in path length; overlapping
+        routes can require visiting additional trie branches.
+      </p>
+      <p>
+        Only complete routes count as matches. For example, registering
+        <code> /users/me/details/:field</code> does not prevent
+        <code> /users/:id</code> from matching <code>/users/me</code>.
+        Within the dynamic trie, a complete higher-priority path wins even when
+        it has no handler for the requested method. An exact static route wins
+        for its registered methods; other methods may still match the dynamic trie.
       </p>
 
       <h2 id="progressive-shorthands">Progressive shorthands</h2>
@@ -241,11 +251,23 @@ export const app = new App().registerRoutes([
         trie position, such as <code>/a/:x</code> and <code>/a/:y</code>
         {", "}throw at registration.
       </p>
+      <p>
+        Capture names must be nonempty and unique within a route. The names
+        <code> __proto__</code>, <code>constructor</code>, and
+        <code> prototype</code> are rejected to keep parameter objects safe for
+        downstream use. A rejected registration does not reserve its
+        <code> operationId</code>.
+      </p>
 
       <h3 id="wildcard-captures">Wildcard captures</h3>
       <p>
         A trailing <code>*name</code> segment captures the rest of the path into
-        one decoded string. Wildcards must be terminal.
+        one decoded string and requires at least one remaining segment.
+        A bare <code>*</code> uses the name <code>wildcard</code>.
+        Wildcards must be terminal: <code>/assets/*path/private</code> throws
+        during registration instead of silently matching a broader path.
+        Multiple methods can share a wildcard route when the capture name
+        agrees. Duplicate methods and conflicting wildcard names throw.
       </p>
       <CodeBlock
         code={`app.route({
@@ -262,10 +284,13 @@ export const app = new App().registerRoutes([
 // GET /assets/css/app.css -> params.path === "css/app.css"`}
       />
       <p>
-        Path traversal segments (<code>..</code>), empty segments{" "}
+        Raw path traversal segments (<code>..</code>), empty segments{" "}
         <code>{"//"}</code>
-        {", "}and malformed percent escapes miss cleanly before your handler
-        sees them.
+        {", "}and malformed percent escapes in captures miss cleanly. Method
+        discovery applies the same checks, so rejected paths do not advertise
+        an <code>Allow</code> header. Decoded parameters remain untrusted data:
+        encoded dots or slashes are not sanitized filesystem paths. Validate
+        filesystem access separately.
       </p>
 
       <h2 id="groups">Groups</h2>
@@ -474,6 +499,13 @@ app.route({
         <code>internal: true</code> are filtered from public 405 and{" "}
         <code>Allow</code> responses so hidden admin or cron endpoints do not
         leak through method probing.
+      </p>
+      <p>
+        Method discovery includes both an exact static route and the selected
+        dynamic route. With <code>GET /users/me</code> and
+        <code> POST /users/:id</code>, the path <code>/users/me</code> advertises
+        both registered methods. The header lists explicit registrations;
+        synthesized HEAD and OPTIONS handling does not add entries.
       </p>
 
       <h2 id="performance">Performance</h2>

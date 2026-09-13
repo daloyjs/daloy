@@ -17,6 +17,45 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-09-13
+
+### Fixed
+
+- Preserve all methods on shared wildcard routes and reject duplicate wildcard
+  registrations instead of silently replacing their handlers.
+- Backtrack past incomplete trie prefixes so complete parameter and wildcard
+  routes remain reachable. Preserve completed-route precedence.
+- Include reachable dynamic methods alongside exact static methods in `Allow`,
+  while keeping internal routes hidden. Reject traversal and empty segments
+  consistently during lookup and method discovery.
+- Preserve falsy router handler values and release operation IDs after failed
+  registration. Allocate handler tables only for terminal trie nodes.
+- Skip trie traversal for static-only method discovery and cache validated
+  static-path method lists. Invalidate on registration, return independent
+  arrays, and bound retained entries by registered static paths.
+- Allocate capture-name tracking only for routes with parameters or wildcards.
+
+### Security
+
+- Isolate router handler tables from object prototypes. Prototype-named HTTP
+  methods no longer produce false matches or distinguish internal routes from
+  absent paths through 500-versus-404 responses.
+- Reject nonterminal wildcards instead of silently broadening their route.
+- Reject empty, repeated, and prototype-sensitive parameter/wildcard names
+  before mutating the routing table. Conflicting wildcard names now throw,
+  matching the existing parameter-name conflict policy.
+
+### Compatibility
+
+- Routes such as `/assets/*path/private` now fail registration. Move fixed
+  segments before the terminal wildcard, or use named parameters when a suffix
+  must be matched. Do not remove the suffix unless broader matching is intended.
+- Give every capture a nonempty, unique name other than `__proto__`,
+  `constructor`, or `prototype`; update parameter schemas and handlers together.
+  Methods sharing a wildcard position must use the same capture name.
+- Rejected paths no longer advertise methods through `Allow`. Overlapping
+  static and dynamic paths advertise the registered methods dispatch can reach.
+
 ## [1.3.3] - 2026-09-10
 
 ### Security

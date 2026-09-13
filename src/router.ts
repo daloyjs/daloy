@@ -3,7 +3,8 @@
  *
  * Performance:
  *   - Exact static (parameter-free) paths resolve via a Map lookup — O(1).
- *   - Dynamic paths walk a trie, O(path-segments) regardless of route count.
+ *   - Dynamic paths walk a segment trie, visiting static branches before
+ *     parameters and wildcards. Backtracking cost depends on overlapping routes.
  *   - Path normalization and splitting avoid regular expressions.
  *
  * Safety:
@@ -14,6 +15,7 @@
  */
 
 import type { HttpMethod } from "./types.js";
+import { isForbiddenObjectKey } from "./security.js";
 
 /** Result of {@link Router.find}: the matched handler plus extracted path params. */
 export interface RouteMatch<T> {
@@ -23,26 +25,34 @@ export interface RouteMatch<T> {
   params: Record<string, string>;
 }
 
+const handlerPrototype = Object.freeze(Object.create(null));
+
 interface Node<T> {
   children: Map<string, Node<T>>;
   paramChild?: { name: string; node: Node<T> };
   wildcardChild?: { name: string; node: Node<T> };
-  handlers: Partial<Record<HttpMethod, T>>;
+  handlers?: Partial<Record<HttpMethod, T>>;
 }
 
 function createNode<T>(): Node<T> {
-  return { children: new Map(), handlers: {} };
+  return { children: new Map(), handlers: undefined };
 }
 
 /**
  * Trie/radix router with a static-route fast path. Registers handlers via
  * {@link Router.add} and resolves them with {@link Router.find}. Rejects
- * duplicate routes, duplicate operationIds, conflicting param names, and
- * path-traversal lookups.
+ * duplicate routes, duplicate operationIds, conflicting or unsafe capture names,
+ * and raw path-traversal lookups.
  */
 export class Router<T> {
   private root = createNode<T>();
   private operationIds = new Set<string>();
+  private hasDynamicRoutes = false;
+  private revision = 0;
+  private staticMethods = new Map<
+    string,
+    { revision: number; methods: HttpMethod[] }
+  >();
   /** Static (no-param/no-wildcard) routes for O(1) lookup. */
   private staticTable = new Map<string, Partial<Record<HttpMethod, T>>>();
 
@@ -53,27 +63,57 @@ export class Router<T> {
    *
    * @param method - HTTP method to register the handler under.
    * @param path - Route path; supports `:param` and a trailing `*wildcard`.
-   * @param handler - Value returned by {@link Router.find} on a match.
+   * @param handler - Value returned by {@link Router.find} on a match, including
+   *   falsy values or `undefined`.
    * @param operationId - Optional unique id; tracked to reject duplicates.
    * @throws Error on a duplicate route, duplicate `operationId`, or conflicting
-   *   param names at the same trie position.
+   *   parameter or wildcard names at the same trie position, empty, repeated,
+   *   or prototype-sensitive capture names, or a nonterminal wildcard.
+   *   Failed registration does not reserve the `operationId`.
    */
-  add(method: HttpMethod, path: string, handler: T, operationId?: string): void {
+  add(
+    method: HttpMethod,
+    path: string,
+    handler: T,
+    operationId?: string,
+  ): void {
     const segments = splitPath(path);
     if (operationId && this.operationIds.has(operationId))
       throw new Error(`Duplicate operationId: "${operationId}"`);
-    if (operationId) this.operationIds.add(operationId);
-    const isStatic = segments.every((s) => !s.startsWith(":") && !s.startsWith("*"));
+    let captureNames: Set<string> | undefined;
+    for (let index = 0; index < segments.length; index++) {
+      const segment = segments[index]!;
+      const wildcard = segment.startsWith("*");
+      if (wildcard && index !== segments.length - 1) {
+        throw new Error(`Wildcard must be the terminal segment: ${path}`);
+      }
+      if (wildcard || segment.startsWith(":")) {
+        const name =
+          wildcard && segment.length === 1 ? "wildcard" : segment.slice(1);
+        if (!name || isForbiddenObjectKey(name) || captureNames?.has(name)) {
+          throw new Error(
+            `Invalid or duplicate capture name: "${name}" in ${path}`,
+          );
+        }
+        (captureNames ??= new Set<string>()).add(name);
+      }
+    }
+    const isStatic = captureNames === undefined;
     const normalized = "/" + segments.join("/");
 
     if (isStatic) {
       let entry = this.staticTable.get(normalized);
       if (!entry) {
-        entry = {};
+        entry = Object.create(handlerPrototype) as Partial<
+          Record<HttpMethod, T>
+        >;
         this.staticTable.set(normalized, entry);
       }
-      if (entry[method]) throw new Error(`Duplicate route: ${method} ${path}`);
+      if (Object.hasOwn(entry, method))
+        throw new Error(`Duplicate route: ${method} ${path}`);
       entry[method] = handler;
+      this.revision++;
+      if (operationId) this.operationIds.add(operationId);
       return;
     }
 
@@ -85,13 +125,19 @@ export class Router<T> {
           node.paramChild = { name, node: createNode<T>() };
         } else if (node.paramChild.name !== name) {
           throw new Error(
-            `Conflicting param names at same position: "${node.paramChild.name}" vs "${name}"`
+            `Conflicting param names at same position: "${node.paramChild.name}" vs "${name}"`,
           );
         }
         node = node.paramChild.node;
       } else if (seg.startsWith("*")) {
         const name = seg.length > 1 ? seg.slice(1) : "wildcard";
-        node.wildcardChild = { name, node: createNode<T>() };
+        if (!node.wildcardChild) {
+          node.wildcardChild = { name, node: createNode<T>() };
+        } else if (node.wildcardChild.name !== name) {
+          throw new Error(
+            `Conflicting wildcard names at same position: "${node.wildcardChild.name}" vs "${name}"`,
+          );
+        }
         node = node.wildcardChild.node;
         break;
       } else {
@@ -104,14 +150,24 @@ export class Router<T> {
       }
     }
 
-    if (node.handlers[method]) throw new Error(`Duplicate route: ${method} ${path}`);
+    node.handlers ??= Object.create(handlerPrototype) as Partial<
+      Record<HttpMethod, T>
+    >;
+    if (Object.hasOwn(node.handlers, method))
+      throw new Error(`Duplicate route: ${method} ${path}`);
     node.handlers[method] = handler;
+    this.hasDynamicRoutes = true;
+    this.revision++;
+    if (operationId) this.operationIds.add(operationId);
   }
 
   /**
    * Look up the handler registered for the given method and path. Tries the
    * static fast path first, then walks the trie, extracting and decoding path
    * params. Path-traversal lookups (`..`, `//`) are rejected up front.
+   * Handler tables inherit only from an empty, frozen, prototype-free base:
+   * Object.prototype properties never count as routes, including for untyped
+   * runtime method values.
    *
    * @param method - HTTP method to match.
    * @param path - Request path to resolve, including any dynamic segments.
@@ -130,38 +186,67 @@ export class Router<T> {
     if (!staticEntry && path.endsWith("/")) {
       staticEntry = this.staticTable.get(trimTrailingSlashes(path));
     }
-    if (staticEntry && staticEntry[method]) {
-      return { handler: staticEntry[method]!, params: {} };
+    if (staticEntry) {
+      const handler = staticEntry[method];
+      if (handler !== undefined || Object.hasOwn(staticEntry, method)) {
+        return { handler: handler as T, params: {} };
+      }
     }
 
     const segments = splitPath(path);
     const params: Record<string, string> = {};
     const found = this.walk(this.root, segments, 0, params);
     if (!found) return undefined;
-    const handler = found.handlers[method];
-    if (!handler) return undefined;
-    return { handler, params };
+    const handler = found.handlers![method];
+    if (handler === undefined && !Object.hasOwn(found.handlers!, method))
+      return undefined;
+    return { handler: handler as T, params };
   }
 
-  /** Returns the set of methods registered at this exact path (for 405 responses). */
+  /**
+   * Return the methods registered at the matched path for 405 responses.
+   * Static-only routers skip trie traversal. Results are fresh arrays and
+   * reflect routes registered after earlier lookups. Only validated registered
+   * static paths are cached, bounding cache size by the static route count.
+   * @param path - Request path, subject to the same traversal and empty-segment
+   *   rejection as {@link Router.find}.
+   * @returns Registered methods, or an empty array for rejected or unmatched paths.
+   */
   allowedMethods(path: string): HttpMethod[] {
+    const cached = this.staticMethods.get(path);
+    if (cached?.revision === this.revision) return cached.methods.slice();
+    if (path.includes("/../") || path.endsWith("/..") || path.includes("//")) {
+      return [];
+    }
     let fromStatic = this.staticTable.get(path);
     if (!fromStatic && path.endsWith("/")) {
       fromStatic = this.staticTable.get(trimTrailingSlashes(path));
     }
-    if (fromStatic) return Object.keys(fromStatic) as HttpMethod[];
-    const segments = splitPath(path);
-    const found = this.walk(this.root, segments, 0, {});
-    return found ? (Object.keys(found.handlers) as HttpMethod[]) : [];
+    const found = this.hasDynamicRoutes
+      ? this.walk(this.root, splitPath(path), 0, {})
+      : undefined;
+    if (!fromStatic)
+      return found ? (Object.keys(found.handlers!) as HttpMethod[]) : [];
+    const methods = Object.keys(fromStatic) as HttpMethod[];
+    if (found) {
+      for (const method of Object.keys(found.handlers!) as HttpMethod[]) {
+        if (!Object.hasOwn(fromStatic, method)) methods.push(method);
+      }
+    }
+    this.staticMethods.set(trimTrailingSlashes(path), {
+      revision: this.revision,
+      methods,
+    });
+    return methods.slice();
   }
 
   private walk(
     node: Node<T>,
     segs: string[],
     i: number,
-    params: Record<string, string>
+    params: Record<string, string>,
   ): Node<T> | undefined {
-    if (i === segs.length) return node;
+    if (i === segs.length) return node.handlers ? node : undefined;
 
     const seg = segs[i]!;
     const staticNext = node.children.get(seg);

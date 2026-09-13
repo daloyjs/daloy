@@ -17,29 +17,37 @@ import { Router } from "../src/router.js";
 import type { RouteMatch } from "../src/router.js";
 
 const r = new Router<{ id: number }>();
+const staticRouter = new Router<{ id: number }>();
 for (let i = 0; i < 500; i++) {
   r.add("GET", `/static/${i}/items`, { id: i });
-  r.add("GET", `/users/:userId/posts/${i}/comments/:commentId`, { id: i + 10000 });
+  staticRouter.add("GET", `/static/${i}/items`, { id: i });
+  r.add("GET", `/users/:userId/posts/${i}/comments/:commentId`, {
+    id: i + 10000,
+  });
 }
+
+type BenchmarkResult = RouteMatch<{ id: number }> | string[] | undefined;
 
 type Scenario = {
   label: string;
   iters: number;
-  fn: () => RouteMatch<{ id: number }> | undefined;
-  verify: (result: RouteMatch<{ id: number }> | undefined) => boolean;
+  fn: () => BenchmarkResult;
+  verify: (result: BenchmarkResult) => boolean;
 };
 
 const rounds = 7;
 const warmupIterations = 2_000;
 
 function bench(scenario: Scenario): number {
-  let observed: RouteMatch<{ id: number }> | undefined;
+  let observed: BenchmarkResult;
   for (let i = 0; i < warmupIterations; i++) observed = scenario.fn();
   const t0 = performance.now();
   for (let i = 0; i < scenario.iters; i++) observed = scenario.fn();
   const t1 = performance.now();
   if (!scenario.verify(observed)) {
-    throw new Error(`${scenario.label}: lookup result failed correctness verification`);
+    throw new Error(
+      `${scenario.label}: lookup result failed correctness verification`,
+    );
   }
   return (scenario.iters / (t1 - t0)) * 1_000;
 }
@@ -49,13 +57,17 @@ const scenarios: Scenario[] = [
     label: "static route lookup",
     iters: 1_000_000,
     fn: () => r.find("GET", "/static/250/items"),
-    verify: (result) => result?.handler.id === 250 && Object.keys(result.params).length === 0,
+    verify: (result) =>
+      !Array.isArray(result) &&
+      result?.handler.id === 250 &&
+      Object.keys(result.params).length === 0,
   },
   {
     label: "dynamic 4-segment lookup",
     iters: 500_000,
     fn: () => r.find("GET", "/users/abc/posts/250/comments/xyz"),
     verify: (result) =>
+      !Array.isArray(result) &&
       result?.handler.id === 10_250 &&
       result.params.userId === "abc" &&
       result.params.commentId === "xyz",
@@ -66,9 +78,32 @@ const scenarios: Scenario[] = [
     fn: () => r.find("GET", "/no/such/path"),
     verify: (result) => result === undefined,
   },
+  {
+    label: "Allow static-only",
+    iters: 1_000_000,
+    fn: () => staticRouter.allowedMethods("/static/250/items"),
+    verify: (result) =>
+      Array.isArray(result) && result.length === 1 && result[0] === "GET",
+  },
+  {
+    label: "Allow static in mixed router",
+    iters: 1_000_000,
+    fn: () => r.allowedMethods("/static/250/items"),
+    verify: (result) =>
+      Array.isArray(result) && result.length === 1 && result[0] === "GET",
+  },
+  {
+    label: "Allow dynamic",
+    iters: 500_000,
+    fn: () => r.allowedMethods("/users/abc/posts/250/comments/xyz"),
+    verify: (result) =>
+      Array.isArray(result) && result.length === 1 && result[0] === "GET",
+  },
 ];
 
-const samples = new Map(scenarios.map((scenario) => [scenario.label, [] as number[]]));
+const samples = new Map(
+  scenarios.map((scenario) => [scenario.label, [] as number[]]),
+);
 for (let round = 0; round < rounds; round++) {
   const offset = round % scenarios.length;
   for (let i = 0; i < scenarios.length; i++) {
@@ -77,7 +112,8 @@ for (let round = 0; round < rounds; round++) {
   }
 }
 
-const format = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const format = (value: number) =>
+  value.toLocaleString("en-US", { maximumFractionDigits: 0 });
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)]!;
@@ -88,7 +124,7 @@ for (const scenario of scenarios) {
   const values = samples.get(scenario.label)!;
   console.log(
     `${scenario.label.padEnd(30)} ${format(median(values)).padStart(12)} ops/sec` +
-      `  (range ${format(Math.min(...values))}–${format(Math.max(...values))})`
+    `  (range ${format(Math.min(...values))}–${format(Math.max(...values))})`,
   );
 }
 
@@ -138,6 +174,6 @@ writeFileSync(
       }),
     },
     null,
-    2
-  )}\n`
+    2,
+  )}\n`,
 );

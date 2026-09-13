@@ -491,7 +491,8 @@ miss                         7,742,635 ops/sec
 
 - After traversal checks, exact static routes resolve with an allocation-free
   `Map.get` fast path — **~26M ops/sec**.
-- Dynamic routes walk a trie, **O(path-segments)** regardless of route count.
+- Dynamic routes walk a segment trie in path-length time without backtracking;
+  overlapping routes can require visiting additional branches.
 - Body parsing is lazy and only runs when a route declares a body schema.
 - Path normalization and splitting use index/character scans rather than
   regular expressions.
