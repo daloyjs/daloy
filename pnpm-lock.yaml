@@ -133,7 +133,7 @@ importers:
         version: 7.0.2
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.5.4
 
   packages/create-daloy: {}
 
@@ -144,7 +144,7 @@ importers:
         version: link:..
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.5.4
     devDependencies:
       '@hey-api/openapi-ts':
         specifier: 0.0.0-next-20260711024907
@@ -670,8 +670,8 @@ packages:
     resolution: {integrity: sha512-g/eziiSUNBSsdDJtCLB8bdYEUMj4jR7AGeUo96p/3dTafgjHhpF4RiCFPiRILwjQoDXx5MqkBr4fwWtR3Ky4Wg==}
     engines: {node: '>=20'}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
 snapshots:
 
@@ -1082,4 +1082,4 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
 
-  zod@4.4.3: {}
+  zod@4.5.4: {}
