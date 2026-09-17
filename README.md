@@ -659,7 +659,7 @@ The framework refuses to start (or to construct) when configuration is unsafe:
 - `combine` primitives: `every`, `some`, `except`.
 - `requestId()` with cryptographic ids; `trustIncoming: false` by default so client-supplied `X-Request-ID` headers cannot poison logs.
 - `bearerAuth()` and `basicAuth()` with per-scheme `verify(credentials, ctx)` revalidation hooks, typed-context `onAuthSuccess` callback, and `Cache-Control: no-store` on every 401 challenge.
-- `jwk()` asymmetric-only JWKS middleware: refuses `HS*` at construction, cross-checks `kid` and JWT-vs-JWK `alg`, requires `https://` JWKS URLs with TTL caching + in-flight-promise dedup, normalizes `scope` / `scp` / `scopes` claims.
+- `jwk()` asymmetric-only JWKS middleware: refuses `HS*` at construction, cross-checks `kid` and JWT-vs-JWK `alg`, requires `https://` JWKS URLs with TTL caching + in-flight-promise dedup, normalizes `scope` / `scp` / `scopes` claims. Optional `maxLifetimeSeconds` requires expiry and caps accepted token lifetimes; see [authentication safeguards](https://daloyjs.dev/docs/security/auth-slice).
 - `requireScopes()` with RFC-6750 `WWW-Authenticate: Bearer` challenge and per-request scope aggregation.
 - `session()` with signed cookies and pluggable stores.
 - `idempotency()` with `Idempotency-Key` fingerprinting + byte-for-byte response replay, in-flight `409`, `422` on key reuse with a different payload, and a pluggable `IdempotencyStore` (in-memory default) at `@daloyjs/core/idempotency`.

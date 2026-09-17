@@ -94,6 +94,13 @@ export interface JwkOptions {
   issuer?: string | string[];
   /** Optional expected audience (string or allowlist). */
   audience?: string | string[];
+  /**
+   * Maximum accepted token lifetime in seconds. When set, requires `exp` and
+   * enforces `exp - (iat ?? now) <= maxLifetimeSeconds` through the JWT verifier.
+   * Must be a positive integer. Omit to preserve uncapped verification,
+   * which validates `exp` when present but does not require it.
+   */
+  maxLifetimeSeconds?: number;
   /** Clock skew tolerance applied to `exp` / `nbf` / `iat`. Default `0`. */
   clockSkewSeconds?: number;
   /** `WWW-Authenticate` realm. Default: `"api"`. */
@@ -260,6 +267,7 @@ function makeJwksLoader(
  * header `alg` against the JWK's own `alg` (when present).
  * URL sources are fetched with redirects disabled; redirecting refreshes
  * follow the existing last-good-key grace policy, never installing new keys.
+ * Set `maxLifetimeSeconds` to require expiry and cap accepted token lifetimes.
  *
  * @example
  * ```ts
@@ -286,7 +294,7 @@ function makeJwksLoader(
  * @returns A {@link Hooks} object to pass to `app.use()` or a route's `hooks`;
  *   failed auth yields a `401` problem+json with `WWW-Authenticate`.
  * @throws {Error} at construction for missing options, an empty or
- *   symmetric-containing allowlist, invalid TTLs, or a malformed realm.
+ *   symmetric-containing allowlist, invalid TTLs or lifetime cap, or a malformed realm.
  * @since 0.22.0
  */
 export function jwk(opts: JwkOptions): Hooks {
@@ -301,6 +309,16 @@ export function jwk(opts: JwkOptions): Hooks {
       throw new Error(
         `jwk(): algorithm "${String(alg)}" is not asymmetric — symmetric (HS*) algorithms are refused by jwk() to close the JWKS confused-deputy attack.`
       );
+    }
+  }
+  if (opts.maxLifetimeSeconds !== undefined) {
+    if (
+      typeof opts.maxLifetimeSeconds !== "number" ||
+      !Number.isFinite(opts.maxLifetimeSeconds) ||
+      !Number.isInteger(opts.maxLifetimeSeconds) ||
+      opts.maxLifetimeSeconds <= 0
+    ) {
+      throw new Error("jwk(): maxLifetimeSeconds must be a positive integer.");
     }
   }
   if (opts.fetchTtlSeconds !== undefined) {
@@ -347,6 +365,7 @@ export function jwk(opts: JwkOptions): Hooks {
       algorithms,
       issuer: opts.issuer,
       audience: opts.audience,
+      maxLifetimeSeconds: opts.maxLifetimeSeconds,
       clockSkewSeconds: opts.clockSkewSeconds,
       // Resolver picks the JWK by `kid` and enforces the alg cross-check.
       key: async (header: Record<string, unknown>) => {

@@ -193,7 +193,7 @@ export default function Page() {
             kind: "response",
           },
         ]}
-        caption="jwk() resolves the signing key by kid from the JWKS source, cross-checks the JWT-header alg against the JWK, and refuses HS* so the confused-deputy attack cannot be configured. Tokens are always cryptographically verified and exp-checked."
+        caption="jwk() resolves the signing key by kid from the JWKS source, cross-checks the JWT-header alg against the JWK, and refuses HS*. Signatures are always verified; exp is checked when present and required when maxLifetimeSeconds is configured."
       />
 
       <CodeBlock
@@ -208,6 +208,7 @@ app.use(
     jwks: "https://login.example.com/.well-known/jwks.json",
     issuer: "https://login.example.com/",
     audience: "https://api.example.com",
+    maxLifetimeSeconds: 300,
     fetchTtlSeconds: 600,
     maxStaleSeconds: 3600,
     realm: "api",
@@ -230,6 +231,16 @@ app.use(
         claims and dedupes the result.
       </p>
       <p>
+        <code>maxLifetimeSeconds</code> is an optional positive integer. The
+        example requires <code>exp</code> and rejects tokens whose lifetime
+        exceeds five minutes with <code>401 invalid_token</code>. The check is
+        <code> exp - (iat ?? now) &lt;= maxLifetimeSeconds</code>, using the
+        verification time when <code>iat</code> is absent. It does not renew a
+        token or rotate its signing key. Zero, negative, fractional, and
+        non-finite values are refused at construction. When omitted, there is
+        no lifetime cap and <code>exp</code> is validated only when present.
+      </p>
+      <p>
         When the JWKS source is a URL, a TTL-expiry refresh that fails (network
         error, non-2xx, or malformed body) does not take down every request: the
         last successfully fetched key set keeps serving for a bounded{" "}
@@ -239,7 +250,25 @@ app.use(
         {". "}
         The first fetch is never eligible for this fallback, so an
         unreachable IdP at boot still fails closed, and tokens are always
-        cryptographically verified and <code>exp</code>-checked regardless.
+        cryptographically verified and <code>exp</code>-checked when present.
+        Removing a key at the provider does not immediately invalidate cached
+        keys. Setting <code>maxStaleSeconds: 0</code> disables stale fallback,
+        not the normal cache TTL; use a per-request revocation check when
+        offboarding must take effect immediately.
+      </p>
+
+      <h3 id="workload-identity-policy">Service-to-service policy</h3>
+      <p>
+        For machine callers, pin both <code>issuer</code> and{" "}
+        <code>audience</code>, set a short <code>maxLifetimeSeconds</code>, and
+        apply <code>requireScopes()</code> to protected routes. Both issuer and
+        audience checks are opt-in. Use distinct identities and secret stores
+        for each workload and environment; <code>env: "production"</code> does
+        not isolate credentials. The <code>verify</code> hook below can check
+        whether the verified service identity is still active in your own
+        store. DaloyJS does not inventory service accounts, rotate credentials,
+        detect credential reuse, or automate offboarding. Use an identity
+        provider and secret manager for those lifecycle controls.
       </p>
 
       <h2 id="2-per-scheme-verify-credentials-ctx-hook">

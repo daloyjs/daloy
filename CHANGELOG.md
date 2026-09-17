@@ -17,6 +17,18 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-09-17
+
+### Security
+
+- Add optional `jwk({ maxLifetimeSeconds })` so service-to-service tokens can
+  require `exp` and reject lifetimes above a positive integer cap
+  (`exp - (iat ?? now) <= maxLifetimeSeconds`). Invalid values throw at
+  construction; omitting the option keeps uncapped verification.
+- Document non-human identity boundaries: JWKS cache TTL is not revocation,
+  `env: "production"` is not isolation, and operators must own offboarding
+  and secret rotation.
+
 ## [1.3.4] - 2026-09-13
 
 ### Fixed
@@ -3281,7 +3293,11 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.3.5...HEAD
+[1.3.5]: https://github.com/daloyjs/daloy/compare/v1.3.4...v1.3.5
+[1.3.4]: https://github.com/daloyjs/daloy/compare/v1.3.3...v1.3.4
+[1.3.3]: https://github.com/daloyjs/daloy/compare/v1.3.2...v1.3.3
+[1.3.2]: https://github.com/daloyjs/daloy/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/daloyjs/daloy/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/daloyjs/daloy/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/daloyjs/daloy/compare/v1.2.0...v1.2.1

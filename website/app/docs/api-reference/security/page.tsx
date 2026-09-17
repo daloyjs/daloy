@@ -24,6 +24,13 @@ export default function Page() {
   return (
     <>
       <h1>API reference: Security &amp; auth</h1>
+      <AuthRole role="resource-server">
+        <p>
+          Token verification and route enforcement belong in your API. Use an
+          identity provider for credential issuance and lifecycle management;
+          the session and signing sections below describe their separate roles.
+        </p>
+      </AuthRole>
       <p>
         The security helper surface: hardening primitives, the SSRF and
         open-redirect guards, cookie helpers, JWT/JWK verification, temporal
@@ -271,6 +278,7 @@ interface JwkOptions {
   algorithms: JwkAlgorithm[];            // required, non-empty; HS* refused at construction
   issuer?: string | string[];
   audience?: string | string[];
+  maxLifetimeSeconds?: number;           // positive integer; requires exp; default: no cap
   clockSkewSeconds?: number;             // default: 0
   realm?: string;                        // WWW-Authenticate realm; default: "api"
   fetchTtlSeconds?: number;              // default: 300; URL sources only
@@ -279,6 +287,15 @@ interface JwkOptions {
   verify?: JwkVerifyHook;
 }`}
       />
+      <p>
+        When configured, <code>maxLifetimeSeconds</code> enforces{" "}
+        <code>exp - (iat ?? now) &lt;= maxLifetimeSeconds</code>. Missing expiry
+        or an excessive lifetime returns <code>401 invalid_token</code>;
+        invalid configuration throws at construction. Omission preserves
+        uncapped verification and permits tokens without <code>exp</code>.
+        See the <Link href="/docs/security/auth-slice">authentication safeguards</Link>{" "}
+        for a short-lived service-token configuration and revocation boundaries.
+      </p>
 
       <h2 id="temporal-claim-assertions">Temporal claim assertions</h2>
       <CodeBlock

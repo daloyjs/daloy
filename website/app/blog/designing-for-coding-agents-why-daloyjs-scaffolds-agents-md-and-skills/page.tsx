@@ -326,7 +326,6 @@ const CHECKLIST = `# Pre-flight: is your repo ready for coding agents?
 #    [ ] Each H2 is independently readable.
 #
 # 3) Conventions are enforced where possible.
-#    [ ] eslint config catches the rules AGENTS.md names.
 #    [ ] CI runs pnpm daloy inspect --check (see the CLI post).
 #    [ ] generated/ is .gitignored OR gated by git diff --exit-code.
 #

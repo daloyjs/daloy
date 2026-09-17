@@ -66,6 +66,36 @@ The RFC 9116 discovery entry point is [`security.txt`](https://daloyjs.dev/.well
   requests; intentionally unauthenticated endpoints still share their configured
   budget. Per-client concurrency caps do not replace a global resource limit.
 
+## Non-human identity boundaries
+
+DaloyJS supplies request-level controls, not an NHI lifecycle-management system.
+For service-to-service JWTs, configure `jwk()` with explicit `issuer`, `audience`,
+and a short `maxLifetimeSeconds`, then enforce route scopes with `requireScopes()`.
+The lifetime cap must be a positive integer; it requires `exp` and checks
+`exp - (iat ?? now) <= maxLifetimeSeconds`. Without the cap, expiry is checked
+only when present. See the [authentication safeguards](https://daloyjs.dev/docs/security/auth-slice)
+for configuration examples.
+
+- **Offboarding and expiry:** use `jwk({ verify })`, `bearerAuth({ verify })`, or
+  `createJwtVerifier({ isRevoked })` with an operator-owned revocation/identity
+  store. JWKS URL caching defaults to 300 seconds plus up to 3600 seconds of
+  stale fallback after refresh failures; key removal is not immediate revocation.
+  `maxStaleSeconds: 0` disables fallback, not the normal cache TTL. Token lifetime
+  limits do not rotate long-lived API keys or signing secrets.
+- **Permissions, isolation, and reuse:** route scopes do not constrain cloud IAM
+  or database privileges. Operators must provision separate workload identities,
+  environment-specific secrets, least-privilege policies, and rotation schedules.
+  `env: "production"` is not an isolation boundary. No cross-application credential
+  reuse detection or abandoned-account inventory is provided.
+- **Leakage and third parties:** logger redaction and repository secret scanning
+  reduce exposure but do not automatically revoke leaked credentials. Dependency
+  scanning is not third-party identity monitoring, and this repository's publishing
+  safeguards do not configure a consumer's cloud deployment.
+- **Human use of workload credentials:** mTLS/SPIFFE SAN allowlists restrict
+  accepted identities but do not attest who is using a copied private key. Use a
+  workload identity provider for issuance/attestation and a secret manager with
+  access auditing; DaloyJS does not implement those services.
+
 ## Redaction and origin boundaries
 
 Deep log objects and arrays beyond `maxDepth` are censored in full. Do not log

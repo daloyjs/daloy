@@ -278,6 +278,58 @@ test("jwk: verifies ES256 token through static JWKS, stamps user + scopes", asyn
   assert.deepEqual([...body.user.scopes].sort(), ["items:read", "items:write"]);
 });
 
+test("jwk: refuses invalid maxLifetimeSeconds at construction", () => {
+  for (const maxLifetimeSeconds of [0, -1, 0.5, NaN, Infinity, "60", null]) {
+    assert.throws(
+      () => jwk({
+        jwks: { keys: [] },
+        algorithms: ["ES256"],
+        maxLifetimeSeconds: maxLifetimeSeconds as number,
+      }),
+      /maxLifetimeSeconds must be a positive integer/
+    );
+  }
+});
+
+test("jwk: optional lifetime cap enforces expiry without changing uncapped verification", async () => {
+  const pair = await genEs256Pair();
+  const pub = await publicJwkFor(pair, "lifetime-key", "ES256");
+  const signer = createJwtSigner({
+    alg: "ES256",
+    key: await privateJwkFor(pair),
+    maxLifetimeSeconds: 7200,
+    acknowledgeNoExp: true,
+    env: "test",
+    header: { kid: "lifetime-key" },
+  });
+  const now = Math.floor(Date.now() / 1000);
+  const withinCap = await signer.sign({ sub: "service", iat: now, exp: now + 300 });
+  const overCap = await signer.sign({ sub: "service", iat: now, exp: now + 7200 });
+  const noExpiry = await signer.sign({ sub: "service", iat: now });
+
+  for (const maxLifetimeSeconds of [300, undefined]) {
+    const app = new App();
+    app.use(jwk({ jwks: { keys: [pub] }, algorithms: ["ES256"], maxLifetimeSeconds }));
+    app.route({
+      method: "GET",
+      path: "/service",
+      responses: { 200: { description: "ok" } },
+      handler: () => ({ status: 200 as const, body: { ok: true } }),
+    });
+    for (const token of [withinCap, overCap, noExpiry]) {
+      const response = await app.request(new Request("http://x/service", {
+        headers: { authorization: `Bearer ${token}` },
+      }));
+      const rejected = maxLifetimeSeconds !== undefined && token !== withinCap;
+      assert.equal(response.status, rejected ? 401 : 200);
+      if (rejected) {
+        assert.match(response.headers.get("www-authenticate") ?? "", /invalid_token/);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+      }
+    }
+  }
+});
+
 test("jwk: missing Authorization → 401 with WWW-Authenticate: Bearer realm", async () => {
   const app = new App();
   app.use(jwk({ jwks: { keys: [] }, algorithms: ["RS256"], realm: "scoped" }));

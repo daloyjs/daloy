@@ -19,7 +19,6 @@ Use these package scripts from `package.json`:
 - `pnpm dev` — `next dev`
 - `pnpm build` — `next build`
 - `pnpm start` — `next start`
-- `pnpm lint` — `eslint`
 - `pnpm format` — `prettier --write "**/*.{ts,tsx}"`
 - `pnpm typecheck` — `tsc --noEmit`
 
