@@ -687,6 +687,36 @@ test("[content-type] a body route rejects text/plain with 415", async () => {
   assert.equal(res.status, 415);
 });
 
+test("[content-type] a parameter that merely contains application/json is not JSON", async () => {
+  // CORS-safelisted: browsers may send this cross-site without a preflight.
+  // Substring matching used to parse it as JSON and run the handler.
+  const res = await bodyEchoApp().request("/echo", {
+    method: "POST",
+    headers: { "content-type": "text/plain; charset=application/json" },
+    body: JSON.stringify({ name: "x" }),
+  });
+  assert.equal(res.status, 415);
+});
+
+test("[content-type] application/json-patch+json is not the application/json allowlist entry", async () => {
+  const res = await bodyEchoApp().request("/echo", {
+    method: "POST",
+    headers: { "content-type": "application/json-patch+json" },
+    body: JSON.stringify({ name: "x" }),
+  });
+  assert.equal(res.status, 415);
+});
+
+test("[content-type] charset on application/json is still accepted", async () => {
+  const res = await bodyEchoApp().request("/echo", {
+    method: "POST",
+    headers: { "content-type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ name: "x" }),
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { name: "x" });
+});
+
 // ===========================================================================
 // 16. MASS ASSIGNMENT (request side) — extra keys must not reach the handler
 // ===========================================================================

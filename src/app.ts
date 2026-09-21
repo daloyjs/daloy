@@ -29,6 +29,8 @@ import {
   assertStrongSecret,
   timingSafeEqual,
   isForbiddenObjectKey,
+  isJsonMediaType,
+  mediaTypeEssence,
 } from "./security.js";
 import {
   createLogger,
@@ -318,7 +320,13 @@ export interface AppOptions {
   /** Hard cap on request body size in bytes. Default: 1 MiB. */
   bodyLimitBytes?: number;
 
-  /** Reject requests whose Content-Type isn't in this allowlist (when a body schema is declared). */
+  /**
+   * Reject requests whose Content-Type isn't in this allowlist (when a body
+   * schema is declared). Each entry is a media type (`application/json`);
+   * parameters such as `charset` are ignored, and a value matches only when
+   * its type/subtype equals an entry. A substring inside another type or a
+   * parameter (`text/plain; charset=application/json`) does not match.
+   */
   allowedContentTypes?: string[];
 
   /**
@@ -5926,7 +5934,7 @@ function validateContext(
         "application/x-www-form-urlencoded",
         "multipart/form-data",
       ];
-    if (!allowed.some((a) => ct.includes(a))) {
+    if (!contentTypeAllowed(ct, allowed)) {
       throw new UnsupportedMediaTypeError(ct || "(none)", allowed);
     }
     // Refuse an over-limit *declared* length here, before soliciting the body.
@@ -6051,6 +6059,15 @@ const TEXT_DECODER = new TextDecoder();
  * @throws {BadRequestError} When `Content-Length` is present but invalid.
  * @throws {PayloadTooLargeError} When the declared or actual size exceeds `limit`.
  */
+function contentTypeAllowed(contentType: string, allowed: readonly string[]): boolean {
+  const essence = mediaTypeEssence(contentType);
+  if (essence.length === 0) return false;
+  for (const entry of allowed) {
+    if (mediaTypeEssence(entry) === essence) return true;
+  }
+  return false;
+}
+
 function readBodyBytesFast(
   req: Request,
   limit: number,
@@ -6112,7 +6129,7 @@ function readBody(
   jsonMaxKeys = 10_000,
   jsonMaxDepth = 50,
 ): unknown | Promise<unknown> {
-  if (ct.includes("application/json")) {
+  if (isJsonMediaType(ct)) {
     const fast = readBodyBytesFast(req, limit);
     if (fast !== undefined)
       return parseJsonBodyBytes(fast, jsonMaxKeys, jsonMaxDepth);
@@ -6120,7 +6137,7 @@ function readBody(
       parseJsonBodyBytes(b, jsonMaxKeys, jsonMaxDepth),
     );
   }
-  if (ct.includes("application/x-www-form-urlencoded")) {
+  if (mediaTypeEssence(ct) === "application/x-www-form-urlencoded") {
     const fast = readBodyBytesFast(req, limit);
     if (fast !== undefined) return parseUrlencodedBodyBytes(fast);
     return readBodyLimited(req, limit).then(parseUrlencodedBodyBytes);
@@ -6134,7 +6151,7 @@ async function readBodySlow(
   limit: number,
   multipart?: AppOptions["multipart"],
 ): Promise<unknown> {
-  if (ct.includes("multipart/form-data")) {
+  if (mediaTypeEssence(ct) === "multipart/form-data") {
     // Fast-fail on an honestly-declared oversize body.
     const cl = req.headers.get("content-length");
     if (cl && Number(cl) > limit) {

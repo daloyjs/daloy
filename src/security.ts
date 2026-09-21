@@ -168,6 +168,37 @@ export function sanitizeHeaderValue(value: string): string {
 }
 
 /**
+ * Media type without parameters, lowercased.
+ *
+ * `text/plain; charset=application/json` is `text/plain`. Comparing this
+ * essence, rather than searching the raw header for a substring, is what
+ * stops a CORS-simple `text/plain` body from being parsed as JSON.
+ *
+ * @param value - A Content-Type header value. Already-lowercased input is fine.
+ * @returns The type/subtype token, or an empty string when there is none.
+ * @internal
+ */
+export function mediaTypeEssence(value: string): string {
+  const semi = value.indexOf(";");
+  return (semi === -1 ? value : value.slice(0, semi)).trim().toLowerCase();
+}
+
+/**
+ * Whether `contentType` is JSON per RFC 6838: `application/json`, or a
+ * structured suffix `+json` such as `application/vnd.api+json`. Parameters
+ * (`charset`) are ignored. A parameter that merely contains the letters
+ * `application/json` does not match.
+ *
+ * @param contentType - Content-Type header value.
+ * @returns `true` when the essence is JSON.
+ * @internal
+ */
+export function isJsonMediaType(contentType: string): boolean {
+  const essence = mediaTypeEssence(contentType);
+  return essence === "application/json" || (essence.endsWith("+json") && essence.includes("/"));
+}
+
+/**
  * Length-independent string comparison resistant to the *first-mismatch*
  * timing leak. Use whenever comparing secrets such as CSRF tokens, HMAC
  * signatures, or API keys; never use `===` for those comparisons.

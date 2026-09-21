@@ -417,6 +417,15 @@ test("createMcpHandler rejects POST requests without an application/json content
 
   assert.equal(res.status, 415);
   assert.equal(json.error?.message, "MCP POST requests must use application/json.");
+
+  const disguised = await handler(
+    new Request(ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "text/plain; charset=application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+    })
+  );
+  assert.equal(disguised.status, 415);
 });
 
 test("createMcpHandler acknowledges notifications and JSON-RPC responses with 202", async () => {

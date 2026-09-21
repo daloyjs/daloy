@@ -1,6 +1,6 @@
 import type { PathString, RouteDefinition } from "./types.js";
 import type { StandardSchemaV1 } from "./schema.js";
-import { safeJsonParse, safeJsonParseLimited } from "./security.js";
+import { mediaTypeEssence, safeJsonParse, safeJsonParseLimited } from "./security.js";
 
 /**
  * Latest MCP protocol version DaloyJS negotiates by default.
@@ -2197,7 +2197,9 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     }
 
     const contentType = request.headers.get("content-type") ?? "";
-    if (!contentType.toLowerCase().includes("application/json")) {
+    // Essence, not a substring: `text/plain; charset=application/json` is a
+    // CORS-simple type and must not be accepted as an MCP JSON body.
+    if (mediaTypeEssence(contentType) !== "application/json") {
       return rpcError(
         null,
         INVALID_REQUEST,

@@ -1076,6 +1076,54 @@ test("node adapter: an over-limit declared body is refused without soliciting it
   }
 });
 
+test("node adapter: a body between the app limit and the buffer cap is refused without 100", async () => {
+  // Default pre-buffer cap is 256 KiB. An app limit of 64 KiB left a window
+  // where Content-Length 70000 was pre-buffered and answered 100, then 413.
+  const app = new App({ logger: false, bodyLimitBytes: 64 * 1024 });
+  app.route({
+    method: "POST",
+    path: "/echo",
+    operationId: "echoPost",
+    request: { body: z.object({ value: z.string() }) as any },
+    responses: { 200: { description: "ok", body: z.object({ value: z.string() }) as any } },
+    handler: async ({ body }) => ({ status: 200 as const, body: body as { value: string } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const statuses = await collectStatusLines(
+      port,
+      "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+        "Content-Length: 70000\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n"
+    );
+    assert.deepEqual(statuses, [413], "must answer 413 alone, with no interim 100");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("[unhappy] node adapter: that same window does not 413 a route that never reads the body", async () => {
+  const app = new App({ logger: false, bodyLimitBytes: 64 * 1024 });
+  app.route({
+    method: "POST",
+    path: "/ignores-body",
+    operationId: "ignoresBody",
+    responses: { 200: { description: "ok" } },
+    acknowledgeNoResponseBodySchema: true,
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const statuses = await collectStatusLines(
+      port,
+      "POST /ignores-body HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\n" +
+        "Content-Length: 70000\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n"
+    );
+    assert.deepEqual(statuses, [200]);
+  } finally {
+    await handle.close();
+  }
+});
+
 test("[unhappy] node adapter: Expect never changes the outcome on a schema-less route", async () => {
   // The property that the reverted header-time refusal violated. A route with no
   // request body schema never applies `bodyLimitBytes`, because the body is never

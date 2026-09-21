@@ -142,10 +142,19 @@ export interface NodeServerHandle {
  */
 export function serve(app: App, opts: NodeServerOptions = {}): NodeServerHandle {
   const trustProxy = opts.trustProxy === true;
-  const bufferedBodyMaxBytes =
+  const requestedBufferCap =
     typeof opts.bufferedBodyMaxBytes === "number" && opts.bufferedBodyMaxBytes >= 0
       ? opts.bufferedBodyMaxBytes
       : DEFAULT_BUFFERED_BODY_MAX_BYTES;
+  // Pre-buffering also answers `Expect: 100-continue` immediately. A declared
+  // length above the app body limit but under the 256 KiB buffer cap used to
+  // take that path: the client was told to send a body the route then rejected
+  // with 413, and the adapter had already allocated it. Cap the fast path at
+  // the app limit so that window stays on the deferred-solicit path.
+  const bufferedBodyMaxBytes = Math.min(
+    requestedBufferCap,
+    app.getSecurityPosture().bodyLimitBytes,
+  );
   const connectionTimeoutMs = opts.connectionTimeoutMs ?? 30_000;
   // Node only *enforces* `headersTimeout` / `requestTimeout` when its periodic
   // connection checker runs, and that checker's default interval is 30s. With
