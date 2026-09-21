@@ -17,6 +17,20 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-09-21
+
+### Security
+
+- Compare request `Content-Type` by media-type essence, not substring.
+  `text/plain; charset=application/json` and `application/json-patch+json` no
+  longer satisfy an `application/json` allowlist. A `charset` parameter on a
+  real `application/json` body still matches. The MCP Streamable HTTP handler
+  uses the same rule.
+- Cap the Node adapter's eager body buffer and immediate `100 Continue` at
+  `bodyLimitBytes`. A declared length between that limit and the 256 KiB
+  pre-buffer cap is no longer invited onto the wire and then rejected with
+  413.
+
 ## [1.3.5] - 2026-09-17
 
 ### Security
@@ -3293,7 +3307,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.3.5...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.3.6...HEAD
+[1.3.6]: https://github.com/daloyjs/daloy/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/daloyjs/daloy/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/daloyjs/daloy/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/daloyjs/daloy/compare/v1.3.2...v1.3.3
