@@ -599,6 +599,23 @@ const worker = createJobWorker({
         <code>leaseMs</code> above your slowest expected attempt so the
         automatic heartbeat can keep the lease.
       </p>
+      <p>
+        A heartbeat that throws (a store outage, a dropped connection) is
+        logged as <code>jobs.heartbeat_failed</code> and never becomes an
+        unhandled rejection. After 3 consecutive failures (roughly one{" "}
+        <code>leaseMs</code> of failed beats) the worker assumes the lease is
+        gone, logs <code>jobs.lease_lost</code>, and aborts the local run
+        (since 1.3.7). A successful beat resets the counter.
+      </p>
+      <p>
+        A crashed worker (OOM, <code>SIGKILL</code>) never calls{" "}
+        <code>fail</code>, so the attempt budget is also enforced when an
+        expired lease is reclaimed: if the job already used its last attempt
+        it dead-letters with <code>lastError</code>{" "}
+        <code>&quot;lease expired after max attempts&quot;</code> instead of
+        running again (since 1.3.7). A process-crashing poison job therefore
+        stops after <code>maxAttempts</code> runs.
+      </p>
 
       <h2 id="status-machine">Job status machine</h2>
       <CodeBlock
@@ -609,8 +626,9 @@ running  --complete-----------------> completed  (terminal)
 running  --fail, attempts < max-----> delayed (runAt = now + backoff) or queued
 running  --fail, attempts >= max----> dead       (terminal)
 running  --JobFatalError------------> dead       (terminal)
-running  --lease expired------------> queued     (attempts +1: poison handlers
-                                                  cannot loop forever uncounted)
+running  --lease expired, attempts < max--> queued (attempts already counted)
+running  --lease expired, attempts >= max-> dead   (terminal, lastError =
+                                                    "lease expired after max attempts")
 queued / delayed / running --cancel-> cancelled  (terminal)
 completed / dead / cancelled: no transitions`}
       />
@@ -1099,20 +1117,23 @@ completed / dead / cancelled: no transitions`}
               priority, then oldest), set <code>running</code> + lease +
               owner, increment <code>attempts</code>. Two concurrent claims
               must never hand out the same job. <code>null</code> when idle.
+              An expired-lease job whose <code>attempts &gt;= maxAttempts</code>{" "}
+              must be dead-lettered, not claimed (see below).
             </td>
           </tr>
           <tr>
             <td>
-              <code>heartbeat(id, workerId, leaseUntil, now)</code>
+              <code>heartbeat(id, workerId, leaseUntil, now, attempt?)</code>
             </td>
             <td>
               Extend the lease while still owned. <code>false</code> means the
-              lease was lost. The caller must stop touching the job.
+              lease was lost (not running, wrong owner, stale attempt, or
+              already expired). The caller must stop touching the job.
             </td>
           </tr>
           <tr>
             <td>
-              <code>complete(id, workerId, now, result)</code>
+              <code>complete(id, workerId, now, result, attempt?)</code>
             </td>
             <td>
               Mark <code>completed</code> (terminal), storing an optional
@@ -1121,12 +1142,13 @@ completed / dead / cancelled: no transitions`}
           </tr>
           <tr>
             <td>
-              <code>fail(id, workerId, error, next, now)</code>
+              <code>fail(id, workerId, error, next, now, attempt?)</code>
             </td>
             <td>
               Apply <code>next</code>: requeue <code>delayed</code>/
               <code>queued</code>, or <code>dead</code> when the attempt
-              budget is spent. <code>false</code> when the lease was lost.
+              budget is spent. <code>false</code> when the lease was lost
+              (another worker, or a newer claim, owns the job).
             </td>
           </tr>
           <tr>
@@ -1155,6 +1177,63 @@ completed / dead / cancelled: no transitions`}
         </tbody>
       </table>
       <p>
+        Two rules for adapter authors (since 1.3.7). A third, optional
+        method, <code>takeReaped(queue, now)</code>, lets the worker report a
+        job your reaper dead-lettered: return (and forget) each such job once,
+        and the worker emits the usual <code>jobs.dead</code> log (with{" "}
+        <code>reason: &quot;lease_expired&quot;</code>) plus{" "}
+        <code>onFail</code> / <code>onDead</code>. Without it those jobs are
+        still <code>dead</code> in the store, just not announced.
+      </p>
+      <ul>
+        <li>
+          <strong>Attempt fencing.</strong> <code>heartbeat</code>,{" "}
+          <code>complete</code>, and <code>fail</code> receive an optional{" "}
+          <code>attempt</code> argument: the <code>attempts</code> value of the
+          caller&apos;s claim. When it is supplied, reject the write unless it
+          equals the record&apos;s current <code>attempts</code>. That stops a
+          stale run of the same <code>workerId</code> (an earlier claim) from
+          overwriting a newer claim. The parameter is optional for backward
+          compatibility; an adapter that ignores it fences on{" "}
+          <code>workerId</code> only, which is weaker.
+        </li>
+        <li>
+          <strong>Dead-letter on final lease expiry.</strong> Wherever your
+          store reclaims an expired lease (in <code>claim</code>,{" "}
+          <code>get</code>, or a reaper), a <code>running</code> job with{" "}
+          <code>attempts &gt;= maxAttempts</code> must become{" "}
+          <code>dead</code> with <code>lastError</code>{" "}
+          <code>&quot;lease expired after max attempts&quot;</code> instead of
+          going back to <code>queued</code>. Otherwise a job that crashes the
+          process reruns forever. As defence in depth the worker also refuses
+          to run a claimed job whose <code>attempts</code> exceeds{" "}
+          <code>maxAttempts</code> and dead-letters it with a{" "}
+          <code>JobFatalError</code>.
+        </li>
+      </ul>
+      <CodeBlock
+        language="ts"
+        code={`// Illustrative: \`row\` is your adapter's mutable stored record.
+// Fencing check shared by heartbeat / complete / fail.
+function ownedRunning(row: Row | undefined, workerId: string, attempt?: number) {
+  if (!row || row.status !== "running" || row.lockedBy !== workerId) return undefined;
+  if (attempt !== undefined && row.attempts !== attempt) return undefined; // stale claim
+  return row;
+}
+
+// Reaping an expired lease: never hand a spent job out again.
+if (row.status === "running" && row.leaseUntil !== null && row.leaseUntil < now) {
+  if (row.attempts >= row.maxAttempts) {
+    row.status = "dead";
+    row.lastError = "lease expired after max attempts";
+  } else {
+    row.status = "queued";
+  }
+  row.lockedBy = null;
+  row.leaseUntil = null;
+}`}
+      />
+      <p>
         A Redis adapter is application code. The sketch below is docs-only
         (implement <code>JobStore</code>, DaloyJS does not ship Redis):
       </p>
@@ -1179,13 +1258,15 @@ export class RedisJobStore implements JobStore {
     // Lua: ZRANGEBYSCORE queue:{q} up to now -> HSET job:{id} status=running,
     // lockedBy=workerId, leaseUntil=now+leaseMs, attempts+1 -> ZREM.
     // The SET-lock equivalent: SET job:{id}:lock workerId PX leaseMs NX.
-    // Also requeue records whose leaseUntil < now (lease-expired crashes).
+    // Also requeue records whose leaseUntil < now (lease-expired crashes),
+    // or mark them dead when attempts >= maxAttempts.
     // ...
   }
 
-  // heartbeat: extend PX only when the lock value is still workerId.
-  // complete / fail / cancel: compare-lock, update hash, publish nothing.
-  // get: HGETALL, then lazily requeue when leaseUntil < now.
+  // heartbeat: extend PX only when the lock value is still workerId
+  //   and, when attempt is passed, attempts === attempt.
+  // complete / fail / cancel: compare-lock (+ attempt), update hash.
+  // get: HGETALL, then lazily reap when leaseUntil < now (same dead rule).
 }`}
       />
       <p>
@@ -1767,7 +1848,8 @@ export class RedisJobStore implements JobStore {
               <code>maxAttempts</code>. Every claim increments{" "}
               <code>attempts</code>, including a claim that only happened
               because a lease expired. When the budget is spent, the next
-              failure is terminal instead of another retry.
+              failure is terminal instead of another retry, and so is the
+              next lease expiry (a crash on the final attempt).
             </td>
           </tr>
           <tr>
@@ -1899,7 +1981,8 @@ export class RedisJobStore implements JobStore {
               lease already expired cannot clobber the job that another
               worker now owns. The store returns <code>false</code> to the
               loser and its <code>AbortSignal</code> fires. The{" "}
-              <code>workerId</code> is the fencing token, and the pattern is
+              <code>workerId</code> plus the claimed <code>attempt</code>{" "}
+              number (since 1.3.7) form the fencing token, and the pattern is
               what stops a process that was paused (GC, a stalled VM) from
               writing stale results on resume.
             </td>
@@ -1910,6 +1993,7 @@ export class RedisJobStore implements JobStore {
             </td>
             <td>
               Returning a job whose lease expired to <code>queued</code>{" "}
+              (or to <code>dead</code> when its attempt budget is spent)
               lazily, on the next read or mutation, rather than running a
               background reaper loop.
             </td>

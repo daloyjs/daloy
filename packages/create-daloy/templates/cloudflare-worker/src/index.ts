@@ -13,14 +13,16 @@ const app = new App({
   // additional proxy in front of the Worker.
   behindProxy: { hops: 1 },
   // daloy-minimal:strip-start docs
-  // Auto-mounted docs (since `docs: true`): GET /openapi.json, /openapi.yaml,
-  // and /docs (Scalar UI). DaloyJS is dependency-free and the Scalar UI loads
-  // from a CDN, so this adds negligible Worker bundle size. Drop `docs` (and
-  // this `openapi` block) if you want the smallest possible bundle.
+  // `docs: "auto"` mounts GET /openapi.json, /openapi.yaml and /docs (Scalar
+  // UI) only outside production. With `production: true` above they stay off,
+  // so a deployed Worker does not publish its schema; set `docs: true` to
+  // publish them (or while developing). The Scalar UI loads from a CDN, so
+  // either way the bundle cost is negligible. Drop `docs` (and this `openapi`
+  // block) for the smallest possible bundle.
   openapi: {
     info: { title: "My Daloy Cloudflare API", version: "0.0.1" },
   },
-  docs: true,
+  docs: "auto",
   // daloy-minimal:strip-end docs
 });
 

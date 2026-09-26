@@ -6,14 +6,26 @@ import {
   responseCache,
   requireScopes,
 } from "../src/index.js";
-import { hasReplayScopes } from "../src/internal-replay.js";
+import {
+  AUTH_IDENTITY_MARKER,
+  getAuthIdentity,
+  hasReplayScopes,
+  markAuthIdentity,
+} from "../src/internal-replay.js";
 import { httpSignatureAuth, signRequest } from "../src/http-signatures.js";
 
 for (const kind of ["cache", "idempotency"] as const) {
   test(`${kind} cannot replay to a caller without a valid HTTP message signature`, async () => {
     const app = new App({ logger: false });
     const secret = crypto.getRandomValues(new Uint8Array(32));
-    app.use(kind === "cache" ? responseCache() : idempotency());
+    // Signed callers now bypass the cache by default (their identity is not in
+    // the URI key); opt in so this test still proves a stored entry cannot be
+    // replayed to an unsigned or forged caller.
+    app.use(
+      kind === "cache"
+        ? responseCache({ cacheAuthenticatedRequests: { clientIdentity: true } })
+        : idempotency(),
+    );
     app.use(
       httpSignatureAuth({
         algorithms: ["hmac-sha256"],
@@ -142,3 +154,16 @@ for (const kind of ["cache", "idempotency"] as const) {
     );
   });
 }
+
+test("auth identity marker records, combines and ignores non-string values", () => {
+  const state: Record<PropertyKey, unknown> = {};
+  assert.equal(getAuthIdentity(state), undefined);
+  markAuthIdentity(state, "mtls:a");
+  assert.equal(getAuthIdentity(state), "mtls:a");
+  markAuthIdentity(state, "mtls:a");
+  assert.equal(getAuthIdentity(state), "mtls:a", "re-marking the same identity is idempotent");
+  markAuthIdentity(state, "httpsig:k");
+  assert.equal(getAuthIdentity(state), "mtls:a\nhttpsig:k");
+  state[AUTH_IDENTITY_MARKER] = 42;
+  assert.equal(getAuthIdentity(state), undefined);
+});

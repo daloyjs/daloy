@@ -1067,7 +1067,25 @@ export default function Page() {
         expressions like <code>{"{+path}"}</code> are rejected at construction
         so the server never advertises a pattern it cannot serve.
       </p>
+      <p>
+        Templates are not compiled to a regular expression. Since 2.0.0 they
+        are matched in linear time, so a template such as{" "}
+        <code>{"docs://{name}.{ext}"}</code> cannot be driven into catastrophic
+        backtracking (ReDoS) by a crafted URI. Before any lookup,{" "}
+        <code>resources/read</code> also refuses a <code>params.uri</code>{" "}
+        longer than <code>maxResourceUriLength</code> (default{" "}
+        <code>8192</code> UTF-16 code units, since 1.3.7) with JSON-RPC{" "}
+        <code>-32602</code>.
+      </p>
       <CodeBlock code={TEMPLATES} />
+      <CodeBlock
+        code={`const mcp = createMcpHandler({
+  serverInfo: { name: "records-mcp", version: "1.0.0" },
+  resourceTemplates: [/* ... */],
+  // Tighten when your URIs are always short. Default: 8192.
+  maxResourceUriLength: 2048,
+});`}
+      />
 
       <h2 id="what-stays-out-of-core">What stays out of core</h2>
       <p>
@@ -1097,6 +1115,19 @@ export default function Page() {
         {". "}
         Unexpected errors become JSON-RPC internal errors and are redacted in
         production.
+      </p>
+      <p>
+        The raw message of an unexpected error is only included (as{" "}
+        <code>error.data.detail</code>) when <code>exposeInternalErrors</code>{" "}
+        is on. Since 2.0.0 the default fails closed: it is on only when{" "}
+        <code>process.env.NODE_ENV</code> is <code>&quot;development&quot;</code>{" "}
+        or <code>&quot;test&quot;</code>, so an unset <code>NODE_ENV</code>{" "}
+        redacts. When the handler is mounted with <code>mcpRoutes()</code> on
+        an App whose environment resolves to production (for example{" "}
+        <code>new App({"{"} env: &quot;production&quot; {"}"})</code>),
+        details are redacted whatever <code>NODE_ENV</code> says. Only an
+        explicit <code>exposeInternalErrors</code> value overrides both
+        signals.
       </p>
       <CodeBlock code={ERROR_HANDLING} />
 

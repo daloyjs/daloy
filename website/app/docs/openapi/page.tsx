@@ -90,8 +90,9 @@ const app = new App({
       />
 
       <p>
-        Use <code>docs: &quot;auto&quot;</code> to mount only when{" "}
-        <code>production: false</code>
+        Use <code>docs: &quot;auto&quot;</code> to mount only when the App is
+        not in production (the <code>create-daloy</code> templates default to
+        this, so a deployed API does not publish its schema)
         {", "}or leave it off (the default) and mount manually with the helpers
         below. Customize paths, UI, and tags via the object form:
       </p>

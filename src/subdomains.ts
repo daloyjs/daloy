@@ -19,7 +19,7 @@
  *
  * @since 0.24.0
  */
-export const PSL_SNAPSHOT_DATE = "2026-05-20";
+export const PSL_SNAPSHOT_DATE = "2026-09-24";
 
 /**
  * Bundled subset of the Public Suffix List. Hand-picked entries covering
@@ -62,7 +62,6 @@ export const PSL_PUBLIC_SUFFIXES: readonly string[] = [
   // single registrable domain would name an adjacent tenant.
   "vercel.app",
   "netlify.app",
-  "netlify.com",
   "workers.dev",
   "pages.dev",
   "fly.dev",
@@ -77,7 +76,7 @@ export const PSL_PUBLIC_SUFFIXES: readonly string[] = [
   "firebaseapp.com",
   "web.app",
   "supabase.co",
-  "render.com",
+  "app.render.com",
   "onrender.com",
 ];
 
@@ -102,6 +101,8 @@ export interface SubdomainsOptions {
    * Whether the app is running in production. When `true` and the bundled
    * snapshot is older than {@link MAX_SNAPSHOT_AGE_DAYS}, the helper
    * throws on first call so deploys cannot ship with a stale PSL.
+   * The check applies only to the PSL path: a call with `baseDomain`
+   * never reads the snapshot and is not blocked by its age.
    * Defaults to `false`.
    */
   production?: boolean;
@@ -151,7 +152,7 @@ export interface SubdomainsResult {
  * @param hostname - Hostname to split (lowercased; a trailing FQDN dot is stripped).
  * @param opts - Optional pinned `baseDomain`, `extraSuffixes`, and the `production` staleness gate.
  * @returns The registrable {@link SubdomainsResult} (`baseDomain`, `subdomain`, `labels`).
- * @throws {Error} On an empty hostname, a host outside a declared `baseDomain`, or a stale PSL snapshot in production.
+ * @throws {Error} On an empty hostname, a host outside a declared `baseDomain`, or (PSL path only, i.e. no `baseDomain`) a stale PSL snapshot in production.
  * @since 0.24.0
  */
 export function subdomains(hostname: string, opts: SubdomainsOptions = {}): SubdomainsResult {
@@ -161,7 +162,19 @@ export function subdomains(hostname: string, opts: SubdomainsOptions = {}): Subd
   // Strip a trailing dot (FQDN form) and lowercase for the PSL match.
   const host = hostname.replace(/\.$/, "").toLowerCase();
 
-  // Production-mode staleness check.
+  if (opts.baseDomain) {
+    const base = opts.baseDomain.toLowerCase();
+    if (host !== base && !host.endsWith(`.${base}`)) {
+      throw new Error(
+        `subdomains(): host ${JSON.stringify(hostname)} is not under declared baseDomain ${JSON.stringify(opts.baseDomain)}.`
+      );
+    }
+    return resultFor(host, base);
+  }
+
+  // Production-mode staleness check. Only the PSL path consults the bundled
+  // snapshot, so a pinned `baseDomain` (above) is never blocked by it; the
+  // PSL path stays fail-closed.
   if (opts.production) {
     const snap = opts._snapshotDate ?? PSL_SNAPSHOT_DATE;
     const now = opts._now ?? new Date();
@@ -176,16 +189,6 @@ export function subdomains(hostname: string, opts: SubdomainsOptions = {}): Subd
           `(threshold ${MAX_SNAPSHOT_AGE_DAYS} days). Refresh PSL_PUBLIC_SUFFIXES or upgrade @daloyjs/core.`
       );
     }
-  }
-
-  if (opts.baseDomain) {
-    const base = opts.baseDomain.toLowerCase();
-    if (host !== base && !host.endsWith(`.${base}`)) {
-      throw new Error(
-        `subdomains(): host ${JSON.stringify(hostname)} is not under declared baseDomain ${JSON.stringify(opts.baseDomain)}.`
-      );
-    }
-    return resultFor(host, base);
   }
 
   const suffixes = new Set<string>([...PSL_PUBLIC_SUFFIXES, ...(opts.extraSuffixes ?? [])]);

@@ -277,6 +277,12 @@ class TableDeadLetterSink implements WebhookDeadLetterSink {
         never default it to the bare global <code>fetch</code> for
         subscriber-controlled URLs.
       </p>
+      <p>
+        With the default transport, the per-attempt <code>timeoutMs</code>{" "}
+        also bounds a subscriber reached over the DNS-pinned <code>http:</code>{" "}
+        path, and a <code>307</code>/<code>308</code> from the subscriber is
+        followed once with the same signed body (since 1.3.7).
+      </p>
     </>
   );
 }

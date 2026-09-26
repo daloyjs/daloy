@@ -888,3 +888,269 @@ test("jobs: ctx.heartbeat extends the lease while a long job runs", async () => 
   const done = (await queue.get(job.id))!;
   assert.equal(done.status, "completed"); // heartbeats kept the lease alive
 });
+
+// ── deepsec 2026-09-26 regressions ──────────────────────────────────
+
+function captureLogger() {
+  const events: Array<Record<string, unknown>> = [];
+  const push = (obj: object | string) => {
+    if (typeof obj !== "string") events.push(obj as Record<string, unknown>);
+  };
+  return { events, logger: { debug: push, info: push, warn: push, error: push } };
+}
+
+/** Fire only the pending auto-heartbeat timers (delay === leaseMs / 3). */
+function fireBeats(harness: ReturnType<typeof makeTimers>, leaseMs: number): void {
+  const delay = Math.max(1, Math.floor(leaseMs / 3));
+  for (const p of harness.pending()) {
+    if (p.delay === delay) {
+      harness.timers.clear(p.id);
+      p.cb();
+    }
+  }
+}
+
+test("jobs: a throwing store.heartbeat() in the auto-heartbeat is logged, not an unhandled rejection", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  let throws = 1;
+  const realBeat = store.heartbeat.bind(store);
+  (store as { heartbeat: MemoryJobStore["heartbeat"] }).heartbeat = (...args) => {
+    if (throws > 0) {
+      throws -= 1;
+      throw new Error("redis ECONNRESET");
+    }
+    return realBeat(...args);
+  };
+  const unhandled: unknown[] = [];
+  const onUnhandled = (e: unknown) => unhandled.push(e);
+  process.on("unhandledRejection", onUnhandled);
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let aborted = false;
+  const { events, logger } = captureLogger();
+  const { worker, harness } = makeWorker(
+    queue,
+    { "long.job": async ({ signal }) => { await gate; aborted = signal.aborted; } },
+    { logger }
+  );
+  try {
+    const { job } = await queue.enqueue({ name: "long.job", payload: {}, leaseMs: 900, timeoutMs: 0 });
+    const run = worker.runOnce();
+    await flush();
+    fireBeats(harness, 900); // transient failure
+    await flush();
+    await flush();
+    assert.ok(events.some((e) => e.event === "jobs.heartbeat_failed"));
+    // Still rescheduled after the failure; the next beat succeeds.
+    assert.ok(harness.pending().some((p) => p.delay === 300));
+    fireBeats(harness, 900);
+    await flush();
+    release();
+    assert.equal(await run, true);
+    assert.equal(aborted, false);
+    assert.equal((await queue.get(job.id))!.status, "completed");
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+});
+
+test("jobs: repeated heartbeat store errors are treated as a lost lease and abort the run", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  (store as { heartbeat: MemoryJobStore["heartbeat"] }).heartbeat = () => {
+    throw new Error("redis down");
+  };
+  const unhandled: unknown[] = [];
+  const onUnhandled = (e: unknown) => unhandled.push(e);
+  process.on("unhandledRejection", onUnhandled);
+  let sawAbort = false;
+  const { events, logger } = captureLogger();
+  const { worker, harness } = makeWorker(
+    queue,
+    {
+      "long.job": ({ signal }) =>
+        new Promise<void>((resolve) => {
+          signal.addEventListener("abort", () => { sawAbort = true; resolve(); });
+        }),
+    },
+    { logger }
+  );
+  try {
+    const { job } = await queue.enqueue({ name: "long.job", payload: {}, leaseMs: 900, timeoutMs: 0 });
+    const run = worker.runOnce();
+    await flush();
+    for (let i = 0; i < 3; i++) {
+      fireBeats(harness, 900);
+      await flush();
+      await flush();
+    }
+    assert.equal(await run, true);
+    assert.equal(sawAbort, true);
+    assert.equal(events.filter((e) => e.event === "jobs.heartbeat_failed").length, 3);
+    assert.ok(events.some((e) => e.event === "jobs.lease_lost"));
+    // Lost lease: the worker touched nothing; the record is still running.
+    assert.equal((await queue.get(job.id))!.status, "running");
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+});
+
+test("jobs: a lease expiring on the final attempt dead-letters instead of requeueing", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  const { job } = await queue.enqueue({ name: "a.b", payload: {}, maxAttempts: 2, leaseMs: 1_000 });
+  store.claim("default", "crashed-1", now); // attempt 1, worker dies
+  now += 1_001;
+  const second = store.claim("default", "crashed-2", now)!; // attempt 2 (legit last)
+  assert.equal(second.attempts, 2);
+  now += 1_001;
+  // Budget spent: reclaim must not hand it out again.
+  assert.equal(store.claim("default", "w3", now), null);
+  const dead = (await queue.get(job.id))!;
+  assert.equal(dead.status, "dead");
+  assert.equal(dead.lastError, "lease expired after max attempts");
+  assert.equal(dead.lockedBy, null);
+});
+
+test("jobs: the worker refuses to run a job claimed past maxAttempts (non-conforming store)", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  const realClaim = store.claim.bind(store);
+  // Simulate a durable adapter that forgets to dead-letter on lease expiry.
+  (store as { claim: MemoryJobStore["claim"] }).claim = (q, w, n) => {
+    const job = realClaim(q, w, n);
+    return job === null ? null : { ...job, attempts: job.maxAttempts + 1 };
+  };
+  let ran = false;
+  const { worker } = makeWorker(queue, { "a.b": () => { ran = true; } });
+  await queue.enqueue({ name: "a.b", payload: {}, maxAttempts: 2 });
+  assert.equal(await worker.runOnce(), true);
+  assert.equal(ran, false);
+});
+
+test("jobs: the worker still runs the final (== maxAttempts) attempt", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  const { job } = await queue.enqueue({ name: "a.b", payload: {}, maxAttempts: 2, leaseMs: 1_000 });
+  store.claim("default", "crashed-1", now);
+  now += 1_001;
+  let ranAt = 0;
+  const { worker } = makeWorker(queue, { "a.b": ({ attempt }) => { ranAt = attempt; } });
+  assert.equal(await worker.runOnce(), true);
+  assert.equal(ranAt, 2);
+  assert.equal((await queue.get(job.id))!.status, "completed");
+});
+
+test("jobs: attempt fencing rejects a stale claim of the same worker", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  const { job } = await queue.enqueue({ name: "a.b", payload: {}, leaseMs: 1_000, maxAttempts: 5 });
+  const first = store.claim("default", "w1", now)!;
+  now += 1_001;
+  const second = store.claim("default", "w1", now)!; // same worker reclaims
+  assert.equal(second.attempts, first.attempts + 1);
+  // Stale attempt 1 is refused on every transition.
+  assert.equal(store.heartbeat(job.id, "w1", now + 1_000, now, first.attempts), false);
+  assert.equal(
+    store.fail(job.id, "w1", "stale", { status: "delayed", runAt: now + 10 }, now, first.attempts),
+    false
+  );
+  assert.equal(store.complete(job.id, "w1", now, null, first.attempts), false);
+  assert.equal((await queue.get(job.id))!.status, "running");
+  // The live attempt still owns the job.
+  assert.equal(store.heartbeat(job.id, "w1", now + 1_000, now, second.attempts), true);
+  assert.equal(store.complete(job.id, "w1", now, null, second.attempts), true);
+  assert.equal((await queue.get(job.id))!.status, "completed");
+});
+
+test("jobs: a stale worker run's failure cannot clobber its own newer claim", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  let release1!: () => void;
+  let release2!: () => void;
+  const gates = [
+    new Promise<void>((r) => (release1 = r)),
+    new Promise<void>((r) => (release2 = r)),
+  ];
+  let runs = 0;
+  const { worker } = makeWorker(
+    queue,
+    { "slow.job": async () => { const g = gates[runs++]!; await g; if (runs === 1) throw new Error("late"); } },
+    { concurrency: 2 }
+  );
+  const { job } = await queue.enqueue({ name: "slow.job", payload: {}, leaseMs: 1_000, timeoutMs: 0 });
+  const run1 = worker.runOnce();
+  await flush();
+  now += 1_001; // lease 1 lapses while run 1 is stuck
+  const run2 = worker.runOnce();
+  await flush();
+  assert.equal(runs, 2);
+  release1(); // stale run 1 throws -> fail(attempt 1) must be rejected
+  await run1;
+  assert.equal((await queue.get(job.id))!.status, "running");
+  release2();
+  await run2;
+  const done = (await queue.get(job.id))!;
+  assert.equal(done.status, "completed");
+  assert.equal(done.attempts, 2);
+});
+
+test("jobs: a reaper dead-letter is reported once via jobs.dead + onFail/onDead", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  const { job } = await queue.enqueue({ name: "a.b", payload: {}, maxAttempts: 1, leaseMs: 1_000 });
+  store.claim("default", "crashed", now); // final attempt; the process dies
+  now += 1_001;
+  const dead: string[] = [];
+  const failed: Array<[string, boolean]> = [];
+  const { events, logger } = captureLogger();
+  const { worker } = makeWorker(queue, { "a.b": () => {} }, {
+    logger,
+    onDead: (j: Job, err: string) => { dead.push(`${j.id}:${err}`); },
+    onFail: (_j: Job, err: string, willRetry: boolean) => { failed.push([err, willRetry]); },
+  });
+  assert.equal(await worker.runOnce(), false); // nothing runnable
+  assert.deepEqual(dead, [`${job.id}:lease expired after max attempts`]);
+  assert.deepEqual(failed, [["lease expired after max attempts", false]]);
+  const logged = events.filter((e) => e.event === "jobs.dead");
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0]!.reason, "lease_expired");
+  // Drained: a second poll (or another worker) does not re-fire.
+  assert.equal(await worker.runOnce(), false);
+  assert.equal(dead.length, 1);
+  assert.deepEqual(store.takeReaped("default", now), []);
+});
+
+test("jobs: takeReaped only drains its own queue and ignores requeued leases", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  await queue.enqueue({ name: "a.b", payload: {}, maxAttempts: 1, leaseMs: 1_000, queue: "mail" });
+  const { job: retryable } = await queue.enqueue({ name: "a.b", payload: {}, maxAttempts: 3, leaseMs: 1_000 });
+  store.claim("mail", "crashed", now);
+  store.claim("default", "crashed", now);
+  now += 1_001;
+  assert.deepEqual(store.takeReaped("default", now), []); // requeued, not dead
+  assert.equal((await queue.get(retryable.id))!.status, "queued");
+  const mail = store.takeReaped("mail", now);
+  assert.equal(mail.length, 1);
+  assert.equal(mail[0]!.status, "dead");
+  assert.deepEqual(store.takeReaped("mail", now), []);
+});
+
+test("jobs: a throwing takeReaped does not stop the worker from claiming", async () => {
+  const store = makeStore();
+  const queue = makeQueue(store);
+  (store as { takeReaped: MemoryJobStore["takeReaped"] }).takeReaped = () => {
+    throw new Error("outbox down");
+  };
+  let ran = false;
+  const { events, logger } = captureLogger();
+  const { worker } = makeWorker(queue, { "a.b": () => { ran = true; } }, { logger });
+  await queue.enqueue({ name: "a.b", payload: {} });
+  assert.equal(await worker.runOnce(), true);
+  assert.equal(ran, true);
+  assert.ok(events.some((e) => e.event === "jobs.worker.take_reaped_failed"));
+});

@@ -938,6 +938,12 @@ export async function signWebhookPayload(opts: {
 // ---------------------------------------------------------------------------
 
 const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
+// C1 controls plus Unicode bidi / invisible format characters. U+202E (RLO)
+// renders `invoice\u202Efdp.exe` as `invoiceexe.pdf` (CWE-451 filename spoof).
+const BIDI_FORMAT_CHAR_RE = /[\u0080-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb]/g;
+// Unpaired UTF-16 surrogates: not valid Unicode, and `encodeURIComponent`
+// throws `URIError` on them.
+const LONE_SURROGATE_RE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 const WINDOWS_RESERVED_CHARS_RE = /[<>:"|?*]/g;
 const WINDOWS_RESERVED_NAMES = new Set([
   "con",
@@ -976,7 +982,10 @@ const WINDOWS_RESERVED_NAMES = new Set([
  *      discarded (`../../etc/passwd` → `passwd`, `C:\\foo\\bar.txt` →
  *      `bar.txt`).
  *   2. Strips NUL bytes and other control characters (NUL truncation is
- *      the classic `evil.png\0.exe` bypass).
+ *      the classic `evil.png\0.exe` bypass), C1 controls, and Unicode
+ *      bidi / invisible format characters (`U+202E` RLO would otherwise
+ *      display `invoice\u202Efdp.exe` as `invoiceexe.pdf`), plus unpaired
+ *      UTF-16 surrogates.
  *   3. Strips Windows-reserved characters (`<>:"|?*`) and replaces them
  *      with `_`.
  *   4. Strips leading dots so the result cannot be `.`, `..`, or a hidden
@@ -1012,7 +1021,11 @@ export function sanitizeFilename(name: string): string {
   const lastSep = Math.max(base.lastIndexOf("/"), base.lastIndexOf("\\"));
   if (lastSep !== -1) base = base.slice(lastSep + 1);
   // Step 2/3: strip control + Windows-reserved characters.
-  base = base.replace(CONTROL_CHAR_RE, "").replace(WINDOWS_RESERVED_CHARS_RE, "_");
+  base = base
+    .replace(CONTROL_CHAR_RE, "")
+    .replace(BIDI_FORMAT_CHAR_RE, "")
+    .replace(LONE_SURROGATE_RE, "")
+    .replace(WINDOWS_RESERVED_CHARS_RE, "_");
   // Step 4: strip leading dots so `.htaccess` / `..` / `.` cannot escape.
   base = base.replace(/^\.+/, "");
   // Step 5: trim trailing dots and spaces (Windows silently drops them).
@@ -1026,6 +1039,40 @@ export function sanitizeFilename(name: string): string {
     throw new BadRequestError(`Reserved filename: ${name}`);
   }
   return base;
+}
+
+/**
+ * Build an RFC 6266 `Content-Disposition` header value for a download,
+ * safe for any (possibly attacker-controlled) filename.
+ *
+ * The name is first passed through {@link sanitizeFilename}. The quoted
+ * `filename="..."` parameter gets an ASCII-only fallback (non-ASCII becomes
+ * `_`, `"` and `\` are replaced), and when the name is not plain ASCII an
+ * RFC 8187 `filename*=UTF-8''...` parameter carries the exact name
+ * percent-encoded. The result is always a valid Latin-1 header value, so
+ * `new Headers({ "content-disposition": ... })` can never throw on it.
+ *
+ * @param filename - Untrusted filename (e.g. from a route param or upload).
+ * @param type - Disposition type. Default `"attachment"`.
+ * @returns A header value such as `attachment; filename="a.txt"`.
+ * @throws {BadRequestError} Propagated from {@link sanitizeFilename} when the
+ *   name is empty after sanitization or is a Windows-reserved device name.
+ * @since 1.3.7
+ */
+export function contentDisposition(
+  filename: string,
+  type: "attachment" | "inline" = "attachment",
+): string {
+  const safe = sanitizeFilename(filename);
+  const fallback = safe.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  if (fallback === safe && !safe.includes("%")) return `${type}; filename="${safe}"`;
+  const encoded = encodeURIComponent(safe).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  // Some user agents percent-decode the quoted `filename`, so `%` never
+  // appears in the fallback; `filename*` carries the exact name.
+  return `${type}; filename="${fallback.replace(/%/g, "_")}"; filename*=UTF-8''${encoded}`;
 }
 
 /**

@@ -33,6 +33,7 @@
  */
 
 import { UnauthorizedError } from "./errors.js";
+import { markAuthIdentity } from "./internal-replay.js";
 import type { Hooks } from "./types.js";
 
 /**
@@ -1125,6 +1126,8 @@ export interface HttpSignatureAuthOptions extends Omit<
  * {@link UnauthorizedError} (`401` + `Cache-Control: no-store`).
  * Verification runs before body I/O and before stored-response middleware,
  * so cache hits and idempotency replays cannot skip signature authentication.
+ * The verified `keyid` is recorded as the caller identity, so `responseCache()`
+ * bypasses (absent a `principal`) and `idempotency()` scopes by signer.
  *
  * @param opts - Verification policy plus middleware knobs; see
  *   {@link HttpSignatureAuthOptions}.
@@ -1143,6 +1146,12 @@ export function httpSignatureAuth(opts: HttpSignatureAuthOptions): Hooks {
         throw new UnauthorizedError(`${message} (${result.reason})`);
       }
       (ctx.state as Record<string, unknown>)[stateKey] = result;
+      // The signer's identity is not in Authorization/Cookie; record it so
+      // responseCache()/idempotency() never replay another signer's response.
+      markAuthIdentity(
+        ctx.state as Record<PropertyKey, unknown>,
+        `httpsig:${JSON.stringify([result.keyid ?? null, result.alg])}`
+      );
       return undefined;
     },
   };

@@ -111,10 +111,34 @@ import { sseStream } from "@daloyjs/core/streaming";`}
         {", "}
         <code>comment</code>
         {", "}and <code>data</code>
-        {". "}Multi-line strings are split into one <code>data:</code> line per
-        source line, and CR/LF in <code>event</code> / <code>id</code> values
-        are sanitized.
+        {". "}Multi-line <code>data</code> and <code>comment</code> values are
+        split into one <code>data:</code> (or <code>:</code>) line per source
+        line, treating CRLF, a lone LF, <em>and a lone CR</em> as line breaks,
+        exactly like the browser&apos;s <code>EventSource</code> parser does.
+        A lone <code>\r</code> can therefore never smuggle a forged field into
+        the frame (since 1.3.7).
       </p>
+      <ul>
+        <li>
+          <code>event</code>
+          {": "}any run of CR/LF is replaced with a single space.
+        </li>
+        <li>
+          <code>id</code>
+          {": "}any run of CR, LF, or NUL is replaced with a single space. A
+          NUL would otherwise make <code>EventSource</code> silently ignore the
+          id and defeat <code>Last-Event-ID</code> resumption (since 1.3.7).
+        </li>
+      </ul>
+      <CodeBlock
+        code={`// Untrusted input is safe to forward: the lone "\\r" becomes a line break
+// inside the data field, not a new "event:" field.
+yield { event: "chat", id: "a\\0b", data: "hello\\revent: admin" };
+// event: chat
+// id: a b
+// data: hello
+// data: event: admin`}
+      />
       <CodeBlock
         code={`import { sseStream } from "@daloyjs/core";
 
@@ -247,6 +271,68 @@ app.get(
         <code>iterator.return()</code> is invoked so a generator&apos;s{" "}
         <code>finally</code> block runs and any underlying cursor/socket is
         released.
+      </p>
+      <p>
+        On the Node adapter, a client that hangs up mid-stream now cancels the
+        response body stream itself (since 1.3.7). Node&apos;s{" "}
+        <code>pipe()</code> only unpipes its source when the socket closes
+        early, so the adapter destroys the source explicitly. That cancel
+        reaches <code>sseStream()</code> / <code>ndjsonStream()</code>
+        {", "}which call <code>iterator.return()</code>
+        {", "}so your generator&apos;s <code>finally</code> block and the
+        keep-alive timer are cleaned up even when you did not pass a{" "}
+        <code>signal</code>
+        {":"}
+      </p>
+      <CodeBlock
+        code={`app.get(
+  "/feed",
+  {
+    operationId: "feed",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "SSE stream" } },
+  },
+  () =>
+    sseResponse(async function* () {
+      const sub = await queue.subscribe("feed");
+      try {
+        for await (const msg of sub) yield { data: msg };
+      } finally {
+        // Runs when the client disconnects.
+        await sub.close();
+      }
+    }),
+);`}
+      />
+
+      <h2 id="compression-and-etag">
+        Compression and <code>etag()</code>
+      </h2>
+      <p>
+        Both <code>compression()</code> and <code>etag()</code> would have to
+        buffer a body before they can act on it, which would withhold every
+        event from the client. Neither touches a stream (since 1.3.7):
+      </p>
+      <ul>
+        <li>
+          <code>compression()</code> skips <code>text/event-stream</code>
+          {", "}NDJSON / JSON Lines / <code>application/json-seq</code>
+          {", "}and any response with <code>Cache-Control: no-transform</code>
+          {". "}<code>sseResponse()</code> sets <code>no-transform</code>
+          {", "}so it is always sent uncompressed.
+        </li>
+        <li>
+          <code>etag()</code> skips <code>text/event-stream</code> and{" "}
+          <code>application/x-ndjson</code>
+          {", "}plus any body with no <code>Content-Length</code> or one above
+          its <code>maxBytes</code> cap. Those responses are sent untagged.
+        </li>
+      </ul>
+      <p>
+        You can keep both middlewares registered globally; streaming routes
+        pass through unchanged. See{" "}
+        <a href="/docs/security/compression">Compression middleware</a>
+        {"."}
       </p>
 
       <h2 id="cross-runtime-compatibility">Cross-runtime compatibility</h2>

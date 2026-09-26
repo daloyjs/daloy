@@ -1015,3 +1015,150 @@ test("sanitizeUrlForLog strips userinfo credentials even without a query string"
   assert.doesNotMatch(safe, /user:/);
   assert.match(safe, /\/data/);
 });
+
+// ---------- Redaction never mutates the caller's objects (deepsec 2026-09-26) ----------
+
+test("createLogger redaction does not mutate the caller's nested objects", () => {
+  const lines: string[] = [];
+  const log = createLogger({ level: "info", write: (l) => lines.push(l) });
+  const jwt = ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxIn0", "abc-DEF_123"].join(".");
+  const body = { email: "alice@x", password: "alice-S3cret!", tokens: [jwt, "ok"] };
+  const deep: any = { a: { b: { c: { d: { e: { f: { g: { keep: 1 } } } } } } } };
+  log.info({ event: "signup", input: body, deep }, "signup attempt");
+  // Unhappy path: the log line is still redacted.
+  const obj = JSON.parse(lines[0]!);
+  assert.equal(obj.input.password, "[REDACTED]");
+  assert.deepEqual(obj.input.tokens, ["[REDACTED]", "ok"]);
+  assert.equal(obj.deep.a.b.c.d.e.f, "[REDACTED]");
+  // Happy path: the live objects the handler keeps using are untouched.
+  assert.equal(body.password, "alice-S3cret!");
+  assert.deepEqual(body.tokens, [jwt, "ok"]);
+  assert.deepEqual(deep.a.b.c.d.e.f, { g: { keep: 1 } });
+});
+
+test("createLogger redaction handles shared references, cycles and frozen objects", () => {
+  const lines: string[] = [];
+  const log = createLogger({ level: "info", write: (l) => lines.push(l) });
+  const creds = Object.freeze({ password: "p", user: "u" });
+  log.info({ first: creds, second: creds, list: [creds] });
+  const obj = JSON.parse(lines[0]!);
+  // Every occurrence of a shared reference is redacted, not only the first.
+  assert.equal(obj.first.password, "[REDACTED]");
+  assert.equal(obj.second.password, "[REDACTED]");
+  assert.equal(obj.list[0].password, "[REDACTED]");
+  assert.equal(obj.first.user, "u");
+  assert.equal(creds.password, "p");
+  // A cycle still fails closed (unserializable), never leaks the secret.
+  const cyclic: any = { password: "leak-me", nested: {} };
+  cyclic.nested.self = cyclic;
+  log.info({ cyclic });
+  assert.ok(!lines[1]!.includes("leak-me"));
+  assert.equal(cyclic.password, "leak-me");
+});
+
+test("createLogger leaves unchanged subtrees shared (copy-on-write only on changed paths)", () => {
+  const lines: string[] = [];
+  const log = createLogger({ level: "info", write: (l) => lines.push(l) });
+  class Box {
+    constructor(public password: string, public v: number) {}
+    toJSON() {
+      return { boxed: this.v, password: this.password };
+    }
+  }
+  const box = new Box("pw", 7);
+  log.info({ box, plain: { a: 1 } });
+  const obj = JSON.parse(lines[0]!);
+  // Prototype (and so toJSON) is kept on the redacted copy.
+  assert.deepEqual(obj.box, { boxed: 7, password: "[REDACTED]" });
+  assert.equal(box.password, "pw");
+  assert.deepEqual(obj.plain, { a: 1 });
+});
+
+test("sanitizeUrlQueryForLog applies sanitizeUrlForLog's query redaction to a bare query", async () => {
+  const { sanitizeUrlQueryForLog } = await import("../src/logger.js");
+  assert.equal(sanitizeUrlQueryForLog(""), "");
+  assert.equal(sanitizeUrlQueryForLog("?"), "");
+  assert.equal(sanitizeUrlQueryForLog("?page=2&sort=asc"), "page=2&sort=asc");
+  const out = sanitizeUrlQueryForLog("code=abc&X-Goog-Date=1&access_token=zzz&q=ok");
+  assert.equal(out, "code=%5BREDACTED%5D&X-Goog-Date=%5BREDACTED%5D&access_token=%5BREDACTED%5D&q=ok");
+  assert.ok(sanitizeUrlForLog("http://h/p?code=abc&q=ok").endsWith("?" + "code=%5BREDACTED%5D&q=ok"));
+});
+
+test("redactRecord never exposes the unredacted original through a cycle", async () => {
+  const { inspect } = await import("node:util");
+  const { redactRecord } = await import("../src/logger.js");
+  const cfg = {
+    keys: new Set(DEFAULT_REDACT_KEYS.map((k) => k.toLowerCase())),
+    censor: "[REDACTED]",
+    redactJwt: true,
+    redactCredential: true,
+    maxDepth: 6,
+  };
+  const a: any = { password: "direct-leak", note: "x" };
+  a.self = a;
+  const b: any = { password: "indirect-leak" };
+  const c: any = { b };
+  b.c = c;
+  const out = redactRecord({ a, c }, cfg);
+  const printed = inspect(out, { depth: 20 });
+  assert.ok(!printed.includes("direct-leak"), printed);
+  assert.ok(!printed.includes("indirect-leak"), printed);
+  assert.equal((out.a as any).self, "[Circular]");
+  assert.equal((out.c as any).b.c, "[Circular]");
+  assert.equal((out.a as any).note, "x");
+  assert.equal(a.password, "direct-leak");
+  // The logger now serializes cyclic records instead of dropping the line.
+  const lines: string[] = [];
+  createLogger({ level: "info", write: (l) => lines.push(l) }).info({ a }, "cyc");
+  assert.equal(JSON.parse(lines[0]!).a.self, "[Circular]");
+});
+
+test("createLogger redacts toJSON() output and keeps Error fields on copies", () => {
+  const lines: string[] = [];
+  const log = createLogger({ level: "info", write: (l) => lines.push(l) });
+  class Creds {
+    #raw: string;
+    constructor(raw: string) {
+      this.#raw = raw;
+    }
+    toJSON() {
+      return { authorization: this.#raw, len: this.#raw.length };
+    }
+  }
+  class Throws {
+    toJSON(): never {
+      throw new Error("nope");
+    }
+  }
+  const err = Object.assign(new Error("db down"), { password: "pw", code: "E1" });
+  const when = new Date(0);
+  log.info({ c: new Creds("Bearer sekrit"), t: new Throws(), err, when }, "m");
+  const obj = JSON.parse(lines[0]!);
+  // Unhappy paths: toJSON output is redacted; a throwing toJSON is censored.
+  assert.deepEqual(obj.c, { authorization: "[REDACTED]", len: 13 });
+  assert.equal(obj.t, "[REDACTED]");
+  assert.equal(obj.err.password, "[REDACTED]");
+  // Happy paths: benign toJSON values (Date) and Error enumerables survive.
+  assert.equal(obj.when, when.toJSON());
+  assert.equal(obj.err.code, "E1");
+  assert.equal(err.password, "pw");
+});
+
+test("redactRecord Error copies keep name/message/stack as non-enumerable", async () => {
+  const { redactRecord } = await import("../src/logger.js");
+  const cfg = {
+    keys: new Set(["password"]),
+    censor: "[REDACTED]",
+    redactJwt: false,
+    redactCredential: false,
+    maxDepth: 6,
+  };
+  const err = Object.assign(new TypeError("boom"), { password: "pw" });
+  const copy = (redactRecord({ err }, cfg).err as any) as TypeError & { password: string };
+  assert.notEqual(copy, err);
+  assert.ok(copy instanceof TypeError);
+  assert.equal(copy.message, "boom");
+  assert.equal(copy.stack, err.stack);
+  assert.equal(copy.password, "[REDACTED]");
+  assert.equal(Object.keys(copy).includes("message"), false);
+});

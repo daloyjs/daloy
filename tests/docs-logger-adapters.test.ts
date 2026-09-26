@@ -499,10 +499,9 @@ test("structured logger respects level, child bindings, and string messages", ()
 test("structured logger falls back when payload serialization fails", () => {
   const lines: string[] = [];
   const logger = createLogger({ level: "info", write: (line) => lines.push(line) });
-  const circular: Record<string, unknown> = {};
-  circular.self = circular;
-
-  logger.info(circular, "will not stringify");
+  // Cycles now serialize as "[Circular]" (redaction breaks them), so use a
+  // BigInt, which JSON.stringify still rejects, to exercise the fallback.
+  logger.info({ big: 1n }, "will not stringify");
 
   assert.equal(lines.length, 1);
   assert.deepEqual(JSON.parse(lines[0]!), {
@@ -1130,4 +1129,54 @@ test("lambda adapter answers a malformed event with 400 problem+json instead of 
   const body = JSON.parse(result.body);
   assert.equal(body.title, "Bad Request");
   assert.equal(body.status, 400);
+});
+
+test("[unhappy] lambda adapter: a non-plain Host is refused 400 and cannot steer the routed path", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/whoami",
+    operationId: "lambdaWhoami",
+    responses: { 200: { description: "ok" } },
+    handler: (ctx) => ({ status: 200 as const, body: { url: ctx.request.url } }),
+  });
+  const handler = toLambdaHandler(app);
+  for (const host of ["h\\admin?", "h/admin?", "h#x", "user@h", "h admin", ""]) {
+    const res = await handler({
+      version: "2.0",
+      rawPath: "/whoami",
+      headers: { host },
+      requestContext: { http: { method: "GET" } },
+    });
+    assert.equal(res.statusCode, 400, `host ${JSON.stringify(host)}`);
+  }
+});
+
+test("lambda adapter: plain Host / IPv6 authority accepted; X-Forwarded-Proto limited to http|https", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/whoami",
+    operationId: "lambdaWhoami2",
+    responses: { 200: { description: "ok" } },
+    handler: (ctx) => ({ status: 200 as const, body: { url: ctx.request.url } }),
+  });
+  const handler = toLambdaHandler(app);
+  const call = async (headers: Record<string, string>) => {
+    const res = await handler({
+      version: "2.0",
+      rawPath: "/whoami",
+      headers,
+      requestContext: { http: { method: "GET" } },
+    });
+    assert.equal(res.statusCode, 200);
+    return JSON.parse(res.body).url as string;
+  };
+  assert.equal(await call({ host: "api.example.com:8443" }), "https://api.example.com:8443/whoami");
+  assert.equal(await call({ host: "[::1]:3000", "x-forwarded-proto": "http" }), "http://[::1]:3000/whoami");
+  assert.equal(await call({ host: "a.example", "x-forwarded-proto": "HTTPS, http" }), "https://a.example/whoami");
+  assert.equal(
+    await call({ host: "a.example", "x-forwarded-proto": "javascript://evil/" }),
+    "https://a.example/whoami"
+  );
 });

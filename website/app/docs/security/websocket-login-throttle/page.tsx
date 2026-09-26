@@ -109,11 +109,14 @@ export default function Page() {
 
 const app = new App({ env: "production" });
 
+// No keyGenerator: both helpers use the default key, which is the
+// trusted forwarded client IP (or the TCP peer when the request did not
+// come through a listed proxy). Never key on a raw client header.
 const authBucket = {
   windowMs: 60_000,
   max: 10,
   groupId: "auth-entry",
-  keyGenerator: (ctx) => ctx.request.headers.get("x-user-key") ?? "global",
+  trustedProxies: ["10.0.0.0/8"], // your load balancer's range
 };
 
 app.post(
@@ -133,6 +136,24 @@ app.ws("/session", {
 });`}
         language="ts"
       />
+      <p>
+        Both helpers must derive the <strong>same key</strong> for the shared
+        counter to work. With proxy trust configured, as above, the default key
+        is identical on both paths. Without proxy trust, <code>rateLimit()</code>{" "}
+        (and so <code>wsRateLimit()</code>) keys every caller into one shared
+        bucket while <code>loginThrottle()</code> keys per TCP peer, so the two
+        would not line up. If you need a custom key, derive it from something
+        the server controls, such as{" "}
+        <code>getConnInfo(ctx.request)?.remoteAddress</code> or an
+        authenticated identity.
+      </p>
+      <p>
+        <strong>Never key a limiter on a raw client-supplied header</strong>{" "}
+        (<code>x-user-key</code>, <code>x-client-id</code>, an untrusted{" "}
+        <code>X-Forwarded-For</code>). The client picks the value, so an
+        attacker sends a fresh one on every attempt and gets a fresh budget
+        each time.
+      </p>
 
       <h2 id="2-loginthrottle">
         2. <code>loginThrottle()</code>
@@ -141,7 +162,10 @@ app.ws("/session", {
         <code>loginThrottle()</code> is the built-in preset for credential-entry
         routes. It combines a shared hard limit with a short progressive delay
         before the hard <code>429</code> response. By default it does not trust
-        proxy IP headers. Pass a <code>keyGenerator</code> or opt in to{" "}
+        proxy IP headers and keys each caller on its TCP peer address, so one
+        client cannot exhaust the budget for every other user. It falls back to
+        a single shared bucket only on runtimes that expose no peer address.
+        Pass a <code>keyGenerator</code> or opt in to{" "}
         <code>trustProxyHeaders: true</code> / <code>trustedProxies</code> only
         behind a trusted proxy. When proxy headers are trusted, the key is the{" "}
         <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
@@ -154,6 +178,25 @@ app.ws("/session", {
         </a>
         ).
       </p>
+      <p>
+        IPv6 clients are grouped by prefix (since 1.3.7). The{" "}
+        <code>ipv6Subnet</code> option (default <code>64</code>) masks IPv6
+        addresses to a /64, the block one subscriber normally holds, so an
+        attacker cannot mint a fresh bucket per address. Different spellings of
+        one address (<code>::1</code> and <code>0:0::1</code>
+        {", "}or <code>1.2.3.4</code> and <code>::ffff:1.2.3.4</code>) collapse
+        to one key. The option is ignored when you pass a{" "}
+        <code>keyGenerator</code>
+        {"."}
+      </p>
+      <p>
+        Register <code>loginThrottle()</code> before your authentication hook.
+        It then counts every rejected attempt, including guards that{" "}
+        <em>throw</em> (for example a failed <code>bearerAuth()</code> check)
+        rather than return a <code>Response</code>
+        {". "}Once the budget is exhausted the <code>429</code> replaces the
+        auth error.
+      </p>
       <CodeBlock
         code={`app.post(
   "/password-reset",
@@ -165,6 +208,7 @@ app.ws("/session", {
       delayAfter: 2,
       delayMs: 250,
       maxDelayMs: 2_000,
+      ipv6Subnet: 56, // group IPv6 clients per /56 instead of /64
     }),
     responses: { 204: { description: "accepted" } },
   },

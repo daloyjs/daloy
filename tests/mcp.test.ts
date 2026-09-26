@@ -1217,3 +1217,238 @@ test("mcpRoutes exposes the JSON-RPC envelope schema to OpenAPI generation", () 
   assert.ok(jsonSchema?.properties?.jsonrpc, "envelope schema must describe the jsonrpc field");
   assert.ok(jsonSchema?.properties?.error, "envelope schema must describe the error field");
 });
+
+// ---------------------------------------------------------------------------
+// deepsec 2026-09-26: fail-closed internal error detail + linear URI templates
+// ---------------------------------------------------------------------------
+
+function throwingToolHandler(options: { exposeInternalErrors?: boolean } = {}): McpHandler {
+  return createMcpHandler({
+    serverInfo: { name: "leak", version: "1.0.0" },
+    ...options,
+    tools: [
+      {
+        name: "lookup",
+        description: "always throws with a secret-bearing message",
+        inputSchema: { type: "object" },
+        handler: () => {
+          throw new Error("connect ECONNREFUSED postgres://admin:hunter2@10.0.3.7/db");
+        },
+      },
+    ],
+  });
+}
+
+async function withNodeEnv<T>(value: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const previous = process.env.NODE_ENV;
+  if (value === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = value;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+}
+
+const CALL_LOOKUP = {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "tools/call",
+  params: { name: "lookup", arguments: {} },
+};
+
+test("MCP internal error detail fails closed when NODE_ENV is unset or not a dev value", async () => {
+  for (const env of [undefined, "production", "staging", ""]) {
+    await withNodeEnv(env, async () => {
+      const { json } = await rpc(throwingToolHandler(), CALL_LOOKUP);
+      assert.equal(json.error?.code, -32603);
+      assert.equal(json.error?.data, undefined, `NODE_ENV=${String(env)} must redact`);
+      assert.doesNotMatch(JSON.stringify(json), /hunter2/);
+    });
+  }
+});
+
+test("MCP internal error detail is exposed on NODE_ENV development/test or explicit opt-in", async () => {
+  for (const env of ["development", "test"]) {
+    await withNodeEnv(env, async () => {
+      const { json } = await rpc(throwingToolHandler(), CALL_LOOKUP);
+      assert.match(String((json.error?.data as { detail?: string })?.detail), /ECONNREFUSED/);
+    });
+  }
+  await withNodeEnv(undefined, async () => {
+    const { json } = await rpc(throwingToolHandler({ exposeInternalErrors: true }), CALL_LOOKUP);
+    assert.match(String((json.error?.data as { detail?: string })?.detail), /ECONNREFUSED/);
+  });
+});
+
+test("App production signal forwarded via mcpRoutes forces redaction unless explicitly overridden", async () => {
+  const hook = Symbol.for("daloyjs.mcp.appProduction");
+  await withNodeEnv("development", async () => {
+    const handler = throwingToolHandler();
+    const [postRoute] = mcpRoutes("/mcp", handler);
+    const forward = (postRoute as unknown as Record<PropertyKey, unknown>)[hook];
+    assert.equal(typeof forward, "function");
+    // A non-production App leaves the dev default alone.
+    (forward as (p: boolean) => void)(false);
+    let { json } = await rpc(handler, CALL_LOOKUP);
+    assert.notEqual(json.error?.data, undefined);
+    // A production App wins over NODE_ENV=development.
+    (forward as (p: boolean) => void)(true);
+    ({ json } = await rpc(handler, CALL_LOOKUP));
+    assert.equal(json.error?.data, undefined);
+    // The hook can never re-enable exposure.
+    (forward as (p: boolean) => void)(false);
+    ({ json } = await rpc(handler, CALL_LOOKUP));
+    assert.equal(json.error?.data, undefined);
+
+    // An explicit exposeInternalErrors: true stays the override.
+    const explicit = throwingToolHandler({ exposeInternalErrors: true });
+    const [explicitPost] = mcpRoutes("/mcp", explicit, { public: true });
+    ((explicitPost as unknown as Record<PropertyKey, unknown>)[hook] as (p: boolean) => void)(true);
+    ({ json } = await rpc(explicit, CALL_LOOKUP));
+    assert.notEqual(json.error?.data, undefined);
+  });
+});
+
+test("[unhappy] an App with env: production redacts MCP tool errors end-to-end, even with NODE_ENV=development", async () => {
+  await withNodeEnv("development", async () => {
+    const call = (app: App) =>
+      app.request("/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+        body: JSON.stringify(CALL_LOOKUP),
+      });
+    const prod = new App({ logger: false, env: "production" } as any);
+    for (const route of mcpRoutes("/mcp", throwingToolHandler(), { public: true })) prod.route(route);
+    const prodJson = (await (await call(prod)).json()) as RpcResponse;
+    assert.equal(prodJson.error?.data, undefined, "production App must not leak tool error text");
+    // The common `app.route({ ...route })` spread must keep the signal.
+    const spread = new App({ logger: false, env: "production" } as any);
+    for (const route of mcpRoutes("/mcp", throwingToolHandler(), { public: true })) spread.route({ ...route });
+    const spreadJson = (await (await call(spread)).json()) as RpcResponse;
+    assert.equal(spreadJson.error?.data, undefined, "spread routes must keep production redaction");
+
+    // Happy path: a development App keeps the debugging detail.
+    const dev = new App({ logger: false, env: "development" } as any);
+    for (const route of mcpRoutes("/mcp", throwingToolHandler(), { public: true })) dev.route(route);
+    const devJson = (await (await call(dev)).json()) as RpcResponse;
+    assert.notEqual(devJson.error?.data, undefined);
+  });
+});
+
+function echoTemplateHandler(uriTemplate: string, maxResourceUriLength?: number): McpHandler {
+  return createMcpHandler({
+    serverInfo: { name: "tpl-echo", version: "1.0.0" },
+    ...(maxResourceUriLength !== undefined ? { maxResourceUriLength } : {}),
+    resourceTemplates: [
+      {
+        uriTemplate,
+        name: "echo",
+        read: (uri, variables) => ({ uri, text: JSON.stringify(variables) }),
+      },
+    ],
+  });
+}
+
+async function readUri(handler: McpHandler, uri: string): Promise<RpcResponse> {
+  return (await rpc(handler, { jsonrpc: "2.0", id: 1, method: "resources/read", params: { uri } }))
+    .json;
+}
+
+test("resource templates with {name}.{ext} match normally and keep greedy capture semantics", async () => {
+  const handler = echoTemplateHandler("docs://files/{name}.{ext}");
+  let json = await readUri(handler, "docs://files/readme.md");
+  assert.deepEqual(JSON.parse(json.result.contents[0].text), { name: "readme", ext: "md" });
+  // Greedy first variable, exactly as the previous anchored regex behaved.
+  json = await readUri(handler, "docs://files/a.b.c");
+  assert.deepEqual(JSON.parse(json.result.contents[0].text), { name: "a.b", ext: "c" });
+  for (const bad of ["docs://files/readme", "docs://files/.md", "docs://files/a./b", "docs://files/a.b/"]) {
+    json = await readUri(handler, bad);
+    assert.equal(json.error?.code, -32602, bad);
+  }
+});
+
+test("resource template matcher agrees with the reference regex on randomized inputs", async () => {
+  const templates = [
+    "x://{a}.{b}",
+    "x://{a}{b}",
+    "x://{a}-{b}-{c}/z",
+    "x://p/{a}",
+    "{a}/{b}.json",
+    "x://static",
+    "x://{a}..{b}",
+  ];
+  const reference = (template: string): { re: RegExp; names: string[] } => {
+    const names: string[] = [];
+    const src = template
+      .split(/(\{[A-Za-z0-9_]+\})/)
+      .map((part) => {
+        const m = /^\{([A-Za-z0-9_]+)\}$/.exec(part);
+        if (m) {
+          names.push(m[1]!);
+          return "([^/]+)";
+        }
+        return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      })
+      .join("");
+    return { re: new RegExp(`^${src}$`), names };
+  };
+  let seed = 12345;
+  const rand = (n: number): number => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  const alphabet = ["a", "b", ".", "-", "/", "z", "json", "x://", "p/"];
+  for (const template of templates) {
+    const handler = echoTemplateHandler(template);
+    const { re, names } = reference(template);
+    const prefix = template.startsWith("x://") ? "x://" : "";
+    for (let i = 0; i < 150; i++) {
+      let uri = prefix;
+      const len = rand(9);
+      for (let k = 0; k < len; k++) uri += alphabet[rand(alphabet.length)];
+      const expected = re.exec(uri);
+      const json = await readUri(handler, uri);
+      if (!expected) {
+        assert.equal(json.error?.code, -32602, `${template} vs ${uri}`);
+        continue;
+      }
+      const vars: Record<string, string> = {};
+      names.forEach((name, index) => (vars[name] = expected[index + 1]!));
+      assert.deepEqual(JSON.parse(json.result.contents[0].text), vars, `${template} vs ${uri}`);
+    }
+  }
+});
+
+test("a crafted 200KB resource URI cannot stall the event loop (ReDoS)", async () => {
+  // Large cap so the linear matcher itself is exercised, not just the length cap.
+  const handler = echoTemplateHandler("docs://files/{name}.{ext}", 1_000_000);
+  const uri = "docs://files/" + "a.".repeat(100_000) + "/";
+  const started = performance.now();
+  const json = await readUri(handler, uri);
+  const elapsed = performance.now() - started;
+  assert.equal(json.error?.code, -32602);
+  assert.ok(elapsed < 100, `took ${elapsed.toFixed(1)}ms`);
+  // A long but legitimate URI still matches.
+  const ok = await readUri(handler, "docs://files/" + "a.".repeat(50_000) + "md");
+  assert.equal(JSON.parse(ok.result.contents[0].text).ext, "md");
+});
+
+test("resources/read refuses URIs over maxResourceUriLength before matching", async () => {
+  const handler = echoTemplateHandler("docs://files/{name}.{ext}");
+  const tooLong = await readUri(handler, "docs://files/" + "a".repeat(8192) + ".md");
+  assert.equal(tooLong.error?.code, -32602);
+  assert.equal(tooLong.error?.message, "Resource URI too long.");
+  const atCap = "docs://files/" + "a".repeat(8192 - "docs://files/.md".length) + ".md";
+  assert.equal(atCap.length, 8192);
+  const ok = await readUri(handler, atCap);
+  assert.equal(ok.error, undefined);
+
+  const tight = echoTemplateHandler("docs://files/{name}.{ext}", 20);
+  assert.equal((await readUri(tight, "docs://files/readme.md")).error?.message, "Resource URI too long.");
+  assert.throws(
+    () => echoTemplateHandler("x://{a}", 0),
+    /maxResourceUriLength must be a positive integer/
+  );
+});

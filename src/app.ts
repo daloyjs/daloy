@@ -124,6 +124,10 @@ import {
 } from "./jobs.js";
 import { securitySchemeRequiresPayloadAuth } from "./security-schemes.js";
 import { assertBehindProxy, type BehindProxyConfig } from "./conn-info.js";
+import {
+  requestFinalizersEnabled,
+  runRequestFinalizers,
+} from "./request-finalizers.js";
 
 const AUTO_SECURE_HEADERS_MARKER: unique symbol = Symbol.for(
   "daloyjs.app.autoSecureHeaders",
@@ -622,7 +626,7 @@ export interface AppOptions {
    *
    * The default is `false` so adding a new `App({ ... })` to an existing app
    * never silently changes its public surface; scaffolded projects from
-   * `create-daloy` set `docs: true` for the auto-mount experience.
+   * `create-daloy` set `docs: "auto"` so docs mount everywhere except production.
    *
    * @since 0.3.0
    */
@@ -1098,6 +1102,8 @@ interface RouteSecurityMarkers {
  * `App` bundle. Must match the string used in `mcpRoutes`.
  */
 const MCP_ROUTE_MARKER = Symbol.for("daloyjs.mcp.route");
+const MCP_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.mcp.appProduction");
+const APP_BODY_LIMIT_HOOK = Symbol.for("daloyjs.hooks.appBodyLimit");
 
 /**
  * Global-registry symbols stamped by `responseCache()` and `tenancy()` on the
@@ -2081,6 +2087,13 @@ export class App<
    * a misconfigured surface.
    */
   private assertSecureHookConfig(hooks: Hooks): void {
+    // Hooks that read raw request bytes themselves (idempotency's raw-body
+    // fingerprint) learn the App body limit here, once, at registration, so
+    // they never read more than the framework itself would accept.
+    const bodyLimitHook = (hooks as Record<PropertyKey, unknown>)[APP_BODY_LIMIT_HOOK];
+    if (typeof bodyLimitHook === "function") {
+      (bodyLimitHook as (limit: number) => void)(this.options.bodyLimitBytes);
+    }
     // Always-on correctness guard (independent of secureDefaults / environment).
     // A hook bundle must be a single Hooks object. Passing an ARRAY — or any
     // object carrying none of the recognized hook keys — is a silent no-op: the
@@ -2922,6 +2935,14 @@ export class App<
     (this.routes as unknown as RouteDefinition<any, any, any, any>[]).push(
       merged,
     );
+    // mcpRoutes() hands the App's production signal to its handler so an
+    // `env: "production"` App redacts MCP tool errors even without NODE_ENV.
+    const mcpProductionHook = (def as unknown as Record<PropertyKey, unknown>)[
+      MCP_APP_PRODUCTION_HOOK
+    ];
+    if (typeof mcpProductionHook === "function") {
+      (mcpProductionHook as (production: boolean) => void)(this.isProduction());
+    }
     this.routeSecurityMarkers.push({
       method: merged.method,
       path: merged.path,
@@ -4427,6 +4448,9 @@ export class App<
           });
     const stripFingerprint = this.options.stripServerHeaders !== false;
     let ctx: BaseContext<any, any> | undefined;
+    // Synthetic OPTIONS-preflight context, tracked only so the `finally` block
+    // can run request finalizers registered on it (it is never `ctx`).
+    let preflightCtx: BaseContext<any, any> | undefined;
     const globalHooks = this.globalHooks;
     let activeErrorHook = globalHooks.onError;
     let activeResponseHook = globalHooks.onResponse;
@@ -4604,6 +4628,7 @@ export class App<
               state: { ...this.decorations, requestId, log },
               set: new LazyResponseSet(),
             } as unknown as BaseContext<any, any>;
+            preflightCtx = synthCtx;
             const preflightHooks = this.coldPathHooks;
             const interceptedResult = preflightHooks.beforeHandle?.(synthCtx);
             const intercepted = isPromiseLike(interceptedResult)
@@ -4906,6 +4931,13 @@ export class App<
       );
     } finally {
       this.inflight--;
+      // Guaranteed lease release (e.g. concurrencyLimit slots) that does not
+      // depend on every onSend/onError hook succeeding. One boolean read when
+      // no middleware ever registered a finalizer.
+      if (requestFinalizersEnabled) {
+        runRequestFinalizers(ctx);
+        runRequestFinalizers(preflightCtx);
+      }
     }
   };
 
@@ -5349,11 +5381,22 @@ function isStateChangingMethod(method: HttpMethod): boolean {
  * produced by the Node adapter and the Fetch standard. Falls back to a
  * `URL` parse for inputs that don't match (e.g. opaque schemes), so
  * correctness is preserved even when the fast path doesn't apply.
+ *
+ * Security: an authority containing `\`, `?` or `#` (e.g. a Host header of
+ * `h\health?`) makes a raw slice disagree with the WHATWG pathname that
+ * `except()` and other middleware compute, so those inputs fall back to a
+ * real `URL` parse and every consumer sees the same path.
  */
 function getPathnameFast(url: string): string {
   const schemeEnd = url.indexOf("://");
   if (schemeEnd === -1) return new URL(url).pathname;
   const pathStart = url.indexOf("/", schemeEnd + 3);
+  for (let i = schemeEnd + 3, end = pathStart === -1 ? url.length : pathStart; i < end; i++) {
+    const c = url.charCodeAt(i);
+    if (c === 92 /* \ */ || c === 63 /* ? */ || c === 35 /* # */) {
+      return new URL(url).pathname;
+    }
+  }
   if (pathStart === -1) return "/";
   let end = url.length;
   const q = url.indexOf("?", pathStart);

@@ -206,19 +206,25 @@ export function tenantFromPathPrefix(opts: PathPrefixTenantOptions = {}): Tenant
 /** Options for {@link tenantFromClaim}. @since 0.42.0 */
 export interface ClaimTenantOptions {
   /**
-   * `ctx.state` key holding the authenticated principal. Default `"auth"`,
-   * matching the first-party auth helpers which write an
-   * `{ scheme, credentials }` context to `ctx.state.auth`. The claim is read
-   * from `credentials[claim]` when present, otherwise from `node[claim]`.
+   * `ctx.state` key holding the authenticated principal. When omitted, the
+   * resolver reads `ctx.state.auth` (the {@link AuthContext} shape) and then
+   * `ctx.state.user`, which is where `jwk()` (`{ sub, scopes, claims }`) and
+   * `basicAuth()` (the `verify()` result) record the verified identity. Pass
+   * a key to read only that node.
    */
   stateKey?: string;
 }
 
 /**
  * Resolve the tenant from a verified auth claim already on `ctx.state`
- * (e.g. an `org` / `tenant` JWT claim). Reads `ctx.state.auth.credentials`
- * (the {@link AuthContext} shape) or, if there is no `credentials` field, the
- * state node itself.
+ * (e.g. an `org` / `tenant` JWT claim). For each principal node the claim is
+ * read from `credentials[claim]`, then `claims[claim]`, then `node[claim]`.
+ *
+ * Security: this resolver must see the identity the auth middleware actually
+ * verified. It used to read only `ctx.state.auth`, which no first-party
+ * helper writes, so the documented `[tenantFromClaim("org"),
+ * tenantFromSubdomain(...)]` chain silently fell through to the attacker-
+ * controlled `Host` header and let an `acme` token read `globex` data.
  *
  * **Ordering:** the auth middleware that populates the claim must run *before*
  * `tenancy()`. Register your verifier first, then `tenancy()`.
@@ -229,20 +235,34 @@ export interface ClaimTenantOptions {
  * @since 0.42.0
  */
 export function tenantFromClaim(claim: string, opts: ClaimTenantOptions = {}): TenantResolver {
-  const stateKey = opts.stateKey ?? "auth";
+  const stateKeys = opts.stateKey !== undefined ? [opts.stateKey] : ["auth", "user"];
   return (ctx) => {
-    const node = (ctx.state as Record<string, unknown>)[stateKey];
-    if (!node || typeof node !== "object") return undefined;
-    const withCreds = node as { credentials?: unknown };
-    const source =
-      withCreds.credentials && typeof withCreds.credentials === "object"
-        ? (withCreds.credentials as Record<string, unknown>)
-        : (node as Record<string, unknown>);
-    const value = source[claim];
-    if (typeof value === "string") return value;
-    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    const state = ctx.state as Record<string, unknown>;
+    for (const key of stateKeys) {
+      const value = readClaim(state[key], claim);
+      if (value !== undefined) return value;
+    }
     return undefined;
   };
+}
+
+/** Read `claim` from a principal node via `credentials`, `claims`, then the node itself. */
+function readClaim(node: unknown, claim: string): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const record = node as Record<string, unknown>;
+  for (const nested of [record.credentials, record.claims]) {
+    if (nested && typeof nested === "object") {
+      const value = claimString((nested as Record<string, unknown>)[claim]);
+      if (value !== undefined) return value;
+    }
+  }
+  return claimString(record[claim]);
+}
+
+function claimString(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
 }
 
 /** Status codes acceptable for an unresolved-tenant rejection. @since 0.42.0 */

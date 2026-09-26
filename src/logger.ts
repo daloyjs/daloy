@@ -219,14 +219,22 @@ function redactString(value: string, cfg: ResolvedRedaction): string {
 }
 
 /**
- * Walk `record` in place, replacing any value whose key (case-insensitive)
- * matches `cfg.keys` and any string value shaped like a JWT (when
- * `cfg.redactJwt` is on) with `cfg.censor`. Exported for direct use by
- * custom logger implementations that want the same defaults.
- * Objects and arrays beyond the depth budget are replaced with the censor,
- * rather than serialized without inspecting their contents.
+ * Redact `record`, replacing any value whose key (case-insensitive) matches
+ * `cfg.keys` and any string value shaped like a JWT / credential (when enabled)
+ * with `cfg.censor`. Exported for custom logger implementations that want the
+ * same defaults. Objects and arrays beyond the depth budget are replaced with
+ * the censor rather than serialized uninspected.
  *
- * @param record - Log record to redact. Mutated in place (cycle-safe, depth-capped).
+ * Security: only the top-level keys of `record` are rewritten in place. Nested
+ * objects and arrays are **never mutated** — a redacted copy is substituted
+ * (copy-on-write along changed paths only), so logging a live object such as
+ * `{ input: ctx.body }` cannot overwrite the caller's data with the censor.
+ * Cycle back-edges become `"[Circular]"`; objects with `toJSON()` are
+ * redacted on its output (censor if it throws). Unchanged subtrees are shared
+ * by reference, so a record needing no
+ * redaction allocates nothing beyond a lazily created cycle/alias memo.
+ *
+ * @param record - Log record to redact. Top-level keys are updated in place.
  * @param cfg - Resolved redaction settings (key set, censor, JWT/credential toggles, max depth).
  * @returns The same `record` object, for chaining.
  * @since 0.15.0
@@ -235,51 +243,134 @@ export function redactRecord(
   record: Record<string, unknown>,
   cfg: ResolvedRedaction
 ): Record<string, unknown> {
-  walkRedact(record, cfg, 0, new WeakSet());
+  let memo: Map<object, unknown> | undefined;
+  for (const key of Object.keys(record)) {
+    const v = record[key];
+    let next: unknown;
+    if (cfg.keys.has(key.toLowerCase())) {
+      next = cfg.censor;
+    } else if (typeof v === "string") {
+      next = redactString(v, cfg);
+    } else if (v !== null && typeof v === "object") {
+      if (memo === undefined) {
+        memo = new Map();
+        // A nested reference back to the root resolves to the root itself.
+        memo.set(record, record);
+      }
+      next = redactValue(v, cfg, 0, memo);
+    } else {
+      continue;
+    }
+    if (next !== v) record[key] = next;
+  }
   return record;
 }
 
-function walkRedact(
-  node: unknown,
+/** Marker for a node whose redaction is in progress (i.e. a cycle back-edge). */
+const REDACT_IN_PROGRESS: unique symbol = Symbol("redact.inProgress");
+
+/** Placeholder substituted for a cycle back-edge so the original is never exposed. */
+const REDACT_CIRCULAR = "[Circular]";
+
+/**
+ * Shallow-copy `obj` onto a fresh object with the same prototype. Errors also
+ * keep their non-enumerable `name` / `message` / `stack` / `cause` (still
+ * non-enumerable, so JSON output is unchanged).
+ */
+function shallowCopy(obj: object): Record<string, unknown> {
+  const out = Object.create(Object.getPrototypeOf(obj)) as Record<string, unknown>;
+  if (obj instanceof Error) {
+    for (const k of ["name", "message", "stack", "cause"]) {
+      const d = Object.getOwnPropertyDescriptor(obj, k);
+      if (d === undefined) continue;
+      // V8 may expose `stack` as an accessor bound to the original's internal
+      // slot; snapshot its value as a plain non-enumerable data property.
+      const value = "value" in d ? d.value : (obj as unknown as Record<string, unknown>)[k];
+      Object.defineProperty(out, k, { value, writable: true, configurable: true, enumerable: false });
+    }
+  }
+  return Object.assign(out, obj);
+}
+
+/**
+ * Redact a child value found at `depth`. Strings are pattern-redacted; objects
+ * past the depth cap become the censor; other objects recurse copy-on-write.
+ */
+function redactValue(
+  v: unknown,
   cfg: ResolvedRedaction,
   depth: number,
-  seen: WeakSet<object>
-): void {
-  if (depth > cfg.maxDepth) return;
-  if (node === null || typeof node !== "object") return;
-  if (seen.has(node as object)) return;
-  seen.add(node as object);
+  memo: Map<object, unknown>
+): unknown {
+  if (typeof v === "string") return redactString(v, cfg);
+  if (v === null || typeof v !== "object") return v;
+  if (depth >= cfg.maxDepth) return cfg.censor;
+  return redactNode(v, cfg, depth + 1, memo);
+}
+
+/**
+ * Return `node` unchanged when nothing beneath it needs redaction, otherwise a
+ * shallow copy (same prototype) with only the changed children replaced. The
+ * input is never mutated. `memo` maps every visited node to its result so an
+ * object referenced twice is redacted consistently; a cycle back-edge becomes
+ * `"[Circular]"` so the unredacted original is never reachable from the output.
+ * Objects with a callable `toJSON` are replaced by their redacted `toJSON()`
+ * result (or the censor if it throws).
+ */
+function redactNode(
+  node: object,
+  cfg: ResolvedRedaction,
+  depth: number,
+  memo: Map<object, unknown>
+): unknown {
+  const prior = memo.get(node);
+  if (prior !== undefined) return prior === REDACT_IN_PROGRESS ? REDACT_CIRCULAR : prior;
+  memo.set(node, REDACT_IN_PROGRESS);
+  // JSON.stringify serializes toJSON()'s result, not the instance, so redact
+  // that result (class instances with #private fields, Date, custom wrappers).
+  // Keep the instance when nothing in the result needed redaction.
+  const toJSON = (node as { toJSON?: unknown }).toJSON;
+  if (typeof toJSON === "function") {
+    let result: unknown;
+    try {
+      const json: unknown = toJSON.call(node);
+      let redacted: unknown;
+      if (json !== null && typeof json === "object") {
+        redacted = json === node ? node : redactNode(json, cfg, depth, memo);
+      } else {
+        redacted = redactValue(json, cfg, depth, memo);
+      }
+      result = redacted === json ? node : redacted;
+    } catch {
+      result = cfg.censor;
+    }
+    memo.set(node, result);
+    return result;
+  }
+  let out: Record<string, unknown> | unknown[] | undefined;
   if (Array.isArray(node)) {
     for (let i = 0; i < node.length; i++) {
       const v = node[i];
-      if (typeof v === "string") {
-        const replaced = redactString(v, cfg);
-        if (replaced !== v) node[i] = replaced;
-      } else if (v !== null && typeof v === "object" && depth >= cfg.maxDepth) {
-        node[i] = cfg.censor;
-      } else {
-        walkRedact(v, cfg, depth + 1, seen);
+      const next = redactValue(v, cfg, depth, memo);
+      if (next !== v) {
+        if (out === undefined) out = node.slice();
+        (out as unknown[])[i] = next;
       }
     }
-    return;
-  }
-  const obj = node as Record<string, unknown>;
-  for (const key of Object.keys(obj)) {
-    const lower = key.toLowerCase();
-    if (cfg.keys.has(lower)) {
-      obj[key] = cfg.censor;
-      continue;
-    }
-    const v = obj[key];
-    if (typeof v === "string") {
-      const replaced = redactString(v, cfg);
-      if (replaced !== v) obj[key] = replaced;
-    } else if (v !== null && typeof v === "object" && depth >= cfg.maxDepth) {
-      obj[key] = cfg.censor;
-    } else {
-      walkRedact(v, cfg, depth + 1, seen);
+  } else {
+    const obj = node as Record<string, unknown>;
+    for (const key of Object.keys(obj)) {
+      const v = obj[key];
+      const next = cfg.keys.has(key.toLowerCase()) ? cfg.censor : redactValue(v, cfg, depth, memo);
+      if (next !== v) {
+        if (out === undefined) out = shallowCopy(obj);
+        (out as Record<string, unknown>)[key] = next;
+      }
     }
   }
+  const result = out ?? node;
+  memo.set(node, result);
+  return result;
 }
 
 /**
@@ -487,16 +578,46 @@ export function sanitizeUrlForLog(url: string): string {
       return `${parsed.origin}${parsed.pathname}`;
     }
     const safe = new URL(parsed.origin + parsed.pathname);
-    for (const [key, value] of parsed.searchParams) {
-      const lower = key.toLowerCase();
-      const sensitiveKey = isSensitiveUrlQueryKey(lower);
-      const sensitiveValue = JWT_LIKE_RE.test(value) || CREDENTIAL_LIKE_RE.test(value);
-      CREDENTIAL_LIKE_RE.lastIndex = 0;
-      safe.searchParams.append(key, sensitiveKey || sensitiveValue ? "[REDACTED]" : value);
-    }
+    appendRedactedParams(parsed.searchParams, safe.searchParams);
     return safe.toString();
   } catch {
     const cut = url.search(/[?#]/);
     return cut === -1 ? url : url.slice(0, cut);
   }
+}
+
+/**
+ * Copy every `key=value` pair from `from` into `to`, replacing the value with
+ * `[REDACTED]` when the key is secret-bearing ({@link SENSITIVE_URL_QUERY_KEYS}
+ * / {@link SENSITIVE_URL_QUERY_KEY_PREFIXES}) or the value looks like a JWT or
+ * credential.
+ */
+function appendRedactedParams(from: URLSearchParams, to: URLSearchParams): void {
+  for (const [key, value] of from) {
+    const sensitiveKey = isSensitiveUrlQueryKey(key.toLowerCase());
+    const sensitiveValue = JWT_LIKE_RE.test(value) || CREDENTIAL_LIKE_RE.test(value);
+    CREDENTIAL_LIKE_RE.lastIndex = 0;
+    to.append(key, sensitiveKey || sensitiveValue ? "[REDACTED]" : value);
+  }
+}
+
+/**
+ * Produce a telemetry/log-safe form of a URL query string, applying exactly the
+ * same redaction as {@link sanitizeUrlForLog}: values of
+ * {@link SENSITIVE_URL_QUERY_KEYS} / {@link SENSITIVE_URL_QUERY_KEY_PREFIXES}
+ * and JWT-like / credential-like values become `[REDACTED]` (serialized
+ * form-encoded as `%5BREDACTED%5D`). Used by `otelTracing()` for the
+ * `url.query` span attribute so OAuth codes, `access_token`s and presigned-URL
+ * signatures are never exported to a tracing backend.
+ *
+ * @param search - Query string, with or without the leading `?`.
+ * @returns The redacted query without a leading `?` (`""` for an empty query).
+ * @since 1.3.7
+ */
+export function sanitizeUrlQueryForLog(search: string): string {
+  const raw = search.charCodeAt(0) === 63 /* ? */ ? search.slice(1) : search;
+  if (raw === "") return "";
+  const out = new URLSearchParams();
+  appendRedactedParams(new URLSearchParams(raw), out);
+  return out.toString();
 }

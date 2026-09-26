@@ -243,7 +243,13 @@ function eventToRequest(event: LambdaEvent): Request {
     : (event.path ?? event.requestContext?.path ?? "/");
   const host =
     headers.get("host") ?? event.requestContext?.domainName ?? "localhost";
-  const proto = headers.get("x-forwarded-proto") ?? "https";
+  // The authority is spliced into the URL verbatim, so anything beyond a plain
+  // `host[:port]` (`\`, `/`, `?`, `#`, `@`, ...) could move bytes into the
+  // path the router sees. Refuse it (the caller answers 400).
+  if (!isPlainAuthority(host)) {
+    throw new TypeError("Invalid Host header");
+  }
+  const proto = forwardedProto(headers.get("x-forwarded-proto"));
   const rawQueryString = isV2Event(event)
     ? (event.rawQueryString ?? "")
     : queryStringForV1(event);
@@ -303,6 +309,41 @@ async function responseToLambda(
   if (!cookies.length) return out;
   if (useV2Response) return { ...out, cookies };
   return { ...out, multiValueHeaders: { "set-cookie": cookies } };
+}
+
+/**
+ * `true` when `host` is a plain `host[:port]` or `[IPv6][:port]` authority.
+ * Mirrors the Node adapter's check (kept local so adapters stay independent).
+ */
+function isPlainAuthority(host: string): boolean {
+  const len = host.length;
+  if (len === 0 || len > 1024) return false;
+  for (let i = 0; i < len; i++) {
+    const c = host.charCodeAt(i);
+    if (
+      (c >= 97 && c <= 122) || // a-z
+      (c >= 65 && c <= 90) || // A-Z
+      (c >= 48 && c <= 58) || // 0-9 and ':'
+      c === 46 || // .
+      c === 45 || // -
+      c === 95 // _
+    ) {
+      continue;
+    }
+    // Brackets only as a leading IPv6 literal: `[` at 0 and one `]` after it.
+    if (c === 91 /* [ */ && i === 0) continue;
+    if (c === 93 /* ] */ && host.charCodeAt(0) === 91 && host.indexOf("]", i + 1) === -1) continue;
+    return false;
+  }
+  return true;
+}
+
+/** First `X-Forwarded-Proto` token when it is `http`/`https`; otherwise `"https"`. */
+function forwardedProto(raw: string | null): "http" | "https" {
+  if (raw === null) return "https";
+  const comma = raw.indexOf(",");
+  const token = (comma === -1 ? raw : raw.slice(0, comma)).trim().toLowerCase();
+  return token === "http" ? "http" : "https";
 }
 
 function isV2Event(event: LambdaEvent): event is LambdaEventV2 {

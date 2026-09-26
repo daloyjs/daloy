@@ -810,17 +810,19 @@ function toWebRequest(
   bufferedBody?: Uint8Array,
   onBodyPull?: () => void
 ): Request {
-  // `onBodyPull` is attached to the finished Request below rather than wrapping
-  // the body stream: undici pulls a streaming body during `new Request(...)`,
-  // so a stream-level hook fired at construction — before the framework had
-  // decided anything — and re-solicited bodies it went on to refuse.
+  // `onBodyPull` (deferred `Expect: 100-continue`) is wired two ways: onto the
+  // finished Request as DALOY_REQUEST_BODY_SOLICIT, which schema-parsed routes
+  // fire after their 415/413 checks, and onto the body stream via
+  // {@link soliciting}, which fires on the first *consumer* read so every other
+  // reader (raw-body handlers, requestDecompression, MCP) also gets its `100`.
+  // The wrapper uses a zero high-water mark so constructing the Request — which
+  // an eagerly-pulling stream would otherwise trigger — solicits nothing.
   const reqHeaders = req.headers;
-  const forwardedHost = trustProxy ? firstHeader(reqHeaders["x-forwarded-host"]) : undefined;
-  const host = forwardedHost ?? reqHeaders.host ?? "localhost";
-  const forwardedProto = trustProxy ? firstHeader(reqHeaders["x-forwarded-proto"]) : undefined;
-  const proto =
-    forwardedProto ?? ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
-  const url = `${proto}://${host}${normalizeRequestTarget(req.url)}`;
+  const origin = requestOrigin(req, trustProxy);
+  if (origin === undefined) {
+    throw new BadRequestError("Invalid request target or Host header");
+  }
+  const url = `${origin}${normalizeRequestTarget(req.url)}`;
   // Reject malformed Host / request-target combinations at the adapter
   // boundary instead of letting the invalid URL propagate as a 500 later.
   // URL.canParse applies WHATWG validation without allocating and immediately
@@ -864,10 +866,11 @@ function toWebRequest(
     (req2 as unknown as Record<symbol, unknown>)[DALOY_REQUEST_RAW_BODY] = bufferedBody;
     return req2;
   }
+  const source = Readable.toWeb(req) as ReadableStream<Uint8Array>;
   const streamed = new Request(url, {
     method,
     headers,
-    body: Readable.toWeb(req) as ReadableStream,
+    body: onBodyPull === undefined ? source : soliciting(source, onBodyPull),
     duplex: "half",
   } as RequestInit);
   if (onBodyPull !== undefined) {
@@ -878,6 +881,41 @@ function toWebRequest(
   return streamed;
 }
 
+/**
+ * Wrap a request body stream so `onFirstPull` runs once, on the consumer's
+ * first read, before any byte is requested from `source`.
+ *
+ * Used only for deferred `Expect: 100-continue` requests: the interim `100`
+ * must be sent when (and only when) something actually reads the body. A
+ * high-water mark of `0` keeps the stream from pulling at construction, so
+ * `new Request(...)` and body-less refusals (413/415/401) never solicit.
+ * Cancelling the wrapper cancels `source`.
+ */
+function soliciting(
+  source: ReadableStream<Uint8Array>,
+  onFirstPull: () => void
+): ReadableStream<Uint8Array> {
+  const reader = source.getReader();
+  let solicited = false;
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        if (!solicited) {
+          solicited = true;
+          onFirstPull();
+        }
+        const { value, done } = await reader.read();
+        if (done) controller.close();
+        else controller.enqueue(value);
+      },
+      cancel(reason) {
+        return reader.cancel(reason);
+      },
+    },
+    { highWaterMark: 0 }
+  );
+}
+
 function firstHeader(v: string | string[] | undefined): string | undefined {
   if (v === undefined) return undefined;
   const raw = Array.isArray(v) ? v[0] : v;
@@ -886,10 +924,110 @@ function firstHeader(v: string | string[] | undefined): string | undefined {
   return (comma === -1 ? raw : raw.slice(0, comma)).trim() || undefined;
 }
 
+/**
+ * Build `scheme://authority` for an incoming request, or `undefined` when the
+ * Host (or trusted `X-Forwarded-Host`) is not a plain `host[:port]`.
+ *
+ * The authority is spliced into the request URL as a raw string. A Host such
+ * as `h\health?` parses as a valid WHATWG URL whose pathname differs from the
+ * request-target the router matched, which let `except()` and other
+ * `new URL(...)` consumers see an exempt path while a protected route ran.
+ * Only `A-Z a-z 0-9 . - _ :` and a bracketed IPv6 literal are accepted.
+ * A trusted `X-Forwarded-Proto` other than `http`/`https` falls back to the
+ * socket's own scheme.
+ */
+function requestOrigin(req: IncomingMessage, trustProxy: boolean): string | undefined {
+  const forwardedHost = trustProxy ? firstHeader(req.headers["x-forwarded-host"]) : undefined;
+  const host = forwardedHost ?? req.headers.host ?? "localhost";
+  if (!isPlainAuthority(host)) return undefined;
+  const forwardedProto = trustProxy
+    ? firstHeader(req.headers["x-forwarded-proto"])?.toLowerCase()
+    : undefined;
+  const proto =
+    forwardedProto === "http" || forwardedProto === "https"
+      ? forwardedProto
+      : (req.socket as { encrypted?: boolean }).encrypted
+        ? "https"
+        : "http";
+  return `${proto}://${host}`;
+}
+
+/** `true` when `host` is a non-empty `reg-name|IPv4|[IPv6][:port]` with no path, query, userinfo or escape characters. */
+function isPlainAuthority(host: string): boolean {
+  const len = host.length;
+  if (len === 0 || len > 1024) return false;
+  for (let i = 0; i < len; i++) {
+    const c = host.charCodeAt(i);
+    if (
+      (c >= 97 && c <= 122) || // a-z
+      (c >= 65 && c <= 90) || // A-Z
+      (c >= 48 && c <= 58) || // 0-9 and ':'
+      c === 46 || // .
+      c === 45 || // -
+      c === 95 // _
+    ) {
+      continue;
+    }
+    // Brackets only as a leading IPv6 literal: `[` at 0 and one `]` after it.
+    if (c === 91 /* [ */ && i === 0) continue;
+    if (c === 93 /* ] */ && host.charCodeAt(0) === 91 && host.indexOf("]", i + 1) === -1) continue;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * `true` when WHATWG URL parsing would rewrite the path portion of an
+ * origin-form request-target: `\` (folded to `/`), `.`/`..` segments and
+ * their `%2e` spellings (resolved), or bytes in the path percent-encode set.
+ * One charCode pass that stops at `?`/`#`; ordinary targets never allocate.
+ */
+function pathNeedsCanonicalization(target: string): boolean {
+  const len = target.length;
+  for (let i = 0; i < len; i++) {
+    const c = target.charCodeAt(i);
+    if (c === 63 /* ? */ || c === 35 /* # */) return false;
+    if (
+      c <= 32 ||
+      c >= 127 ||
+      c === 92 /* \ */ ||
+      c === 34 /* " */ ||
+      c === 60 /* < */ ||
+      c === 62 /* > */ ||
+      c === 96 /* ` */ ||
+      c === 123 /* { */ ||
+      c === 125 /* } */
+    ) {
+      return true;
+    }
+    if (c === 37 /* % */) {
+      if (target.charCodeAt(i + 1) === 50 && (target.charCodeAt(i + 2) | 0x20) === 101) return true;
+    } else if (c === 46 /* . */ && target.charCodeAt(i - 1) === 47 /* / */) {
+      const n = target.charCodeAt(i + 1);
+      if (n !== n /* end */ || n === 47 || n === 46 || n === 63 || n === 35) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Normalize a raw Node request-target to origin-form `path[?query]`.
+ *
+ * The result must be exactly what WHATWG URL parsing would produce, because
+ * the router matches the raw path via `getPathnameFast` while middleware such
+ * as `except()`, tenancy and the WAF re-parse `request.url`. Absolute-form
+ * targets and origin-form targets that URL parsing would rewrite (see
+ * {@link pathNeedsCanonicalization}) are round-tripped through `URL`; the
+ * common case is returned untouched.
+ */
 function normalizeRequestTarget(target: string | undefined): string {
   const raw = target && target.length > 0 ? target : "/";
-  if (raw.charCodeAt(0) === 47 /* / */) return raw;
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+  if (raw.charCodeAt(0) === 47 /* / */) {
+    return pathNeedsCanonicalization(raw) ? canonicalOriginForm(raw) : raw;
+  }
+  // Absolute-form: the scheme is case-insensitive (`HTTP://h/x` is valid).
+  const head = raw.slice(0, 8).toLowerCase();
+  if (head.startsWith("http://") || head.startsWith("https://")) {
     try {
       const url = new URL(raw);
       return `${url.pathname}${url.search}`;
@@ -897,8 +1035,20 @@ function normalizeRequestTarget(target: string | undefined): string {
       return "/";
     }
   }
-  if (raw.charCodeAt(0) === 63 /* ? */) return `/${raw}`;
-  return `/${raw}`;
+  // Anything else (`?q`, a bare segment, a foreign scheme) is treated as a
+  // relative path and gets the same canonicalization as origin-form.
+  const prefixed = `/${raw}`;
+  return pathNeedsCanonicalization(prefixed) ? canonicalOriginForm(prefixed) : prefixed;
+}
+
+/** Round-trip an origin-form target through WHATWG URL parsing; `/` if it cannot parse. */
+function canonicalOriginForm(target: string): string {
+  try {
+    const url = new URL(target, "http://h");
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return "/";
+  }
 }
 
 function sendWebResponse(res: Response, out: ServerResponse): void | Promise<void> {
@@ -952,6 +1102,7 @@ function sendWebResponse(res: Response, out: ServerResponse): void | Promise<voi
         r.once("error", onError);
         out.once("error", onError);
         out.once("finish", () => resolve());
+        out.once("close", () => destroyIfAborted(r, out, resolve));
         r.pipe(out);
       });
     }
@@ -990,8 +1141,24 @@ function pumpBody(body: ReadableStream<Uint8Array>, out: ServerResponse): Promis
     readable.once("error", onError);
     out.once("error", onError);
     out.once("finish", () => resolve());
+    out.once("close", () => destroyIfAborted(readable, out, resolve));
     readable.pipe(out);
   });
+}
+
+/**
+ * `pipe()` unpipes but never destroys its source when the destination closes
+ * early (client hung up). Without this, the source — and, for a
+ * `Readable.fromWeb` bridge, the underlying web stream — is never cancelled, so
+ * SSE/NDJSON generators, their `finally` blocks and keep-alive timers leak for
+ * every dropped connection. Destroying the source cancels the web stream, which
+ * runs the stream's `cancel()` (e.g. `iterator.return()` in `sseStream`).
+ */
+function destroyIfAborted(source: Readable, out: ServerResponse, resolve: () => void): void {
+  if (out.writableFinished) return;
+  source.unpipe(out);
+  source.destroy();
+  resolve();
 }
 
 // ---------- WebSocket upgrade ----------
@@ -1003,18 +1170,17 @@ async function handleUpgrade(
   head: Buffer,
   trustProxy: boolean
 ): Promise<void> {
-  const forwardedHost = trustProxy ? firstHeader(req.headers["x-forwarded-host"]) : undefined;
-  const host = forwardedHost ?? req.headers.host ?? "localhost";
-  const forwardedProto = trustProxy ? firstHeader(req.headers["x-forwarded-proto"]) : undefined;
-  const proto =
-    forwardedProto ?? ((req.socket as { encrypted?: boolean }).encrypted ? "https" : "http");
-  // A malformed `Host` header (e.g. containing a space) reaches this point:
-  // Node's HTTP parser accepts it and fires `upgrade`, but WHATWG URL
-  // parsing throws. Reject it as the client error it is instead of letting
-  // the throw escape the adapter.
+  // A malformed `Host` header (e.g. containing a space or `\`) reaches this
+  // point: Node's HTTP parser accepts it and fires `upgrade`. Reject it as
+  // the client error it is instead of letting it reach URL parsing.
+  const origin = requestOrigin(req, trustProxy);
+  if (origin === undefined) {
+    writeUpgradeError(socket, 400, "Bad Request");
+    return;
+  }
   let url: URL;
   try {
-    url = new URL(`${proto}://${host}${req.url ?? "/"}`);
+    url = new URL(`${origin}${req.url ?? "/"}`);
   } catch {
     writeUpgradeError(socket, 400, "Bad Request");
     return;
@@ -1036,7 +1202,9 @@ async function handleUpgrade(
     return;
   }
 
-  const request = new Request(`${proto}://${host}${req.url ?? "/"}`, {
+  // `url.href` is the same parse the route was matched on, so beforeUpgrade
+  // and any path-based guard see exactly the path that selected the handler.
+  const request = new Request(url.href, {
     method: "GET",
     headers,
   });

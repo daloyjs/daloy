@@ -43,6 +43,12 @@
  */
 
 import type { RateLimitStore } from "./middleware.js";
+import type {
+  AutoBanRecord,
+  AutoBanStore,
+  AutoBanStrikePolicy,
+  AutoBanStrikeResult,
+} from "./auto-ban.js";
 
 /**
  * Minimal Redis transport contract used by {@link redisRateLimitStore}.
@@ -141,6 +147,154 @@ export function redisRateLimitStore(opts: RedisRateLimitStoreOptions): RateLimit
         if (decision === "fail-closed") throw err;
         return { count: 1, resetMs: Date.now() + windowMs };
       }
+    },
+  };
+}
+
+// ---------- autoBan store ----------
+
+/** Options accepted by {@link redisAutoBanStore}. */
+export interface RedisAutoBanStoreOptions {
+  /** Redis transport (see {@link ioredisAdapter} / {@link nodeRedisAdapter}). */
+  client: RedisCommands;
+  /** Namespace prefix for every Redis key. Defaults to `"daloy:ab:"`. */
+  prefix?: string;
+}
+
+// Each script starts with a marker comment so test fakes can dispatch on it.
+const AB_GET = `-- daloy:autoban:get
+return redis.call('HMGET', KEYS[1], 's', 'se', 'bu', 'bc')`;
+
+const AB_SET = `-- daloy:autoban:set
+redis.call('HSET', KEYS[1], 's', ARGV[1], 'se', ARGV[2], 'bu', ARGV[3], 'bc', ARGV[4])
+redis.call('PEXPIRE', KEYS[1], ARGV[5])
+return 1`;
+
+const AB_DEL = `-- daloy:autoban:del
+redis.call('DEL', KEYS[1])
+return 1`;
+
+/**
+ * Atomic strike: a Lua port of `applyAutoBanStrike` (src/auto-ban.ts). Keep the
+ * two in sync. ARGV: now, windowMs, maxStrikes, banMs, maxBanMs, escalate(0|1).
+ * Returns {strikes, banned(0|1), banCount, banDurationMs, bannedUntilMs}.
+ */
+const AB_STRIKE = `-- daloy:autoban:strike
+local now = tonumber(ARGV[1])
+local windowMs = tonumber(ARGV[2])
+local maxStrikes = tonumber(ARGV[3])
+local banMs = tonumber(ARGV[4])
+local maxBanMs = tonumber(ARGV[5])
+local v = redis.call('HMGET', KEYS[1], 's', 'se', 'bu', 'bc')
+local s = tonumber(v[1]) or 0
+local se = tonumber(v[2]) or 0
+local bu = tonumber(v[3]) or 0
+local bc = tonumber(v[4]) or 0
+if se <= now then s = 0 end
+s = s + 1
+local strikes = s
+local banned = 0
+local dur = 0
+se = now + windowMs
+if s >= maxStrikes then
+  bc = bc + 1
+  if ARGV[6] == '1' then
+    dur = math.min(maxBanMs, banMs * (2 ^ (bc - 1)))
+  else
+    dur = banMs
+  end
+  bu = now + dur
+  banned = 1
+  s = 0
+end
+redis.call('HSET', KEYS[1], 's', string.format('%d', s), 'se', string.format('%d', se), 'bu', string.format('%d', bu), 'bc', string.format('%d', bc))
+redis.call('PEXPIRE', KEYS[1], string.format('%d', math.max(1, math.max(se, bu) - now)))
+return {strikes, banned, bc, dur, bu}`;
+
+/**
+ * Build a Redis-backed {@link AutoBanStore} for `autoBan()` whose
+ * {@link AutoBanStore.strike} runs as a single Lua script, so concurrent
+ * failures on any number of replicas cannot overwrite each other's strikes.
+ *
+ * Records are stored as a Redis hash (`s`, `se`, `bu`, `bc`) with a `PEXPIRE`
+ * matching the record TTL. Requires Redis >= 4 (multi-field `HSET`).
+ *
+ * @remarks
+ * Security: store errors propagate. `autoBan()` fails **closed** on a read error
+ * during ban enforcement (the request errors) and, on a strike error, skips the
+ * strike and reports it through `onStoreError` rather than failing the response.
+ * The strike clock is the calling replica's `Date.now()`; keep replica clocks in
+ * sync (NTP).
+ *
+ * @example
+ * ```ts
+ * import { autoBan } from "@daloyjs/core";
+ * import { redisAutoBanStore, ioredisAdapter } from "@daloyjs/core/rate-limit-redis";
+ *
+ * app.use(autoBan({ trustedHops: 1, store: redisAutoBanStore({ client: ioredisAdapter(redis) }) }));
+ * ```
+ *
+ * @param opts - Redis client and key prefix; see {@link RedisAutoBanStoreOptions}.
+ * @returns An {@link AutoBanStore} implementing the atomic `strike()` method.
+ * @since 1.3.7
+ */
+export function redisAutoBanStore(opts: RedisAutoBanStoreOptions): AutoBanStore {
+  const prefix = opts.prefix ?? "daloy:ab:";
+  const client = opts.client;
+  return {
+    async get(key: string): Promise<AutoBanRecord | undefined> {
+      const v = (await client.eval(AB_GET, [prefix + key], [])) as readonly unknown[] | null;
+      if (!v || v[0] === null || v[0] === undefined || v[0] === false) return undefined;
+      return {
+        strikes: toNumber(v[0]),
+        strikeExpiresMs: toNumber(v[1]),
+        bannedUntilMs: toNumber(v[2]),
+        banCount: toNumber(v[3]),
+      };
+    },
+    async set(key: string, record: AutoBanRecord, ttlMs: number): Promise<void> {
+      await client.eval(
+        AB_SET,
+        [prefix + key],
+        [
+          String(Math.trunc(record.strikes)),
+          String(Math.trunc(record.strikeExpiresMs)),
+          String(Math.trunc(record.bannedUntilMs)),
+          String(Math.trunc(record.banCount)),
+          String(Math.max(1, Math.ceil(ttlMs))),
+        ]
+      );
+    },
+    async delete(key: string): Promise<void> {
+      await client.eval(AB_DEL, [prefix + key], []);
+    },
+    async strike(
+      key: string,
+      policy: AutoBanStrikePolicy,
+      nowMs: number
+    ): Promise<AutoBanStrikeResult> {
+      const r = (await client.eval(
+        AB_STRIKE,
+        [prefix + key],
+        [
+          String(Math.trunc(nowMs)),
+          String(policy.windowMs),
+          String(policy.maxStrikes),
+          String(policy.banMs),
+          String(policy.maxBanMs),
+          policy.escalate ? "1" : "0",
+        ]
+      )) as readonly unknown[] | null;
+      if (!Array.isArray(r) || r.length < 5) {
+        throw new Error("redisAutoBanStore: unexpected strike reply from Redis");
+      }
+      return {
+        strikes: toNumber(r[0]),
+        banned: toNumber(r[1]) === 1,
+        banCount: toNumber(r[2]),
+        banDurationMs: toNumber(r[3]),
+        bannedUntilMs: toNumber(r[4]),
+      };
     },
   };
 }

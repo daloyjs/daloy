@@ -202,11 +202,12 @@ app.use(
       <h2 id="how-clients-are-keyed">How clients are keyed</h2>
       <p>
         This is the part people get wrong. By default <code>rateLimit()</code>{" "}
-        derives a single shared key, <code>global</code>
-        {", "}so <strong>every caller lands in one bucket</strong> (the Redis
-        key is <code>daloy:rl:global</code>). That is a deliberate safe default:
-        DaloyJS will not key off a spoofable client IP unless you tell it to. To
-        limit <em>per client</em> you have to opt in.
+        keys on the unspoofable TCP peer (<code>peer:&lt;addr&gt;</code>
+        {", "}IPv6 grouped per <code>ipv6Subnet</code>; since 1.3.7). DaloyJS
+        will not key off a spoofable forwarded IP unless you tell it to, so{" "}
+        <strong>behind a proxy every caller lands in the proxy&apos;s bucket</strong>{" "}
+        until you configure trust. Runtimes that expose no peer share one{" "}
+        <code>global</code> bucket (Redis key <code>daloy:rl:global</code>).
       </p>
       <ul>
         <li>
@@ -347,6 +348,46 @@ const myAdapter: RedisCommands = {
   prefix: "myapp:prod:rl:",
 });`}
       />
+
+      <h2 id="auto-ban-store">autoBan() store</h2>
+      <p>
+        The same entry point also exports <code>redisAutoBanStore()</code>{" "}
+        (since 1.3.7), a shared store for{" "}
+        <a href="/docs/auto-ban#pluggable-store-multi-instance">
+          <code>autoBan()</code>
+        </a>
+        . It uses the same <code>RedisCommands</code> adapters, keeps each
+        record as a Redis hash with a matching <code>PEXPIRE</code>, and
+        implements the atomic <code>strike()</code> as one Lua script, so
+        concurrent failures on different replicas cannot overwrite each
+        other&apos;s strikes. Keys are prefixed with <code>daloy:ab:</code> by
+        default. Requires Redis 4 or newer (multi-field <code>HSET</code>).
+      </p>
+      <CodeBlock
+        code={`import { autoBan, rateLimit } from "@daloyjs/core";
+import {
+  redisAutoBanStore,
+  redisRateLimitStore,
+  ioredisAdapter,
+} from "@daloyjs/core/rate-limit-redis";
+
+const client = ioredisAdapter(redis);
+
+app.use(rateLimit({ trustedHops: 1, store: redisRateLimitStore({ client }) }));
+app.use(
+  autoBan({
+    trustedHops: 1,
+    store: redisAutoBanStore({ client, prefix: "myapp:prod:ab:" }),
+  }),
+);`}
+      />
+      <p>
+        Store errors propagate to <code>autoBan()</code>
+        {": "}a failed ban check fails closed, while a failed strike is skipped
+        and reported through <code>onStoreError</code> instead of failing the
+        response. The strike clock is the calling replica&apos;s{" "}
+        <code>Date.now()</code>, so keep replica clocks in sync (NTP).
+      </p>
 
       <h2 id="what-it-does-not-do">What it does not do</h2>
       <ul>

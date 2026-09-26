@@ -326,7 +326,8 @@ app.use(autoBan({ trustedProxies: ["10.0.0.0/8"], trustedHops: 2 }));`}
 
       <h2 id="responses">Responses</h2>
       <p>
-        A banned request is rejected in <code>beforeHandle</code> before the
+        A banned request is rejected in <code>preBody</code> (with a{" "}
+        <code>beforeHandle</code> fallback) before the body is read or the
         handler runs. By default it returns <code>429 Too Many Requests</code>{" "}
         with a <code>Retry-After</code> header and{" "}
         <code>Cache-Control: no-store</code>
@@ -372,10 +373,50 @@ app.use(autoBan({ trustedProxies: ["10.0.0.0/8"], trustedHops: 2 }));`}
       </h2>
       <p>
         The default store is in-memory and <strong>single-process</strong>
-        {". "}For a horizontally-scaled deployment, implement{" "}
-        <code>AutoBanStore</code> (mirroring the <code>rateLimit()</code> store
-        contract) against Redis or another shared backend so a ban applies
-        across every instance:
+        {". "}For a horizontally-scaled deployment, use a shared backend so a
+        ban applies across every instance. The ready-made option is{" "}
+        <code>redisAutoBanStore()</code> (since 1.3.7), exported from{" "}
+        <code>@daloyjs/core/rate-limit-redis</code> next to the rate-limit
+        store. Its strike runs as one Lua script, so concurrent failures on any
+        number of replicas cannot overwrite each other&apos;s strikes. It needs
+        Redis 4 or newer; keep replica clocks in sync (NTP), because the strike
+        clock is the calling replica&apos;s <code>Date.now()</code>.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`import Redis from "ioredis";
+import { autoBan } from "@daloyjs/core";
+import { redisAutoBanStore, ioredisAdapter } from "@daloyjs/core/rate-limit-redis";
+
+const redis = new Redis(process.env.REDIS_URL!);
+
+app.use(
+  autoBan({
+    trustedHops: 1,
+    store: redisAutoBanStore({ client: ioredisAdapter(redis) }), // prefix "daloy:ab:"
+  }),
+);`}
+      />
+      <h3 id="custom-store-atomic-strike">Custom stores and atomic strikes</h3>
+      <p>
+        You can also implement <code>AutoBanStore</code> yourself (it mirrors
+        the <code>rateLimit()</code> store contract). The required methods are{" "}
+        <code>get</code>
+        {", "}
+        <code>set</code>
+        {", "}and <code>delete</code>
+        {". "}Without anything else, <code>autoBan()</code> records a strike as{" "}
+        <code>get</code> then <code>set</code>
+        {". "}It serialises that per key inside one process, but it cannot make
+        it atomic across instances, so a brute-forcer spread over replicas gets
+        roughly <code>maxStrikes x replicas</code> guesses. A one-time warning
+        is logged when a custom store lacks the fix: the optional{" "}
+        <code>strike(key, policy, nowMs)</code> method (since 1.3.7), which
+        reads, applies one strike, persists, and returns the outcome as one
+        indivisible operation. The pure arithmetic is exported as{" "}
+        <code>applyAutoBanStrike(record, policy, nowMs)</code> (since 1.3.7):
+        call it inside an in-process critical section, or port it to your
+        backend&apos;s server-side atomic primitive.
       </p>
       <CodeBlock
         language="ts"
@@ -401,6 +442,59 @@ app.use(autoBan({ trustProxyHeaders: true, store: redisStore }));`}
         absent so bans and escalation decay automatically. To lift a ban
         manually, call <code>store.delete(key)</code>.
       </p>
+      <CodeBlock
+        language="ts"
+        code={`import {
+  applyAutoBanStrike,
+  type AutoBanRecord,
+  type AutoBanStore,
+} from "@daloyjs/core/auto-ban";
+
+// In-process example: no await between read and write, so it is atomic.
+const map = new Map<string, { record: AutoBanRecord; expiresMs: number }>();
+const store: AutoBanStore = {
+  async get(key) {
+    const e = map.get(key);
+    return e && e.expiresMs > Date.now() ? e.record : undefined;
+  },
+  async set(key, record, ttlMs) {
+    map.set(key, { record, expiresMs: Date.now() + ttlMs });
+  },
+  async delete(key) {
+    map.delete(key);
+  },
+  async strike(key, policy, nowMs) {
+    const e = map.get(key);
+    const current = e && e.expiresMs > nowMs ? e.record : undefined;
+    const next = applyAutoBanStrike(current, policy, nowMs);
+    map.set(key, { record: next.record, expiresMs: nowMs + next.ttlMs });
+    return next.result; // { strikes, banned, banCount, banDurationMs, bannedUntilMs }
+  },
+};`}
+      />
+
+      <h3 id="store-outages">Store outages</h3>
+      <p>
+        Since 2.0.0 a store error while <em>recording</em> a strike (a Redis
+        outage, say) no longer turns the response into a <code>500</code>
+        {". "}The strike is skipped, the response goes out unchanged, and later{" "}
+        <code>onSend</code> hooks (such as <code>concurrencyLimit()</code>
+        &apos;s slot release) still run. The error is reported to{" "}
+        <code>onStoreError(error, key)</code>, which defaults to a one-line{" "}
+        <code>console.warn</code>
+        {". "}Ban <em>checks</em> are different: a store error while checking
+        for an active ban still fails closed and the request errors.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`app.use(
+  autoBan({
+    trustedHops: 1,
+    store: redisAutoBanStore({ client: ioredisAdapter(redis) }),
+    onStoreError: (err, key) => log.error({ err, key }, "auto-ban strike not recorded"),
+  }),
+);`}
+      />
 
       <h2 id="sharing-across-route-groups">Sharing across route groups</h2>
       <p>

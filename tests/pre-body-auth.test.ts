@@ -3,7 +3,15 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 
 import { App } from "../src/app.js";
-import { basicAuth, bearerAuth, rateLimit, requestId } from "../src/middleware.js";
+import {
+  basicAuth,
+  bearerAuth,
+  loginThrottle,
+  markAuthHook,
+  rateLimit,
+  requestId,
+} from "../src/middleware.js";
+import { UnauthorizedError } from "../src/errors.js";
 
 function protectedBodyApp() {
   const app = new App({ logger: false });
@@ -128,4 +136,73 @@ test("preBody runs before validation while beforeHandle keeps validated context"
 
   assert.equal(response.status, 204);
   assert.deepEqual(phases, ["pre:undefined", "validated:ok"]);
+});
+
+function throwingAuthApp(limiter: Parameters<App["use"]>[0], auth: Parameters<App["use"]>[0]) {
+  const app = new App({ logger: false });
+  app.use(limiter);
+  app.use(auth);
+  app.route({
+    method: "GET",
+    path: "/secret",
+    responses: { 200: { description: "OK" } },
+    handler: () => ({ status: 200, body: undefined }),
+  });
+  return app;
+}
+
+async function statuses(app: App, n: number, authorization: string): Promise<number[]> {
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push((await app.request("/secret", { headers: { authorization } })).status);
+  }
+  return out;
+}
+
+test("a rate limiter before bearerAuth counts thrown invalid-token rejections (403 -> 429)", async () => {
+  const app = throwingAuthApp(
+    rateLimit({ windowMs: 60_000, max: 2, keyGenerator: () => "attacker" }),
+    bearerAuth({ validate: () => false })
+  );
+  assert.deepEqual(await statuses(app, 4, "Bearer guess"), [403, 403, 429, 429]);
+});
+
+test("a rate limiter before a throwing markAuthHook counts failures and rethrows under budget", async () => {
+  const app = throwingAuthApp(
+    rateLimit({ windowMs: 60_000, max: 2, keyGenerator: () => "attacker" }),
+    markAuthHook({
+      preBody() {
+        throw new UnauthorizedError();
+      },
+    })
+  );
+  const first = await app.request("/secret");
+  assert.equal(first.status, 401);
+  assert.equal(first.headers.get("x-ratelimit-remaining"), "1");
+  assert.deepEqual(await statuses(app, 2, "Bearer guess"), [401, 429]);
+});
+
+test("loginThrottle before a throwing auth hook hard-limits thrown rejections", async () => {
+  const app = throwingAuthApp(
+    loginThrottle({
+      groupId: "pre-body-throw-test",
+      max: 2,
+      delayMs: 0,
+      keyGenerator: () => "attacker",
+    }),
+    bearerAuth({ validate: () => false })
+  );
+  assert.deepEqual(await statuses(app, 3, "Bearer guess"), [403, 403, 429]);
+});
+
+test("valid bearer tokens still pass once and are charged only once per request", async () => {
+  const app = throwingAuthApp(
+    rateLimit({ windowMs: 60_000, max: 2, keyGenerator: () => "user" }),
+    bearerAuth({ validate: (token) => token === "good" })
+  );
+  const ok = await app.request("/secret", { headers: { authorization: "Bearer good" } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("x-ratelimit-remaining"), "1");
+  // A later failure is still counted, and the original 403 surfaces while under budget.
+  assert.deepEqual(await statuses(app, 2, "Bearer bad"), [403, 429]);
 });

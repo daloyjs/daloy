@@ -60,6 +60,29 @@ if (r.status === 200) {
         step.
       </p>
 
+      <h3 id="path-parameters">Path parameters</h3>
+      <p>
+        Path params are substituted by whole segment, so <code>:id</code> never
+        matches inside <code>:idx</code>, and each value is percent-encoded
+        into its own segment. Since 1.3.7 a generated method throws a{" "}
+        <code>TypeError</code>, before any request is sent, when a param is
+        missing, empty, <code>.</code>, or <code>..</code>. URL parsing would
+        resolve a dot segment (even as <code>%2E%2E</code>) and silently
+        retarget the call, for example turning{" "}
+        <code>DELETE /orgs/:org/members/..</code> into{" "}
+        <code>DELETE /orgs/:org</code>. Wildcard routes (<code>*path</code>, or
+        a bare <code>*</code> named <code>wildcard</code>) accept a{" "}
+        <code>/</code>-separated value; every segment is encoded and checked
+        the same way.
+      </p>
+      <CodeBlock
+        code={`// app.get("/files/*path", { operationId: "getFile", ... })
+await client.getFile({ params: { path: "docs/guide.md" } }); // GET /files/docs/guide.md
+
+await client.getBookById({ params: { id: ".." } });
+// TypeError: Invalid path parameter "id" for /books/:id: empty and "."/".." segments are not allowed`}
+      />
+
       <div role="note">
         <p>
           <strong>Compose route tuples instead of widening the App.</strong>{" "}

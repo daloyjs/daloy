@@ -147,6 +147,24 @@ describe("subdomains PSL helper", () => {
       })
     );
   });
+  it("stale PSL does not block a pinned baseDomain in production", () => {
+    const r = subdomains("acme.example.com", {
+      baseDomain: "example.com",
+      production: true,
+      _snapshotDate: "2020-01-01",
+      _now: new Date("2026-09-26"),
+    });
+    assert.equal(r.subdomain, "acme");
+    assert.equal(r.baseDomain, "example.com");
+  });
+  it("stale PSL still fails closed on the PSL path, and baseDomain mismatch still throws", () => {
+    const stale = { production: true, _snapshotDate: "2020-01-01", _now: new Date("2026-09-26") };
+    assert.throws(() => subdomains("acme.example.com", stale), /Public Suffix List snapshot is/);
+    assert.throws(
+      () => subdomains("acme.evil.com", { ...stale, baseDomain: "example.com" }),
+      /not under declared baseDomain/
+    );
+  });
   it("accepts fresh PSL in production", () => {
     const r = subdomains("api.example.com", {
       production: true,

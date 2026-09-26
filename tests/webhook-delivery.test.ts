@@ -5,7 +5,11 @@ import {
   MemoryWebhookDeadLetterSink,
   verifyWebhookSignature,
   type WebhookAttempt,
+  fetchGuard,
 } from "../src/index.js";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createNetServer, type Socket } from "node:net";
+import { once } from "node:events";
 
 const SECRET = "whsec_test_0123456789abcdef0123456789abcdef";
 
@@ -343,4 +347,67 @@ test("createWebhookSender: custom header names and algorithm are honoured", asyn
   assert.match(h.get("x-sig")!, /^sha512=/);
   assert.equal(h.get("x-type"), "t");
   assert.equal(h.get("user-agent"), "MyApp/2");
+});
+
+// deepsec 2026-09-26: the default fetchGuard() transport (pinned http: path)
+// must honour the per-attempt timeout and follow 307 without re-sending.
+test("createWebhookSender + fetchGuard: per-attempt timeoutMs fires on a stalled pinned http: receiver", async () => {
+  const sockets: Socket[] = [];
+  const stall = createNetServer((s) => {
+    sockets.push(s);
+    s.on("error", () => {});
+  });
+  stall.listen(0, "127.0.0.1");
+  await once(stall, "listening");
+  const port = (stall.address() as { port: number }).port;
+  try {
+    const send = createWebhookSender({
+      secret: SECRET,
+      fetch: fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] }),
+      timeoutMs: 100,
+      maxAttempts: 1,
+    });
+    const t0 = Date.now();
+    const r = await send({ url: `http://hooks.invalid:${port}/in`, payload: { a: 1 } });
+    assert.equal(r.ok, false);
+    assert.ok(Date.now() - t0 < 2000, "the attempt timed out instead of hanging");
+  } finally {
+    for (const s of sockets) s.destroy();
+    stall.close();
+  }
+});
+
+test("createWebhookSender + fetchGuard: a 307 is followed once with the signed body (no re-send)", async () => {
+  const seen: string[] = [];
+  const up = createHttpServer((req, res) => {
+    let b = "";
+    req.on("data", (c) => (b += c));
+    req.on("end", () => {
+      seen.push(`${req.method} ${req.url} ${b} ${req.headers["webhook-signature"] ? "signed" : "unsigned"}`);
+      if (req.url === "/hook") {
+        res.writeHead(307, { location: "/hook2" });
+        res.end();
+      } else {
+        res.writeHead(200);
+        res.end("ok");
+      }
+    });
+  });
+  up.listen(0, "127.0.0.1");
+  await once(up, "listening");
+  const port = (up.address() as { port: number }).port;
+  try {
+    const send = createWebhookSender({
+      secret: SECRET,
+      fetch: fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] }),
+      maxAttempts: 3,
+      retryDelayMs: 1,
+    });
+    const r = await send({ url: `http://hooks.invalid:${port}/hook`, payload: { a: 1 } });
+    assert.equal(r.ok, true);
+    assert.equal(r.attempts, 1);
+    assert.deepEqual(seen, ['POST /hook {"a":1} signed', 'POST /hook2 {"a":1} signed']);
+  } finally {
+    up.close();
+  }
 });

@@ -184,11 +184,14 @@ app.get(
                 <code>acme.example.com</code> -&gt; <code>acme</code>
               </td>
               <td>
-                PSL-aware via <code>subdomains()</code>
-                {". "}A <code>Host</code> not under <code>baseDomain</code>{" "}
-                resolves to <em>unresolved</em> (host-spoof safe), never a{" "}
-                <code>500</code>
-                {". "}Recommended for production.
+                Splits the host via <code>subdomains()</code> (PSL-aware when{" "}
+                <code>baseDomain</code> is omitted). A <code>Host</code> not
+                under <code>baseDomain</code> resolves to <em>unresolved</em>{" "}
+                (host-spoof safe), never a <code>500</code>
+                {". "}Recommended for production. With a pinned{" "}
+                <code>baseDomain</code>
+                {", "}<code>production: true</code> never trips the PSL
+                snapshot staleness check (since 1.3.7).
               </td>
             </tr>
             <tr>
@@ -219,11 +222,21 @@ app.get(
                 <code>tenantFromClaim(&quot;org&quot;)</code>
               </td>
               <td>
-                <code>ctx.state.auth.credentials.org</code>
+                <code>ctx.state.auth</code>
+                {", "}then <code>ctx.state.user</code>
               </td>
               <td>
-                For a verified JWT/session claim. The auth middleware that
-                populates it must run <em>before</em> <code>tenancy()</code>.
+                For a verified JWT/session claim. On each node the claim is read
+                from <code>credentials</code>
+                {", "}then <code>claims</code>
+                {", "}then the node itself, so it finds the identity that{" "}
+                <code>jwk()</code> (<code>ctx.state.user.claims</code>) and{" "}
+                <code>basicAuth()</code> (<code>ctx.state.user</code>) record,
+                as well as an <code>AuthContext</code> at{" "}
+                <code>ctx.state.auth.credentials</code> (since 1.3.7). Pass{" "}
+                <code>{`{ stateKey }`}</code> to read one node only. The auth
+                middleware that populates it must run <em>before</em>{" "}
+                <code>tenancy()</code>.
               </td>
             </tr>
             <tr>
@@ -238,9 +251,22 @@ app.get(
       </div>
       <CodeBlock
         code={`// Prefer a verified claim, fall back to the subdomain.
-tenancy({
-  resolve: [tenantFromClaim("org"), tenantFromSubdomain({ baseDomain: "example.com" })],
-});`}
+// jwk() runs first and records { sub, scopes, claims } on ctx.state.user,
+// so tenantFromClaim("org") reads ctx.state.user.claims.org.
+app.use(
+  jwk({
+    jwks: "https://issuer.example.com/.well-known/jwks.json",
+    algorithms: ["RS256"],
+  }),
+);
+app.use(
+  tenancy({
+    resolve: [
+      tenantFromClaim("org"),
+      tenantFromSubdomain({ baseDomain: "example.com", production: true }),
+    ],
+  }),
+);`}
         language="ts"
       />
 

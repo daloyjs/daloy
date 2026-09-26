@@ -27,7 +27,7 @@ export function buildApp(): App {
       ? { behindProxy: { hops: Number(Deno.env.get("TRUST_PROXY_HOPS")) } }
       : {}),
     // daloy-minimal:strip-start docs
-    // Auto-mounted docs (when `docs: true`):
+    // Auto-mounted docs, outside production only (`docs: "auto"`):
     //   GET /openapi.json — OpenAPI 3.1 spec (JSON)
     //   GET /openapi.yaml — OpenAPI 3.1 spec (YAML, served inline as text/yaml)
     //   GET /docs         — Scalar API reference UI that loads the spec
@@ -44,7 +44,7 @@ export function buildApp(): App {
       // deployed. Set PUBLIC_URL to pin an absolute base URL (e.g. for codegen).
       ...(Deno.env.get("PUBLIC_URL") ? { servers: [{ url: Deno.env.get("PUBLIC_URL")! }] } : {}),
     },
-    docs: true,
+    docs: "auto",
     // daloy-minimal:strip-end docs
   });
 

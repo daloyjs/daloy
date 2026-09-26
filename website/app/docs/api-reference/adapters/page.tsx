@@ -78,11 +78,16 @@ interface NodeServerOptions {
   shutdownTimeoutMs?:    number;   // default: 10_000
   handleSignals?:        boolean;  // default: true (SIGINT/SIGTERM)
   maxHeaderBytes?:       number;   // default: 16 KiB
-  trustProxy?:           boolean;  // honor x-forwarded-proto/host (only behind a trusted LB)
+  trustProxy?:           boolean;  // honor x-forwarded-proto/host (only behind a trusted LB); proto only as http/https
   maxConnections?:       number;   // cap concurrent sockets (admission control); default: unset (unbounded)
   bufferedBodyMaxBytes?: number;   // default: 256 KiB (pre-buffer threshold for POST hot path)
 }
-interface NodeServerHandle { server: Server; port: number; close(): Promise<void> }`}
+interface NodeServerHandle { server: Server; port: number; close(): Promise<void> }
+
+// Request-target hardening: raw %2e%2e dot segments are resolved and \\ is
+// folded to / before routing, and a Host (or trusted X-Forwarded-Host) that
+// contains \\ / ? # @ % or whitespace is refused with 400. When the client
+// disconnects mid-response, a streamed body (SSE, NDJSON) is cancelled.`}
       />
       <p>
         Pass <code>port: 0</code> when a test needs an ephemeral port. Because
@@ -178,7 +183,11 @@ toLambdaStreamHandler(app: App): LambdaStreamHandler;
 type LambdaHandler  = (event: LambdaEvent) => Promise<LambdaResponse>;
 type LambdaStreamHandler = (event: LambdaEvent, responseStream: LambdaResponseStream, context?: unknown) => Promise<void>;
 type LambdaEvent    = LambdaEventV1   | LambdaEventV2;     // API Gateway REST + HTTP/Function URLs
-type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;`}
+type LambdaResponse = LambdaResponseV1 | LambdaResponseV2;
+
+// A Host that is not a plain host[:port] or [IPv6][:port] (for example one
+// containing \\ / ? # @ % or whitespace) is refused with 400.
+// X-Forwarded-Proto is honoured only as http or https; anything else is https.`}
       />
 
       <h2 id="test-only-internal-helpers">Test-only / internal helpers</h2>

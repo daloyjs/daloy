@@ -201,7 +201,45 @@ app.use(compression());
           archives, fonts, WebAssembly, and PDFs. <code>image/svg+xml</code> is
           carved back in because it is XML text.
         </li>
+        <li>
+          Skips live streams (since 1.3.7): <code>text/event-stream</code>
+          {", "}NDJSON (<code>application/x-ndjson</code>
+          {", "}
+          <code>application/ndjson</code>), JSON Lines (
+          <code>application/jsonl</code>
+          {", "}
+          <code>application/x-jsonlines</code>), <code>application/json-seq</code>
+          {", "}and any response whose <code>Cache-Control</code> carries{" "}
+          <code>no-transform</code>
+          {". "}Compressing these would buffer the stream and hold back every
+          event until the cap or the end of the stream.
+        </li>
       </ul>
+      <p>
+        The streaming skip means <code>sseResponse()</code> (which sets{" "}
+        <code>cache-control: no-cache, no-transform</code>) and{" "}
+        <code>ndjsonResponse()</code> work with a global{" "}
+        <code>compression()</code> and no per-route opt-out. For your own
+        streamed format, set <code>no-transform</code> to get the same
+        pass-through:
+      </p>
+      <CodeBlock
+        code={`app.use(compression());
+
+// Sent uncompressed: sseResponse() sets Cache-Control: no-transform.
+app.get("/events", eventsRoute, () => sseResponse(ticks()));
+
+// Your own stream: opt out with no-transform.
+app.get("/feed", feedRoute, () =>
+  new Response(feedStream(), {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+    },
+  }),
+);`}
+        language="ts"
+      />
 
       <h2 id="cache-and-etag-behavior">Cache and ETag behavior</h2>
       <p>
@@ -258,6 +296,31 @@ app.use(compression());
         <code>compression()</code> performs the downgrade for you on the way
         out.
       </p>
+      <p>
+        <code>etag()</code> buffers a body to hash it, so it only tags bodies
+        with a known size (since 1.3.7). Responses that are{" "}
+        <code>text/event-stream</code> or <code>application/x-ndjson</code>
+        {", "}have no <code>Content-Length</code>
+        {", "}or declare a <code>Content-Length</code> above{" "}
+        <code>maxBytes</code> (default <code>1_048_576</code>, 1&nbsp;MiB) are
+        sent untagged instead of buffered. <code>maxBytes</code> must be a
+        non-negative finite number; anything else throws a{" "}
+        <code>TypeError</code> at construction. Framework-serialized handler
+        results always carry a <code>Content-Length</code> and are tagged. A
+        raw <code>new Response(...)</code> or <code>Response.json(...)</code>{" "}
+        has none, so set <code>content-length</code> on it if you want an
+        ETag.
+      </p>
+      <CodeBlock
+        code={`app.use(
+  etag({
+    // Tag bodies up to 4 MiB; larger or unknown-length bodies go out untagged.
+    maxBytes: 4 * 1024 * 1024,
+  }),
+);
+app.use(compression());`}
+        language="ts"
+      />
 
       <h2 id="no-compression-level-knob">No compression level knob</h2>
       <p>

@@ -166,6 +166,7 @@ export {
   MIN_PROD_SECRET_BYTES,
   WEAK_SECRET_STRINGS,
   sanitizeFilename,
+  contentDisposition,
   assertSafeRelativePath,
   hasMongoOperatorKeys,
   assertNoMongoOperators,
@@ -339,13 +340,15 @@ export type {
   HttpSignatureAuthOptions,
   ContentDigestAlgorithm,
 } from "./http-signatures.js";
-export { autoBan, MemoryAutoBanStore, _resetAutoBanStoresForTests } from "./auto-ban.js";
+export { autoBan, applyAutoBanStrike, MemoryAutoBanStore, _resetAutoBanStoresForTests } from "./auto-ban.js";
 export type {
   AutoBanOptions,
   AutoBanStore,
   AutoBanRecord,
   AutoBanEvent,
   AutoBanStrikeEvent,
+  AutoBanStrikePolicy,
+  AutoBanStrikeResult,
 } from "./auto-ban.js";
 export { botGuard, GOOGLEBOT, BINGBOT, WELL_KNOWN_BOTS } from "./bot-guard.js";
 export type { BotGuardOptions, BotGuardEvent, BotResolver, VerifiedBotRule } from "./bot-guard.js";
@@ -425,6 +428,7 @@ export {
   DEFAULT_REDACT_KEYS,
   SENSITIVE_URL_QUERY_KEYS,
   sanitizeUrlForLog,
+  sanitizeUrlQueryForLog,
 } from "./logger.js";
 export type { Logger, LogLevel, ConsoleLoggerOptions, LoggerRedactionOptions } from "./logger.js";
 
@@ -643,6 +647,7 @@ export {
   WS_MAX_CONTROL_PAYLOAD,
   DEFAULT_WS_BACKPRESSURE_LIMIT,
   DEFAULT_WS_MAX_PAYLOAD_LENGTH,
+  DEFAULT_WS_MAX_MESSAGE_FRAGMENTS,
   DEFAULT_WS_IDLE_TIMEOUT_SECONDS,
   computeAcceptKey,
   parseSubprotocols,

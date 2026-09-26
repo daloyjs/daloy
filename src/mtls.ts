@@ -29,6 +29,7 @@
  */
 
 import { ForbiddenError } from "./errors.js";
+import { markAuthIdentity } from "./internal-replay.js";
 import { timingSafeEqual } from "./security.js";
 import type { Hooks, PreBodyContext } from "./types.js";
 
@@ -516,6 +517,20 @@ export interface ClientCertAuthOptions {
   now?: () => number;
 }
 
+/**
+ * Stable identity for an accepted certificate. Names are included alongside
+ * the fingerprint because a header-sourced fingerprint may be absent or coarse.
+ */
+function certIdentity(cert: ClientCertificate): string {
+  return `mtls:${JSON.stringify([
+    cert.fingerprint256 ?? null,
+    cert.subjectDN ?? null,
+    cert.issuerDN ?? null,
+    cert.serialNumber ?? null,
+    cert.subjectAltNames,
+  ])}`;
+}
+
 const MISSING_CERT_BODY = JSON.stringify({
   type: "https://daloyjs.dev/errors/client-certificate-required",
   title: "Client certificate required",
@@ -527,7 +542,10 @@ const MISSING_CERT_BODY = JSON.stringify({
  * normalized {@link ClientCertificate} attached by the adapter (native TLS) or
  * parsed from a trusted-proxy header, enforces verification + optional
  * allow-lists + validity window + a custom hook, and stamps the accepted
- * certificate on `ctx.state` for downstream handlers.
+ * certificate on `ctx.state` for downstream handlers. It also records the
+ * certificate identity for `responseCache()` (which then bypasses unless a
+ * `principal` is configured) and `idempotency()` (which scopes by it), so one
+ * allow-listed peer is never replayed another peer's stored response.
  * Header mode requires an origin reachable only through a trusted terminator
  * that strips and replaces identity headers after certificate verification.
  * Fingerprint allowlists do not authenticate client-supplied header values.
@@ -619,6 +637,10 @@ export function clientCertAuth(opts: ClientCertAuthOptions = {}): Hooks {
         if (ok === false) throw new ForbiddenError(message);
       }
       (ctx.state as Record<string, unknown>)[stateKey] = cert;
+      // Tell stored-response middleware (responseCache / idempotency) who the
+      // caller is: this identity is not in Authorization/Cookie, so without it a
+      // cache HIT would hand one allow-listed peer another peer's response.
+      markAuthIdentity(ctx.state as Record<PropertyKey, unknown>, certIdentity(cert));
       return undefined;
     },
   };

@@ -14,8 +14,10 @@
  * The limiter can be partitioned with {@link ConcurrencyLimitOptions.scope}:
  *
  * - `"global"` (default) — one shared budget across the whole mount.
- * - `"route"` — a separate budget per `method + path`, so a single hot endpoint
- *   can't starve the others mounted under the same guard.
+ * - `"route"` — a separate budget per `method + matched route template`
+ *   (`ctx.routePath`, e.g. `/reports/:id`), so a single hot endpoint can't
+ *   starve the others mounted under the same guard, and varying a path
+ *   parameter or trailing slash cannot mint a fresh budget.
  * - `"client"` — a separate budget per client identity (requires
  *   {@link ConcurrencyLimitOptions.trustProxyHeaders} or a
  *   {@link ConcurrencyLimitOptions.keyGenerator}); a heavy client can't consume
@@ -25,8 +27,10 @@
  *
  * The middleware is dependency-free and runtime-portable: it acquires in
  * {@link "./types.js".Hooks.beforeHandle} and releases in
- * {@link "./types.js".Hooks.onSend}, which the framework runs on the success,
- * error, and short-circuit response paths alike, so a slot is never leaked.
+ * {@link "./types.js".Hooks.onSend}. It also registers a per-request
+ * finalizer that the dispatcher runs in its `finally` block, so the slot is
+ * released even when another `onSend` / `onError` hook throws — a slot is
+ * never leaked, and never released twice.
  *
  * @example
  * ```ts
@@ -55,6 +59,7 @@ import {
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
 import type { IpMatcher } from "./ip-match.js";
+import { registerRequestFinalizer } from "./request-finalizers.js";
 
 /**
  * Details of a request rejected by {@link concurrencyLimit}, passed to
@@ -99,7 +104,9 @@ export interface ConcurrencyLimitOptions {
   queueTimeoutMs?: number;
   /**
    * How to partition the concurrency budget. `"global"` (default) shares one
-   * budget; `"route"` keys by `method + path`; `"client"` keys by client
+   * budget; `"route"` keys by `method + matched route template`
+   * (`ctx.routePath`; requests that matched no route fall back to the concrete
+   * pathname); `"client"` keys by client
    * identity (needs {@link trustProxyHeaders} or {@link keyGenerator}); a
    * function returns a custom bucket key (or `undefined` to skip limiting).
    */
@@ -226,7 +233,12 @@ function buildScopeResolver(
   if (typeof scope === "function") return scope;
   if (scope === "global") return () => "global";
   if (scope === "route") {
-    return (ctx) => `${ctx.request.method} ${pathnameOf(ctx.request.url)}`;
+    // Key on the matched route TEMPLATE, not the concrete pathname: otherwise
+    // `/reports/1`, `/reports/2`, `/reports/1/` each get a fresh budget and the
+    // per-route cap is multiplied by the attacker. The concrete pathname is
+    // only used when no route matched (cold 404/405/OPTIONS guards).
+    return (ctx) =>
+      `${ctx.request.method} ${ctx.routePath ?? pathnameOf(ctx.request.url)}`;
   }
   // scope === "client"
   const hops = resolveForwardedTrust("concurrencyLimit()", opts);
@@ -258,8 +270,9 @@ function buildScopeResolver(
  * waits in a bounded FIFO queue (subject to {@link ConcurrencyLimitOptions.maxQueue}
  * and {@link ConcurrencyLimitOptions.queueTimeoutMs}) and is rejected with `503`
  * when the queue is full or the wait times out. The slot is released on the
- * response path (`onSend`), so it is freed for success, error, and
- * short-circuit responses alike.
+ * response path (`onSend`), with a dispatcher-run per-request finalizer as a
+ * backstop, so it is freed for success, error, and short-circuit responses
+ * alike — including when another middleware's `onSend` or `onError` throws.
  *
  * @param opts - Concurrency-limit configuration; `maxConcurrent` is required.
  * @returns A {@link Hooks} bundle ready for `app.use(...)`.
@@ -333,6 +346,16 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
     }
   };
 
+  /** Release this request's slot once; shared by `onSend` and the finalizer. */
+  const releaseFor = (ctx: BaseContext<any, any>): void => {
+    const state = ctx.state as Record<string, unknown>;
+    if (state[ACQUIRED_KEY] !== true) return;
+    // Guard against a double release (onSend + finalizer, or onSend twice).
+    state[ACQUIRED_KEY] = false;
+    const key = state[BUCKET_KEY];
+    if (typeof key === "string") release(key);
+  };
+
   return {
     async beforeHandle(ctx) {
       const key = resolveKey(ctx);
@@ -377,16 +400,14 @@ export function concurrencyLimit(opts: ConcurrencyLimitOptions): Hooks {
       const state = ctx.state as Record<string, unknown>;
       state[ACQUIRED_KEY] = true;
       state[BUCKET_KEY] = key;
+      // Guaranteed release: the dispatcher runs this in `finally`, so the slot
+      // is returned even if an earlier `onSend` hook (or `onError`) throws and
+      // our own `onSend` below never runs.
+      registerRequestFinalizer(ctx, releaseFor);
       return undefined;
     },
     onSend(_res, ctx) {
-      if (!ctx) return undefined;
-      const state = ctx.state as Record<string, unknown>;
-      if (state[ACQUIRED_KEY] !== true) return undefined;
-      // Guard against a double release if onSend somehow runs twice.
-      state[ACQUIRED_KEY] = false;
-      const key = state[BUCKET_KEY];
-      if (typeof key === "string") release(key);
+      if (ctx) releaseFor(ctx);
       return undefined;
     },
   };

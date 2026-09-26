@@ -243,6 +243,19 @@ app.use(
         encoded traversal tricks.
       </p>
       <p>
+        Since 2.0.0 the adapters guarantee that this view and the router agree.
+        A request-target such as <code>/admin/%2e%2e/health</code> or{" "}
+        <code>{"/admin\\..\\health"}</code> is canonicalized by the Node
+        adapter before routing, so <code>except()</code> and the router both see{" "}
+        <code>/health</code>
+        {". "}A <code>Host</code> header carrying <code>{"\\ / ? # @ %"}</code>{" "}
+        or whitespace (for example <code>{"h\\health?"}</code>) is refused
+        with <code>400</code> by the Node and AWS Lambda adapters instead of
+        shifting bytes into the path an exemption matches on. Router params
+        and wildcards never bind <code>.</code> or <code>..</code>
+        {"."}
+      </p>
+      <p>
         The wrapped bundle&apos;s <code>preBody</code> and{" "}
         <code>beforeHandle</code> gates are skipped. Its <code>onRequest</code>
         {", "}

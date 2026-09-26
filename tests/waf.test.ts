@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import { App, waf } from "../src/index.js";
 import type { WafEvent, WafOptions } from "../src/index.js";
+import { _WAF_SIGNATURES_FOR_TESTS } from "../src/waf.js";
 
 // ---------- app fixtures ----------
 
@@ -528,7 +529,7 @@ test("malicious path segment is blocked", async () => {
 
 // ---------- bounded scanning ----------
 
-test("oversized body string is truncated but still scanned at the prefix", async () => {
+test("oversized body string is still scanned at the prefix window", async () => {
   const app = bodyApp({ maxValueLength: 32 });
   const payload = "<script>alert(1)</script>" + "A".repeat(5000);
   const res = await app.fetch(jsonRequest("/echo", { value: payload }));
@@ -541,4 +542,199 @@ test("no inspection work when all rules disabled", async () => {
   });
   const res = await app.fetch(jsonRequest("/echo", { value: "<script>alert(1)</script>" }));
   assert.equal(res.status, 200);
+});
+
+// ---------- scan caps never fail open (deepsec 2026-09-26) ----------
+
+const SQLI_PAYLOAD = "' OR 1=1 UNION SELECT password FROM users--";
+
+function tagsApp(opts?: WafOptions) {
+  const app = new App({ env: "development", logger: false });
+  app.use(waf(opts));
+  app.route({
+    method: "POST",
+    path: "/tags",
+    operationId: "tags",
+    request: { body: z.object({ tags: z.array(z.string()) }).strict() },
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  return app;
+}
+
+test("body value padded past maxValueLength is still blocked (tail window)", async () => {
+  const app = bodyApp();
+  const res = await app.fetch(jsonRequest("/echo", { value: " ".repeat(8192) + SQLI_PAYLOAD }));
+  assert.equal(res.status, 403);
+});
+
+test("payload buried mid-value between padding windows is blocked", async () => {
+  const app = bodyApp();
+  const value = "a".repeat(20_000) + SQLI_PAYLOAD + "b".repeat(20_000);
+  const res = await app.fetch(jsonRequest("/echo", { value }));
+  assert.equal(res.status, 403);
+});
+
+test("payload straddling a window boundary via a long whitespace run is blocked", async () => {
+  const app = bodyApp({ maxValueLength: 64 });
+  // `OR` and `1=1` separated by more whitespace than any window overlap.
+  const value = "x".repeat(40) + "' OR" + " ".repeat(2000) + "1=1";
+  const res = await app.fetch(jsonRequest("/echo", { value }));
+  assert.equal(res.status, 403);
+});
+
+test("query value padded past maxValueLength is still blocked", async () => {
+  const app = queryApp();
+  const res = await app.fetch(
+    new Request(`http://x/search?q=${"a".repeat(8192)}${encodeURIComponent(SQLI_PAYLOAD)}`)
+  );
+  assert.equal(res.status, 403);
+});
+
+test("long benign body value is not flagged (happy path)", async () => {
+  const app = bodyApp();
+  const value = "The quick brown fox jumps over the lazy dog. ".repeat(1000);
+  const res = await app.fetch(jsonRequest("/echo", { value }));
+  assert.equal(res.status, 200);
+});
+
+test("payload after maxBodyNodes junk nodes is blocked by the limits anomaly", async () => {
+  const events: WafEvent[] = [];
+  const app = tagsApp({ onMatch: (e) => events.push(e) });
+  const tags = [...Array.from({ length: 10_000 }, () => "x"), SQLI_PAYLOAD];
+  const res = await app.fetch(jsonRequest("/tags", { tags }));
+  assert.equal(res.status, 403);
+  assert.ok(events[0]!.matches.some((m) => m.ruleId === "limits"));
+});
+
+test("benign body over maxBodyNodes is blocked by default (fail closed)", async () => {
+  const app = tagsApp({ maxBodyNodes: 10 });
+  const res = await app.fetch(jsonRequest("/tags", { tags: Array.from({ length: 20 }, () => "ok") }));
+  assert.equal(res.status, 403);
+});
+
+test("body within maxBodyNodes is allowed (happy path)", async () => {
+  const app = tagsApp({ maxBodyNodes: 100 });
+  const res = await app.fetch(jsonRequest("/tags", { tags: Array.from({ length: 20 }, () => "ok") }));
+  assert.equal(res.status, 200);
+});
+
+test("onLimitExceeded 'log' reports but does not block a limits-only flag", async () => {
+  const events: WafEvent[] = [];
+  const app = tagsApp({ maxBodyNodes: 10, onLimitExceeded: "log", onMatch: (e) => events.push(e) });
+  const res = await app.fetch(jsonRequest("/tags", { tags: Array.from({ length: 20 }, () => "ok") }));
+  assert.equal(res.status, 200);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]!.action, "logged");
+  assert.equal(events[0]!.matches[0]!.ruleId, "limits");
+});
+
+test("onLimitExceeded 'log' still blocks a real signature match", async () => {
+  const app = tagsApp({ maxBodyNodes: 10, onLimitExceeded: "log" });
+  const tags = [SQLI_PAYLOAD, ...Array.from({ length: 20 }, () => "ok")];
+  const res = await app.fetch(jsonRequest("/tags", { tags }));
+  assert.equal(res.status, 403);
+});
+
+test("onLimitExceeded 'ignore' restores prefix-only node walking", async () => {
+  const app = tagsApp({ maxBodyNodes: 10, onLimitExceeded: "ignore" });
+  const res = await app.fetch(jsonRequest("/tags", { tags: Array.from({ length: 20 }, () => "ok") }));
+  assert.equal(res.status, 200);
+});
+
+test("limits anomaly in log mode is reported, never blocked", async () => {
+  const events: WafEvent[] = [];
+  const app = tagsApp({ mode: "log", maxBodyNodes: 10, onMatch: (e) => events.push(e) });
+  const res = await app.fetch(jsonRequest("/tags", { tags: Array.from({ length: 20 }, () => "ok") }));
+  assert.equal(res.status, 200);
+  assert.equal(events[0]!.action, "logged");
+});
+
+test("waf() rejects an invalid onLimitExceeded", () => {
+  assert.throws(() => waf({ onLimitExceeded: "drop" as never }), /onLimitExceeded/);
+});
+
+// ---------- bounded signature runs (review follow-up) ----------
+
+/**
+ * Return the unbounded `+` / `*` quantifiers in a regex source whose operand is
+ * not `\s`. Skips escapes and character-class contents.
+ */
+function unboundedNonWhitespace(source: string): string[] {
+  const bad: string[] = [];
+  let lastAtom = "";
+  let inClass = false;
+  let classStart = 0;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i]!;
+    if (ch === "\\") {
+      if (!inClass) lastAtom = source.slice(i, i + 2);
+      i++;
+      continue;
+    }
+    if (inClass) {
+      if (ch === "]") {
+        inClass = false;
+        lastAtom = source.slice(classStart, i + 1);
+      }
+      continue;
+    }
+    if (ch === "[") {
+      inClass = true;
+      classStart = i;
+      continue;
+    }
+    if ((ch === "+" || ch === "*") && source[i - 1] !== "?") {
+      if (lastAtom !== "\\s") bad.push(`${lastAtom}${ch}`);
+      continue;
+    }
+    lastAtom = ch;
+  }
+  return bad;
+}
+
+test("every signature bounds non-whitespace runs (no unbounded + / * outside \\s)", () => {
+  // Self-check of the checker itself.
+  assert.deepEqual(unboundedNonWhitespace(String.raw`a\s+b\s*c`), []);
+  assert.deepEqual(unboundedNonWhitespace(String.raw`\d+`), [String.raw`\d+`]);
+  assert.deepEqual(unboundedNonWhitespace(String.raw`[\w]+`), [String.raw`[\w]+`]);
+  for (const [rule, sigs] of Object.entries(_WAF_SIGNATURES_FOR_TESTS)) {
+    for (const sig of sigs) {
+      assert.deepEqual(unboundedNonWhitespace(sig.source), [], `${rule}: ${sig.source}`);
+    }
+  }
+});
+
+// Default window 8192, overlap 512, stride 7680: pad so the payload crosses 7680.
+const STRADDLE_PAD = "a".repeat(7600);
+
+test("digit-run tautology straddling the window stride is blocked", async () => {
+  const app = bodyApp();
+  const value = STRADDLE_PAD + " ' OR " + "1".repeat(1000) + "=" + "1".repeat(1000);
+  assert.equal((await app.fetch(jsonRequest("/echo", { value }))).status, 403);
+});
+
+test("word-run tautology straddling the window stride is blocked", async () => {
+  const app = bodyApp();
+  const value = STRADDLE_PAD + "' OR " + "a".repeat(1000) + "=" + "a".repeat(1000);
+  assert.equal((await app.fetch(jsonRequest("/echo", { value }))).status, 403);
+});
+
+test("short values with long runs and plain short payloads are still blocked", async () => {
+  const app = bodyApp();
+  for (const value of [
+    "x' OR 1=1",
+    "x' OR 'a'='a",
+    "1 OR 1=1",
+    " ' OR " + "1".repeat(300) + "=" + "1".repeat(300),
+    "' OR " + "b".repeat(300) + "=" + "b",
+  ]) {
+    assert.equal((await app.fetch(jsonRequest("/echo", { value }))).status, 403, value);
+  }
+});
+
+test("long benign word runs with '=' are not flagged (happy path)", async () => {
+  const app = bodyApp();
+  const value = "token=" + "A1b2".repeat(500) + " and more prose=fine";
+  assert.equal((await app.fetch(jsonRequest("/echo", { value }))).status, 200);
 });

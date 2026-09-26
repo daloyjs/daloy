@@ -39,15 +39,19 @@ const TEXT_ENCODER = new TextEncoder();
  * and reconnection control without sending an event payload.
  */
 export interface SSEMessage {
-  /** Event payload. Strings are sent verbatim; other values are `JSON.stringify`-ed. */
+  /**
+   * Event payload. Strings are sent as-is; other values are `JSON.stringify`-ed.
+   * The payload is split on every line terminator (CRLF, lone CR, lone LF),
+   * each line becoming its own `data:` field, so it cannot start a new field.
+   */
   data?: unknown;
-  /** Event name (`event:` field). Newlines are replaced with spaces to prevent frame injection. */
+  /** Event name (`event:` field). CR/LF runs are replaced with a space to prevent frame injection. */
   event?: string;
-  /** Last-event ID (`id:` field). Newlines are replaced with spaces to prevent frame injection. */
+  /** Last-event ID (`id:` field). CR/LF/NUL runs are replaced with a space to prevent frame injection. */
   id?: string;
   /** Reconnection delay in milliseconds. */
   retry?: number;
-  /** Comment line (sent as `: <comment>`). Useful for keep-alive pings. */
+  /** Comment (sent as `: <comment>`, one line per CR/LF/CRLF-delimited segment). Useful for keep-alive pings. */
   comment?: string;
 }
 
@@ -105,27 +109,38 @@ function getAsyncIterator<T>(src: IterableSource<T>): AsyncIterator<T> {
   throw new TypeError("Streaming source is not iterable");
 }
 
+/**
+ * SSE line terminators per the WHATWG EventSource parser: CRLF, lone CR, or
+ * lone LF all end a line, so every one of them must be treated as a split
+ * point (a lone `\r` left in a field would otherwise start a forged field).
+ */
+const SSE_LINE_BREAK = /\r\n|\r|\n/;
+const SSE_LINE_BREAK_RUN = /[\r\n]+/g;
+const SSE_ID_UNSAFE = /[\r\n\0]+/g;
+
 function encodeSSE(msg: SSEMessage | string): Uint8Array {
   const message: SSEMessage = typeof msg === "string" ? { data: msg } : msg;
   let out = "";
   if (message.comment) {
-    for (const line of String(message.comment).split(/\r?\n/)) {
+    for (const line of String(message.comment).split(SSE_LINE_BREAK)) {
       out += `: ${line}\n`;
     }
   }
   if (message.event !== undefined) {
-    // Event names cannot contain newlines per the spec.
-    out += `event: ${String(message.event).replace(/[\r\n]+/g, " ")}\n`;
+    // Event names cannot contain any line terminator (CR, LF or CRLF).
+    out += `event: ${String(message.event).replace(SSE_LINE_BREAK_RUN, " ")}\n`;
   }
   if (message.id !== undefined) {
-    out += `id: ${String(message.id).replace(/[\r\n]+/g, " ")}\n`;
+    // An id may not carry line terminators, and a NUL makes EventSource
+    // ignore the field entirely, so both are neutralised.
+    out += `id: ${String(message.id).replace(SSE_ID_UNSAFE, " ")}\n`;
   }
   if (message.retry !== undefined && Number.isFinite(message.retry)) {
     out += `retry: ${Math.max(0, Math.floor(message.retry))}\n`;
   }
   if (message.data !== undefined) {
     const raw = typeof message.data === "string" ? message.data : JSON.stringify(message.data);
-    for (const line of raw.split(/\r?\n/)) {
+    for (const line of raw.split(SSE_LINE_BREAK)) {
       out += `data: ${line}\n`;
     }
   }

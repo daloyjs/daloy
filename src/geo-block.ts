@@ -20,6 +20,10 @@
  * Like the other network guards this fails **closed for allow-lists** (an
  * unknown country is rejected when an allow-list is configured) and **open for
  * deny-only** configurations, so a missing lookup cannot silently widen access.
+ * "Unknown" means the lookup returned no country. A request whose forwarded
+ * client IP cannot be resolved (it bypassed the declared proxy chain) is looked
+ * up by its unspoofable TCP peer address instead — see
+ * {@link GeoBlockOptions.onUnresolvedIp}.
  *
  * @module
  * @since 0.37.0
@@ -28,6 +32,7 @@
 import type { BaseContext, Hooks, IdentityGateContext } from "./types.js";
 import { ForbiddenError } from "./errors.js";
 import {
+  readRemoteAddress,
   resolveForwardedClientIp,
   resolveForwardedTrust,
   resolveTrustedProxyMatchers,
@@ -163,6 +168,28 @@ export interface GeoBlockOptions {
    */
   trustedProxies?: readonly string[];
   /**
+   * What to do when the default forwarded-IP resolver (enabled by
+   * {@link trustProxyHeaders}, {@link trustedHops} or {@link trustedProxies})
+   * cannot resolve a client IP — the peer is not a trusted proxy, or the
+   * `X-Forwarded-For` chain is missing or shorter than {@link trustedHops}.
+   *
+   * - `"peer"` (default) — look up the immediate TCP peer address instead. The
+   *   peer cannot be spoofed, and a request that skipped the declared proxy
+   *   chain (e.g. direct-to-origin) came *from* that peer, so a client in a
+   *   denied country cannot pass just by bypassing the CDN. A peer-derived
+   *   country can only block: if it would be allowed, the request is still
+   *   treated as unknown-country (so allow-lists stay fail-closed).
+   * - `"unknown"` — treat the country as unknown (then
+   *   {@link allowUnknownCountry} decides; deny-only configs let it through).
+   *   This was the behaviour before 1.3.7.
+   *
+   * On peer-less platforms the peer is unavailable and the country is unknown.
+   * Ignored when `resolveCountry` or a custom `resolveIp` is supplied.
+   *
+   * @since 1.3.7
+   */
+  onUnresolvedIp?: "peer" | "unknown";
+  /**
    * What to do when the country cannot be resolved. Defaults to `false` when
    * an `allow` list is configured (fail closed — an unknown country is not on
    * the allow-list) and `true` for deny-only configurations (fail open). Set
@@ -251,7 +278,7 @@ function forwardedIpResolver(hops: number, trustedPeers?: readonly IpMatcher[]) 
  * @returns {@link Hooks} to register via `app.use(...)`.
  * @throws Error when neither `allow` nor `deny` is provided, when both or
  *   neither of `lookupCountry` / `resolveCountry` are provided, when a country
- *   code is malformed, or when `mode` is invalid.
+ *   code is malformed, or when `mode` or `onUnresolvedIp` is invalid.
  * @since 0.37.0
  */
 export function geoBlock(opts: GeoBlockOptions): Hooks {
@@ -281,11 +308,20 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
   const onBlock = opts.onBlock;
   const lookupCountry = opts.lookupCountry;
   const resolveCountry = opts.resolveCountry;
+  const onUnresolvedIp = opts.onUnresolvedIp ?? "peer";
+  if (onUnresolvedIp !== "peer" && onUnresolvedIp !== "unknown") {
+    throw new Error(
+      `geoBlock(): invalid onUnresolvedIp ${JSON.stringify(onUnresolvedIp)}; expected ` +
+        '"peer" or "unknown".'
+    );
+  }
   const hops = resolveForwardedTrust("geoBlock()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("geoBlock()", opts);
   const resolveIp =
     opts.resolveIp ??
     (hops !== undefined ? forwardedIpResolver(hops, proxyMatchers) : noIpResolver);
+  // Peer fallback applies only to the built-in forwarded resolver.
+  const peerFallback = onUnresolvedIp === "peer" && !opts.resolveIp && hops !== undefined;
 
   return {
     // Runs in `preBody`, not `beforeHandle`. A `beforeHandle` hook that returns
@@ -297,10 +333,18 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
     async preBody(ctx) {
       let ip: string | undefined;
       let rawCountry: string | undefined | null;
+      let viaPeer = false;
       if (resolveCountry) {
         rawCountry = await resolveCountry(ctx);
       } else {
         ip = resolveIp(ctx) ?? undefined;
+        if (ip === undefined && peerFallback) {
+          // The request bypassed the declared proxy topology (direct-to-origin,
+          // or a chain shorter than trustedHops): the unspoofable socket peer is
+          // where it came from.
+          ip = readRemoteAddress(ctx);
+          viaPeer = ip !== undefined;
+        }
         rawCountry = ip ? await lookupCountry!(ip) : undefined;
       }
 
@@ -313,6 +357,11 @@ export function geoBlock(opts: GeoBlockOptions): Hooks {
         reason = "denied_country";
       } else if (allow.size > 0 && !allow.has(country)) {
         reason = "not_in_allowlist";
+      } else if (viaPeer && !allowUnknown) {
+        // A peer-derived country may only narrow access, never widen it: the
+        // peer can be our own proxy (e.g. a chain one hop short), whose country
+        // says nothing about the client. Keep the pre-fallback "unknown" verdict.
+        reason = "unknown_country";
       }
 
       if (reason) {

@@ -281,12 +281,20 @@ export class Router<T> {
  * than letting a `URIError` bubble up as a generic 500.
  */
 function safeDecodeURIComponent(segment: string): string | undefined {
-  if (!segment.includes("%")) return segment;
+  if (!segment.includes("%")) return isDotSegment(segment) ? undefined : segment;
   try {
-    return decodeURIComponent(segment);
+    const decoded = decodeURIComponent(segment);
+    // `%2e%2e` decodes to `..`: a URL parser resolves it as a parent-directory
+    // step, so never let it bind as a param or wildcard segment.
+    return isDotSegment(decoded) ? undefined : decoded;
   } catch {
     return undefined;
   }
+}
+
+/** `true` for the `.` / `..` path segments that URL parsers resolve away. */
+function isDotSegment(segment: string): boolean {
+  return segment === "." || segment === "..";
 }
 
 /**

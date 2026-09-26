@@ -68,6 +68,105 @@ export interface AutoBanStore {
   set(key: string, record: AutoBanRecord, ttlMs: number): Promise<void>;
   /** Forget `key` entirely (e.g. an operator manually lifting a ban). */
   delete(key: string): Promise<void>;
+  /**
+   * Optional **atomic** strike: read the record for `key`, apply one strike
+   * under `policy` (see {@link applyAutoBanStrike}), persist the result with the
+   * matching TTL, and return the outcome — all as one indivisible operation.
+   *
+   * Security: without this method {@link autoBan} falls back to `get` then
+   * `set`, which it serialises per key inside one process but cannot make atomic
+   * across instances sharing a networked store, so concurrent failures on
+   * different replicas can overwrite each other's strikes (a brute-forcer gets
+   * roughly `maxStrikes × replicas` guesses). Implement it (e.g. a Redis Lua
+   * script — see `redisAutoBanStore` in `@daloyjs/core/rate-limit-redis`) for
+   * any store shared between processes.
+   *
+   * @param key - Store key (group prefix + client identity).
+   * @param policy - Strike/ban parameters of the calling `autoBan()`.
+   * @param nowMs - Current epoch ms, as seen by the caller.
+   * @returns The strike outcome.
+   * @since 1.3.7
+   */
+  strike?(key: string, policy: AutoBanStrikePolicy, nowMs: number): Promise<AutoBanStrikeResult>;
+}
+
+/**
+ * Strike/ban parameters handed to {@link AutoBanStore.strike}. Mirrors the
+ * resolved {@link AutoBanOptions} of the calling `autoBan()`.
+ *
+ * @since 1.3.7
+ */
+export interface AutoBanStrikePolicy {
+  /** Rolling strike window in ms. */
+  readonly windowMs: number;
+  /** Strikes inside the window that trigger a ban. */
+  readonly maxStrikes: number;
+  /** Base ban duration in ms. */
+  readonly banMs: number;
+  /** Cap on an escalated ban duration in ms. */
+  readonly maxBanMs: number;
+  /** Whether repeat bans double in length. */
+  readonly escalate: boolean;
+}
+
+/**
+ * Outcome of one strike, returned by {@link AutoBanStore.strike} and
+ * {@link applyAutoBanStrike}.
+ *
+ * @since 1.3.7
+ */
+export interface AutoBanStrikeResult {
+  /** Strike count including this strike (before a ban resets it to 0). */
+  strikes: number;
+  /** Whether this strike issued a ban. */
+  banned: boolean;
+  /** Ban count after this strike. */
+  banCount: number;
+  /** Duration of the ban this strike issued; `0` when `banned` is `false`. */
+  banDurationMs: number;
+  /** Epoch ms the client is banned until (`0` when never banned). */
+  bannedUntilMs: number;
+}
+
+/**
+ * Pure strike arithmetic shared by every {@link AutoBanStore}: apply one strike
+ * to `record` (or to a fresh record) at `nowMs` under `policy`.
+ *
+ * Custom stores implementing {@link AutoBanStore.strike} in-process can call
+ * this inside their critical section; networked stores should port it to their
+ * server-side atomic primitive (e.g. Lua).
+ *
+ * @param record - The current record, or `undefined` when none/expired.
+ * @param policy - Strike/ban parameters.
+ * @param nowMs - Current epoch ms.
+ * @returns The record to persist, its TTL in ms, and the strike outcome.
+ * @since 1.3.7
+ */
+export function applyAutoBanStrike(
+  record: AutoBanRecord | undefined,
+  policy: AutoBanStrikePolicy,
+  nowMs: number
+): { record: AutoBanRecord; ttlMs: number; result: AutoBanStrikeResult } {
+  const windowActive = record !== undefined && record.strikeExpiresMs > nowMs;
+  const strikes = (windowActive ? record.strikes : 0) + 1;
+  let banCount = record?.banCount ?? 0;
+  let bannedUntilMs = record?.bannedUntilMs ?? 0;
+  const strikeExpiresMs = nowMs + policy.windowMs;
+  let banned = false;
+  let banDurationMs = 0;
+  if (strikes >= policy.maxStrikes) {
+    banCount += 1;
+    banDurationMs = policy.escalate
+      ? Math.min(policy.maxBanMs, policy.banMs * 2 ** (banCount - 1))
+      : policy.banMs;
+    bannedUntilMs = nowMs + banDurationMs;
+    banned = true;
+  }
+  return {
+    record: { strikes: banned ? 0 : strikes, strikeExpiresMs, bannedUntilMs, banCount },
+    ttlMs: Math.max(strikeExpiresMs, bannedUntilMs) - nowMs,
+    result: { strikes, banned, banCount, banDurationMs, bannedUntilMs },
+  };
 }
 
 /**
@@ -236,6 +335,17 @@ export interface AutoBanOptions {
   onBan?: (event: AutoBanEvent) => void;
   /** Called for every recorded strike, before any resulting ban. */
   onStrike?: (event: AutoBanStrikeEvent) => void;
+  /**
+   * Called when the store throws while recording a strike (e.g. a Redis
+   * outage). The strike is skipped and the response is delivered unchanged, so
+   * a store outage never turns into a `500` (or starves later `onSend` hooks
+   * such as `concurrencyLimit()`'s slot release). Default: a one-line
+   * `console.warn`. Ban *enforcement* in `preBody` still fails closed on a store
+   * error.
+   *
+   * @since 1.3.7
+   */
+  onStoreError?: (error: unknown, key: string) => void;
 }
 
 const DEFAULT_WINDOW_MS = 10 * 60_000;
@@ -300,7 +410,31 @@ export class MemoryAutoBanStore implements AutoBanStore {
   async delete(key: string): Promise<void> {
     this.map.delete(key);
   }
+
+  /**
+   * {@inheritDoc AutoBanStore.strike}
+   *
+   * Atomic by construction: the read-modify-write runs synchronously, with no
+   * `await` between the read and the write.
+   */
+  async strike(
+    key: string,
+    policy: AutoBanStrikePolicy,
+    nowMs: number
+  ): Promise<AutoBanStrikeResult> {
+    const entry = this.map.get(key);
+    const current = entry && entry.expiresMs > nowMs ? entry.record : undefined;
+    const next = applyAutoBanStrike(current, policy, nowMs);
+    this.map.set(key, { record: next.record, expiresMs: nowMs + next.ttlMs });
+    if (this.map.size > 10_000) {
+      for (const [k, v] of this.map) if (v.expiresMs <= nowMs) this.map.delete(k);
+    }
+    return next.result;
+  }
 }
+
+/** Once-per-process latch for the "custom store lacks strike()" warning. */
+let warnedNonAtomicStore = false;
 
 function assertPositiveInteger(name: string, value: number): void {
   if (!Number.isInteger(value) || value <= 0) {
@@ -426,6 +560,14 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
   let store: AutoBanStore;
   if (opts.store) {
     store = opts.store;
+    if (typeof store.strike !== "function" && !warnedNonAtomicStore) {
+      warnedNonAtomicStore = true;
+      globalThis.console?.warn?.(
+        "autoBan(): the custom store has no atomic strike() method; strike counting is " +
+          "serialised per key within this process but is best-effort across instances " +
+          "sharing the store. Implement AutoBanStore.strike (see redisAutoBanStore)."
+      );
+    }
   } else {
     let shared = SHARED_AUTO_BAN_STORES.get(groupId);
     if (!shared) {
@@ -435,6 +577,47 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
     store = shared;
   }
   const prefix = `${groupId}:`;
+  const policy: AutoBanStrikePolicy = Object.freeze({
+    windowMs,
+    maxStrikes,
+    banMs,
+    maxBanMs,
+    escalate,
+  });
+  const atomicStrike = typeof store.strike === "function";
+  const reportStoreError =
+    opts.onStoreError ??
+    ((err: unknown, key: string): void => {
+      globalThis.console?.warn?.(
+        `autoBan(): store error while recording a strike for ${JSON.stringify(key)}; strike skipped.`,
+        err
+      );
+    });
+
+  // Fallback for stores without `strike()`: serialise get→set per key inside
+  // this process so concurrent failures cannot overwrite each other's strikes.
+  // Entries live only while a strike is in flight, so the map stays bounded.
+  const strikeChains = new Map<string, Promise<unknown>>();
+  const strikeSerialised = async (key: string): Promise<AutoBanStrikeResult> => {
+    const run = async (): Promise<AutoBanStrikeResult> => {
+      const now = Date.now();
+      const next = applyAutoBanStrike(await store.get(key), policy, now);
+      await store.set(key, next.record, next.ttlMs);
+      return next.result;
+    };
+    const prev = strikeChains.get(key);
+    const current = prev ? prev.then(run, run) : run();
+    const settled = current.then(
+      () => undefined,
+      () => undefined
+    );
+    strikeChains.set(key, settled);
+    try {
+      return await current;
+    } finally {
+      if (strikeChains.get(key) === settled) strikeChains.delete(key);
+    }
+  };
 
   /**
    * Resolve the identity, stash the key for `onSend`, and reject an active ban.
@@ -482,26 +665,27 @@ export function autoBan(opts: AutoBanOptions = {}): Hooks {
       if (key === undefined) return undefined;
       if (!watch.has(res.status)) return undefined;
 
-      const now = Date.now();
-      const record = await store.get(key);
-      const windowActive = record !== undefined && record.strikeExpiresMs > now;
-      let strikes = (windowActive ? record!.strikes : 0) + 1;
-      let banCount = record?.banCount ?? 0;
-      let bannedUntilMs = record?.bannedUntilMs ?? 0;
-      const strikeExpiresMs = now + windowMs;
-
-      opts.onStrike?.({ key, strikes, status: res.status });
-
-      if (strikes >= maxStrikes) {
-        banCount += 1;
-        const duration = escalate ? Math.min(maxBanMs, banMs * 2 ** (banCount - 1)) : banMs;
-        bannedUntilMs = now + duration;
-        strikes = 0;
-        opts.onBan?.({ key, banCount, banDurationMs: duration, bannedUntilMs });
+      let outcome: AutoBanStrikeResult;
+      try {
+        outcome = atomicStrike
+          ? await store.strike!(key, policy, Date.now())
+          : await strikeSerialised(key);
+      } catch (err) {
+        // A store outage must not become a 500 (nor skip later onSend hooks such
+        // as concurrencyLimit's slot release): report it and skip the strike.
+        reportStoreError(err, key);
+        return undefined;
       }
 
-      const ttlMs = Math.max(strikeExpiresMs, bannedUntilMs) - now;
-      await store.set(key, { strikes, strikeExpiresMs, bannedUntilMs, banCount }, ttlMs);
+      opts.onStrike?.({ key, strikes: outcome.strikes, status: res.status });
+      if (outcome.banned) {
+        opts.onBan?.({
+          key,
+          banCount: outcome.banCount,
+          banDurationMs: outcome.banDurationMs,
+          bannedUntilMs: outcome.bannedUntilMs,
+        });
+      }
       return undefined;
     },
   };

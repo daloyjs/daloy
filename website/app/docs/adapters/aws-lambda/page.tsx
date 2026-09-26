@@ -186,6 +186,19 @@ CMD ["node", "dist/server.js"]`}
           Cold starts: prefer the Node adapter on provisioned concurrency or use
           a container with the Web Adapter for warmer reuse.
         </li>
+        <li>
+          Since 2.0.0 the adapter answers <code>400</code> when the event&apos;s{" "}
+          <code>Host</code> header is not a plain <code>host[:port]</code> or
+          bracketed IPv6 literal (for example one containing{" "}
+          <code>{"\\ / ? # @ %"}</code> or whitespace). The host is spliced
+          into the request URL, so such a value could otherwise move bytes into
+          the path that <code>except()</code> and other middleware match on.
+        </li>
+        <li>
+          <code>X-Forwarded-Proto</code> is honoured only as <code>http</code>{" "}
+          or <code>https</code> (first comma-separated token). Any other value
+          is treated as <code>https</code> (since 1.3.7).
+        </li>
       </ul>
 
       <h2 id="see-also">See also</h2>

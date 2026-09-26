@@ -100,7 +100,7 @@ check, run `pnpm contract`.
 
 ## OpenAPI & docs routes
 
-When `docs: true` is set on `new App({...})` (the default in this template),
+With `docs: "auto"` on `new App({...})` (the default in this template),
 three routes are auto-mounted off the spec generated from your route
 definitions:
 
@@ -110,8 +110,8 @@ definitions:
 - `GET /docs` — Scalar API reference UI that loads the spec.
 
 Customize via `docs: { openapiPath, openapiYamlPath, path, ui }`. Set
-`openapiYamlPath: false` to disable just the YAML route, `docs: "auto"` to
-mount only outside production, or `docs: false` to disable all three.
+`openapiYamlPath: false` to disable just the YAML route, `docs: true` to
+also mount them in production, or `docs: false` to disable all three.
 On Vercel the YAML serializer is pure-string (no extra deps) and adds
 <1KB to the bundle. For hand-rolled mounting, `openapiToYAML` is exported
 from `@daloyjs/core/openapi`.

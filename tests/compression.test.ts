@@ -5,6 +5,7 @@ import {
   compression,
   COMPRESSION_HOOK_MARKER,
   _resetCompressionRuntimeProbeForTests,
+  sseResponse,
 } from "../src/index.js";
 
 // Build a body large enough to clear the default 1024 minimumSize and also
@@ -672,4 +673,76 @@ test("compression: skips bodies larger than maxCompressibleBytes without hanging
   assert.equal(res.headers.get("content-encoding"), null, "oversize body must not be compressed");
   const text = await res.text();
   assert.equal(text.length, 200);
+});
+
+test("compression: sseResponse() streams uncompressed and delivers the first event before the stream ends (unhappy path)", async () => {
+  const app = new App({ env: "development" });
+  app.use(compression());
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  app.route({
+    method: "GET",
+    path: "/sse",
+    operationId: "sse",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: () =>
+      sseResponse(async function* () {
+        yield { event: "first", data: LARGE_TEXT };
+        await gate; // never resolves until the test has seen the first event
+        yield { event: "second", data: "x" };
+      }),
+  } as any);
+  const res = await Promise.race([
+    app.fetch(new Request("http://x/sse", { headers: { "accept-encoding": "gzip, br" } })),
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error("response head withheld")), 1000)),
+  ]);
+  assert.equal(res.headers.get("content-encoding"), null);
+  assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
+  const reader = res.body!.getReader();
+  const first = await reader.read();
+  assert.match(new TextDecoder().decode(first.value), /event: first/);
+  release();
+  await reader.cancel();
+});
+
+test("compression: NDJSON and Cache-Control no-transform are passed through (unhappy path)", async () => {
+  const app = new App({ env: "development" });
+  app.use(compression());
+  for (const [path, headers] of [
+    ["/ndjson", { "content-type": "application/x-ndjson" }],
+    ["/nt", { "content-type": "text/plain", "cache-control": "public, no-transform" }],
+  ] as const) {
+    app.route({
+      method: "GET",
+      path,
+      operationId: path.slice(1),
+      responses: { 200: { description: "ok" } },
+      handler: () => ({ status: 200 as const, headers: { ...headers }, body: LARGE_TEXT }),
+    });
+  }
+  for (const path of ["/ndjson", "/nt"]) {
+    const res = await app.fetch(new Request(`http://x${path}`, { headers: { "accept-encoding": "gzip" } }));
+    assert.equal(res.headers.get("content-encoding"), null, path);
+    assert.match(res.headers.get("vary") ?? "", /Accept-Encoding/);
+    assert.equal(await res.text(), LARGE_TEXT);
+  }
+});
+
+test("compression: a no-cache (without no-transform) text body is still compressed (happy path)", async () => {
+  const app = new App({ env: "development" });
+  app.use(compression());
+  app.route({
+    method: "GET",
+    path: "/nc",
+    operationId: "nc",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({
+      status: 200 as const,
+      headers: { "content-type": "text/plain", "cache-control": "no-cache, no-store" },
+      body: LARGE_TEXT,
+    }),
+  });
+  const res = await app.fetch(new Request("http://x/nc", { headers: { "accept-encoding": "gzip" } }));
+  assert.equal(res.headers.get("content-encoding"), "gzip");
 });

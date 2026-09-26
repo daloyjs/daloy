@@ -226,7 +226,13 @@ app.post(
         </li>
         <li>
           <code>destroy()</code> - drops server-side state and emits a{" "}
-          <code>Set-Cookie</code> with <code>Max-Age=0</code>.
+          <code>Set-Cookie</code> with <code>Max-Age=0</code>. A destroyed
+          session cannot be resurrected by a request that was already in
+          flight when logout ran (since 1.3.7): write-backs of a session loaded
+          from the cookie only succeed if the record still exists, and the
+          middleware remembers ids it destroyed (bounded, for the session TTL)
+          so a concurrent request skips both the store write and the cookie
+          refresh.
         </li>
       </ul>
 
@@ -282,31 +288,69 @@ app.post(
         Methods may return synchronously or via a <code>Promise</code> - DaloyJS
         always awaits them, so a fully async store works without changes.
       </p>
+      <p>
+        Custom stores should implement <code>update()</code> as an atomic
+        conditional write. Stores without it still work: before writing back a
+        loaded session, <code>session()</code> re-reads it with{" "}
+        <code>get()</code> and skips the write when it is gone, remembers ids
+        this instance destroyed, and logs a one-time warning at setup. That
+        makes logout revocation complete within one process. When several
+        instances share the store, a narrow window remains between that{" "}
+        <code>get()</code> and <code>set()</code> where an in-flight request on
+        another instance can restore a session that was just destroyed, so
+        multi-instance deployments should implement <code>update()</code>.
+      </p>
+      <ul>
+        <li>
+          <code>update(sid, record)</code> (optional, since 1.3.7) - an atomic conditional write:
+          overwrite the record <strong>only if it still exists</strong> and is
+          unexpired, returning <code>true</code> when written and{" "}
+          <code>false</code> when it was missing. The middleware uses it for
+          every write-back of a session loaded from a cookie. Redis{" "}
+          <code>SET ... XX</code> is one way to make this atomic.
+        </li>
+        <li>
+          <code>touch(sid, expiresAt)</code> - slides the expiry for rolling
+          sessions. If provided, it must atomically extend only an{" "}
+          <strong>existing</strong> record, never create one. When omitted,
+          rolling refresh uses <code>update()</code>.
+        </li>
+      </ul>
+      <p>
+        With Redis, <code>XX</code> makes <code>update()</code> atomic and{" "}
+        <code>PEXPIRE</code> on an existing key makes <code>touch()</code>{" "}
+        safe by construction:
+      </p>
       <CodeBlock
         code={`import type { SessionStore } from "@daloyjs/core";
+import Redis from "ioredis";
 
-const kvStore: SessionStore = {
+const redis = new Redis(process.env.REDIS_URL!);
+const ttl = (expiresAt: number) => Math.max(1, expiresAt - Date.now());
+
+const redisStore: SessionStore = {
   async get(id) {
-    const raw = await KV.get(id);
-    return raw ? (JSON.parse(raw) as { data: Record<string, unknown>; expiresAt: number }) : null;
+    const raw = await redis.get(\`sess:\${id}\`);
+    return raw ? JSON.parse(raw) : null;
   },
   async set(id, record) {
-    const ttlSeconds = Math.max(1, Math.ceil((record.expiresAt - Date.now()) / 1000));
-    await KV.put(id, JSON.stringify(record), { expirationTtl: ttlSeconds });
+    await redis.set(\`sess:\${id}\`, JSON.stringify(record), "PX", ttl(record.expiresAt));
   },
   async destroy(id) {
-    await KV.delete(id);
+    await redis.del(\`sess:\${id}\`);
   },
-  // Optional: implement touch() to slide the expiry without rewriting the payload.
+  // SET ... XX writes only if the key still exists: logout wins the race.
+  async update(id, record) {
+    const ok = await redis.set(
+      \`sess:\${id}\`, JSON.stringify(record), "PX", ttl(record.expiresAt), "XX",
+    );
+    return ok === "OK";
+  },
+  // PEXPIRE is a no-op on a missing key, so touch() can never revive a session.
   async touch(id, expiresAt) {
-    const raw = await KV.get(id);
-    if (!raw) return;
-    const ttlSeconds = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
-    await KV.put(id, raw, { expirationTtl: ttlSeconds });
+    await redis.pexpire(\`sess:\${id}\`, ttl(expiresAt));
   },
-};
-
-app.use(session({ secret: process.env.SESSION_SECRET!, store: kvStore }));`}
+};`}
       />
 
       <h2 id="standalone-signing-helpers">Standalone signing helpers</h2>
@@ -349,7 +393,9 @@ const original = await verifySignedValue(signed, process.env.LINK_SECRET!);
         <li>
           The default <code>MemorySessionStore</code> is per-process - it is
           suitable for tests and single-instance deployments only. Use a
-          KV/Redis-shaped store across replicas.
+          KV/Redis-shaped store across replicas, and implement{" "}
+          <code>update()</code> there so logout cannot be undone by a
+          concurrent request on another instance.
         </li>
       </ul>
     </>

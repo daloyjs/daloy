@@ -84,7 +84,7 @@ interface AppOptions {
 
   // Environment & logging
   production?: boolean;                // defaults from NODE_ENV
-  env?: "development" | "production" | "test";
+  env?: "development" | "production" | "test";  // "production" also forces mcpRoutes() error redaction
   logger?: Logger | { level?: LogLevel } | false;
   stripServerHeaders?: boolean;        // default: true
 

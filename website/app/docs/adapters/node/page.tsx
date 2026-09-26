@@ -142,9 +142,41 @@ await close();`}
           When <code>trustProxy: true</code>
           {", "}the adapter reads <code>x-forwarded-proto</code> and{" "}
           <code>x-forwarded-host</code> when constructing the request URL. Leave
-          it off unless TLS is terminated at a known proxy you control.
+          it off unless TLS is terminated at a known proxy you control. Since
+          2.0.0 only <code>http</code> or <code>https</code> is honoured from{" "}
+          <code>x-forwarded-proto</code>
+          {"; "}any other value falls back to the socket&apos;s own scheme.
+        </li>
+        <li>
+          One path view for router and middleware (since 1.3.7). The router
+          matches the raw request-target while middleware such as{" "}
+          <code>except()</code>
+          {", "}tenancy, and the WAF re-parse <code>request.url</code>
+          {". "}So the two can never disagree, the adapter canonicalizes a
+          request-target containing <code>{"\\"}</code>
+          {", "}<code>.</code>/<code>..</code> segments, their{" "}
+          <code>%2e</code> spellings, or bytes that URL parsing would
+          percent-encode, exactly as <code>new URL()</code> would. Ordinary
+          paths skip this with no allocation.
+        </li>
+        <li>
+          A <code>Host</code> header (or trusted <code>x-forwarded-host</code>)
+          that is not a plain <code>host[:port]</code> or bracketed IPv6
+          literal is refused with <code>400</code> on both HTTP requests and
+          WebSocket upgrades. Only letters, digits, <code>. - _ :</code> and{" "}
+          <code>[ ]</code> around an IPv6 address are accepted, so a value such
+          as <code>{"h\\health?"}</code> cannot move bytes into the path the
+          router sees.
         </li>
       </ul>
+      <CodeBlock
+        code={`# Routed as /health, the same path except() sees:
+curl --path-as-is http://localhost:3000/admin/%2e%2e/health
+
+# Refused with 400 Bad Request:
+curl -H 'Host: h\\health?' http://localhost:3000/admin`}
+        language="bash"
+      />
 
       <h2 id="behind-a-load-balancer">Behind a load balancer</h2>
       <p>Two rules to avoid the classic 502/504 race:</p>

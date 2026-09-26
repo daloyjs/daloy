@@ -257,7 +257,8 @@ app.use(
     // instead of bypassing. Return null for anonymous.
     principal: (ctx) => ctx.state.session?.get("userId") ?? null,
     // Cache credentialed requests only when responses are shareable. Boolean
-    // sets both Authorization and Cookie; an object controls them separately.
+    // sets Authorization, Cookie, and clientIdentity (mTLS / HTTP-signature
+    // callers, since 1.3.7); an object controls them separately.
     cacheAuthenticatedRequests: false,
     // Custom cache key BODY; the tenant/principal partition is applied around it.
     // Return null to skip caching this request.
@@ -325,7 +326,7 @@ app.use(responseCache({ store: redisResponseCacheStore }));`}
             + [ secondary key ] ─── the request's values for the fields the
                                     response's own Vary header names (RFC 9111 §4.1)
 
-Authorization or Cookie present, and neither handled nor identified?  →  bypass the cache entirely`}</code>
+Authorization, Cookie, or an mTLS / signature identity present, and neither handled nor identified?  →  bypass the cache entirely`}</code>
         </pre>
       </div>
       <h3 id="the-authority-is-part-of-the-key">
@@ -380,6 +381,28 @@ app.use(
         credential in <code>varyHeaders</code> also counts as handling it, since
         its value then partitions the key by itself.
       </p>
+      <p>
+        Callers authenticated by <code>clientCertAuth()</code> (mTLS) or{" "}
+        <code>httpSignatureAuth()</code> carry no <code>Authorization</code> or{" "}
+        <code>Cookie</code>, but they are still identified callers. Both hooks
+        run in <code>preBody</code>, before the cache lookup, and record the
+        verified identity, so such a request bypasses the cache the same way
+        (since 1.3.7). Name the caller with <code>principal</code> to cache per
+        peer, or set <code>cacheAuthenticatedRequests: {"{"} clientIdentity:
+        true {"}"}</code> when the response is genuinely the same for every
+        authenticated peer. Passing <code>true</code> opts in all three
+        dimensions.
+      </p>
+      <CodeBlock
+        code={`app.use(clientCertAuth({ /* ... */ }));
+app.use(
+  responseCache({
+    // Public catalogue behind mTLS: every partner sees the same body.
+    cacheAuthenticatedRequests: { clientIdentity: true },
+  }),
+);`}
+        language="ts"
+      />
       <h3 id="declared-variants-are-honoured">
         Declared variants are honoured
       </h3>
@@ -451,7 +474,9 @@ app.use(
         {", "}
         <code>basicAuth()</code>
         {", "}
-        <code>clientCertAuth()</code>) runs in <code>preBody</code> for the same
+        <code>clientCertAuth()</code>
+        {", "}
+        <code>httpSignatureAuth()</code>) runs in <code>preBody</code> for the same
         reason.
       </p>
       <p>

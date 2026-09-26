@@ -283,3 +283,101 @@ test("releases the slot even when the handler errors", async () => {
   const r2 = await app.fetch(new Request("http://x/maybe"));
   assert.equal(r2.status, 200); // proves the slot was freed
 });
+
+// ---------- regression: route scope keys on the matched template ----------
+
+function paramApp(gate: () => Promise<void>): App {
+  const app = new App({ env: "development" });
+  app.use(concurrencyLimit({ maxConcurrent: 1, scope: "route" }));
+  app.route({
+    method: "GET",
+    path: "/reports/:id",
+    responses: { 200: { description: "ok" } },
+    handler: async () => {
+      await gate();
+      return { status: 200 as const, body: { ok: true } };
+    },
+  });
+  app.route({
+    method: "GET",
+    path: "/other",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  return app;
+}
+
+test('scope "route" shares one budget across path-param values and trailing slash', async () => {
+  const gate = deferred();
+  const app = paramApp(() => gate.promise);
+  const first = app.fetch(new Request("http://x/reports/1"));
+  await new Promise((r) => setTimeout(r, 10));
+  // Varying the param (or adding a trailing slash) must NOT mint a fresh budget.
+  for (const p of ["/reports/2", "/reports/3", "/reports/1/"]) {
+    const res = await app.fetch(new Request(`http://x${p}`));
+    assert.equal(res.status, 503, p);
+  }
+  assert.equal((await app.fetch(new Request("http://x/reports/2"))).status, 503);
+  gate.resolve();
+  assert.equal((await first).status, 200);
+});
+
+test('scope "route" still gives a different route template its own budget', async () => {
+  const gate = deferred();
+  const app = paramApp(() => gate.promise);
+  const first = app.fetch(new Request("http://x/reports/1"));
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal((await app.fetch(new Request("http://x/other"))).status, 200);
+  gate.resolve();
+  assert.equal((await first).status, 200);
+  // Slot released: the same template is admitted again.
+  gate.resolve();
+  assert.equal((await app.fetch(new Request("http://x/reports/9"))).status, 200);
+});
+
+// ---------- regression: slot released even when another onSend throws ----------
+
+test("releases the slot when an earlier onSend hook throws (no permanent 503)", async () => {
+  const app = new App({ env: "production", logger: false });
+  let explode = true;
+  app.use({
+    onSend() {
+      if (explode) throw new Error("store outage");
+      return undefined;
+    },
+  });
+  app.use(concurrencyLimit({ maxConcurrent: 1 }));
+  app.route({
+    method: "GET",
+    path: "/x",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+
+  for (let i = 0; i < 3; i++) {
+    // The throwing onSend makes the dispatch fail; the slot must still be freed.
+    await app.fetch(new Request("http://x/x")).then(
+      () => undefined,
+      () => undefined
+    );
+  }
+  explode = false;
+  const res = await app.fetch(new Request("http://x/x"));
+  assert.equal(res.status, 200);
+});
+
+test("guaranteed release does not double-release: cap still holds afterwards", async () => {
+  let block: Deferred | undefined;
+  const app = appWith({ maxConcurrent: 1 }, () => block?.promise ?? Promise.resolve());
+  // Several completed requests: each runs the onSend release AND the finalizer.
+  for (let i = 0; i < 3; i++) {
+    assert.equal((await app.fetch(req("/slow"))).status, 200);
+  }
+  block = deferred();
+  const held = app.fetch(req("/slow"));
+  await new Promise((r) => setTimeout(r, 10));
+  // If a double release had driven `active` negative, this would be admitted.
+  assert.equal((await app.fetch(req("/slow"))).status, 503);
+  block.resolve();
+  assert.equal((await held).status, 200);
+});

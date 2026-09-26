@@ -10,6 +10,8 @@ import {
   tenantFromHeader,
   tenantFromPathPrefix,
   tenantFromClaim,
+  jwk,
+  basicAuth,
   defaultTenantNormalize,
   type Hooks,
   type TenancyOptions,
@@ -332,4 +334,77 @@ test("tenantScope isolates rate-limit buckets per tenant", async () => {
   assert.equal((await hit("globex")).status, 200);
   assert.equal((await hit("globex")).status, 200);
   assert.equal((await hit("globex")).status, 429);
+});
+
+// Regression (deepsec 2026-09-26, OWASP API1): no first-party helper writes
+// ctx.state.auth, so the documented claim-then-subdomain chain used to fall
+// through to the attacker-controlled Host and serve another tenant's data.
+async function realAuthTenantApp(auth: Hooks) {
+  const app = new App({ logger: false });
+  app.use(auth);
+  app.use(
+    tenancy({
+      resolve: [tenantFromClaim("org"), tenantFromSubdomain({ baseDomain: "example.com" })],
+      allow: ["acme", "globex"],
+    }),
+  );
+  app.route({
+    method: "GET",
+    path: "/invoices",
+    operationId: "invoices",
+    responses: { 200: { description: "ok", body: z.object({ tenant: z.string() }) } },
+    handler: ({ state }) => ({ status: 200 as const, body: { tenant: (state as any).tenant } }),
+  });
+  return app;
+}
+
+test("[unhappy] tenantFromClaim uses the jwk()-verified claim, never a spoofed Host subdomain", async () => {
+  const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const pub = { ...(await crypto.subtle.exportKey("jwk", kp.publicKey)), kid: "k1", alg: "ES256", use: "sig" };
+  const b64u = (v: string | Uint8Array) => Buffer.from(v as any).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64u(JSON.stringify({ alg: "ES256", kid: "k1", typ: "JWT" }));
+  const body = b64u(JSON.stringify({ sub: "alice", org: "acme", iat: now, exp: now + 300 }));
+  const sig = new Uint8Array(
+    await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, kp.privateKey, new TextEncoder().encode(`${head}.${body}`)),
+  );
+  const token = `${head}.${body}.${b64u(sig)}`;
+  const app = await realAuthTenantApp(jwk({ jwks: { keys: [pub as JsonWebKey] }, algorithms: ["ES256"] }));
+  for (const host of ["acme.example.com", "globex.example.com"]) {
+    const res = await app.request(`http://${host}/invoices`, { headers: { authorization: `Bearer ${token}` } });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { tenant: "acme" }, `Host ${host} must not pick the tenant`);
+  }
+});
+
+test("[unhappy] tenantFromClaim uses the basicAuth() verify() result, never a spoofed Host subdomain", async () => {
+  const app = await realAuthTenantApp(
+    basicAuth({ verify: async (u, p) => (u === "alice" && p === "pw" ? { username: "alice", org: "acme" } : false) }),
+  );
+  const res = await app.request("http://globex.example.com/invoices", {
+    headers: { authorization: `Basic ${Buffer.from("alice:pw").toString("base64")}` },
+  });
+  assert.deepEqual(await res.json(), { tenant: "acme" });
+});
+
+test("tenantFromClaim still falls back to the subdomain when no principal carries the claim", async () => {
+  const noClaim: Hooks = {
+    beforeHandle(ctx) {
+      (ctx.state as Record<string, unknown>).user = { sub: "svc" };
+    },
+  };
+  const app = await realAuthTenantApp(noClaim);
+  const res = await app.request("http://globex.example.com/invoices");
+  assert.deepEqual(await res.json(), { tenant: "globex" });
+  // An explicit stateKey reads only that node.
+  const scoped = new App({ hooks: noClaim });
+  scoped.use(tenancy({ resolve: tenantFromClaim("sub", { stateKey: "auth" }), require: false }));
+  scoped.route({
+    method: "GET",
+    path: "/t",
+    operationId: "t",
+    responses: { 200: { description: "ok" } },
+    handler: ({ state }) => ({ status: 200 as const, body: { tenant: (state as any).tenant ?? null } }),
+  });
+  assert.deepEqual(await (await scoped.request("http://x/t")).json(), { tenant: null });
 });

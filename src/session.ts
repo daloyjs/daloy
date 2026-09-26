@@ -77,8 +77,29 @@ export interface SessionStore {
   set(sid: string, record: SessionRecord): void | Promise<void>;
   /** Delete the record for a session id; a no-op when it does not exist. */
   destroy(sid: string): void | Promise<void>;
-  /** Optional fast-path for rolling sessions; falls back to `set()` if omitted. */
+  /**
+    * Optional fast-path for rolling sessions. Must atomically extend an
+    * **existing** record and never create one (so a destroyed session cannot
+    * be revived). When omitted, rolling refresh uses {@link SessionStore.update}.
+   */
   touch?(sid: string, expiresAt: number): void | Promise<void>;
+  /**
+   * Atomic conditional write: overwrite the record for `sid` **only if it
+   * still exists** (and is unexpired), e.g. Redis `SET ... XX`. Returns `true`
+   * when written, `false` when the record was missing.
+   *
+   * Security: used for every write-back of a session loaded from a cookie, so
+   * a request still in flight during logout cannot resurrect the destroyed
+   * session. Strongly recommended, and required for complete logout
+   * revocation when several instances share one store. Without it the
+   * middleware re-reads the record with `get()` and skips the write when it is
+   * gone, and remembers ids destroyed by this instance; that closes the race
+   * in a single process but leaves a narrow cross-instance window between
+   * `get()` and `set()`. `session()` logs a one-time warning for such stores.
+   *
+   * @since 1.3.7
+   */
+  update?(sid: string, record: SessionRecord): boolean | Promise<boolean>;
 }
 
 /** Attributes for the session id cookie set by the {@link session} middleware. */
@@ -112,7 +133,7 @@ export interface SessionOptions {
   cookieName?: string;
   /** Cookie attributes (see {@link SessionCookieOptions}). */
   cookieOptions?: SessionCookieOptions;
-  /** Pluggable persistence backend. Default: a fresh in-memory store. */
+  /** Pluggable backend (implement atomic `update()`); default: a fresh in-memory store. */
   store?: SessionStore;
   /** Default session lifetime in seconds. Default: `86400` (1 day). */
   ttlSeconds?: number;
@@ -137,9 +158,9 @@ export type SessionContext = {
   readonly id: string;
   /**
    * Session payload. Top-level and nested mutations (including array element
-   * writes) mark the session dirty so {@link SessionStore.set} runs on the
-   * response. Prefer `set`/`delete` for top-level keys when you do not need
-   * nested objects.
+  * writes) mark the session dirty so {@link SessionStore.update} (or
+  * {@link SessionStore.set} for a new session) runs on the response. Prefer
+  * `set`/`delete` for top-level keys when you do not need nested objects.
    */
   readonly data: Record<string, unknown>;
   /** Read a single payload key. */
@@ -155,6 +176,30 @@ export type SessionContext = {
 };
 
 const STATE_KEY = "session";
+let warnedStoreWithoutUpdate = false;
+
+/**
+ * Warn once per process that a custom `SessionStore` lacks `update()`, so
+ * logout revocation is only best-effort across instances sharing the store.
+ */
+function warnSessionStoreWithoutUpdate(): void {
+  if (warnedStoreWithoutUpdate) return;
+  warnedStoreWithoutUpdate = true;
+  console.warn(
+    "[daloy] session(): the configured SessionStore has no update() method. Logout " +
+      "revocation is complete within this process, but instances sharing the store keep a " +
+      "narrow window where an in-flight request can restore a destroyed session. Implement " +
+      "update() as an atomic write-if-exists (e.g. Redis SET ... XX)."
+  );
+}
+
+/** @internal Reset the one-time store warning (tests only). */
+export function _resetSessionStoreWarningForTests(): void {
+  warnedStoreWithoutUpdate = false;
+}
+
+/** Upper bound on remembered destroyed session ids per `session()` instance. */
+const MAX_SESSION_TOMBSTONES = 10_000;
 const STATE_INTERNAL = "__sessionInternal";
 
 // ---------- Implementation ----------
@@ -218,9 +263,9 @@ function makeSigner(secret: string): Signer {
   if (typeof secret !== "string" || secret.length < 16) {
     throw new Error(
       "session(): each secret must be a string of at least 16 characters — it is the HMAC key " +
-        "that signs every session cookie, so a short or guessable value lets an attacker forge sessions. " +
-        "Generate one with `openssl rand -base64 32` and load it from an env var or secret manager " +
-        "(never hard-code or commit it). See https://daloyjs.dev/docs/security/session."
+      "that signs every session cookie, so a short or guessable value lets an attacker forge sessions. " +
+      "Generate one with `openssl rand -base64 32` and load it from an env var or secret manager " +
+      "(never hard-code or commit it). See https://daloyjs.dev/docs/security/session."
     );
   }
   let keyPromise: Promise<CryptoKey> | null = null;
@@ -448,6 +493,17 @@ export class MemorySessionStore implements SessionStore {
     this.map.delete(sid);
   }
 
+  /**
+   * Overwrite a record only if it still exists and is unexpired.
+   *
+   * @returns `true` when written, `false` when the record was missing/expired.
+   */
+  update(sid: string, record: SessionRecord): boolean {
+    if (this.get(sid) === null) return false;
+    this.map.set(sid, record);
+    return true;
+  }
+
   /** Extend an existing record's expiry (ms since epoch) without rewriting data. */
   touch(sid: string, expiresAt: number): void {
     const rec = this.map.get(sid);
@@ -492,7 +548,9 @@ export class MemorySessionStore implements SessionStore {
  * @returns A {@link Hooks} object that loads/verifies the session before the
  *   handler and persists mutations plus the `Set-Cookie` header afterwards.
  * @throws Error at setup time on missing/short secrets, invalid cookie
- *   attribute combinations, or a non-positive `ttlSeconds`.
+ *   attribute combinations, or a non-positive `ttlSeconds`. A custom store
+ *   without `update()` is accepted with a one-time warning (see
+ *   {@link SessionStore.update}).
  */
 export function session(opts: SessionOptions): Hooks {
   const cookieName = opts.cookieName ?? DEFAULT_COOKIE_NAME;
@@ -524,8 +582,50 @@ export function session(opts: SessionOptions): Hooks {
   const ttlMs = ttlSeconds * 1000;
   const rolling = opts.rolling !== false;
   const store = opts.store ?? new MemorySessionStore();
+  if (typeof store.update !== "function") warnSessionStoreWithoutUpdate();
   const generator = opts.generator ?? generateSessionId;
   const saveUninitialized = opts.saveUninitialized === true;
+
+  // Tombstones for session ids destroyed by this middleware instance (logout,
+  // regenerate). A request that loaded one of these ids before it was
+  // destroyed must not write it back on send. Bounded (oldest evicted first)
+  // and each entry lives for the session TTL — a destroyed id can never be
+  // legitimately reused (ids are random), so the check never blocks real use.
+  const tombstones = new Map<string, number>();
+  const addTombstone = (sid: string): void => {
+    const now = Date.now();
+    tombstones.delete(sid);
+    if (tombstones.size >= MAX_SESSION_TOMBSTONES) {
+      const oldest = tombstones.keys().next().value;
+      if (oldest !== undefined) tombstones.delete(oldest);
+    }
+    tombstones.set(sid, now + ttlMs);
+    // Opportunistically drop expired entries from the front (insertion order).
+    for (const [k, exp] of tombstones) {
+      if (exp > now) break;
+      tombstones.delete(k);
+    }
+  };
+  const isTombstoned = (sid: string): boolean => {
+    if (tombstones.size === 0) return false;
+    const exp = tombstones.get(sid);
+    if (exp === undefined) return false;
+    if (exp <= Date.now()) {
+      tombstones.delete(sid);
+      return false;
+    }
+    return true;
+  };
+  // Write back only a record that still exists: atomically via `update()`,
+  // or (legacy stores) by re-reading it first. Never an unconditional `set()`
+  // for a session loaded from a cookie.
+  const writeExisting = async (sid: string, record: SessionRecord): Promise<boolean> => {
+    if (store.update) return (await store.update(sid, record)) === true;
+    const current = await store.get(sid);
+    if (!current || current.expiresAt <= Date.now()) return false;
+    await store.set(sid, record);
+    return true;
+  };
 
   const hooks: Hooks = {
     async beforeHandle(ctx) {
@@ -588,6 +688,7 @@ export function session(opts: SessionOptions): Hooks {
         // request (or a prior mid-request rotation) was never written to the
         // store, so there is nothing to destroy — we just discard it.
         if (internal.activeId && internal.originalId === internal.activeId) {
+          addTombstone(internal.activeId);
           await store.destroy(internal.activeId);
         }
         const next = generator();
@@ -619,7 +720,10 @@ export function session(opts: SessionOptions): Hooks {
       if (!internal) return undefined;
 
       if (internal.destroyed) {
-        if (internal.originalId) await store.destroy(internal.originalId);
+        if (internal.originalId) {
+          addTombstone(internal.originalId);
+          await store.destroy(internal.originalId);
+        }
         // Clear stale or malformed client cookies too, not only verified sessions.
         if (internal.hadCookie) {
           res.headers.append(
@@ -641,14 +745,27 @@ export function session(opts: SessionOptions): Hooks {
       if (!initialized && !internal.saveUninitialized) return undefined;
 
       const mustPersist = internal.dirty || internal.created || internal.regenerated;
+      // A session loaded from the cookie (not freshly created or rotated) may
+      // have been destroyed by a concurrent request (logout) while this one
+      // was in flight. Write it back only if it still exists, and skip the
+      // cookie refresh when it does not.
+      const loaded = internal.originalId !== null && internal.originalId === sid;
+      if (loaded && isTombstoned(sid)) return undefined;
 
       if (mustPersist) {
         // Deep-clone so nested mutations persist as an independent tree and
         // never share references with the store.
-        await store.set(sid, { data: cloneSessionData(data), expiresAt });
+        const record = { data: cloneSessionData(data), expiresAt };
+        if (loaded) {
+          if (!(await writeExisting(sid, record))) return undefined;
+        } else {
+          await store.set(sid, record);
+        }
       } else if (internal.rolling) {
         if (store.touch) await store.touch(sid, expiresAt);
-        else await store.set(sid, { data: cloneSessionData(data), expiresAt });
+        else if (!(await writeExisting(sid, { data: cloneSessionData(data), expiresAt }))) {
+          return undefined;
+        }
       }
 
       if (internal.regenerated && internal.originalId && internal.originalId !== sid) {

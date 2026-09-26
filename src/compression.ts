@@ -245,6 +245,36 @@ function isExcludedContentType(contentType: string | null, extraDeny: readonly s
   return false;
 }
 
+// Content types that are, by definition, open-ended streams of records.
+const STREAMING_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  "text/event-stream",
+  "application/x-ndjson",
+  "application/ndjson",
+  "application/jsonl",
+  "application/x-jsonlines",
+  "application/json-seq",
+]);
+
+const RAW_STREAM_SYMBOL = Symbol.for("daloyjs.response.rawStream");
+
+/**
+ * True when `res` is a live stream that compression must pass through
+ * untouched: a streaming media type (SSE, NDJSON, JSON Lines, JSON-seq), a
+ * `Cache-Control: no-transform` directive (RFC 9111 §5.2.2.6, which
+ * `sseResponse()` sets), or a handler-attached raw stream.
+ */
+function isStreamingResponse(res: Response): boolean {
+  const ct = res.headers.get("content-type");
+  if (ct) {
+    const semi = ct.indexOf(";");
+    const token = (semi === -1 ? ct : ct.slice(0, semi)).trim().toLowerCase();
+    if (STREAMING_CONTENT_TYPES.has(token)) return true;
+  }
+  const cc = res.headers.get("cache-control");
+  if (cc && /(?:^|,)\s*no-transform\s*(?:,|$)/i.test(cc)) return true;
+  return (res as unknown as Record<symbol, unknown>)[RAW_STREAM_SYMBOL] !== undefined;
+}
+
 function requestCarriesAuthCookie(cookieHeader: string | null, extra: readonly string[]): boolean {
   if (!cookieHeader) return false;
   const lower = cookieHeader.toLowerCase();
@@ -356,7 +386,11 @@ async function compressBytes(
  *   capture clone is cancelled, without waiting for the client to consume it;
  * - response `Content-Type` is in the always-on already-compressed
  *   deny-list (image/video/audio/archives/fonts/wasm/pdf, with
- *   `image/svg+xml` carved back in as compressible XML).
+ *   `image/svg+xml` carved back in as compressible XML);
+ * - response is a live stream: `Content-Type` is `text/event-stream`,
+ *   NDJSON / JSON Lines / `application/json-seq`, or `Cache-Control`
+ *   carries `no-transform` (set by `sseResponse()`). Compressing these
+ *   would buffer the stream and withhold every event from the client.
  *
  * When skipping, the middleware still appends `Vary: Accept-Encoding`
  * to the response so cache keys remain content-negotiation-correct.
@@ -436,6 +470,11 @@ export function compression(opts: CompressionOptions = {}): Hooks {
       if (isExcludedContentType(res.headers.get("content-type"), extraDeny)) {
         return undefined;
       }
+      // Streaming responses (SSE / NDJSON / `no-transform` / raw streams) must
+      // not be buffered: compressing them means awaiting up to
+      // `maxCompressibleBytes` (or stream end) before a single byte — or even
+      // the response head — reaches the client.
+      if (isStreamingResponse(res)) return undefined;
 
       const runtimeSupported = detectRuntimeSupport();
       if (runtimeSupported.size === 0) return undefined;

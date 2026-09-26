@@ -31,14 +31,14 @@ export const app = new App({
   // (e.g. set it to 2 behind Cloudflare -> Vercel).
   behindProxy: { hops: Number(process.env.TRUST_PROXY_HOPS ?? "1") },
   // daloy-minimal:strip-start docs
-  // Auto-mounted docs (when `docs: true`):
+  // Auto-mounted docs, outside production only (`docs: "auto"`):
   //   GET /openapi.json — OpenAPI 3.1 spec (JSON)
   //   GET /openapi.yaml — OpenAPI 3.1 spec (YAML, served inline as text/yaml)
   //   GET /docs         — Scalar API reference UI that loads the spec
   openapi: {
     info: { title: "My Daloy Vercel API", version: "0.0.1" },
   },
-  docs: true,
+  docs: "auto",
   // daloy-minimal:strip-end docs
 });
 

@@ -1372,20 +1372,26 @@ app.get(
         <li>
           Stream a specific file from a handler when you need app logic
           (auth-gated downloads, generated files). Read the file and return it
-          as the body with the right headers, set{" "}
-          <code>content-disposition: attachment; filename=&quot;...&quot;</code>{" "}
-          to reproduce <code>res.download()</code>
-          {". "}Always sanitize untrusted filenames with{" "}
-          <code>sanitizeFilename()</code> /{" "}
-          <code>assertSafeRelativePath()</code> from <code>@daloyjs/core</code>{" "}
-          to avoid path traversal.
+          as the body with the right headers, and build the{" "}
+          <code>content-disposition</code> header with{" "}
+          <code>contentDisposition(filename)</code> (since 1.3.7) to
+          reproduce <code>res.download()</code>
+          {". "}It runs the name through <code>sanitizeFilename()</code>{" "}
+          (which also strips bidi and invisible format characters, so{" "}
+          <code>invoice\u202Efdp.exe</code> cannot pose as a PDF), emits an
+          ASCII <code>filename=&quot;...&quot;</code> fallback plus an RFC
+          8187 <code>filename*=UTF-8&apos;&apos;...</code> parameter for
+          non-ASCII names, and always returns a valid header value. Guard the
+          path itself with <code>assertSafeRelativePath()</code> to avoid path
+          traversal. Both come from <code>@daloyjs/core</code>
+          .
         </li>
       </ol>
       <CodeBlock
         language="typescript"
         code={`// Auth-gated download (replaces res.download)
 import { readFile } from "node:fs/promises";
-import { assertSafeRelativePath } from "@daloyjs/core";
+import { assertSafeRelativePath, contentDisposition } from "@daloyjs/core";
 
 app.get(
   "/files/:name",
@@ -1401,7 +1407,8 @@ app.get(
       status: 200,
       headers: {
         "content-type": "application/octet-stream",
-        "content-disposition": \`attachment; filename="\${params.name}"\`,
+        // attachment; filename="r_sum_.pdf"; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf
+        "content-disposition": contentDisposition(params.name),
       },
       body: data,
     };

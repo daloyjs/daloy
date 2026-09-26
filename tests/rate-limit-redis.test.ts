@@ -4,9 +4,16 @@ import {
   redisRateLimitStore,
   ioredisAdapter,
   nodeRedisAdapter,
+  redisAutoBanStore,
   type RedisCommands,
 } from "../src/rate-limit-redis.js";
-import { App, rateLimit } from "../src/index.js";
+import {
+  App,
+  rateLimit,
+  autoBan,
+  UnauthorizedError,
+  _resetAutoBanStoresForTests,
+} from "../src/index.js";
 
 /**
  * Minimal in-memory fake of the EVAL contract. Only models the script that
@@ -166,4 +173,137 @@ test("redisRateLimitStore integrates with rateLimit and surfaces 429 + Retry-Aft
   const blocked = await app.request("/ping");
   assert.equal(blocked.status, 429);
   assert.ok(blocked.headers.get("retry-after"));
+});
+
+// ---------- redisAutoBanStore (deepsec 2026-09-26) ----------
+
+/**
+ * Fake of the autoBan scripts: dispatches on the marker comment each script
+ * starts with and models the hash + PEXPIRE semantics (a JS mirror of the Lua).
+ * Adds latency so concurrent callers genuinely interleave.
+ */
+function fakeAutoBanRedis(): RedisCommands & {
+  hashes: Map<string, { h: Record<string, number>; expireAt: number }>;
+  scripts: string[];
+} {
+  const hashes = new Map<string, { h: Record<string, number>; expireAt: number }>();
+  const scripts: string[] = [];
+  const live = (k: string) => {
+    const e = hashes.get(k);
+    if (e && e.expireAt <= Date.now()) hashes.delete(k);
+    return hashes.get(k);
+  };
+  return {
+    hashes,
+    scripts,
+    async eval(script, keys, args) {
+      await new Promise((r) => setTimeout(r, 1));
+      const marker = script.split("\n", 1)[0]!;
+      scripts.push(marker);
+      const k = keys[0]!;
+      if (marker === "-- daloy:autoban:get") {
+        const e = live(k);
+        return e ? [e.h.s, e.h.se, e.h.bu, e.h.bc].map(String) : [null, null, null, null];
+      }
+      if (marker === "-- daloy:autoban:set") {
+        const [s, se, bu, bc, ttl] = args.map(Number);
+        hashes.set(k, { h: { s: s!, se: se!, bu: bu!, bc: bc! }, expireAt: Date.now() + ttl! });
+        return 1;
+      }
+      if (marker === "-- daloy:autoban:del") {
+        hashes.delete(k);
+        return 1;
+      }
+      if (marker === "-- daloy:autoban:strike") {
+        const [now, windowMs, maxStrikes, banMs, maxBanMs] = args.map(Number) as number[];
+        const e = live(k);
+        let s = e?.h.s ?? 0;
+        let se = e?.h.se ?? 0;
+        let bu = e?.h.bu ?? 0;
+        let bc = e?.h.bc ?? 0;
+        if (se <= now!) s = 0;
+        s += 1;
+        const strikes = s;
+        let banned = 0;
+        let dur = 0;
+        se = now! + windowMs!;
+        if (s >= maxStrikes!) {
+          bc += 1;
+          dur = args[5] === "1" ? Math.min(maxBanMs!, banMs! * 2 ** (bc - 1)) : banMs!;
+          bu = now! + dur;
+          banned = 1;
+          s = 0;
+        }
+        hashes.set(k, { h: { s, se, bu, bc }, expireAt: Date.now() + Math.max(se, bu) - now! });
+        return [strikes, banned, bc, dur, bu];
+      }
+      throw new Error("unknown script " + marker);
+    },
+  };
+}
+
+test("redisAutoBanStore get/set/delete round-trip under the prefix", async () => {
+  const client = fakeAutoBanRedis();
+  const store = redisAutoBanStore({ client });
+  assert.equal(await store.get("a"), undefined);
+  await store.set("a", { strikes: 2, strikeExpiresMs: 10, bannedUntilMs: 0, banCount: 1 }, 5_000);
+  assert.ok(client.hashes.has("daloy:ab:a"));
+  assert.deepEqual(await store.get("a"), {
+    strikes: 2,
+    strikeExpiresMs: 10,
+    bannedUntilMs: 0,
+    banCount: 1,
+  });
+  await store.delete("a");
+  assert.equal(await store.get("a"), undefined);
+});
+
+test("redisAutoBanStore strike() is used by autoBan and counts concurrent failures", async () => {
+  _resetAutoBanStoresForTests();
+  const client = fakeAutoBanRedis();
+  const bans: number[] = [];
+  const app = new App({ env: "development", logger: false });
+  app.use(
+    autoBan({
+      keyGenerator: () => "attacker",
+      store: redisAutoBanStore({ client, prefix: "t:" }),
+      maxStrikes: 5,
+      onBan: (e) => bans.push(e.banCount),
+    })
+  );
+  app.route({
+    method: "GET",
+    path: "/login",
+    responses: { 200: { description: "ok" } },
+    handler: () => {
+      throw new UnauthorizedError();
+    },
+  });
+  const res = await Promise.all(
+    Array.from({ length: 15 }, () => app.fetch(new Request("http://x/login")))
+  );
+  assert.ok(res.every((r) => r.status === 401));
+  assert.deepEqual(bans, [1, 2, 3]);
+  assert.ok(client.scripts.includes("-- daloy:autoban:strike"));
+  assert.ok(!client.scripts.includes("-- daloy:autoban:set"));
+  assert.equal((await app.fetch(new Request("http://x/login"))).status, 429);
+});
+
+test("redisAutoBanStore strike() rejects a malformed reply", async () => {
+  const store = redisAutoBanStore({ client: { eval: async () => "OK" } });
+  await assert.rejects(
+    store.strike!("k", { windowMs: 1, maxStrikes: 1, banMs: 1, maxBanMs: 1, escalate: false }, 0),
+    /unexpected strike reply/
+  );
+});
+
+test("redisAutoBanStore propagates transport errors", async () => {
+  const store = redisAutoBanStore({
+    client: {
+      eval: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    },
+  });
+  await assert.rejects(store.get("k"), /ECONNREFUSED/);
 });

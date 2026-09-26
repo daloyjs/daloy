@@ -31,7 +31,7 @@
  * serve(app, { port: 3000 });
  * ```
  */
-import { HttpError, InternalError } from "./errors.js";
+import { HttpError } from "./errors.js";
 import { rateLimit, type RateLimitOptions } from "./middleware.js";
 import { getFileFieldOptions } from "./multipart.js";
 import { Router, type RouteMatch } from "./router.js";
@@ -91,6 +91,13 @@ export const DEFAULT_WS_BACKPRESSURE_LIMIT = 1024 * 1024;
 export const DEFAULT_WS_MAX_PAYLOAD_LENGTH = 1024 * 1024;
 /** Default idle timeout applied to WebSocket routes (seconds). */
 export const DEFAULT_WS_IDLE_TIMEOUT_SECONDS = 120;
+/**
+ * Default cap on the number of data frames (initial + continuations) a single
+ * fragmented inbound message may span. Bounds per-frame bookkeeping so a peer
+ * cannot hold a message open forever with empty continuation frames, which
+ * `maxPayloadLength` alone never trips on. Exceeding it is a protocol error.
+ */
+export const DEFAULT_WS_MAX_MESSAGE_FRAGMENTS = 4096;
 
 // ---------- Public types ----------
 
@@ -419,7 +426,8 @@ export type WebSocketBeforeUpgrade<P extends string = string, S = AppState> = No
  * routes (for example, login and WebSocket session-establishment endpoints).
  *
  * @param options The same {@link RateLimitOptions} accepted by the HTTP `rateLimit` middleware.
- * @returns A `beforeUpgrade` hook that returns the 429 (or error) `Response` when the limit is exceeded, or `undefined` to allow the upgrade. Rate-limit headers are copied onto rejection responses.
+ * @returns A `beforeUpgrade` hook that returns the 429 (or `HttpError`) `Response` when the limit is exceeded, or `undefined` to allow the upgrade. Rate-limit headers are copied onto rejection responses; 5xx `detail` is always scrubbed.
+ * @throws Rethrows any non-`HttpError` failure (for example a store outage) so the adapter logs it and answers with a generic 500 — the error message never reaches the client.
  * @since 0.23.0
  */
 export function wsRateLimit<P extends string = string, S = AppState>(
@@ -445,12 +453,13 @@ export function wsRateLimit<P extends string = string, S = AppState>(
       }
       return undefined;
     } catch (err) {
-      const response =
-        err instanceof HttpError
-          ? err.toResponse()
-          : new InternalError(
-              err instanceof Error ? err.message : "WebSocket rate limit failed"
-            ).toResponse();
+      // Never echo arbitrary error text (store/keyGenerator failures can carry
+      // connection strings, hostnames, credentials) to the client. Non-HTTP
+      // errors are rethrown so the adapter logs them and writes its own
+      // generic 500; HttpError 5xx `detail` is always scrubbed because some
+      // adapters (Bun) return this Response verbatim, with no prod-mode pass.
+      if (!(err instanceof HttpError)) throw err;
+      const response = err.toResponse({ production: true });
       copyWsRateLimitHeaders(setHeaders, response);
       return response;
     }
@@ -1140,55 +1149,104 @@ export interface FrameSinkEvents {
  * driven by an adapter's socket `data` event.
  */
 export class FrameSink {
-  private buffer: Uint8Array = new Uint8Array(0);
-  private fragments: Uint8Array[] = [];
+  // Pending (not yet parsed) input lives in `buf[off, off + len)`. Growth is
+  // amortized (doubling + compaction) so a frame trickled in N small chunks
+  // costs O(frame size) copying instead of O(N * frame size).
+  private buf: Uint8Array = EMPTY_BYTES;
+  private off = 0;
+  private len = 0;
+  // Reassembled fragmented message bytes live in `msg[0, fragmentBytes)`.
+  // A single growable buffer (not an array of per-fragment slices) keeps
+  // memory proportional to payload bytes, never to frame count.
+  private msg: Uint8Array = EMPTY_BYTES;
   private fragmentOpcode = -1;
   private fragmentBytes = 0;
+  private fragmentCount = 0;
   private closed = false;
 
+  /**
+   * @param opts - Event callbacks plus parser limits: `requireMask` (reject
+   *   unmasked frames), `maxPayloadLength` (cap on a frame and on the
+   *   reassembled message; violations surface as
+   *   {@link WebSocketPayloadTooLargeError}), and `maxFragments` (cap on data
+   *   frames per message, default {@link DEFAULT_WS_MAX_MESSAGE_FRAGMENTS};
+   *   violations surface as a {@link WebSocketProtocolError}).
+   */
   constructor(
     private readonly opts: FrameSinkEvents & {
       requireMask?: boolean;
       maxPayloadLength?: number;
+      maxFragments?: number;
     }
   ) {}
 
   /**
    * Feed raw socket bytes into the assembler. Complete frames trigger the
    * configured callbacks; partial frames are buffered until more bytes
-   * arrive. No-op after a CLOSE frame or protocol error.
+   * arrive. No-op after a CLOSE frame or protocol error. The chunk is copied,
+   * so the caller may reuse it.
    *
    * @param chunk - The next bytes read from the socket.
    */
   push(chunk: Uint8Array): void {
     if (this.closed) return;
-    if (this.buffer.length === 0) {
-      this.buffer = chunk.slice();
+    if (this.len === 0) {
+      // Common case: nothing pending. One exact-size copy, as before.
+      this.buf = chunk.slice();
+      this.off = 0;
+      this.len = chunk.length;
     } else {
-      const next = new Uint8Array(this.buffer.length + chunk.length);
-      next.set(this.buffer, 0);
-      next.set(chunk, this.buffer.length);
-      this.buffer = next;
+      this.append(chunk);
     }
     try {
-      while (this.buffer.length > 0) {
-        const frame = parseFrame(this.buffer, {
+      while (this.len > 0) {
+        const frame = parseFrame(this.buf.subarray(this.off, this.off + this.len), {
           requireMask: this.opts.requireMask,
           maxPayload: this.opts.maxPayloadLength,
         });
         if (frame === FRAME_INCOMPLETE) return;
-        this.buffer = this.buffer.subarray(frame.consumed);
+        this.off += frame.consumed;
+        this.len -= frame.consumed;
         this.handle(frame);
         if (this.closed) return;
       }
+      // Fully drained: drop the (possibly large) backing store.
+      this.buf = EMPTY_BYTES;
+      this.off = 0;
     } catch (err) {
       if (err instanceof WebSocketProtocolError) {
         this.closed = true;
+        this.release();
         this.opts.onProtocolError(err);
       } else {
         throw err;
       }
     }
+  }
+
+  private append(chunk: Uint8Array): void {
+    const need = this.len + chunk.length;
+    if (this.off + need > this.buf.length) {
+      if (need <= this.buf.length && this.off >= this.len) {
+        // Compact: the live region is no larger than the consumed prefix, so
+        // this copy is paid for by bytes already consumed (amortized O(1)).
+        this.buf.copyWithin(0, this.off, this.off + this.len);
+      } else {
+        const next = new Uint8Array(Math.max(need, this.buf.length * 2));
+        next.set(this.buf.subarray(this.off, this.off + this.len), 0);
+        this.buf = next;
+      }
+      this.off = 0;
+    }
+    this.buf.set(chunk, this.off + this.len);
+    this.len = need;
+  }
+
+  private release(): void {
+    this.buf = EMPTY_BYTES;
+    this.off = 0;
+    this.len = 0;
+    this.msg = EMPTY_BYTES;
   }
 
   private handle(frame: ParsedFrame): void {
@@ -1198,6 +1256,7 @@ export class FrameSink {
       if (frame.opcode === WS_OPCODE.CLOSE) {
         const { code, reason } = decodeClosePayload(copy);
         this.closed = true;
+        this.release();
         this.opts.onClose(code, reason);
       } else if (frame.opcode === WS_OPCODE.PING) {
         this.opts.onPing(copy);
@@ -1211,8 +1270,6 @@ export class FrameSink {
       if (this.fragmentOpcode === -1) {
         throw new WebSocketProtocolError("Continuation frame without an initial data frame");
       }
-      this.assertMessageSize(frame.payload.length);
-      this.fragments.push(frame.payload.slice());
     } else {
       if (this.fragmentOpcode !== -1) {
         throw new WebSocketProtocolError(
@@ -1220,34 +1277,57 @@ export class FrameSink {
         );
       }
       this.fragmentOpcode = frame.opcode;
-      this.assertMessageSize(frame.payload.length);
-      this.fragments.push(frame.payload.slice());
+    }
+    const maxFragments = this.opts.maxFragments ?? DEFAULT_WS_MAX_MESSAGE_FRAGMENTS;
+    if (++this.fragmentCount > maxFragments) {
+      throw new WebSocketProtocolError(`Fragmented message exceeds ${maxFragments} frames`);
+    }
+    this.assertMessageSize(frame.payload.length);
+
+    let joined: Uint8Array;
+    if (frame.fin && this.fragmentCount === 1) {
+      // Unfragmented message (the common case): a single copy.
+      joined = frame.payload.slice();
+    } else {
+      if (frame.payload.length > 0) this.appendFragment(frame.payload);
+      if (!frame.fin) return;
+      joined =
+        this.msg.length === this.fragmentBytes
+          ? this.msg
+          : this.msg.slice(0, this.fragmentBytes);
     }
 
-    if (frame.fin) {
-      const total = this.fragments.reduce((n, p) => n + p.length, 0);
-      const joined = new Uint8Array(total);
-      let offset = 0;
-      for (const p of this.fragments) {
-        joined.set(p, offset);
-        offset += p.length;
+    const isBinary = this.fragmentOpcode === WS_OPCODE.BINARY;
+    this.msg = EMPTY_BYTES;
+    this.fragmentOpcode = -1;
+    this.fragmentBytes = 0;
+    this.fragmentCount = 0;
+    if (isBinary) {
+      this.opts.onMessage({ data: joined, isBinary: true });
+    } else {
+      let text: string;
+      try {
+        text = new TextDecoder("utf-8", { fatal: true }).decode(joined);
+      } catch {
+        throw new WebSocketProtocolError("Invalid UTF-8 in text message");
       }
-      const isBinary = this.fragmentOpcode === WS_OPCODE.BINARY;
-      this.fragments = [];
-      this.fragmentOpcode = -1;
-      this.fragmentBytes = 0;
-      if (isBinary) {
-        this.opts.onMessage({ data: joined, isBinary: true });
-      } else {
-        let text: string;
-        try {
-          text = new TextDecoder("utf-8", { fatal: true }).decode(joined);
-        } catch {
-          throw new WebSocketProtocolError("Invalid UTF-8 in text message");
-        }
-        this.opts.onMessage({ data: text, isBinary: false });
-      }
+      this.opts.onMessage({ data: text, isBinary: false });
     }
+  }
+
+  /** Append `payload` at `msg[fragmentBytes - payload.length)` (size already accounted). */
+  private appendFragment(payload: Uint8Array): void {
+    const end = this.fragmentBytes;
+    const start = end - payload.length;
+    if (end > this.msg.length) {
+      const limit = this.opts.maxPayloadLength;
+      let cap = Math.max(end, this.msg.length * 2);
+      if (limit !== undefined && cap > limit) cap = Math.max(end, limit);
+      const next = new Uint8Array(cap);
+      next.set(this.msg.subarray(0, start), 0);
+      this.msg = next;
+    }
+    this.msg.set(payload, start);
   }
 
   private assertMessageSize(nextPayloadLength: number): void {
@@ -1259,6 +1339,8 @@ export class FrameSink {
     this.fragmentBytes = nextTotal;
   }
 }
+
+const EMPTY_BYTES = new Uint8Array(0);
 
 // ---------- Helpers shared by adapters ----------
 

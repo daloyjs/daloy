@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { App, geoBlock, type GeoBlockDecision } from "../src/index.js";
+import { App, geoBlock, setConnInfo, type GeoBlockDecision } from "../src/index.js";
 
 // ---------- helpers ----------
 
@@ -279,4 +279,98 @@ test("x-real-ip is used as a fallback when x-forwarded-for is absent", async () 
     headers: { "x-real-ip": "203.0.113.9" },
   });
   assert.equal((await app.fetch(r)).status, 403);
+});
+
+// ---------- unresolved forwarded IP falls back to the peer (deepsec 2026-09-26) ----------
+
+function peerReq(peer: string | undefined, xff?: string): Request {
+  const r = new Request("http://x/", { headers: xff ? { "x-forwarded-for": xff } : {} });
+  if (peer) setConnInfo(r, { remoteAddress: peer });
+  return r;
+}
+
+const PEER_TABLE: Record<string, string> = { "198.51.100.7": "KP", "203.0.113.9": "US" };
+const peerLookup = (ip: string) => PEER_TABLE[ip];
+
+test("deny-only + trustedProxies: direct-to-origin peer in a denied country is blocked", async () => {
+  const decisions: GeoBlockDecision[] = [];
+  const app = appWith(
+    geoBlock({
+      deny: ["KP"],
+      trustedProxies: ["10.0.0.0/8"],
+      lookupCountry: peerLookup,
+      onBlock: (d) => decisions.push(d),
+    })
+  );
+  const res = await app.fetch(peerReq("198.51.100.7", "203.0.113.9"));
+  assert.equal(res.status, 403);
+  assert.equal(decisions[0]?.reason, "denied_country");
+  assert.equal(decisions[0]?.ip, "198.51.100.7");
+});
+
+test("deny-only + trustedHops: a chain one hop short is looked up by peer and blocked", async () => {
+  const app = appWith(geoBlock({ deny: ["KP"], trustedHops: 2, lookupCountry: peerLookup }));
+  const res = await app.fetch(peerReq("198.51.100.7", "203.0.113.9"));
+  assert.equal(res.status, 403);
+});
+
+test("deny-only peer fallback: a peer in an allowed country passes (happy path)", async () => {
+  const app = appWith(
+    geoBlock({ deny: ["KP"], trustedProxies: ["10.0.0.0/8"], lookupCountry: peerLookup })
+  );
+  const res = await app.fetch(peerReq("203.0.113.9"));
+  assert.equal(res.status, 200);
+});
+
+test("trusted proxy chain still resolves the forwarded client (happy path)", async () => {
+  const app = appWith(
+    geoBlock({ deny: ["KP"], trustedProxies: ["10.0.0.0/8"], lookupCountry: peerLookup })
+  );
+  assert.equal((await app.fetch(peerReq("10.0.0.1", "203.0.113.9"))).status, 200);
+  assert.equal((await app.fetch(peerReq("10.0.0.1", "198.51.100.7"))).status, 403);
+});
+
+test("allow-list: a peer-derived allowed country never widens access (stays unknown)", async () => {
+  const decisions: GeoBlockDecision[] = [];
+  const app = appWith(
+    geoBlock({
+      allow: ["US"],
+      trustedHops: 2,
+      lookupCountry: peerLookup,
+      onBlock: (d) => decisions.push(d),
+    })
+  );
+  // Chain one hop short; the peer (our own LB in this topology) maps to US.
+  const res = await app.fetch(peerReq("203.0.113.9", "198.51.100.7"));
+  assert.equal(res.status, 403);
+  assert.equal(decisions[0]?.reason, "unknown_country");
+});
+
+test("onUnresolvedIp 'unknown' restores the previous deny-only fail-open", async () => {
+  const lookups: string[] = [];
+  const app = appWith(
+    geoBlock({
+      deny: ["KP"],
+      trustedProxies: ["10.0.0.0/8"],
+      onUnresolvedIp: "unknown",
+      lookupCountry: (ip) => (lookups.push(ip), peerLookup(ip)),
+    })
+  );
+  const res = await app.fetch(peerReq("198.51.100.7"));
+  assert.equal(res.status, 200);
+  assert.deepEqual(lookups, []);
+});
+
+test("peer-less platform keeps the unknown-country verdict", async () => {
+  const app = appWith(geoBlock({ deny: ["KP"], trustedHops: 1, lookupCountry: peerLookup }));
+  assert.equal((await app.fetch(peerReq(undefined))).status, 200);
+  const strict = appWith(geoBlock({ allow: ["US"], trustedHops: 1, lookupCountry: peerLookup }));
+  assert.equal((await strict.fetch(peerReq(undefined))).status, 403);
+});
+
+test("geoBlock() rejects an invalid onUnresolvedIp", () => {
+  assert.throws(
+    () => geoBlock({ deny: ["KP"], lookupCountry: () => "US", onUnresolvedIp: "skip" as never }),
+    /onUnresolvedIp/
+  );
 });

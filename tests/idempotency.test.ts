@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { z } from "zod";
 import {
   App,
+  clientCertAuth,
   idempotency,
   MemoryIdempotencyStore,
   _resetSharedIdempotencyStoresForTests,
@@ -307,4 +308,231 @@ test("MemoryIdempotencyStore.release drops a reservation", () => {
   assert.equal(store.size(), 0);
   store.clear();
   assert.equal(store.size(), 0);
+});
+
+// ---------- Raw-body fingerprint (routes without a body schema) ----------
+
+function makeRawApp(opts: IdempotencyOptions = {}) {
+  const app = new App({ logger: false });
+  const state = { calls: 0 };
+  app.use(idempotency(opts));
+  app.route({
+    method: "POST",
+    path: "/raw",
+    operationId: "rawCharge",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async (ctx: any) => {
+      state.calls++;
+      return new Response("charged " + (await ctx.request.text()));
+    },
+  } as any);
+  const post = (key: string, body: string, contentType = "text/plain") =>
+    app.request("/raw", {
+      method: "POST",
+      headers: { "idempotency-key": key, "content-type": contentType, authorization: "Bearer u1" },
+      body,
+    });
+  return { app, state, post };
+}
+
+test("[unhappy] a reused key with a different raw body is refused with 422 on a schema-less route", async () => {
+  const { state, post } = makeRawApp();
+  const first = await post("raw-1", "amount=10");
+  assert.equal(first.status, 200);
+  assert.equal(await first.text(), "charged amount=10");
+  const second = await post("raw-1", "amount=99999");
+  assert.equal(second.status, 422);
+  assert.equal(second.headers.get("idempotency-replayed"), null);
+  assert.equal(state.calls, 1);
+});
+
+test("[unhappy] a reused key with the same bytes but a different content type is refused", async () => {
+  const { post } = makeRawApp();
+  assert.equal((await post("raw-ct", "a=1", "text/plain")).status, 200);
+  assert.equal((await post("raw-ct", "a=1", "application/x-www-form-urlencoded")).status, 422);
+});
+
+test("an identical raw-body retry replays and the handler still reads the original body", async () => {
+  const { state, post } = makeRawApp();
+  const first = await post("raw-2", "amount=10");
+  assert.equal(await first.text(), "charged amount=10");
+  const retry = await post("raw-2", "amount=10");
+  assert.equal(retry.status, 200);
+  assert.equal(retry.headers.get("idempotency-replayed"), "true");
+  assert.equal(await retry.text(), "charged amount=10");
+  assert.equal(state.calls, 1);
+});
+
+test("[unhappy] a raw body over maxFingerprintBodyBytes is refused with 413, not fingerprinted blind", async () => {
+  const { state, post } = makeRawApp({ maxFingerprintBodyBytes: 8 });
+  const res = await post("raw-3", "0123456789");
+  assert.equal(res.status, 413);
+  assert.equal(state.calls, 0);
+  assert.equal((await post("raw-4", "small")).status, 200);
+});
+
+test("maxFingerprintBodyBytes must be a positive integer", () => {
+  assert.throws(() => idempotency({ maxFingerprintBodyBytes: 0 }), /maxFingerprintBodyBytes/);
+});
+
+// ---------- mTLS identity scoping ----------
+
+test("[unhappy] mTLS callers without Authorization get separate namespaces for the same key", async () => {
+  const app = new App({ logger: false });
+  let calls = 0;
+  app.use(
+    clientCertAuth({
+      resolve: (ctx) => {
+        const svc = ctx.request.headers.get("x-test-peer");
+        return svc
+          ? { subjectDN: `CN=${svc}`, subjectAltNames: [`URI:spiffe://acme/${svc}`], verified: true }
+          : undefined;
+      },
+    })
+  );
+  app.use(idempotency());
+  app.route({
+    method: "POST",
+    path: "/transfer",
+    operationId: "mtlsTransfer",
+    request: { body: z.object({ amount: z.number() }) as any },
+    responses: { 200: { description: "ok", body: z.object({ owner: z.string() }) as any } },
+    handler: async (ctx: any) => {
+      calls++;
+      return { status: 200 as const, body: { owner: ctx.state.clientCertificate.subjectDN } };
+    },
+  });
+  const post = (svc: string) =>
+    app.request("/transfer", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "idempotency-key": "shared", "x-test-peer": svc },
+      body: JSON.stringify({ amount: 1 }),
+    });
+  assert.deepEqual(await (await post("svc-a")).json(), { owner: "CN=svc-a" });
+  const b = await post("svc-b");
+  assert.equal(b.headers.get("idempotency-replayed"), null);
+  assert.deepEqual(await b.json(), { owner: "CN=svc-b" });
+  // Same peer retrying still replays.
+  const retry = await post("svc-a");
+  assert.equal(retry.headers.get("idempotency-replayed"), "true");
+  assert.deepEqual(await retry.json(), { owner: "CN=svc-a" });
+  assert.equal(calls, 2);
+});
+
+test("[unhappy] the raw-body fingerprint cap is lowered to the app bodyLimitBytes when reported", async () => {
+  const { state, post } = makeRawApp();
+  // Simulate App reporting bodyLimitBytes: 1 KiB to the hook (APP_BODY_LIMIT_HOOK).
+  const limited = new App({ logger: false });
+  const idem = idempotency();
+  (idem as any)[Symbol.for("daloyjs.hooks.appBodyLimit")](1024);
+  (idem as any)[Symbol.for("daloyjs.hooks.appBodyLimit")](10_000_000); // never raised
+  (idem as any)[Symbol.for("daloyjs.hooks.appBodyLimit")](-1); // ignored
+  limited.use(idem);
+  let calls = 0;
+  limited.route({
+    method: "POST",
+    path: "/raw",
+    operationId: "rawLimited",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async (ctx: any) => {
+      calls++;
+      return new Response("ok " + (await ctx.request.text()).length);
+    },
+  } as any);
+  const send = (key: string, size: number) =>
+    limited.request("/raw", {
+      method: "POST",
+      headers: { "idempotency-key": key, "content-type": "text/plain", authorization: "Bearer u1" },
+      body: "x".repeat(size),
+    });
+  assert.equal((await send("big", 900_000)).status, 413);
+  assert.equal(calls, 0);
+  assert.equal((await send("small", 1024)).status, 200);
+  assert.equal(calls, 1);
+  // Unrelated default instance keeps its 1 MiB cap.
+  assert.equal((await post("default-cap", "x".repeat(900_000))).status, 200);
+  assert.equal(state.calls, 1);
+});
+
+test("[unhappy] a raw body consumed by an earlier hook fails closed instead of fingerprinting as empty", async () => {
+  const app = new App({ logger: false });
+  let calls = 0;
+  app.use({
+    async beforeHandle(ctx) {
+      await ctx.request.text();
+    },
+  });
+  app.use(idempotency());
+  app.route({
+    method: "POST",
+    path: "/raw",
+    operationId: "rawConsumed",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async () => {
+      calls++;
+      return new Response("ok");
+    },
+  } as any);
+  const res = await app.request("/raw", {
+    method: "POST",
+    headers: { "idempotency-key": "consumed", "content-type": "text/plain", authorization: "Bearer u1" },
+    body: "amount=10",
+  });
+  assert.equal(res.status, 500);
+  assert.equal(calls, 0);
+  // Happy path: without a key the same app passes through untouched.
+  const noKey = await app.request("/raw", {
+    method: "POST",
+    headers: { "content-type": "text/plain" },
+    body: "amount=10",
+  });
+  assert.equal(noKey.status, 200);
+});
+
+test("a bodiless keyed POST without Content-Length still fingerprints as empty (no false 500)", async () => {
+  const app = new App({ logger: false });
+  app.use(idempotency());
+  let calls = 0;
+  app.route({
+    method: "POST",
+    path: "/ping",
+    operationId: "ping",
+    responses: { 200: { description: "ok", body: z.object({ n: z.number() }) } },
+    handler: () => ({ status: 200 as const, body: { n: ++calls } }),
+  });
+  const first = await app.request("/ping", { method: "POST", headers: { "idempotency-key": "k-bodiless-1" } });
+  assert.equal(first.status, 200);
+  const replay = await app.request("/ping", { method: "POST", headers: { "idempotency-key": "k-bodiless-1" } });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.headers.get("idempotency-replayed"), "true");
+  assert.equal(calls, 1);
+});
+
+test("[unhappy] App wiring lowers the raw-body fingerprint cap to bodyLimitBytes end-to-end", async () => {
+  const app = new App({ logger: false, bodyLimitBytes: 1024 });
+  app.use(idempotency());
+  let calls = 0;
+  app.route({
+    method: "POST",
+    path: "/raw",
+    operationId: "rawCap",
+    responses: { 200: { description: "ok", body: z.object({ n: z.number() }) } },
+    handler: () => ({ status: 200 as const, body: { n: ++calls } }),
+  });
+  const big = await app.request("/raw", {
+    method: "POST",
+    headers: { "idempotency-key": "k-cap-1", "content-type": "text/plain" },
+    body: "x".repeat(4096),
+  });
+  assert.equal(big.status, 413);
+  assert.equal(calls, 0);
+  const small = await app.request("/raw", {
+    method: "POST",
+    headers: { "idempotency-key": "k-cap-2", "content-type": "text/plain" },
+    body: "x".repeat(512),
+  });
+  assert.equal(small.status, 200);
 });

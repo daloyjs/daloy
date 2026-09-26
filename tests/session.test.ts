@@ -11,6 +11,7 @@ import {
   type SessionRecord,
   type SessionStore,
 } from "../src/index.js";
+import { _resetSessionStoreWarningForTests } from "../src/session.js";
 
 const SECRET = "this-is-a-test-secret-32-bytes!!";
 
@@ -242,8 +243,9 @@ test("session clones store records before request mutation", async () => {
   const sid = "stable";
   const store: SessionStore = {
     get: () => record,
-    set: () => {},
-    destroy: () => {},
+    set: () => { },
+    destroy: () => { },
+    update: () => true,
   };
   const { app } = makeApp({ store });
   const sig = await getSig(sid, SECRET);
@@ -342,6 +344,7 @@ test("session rolling default refreshes Set-Cookie + touch on each access", asyn
     get: (sid) => inner.get(sid),
     set: (sid, rec) => inner.set(sid, rec),
     destroy: (sid) => inner.destroy(sid),
+    update: (sid, rec) => inner.update(sid, rec),
     touch: (sid, exp) => {
       touched += 1;
       inner.touch(sid, exp);
@@ -358,26 +361,27 @@ test("session rolling default refreshes Set-Cookie + touch on each access", asyn
   assert.equal(touched, 1);
 });
 
-test("session rolling: when store has no touch(), falls back to set()", async () => {
-  let sets = 0;
+test("session rolling: when store has no touch(), uses atomic update()", async () => {
+  let updates = 0;
   const inner = new MemorySessionStore();
   const store: SessionStore = {
     get: (sid) => inner.get(sid),
-    set: (sid, rec) => {
-      sets += 1;
-      inner.set(sid, rec);
-    },
+    set: (sid, rec) => inner.set(sid, rec),
     destroy: (sid) => inner.destroy(sid),
+    update: (sid, rec) => {
+      updates += 1;
+      return inner.update(sid, rec);
+    },
   };
   const { app } = makeApp({ store });
   const r1 = await app.request("/login", { method: "POST" });
   const cookie = readCookie(r1)!;
-  sets = 0;
+  updates = 0;
   await app.request("/touch-only", {
     method: "POST",
     headers: { cookie: `__Host-daloy.sid=${encodeURIComponent(cookie)}` },
   });
-  assert.equal(sets, 1);
+  assert.equal(updates, 1);
 });
 
 test("session rolling: false skips refresh on unmodified requests", async () => {
@@ -430,8 +434,9 @@ test("session: custom store returning an expired record is treated as no session
   // A store that doesn't filter expired records itself.
   const store: SessionStore = {
     get: () => ({ data: { name: "stale" }, expiresAt: Date.now() - 1000 }),
-    set: () => {},
-    destroy: () => {},
+    set: () => { },
+    destroy: () => { },
+    update: () => false,
   };
   const { app } = makeApp({ store, saveUninitialized: false });
   const sid = "alive";
@@ -450,8 +455,9 @@ test("session: stored record with missing data field is replaced with empty obje
       data: null as unknown as Record<string, unknown>,
       expiresAt: Date.now() + 60_000,
     }),
-    set: () => {},
-    destroy: () => {},
+    set: () => { },
+    destroy: () => { },
+    update: () => true,
   };
   const { app } = makeApp({ store });
   const sid = "alive";
@@ -657,6 +663,7 @@ test("session: store async get returning a value works", async () => {
     get: async (sid) => inner.get(sid),
     set: async (sid, rec) => inner.set(sid, rec),
     destroy: async (sid) => inner.destroy(sid),
+    update: async (sid, rec) => inner.update(sid, rec),
   };
   const { app } = makeApp({ store: asyncStore });
   const r1 = await app.request("/login", { method: "POST" });
@@ -1031,4 +1038,248 @@ test("session clone preserves Date values across a store round-trip (no JSON cor
   const body = (await second.json()) as { isDate: boolean; ms: number | null };
   assert.equal(body.isDate, true, "Date must survive the clone (JSON would stringify it)");
   assert.equal(body.ms, 1_700_000_000_000);
+});
+
+// ---------- Logout resurrection race (deepsec 2026-09-26) ----------
+
+class NoTouchStore implements SessionStore {
+  readonly m = new Map<string, SessionRecord>();
+  sets = 0;
+  get(s: string) {
+    const r = this.m.get(s);
+    return r && r.expiresAt > Date.now() ? structuredClone(r) : null;
+  }
+  set(s: string, r: SessionRecord) {
+    this.sets += 1;
+    this.m.set(s, structuredClone(r));
+  }
+  destroy(s: string) {
+    this.m.delete(s);
+  }
+  update(s: string, r: SessionRecord) {
+    if (this.get(s) === null) return false;
+    this.m.set(s, structuredClone(r));
+    return true;
+  }
+}
+
+function makeRaceApp(store: SessionStore) {
+  const app = new App({ logger: false });
+  app.use(session({ secret: SECRET, store }));
+  let release!: () => void;
+  let entered!: () => void;
+  const gate = { wait: Promise.resolve(), entered: Promise.resolve() };
+  const arm = () => {
+    gate.wait = new Promise<void>((r) => (release = r));
+    gate.entered = new Promise<void>((r) => (entered = r));
+  };
+  app.route({
+    method: "POST",
+    path: "/login",
+    operationId: "login",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      await state.session.regenerate();
+      state.session.set("userId", "alice");
+      return { status: 200 as const, body: { ok: true } };
+    },
+  });
+  app.route({
+    method: "POST",
+    path: "/logout",
+    operationId: "logout",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => {
+      state.session.destroy();
+      return { status: 200 as const, body: { ok: true } };
+    },
+  });
+  for (const [path, writes] of [["/slow", false], ["/slow-touch", true]] as const) {
+    app.route({
+      method: "GET",
+      path,
+      operationId: writes ? "slowTouch" : "slow",
+      responses: { 200: { description: "ok" } },
+      handler: async ({ state }) => {
+        entered();
+        await gate.wait;
+        if (writes) state.session.set("lastSeen", 1);
+        return { status: 200 as const, body: { ok: true } };
+      },
+    });
+  }
+  app.route({
+    method: "GET",
+    path: "/me",
+    operationId: "me",
+    responses: { 200: { description: "ok" } },
+    handler: async ({ state }) => ({
+      status: 200 as const,
+      body: { user: state.session.get<string>("userId") ?? null },
+    }),
+  });
+  return { app, arm, release: () => release(), gate };
+}
+
+for (const [label, mkStore, path] of [
+  ["MemorySessionStore + in-flight write", () => new MemorySessionStore(), "/slow-touch"],
+  ["store without touch() + in-flight read", () => new NoTouchStore(), "/slow"],
+  ["store without touch() + in-flight write", () => new NoTouchStore(), "/slow-touch"],
+] as const) {
+  test(`session: in-flight request cannot resurrect a destroyed session (${label})`, async () => {
+    const { app, arm, release, gate } = makeRaceApp(mkStore());
+    const cookie = `__Host-daloy.sid=${encodeURIComponent(readCookie(await app.request("/login", { method: "POST" }))!)}`;
+    arm();
+    const inflight = app.request(path, { headers: { cookie } });
+    await gate.entered;
+    const out = await app.request("/logout", { method: "POST", headers: { cookie } });
+    assert.equal(out.status, 200);
+    release();
+    const late = await inflight;
+    assert.equal(late.status, 200);
+    // The late response must not re-issue the dead session cookie.
+    assert.equal(readCookie(late), null);
+    const me = await (await app.request("/me", { headers: { cookie } })).json();
+    assert.equal(me.user, null);
+  });
+}
+
+test("session: tombstones also stop a pre-rotation id being revived after regenerate()", async () => {
+  const store = new NoTouchStore();
+  const { app, arm, release, gate } = makeRaceApp(store);
+  const first = readCookie(await app.request("/login", { method: "POST" }))!;
+  const oldCookie = `__Host-daloy.sid=${encodeURIComponent(first)}`;
+  arm();
+  const inflight = app.request("/slow-touch", { headers: { cookie: oldCookie } });
+  await gate.entered;
+  // Re-login on the same cookie rotates the id (fixation defense).
+  const rotated = await app.request("/login", { method: "POST", headers: { cookie: oldCookie } });
+  const next = readCookie(rotated)!;
+  assert.notEqual(next.split(".")[0], first.split(".")[0]);
+  release();
+  await (await inflight).text();
+  assert.equal(store.m.has(first.split(".")[0]!), false, "old id stays destroyed");
+  const meOld = await (await app.request("/me", { headers: { cookie: oldCookie } })).json();
+  assert.equal(meOld.user, null);
+  const meNew = await (
+    await app.request("/me", { headers: { cookie: `__Host-daloy.sid=${encodeURIComponent(next)}` } })
+  ).json();
+  assert.equal(meNew.user, "alice");
+});
+
+test("session: without tombstones (another instance destroyed it), atomic update still refuses", async () => {
+  const store = new NoTouchStore();
+  const { app, arm, release, gate } = makeRaceApp(store);
+  const cookie = readCookie(await app.request("/login", { method: "POST" }))!;
+  arm();
+  const inflight = app.request("/slow-touch", {
+    headers: { cookie: `__Host-daloy.sid=${encodeURIComponent(cookie)}` },
+  });
+  await gate.entered;
+  store.destroy(cookie.split(".")[0]!); // logout handled by a different process
+  const setsBefore = store.sets;
+  release();
+  const late = await inflight;
+  assert.equal(store.sets, setsBefore, "no unconditional set() for a vanished record");
+  assert.equal(readCookie(late), null);
+  assert.equal(store.m.size, 0);
+});
+
+test("session: store.update() is preferred for write-back of a loaded session", async () => {
+  const inner = new MemorySessionStore();
+  const calls: string[] = [];
+  const store: SessionStore = {
+    get: (sid) => inner.get(sid),
+    set: (sid, rec) => {
+      calls.push("set");
+      inner.set(sid, rec);
+    },
+    destroy: (sid) => inner.destroy(sid),
+    update: (sid, rec) => {
+      calls.push("update");
+      return inner.update(sid, rec);
+    },
+  };
+  const { app } = makeApp({ store });
+  const cookie = readCookie(await app.request("/login", { method: "POST" }))!;
+  calls.length = 0;
+  const headers = { cookie: `__Host-daloy.sid=${encodeURIComponent(cookie)}` };
+  // Happy path: dirty write and no-touch rolling refresh both go through update().
+  await app.request("/mutate-via-data", { method: "POST", headers });
+  await app.request("/touch-only", { method: "POST", headers });
+  assert.deepEqual(calls, ["update", "update"]);
+  const me = await (await app.request("/me", { headers })).json();
+  assert.equal(me.name, "alice");
+});
+
+/** A 1.3.6-era store: get/set/destroy only, no touch() and no update(). */
+class LegacyStore implements SessionStore {
+  readonly m = new Map<string, SessionRecord>();
+  sets = 0;
+  get(s: string) {
+    const r = this.m.get(s);
+    return r && r.expiresAt > Date.now() ? structuredClone(r) : null;
+  }
+  set(s: string, r: SessionRecord) {
+    this.sets += 1;
+    this.m.set(s, structuredClone(r));
+  }
+  destroy(s: string) {
+    this.m.delete(s);
+  }
+}
+
+test("session: a store without update() is still accepted, with a one-time warning", (t) => {
+  _resetSessionStoreWarningForTests();
+  const warn = t.mock.method(console, "warn", () => {});
+  assert.doesNotThrow(() => session({ secret: SECRET, store: new LegacyStore() }));
+  session({ secret: SECRET, store: new LegacyStore() });
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(String(warn.mock.calls[0]!.arguments[0]), /no update\(\) method/);
+  // Stores with update() never warn.
+  _resetSessionStoreWarningForTests();
+  session({ secret: SECRET, store: new NoTouchStore() });
+  assert.equal(warn.mock.callCount(), 1);
+});
+
+test("[unhappy] legacy store: a record destroyed elsewhere is not written back (get re-check)", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const store = new LegacyStore();
+  const { app, arm, release, gate } = makeRaceApp(store);
+  const cookie = readCookie(await app.request("/login", { method: "POST" }))!;
+  arm();
+  const inflight = app.request("/slow-touch", {
+    headers: { cookie: `__Host-daloy.sid=${encodeURIComponent(cookie)}` },
+  });
+  await gate.entered;
+  store.destroy(cookie.split(".")[0]!); // logout handled by another instance
+  const setsBefore = store.sets;
+  release();
+  const late = await inflight;
+  assert.equal(store.sets, setsBefore, "no set() for a vanished record");
+  assert.equal(readCookie(late), null);
+  assert.equal(store.m.size, 0);
+});
+
+test("legacy store: write-back of a live session still persists via get() + set()", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const store = new LegacyStore();
+  const { app } = makeApp({ store });
+  const cookie = readCookie(await app.request("/login", { method: "POST" }))!;
+  const headers = { cookie: `__Host-daloy.sid=${encodeURIComponent(cookie)}` };
+  await app.request("/mutate-via-data", { method: "POST", headers });
+  const me = await (await app.request("/me", { headers })).json();
+  assert.equal(me.name, "alice");
+});
+
+test("MemorySessionStore.update() only writes existing, unexpired records", () => {
+  const store = new MemorySessionStore();
+  const rec = { data: { a: 1 }, expiresAt: Date.now() + 10_000 };
+  assert.equal(store.update("missing", rec), false);
+  assert.equal(store.size(), 0);
+  store.set("sid", { data: {}, expiresAt: Date.now() + 10_000 });
+  assert.equal(store.update("sid", rec), true);
+  assert.deepEqual(store.get("sid")?.data, { a: 1 });
+  store.set("old", { data: {}, expiresAt: Date.now() - 1 });
+  assert.equal(store.update("old", rec), false);
 });

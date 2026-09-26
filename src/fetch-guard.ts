@@ -31,8 +31,16 @@
  *   `198.51.100.0/24`, `203.0.113.0/24` (IANA-reserved), `224.0.0.0/4`
  *   (multicast), `240.0.0.0/4` (reserved), `255.255.255.255` (broadcast).
  * - IPv6: `::/128` (unspecified), `ff00::/8` (multicast),
- *   `fd00:ec2::254/128` (AWS IMDSv2 IPv6), IPv4-mapped
- *   `::ffff:0:0/96` is re-checked against the embedded IPv4 address.
+ *   `fd00:ec2::254/128` (AWS IMDSv2 IPv6).
+ * - IPv6 forms that **embed an IPv4 address** are re-checked against the
+ *   embedded IPv4 with the full IPv4 policy (fail closed: a denied embedded
+ *   IPv4 denies the IPv6 address): IPv4-mapped `::ffff:0:0/96`, SIIT
+ *   `::ffff:0:0:0/96`, IPv4-compatible `::/96`, NAT64 `64:ff9b::/96`,
+ *   6to4 `2002::/16`, and Teredo `2001::/32` (server and de-obfuscated
+ *   client IPv4). The local-use NAT64 prefix `64:ff9b:1::/48` is denied by
+ *   default (its embedding layout is operator-defined); only an explicit
+ *   `allowAddresses` range lifts it. Operator-chosen NAT64 network-specific
+ *   prefixes cannot be detected — add them to `denyAddresses`.
  *
  * The floor also picks up any user-supplied `denyAddresses` — these win
  * over `allowAddresses` and over the soft-deny class flags, so an
@@ -110,7 +118,8 @@ export type SsrfBlockReason =
   | "address-not-allowed"
   | "too-many-redirects"
   | "credentials-in-url"
-  | "invalid-url";
+  | "invalid-url"
+  | "redirect-body-not-replayable";
 
 /**
  * Thrown by {@link fetchGuard} when an outbound request is refused. Never
@@ -198,6 +207,19 @@ export interface FetchGuardOptions {
    * directly).
    */
   maxRedirects?: number;
+  /**
+   * Largest in-memory request body (string, `ArrayBuffer` / typed-array view,
+   * `Blob`, `URLSearchParams`, `FormData`) that is buffered once so a
+   * 307/308 redirect can replay it. Default `1048576` (1 MiB, same as the
+   * App's `bodyLimitBytes`). Larger bodies, and every stream body (a
+   * `ReadableStream` / async-iterable `init.body` **or** a `Request` input
+   * such as a forwarded `ctx.request`), are sent without buffering; a 307/308
+   * of such a body throws `SsrfBlockedError("redirect-body-not-replayable")`.
+   * Set `0` to never buffer.
+   *
+   * @since 1.3.7
+   */
+  maxReplayBodyBytes?: number;
   /**
    * Underlying fetch implementation. Defaults to `globalThis.fetch`.
    * Useful for tests or for layering on top of an instrumented client.
@@ -293,6 +315,54 @@ const LOOPBACK = ["127.0.0.0/8", "::1/128"];
 const LINK_LOCAL = ["169.254.0.0/16", "fe80::/10"];
 const PRIVATE = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"];
 const UNIQUE_LOCAL = ["fc00::/7"];
+// Soft-deny with no class flag: only an explicit `allowAddresses` range lifts
+// it. RFC 8215 local-use NAT64 — the IPv4 embedding offset is operator-chosen,
+// so the embedded address cannot be reliably extracted and re-checked.
+const LOCAL_NAT64 = ["64:ff9b:1::/48"];
+
+/**
+ * Extract every IPv4 address embedded in an IPv6 transition form so the IPv4
+ * deny policy can be re-applied to it (a NAT64 / 6to4 / Teredo translator
+ * turns the IPv6 destination into a connection to that IPv4).
+ *
+ * Covered: IPv4-mapped `::ffff:0:0/96`, SIIT `::ffff:0:0:0/96`,
+ * IPv4-compatible `::/96` (excluding `::` and `::1`), NAT64 well-known
+ * `64:ff9b::/96`, RFC 8215 `64:ff9b:1::/48` (the `/96` layout), 6to4
+ * `2002::/16`, and Teredo `2001::/32` (server IPv4 and XOR-obfuscated client
+ * IPv4). Returns `undefined` for IPv4 input and for IPv6 outside these ranges.
+ */
+function embeddedIPv4s(ip: ParsedIp): ParsedIp[] | undefined {
+  if (ip.family !== 6) return undefined;
+  const b = ip.bytes;
+  const v4 = (o: number, x = 0): ParsedIp => ({
+    family: 4,
+    bytes: Uint8Array.of(b[o]! ^ x, b[o + 1]! ^ x, b[o + 2]! ^ x, b[o + 3]! ^ x),
+  });
+  const zero = (from: number, to: number): boolean => {
+    for (let i = from; i < to; i++) if (b[i] !== 0) return false;
+    return true;
+  };
+  const g0 = (b[0]! << 8) | b[1]!;
+  const g1 = (b[2]! << 8) | b[3]!;
+  if (g0 === 0 && g1 === 0 && zero(4, 8)) {
+    const g4 = (b[8]! << 8) | b[9]!;
+    const g5 = (b[10]! << 8) | b[11]!;
+    // ::ffff:a.b.c.d (mapped) and ::ffff:0:a.b.c.d (SIIT)
+    if ((g4 === 0 && g5 === 0xffff) || (g4 === 0xffff && g5 === 0)) return [v4(12)];
+    if (g4 === 0 && g5 === 0) {
+      // ::a.b.c.d (IPv4-compatible); `::` and `::1` are classified directly.
+      if (b[12] === 0 && b[13] === 0 && b[14] === 0 && b[15]! <= 1) return undefined;
+      return [v4(12)];
+    }
+    return undefined;
+  }
+  // 64:ff9b::/96 (RFC 6052) and the /96 layout of 64:ff9b:1::/48 (RFC 8215).
+  if (g0 === 0x0064 && g1 === 0xff9b && zero(4, 12)) return [v4(12)];
+  if (g0 === 0x0064 && g1 === 0xff9b && b[4] === 0 && b[5] === 1) return [v4(12)];
+  if (g0 === 0x2002) return [v4(2)]; // 6to4
+  if (g0 === 0x2001 && g1 === 0) return [v4(4), v4(12, 0xff)]; // Teredo server, client
+  return undefined;
+}
 
 /**
  * Wrap `fetch` with an SSRF-hardened guard. The returned function has
@@ -325,6 +395,12 @@ const UNIQUE_LOCAL = ["fc00::/7"];
  *   `Proxy-Authorization`, and explicit `Host` headers; same-origin redirects
  *   preserve them. Custom credential headers must not be used with untrusted
  *   redirect destinations; use `redirect: "error"` or `"manual"` in that case.
+ *   An in-memory `init.body` up to `maxReplayBodyBytes` is buffered once so a
+ *   307/308 can replay it on the re-validated next hop; stream bodies
+ *   (including any `Request` input's body) and larger bodies are sent
+ *   unbuffered, and a 307/308 of one throws
+ *   `SsrfBlockedError("redirect-body-not-replayable")`. The request's
+ *   `AbortSignal` is honoured on every path, including the pinned `http:` one.
  * @throws {Error} If no underlying fetch implementation is available.
  * @throws {SsrfBlockedError} The returned function throws when a destination
  *   or redirect chain violates policy, including malformed URLs and userinfo.
@@ -351,6 +427,10 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
   const allowMatchers: IpMatcher[] = [];
   const allowHosts = new Set((options.allowHosts ?? []).map((h) => h.toLowerCase()));
   const maxRedirects = options.maxRedirects ?? 5;
+  const maxReplayBodyBytes = options.maxReplayBodyBytes ?? 1024 * 1024;
+  if (!Number.isFinite(maxReplayBodyBytes) || maxReplayBodyBytes < 0) {
+    throw new RangeError("fetchGuard(): maxReplayBodyBytes must be a non-negative finite number.");
+  }
   const baseFetch = options.fetch ?? (globalThis.fetch as typeof fetch);
   if (typeof baseFetch !== "function") {
     throw new Error("fetchGuard(): no global fetch available; pass options.fetch.");
@@ -376,14 +456,27 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
   if (!options.allowUniqueLocal) {
     for (const c of UNIQUE_LOCAL) softDenyMatchers.push(compileCidrMatcher(c));
   }
+  for (const c of LOCAL_NAT64) softDenyMatchers.push(compileCidrMatcher(c));
   for (const c of options.allowAddresses ?? []) allowMatchers.push(compileCidrMatcher(c));
 
-  function isAddressAllowed(parsed: ParsedIp): boolean {
+  function isSingleAddressAllowed(parsed: ParsedIp): boolean {
     // Hard-deny wins over every allow knob — cloud metadata IPs and
     // operator-pinned `denyAddresses` are non-negotiable.
     if (hardDenyMatchers.some((m) => matchesMatcher(parsed, m))) return false;
     if (allowMatchers.some((m) => matchesMatcher(parsed, m))) return true;
     return !softDenyMatchers.some((m) => matchesMatcher(parsed, m));
+  }
+
+  function isAddressAllowed(parsed: ParsedIp): boolean {
+    if (!isSingleAddressAllowed(parsed)) return false;
+    // Fail closed on IPv6 transition forms (NAT64 / 6to4 / Teredo / mapped /
+    // compatible): the embedded IPv4 must pass the same policy, since a
+    // translator turns the IPv6 destination into a connection to it.
+    const embedded = embeddedIPv4s(parsed);
+    if (embedded) {
+      for (const e of embedded) if (!isSingleAddressAllowed(e)) return false;
+    }
+    return true;
   }
 
   /**
@@ -402,12 +495,16 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     if (!allowProtocols.has(proto)) {
       throw new SsrfBlockedError(url.toString(), "protocol-not-allowed");
     }
-    // URL.hostname strips brackets from IPv6 literals — perfect for parseIp.
-    const hostname = url.hostname;
-    if (!hostname) {
+    // WHATWG URL.hostname KEEPS the brackets on IPv6 literals ("[::1]"), so
+    // strip one surrounding pair before classification; otherwise every IPv6
+    // literal would be handed to the resolver instead of the deny list.
+    const raw = url.hostname;
+    if (!raw) {
       throw new SsrfBlockedError(url.toString(), "invalid-url");
     }
-    if (allowHosts.has(hostname.toLowerCase())) return null;
+    const hostname =
+      raw.charCodeAt(0) === 91 /* [ */ && raw.endsWith("]") ? raw.slice(1, -1) : raw;
+    if (allowHosts.has(raw.toLowerCase()) || allowHosts.has(hostname.toLowerCase())) return null;
     const literal = parseIp(hostname);
     if (literal) {
       if (!isAddressAllowed(literal)) {
@@ -461,6 +558,30 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     }
     let request = new Request(input as RequestInfo, init);
     const userRedirect = (init?.redirect ?? request.redirect) as RequestRedirect;
+    // A request body can be sent only once, but a 307/308 must replay it on
+    // the next (re-validated) hop. Only bodies that are ALREADY in memory
+    // (init.body string / bytes / Blob / URLSearchParams / FormData) up to
+    // `maxReplayBodyBytes` are buffered once and copied per hop. Streams —
+    // an init stream or any `Request` input's body (e.g. a proxied
+    // `ctx.request`) — are never buffered (unbounded); a 307/308 of one is
+    // refused below.
+    let bodyBytes: Uint8Array<ArrayBuffer> | null = null;
+    let streamingBody = false;
+    if (request.body !== null) {
+      const size = init?.body != null ? inMemoryBodySize(init.body) : undefined;
+      if (size !== undefined && size <= maxReplayBodyBytes) {
+        const serialized = new Uint8Array(await request.arrayBuffer());
+        if (serialized.byteLength <= maxReplayBodyBytes) {
+          bodyBytes = serialized;
+          request = new Request(request, { body: bodyBytes });
+        } else {
+          request = new Request(request, { body: serialized });
+          streamingBody = true;
+        }
+      } else {
+        streamingBody = true;
+      }
+    }
     // Always dispatch underlying calls with redirect: "manual" so we can
     // re-validate each Location ourselves.
     let currentUrl: URL;
@@ -471,7 +592,8 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     }
     for (let hop = 0; ; hop++) {
       const pinnedIp = await validateUrl(currentUrl);
-      const dispatchInit: RequestInit = { redirect: "manual" };
+      const dispatchInit: RequestInit =
+        bodyBytes !== null ? { redirect: "manual", body: bodyBytes } : { redirect: "manual" };
       const dispatchReq = new Request(request, dispatchInit);
       // When DNS pinning is enabled, dispatch `http:` requests through a
       // socket bound to the exact validated IP so the underlying client cannot
@@ -480,7 +602,7 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
       // the `pinDns` option docs for why.
       const res =
         pinDns && pinnedIp !== null && currentUrl.protocol === "http:"
-          ? await pinnedHttpFetch(dispatchReq, pinnedIp)
+          ? await pinnedHttpFetch(dispatchReq, pinnedIp, bodyBytes)
           : await baseFetch(dispatchReq);
       if (!isRedirect(res.status)) return res;
       if (userRedirect === "error") {
@@ -512,16 +634,27 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
       // Committed to following this hop. Drain the intermediate 3xx body so
       // the underlying socket isn't pinned until GC (Node/undici keep the
       // connection open while an un-consumed body stream is outstanding).
-      void res.body?.cancel();
+      void res.body?.cancel().catch(() => undefined);
+      if (streamingBody && !shouldDowngrade) {
+        // 307/308 must resend the body, but a caller stream was already
+        // consumed by the first hop. Refuse with a typed, non-transient error
+        // (retry wrappers do not re-send) instead of a raw TypeError.
+        throw new SsrfBlockedError(next.toString(), "redirect-body-not-replayable");
+      }
       request = shouldDowngrade
         ? new Request(next, {
-            method: "GET",
-            headers: stripBodyHeaders(request.headers),
-            redirect: "manual",
-            credentials: request.credentials,
-            referrerPolicy: request.referrerPolicy,
-          })
+          method: "GET",
+          headers: stripBodyHeaders(request.headers),
+          redirect: "manual",
+          credentials: request.credentials,
+          referrerPolicy: request.referrerPolicy,
+          signal: request.signal,
+        })
         : new Request(next, request);
+      if (shouldDowngrade) {
+        bodyBytes = null;
+        streamingBody = false;
+      }
       if (next.origin !== currentUrl.origin) {
         request.headers.delete("authorization");
         request.headers.delete("cookie");
@@ -532,6 +665,27 @@ export function fetchGuard(options: FetchGuardOptions = {}): typeof fetch {
     }
   };
   return guarded;
+}
+
+/**
+ * Upper-bound byte size of an in-memory `RequestInit.body`, or `undefined`
+ * when the body is a stream / unknown type (never buffered for replay).
+ */
+function inMemoryBodySize(body: unknown): number | undefined {
+  if (typeof body === "string") return body.length * 3; // UTF-8 upper bound
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) return body.byteLength;
+  if (typeof Blob !== "undefined" && body instanceof Blob) return body.size;
+  if (body instanceof URLSearchParams) return body.toString().length;
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    let total = 0;
+    for (const [name, value] of body) {
+      // Multipart filenames are serialized into Content-Disposition too.
+      const filename = typeof value === "string" ? 0 : value.name.length * 3;
+      total += name.length * 3 + filename + 256 + (typeof value === "string" ? value.length * 3 : value.size);
+    }
+    return total;
+  }
+  return undefined;
 }
 
 function isRedirect(status: number): boolean {
@@ -550,21 +704,34 @@ function isRedirect(status: number): boolean {
  * plain `fetch`. `Accept-Encoding: identity` is forced so the returned body is
  * not silently left compressed (Node's `http` does not auto-decode).
  *
+ * `req.signal` is honoured: an abort before dispatch, while waiting for the
+ * response head, or while the body is streaming destroys the socket and
+ * rejects / errors the body with the signal's `reason` (same contract as
+ * `fetch`, so timeout wrappers keep working).
+ *
  * @param req - The request to dispatch (its URL supplies the path + `Host`).
  * @param ip - The validated address to connect to.
+ * @param bufferedBody - The already-buffered body bytes (sent with an exact
+ *   `Content-Length`), or `null` to stream `req.body` (chunked, unbuffered).
  * @returns A web {@link Response} mirroring the upstream reply.
- * @throws when `node:http` is unavailable (non-Node runtime) or the socket errors.
+ * @throws when `node:http` is unavailable (non-Node runtime), the socket
+ *   errors, or `req.signal` aborts (rejects with `signal.reason`).
  */
-async function pinnedHttpFetch(req: Request, ip: string): Promise<Response> {
+async function pinnedHttpFetch(
+  req: Request,
+  ip: string,
+  bufferedBody: Uint8Array | null
+): Promise<Response> {
   let httpRequest: typeof import("node:http").request;
   let toWeb: typeof import("node:stream").Readable.toWeb;
+  let fromWeb: typeof import("node:stream").Readable.fromWeb;
   try {
     ({ request: httpRequest } = await import("node:http"));
-    ({ toWeb } = (await import("node:stream")).Readable);
+    ({ toWeb, fromWeb } = (await import("node:stream")).Readable);
   } catch {
     throw new Error(
       "fetchGuard({ pinDns: true }): node:http is unavailable on this runtime; " +
-        "DNS pinning for http: requires Node. Disable pinDns or run on Node."
+      "DNS pinning for http: requires Node. Disable pinDns or run on Node."
     );
   }
   const url = new URL(req.url);
@@ -579,10 +746,28 @@ async function pinnedHttpFetch(req: Request, ip: string): Promise<Response> {
   // silently-compressed body would break `res.text()` / `res.json()` callers.
   headers["accept-encoding"] = "identity";
   const method = req.method.toUpperCase();
-  const bodyBytes =
-    method === "GET" || method === "HEAD" ? undefined : new Uint8Array(await req.arrayBuffer());
+  const signal = req.signal;
+  signal.throwIfAborted();
+  // In-memory bodies go out with an exact Content-Length; stream bodies are
+  // piped through unbuffered (chunked) so a proxied upload never sits whole
+  // in memory.
+  if (bufferedBody !== null) headers["content-length"] = String(bufferedBody.byteLength);
+  const bodyStream = bufferedBody === null ? req.body : null;
 
   return await new Promise<Response>((resolve, reject) => {
+    let upstream: import("node:http").IncomingMessage | undefined;
+    let source: import("node:stream").Readable | undefined;
+    const onAbort = (): void => {
+      const reason: unknown = signal.reason;
+      const err = reason instanceof Error ? reason : new DOMException("aborted", "AbortError");
+      // Destroying the response errors the web body stream with `err`;
+      // destroying the request tears down the socket (and rejects if the
+      // response head has not arrived yet — a no-op once resolved).
+      upstream?.destroy(err);
+      source?.destroy(err);
+      clientReq.destroy(err);
+      reject(err);
+    };
     const clientReq = httpRequest(
       {
         host: ip,
@@ -592,6 +777,8 @@ async function pinnedHttpFetch(req: Request, ip: string): Promise<Response> {
         headers,
       },
       (res) => {
+        upstream = res;
+        res.once("close", () => signal.removeEventListener("abort", onAbort));
         const responseHeaders = new Headers();
         for (const [key, value] of Object.entries(res.headers)) {
           if (Array.isArray(value)) {
@@ -619,9 +806,18 @@ async function pinnedHttpFetch(req: Request, ip: string): Promise<Response> {
         );
       }
     );
-    clientReq.on("error", reject);
-    if (bodyBytes && bodyBytes.byteLength > 0) clientReq.write(bodyBytes);
-    clientReq.end();
+    clientReq.on("error", (err) => {
+      signal.removeEventListener("abort", onAbort);
+      reject(err);
+    });
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (bodyStream) {
+      source = fromWeb(bodyStream as import("node:stream/web").ReadableStream);
+      source.once("error", (err) => clientReq.destroy(err));
+      source.pipe(clientReq);
+    } else {
+      clientReq.end(bufferedBody && bufferedBody.byteLength > 0 ? bufferedBody : undefined);
+    }
   });
 }
 

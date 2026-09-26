@@ -275,9 +275,8 @@ test("createLogger writes to stdout by default and survives unserializable paylo
   try {
     const logger = createLogger();
     logger.info("hello stdout");
-    const circular: any = {};
-    circular.self = circular;
-    logger.error(circular, "circular");
+    // Redaction turns cycles into "[Circular]"; a BigInt still cannot serialize.
+    logger.error({ big: 1n }, "unserializable");
   } finally {
     (process.stdout as any).write = writes;
   }

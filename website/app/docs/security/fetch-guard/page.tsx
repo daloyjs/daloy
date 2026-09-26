@@ -184,11 +184,54 @@ app.post(
           <code>ldap:</code>).
         </li>
       </ul>
+      <h3 id="ipv6-forms-that-embed-ipv4">IPv6 forms that embed IPv4</h3>
       <p>
-        IPv4-mapped IPv6 (<code>::ffff:a.b.c.d</code>) is re-checked against the
-        embedded IPv4 address, so <code>http://[::ffff:169.254.169.254]/</code>{" "}
-        is rejected the same way as <code>http://169.254.169.254/</code>.
+        A NAT64, 6to4, or Teredo translator turns an IPv6 destination into a
+        connection to the IPv4 address embedded in it, so each of these forms
+        is re-checked against the full IPv4 policy (since 1.3.7 for all but the
+        mapped form). A denied embedded IPv4 denies the IPv6 address:
       </p>
+      <ul>
+        <li>
+          IPv4-mapped <code>::ffff:0:0/96</code> and SIIT{" "}
+          <code>::ffff:0:0:0/96</code>
+        </li>
+        <li>
+          IPv4-compatible <code>::/96</code> (other than <code>::</code> and{" "}
+          <code>::1</code>, which are classified directly)
+        </li>
+        <li>
+          NAT64 well-known prefix <code>64:ff9b::/96</code>
+        </li>
+        <li>
+          6to4 <code>2002::/16</code>
+        </li>
+        <li>
+          Teredo <code>2001::/32</code> (both the server IPv4 and the
+          de-obfuscated client IPv4)
+        </li>
+      </ul>
+      <p>
+        So <code>http://[::ffff:169.254.169.254]/</code> and{" "}
+        <code>http://[64:ff9b::a9fe:a9fe]/</code> are rejected the same way as{" "}
+        <code>http://169.254.169.254/</code>. The local-use NAT64 prefix{" "}
+        <code>64:ff9b:1::/48</code> is denied outright, because its embedding
+        layout is operator-defined; only an explicit{" "}
+        <code>allowAddresses</code> range lifts it. IPv6 literal URLs such as{" "}
+        <code>http://[::1]/</code> are classified by the deny list directly
+        (since 1.3.7) rather than handed to the resolver.
+      </p>
+      <p>
+        A NAT64 network-specific prefix that your network operator chose
+        cannot be detected from the address alone. If your egress path uses
+        one, add it to <code>denyAddresses</code>:
+      </p>
+      <CodeBlock
+        code={`const safeFetch = fetchGuard({
+  // Operator-chosen NAT64 prefix used by this VPC's DNS64 resolver.
+  denyAddresses: ["2001:db8:64::/96"],
+});`}
+      />
 
       <h2 id="redirects-are-re-validated-at-every-hop">
         Redirects are re-validated at every hop
@@ -202,6 +245,27 @@ app.post(
         before issuing the next request. Set <code>maxRedirects: 0</code> to
         return the 3xx directly, or pass{" "}
         <code>redirect: &quot;manual&quot;</code> per call for the same effect.
+      </p>
+      <p>
+        An in-memory request body (string, <code>ArrayBuffer</code> or view,{" "}
+        <code>Blob</code>, <code>URLSearchParams</code>, <code>FormData</code>)
+        up to <code>maxReplayBodyBytes</code> (default 1&nbsp;MiB;{" "}
+        <code>0</code> never buffers) is copied once so a <code>307</code> or{" "}
+        <code>308</code> can replay it on the re-validated next hop (since
+        2.0.0). Multipart filenames count toward the cap, and the serialized
+        byte length is checked before a body is kept for replay. A{" "}
+        <code>301</code>/<code>302</code>/<code>303</code> that
+        downgrades to <code>GET</code> drops the body as usual. A body you
+        pass as a <code>ReadableStream</code> or async iterable, the body of a{" "}
+        <code>Request</code> you forward (for example{" "}
+        <code>ctx.request</code> in a proxy), and an in-memory body over the
+        cap are streamed through without buffering, so a{" "}
+        <code>307</code>/<code>308</code> of one throws{" "}
+        <code>SsrfBlockedError</code> with reason{" "}
+        <code>redirect-body-not-replayable</code> instead of a raw{" "}
+        <code>TypeError</code>. Buffer the body yourself, or use{" "}
+        <code>redirect: &quot;error&quot;</code>, when a streamed upload must
+        follow redirects.
       </p>
 
       <h2 id="custom-allowlists">Custom allowlists</h2>
@@ -272,6 +336,14 @@ const custom = fetchGuard({
         <code>pinDns: false</code> on Workers and other edge runtimes only if
         you had forced it on. The default is already off when{" "}
         <code>process.versions.node</code> is absent.
+      </p>
+      <p>
+        The request&apos;s <code>AbortSignal</code> is honoured on the pinned{" "}
+        <code>http:</code> path too (since 1.3.7): an abort before dispatch,
+        while waiting for the response head, or while the body streams tears
+        down the socket and rejects with the signal&apos;s reason, the same
+        contract as <code>fetch</code>. Timeouts such as{" "}
+        <code>AbortSignal.timeout()</code> keep working with DNS pinning on.
       </p>
 
       <h2 id="residual-risk-dns-rebinding-toctou">
@@ -361,6 +433,11 @@ const safeFetch = fetchGuard({
         <li>
           <code>invalid-url</code>
           {": "}URL or Location header could not be parsed.
+        </li>
+        <li>
+          <code>redirect-body-not-replayable</code>
+          {": "}a <code>307</code>/<code>308</code> redirect needed to resend a
+          streamed request body that was already consumed (since 1.3.7).
         </li>
       </ul>
       <p>

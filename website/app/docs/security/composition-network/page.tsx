@@ -52,7 +52,12 @@ export default function Page() {
 
 const app = new App({ env: "production" });
 const authLimit = () =>
-  rateLimit({ windowMs: 60_000, max: 10, groupId: "auth" });
+  rateLimit({
+    windowMs: 60_000,
+    max: 10,
+    groupId: "auth",
+    trustedProxies: ["10.0.0.0/8"], // key on the real client IP
+  });
 
 app.post("/login",          { hooks: authLimit(), ... });
 app.post("/login/otp",      { hooks: authLimit(), ... });
@@ -65,6 +70,29 @@ app.post("/password-reset", { hooks: authLimit(), ... });
         {", "}Daloy still prefixes the derived key with{" "}
         <code>{`\`\${groupId}:\``}</code> so two groups cannot collide in a
         shared Redis backend either.
+      </p>
+      <p>
+        The per-IP key needs proxy trust (<code>trustedProxies</code>
+        {", "}
+        <code>trustedHops</code>
+        {", "}or <code>trustProxyHeaders</code>). Without it, and without a{" "}
+        <code>keyGenerator</code>
+        {", "}<code>rateLimit()</code> and <code>loginThrottle()</code> key on
+        the TCP peer (since 1.3.7), so behind a proxy every request shares the
+        proxy&apos;s address until you configure proxy trust. Only runtimes that
+        expose no peer address fall back to one shared bucket. The IP-based default key canonicalizes address spellings and
+        groups IPv6 clients per <code>/64</code>
+        {"; "}tune that with <code>ipv6Subnet</code> (since 1.3.7). Never write
+        a <code>keyGenerator</code> that reads a raw client-supplied header:
+        the attacker picks the value and gets a fresh bucket per request.
+      </p>
+      <p>
+        A limiter registered <strong>before</strong> an auth guard counts that
+        guard&apos;s rejections, whether the guard returns a{" "}
+        <code>Response</code> or throws (as <code>bearerAuth()</code> does).
+        When the budget runs out, the limiter&apos;s <code>429</code> replaces
+        the auth error, so credential stuffing hits the limit even though no
+        request ever reaches a handler.
       </p>
 
       <h2 id="2-combine-primitives-every-some-except">

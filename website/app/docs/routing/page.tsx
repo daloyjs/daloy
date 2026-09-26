@@ -288,9 +288,29 @@ export const app = new App().registerRoutes([
         <code>{"//"}</code>
         {", "}and malformed percent escapes in captures miss cleanly. Method
         discovery applies the same checks, so rejected paths do not advertise
-        an <code>Allow</code> header. Decoded parameters remain untrusted data:
-        encoded dots or slashes are not sanitized filesystem paths. Validate
+        an <code>Allow</code> header. Since 1.3.7, a param or wildcard segment
+        never binds <code>.</code> or <code>..</code>
+        {", "}including the encoded spellings <code>%2e</code> and{" "}
+        <code>%2e%2e</code>
+        {". "}A URL parser would resolve those as directory steps, so letting
+        them bind would give the handler a different path from the one that
+        middleware saw. Decoded parameters remain untrusted data: encoded
+        slashes and other bytes are not sanitized filesystem paths. Validate
         filesystem access separately.
+      </p>
+      <p>
+        The adapters also keep the router and middleware on one path view
+        (since 1.3.7). The Node adapter canonicalizes request-targets
+        containing <code>{"\\"}</code>
+        {", "}dot segments, or their <code>%2e</code> forms the way{" "}
+        <code>new URL()</code> would before routing. The Node and AWS Lambda
+        adapters both refuse a <code>Host</code> header that is not a plain{" "}
+        <code>host[:port]</code> (for example one containing{" "}
+        <code>{"\\ / ? # @ %"}</code> or whitespace) with <code>400</code>
+        {". "}Path-based guards such as <code>except()</code> therefore match
+        exactly the route that runs. See the{" "}
+        <Link href={"/docs/adapters/node" as Route}>Node adapter</Link> for
+        details.
       </p>
 
       <h2 id="groups">Groups</h2>

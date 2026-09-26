@@ -238,9 +238,8 @@ export interface AuthSpec {
 export interface AppState {}
 
 /**
- * Scheme-aware auth contract. Every shipped first-party
- * auth helper writes through to `ctx.state.auth` with a discriminated
- * `scheme` tag so audit logs, revocation hooks, and per-scheme
+ * Scheme-aware auth contract for identities recorded at `ctx.state.auth`
+ * with a discriminated `scheme` tag, so audit logs, revocation hooks, and per-scheme
  * `verify(credentials, ctx)` callbacks know which scheme issued the
  * credential. Prevents the "session-cookie revocation list applied to a
  * bearer-token request" class of cross-scheme confusion.
@@ -250,8 +249,9 @@ export interface AppState {}
 export type AuthScheme = "bearer" | "basic" | "jwt" | "jwk" | "webhook" | "session" | "apiKey";
 
 /**
- * Verified-identity envelope written to `ctx.state.auth` by the first-party
- * auth helpers. The `scheme` discriminant keeps per-scheme logic (revocation
+ * Verified-identity envelope for `ctx.state.auth`. Note that `jwk()` and
+ * `basicAuth()` record their verified identity at `ctx.state.user` instead;
+ * `tenantFromClaim()` reads both. The `scheme` discriminant keeps per-scheme logic (revocation
  * lists, audit logs) from being applied to credentials issued by a different
  * scheme (see {@link AuthScheme}).
  *

@@ -32,9 +32,11 @@ import {
   WS_OPCODE,
   WS_READY_STATE,
   _resetSharedRateLimitStoresForTests,
+  InternalError,
 } from "../src/index.js";
 import { serve as serveNode } from "../src/adapters/node.js";
 import { serve as serveBun } from "../src/adapters/bun.js";
+import { DEFAULT_WS_MAX_MESSAGE_FRAGMENTS } from "../src/websocket.js";
 
 // ---------- constants / handshake ----------
 
@@ -1799,3 +1801,151 @@ async function rawUpgrade(
 void startNodeApp;
 // Avoid eslint unused warning on createServer import (kept for potential future use).
 void createServer;
+
+// ---------- deepsec 2026-09-26: FrameSink bounds + wsRateLimit redaction ----------
+
+function collectingSink(opts: { maxPayloadLength?: number; maxFragments?: number } = {}) {
+  const messages: Array<string | Uint8Array> = [];
+  const errors: Error[] = [];
+  const sink = new FrameSink({
+    requireMask: true,
+    ...opts,
+    onMessage: (ev) => messages.push(ev.data),
+    onPing: () => {},
+    onPong: () => {},
+    onClose: () => {},
+    onProtocolError: (err) => errors.push(err),
+  });
+  return { sink, messages, errors };
+}
+
+test("FrameSink refuses a message held open by unbounded empty continuation frames", () => {
+  const { sink, messages, errors } = collectingSink({ maxPayloadLength: 64 * 1024 });
+  const first = encodeFrame({ fin: false, opcode: WS_OPCODE.TEXT, mask: true });
+  const empty = encodeFrame({ fin: false, opcode: WS_OPCODE.CONTINUATION, mask: true });
+  sink.push(first);
+  for (let i = 0; i < DEFAULT_WS_MAX_MESSAGE_FRAGMENTS + 10 && errors.length === 0; i++) {
+    sink.push(empty);
+  }
+  assert.equal(messages.length, 0);
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0] instanceof WebSocketProtocolError);
+  assert.match(errors[0]!.message, /exceeds 4096 frames/);
+});
+
+test("FrameSink honors a custom maxFragments and still assembles messages within it", () => {
+  const frames = (n: number) => {
+    const out: Uint8Array[] = [];
+    for (let i = 0; i < n; i++) {
+      out.push(
+        encodeFrame({
+          fin: i === n - 1,
+          opcode: i === 0 ? WS_OPCODE.TEXT : WS_OPCODE.CONTINUATION,
+          payload: i % 2 === 0 ? new TextEncoder().encode("ab") : new Uint8Array(0),
+          mask: true,
+        })
+      );
+    }
+    return out;
+  };
+  const ok = collectingSink({ maxFragments: 8 });
+  for (const f of frames(8)) ok.sink.push(f);
+  assert.deepEqual(ok.errors, []);
+  assert.deepEqual(ok.messages, ["abababab"]);
+
+  const bad = collectingSink({ maxFragments: 8 });
+  for (const f of frames(9)) bad.sink.push(f);
+  assert.equal(bad.messages.length, 0);
+  assert.match(bad.errors[0]!.message, /exceeds 8 frames/);
+});
+
+test("FrameSink reassembles trickled and fragmented binary messages byte-for-byte", () => {
+  const payload = new Uint8Array(200_000);
+  for (let i = 0; i < payload.length; i++) payload[i] = (i * 31) & 0xff;
+  // One large frame trickled in 97-byte chunks, followed in-stream by a
+  // fragmented message and a small text frame (exercises growth + compaction).
+  const big = encodeFrame({ opcode: WS_OPCODE.BINARY, payload, mask: true });
+  const parts = [
+    encodeFrame({ fin: false, opcode: WS_OPCODE.BINARY, payload: payload.subarray(0, 70_000), mask: true }),
+    encodeFrame({ fin: false, opcode: WS_OPCODE.CONTINUATION, mask: true }),
+    encodeFrame({ fin: false, opcode: WS_OPCODE.CONTINUATION, payload: payload.subarray(70_000, 150_000), mask: true }),
+    encodeFrame({ fin: true, opcode: WS_OPCODE.CONTINUATION, payload: payload.subarray(150_000), mask: true }),
+  ];
+  const tail = encodeFrame({ opcode: WS_OPCODE.TEXT, payload: new TextEncoder().encode("done"), mask: true });
+  const stream = new Uint8Array(big.length + parts.reduce((n, p) => n + p.length, 0) + tail.length);
+  let o = 0;
+  for (const f of [big, ...parts, tail]) {
+    stream.set(f, o);
+    o += f.length;
+  }
+  const { sink, messages, errors } = collectingSink({ maxPayloadLength: 256 * 1024 });
+  for (let i = 0; i < stream.length; i += 97) sink.push(stream.subarray(i, i + 97));
+  assert.deepEqual(errors, []);
+  assert.equal(messages.length, 3);
+  assert.deepEqual(messages[0], payload);
+  assert.deepEqual(messages[1], payload);
+  assert.equal((messages[1] as Uint8Array).buffer.byteLength, payload.length);
+  assert.equal(messages[2], "done");
+});
+
+test("FrameSink still enforces maxPayloadLength across non-empty fragments", () => {
+  const { sink, messages, errors } = collectingSink({ maxPayloadLength: 10 });
+  sink.push(encodeFrame({ fin: false, opcode: WS_OPCODE.BINARY, payload: new Uint8Array(6), mask: true }));
+  sink.push(encodeFrame({ fin: true, opcode: WS_OPCODE.CONTINUATION, payload: new Uint8Array(6), mask: true }));
+  assert.equal(messages.length, 0);
+  assert.ok(errors[0] instanceof WebSocketPayloadTooLargeError);
+});
+
+test("wsRateLimit() never echoes store error text to the client", async () => {
+  const secret = "connect ECONNREFUSED 10.0.3.7:6379 (redis://default:s3cr3t@cache.internal)";
+  const gate = wsRateLimit({
+    windowMs: 1000,
+    max: 5,
+    keyGenerator: () => "k",
+    store: {
+      hit: async () => {
+        throw new Error(secret);
+      },
+    } as any,
+  });
+  const request = new Request("http://127.0.0.1/session");
+  const wsCtx = { params: {}, query: {}, headers: {}, state: {} } as any;
+  // Unhappy path: a non-HTTP failure is rethrown (adapters log it and write a
+  // generic 500) instead of being rendered with its raw message.
+  await assert.rejects(
+    () => Promise.resolve(gate(request, wsCtx)),
+    (err: Error) => err.message === secret
+  );
+
+  // An HttpError 5xx is rendered with its detail scrubbed even without NODE_ENV.
+  const prevEnv = process.env.NODE_ENV;
+  delete process.env.NODE_ENV;
+  try {
+    const gate5xx = wsRateLimit({
+      windowMs: 1000,
+      max: 5,
+      keyGenerator: () => "k",
+      store: {
+        hit: async () => {
+          throw new InternalError(secret);
+        },
+      } as any,
+    });
+    const res = (await gate5xx(request, wsCtx)) as Response;
+    assert.equal(res.status, 500);
+    assert.doesNotMatch(await res.text(), /s3cr3t|10\.0\.3\.7/);
+  } finally {
+    if (prevEnv !== undefined) process.env.NODE_ENV = prevEnv;
+  }
+
+  // Over Node the upgrade gets the adapter's generic 500.
+  const app = new App({ logger: false });
+  app.ws("/session", { beforeUpgrade: gate, open: () => {} });
+  const handle = await startApp(app);
+  try {
+    const port = (handle.server.address() as AddressInfo).port;
+    assert.equal(await rawUpgrade(port, "/session", {}), 500);
+  } finally {
+    await handle.close();
+  }
+});

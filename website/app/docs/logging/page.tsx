@@ -218,6 +218,27 @@ const log = createLogger({
 const raw = createLogger({ redact: false });`}
       />
       <p>
+        Redaction never mutates your data (since 1.3.7). Only the top-level
+        keys of the log record itself are rewritten; nested objects and arrays
+        are copied along the changed paths and the originals are left alone.
+        So logging a live object such as <code>{"{ input: ctx.body }"}</code>{" "}
+        cannot overwrite <code>ctx.body.password</code> with the censor before
+        your handler reads it. Subtrees that need no redaction are shared by
+        reference, so a clean record costs no extra allocation. A cycle is
+        written as <code>&quot;[Circular]&quot;</code>, an object with a{" "}
+        <code>toJSON()</code> is redacted on what <code>toJSON()</code>{" "}
+        returns (the censor if it throws), and a redacted <code>Error</code>{" "}
+        copy keeps its <code>name</code>, <code>message</code>,{" "}
+        <code>stack</code> and <code>cause</code>.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`const body = { user: "ana", password: "hunter2" };
+log.info({ input: body }, "signup");
+// logged: {"input":{"user":"ana","password":"[REDACTED]"},...}
+body.password; // still "hunter2"`}
+      />
+      <p>
         Do not turn redaction off in production. The default list exists because
         these exact keys are the ones most commonly observed leaking secrets
         into log aggregators in real-world incidents.
@@ -237,16 +258,24 @@ const raw = createLogger({ redact: false });`}
         {", "}
         and signed-URL signatures do not persist under <code>url</code>
         {". "}Export it from <code>@daloyjs/core</code> when you bind URLs into
-        your own log calls.
+        your own log calls. When you only have the query string,{" "}
+        <code>sanitizeUrlQueryForLog(search)</code> (since 1.3.7) applies the
+        same rules and returns the redacted query without a leading{" "}
+        <code>?</code> (redacted values serialize form-encoded as{" "}
+        <code>%5BREDACTED%5D</code>). <code>otelTracing()</code> uses it for
+        the <code>url.query</code> span attribute.
       </p>
       <CodeBlock
         language="ts"
-        code={`import { sanitizeUrlForLog } from "@daloyjs/core";
+        code={`import { sanitizeUrlForLog, sanitizeUrlQueryForLog } from "@daloyjs/core";
 
 log.info(
   { url: sanitizeUrlForLog(request.url) },
   "outbound callback",
-);`}
+);
+
+sanitizeUrlQueryForLog("?page=2&code=abc123");
+// => "page=2&code=%5BREDACTED%5D"`}
       />
 
       <h2 id="bring-your-own-logger-pino-winston">

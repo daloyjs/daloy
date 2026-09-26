@@ -15,7 +15,7 @@ import {
   resolveForwardedTrust,
   resolveTrustedProxyMatchers,
 } from "./conn-info.js";
-import type { IpMatcher } from "./ip-match.js";
+import { ipRateLimitIdentity, type IpMatcher } from "./ip-match.js";
 
 // ---------- Request ID ----------
 
@@ -696,6 +696,9 @@ type EarlyRejectionHook = (ctx: PreBodyContext<any>) => void | Response | Promis
 /**
  * Compose `preBody` hooks while honoring request-budget hooks registered
  * before the guard that rejects. Used internally by App and hook combinators.
+ * A rejection counts whether the guard returns a `Response` or throws; when a
+ * pending budget is exhausted its 429 replaces the rejection, otherwise the
+ * original Response / error is surfaced.
  *
  * @param layers - Hook layers in registration order.
  * @returns A composed `preBody` hook, or `undefined` when no layer has one.
@@ -715,7 +718,23 @@ export function _mergePreBodyWithEarlyRejections(
         }
       }
       if (hooks.preBody === undefined) continue;
-      const result = await hooks.preBody(ctx);
+      let result: Awaited<ReturnType<NonNullable<Hooks["preBody"]>>>;
+      try {
+        result = await hooks.preBody(ctx);
+      } catch (err) {
+        // A guard that *throws* (bearerAuth's 403, a markAuthHook's 401) is a
+        // failed attempt too: charge the pending request budgets so a limiter
+        // registered first still counts it. A budget that is exhausted throws
+        // (429) or returns a Response, replacing the original rejection;
+        // otherwise the original error is rethrown unchanged.
+        let replaced: Response | undefined;
+        for (const hook of pending) {
+          const replacement = await hook(ctx);
+          if (replacement instanceof Response) replaced = replacement;
+        }
+        if (replaced !== undefined) return replaced;
+        throw err;
+      }
       if (!(result instanceof Response)) continue;
       let response = result;
       for (const hook of pending) {
@@ -943,12 +962,24 @@ export interface RateLimitOptions {
   /** Maximum allowed requests per `windowMs` per key. */
   max: number;
   /**
-   * Derive the bucket key from `ctx`. Default returns `"global"`. When the
+   * Derive the bucket key from `ctx`. Default: the trusted forwarded client
+   * IP when proxy trust is configured, otherwise the unspoofable TCP peer
+   * (`peer:<ip>`), and one shared `"global"` bucket only when the runtime
+   * exposes no peer. Never key on a raw client-supplied header. When the
    * limiter precedes `preBody` authentication, it also receives failed
    * attempts before body I/O; rely only on the raw request and state populated
    * by earlier `preBody` hooks.
    */
   keyGenerator?: (ctx: RateLimitContext) => string;
+  /**
+   * IPv6 prefix length the default IP-based key groups on (`1`-`128`).
+   * Default `64`: one subscriber normally holds a whole /64, so keying on the
+   * full address would give an attacker a fresh bucket per address. IPv4 and
+   * IPv4-mapped addresses are always keyed on the canonical dotted address.
+   * Ignored when `keyGenerator` is set.
+   * @since 1.3.7
+   */
+  ipv6Subnet?: number;
   /** Custom backend (default: shared in-memory store). */
   store?: RateLimitStore;
   /**
@@ -1060,10 +1091,12 @@ class MemoryStore implements RateLimitStore {
  * package ships `redisRateLimitStore` from `@daloyjs/core/rate-limit-redis`
  * as a Redis backend.
  *
- * The default key derivation returns `"global"`, which means every caller
- * shares one bucket. Pass `trustProxyHeaders: true` to derive from
- * `X-Forwarded-For` / `X-Real-IP` when behind a trusted proxy, or supply a
- * custom `keyGenerator` (e.g. derive from the authenticated user id).
+ * The default key is per client: the unspoofable TCP peer (`peer:<ip>`,
+ * IPv6 grouped per `ipv6Subnet`), so one caller cannot exhaust everyone's
+ * budget. Behind a reverse proxy every request shares the proxy's address, so
+ * configure `trustedProxies` / `trustProxyHeaders` to key on the real client,
+ * or supply a custom `keyGenerator` (e.g. the authenticated user id). Runtimes
+ * that expose no peer address fall back to one shared `"global"` bucket.
  *
  * Registration order remains security-significant: a limiter placed before a
  * `preBody` auth hook counts rejected credentials and can replace the later
@@ -1102,7 +1135,9 @@ export function rateLimit(opts: RateLimitOptions): Hooks {
   const groupPrefix = opts.groupId ? `${opts.groupId}:` : "";
   const hops = resolveForwardedTrust("rateLimit()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("rateLimit()", opts);
-  const keyOf = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops, proxyMatchers);
+  const keyOf =
+    opts.keyGenerator ??
+    defaultForwardedRateLimitKey(hops, proxyMatchers, true, resolveIpv6Subnet("rateLimit()", opts.ipv6Subnet));
 
   const enforce = async (ctx: RateLimitContext) => {
     const key = `${groupPrefix}${keyOf(ctx)}`;
@@ -1132,8 +1167,15 @@ export interface LoginThrottleOptions {
   max?: number;
   /** Shared bucket id. Default: `"login"`. */
   groupId?: string;
-  /** Derive the caller key. Defaults to trusted proxy headers only when enabled. */
+  /**
+   * Derive the caller key. By default: the trusted forwarded client IP when
+   * proxy trust is enabled; otherwise the unspoofable TCP peer address
+   * (`peer:<ip>`), falling back to one shared `"global"` bucket only when the
+   * runtime exposes no peer. Never key on a raw client-supplied header.
+   */
   keyGenerator?: (ctx: RateLimitContext) => string;
+  /** IPv6 prefix length for the default key; see {@link RateLimitOptions.ipv6Subnet}. Default `64`. @since 1.3.7 */
+  ipv6Subnet?: number;
   /** Shared store for the hard limit. Uses rateLimit()'s in-memory group bucket by default. */
   store?: RateLimitStore;
   /** Trust x-forwarded-for / x-real-ip when deriving the default key. Default: false.
@@ -1187,6 +1229,21 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
+/** Key on the unspoofable TCP peer; `"global"` only when the adapter exposed none. */
+function peerRateLimitKey(ctx: RateLimitContext, ipv6Subnet: number): string {
+  const peer = getConnInfo(ctx.request)?.remoteAddress;
+  return peer !== undefined ? `peer:${ipRateLimitIdentity(peer, ipv6Subnet)}` : "global";
+}
+
+/** Validate an `ipv6Subnet` option, returning the default `64` when unset. */
+function resolveIpv6Subnet(where: string, value: number | undefined): number {
+  if (value === undefined) return 64;
+  if (!Number.isInteger(value) || value < 1 || value > 128) {
+    throw new Error(`${where}: ipv6Subnet must be an integer between 1 and 128.`);
+  }
+  return value;
+}
+
 /**
  * Default rate-limit / login-throttle key: the spoof-resistant forwarded client
  * IP, the unspoofable TCP peer when no trustworthy forwarded identity exists,
@@ -1205,20 +1262,21 @@ function assertPositiveInteger(name: string, value: number): void {
  */
 function defaultForwardedRateLimitKey(
   hops: number | undefined,
-  trustedPeers?: readonly IpMatcher[]
+  trustedPeers?: readonly IpMatcher[],
+  keyOnPeerWithoutProxyTrust = false,
+  ipv6Subnet = 64
 ): (ctx: RateLimitContext) => string {
-  if (hops === undefined) return () => "global";
+  const peerKey = (ctx: RateLimitContext) => peerRateLimitKey(ctx, ipv6Subnet);
+  if (hops === undefined) return keyOnPeerWithoutProxyTrust ? peerKey : () => "global";
   return (ctx) => {
     const forwarded = resolveForwardedClientIp(ctx.request, hops, trustedPeers);
-    if (forwarded !== undefined) return forwarded;
+    if (forwarded !== undefined) return ipRateLimitIdentity(forwarded, ipv6Subnet);
     // Fail safe, not silent: missing/untrusted XFF must not collapse every
     // caller into one shared bucket (attacker-induced global lockout). Key on
     // the unspoofable TCP peer when the adapter exposed one — including the
     // plain `trustProxyHeaders: true` path, not only `trustedProxies`. Only a
     // truly peer-less request shares "global".
-    const peer = getConnInfo(ctx.request)?.remoteAddress;
-    if (peer !== undefined) return `peer:${peer}`;
-    return "global";
+    return peerKey(ctx);
   };
 }
 
@@ -1236,6 +1294,9 @@ function wait(ms: number): Promise<void> {
  * by rotating between password, OTP, and reset endpoints.
  * When registered before `preBody` authentication it counts and progressively
  * delays rejected credentials without consuming a declared request body.
+ * The default key is per TCP peer (not one global bucket), so one client
+ * cannot lock every other user out; behind a proxy, configure
+ * `trustedProxies` / `trustProxyHeaders` so the key is the real client.
  *
  * @param opts - Throttle tuning (see {@link LoginThrottleOptions}); every field has a safe default.
  * @returns A {@link Hooks} bundle ready for `app.use(...)` or per-route `hooks`.
@@ -1258,7 +1319,16 @@ export function loginThrottle(opts: LoginThrottleOptions = {}): Hooks {
   const groupId = opts.groupId ?? "login";
   const hops = resolveForwardedTrust("loginThrottle()", opts);
   const proxyMatchers = resolveTrustedProxyMatchers("loginThrottle()", opts);
-  const keyGenerator = opts.keyGenerator ?? defaultForwardedRateLimitKey(hops, proxyMatchers);
+  // Without proxy trust, key on the TCP peer rather than one shared "global"
+  // bucket, so a single client cannot lock every user out of the login flow.
+  const keyGenerator =
+    opts.keyGenerator ??
+    defaultForwardedRateLimitKey(
+      hops,
+      proxyMatchers,
+      true,
+      resolveIpv6Subnet("loginThrottle()", opts.ipv6Subnet),
+    );
   const limiter = rateLimit({
     windowMs,
     max,

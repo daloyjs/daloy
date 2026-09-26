@@ -107,8 +107,31 @@ verifyWebhookSignature(opts: {
 }): Promise<boolean>;
 
 // Filesystem
-sanitizeFilename(name: string): string;
+sanitizeFilename(name: string): string;                     // also strips bidi, format, and C1 control chars
+contentDisposition(filename: string,
+                   type?: "attachment" | "inline"): string;  // default "attachment"; RFC 6266 + RFC 8187 (since 1.3.7)
 assertSafeRelativePath(p: string, where?: string): void;    // refuses .. escape, absolute, NUL`}
+      />
+
+      <p>
+        <code>contentDisposition()</code> (since 1.3.7) builds a download
+        header from an untrusted filename. It runs the name through{" "}
+        <code>sanitizeFilename()</code>, emits an ASCII-only quoted{" "}
+        <code>filename</code> fallback, and adds an RFC 8187{" "}
+        <code>filename*</code> parameter when the name is not plain ASCII. The
+        result is always a valid Latin-1 header value, and it throws{" "}
+        <code>BadRequestError</code> when the name sanitizes to nothing.
+      </p>
+      <CodeBlock
+        code={`import { contentDisposition } from "@daloyjs/core";
+
+return new Response(file.stream(), {
+  headers: {
+    "content-type": "application/pdf",
+    "content-disposition": contentDisposition(file.name),
+    // "résumé.pdf" -> attachment; filename="r_sum_.pdf"; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf
+  },
+});`}
       />
 
       <h2 id="ssrf-guard">SSRF guard</h2>
@@ -134,9 +157,15 @@ interface FetchGuardOptions {
 type SsrfBlockReason =
   | "protocol-not-allowed" | "host-not-allowed" | "dns-resolution-failed"
   | "address-not-allowed"  | "too-many-redirects" | "credentials-in-url"
-  | "invalid-url";
+  | "invalid-url" | "redirect-body-not-replayable";
 
-class SsrfBlockedError extends Error { readonly url; readonly reason: SsrfBlockReason; readonly address?: string }`}
+class SsrfBlockedError extends Error { readonly url; readonly reason: SsrfBlockReason; readonly address?: string }
+
+// IPv6 transition forms (IPv4-mapped, SIIT, IPv4-compatible, NAT64, 6to4,
+// Teredo) are checked against the IPv4 policy, and IPv6 literal URLs are classified like resolved
+// addresses. The AbortSignal is honoured on every path, including the pinned
+// http: one. A 307/308 replays a buffered request body; a streamed body is
+// refused with "redirect-body-not-replayable".`}
       />
 
       <h2 id="open-redirect-guard">Open-redirect guard</h2>
@@ -346,10 +375,14 @@ verifySignedValue(value: string, secret: string | Uint8Array): Promise<string | 
 class MemorySessionStore implements SessionStore {}
 
 interface SessionStore {
-  get   (id: string): Promise<SessionRecord | undefined>;
-  set   (id: string, record: SessionRecord): Promise<void>;
-  delete(id: string): Promise<void>;
-  touch?(id: string, expiresAt: number): Promise<void>;
+  get    (sid: string): SessionRecord | null | Promise<SessionRecord | null>;
+  set    (sid: string, record: SessionRecord): void | Promise<void>;
+  destroy(sid: string): void | Promise<void>;
+  touch? (sid: string, expiresAt: number): void | Promise<void>;
+    // atomically extends an existing record only; must never create one
+  update?(sid: string, record: SessionRecord): boolean | Promise<boolean>;
+    // atomic write-if-exists; false when missing (since 1.3.7). Recommended;
+    // needed for full logout revocation across instances sharing the store
 }`}
       />
 

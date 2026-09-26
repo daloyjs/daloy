@@ -201,17 +201,18 @@ test("vercel template preserves the literal true type on the Node.js handler", a
   assert.match(source, /TRUST_PROXY_HOPS/);
 });
 
-test("node-basic template opts into the auto-mounted /docs and /openapi.json", async () => {
+test("node-basic template auto-mounts /docs and /openapi.json outside production only", async () => {
   const source = await readFile(
     path.join(pkgRoot, "templates/node-basic/src/build-app.ts"),
     "utf8"
   );
-  // The framework auto-mounts /docs and /openapi.json when `docs: true` is
-  // set on the App constructor. info.title / info.version fall back to the
+  // `docs: "auto"` mounts /docs and /openapi.json only when the App is not in
+  // production, so a deployed scaffold never publishes its schema. info.title / info.version fall back to the
   // top-level title / version App options and then to "DaloyJS API" / "0.0.0"
   // (they are NOT read from package.json), so the template leaves them unset
   // rather than hardcoding a name.
-  assert.match(source, /docs:\s*true/);
+  assert.match(source, /docs:\s*"auto"/);
+  assert.doesNotMatch(source, /^\s*docs:\s*true,/m);
   assert.match(source, /openapi:\s*\{/);
   assert.doesNotMatch(source, /info:\s*\{\s*title:\s*"My Daloy API"/);
 });
@@ -274,9 +275,10 @@ test("node-basic separates buildApp() from server boot so codegen has no side ef
   assert.equal(pkg.scripts.start, "node dist/index.js");
 });
 
-test("vercel template opts into the auto-mounted /docs and /openapi.json", async () => {
+test("vercel template auto-mounts /docs and /openapi.json outside production only", async () => {
   const source = await readFile(path.join(pkgRoot, "templates/vercel/api/index.ts"), "utf8");
-  assert.match(source, /docs:\s*true/);
+  assert.match(source, /docs:\s*"auto"/);
+  assert.doesNotMatch(source, /^\s*docs:\s*true,/m);
   assert.match(source, /openapi:\s*\{/);
   assert.match(source, /info:\s*\{\s*title:\s*"My Daloy Vercel API"/);
 });
@@ -304,13 +306,14 @@ test("cloudflare-worker template configures the proxy posture and docs", async (
   // Cloudflare Workers always run behind Cloudflare's edge (sets
   // x-forwarded-for), so without a declared proxy posture the production boot
   // guard returns 500 on every request. The template declares one trusted edge
-  // hop, and enables docs for parity with the other templates.
+  // hop, and keeps docs on "auto" so a deployed Worker publishes no schema.
   const source = await readFile(
     path.join(pkgRoot, "templates/cloudflare-worker/src/index.ts"),
     "utf8"
   );
   assert.match(source, /behindProxy:\s*\{\s*hops:\s*1\s*\}/);
-  assert.match(source, /docs:\s*true/);
+  assert.match(source, /docs:\s*"auto"/);
+  assert.doesNotMatch(source, /^\s*docs:\s*true,/m);
 });
 
 test("every template ships at least one runnable example test", async () => {

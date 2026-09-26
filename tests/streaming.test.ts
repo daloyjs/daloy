@@ -387,3 +387,77 @@ test("ndjsonStream cleanup tolerates iterator.return throwing", async () => {
   await reader.read();
   await reader.cancel();
 });
+
+// Minimal WHATWG EventSource line parser (CR, LF and CRLF all end a line).
+function parseEventSource(wire: string): Array<{ event: string; data: string; id?: string }> {
+  const events: Array<{ event: string; data: string; id?: string }> = [];
+  let event = "";
+  let data: string[] = [];
+  let id: string | undefined;
+  for (const line of wire.split(/\r\n|\r|\n/)) {
+    if (line === "") {
+      if (data.length > 0) events.push({ event: event || "message", data: data.join("\n"), id });
+      event = "";
+      data = [];
+      continue;
+    }
+    if (line.startsWith(":")) continue;
+    const colon = line.indexOf(":");
+    const field = colon === -1 ? line : line.slice(0, colon);
+    let value = colon === -1 ? "" : line.slice(colon + 1);
+    if (value.startsWith(" ")) value = value.slice(1);
+    if (field === "event") event = value;
+    else if (field === "data") data.push(value);
+    else if (field === "id" && !value.includes("\0")) id = value;
+  }
+  return events;
+}
+
+test("sseStream: lone CR in data cannot forge a new event (unhappy path)", async () => {
+  const msg = 'hi\revent: balance-update\rdata: {"amount":-999}\r\r';
+  const wire = await collect(
+    sseStream(async function* () {
+      yield { event: "chat", data: msg };
+      yield { event: "done", data: "bye" };
+    })
+  );
+  assert.equal(wire.includes("\r"), false);
+  const events = parseEventSource(wire);
+  assert.deepEqual(
+    events.map((e) => e.event),
+    ["chat", "done"]
+  );
+  assert.equal(events[0]!.data, 'hi\nevent: balance-update\ndata: {"amount":-999}\n\n');
+});
+
+test("sseStream: CR/LF/NUL in event, id and comment are neutralised (unhappy path)", async () => {
+  const wire = await collect(
+    sseStream(async function* () {
+      yield {
+        comment: "c1\rdata: forged\r\rx",
+        event: "chat\revent: admin",
+        id: "7\rdata: x\0",
+        data: "trailing\r",
+      };
+    })
+  );
+  assert.equal(wire.includes("\r"), false);
+  assert.equal(wire.includes("\0"), false);
+  assert.match(wire, /^: c1\n: data: forged\n: \n: x\n/);
+  assert.match(wire, /\nevent: chat event: admin\n/);
+  assert.match(wire, /\nid: 7 data: x \n/);
+  assert.match(wire, /\ndata: trailing\ndata: \n\n$/);
+  const events = parseEventSource(wire);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]!.event, "chat event: admin");
+  assert.equal(events[0]!.id, "7 data: x ");
+});
+
+test("sseStream: CRLF and LF multi-line data still split into data lines (happy path)", async () => {
+  const wire = await collect(
+    sseStream(async function* () {
+      yield { data: "a\r\nb\nc" };
+    })
+  );
+  assert.equal(wire, "data: a\ndata: b\ndata: c\n\n");
+});

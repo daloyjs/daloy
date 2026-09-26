@@ -180,7 +180,8 @@ export class JobTimeoutError extends Error {
  * running  --fail, attempts < max--> delayed (runAt = now + backoff)
  * running  --fail, attempts >= max--> dead     (terminal)
  * running  --JobFatalError--> dead             (terminal)
- * running  --lease expired--> queued           (attempts already counted)
+ * running  --lease expired, attempts < max--> queued (attempts already counted)
+ * running  --lease expired, attempts >= max--> dead (terminal)
  * queued/delayed/running --cancel--> cancelled (terminal)
  * ```
  *
@@ -304,6 +305,22 @@ export interface EnqueueResult<P = unknown> {
  * workers, and two concurrent puts with the same idempotency key must never
  * create two records.
  *
+ * **Attempt budget on lease expiry.** A worker that crashes (OOM, SIGKILL)
+ * never calls {@link JobStore.fail}, so the budget must also be enforced
+ * wherever an expired lease is reclaimed: when a `running` job's lease has
+ * expired and `attempts >= maxAttempts`, the store must mark it `dead`
+ * (`lastError` `"lease expired after max attempts"`) instead of making it
+ * claimable again. Otherwise a process-crashing poison job reruns forever.
+ * The worker also refuses to run a claimed job whose `attempts` exceeds
+ * `maxAttempts` (defence in depth for adapters that miss this rule).
+ *
+ * **Attempt fencing.** `heartbeat`, `complete` and `fail` receive the
+ * `attempt` number the caller claimed. When it is supplied the store must
+ * reject the transition unless it equals the record's current `attempts`,
+ * so a stale run (same `workerId`, earlier claim) can never overwrite a
+ * newer claim. The parameter is optional for backward compatibility;
+ * adapters that ignore it fence on `workerId` only (weaker).
+ *
  * @since 1.3.0
  */
 export interface JobStore {
@@ -327,7 +344,8 @@ export interface JobStore {
    * highest `priority` first, then oldest `runAt` / `createdAt`. Set
    * `status = "running"`, `leaseUntil = now + job.leaseMs`,
    * `lockedBy = workerId`, increment `attempts`, and return the claimed
-   * record. Return `null` when nothing is runnable.
+   * record. Return `null` when nothing is runnable. An expired-lease job
+   * whose `attempts >= maxAttempts` must be dead-lettered, not claimed.
    *
    * @param queue - The partition to claim from (never cross-queue).
    * @param workerId - Identity written to `lockedBy` for fencing.
@@ -338,20 +356,25 @@ export interface JobStore {
   /**
    * Extend the lease of a running job still owned by `workerId`.
    *
-   * @returns `false` when the lease was lost (not running, wrong owner, or
-   *   already expired) — the caller must stop touching the job.
+   * @param attempt - Optional fencing token: the `attempts` value of the
+   *   caller's claim. When supplied, reject unless it matches the record.
+   * @returns `false` when the lease was lost (not running, wrong owner,
+   *   stale attempt, or already expired) — the caller must stop touching
+   *   the job.
    */
   heartbeat(
     id: string,
     workerId: string,
     leaseUntil: number,
-    now: number
+    now: number,
+    attempt?: number
   ): Promise<boolean> | boolean;
 
   /**
    * Mark a running job owned by `workerId` as `completed` (terminal),
    * storing an optional result value.
    *
+   * @param attempt - Optional fencing token (see {@link JobStore.heartbeat}).
    * @returns `false` when the lease was lost — the worker must treat the
    *   completion as not persisted.
    */
@@ -359,7 +382,8 @@ export interface JobStore {
     id: string,
     workerId: string,
     now: number,
-    result: unknown | null
+    result: unknown | null,
+    attempt?: number
   ): Promise<boolean> | boolean;
 
   /**
@@ -368,14 +392,17 @@ export interface JobStore {
    * store marks the job `dead`; otherwise it applies `next` (requeue
    * `delayed` until `runAt`, or straight back to `queued`).
    *
-   * @returns `false` when the lease was lost — another worker owns the job.
+   * @param attempt - Optional fencing token (see {@link JobStore.heartbeat}).
+   * @returns `false` when the lease was lost — another worker (or a newer
+   *   claim) owns the job.
    */
   fail(
     id: string,
     workerId: string,
     error: string,
     next: { status: "delayed" | "queued" | "dead"; runAt: number },
-    now: number
+    now: number,
+    attempt?: number
   ): Promise<boolean> | boolean;
 
   /**
@@ -399,6 +426,21 @@ export interface JobStore {
     name?: string;
     tenant?: string;
   }): Promise<readonly Job[]> | readonly Job[];
+
+  /**
+   * Optional: remove and return the jobs in `queue` that the store itself
+   * dead-lettered because their final lease expired (see the attempt-budget
+   * rule above) since the last call. Each job must be returned **at most
+   * once** across all callers, so exactly one worker reports it. Workers
+   * call this every poll and emit `jobs.dead` plus `onFail` / `onDead` for
+   * each entry; stores that omit it leave those dead-letters unreported
+   * (they are still visible via {@link JobStore.get} / `list`).
+   *
+   * @param queue - The partition to drain (never cross-queue).
+   * @param now - Epoch ms.
+   * @returns Snapshots of the reaper-dead jobs (possibly empty).
+   */
+  takeReaped?(queue: string, now: number): Promise<readonly Job[]> | readonly Job[];
 }
 
 // ── internal helpers ────────────────────────────────────────────────
@@ -607,6 +649,18 @@ export function computeBackoffMs(
 const DEFAULT_CAPACITY = 10_000;
 /** Default retention for `completed` / `cancelled` records: 24 hours. */
 const DEFAULT_RETENTION_MS = 86_400_000;
+/** `lastError` for a job dead-lettered because its final lease expired. */
+const LEASE_EXPIRED_DEAD_MESSAGE = "lease expired after max attempts";
+
+/** Cap on undrained reaper dead-letter reports kept by MemoryJobStore. */
+const MAX_REAPED_BUFFER = 1_000;
+
+/** Shared empty result for takeReaped() (no per-poll allocation). */
+const NO_JOBS: readonly Job[] = Object.freeze([]);
+
+/** Consecutive auto-heartbeat store errors treated as a lost lease. */
+const MAX_HEARTBEAT_FAILURES = 3;
+
 /** Default retention for `dead` records (kept longer for inspection): 7 days. */
 const DEFAULT_DEAD_RETENTION_MS = 604_800_000;
 
@@ -687,6 +741,8 @@ export class MemoryJobStore implements JobStore {
   readonly #now: () => number;
   readonly #retentionMs: number;
   readonly #deadRetentionMs: number;
+  /** Ids dead-lettered by the lease reaper, awaiting takeReaped(). Bounded. */
+  #reapedDead: string[] = [];
 
   /**
    * @param opts - Capacity, clock, and retention knobs.
@@ -788,11 +844,15 @@ export class MemoryJobStore implements JobStore {
   }
 
   /** @inheritDoc */
-  heartbeat(id: string, workerId: string, leaseUntil: number, now: number): boolean {
-    const job = this.#jobs.get(id);
-    if (job === undefined || job.status !== "running" || job.lockedBy !== workerId) {
-      return false;
-    }
+  heartbeat(
+    id: string,
+    workerId: string,
+    leaseUntil: number,
+    now: number,
+    attempt?: number
+  ): boolean {
+    const job = this.#ownedRunning(id, workerId, attempt);
+    if (job === undefined) return false;
     if (job.leaseUntil !== null && job.leaseUntil < now) return false; // already lost
     job.leaseUntil = leaseUntil;
     job.updatedAt = now;
@@ -800,11 +860,15 @@ export class MemoryJobStore implements JobStore {
   }
 
   /** @inheritDoc */
-  complete(id: string, workerId: string, now: number, result: unknown | null): boolean {
-    const job = this.#jobs.get(id);
-    if (job === undefined || job.status !== "running" || job.lockedBy !== workerId) {
-      return false;
-    }
+  complete(
+    id: string,
+    workerId: string,
+    now: number,
+    result: unknown | null,
+    attempt?: number
+  ): boolean {
+    const job = this.#ownedRunning(id, workerId, attempt);
+    if (job === undefined) return false;
     job.status = "completed";
     job.completedAt = now;
     job.resultJson = result === null || result === undefined ? null : JSON.stringify(result);
@@ -820,12 +884,11 @@ export class MemoryJobStore implements JobStore {
     workerId: string,
     error: string,
     next: { status: "delayed" | "queued" | "dead"; runAt: number },
-    now: number
+    now: number,
+    attempt?: number
   ): boolean {
-    const job = this.#jobs.get(id);
-    if (job === undefined || job.status !== "running" || job.lockedBy !== workerId) {
-      return false;
-    }
+    const job = this.#ownedRunning(id, workerId, attempt);
+    if (job === undefined) return false;
     job.lastError = error;
     job.lockedBy = null;
     job.leaseUntil = null;
@@ -887,6 +950,22 @@ export class MemoryJobStore implements JobStore {
     return out;
   }
 
+  /** @inheritDoc */
+  takeReaped(queue: string, now: number): readonly Job[] {
+    this.#reapLeases(now);
+    if (this.#reapedDead.length === 0) return NO_JOBS;
+    const out: Job[] = [];
+    const keep: string[] = [];
+    for (const id of this.#reapedDead) {
+      const job = this.#jobs.get(id);
+      if (job === undefined) continue; // already purged
+      if (job.queue === queue) out.push(this.#clone(job));
+      else keep.push(id);
+    }
+    this.#reapedDead = keep;
+    return out.length === 0 ? NO_JOBS : out;
+  }
+
   /** Test helper: every job, including terminal records. */
   dump(): Job[] {
     return this.list();
@@ -919,11 +998,35 @@ export class MemoryJobStore implements JobStore {
     });
   }
 
-  /** Expired leases return to `queued`; attempts stay spent. */
+  /**
+   * Fencing: the running record owned by `workerId` and, when `attempt` is
+   * given, by that exact claim — a stale run of the same worker is refused.
+   */
+  #ownedRunning(id: string, workerId: string, attempt: number | undefined): StoredJob | undefined {
+    const job = this.#jobs.get(id);
+    if (job === undefined || job.status !== "running" || job.lockedBy !== workerId) return undefined;
+    if (attempt !== undefined && job.attempts !== attempt) return undefined;
+    return job;
+  }
+
+  /**
+   * Expired leases return to `queued` (attempts stay spent), or dead-letter
+   * once the attempt budget is spent so a crash-looping job cannot rerun.
+   */
   #reapLeases(now: number): void {
     for (const job of this.#jobs.values()) {
       if (job.status === "running" && job.leaseUntil !== null && job.leaseUntil < now) {
-        job.status = "queued";
+        if (job.attempts >= job.maxAttempts) {
+          job.status = "dead";
+          job.runAt = now;
+          job.lastError = LEASE_EXPIRED_DEAD_MESSAGE;
+          // Bounded outbox: if no worker drains it, drop the oldest report
+          // (the dead record itself stays inspectable via get()/list()).
+          if (this.#reapedDead.length >= MAX_REAPED_BUFFER) this.#reapedDead.shift();
+          this.#reapedDead.push(job.id);
+        } else {
+          job.status = "queued";
+        }
         job.lockedBy = null;
         job.leaseUntil = null;
         job.updatedAt = now;
@@ -1301,7 +1404,11 @@ export interface JobWorkerOptions {
   timers?: TimerFns;
   /** Injectable clock (ms since epoch). Default {@link Date.now}. */
   now?: () => number;
-  /** Called when a job dead-letters (fatal, or budget exhausted). */
+  /**
+   * Called when a job dead-letters (fatal, or budget exhausted — including
+   * a final attempt whose lease expired, when the store implements
+   * {@link JobStore.takeReaped}).
+   */
   onDead?: (job: Job, error: string) => void | Promise<void>;
   /** Called when a job completes. */
   onComplete?: (job: Job) => void | Promise<void>;
@@ -1483,7 +1590,47 @@ export function createJobWorker(opts: JobWorkerOptions): JobWorker {
     }
   }
 
+  /**
+   * Report jobs the store dead-lettered on lease expiry (a crashed worker's
+   * final attempt) through the same log + hooks as the normal dead path.
+   * The store hands each one out at most once, so nothing double-fires.
+   */
+  async function reportReaped(): Promise<void> {
+    if (store.takeReaped === undefined) return;
+    for (const queueName of queues) {
+      let reaped: readonly Job[];
+      try {
+        reaped = await settle(store.takeReaped(queueName, now()));
+      } catch (error) {
+        logger?.error(
+          { event: "jobs.worker.take_reaped_failed", err: errorMessage(error), workerId },
+          "Job worker: takeReaped failed"
+        );
+        continue;
+      }
+      for (const job of reaped) {
+        const message = job.lastError ?? LEASE_EXPIRED_DEAD_MESSAGE;
+        logger?.error(
+          {
+            event: "jobs.dead",
+            queue: job.queue,
+            name: job.name,
+            jobId: job.id,
+            attempt: job.attempts,
+            fatal: false,
+            reason: "lease_expired",
+            err: message,
+          },
+          `Job "${job.name}" (${job.id}) dead-lettered`
+        );
+        await safeHook(() => opts.onFail?.(job, message, false));
+        await safeHook(() => opts.onDead?.(job, message));
+      }
+    }
+  }
+
   async function claimNext(): Promise<Job | null> {
+    await reportReaped();
     for (const queueName of queues) {
       const job = await settle(store.claim(queueName, workerId, now()));
       if (job !== null) {
@@ -1535,18 +1682,44 @@ export function createJobWorker(opts: JobWorkerOptions): JobWorker {
       }
     };
 
+    let heartbeatFailures = 0;
+    const loseLease = (): void => {
+      // Another worker owns the job now: unwind locally, touch nothing.
+      lostLease = true;
+      logger?.warn(
+        { event: "jobs.lease_lost", queue: job.queue, name: job.name, jobId: job.id, workerId },
+        `Lost lease for job "${job.name}" (${job.id}); aborting local run`
+      );
+      controller.abort();
+    };
+
     const beat = async (): Promise<void> => {
       if (settled || lostLease) return;
-      const ok = await settle(store.heartbeat(job.id, workerId, now() + job.leaseMs, now()));
-      if (!ok && !settled) {
-        // Another worker owns the job now: unwind locally, touch nothing.
-        lostLease = true;
-        logger?.warn(
-          { event: "jobs.lease_lost", queue: job.queue, name: job.name, jobId: job.id, workerId },
-          `Lost lease for job "${job.name}" (${job.id}); aborting local run`
+      let ok: boolean;
+      try {
+        ok = await settle(
+          store.heartbeat(job.id, workerId, now() + job.leaseMs, now(), job.attempts)
         );
-        controller.abort();
+      } catch (error) {
+        heartbeatFailures += 1;
+        logger?.error(
+          {
+            event: "jobs.heartbeat_failed",
+            queue: job.queue,
+            name: job.name,
+            jobId: job.id,
+            workerId,
+            failures: heartbeatFailures,
+            err: errorMessage(error),
+          },
+          `Heartbeat for job "${job.name}" (${job.id}) failed`
+        );
+        // ~leaseMs of failed beats: the lease has (or is about to) expire.
+        if (heartbeatFailures >= MAX_HEARTBEAT_FAILURES && !settled && !lostLease) loseLease();
+        throw error;
       }
+      heartbeatFailures = 0;
+      if (!ok && !settled && !lostLease) loseLease();
     };
 
     const scheduleBeat = (): void => {
@@ -1554,7 +1727,12 @@ export function createJobWorker(opts: JobWorkerOptions): JobWorker {
       heartbeatTimer = timers.set(() => {
         heartbeatTimer = undefined;
         void (async () => {
-          await beat();
+          try {
+            await beat();
+          } catch {
+            // Logged in beat(); a transient store error must never become an
+            // unhandled rejection (production crash handlers exit on those).
+          }
           if (!settled && !lostLease && !controller.signal.aborted) scheduleBeat();
         })();
       }, Math.max(1, Math.floor(job.leaseMs / 3)));
@@ -1608,6 +1786,13 @@ export function createJobWorker(opts: JobWorkerOptions): JobWorker {
         // immediately instead of retrying a record that can never succeed.
         throw new JobFatalError(`Unknown job handler: "${job.name}".`);
       }
+      if (job.attempts > job.maxAttempts) {
+        // Defence in depth for stores that reclaim expired leases without
+        // enforcing the budget: never run past maxAttempts.
+        throw new JobFatalError(
+          `Attempt budget exhausted (${job.attempts} > ${job.maxAttempts}).`
+        );
+      }
       const returned = await handler({
         job,
         signal: controller.signal,
@@ -1625,7 +1810,7 @@ export function createJobWorker(opts: JobWorkerOptions): JobWorker {
         // Same rules as payloads: plain JSON, pollution keys rejected, size cap.
         serializePayload(resultValue, queue.payloadMaxBytes, "result");
       }
-      const ok = await settle(store.complete(job.id, workerId, now(), resultValue));
+      const ok = await settle(store.complete(job.id, workerId, now(), resultValue, job.attempts));
       if (!ok) {
         logger?.warn(
           { event: "jobs.complete_lost", queue: job.queue, name: job.name, jobId: job.id, workerId },
@@ -1662,7 +1847,8 @@ export function createJobWorker(opts: JobWorkerOptions): JobWorker {
           willRetry
             ? { status: "delayed", runAt: nextRunAt }
             : { status: "dead", runAt: now() },
-          now()
+          now(),
+          job.attempts
         )
       );
       if (!ok) {

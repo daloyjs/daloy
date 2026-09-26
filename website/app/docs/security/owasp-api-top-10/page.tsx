@@ -118,9 +118,10 @@ export default function Page() {
             </td>
             <td>
               Per-route auth via <code>bearerAuth()</code> /{" "}
-              <code>basicAuth()</code> / <code>requireScopes()</code>. Typed{" "}
-              <code>ctx.state.auth</code> contract so the handler always knows
-              who the caller is. Standard Schema params let you validate ID
+              <code>basicAuth()</code> / <code>requireScopes()</code>.{" "}
+              <code>jwk()</code> and <code>basicAuth()</code> record the verified
+              identity at <code>ctx.state.user</code> so the handler always knows
+              who the caller is, and <code>tenantFromClaim()</code> reads it. Standard Schema params let you validate ID
               shape. <code>onAuthSuccess</code> hooks for attaching tenant/user
               context.
             </td>
@@ -471,8 +472,9 @@ export default function Page() {
           <tr>
             <td>Zero-trust posture between services</td>
             <td>
-              JWT / JWKS verification helpers, scheme-aware{" "}
-              <code>ctx.state.auth</code> typed contract, namespace-protected
+              JWT / JWKS verification helpers, verified identity on{" "}
+              <code>ctx.state.user</code> (scheme-aware{" "}
+              <code>ctx.state.auth</code> for custom verifiers), namespace-protected
               decorators, plugin <code>dependencies: string[]</code>{" "}
               refuse-to-boot.
             </td>

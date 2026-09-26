@@ -307,3 +307,26 @@ test("malformed percent-escapes miss cleanly instead of throwing", () => {
   assert.doesNotThrow(() => router.allowedMethods("/files/%zz"));
   assert.deepEqual(router.allowedMethods("/files/%zz"), []);
 });
+
+test("[unhappy] params and wildcards never bind a `.`/`..` segment, raw or percent-encoded", () => {
+  const router = new Router<string>();
+  router.add("GET", "/users/:id", "user");
+  router.add("GET", "/files/*", "files");
+  for (const path of ["/users/%2e%2e", "/users/%2E%2e", "/users/.%2e", "/users/%2e", "/users/."]) {
+    assert.equal(router.find("GET", path), undefined, path);
+  }
+  for (const path of ["/files/%2e%2e/etc/passwd", "/files/a/.%2E/b", "/files/a/./b"]) {
+    assert.equal(router.find("GET", path), undefined, path);
+  }
+  assert.deepEqual(router.allowedMethods("/users/%2e%2e"), []);
+});
+
+test("dot-containing params that are not dot segments still bind", () => {
+  const router = new Router<string>();
+  router.add("GET", "/users/:id", "user");
+  router.add("GET", "/files/*", "files");
+  assert.deepEqual(router.find("GET", "/users/...")?.params, { id: "..." });
+  assert.deepEqual(router.find("GET", "/users/a.b")?.params, { id: "a.b" });
+  assert.deepEqual(router.find("GET", "/users/%2e%2ex")?.params, { id: "..x" });
+  assert.deepEqual(router.find("GET", "/files/v1.2/.env")?.params, { wildcard: "v1.2/.env" });
+});

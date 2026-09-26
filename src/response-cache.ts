@@ -47,6 +47,10 @@
  *   the shared cache entirely unless the caller is identified (see
  *   {@link ResponseCacheOptions.principal}) or the header is explicitly declared
  *   shareable (see {@link ResponseCacheOptions.cacheAuthenticatedRequests}).
+ * - **Non-header identities.** A request whose caller was authenticated by
+ *   `clientCertAuth()` or `httpSignatureAuth()` (identity not carried in
+ *   `Authorization`/`Cookie`) bypasses the cache the same way, unless
+ *   `principal` names the caller or `cacheAuthenticatedRequests` opts in.
  * - **Tenant.** When `tenancy()` has resolved a tenant for the request, that
  *   tenant is folded into the key automatically — no `keyGenerator` wiring
  *   required, and it applies to a custom `keyGenerator` too.
@@ -68,7 +72,7 @@
 import type { BaseContext, Hooks } from "./types.js";
 import { markSchemaValidatedResponse } from "./internal-response.js";
 import { readResponseBodyUpTo } from "./internal-body.js";
-import { hasReplayScopes } from "./internal-replay.js";
+import { AUTH_IDENTITY_MARKER, hasReplayScopes } from "./internal-replay.js";
 
 /** Internal `ctx.state` key carrying the pending cache key between hooks. */
 const PENDING_STATE_KEY = "__responseCachePending";
@@ -293,7 +297,14 @@ export interface ResponseCacheOptions {
    * permitted; `Cookie` is treated the same way because a session cookie is the
    * single most common way a response is made private.
    *
-   * Pass a boolean to set both, or an object to control them independently —
+   * The `clientIdentity` dimension covers callers authenticated by a channel
+   * other than those headers — a client certificate (`clientCertAuth()`) or an
+   * HTTP message signature (`httpSignatureAuth()`). Those hooks run in
+   * `preBody`, before the cache lookup, and record the identity; such a request
+   * bypasses the cache unless {@link principal} names the caller or this
+   * dimension is enabled.
+   *
+   * Pass a boolean to set all dimensions, or an object to control them independently —
    * useful when a public endpoint receives unrelated analytics cookies but must
    * never cache bearer-authenticated responses:
    *
@@ -307,9 +318,12 @@ export interface ResponseCacheOptions {
    *
    * @remarks Declaring the credential header in {@link varyHeaders} also counts
    * as handling it, since its value then partitions the key.
-   * @since 0.40.0 — extended to `Cookie` and per-header control in 1.0.0.
+   * @since 0.40.0 — extended to `Cookie` and per-header control in 1.0.0;
+   *   `clientIdentity` added in 1.3.7.
    */
-  cacheAuthenticatedRequests?: boolean | { authorization?: boolean; cookie?: boolean };
+  cacheAuthenticatedRequests?:
+    | boolean
+    | { authorization?: boolean; cookie?: boolean; clientIdentity?: boolean };
 }
 
 // ---------- Default store ----------
@@ -734,6 +748,9 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
     optInAll ||
     (typeof credentialOptIn === "object" && credentialOptIn?.cookie === true) ||
     varyHeaders.includes("cookie");
+  const clientIdentityHandled =
+    optInAll ||
+    (typeof credentialOptIn === "object" && credentialOptIn?.clientIdentity === true);
   const statusHeaderName =
     opts.statusHeaderName === null ? null : (opts.statusHeaderName ?? "x-cache").toLowerCase();
   const ttlMs = ttlSeconds * 1_000;
@@ -802,7 +819,12 @@ export function responseCache(opts: ResponseCacheOptions = {}): Hooks {
       if (
         !principalId &&
         ((!authorizationHandled && headers.has("authorization")) ||
-          (!cookieHandled && headers.has("cookie")))
+          (!cookieHandled && headers.has("cookie")) ||
+          // mTLS / HTTP-signature identity stamped by a preBody auth hook: the
+          // URI-based key cannot tell two such callers apart (CWE-524).
+          (!clientIdentityHandled &&
+            typeof (ctx.state as Record<PropertyKey, unknown>)[AUTH_IDENTITY_MARKER] ===
+              "string"))
       ) {
         return undefined;
       }

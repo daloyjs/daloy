@@ -402,3 +402,51 @@ test("resilientFetch: SSRF refusal does not trip the circuit breaker", async () 
   // the guard (and is refused again) rather than failing fast.
   await assert.rejects(() => f("http://169.254.169.254/"), SsrfBlockedError);
 });
+
+// deepsec 2026-09-26: the documented composition resilientFetch({ fetch:
+// fetchGuard(), timeoutMs }) must time out on the default pinned http: path.
+test("resilientFetch + fetchGuard: timeoutMs fires on a stalled pinned http: upstream", async () => {
+  const { createServer } = await import("node:net");
+  const { once } = await import("node:events");
+  const sockets: import("node:net").Socket[] = [];
+  const stall = createServer((s) => {
+    sockets.push(s);
+    s.on("error", () => {});
+  });
+  stall.listen(0, "127.0.0.1");
+  await once(stall, "listening");
+  const port = (stall.address() as { port: number }).port;
+  try {
+    const safe = resilientFetch({
+      fetch: fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] }),
+      timeoutMs: 100,
+      retries: 0,
+    });
+    const t0 = Date.now();
+    await assert.rejects(() => safe(`http://slow.invalid:${port}/`), FetchTimeoutError);
+    assert.ok(Date.now() - t0 < 1000);
+  } finally {
+    for (const s of sockets) s.destroy();
+    stall.close();
+  }
+});
+
+test("resilientFetch + fetchGuard: a responsive pinned http: upstream is unaffected by timeoutMs", async () => {
+  const { createServer } = await import("node:http");
+  const { once } = await import("node:events");
+  const up = createServer((_req, res) => res.end("fine"));
+  up.listen(0, "127.0.0.1");
+  await once(up, "listening");
+  const port = (up.address() as { port: number }).port;
+  try {
+    const safe = resilientFetch({
+      fetch: fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] }),
+      timeoutMs: 2000,
+      retries: 0,
+    });
+    const res = await safe(`http://ok.invalid:${port}/`);
+    assert.equal(await res.text(), "fine");
+  } finally {
+    up.close();
+  }
+});

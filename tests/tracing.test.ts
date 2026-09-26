@@ -380,3 +380,50 @@ test("otelTracing onSend ends the span exactly once even after onError already f
   const span = spans[0]!;
   assert.equal(span.endCount, 1);
 });
+
+// ---------- url.query redaction (deepsec 2026-09-26) ----------
+
+test("otelTracing redacts credential-bearing query values in url.query by default", async () => {
+  const { tracer, spans } = makeFakeTracer();
+  const app = makeApp(otelTracing({ tracer }));
+  const jwt = ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxIn0", "abc-DEF_123"].join(".");
+  await app.request(
+    `http://api.test.local/ok?code=SplxlOBeZQQY&access_token=ya29.SECRET_TOKEN_123&X-Amz-Signature=deadbeef&page=2&t=${jwt}`
+  );
+  const query = String(spans[0]!.attributes["url.query"]);
+  // Unhappy path: no secret value reaches the tracing backend.
+  for (const secret of ["SplxlOBeZQQY", "ya29.SECRET_TOKEN_123", "deadbeef", jwt]) {
+    assert.ok(!query.includes(secret), `leaked ${secret} in ${query}`);
+  }
+  // Happy path: keys and benign values stay visible for debugging.
+  const params = new URLSearchParams(query);
+  assert.equal(params.get("code"), "[REDACTED]");
+  assert.equal(params.get("access_token"), "[REDACTED]");
+  assert.equal(params.get("X-Amz-Signature"), "[REDACTED]");
+  assert.equal(params.get("page"), "2");
+  for (const s of spans) assert.ok(!JSON.stringify(s.attributes).includes("SECRET_TOKEN"));
+});
+
+test("otelTracing redactQuery accepts a custom function or an explicit false opt-out", async () => {
+  const custom = makeFakeTracer();
+  const seen: string[] = [];
+  const app1 = makeApp(
+    otelTracing({
+      tracer: custom.tracer,
+      redactQuery: (q) => {
+        seen.push(q);
+        return q.startsWith("drop") ? undefined : "custom";
+      },
+    })
+  );
+  await app1.request("http://api.test.local/ok?access_token=abc");
+  await app1.request("http://api.test.local/ok?drop=1");
+  assert.deepEqual(seen, ["access_token=abc", "drop=1"]);
+  assert.equal(custom.spans[0]!.attributes["url.query"], "custom");
+  assert.equal("url.query" in custom.spans[1]!.attributes, false);
+
+  const raw = makeFakeTracer();
+  const app2 = makeApp(otelTracing({ tracer: raw.tracer, redactQuery: false }));
+  await app2.request("http://api.test.local/ok?access_token=abc");
+  assert.equal(raw.spans[0]!.attributes["url.query"], "access_token=abc");
+});

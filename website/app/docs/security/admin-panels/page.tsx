@@ -253,8 +253,10 @@ app.post(
         </li>
         <li>
           Login-throttle factor.{" "}
-          <code>rateLimit({'{ windowMs, max, groupId: "admin-auth" }'})</code>{" "}
-          shares one bucket across <code>/admin/login</code>
+          <code>loginThrottle({'{ groupId: "admin-auth" }'})</code>{" "}
+          (keyed per client: the TCP peer, or the trusted forwarded IP with{" "}
+          <code>trustedProxies</code>) shares one bucket per client across{" "}
+          <code>/admin/login</code>
           {", "}
           <code>/admin/otp</code>
           {", "}and <code>/admin/recovery</code> so password spraying and OTP

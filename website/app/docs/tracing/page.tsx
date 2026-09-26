@@ -101,8 +101,8 @@ const app = new App({
           <code>url.scheme</code>
           {", "}
           <code>server.address</code> (host without port),{" "}
-          <code>server.port</code> (when present), <code>url.query</code>
-          {", "}
+          <code>server.port</code> (when present), <code>url.query</code>{" "}
+          (redacted, see below){", "}
           <code>user_agent.original</code> set on <code>onRequest</code>.
         </li>
         <li>
@@ -118,6 +118,34 @@ const app = new App({
           <code>onError</code> and <code>onSend</code> fire.
         </li>
       </ul>
+
+      <h3 id="url-query-redaction">
+        <code>url.query</code> is redacted by default
+      </h3>
+      <p>
+        Query strings often carry OAuth <code>code</code> values,{" "}
+        <code>access_token</code>s, and presigned-URL signatures. Since 2.0.0,{" "}
+        <code>otelTracing()</code> runs the query through{" "}
+        <code>sanitizeUrlQueryForLog</code>, the same rules the logger applies
+        to URLs (see <a href="/docs/logging#redaction-secure-by-default">Logging</a>
+        ): values of sensitive keys and JWT or credential-shaped values become{" "}
+        <code>[REDACTED]</code> before the attribute reaches your tracing
+        backend. The <code>redactQuery</code> option (since 1.3.7) changes
+        that:
+      </p>
+      <CodeBlock
+        code={`// Default: ?page=2&code=abc -> url.query = "page=2&code=%5BREDACTED%5D"
+otelTracing({ tracer });
+
+// Your own redaction. Receives the raw query (no "?"); return undefined to omit.
+otelTracing({
+  tracer,
+  redactQuery: (query) => (query.includes("session=") ? undefined : query),
+});
+
+// Raw query, verbatim. Unsafe: tokens and signatures reach the backend.
+otelTracing({ tracer, redactQuery: false });`}
+      />
 
       <h2 id="reading-the-active-span-in-handlers">
         Reading the active span in handlers

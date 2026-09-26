@@ -126,7 +126,11 @@ interface InProcessClientOptions {
 // { params?, query?, headers?, body? } and returns a discriminated union
 // keyed by status: { status, body, headers }.
 type ClientFor<A extends App>  = { /* generated from A["routes"] */ };
-type RoutesOf<A extends App>   = A["routes"][number];`}
+type RoutesOf<A extends App>   = A["routes"][number];
+
+// Path params are filled by whole segment and percent-encoded. A missing,
+// empty, "." or ".." param throws TypeError before any request is sent.
+// Wildcard routes ("*name") accept "/"-separated values, each segment checked.`}
       />
 
       <h2 id="daloyjs-core-contract">
@@ -203,8 +207,11 @@ interface McpHandlerOptions {
   preferredProtocolVersion?: string;        // default MCP_PROTOCOL_VERSION
   maxBodyBytes?: number;                    // default MCP_DEFAULT_MAX_BODY_BYTES
   headers?: Record<string, string>;
-  exposeInternalErrors?: boolean;           // default NODE_ENV !== "production"
+  exposeInternalErrors?: boolean;           // default: on only when NODE_ENV is "development" or "test"
+  maxResourceUriLength?: number;            // default 8192; longer resources/read URIs get -32602
 }
+// exposeInternalErrors fails closed: when omitted, mcpRoutes() on an App whose
+// env is "production" always redacts. An explicit value wins.
 
 interface McpImplementation { name: string; version: string; title?: string }
 
@@ -334,7 +341,11 @@ ndjsonResponse(source, opts?: NDJSONResponseOptions): Response;
 interface StreamOptions       { signal?: AbortSignal }
 interface SSEStreamOptions    extends StreamOptions { keepAliveMs?: number }
 interface SSEResponseOptions  extends SSEStreamOptions { status?: number; headers?: HeadersInit }
-interface NDJSONResponseOptions extends StreamOptions { status?: number; headers?: HeadersInit }`}
+interface NDJSONResponseOptions extends StreamOptions { status?: number; headers?: HeadersInit }
+
+// data and comment split on CRLF, lone CR, and lone LF, so a stray "\\r" cannot
+// forge a field. CR/LF runs in event (and CR/LF/NUL in id) become a space.
+// The Node adapter cancels a streamed body when the client disconnects.`}
       />
 
       <h2 id="daloyjs-core-multipart">
@@ -381,12 +392,15 @@ interface WebSocketHandler<P, S = AppState, TData = unknown> {
 }
 
 wsRateLimit(opts: { windowMs; max; groupId?; keyGenerator?; store? }): WebSocketBeforeUpgrade;
+  // store / keyGenerator failures are rethrown and answered with a generic 500,
+  // never echoed to the client
 normalizeWebSocketOptions(handler, ctx): NormalizedWebSocketOptions;
 
 // Constants
 WS_GUID; WS_READY_STATE; WS_OPCODE; WS_CLOSE_CODE; WS_MAX_CONTROL_PAYLOAD;
 DEFAULT_WS_BACKPRESSURE_LIMIT;      // 1 MiB
 DEFAULT_WS_MAX_PAYLOAD_LENGTH;      // 1 MiB
+DEFAULT_WS_MAX_MESSAGE_FRAGMENTS;   // 4096 data frames per message; more closes with 1002 (since 1.3.7)
 DEFAULT_WS_IDLE_TIMEOUT_SECONDS;    // 120
 
 // Frame primitives (for custom adapters)
@@ -418,6 +432,8 @@ interface OtelTracingOptions {
   includeRequestHeaders?: readonly string[];
   includeResponseHeaders?: readonly string[];
   recordExceptions?: boolean;
+  redactQuery?: false | ((query: string) => string | undefined);
+    // default: url.query redacted via sanitizeUrlQueryForLog(); false records it raw (unsafe) (since 1.3.7)
 }
 
 const TRACING_SPAN_KIND_SERVER:   number;
@@ -431,6 +447,7 @@ const TRACING_SPAN_STATUS_ERROR:  number;`}
       </h2>
       <CodeBlock
         code={`redisRateLimitStore(opts: RedisRateLimitStoreOptions): RateLimitStore;
+redisAutoBanStore(opts: RedisAutoBanStoreOptions): AutoBanStore;  // atomic strike() for autoBan() (since 1.3.7)
 ioredisAdapter (client: IoredisLike):  RedisCommands;
 nodeRedisAdapter(client: NodeRedisLike): RedisCommands;
 
@@ -438,6 +455,10 @@ interface RedisRateLimitStoreOptions {
   client:  RedisCommands;
   prefix?: string;             // default: "daloy:rl:"
   scriptCacheKey?: string;
+}
+interface RedisAutoBanStoreOptions {
+  client:  RedisCommands;
+  prefix?: string;             // default: "daloy:ab:"
 }
 interface RedisCommands {
   evalsha?: (...) => Promise<unknown>;

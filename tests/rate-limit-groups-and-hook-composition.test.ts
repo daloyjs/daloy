@@ -11,6 +11,7 @@ import {
   bearerAuth,
   httpBearerScheme,
   _resetSharedRateLimitStoresForTests,
+  setConnInfo,
 } from "../src/index.js";
 import type { Hooks } from "../src/index.js";
 import { generateOpenAPI } from "../src/openapi.js";
@@ -167,6 +168,47 @@ test("loginThrottle() does not trust proxy IP headers until opted in", async () 
     ).status,
     429
   );
+});
+
+function loginFrom(peer: string, headers: Record<string, string> = {}): Request {
+  const req = new Request("http://x/login", { method: "POST", headers });
+  setConnInfo(req, { remoteAddress: peer });
+  return req;
+}
+
+function peerKeyedLoginApp(): App {
+  _resetSharedRateLimitStoresForTests();
+  const app = new App({ env: "development" });
+  app.route({
+    method: "POST",
+    path: "/login",
+    hooks: loginThrottle({ windowMs: 60_000, max: 2, delayAfter: 0, delayMs: 0 }),
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  return app;
+}
+
+test("[unhappy] loginThrottle() default key: one peer exhausting the budget cannot lock out another peer", async () => {
+  const app = peerKeyedLoginApp();
+  for (let i = 0; i < 3; i++) await app.fetch(loginFrom("203.0.113.66"));
+  assert.equal((await app.fetch(loginFrom("203.0.113.66"))).status, 429);
+  assert.equal((await app.fetch(loginFrom("198.51.100.7"))).status, 200);
+});
+
+test("loginThrottle() default key still throttles the same peer, ignoring spoofed forwarding headers", async () => {
+  const app = peerKeyedLoginApp();
+  assert.equal((await app.fetch(loginFrom("203.0.113.66", { "x-forwarded-for": "1.1.1.1" }))).status, 200);
+  assert.equal((await app.fetch(loginFrom("203.0.113.66", { "x-forwarded-for": "2.2.2.2" }))).status, 200);
+  assert.equal((await app.fetch(loginFrom("203.0.113.66", { "x-real-ip": "3.3.3.3" }))).status, 429);
+});
+
+test("loginThrottle() default key falls back to one shared bucket when no peer is exposed", async () => {
+  const app = peerKeyedLoginApp();
+  const bare = () => new Request("http://x/login", { method: "POST" });
+  assert.equal((await app.fetch(bare())).status, 200);
+  assert.equal((await app.fetch(bare())).status, 200);
+  assert.equal((await app.fetch(bare())).status, 429);
 });
 
 test("loginThrottle() can key by trusted proxy headers", async () => {
@@ -888,4 +930,90 @@ test("internal: true is excluded from OpenAPI unless explicitly included", () =>
     includeInternal: true,
   });
   assert.ok((internalDoc.paths as Record<string, unknown>)["/__admin/reindex"]);
+});
+
+// ---- IPv6 /64 grouping + canonical keys (deepsec 2026-09-26, OWASP API6) ----
+
+test("[unhappy] rateLimit default key groups an IPv6 /64 so address rotation shares one bucket", async () => {
+  const app = new App({ logger: false, behindProxy: { cidrs: ["127.0.0.1/32"] } } as any);
+  app.use(rateLimit({ windowMs: 60_000, max: 3, trustedProxies: ["127.0.0.1/32"] }));
+  app.route({
+    method: "GET",
+    path: "/x",
+    operationId: "x",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: null }),
+  });
+  const { serve } = await import("../src/adapters/node.js");
+  const { once } = await import("node:events");
+  const handle = serve(app, { port: 0, hostname: "127.0.0.1", handleSignals: false });
+  await once(handle.server, "listening");
+  try {
+    const hit = async (xff: string) =>
+      (await fetch(`http://127.0.0.1:${handle.port}/x`, { headers: { "x-forwarded-for": xff } })).status;
+    const rotated: number[] = [];
+    for (let i = 1; i <= 6; i++) rotated.push(await hit(`2001:db8:1:2::${i.toString(16)}`));
+    assert.deepEqual(rotated, [200, 200, 200, 429, 429, 429]);
+    // Textual variants of one address collapse to one key.
+    const variants = [];
+    for (const f of ["2001:db8:9::1", "2001:DB8:9::1", "2001:0db8:0009::1", "2001:db8:9:0:0:0:0:1"]) variants.push(await hit(f));
+    assert.deepEqual(variants, [200, 200, 200, 429]);
+    // Happy path: a different /64 and an IPv4 client keep their own budgets.
+    assert.equal(await hit("2001:db8:1:3::1"), 200);
+    assert.equal(await hit("10.0.0.1"), 200);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("ipRateLimitIdentity canonicalizes IPv4, IPv4-mapped and IPv6 addresses", async () => {
+  const { ipRateLimitIdentity } = await import("../src/ip-match.js");
+  assert.equal(ipRateLimitIdentity("10.0.0.1"), "10.0.0.1");
+  assert.equal(ipRateLimitIdentity("::ffff:10.0.0.1"), "10.0.0.1");
+  assert.equal(ipRateLimitIdentity("2001:DB8::abcd:1"), "2001:db8:0:0:0:0:0:0/64");
+  assert.equal(ipRateLimitIdentity("[2001:db8::1]", 128), "2001:db8:0:0:0:0:0:1/128");
+  assert.equal(ipRateLimitIdentity(" not-an-ip "), "not-an-ip");
+});
+
+test("[unhappy] rateLimit/loginThrottle reject an out-of-range ipv6Subnet", () => {
+  for (const bad of [0, 129, 1.5, -1]) {
+    assert.throws(() => rateLimit({ windowMs: 1000, max: 1, ipv6Subnet: bad }), /ipv6Subnet/);
+    assert.throws(() => loginThrottle({ ipv6Subnet: bad }), /ipv6Subnet/);
+  }
+});
+
+// rateLimit() default key is per TCP peer too (deepsec 2026-09-26 follow-up).
+function peerKeyedRateLimitApp(): App {
+  _resetSharedRateLimitStoresForTests();
+  const app = new App({ env: "development" });
+  app.use(rateLimit({ windowMs: 60_000, max: 2 }));
+  app.route({
+    method: "POST",
+    path: "/login",
+    responses: { 200: { description: "ok" } },
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  return app;
+}
+
+test("[unhappy] rateLimit() default key: one peer exhausting its budget cannot starve another peer", async () => {
+  const app = peerKeyedRateLimitApp();
+  for (let i = 0; i < 2; i++) await app.fetch(loginFrom("203.0.113.66"));
+  assert.equal((await app.fetch(loginFrom("203.0.113.66"))).status, 429);
+  assert.equal((await app.fetch(loginFrom("198.51.100.7"))).status, 200);
+});
+
+test("rateLimit() default key ignores spoofed forwarding headers and still throttles the peer", async () => {
+  const app = peerKeyedRateLimitApp();
+  assert.equal((await app.fetch(loginFrom("203.0.113.66", { "x-forwarded-for": "1.1.1.1" }))).status, 200);
+  assert.equal((await app.fetch(loginFrom("203.0.113.66", { "x-real-ip": "2.2.2.2" }))).status, 200);
+  assert.equal((await app.fetch(loginFrom("203.0.113.66", { "x-forwarded-for": "3.3.3.3" }))).status, 429);
+});
+
+test("rateLimit() default key falls back to one shared bucket when no peer is exposed", async () => {
+  const app = peerKeyedRateLimitApp();
+  const bare = () => new Request("http://x/login", { method: "POST" });
+  assert.equal((await app.fetch(bare())).status, 200);
+  assert.equal((await app.fetch(bare())).status, 200);
+  assert.equal((await app.fetch(bare())).status, 429);
 });

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
 import { App } from "../src/index.js";
-import { createClient } from "../src/client.js";
+import { createClient, createInProcessClient } from "../src/client.js";
 import { generateOpenAPI } from "../src/openapi.js";
 
 test("typed client replaces params, appends array query values, merges headers, and parses JSON", async () => {
@@ -175,6 +175,93 @@ test("typed client omits routes missing operationId", () => {
 
   const client: any = createClient(app, { baseUrl: "https://api.example.com" });
   assert.deepEqual(Object.keys(client), []);
+});
+
+function dotSegmentApp() {
+  const hits: string[] = [];
+  const app = new App({ logger: false })
+    .route({
+      method: "DELETE",
+      path: "/orgs/:org/members/:member",
+      operationId: "removeMember",
+      request: { params: z.object({ org: z.string(), member: z.string() }) },
+      responses: { 200: { description: "ok", body: z.object({ removed: z.string() }) } },
+      handler: ({ params }) => {
+        hits.push(`removeMember ${params.member}`);
+        return { status: 200 as const, body: { removed: params.member } };
+      },
+    })
+    .route({
+      method: "DELETE",
+      path: "/orgs/:org",
+      operationId: "deleteOrg",
+      request: { params: z.object({ org: z.string() }) },
+      responses: { 200: { description: "ok", body: z.object({ deletedOrg: z.string() }) } },
+      handler: ({ params }) => {
+        hits.push(`deleteOrg ${params.org}`);
+        return { status: 200 as const, body: { deletedOrg: params.org } };
+      },
+    })
+    .route({
+      method: "GET",
+      path: "/items/:idx/:id",
+      operationId: "getItem",
+      request: { params: z.object({ idx: z.string(), id: z.string() }) },
+      responses: { 200: { description: "ok", body: z.object({ idx: z.string(), id: z.string() }) } },
+      handler: ({ params }) => ({ status: 200 as const, body: params }),
+    })
+    .route({
+      method: "GET",
+      path: "/assets/*path",
+      operationId: "getAsset",
+      request: { params: z.object({ path: z.string() }) },
+      responses: { 200: { description: "ok", body: z.object({ path: z.string() }) } },
+      handler: ({ params }) => ({ status: 200 as const, body: params }),
+    });
+  return { app, hits };
+}
+
+test("typed client refuses dot-segment and empty path params instead of retargeting the route", async () => {
+  const { app, hits } = dotSegmentApp();
+  const client: any = createInProcessClient(app);
+  for (const member of ["..", ".", ""]) {
+    await assert.rejects(
+      client.removeMember({ params: { org: "acme", member } }),
+      (err: unknown) => err instanceof TypeError && /"member"/.test((err as Error).message),
+    );
+  }
+  await assert.rejects(client.removeMember({ params: { org: "..", member: "bob" } }), TypeError);
+  for (const path of ["css/../../orgs/acme", "./x", "a//b", "", "/css/app.css"]) {
+    await assert.rejects(client.getAsset({ params: { path } }), TypeError);
+  }
+  assert.deepEqual(hits, [], "no request reached any handler");
+});
+
+test("typed client keeps legit dotted values and encodes them as data", async () => {
+  const { app, hits } = dotSegmentApp();
+  const client: any = createInProcessClient(app);
+  for (const member of ["...", ".bob", "bob.", "a..b", "a/.."]) {
+    const res = await client.removeMember({ params: { org: "acme", member } });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { removed: member });
+  }
+  assert.ok(!hits.some((h) => h.startsWith("deleteOrg")));
+  const asset = await client.getAsset({ params: { path: "css/app v2.css" } });
+  assert.deepEqual(asset.body, { path: "css/app v2.css" });
+});
+
+test("typed client substitutes params by whole segment and rejects missing params", async () => {
+  const { app } = dotSegmentApp();
+  const client: any = createInProcessClient(app);
+  const res = await client.getItem({ params: { id: "B", idx: "A" } });
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { idx: "A", id: "B" });
+  await assert.rejects(
+    client.getItem({ params: { idx: "A" } }),
+    (err: unknown) => err instanceof TypeError && /Missing path parameter "id"/.test((err as Error).message),
+  );
+  await assert.rejects(client.getItem({ params: { idx: "A", id: null } }), TypeError);
+  await assert.rejects(client.getItem(), TypeError);
 });
 
 test("OpenAPI includes metadata, parameters, request body, responses, and security", () => {

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **Contract-first**: routes are defined with validation schemas (Zod in this template; DaloyJS also supports Standard Schema-compatible validators) and OpenAPI 3.1 is generated from them. `docs: true` is set in `new App({...})`, so `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI) are auto-mounted. DaloyJS is dependency-free and the Scalar UI loads from a CDN, so bundle cost is negligible; drop `docs` (and the `openapi` block) for the smallest bundle.
+A [DaloyJS](https://daloyjs.dev) REST API deployed to **Cloudflare Workers**. **Contract-first**: routes are defined with validation schemas (Zod in this template; DaloyJS also supports Standard Schema-compatible validators) and OpenAPI 3.1 is generated from them. `docs: "auto"` is set, and since `production: true` the spec routes (`/openapi.json`, `/openapi.yaml`, `/docs`) stay off; set `docs: true` to publish them. Drop `docs` and `openapi` for the smallest bundle.
 
 - Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).
 - Runtime: Cloudflare Workers (Web Standard `Request`/`Response`).

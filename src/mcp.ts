@@ -877,10 +877,23 @@ export interface McpHandlerOptions {
    */
   headers?: Record<string, string>;
   /**
-   * Include development error details in JSON-RPC internal errors. Defaults to
-   * `process.env.NODE_ENV !== "production"` when `process` exists.
+   * Include raw `Error.message` text from non-{@link McpToolError} throws in
+   * JSON-RPC internal errors (`error.data.detail`).
+   *
+   * Security: fails closed. When omitted, details are exposed only on a
+   * positive development signal (`process.env.NODE_ENV` is `"development"` or
+   * `"test"`), and never when the routes are mounted via {@link mcpRoutes} on an
+   * App whose resolved environment is production. An explicit value always
+   * wins over both signals.
    */
   exposeInternalErrors?: boolean;
+  /**
+   * Maximum accepted length of `params.uri` on `resources/read`, in UTF-16 code
+   * units. Longer URIs are refused with `-32602` before any lookup or template
+   * matching. Defaults to 8192.
+   * @since 1.3.7
+   */
+  maxResourceUriLength?: number;
 }
 
 /**
@@ -1164,34 +1177,39 @@ function selectedProtocolVersion(
   return supported.has(requested) ? requested : preferred;
 }
 
-function escapeRegExp(literal: string): string {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 interface CompiledUriTemplate {
   template: McpResourceTemplateDefinition;
-  regex: RegExp;
+  /**
+   * Literal text around the variables: `literals[0]` precedes the first
+   * variable, `literals[i + 1]` follows variable `i`. Always
+   * `variables.length + 1` entries (empty strings allowed).
+   */
+  literals: string[];
   variables: string[];
 }
 
 /**
  * Compile a simple RFC 6570 level-1 URI template into a matcher. Each
- * `{name}` variable matches exactly one URI segment (`[^/]+`). Operators such
- * as `{+path}` or `{?query}` are rejected so the handler never advertises a
- * template it cannot match.
+ * `{name}` variable matches one or more characters within a single URI
+ * segment (no `/`). Operators such as `{+path}` or `{?query}` are rejected so
+ * the handler never advertises a template it cannot match.
+ *
+ * Security: templates are NOT compiled to a `RegExp`. `{name}.{ext}`-style
+ * templates made a backtracking regex go quadratic on crafted URIs (ReDoS);
+ * {@link matchUriTemplate} runs in time linear in the URI length instead.
  */
 function compileUriTemplate(template: McpResourceTemplateDefinition): CompiledUriTemplate {
   const { uriTemplate } = template;
   const variables: string[] = [];
-  let pattern = "";
+  const literals: string[] = [];
   let index = 0;
-  while (index < uriTemplate.length) {
+  while (true) {
     const open = uriTemplate.indexOf("{", index);
     if (open === -1) {
-      pattern += escapeRegExp(uriTemplate.slice(index));
+      literals.push(uriTemplate.slice(index));
       break;
     }
-    pattern += escapeRegExp(uriTemplate.slice(index, open));
+    literals.push(uriTemplate.slice(index, open));
     const close = uriTemplate.indexOf("}", open);
     if (close === -1) {
       throw new TypeError(`MCP resource template "${uriTemplate}" has an unterminated "{".`);
@@ -1204,11 +1222,79 @@ function compileUriTemplate(template: McpResourceTemplateDefinition): CompiledUr
       );
     }
     variables.push(name);
-    pattern += "([^/]+)";
     index = close + 1;
   }
-  return { template, regex: new RegExp(`^${pattern}$`), variables };
+  return { template, literals, variables };
 }
+
+const SLASH = 47; // "/"
+
+/**
+ * Match `uri` against a compiled template in O(|uri| * |template|) time with
+ * no backtracking. Semantics are identical to the former anchored regex
+ * `^l0([^/]+)l1([^/]+)...ln$` with greedy captures: each variable takes the
+ * longest non-empty, slash-free span for which the rest of the template can
+ * still match, left to right.
+ *
+ * @returns The captured variables, or `undefined` when the URI does not match.
+ */
+function matchUriTemplate(
+  compiled: CompiledUriTemplate,
+  uri: string
+): Record<string, string> | undefined {
+  const { literals, variables } = compiled;
+  const count = variables.length;
+  const head = literals[0]!;
+  if (count === 0) return uri === head ? {} : undefined;
+  const tail = literals[count]!;
+  const n = uri.length;
+  if (!uri.startsWith(head) || n - head.length - tail.length < count || !uri.endsWith(tail)) {
+    return undefined;
+  }
+  // feasible[j][p] === 1 when uri[p..] matches `([^/]+) literals[j+1] ...`
+  // from variable j onwards. Filled right to left, one pass per variable.
+  const feasible: Uint8Array[] = new Array(count);
+  // endOk(j, e): variable j may end at e (exclusive) and the rest matches.
+  const endOk = (j: number, e: number): boolean => {
+    const literal = literals[j + 1]!;
+    if (j === count - 1) return e + literal.length === n && uri.startsWith(literal, e);
+    return uri.startsWith(literal, e) && feasible[j + 1]![e + literal.length] === 1;
+  };
+  for (let j = count - 1; j >= 0; j--) {
+    const row = new Uint8Array(n + 1);
+    feasible[j] = row;
+    for (let p = n - 1; p >= head.length; p--) {
+      if (uri.charCodeAt(p) === SLASH) continue;
+      if (row[p + 1] === 1 || endOk(j, p + 1)) row[p] = 1;
+    }
+  }
+  if (feasible[0]![head.length] !== 1) return undefined;
+  const out: Record<string, string> = {};
+  let p = head.length;
+  for (let j = 0; j < count; j++) {
+    // Greedy: the furthest slash-free end that keeps the remainder feasible.
+    let best = -1;
+    for (let e = p + 1; e <= n; e++) {
+      if (endOk(j, e)) best = e;
+      if (uri.charCodeAt(e) === SLASH || e === n) break;
+    }
+    // feasible[j][p] guarantees best !== -1.
+    out[variables[j]!] = uri.slice(p, best);
+    p = best + literals[j + 1]!.length;
+  }
+  return out;
+}
+
+/** Default cap on `resources/read` `params.uri` length (UTF-16 code units). */
+const DEFAULT_MAX_RESOURCE_URI_LENGTH = 8192;
+
+/**
+ * Hidden hook key on a handler returned by {@link createMcpHandler}. Calling
+ * the function with `true` tells the handler its host App runs in production,
+ * which forces internal-error redaction unless `exposeInternalErrors` was set
+ * explicitly. It can only make the handler stricter, never looser.
+ */
+const MCP_APP_PRODUCTION_HOOK = Symbol.for("daloyjs.mcp.appProduction");
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -1541,9 +1627,14 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     allowedOrigins.add(normalized);
   }
 
-  const exposeInternalErrors =
-    options.exposeInternalErrors ??
-    (typeof process === "object" && process.env?.NODE_ENV !== "production");
+  // Fail closed: expose raw error text only on a positive dev signal.
+  const nodeEnv = typeof process === "object" ? process.env?.NODE_ENV : undefined;
+  let exposeInternalErrors =
+    options.exposeInternalErrors ?? (nodeEnv === "development" || nodeEnv === "test");
+  const maxResourceUriLength = options.maxResourceUriLength ?? DEFAULT_MAX_RESOURCE_URI_LENGTH;
+  if (!Number.isInteger(maxResourceUriLength) || maxResourceUriLength < 1) {
+    throw new TypeError("MCP maxResourceUriLength must be a positive integer.");
+  }
   const headers = options.headers;
 
   const legacyAssumed = supported.has(LEGACY_ASSUMED_PROTOCOL_VERSION)
@@ -1839,6 +1930,9 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
         return ok({ resourceTemplates: resourceTemplates.map(publicResourceTemplate) }, true);
       case "resources/read": {
         const uri = typeof params.uri === "string" ? params.uri : "";
+        if (uri.length > maxResourceUriLength) {
+          return rpcError(id, INVALID_PARAMS, "Resource URI too long.", undefined, 200, headers);
+        }
         const readError = (error: unknown): Response => {
           const message = error instanceof McpToolError ? error.message : "Resource read failed.";
           const data =
@@ -1866,12 +1960,8 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
         }
         if (uri) {
           for (const compiled of compiledTemplates) {
-            const match = compiled.regex.exec(uri);
-            if (!match) continue;
-            const variables: Record<string, string> = {};
-            compiled.variables.forEach((name, position) => {
-              variables[name] = match[position + 1] ?? "";
-            });
+            const variables = matchUriTemplate(compiled, uri);
+            if (!variables) continue;
             try {
               const read = await compiled.template.read(uri, variables, ctx);
               if (isInputRequiredResult(read)) return inputRequired(read);
@@ -2147,7 +2237,7 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
     return undefined;
   }
 
-  return async function handleMcpRequest(request: Request): Promise<Response> {
+  const handleMcpRequest = async function handleMcpRequest(request: Request): Promise<Response> {
     // Streamable HTTP requires Origin validation on every request to defeat
     // DNS rebinding; invalid browser origins are refused with 403.
     const origin = request.headers.get("origin");
@@ -2329,6 +2419,13 @@ export function createMcpHandler(options: McpHandlerOptions): McpHandler {
       );
     }
   };
+  const explicitExpose = options.exposeInternalErrors !== undefined;
+  Object.defineProperty(handleMcpRequest, MCP_APP_PRODUCTION_HOOK, {
+    value: (production: boolean): void => {
+      if (production && !explicitExpose) exposeInternalErrors = false;
+    },
+  });
+  return handleMcpRequest;
 }
 
 /**
@@ -2364,6 +2461,11 @@ export interface McpRoutesOptions {
  * it — MCP tools are model-controlled and side-effecting. Cover the route with
  * an auth middleware (e.g. `app.use(bearerAuth({ ... }))`), or pass
  * `{ public: true }` to intentionally expose a public MCP server.
+ *
+ * The `POST` route also carries a hidden `Symbol.for("daloyjs.mcp.appProduction")`
+ * callback so the host App can report its resolved production environment;
+ * it can only force internal-error redaction on (see
+ * {@link McpHandlerOptions.exposeInternalErrors}).
  *
  * @param path - Public MCP endpoint path, usually `"/mcp"`.
  * @param handler - Handler returned by {@link createMcpHandler}.
@@ -2452,6 +2554,18 @@ export function mcpRoutes(
         (route as unknown as Record<PropertyKey, unknown>)[Symbol.for("daloyjs.mcp.route")] = true;
       }
     }
+  }
+  // Forward the handler's App-production hook onto the POST route so the App
+  // can report its resolved environment at registration time
+  // (`route[Symbol.for("daloyjs.mcp.appProduction")]?.(isProduction())`).
+  // The hook can only force error redaction on, never off.
+  const productionHook = (handler as unknown as Record<PropertyKey, unknown>)[
+    MCP_APP_PRODUCTION_HOOK
+  ];
+  if (typeof productionHook === "function") {
+    // Plain assignment (enumerable, like the MCP route marker) so the hook
+    // survives `app.route({ ...route })` spreads.
+    (routes[0] as unknown as Record<PropertyKey, unknown>)[MCP_APP_PRODUCTION_HOOK] = productionHook;
   }
   return routes;
 }

@@ -146,8 +146,17 @@ export default function Page() {
         signature with a <code>401</code> (<code>Cache-Control: no-store</code>)
         and stamps the verified result on <code>ctx.state.httpSignature</code>.
         Verification runs in <code>preBody</code>, before body I/O and
-        cache/idempotency replay hooks. Private stored responses still need
-        principal-specific keys. Signature verification alone does not verify
+        cache/idempotency replay hooks. The verified <code>keyid</code> is
+        recorded as the caller identity (since 1.3.7), so{" "}
+        <a href="/docs/response-cache#credentials-fail-closed">
+          <code>responseCache()</code>
+        </a>{" "}
+        bypasses signed requests unless a <code>principal</code> names the
+        signer, and{" "}
+        <a href="/docs/idempotency#security-notes">
+          <code>idempotency()</code>
+        </a>{" "}
+        scopes keys per signer by default. Signature verification alone does not verify
         the body: check any signed Content-Digest against the received bytes
         with <code>verifyContentDigest()</code>.
       </p>

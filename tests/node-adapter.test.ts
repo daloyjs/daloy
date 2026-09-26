@@ -4,7 +4,10 @@ import { once } from "node:events";
 import { request as httpRequest } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { z } from "zod";
-import { App } from "../src/index.js";
+import { App, bearerAuth, except, requestDecompression, sseResponse } from "../src/index.js";
+import { DALOY_RAW_STREAM } from "../src/app.js";
+import { Readable } from "node:stream";
+import { gzipSync } from "node:zlib";
 import { getConnInfo } from "../src/conn-info.js";
 import { serve as serveNode } from "../src/adapters/node.js";
 
@@ -526,6 +529,136 @@ test("node adapter: malformed Host port suffix returns 400 while a trailing-dot 
       /^HTTP\/1\.1 200\b/,
       `a valid trailing-dot hostname must remain accepted, got: ${validStatusLine}`
     );
+  } finally {
+    await handle.close();
+  }
+});
+
+// ---------- router / middleware path agreement (deepsec 2026-09-26) ----------
+//
+// The router matches the adapter's request-target while except(), tenancy,
+// HTTP signatures and the WAF re-parse request.url with WHATWG URL. A raw
+// `%2e%2e` segment, a `\`, or a Host such as `h\health?` used to make the two
+// disagree, so an exempt-looking path reached a protected handler.
+
+function buildExceptApp(): App {
+  const app = new App({ logger: false });
+  app.use(except(["/", "/health"], bearerAuth({ validate: (t) => t === "good" })));
+  const ok = z.object({ route: z.string(), rest: z.string().optional() }) as any;
+  app.route({
+    method: "GET",
+    path: "/",
+    operationId: "root",
+    responses: { 200: { description: "ok", body: ok } },
+    handler: async () => ({ status: 200 as const, body: { route: "/" } }),
+  });
+  app.route({
+    method: "GET",
+    path: "/health",
+    operationId: "health",
+    responses: { 200: { description: "ok", body: ok } },
+    handler: async () => ({ status: 200 as const, body: { route: "/health" } }),
+  });
+  app.route({
+    method: "GET",
+    path: "/users/:id",
+    operationId: "user",
+    responses: { 200: { description: "ok", body: ok } },
+    handler: async ({ params }) => ({
+      status: 200 as const,
+      body: { route: "/users/:id", rest: (params as { id: string }).id },
+    }),
+  });
+  app.route({
+    method: "GET",
+    path: "/admin/files/*",
+    operationId: "adminFiles",
+    responses: { 200: { description: "ok", body: ok } },
+    handler: async () => ({ status: 200 as const, body: { route: "/admin/files/*" } }),
+  });
+  return app;
+}
+
+test("node adapter: encoded dot segments and backslashes never reach a protected route under except()", async () => {
+  const { handle, port } = await startServer(buildExceptApp());
+  try {
+    const attacks = [
+      "/users/%2e%2e",
+      "/users/%2E%2e/",
+      "/users/.%2e",
+      "/admin/files/%2e%2e/%2e%2e/%2e%2e/health",
+      "/admin/files/..\\..\\..\\health",
+      "/admin/files/x/.%2E/%2e./%2e%2e/health",
+      // Absolute-form with a case-insensitive scheme, and bare relative forms.
+      "HTTP://127.0.0.1/admin/files/..\\..\\..\\health",
+      "Https://127.0.0.1/users/%2e%2e",
+      "users/%2e%2e",
+    ];
+    for (const target of attacks) {
+      const res = await rawHttp(
+        port,
+        `GET ${target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`
+      );
+      assert.doesNotMatch(res, /\/admin\/files\/\*|\/users\/:id/, `${target} must not run a protected handler: ${res}`);
+    }
+    // Unhappy path: the protected routes themselves still demand a token.
+    for (const target of ["/users/1", "/admin/files/a"]) {
+      const res = await rawHttp(
+        port,
+        `GET ${target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`
+      );
+      assert.match(res.split("\r\n")[0] ?? "", /^HTTP\/1\.1 401\b/, `${target} must stay protected`);
+    }
+    // Happy path: an ordinary param and an authenticated call still work.
+    const authed = await rawHttp(
+      port,
+      "GET /users/42 HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer good\r\nConnection: close\r\n\r\n"
+    );
+    assert.match(authed, /"rest":"42"/);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: a Host carrying path, query or fragment characters is refused with 400", async () => {
+  const { handle, port } = await startServer(buildExceptApp());
+  try {
+    for (const host of ["127.0.0.1\\health?", "127.0.0.1\\health#", "127.0.0.1/health?", "127.0.0.1?x", "user@127.0.0.1", "127.0.0.1%2fx"]) {
+      const res = await rawHttp(
+        port,
+        `GET /users/1 HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`
+      );
+      assert.match(res.split("\r\n")[0] ?? "", /^HTTP\/1\.1 400\b/, `Host ${host} must be rejected: ${res}`);
+    }
+    // Trusted X-Forwarded-Host gets the same shape check.
+    const proxied = await startServer(buildExceptApp(), { trustProxy: true });
+    try {
+      const res = await rawHttp(
+        proxied.port,
+        "GET /users/1 HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Forwarded-Host: a\\health?\r\nConnection: close\r\n\r\n"
+      );
+      assert.match(res.split("\r\n")[0] ?? "", /^HTTP\/1\.1 400\b/);
+      const bracket = await rawHttp(
+        proxied.port,
+        "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Forwarded-Host: [::1]:8080\r\nX-Forwarded-Proto: javascript\r\nConnection: close\r\n\r\n"
+      );
+      assert.match(bracket.split("\r\n")[0] ?? "", /^HTTP\/1\.1 200\b/, "bracketed IPv6 host stays valid");
+    } finally {
+      await proxied.handle.close();
+    }
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: a bogus trusted X-Forwarded-Proto falls back to the socket scheme", async () => {
+  const { handle, port } = await startServer(buildEchoApp(), { trustProxy: true });
+  try {
+    const res = await rawHttp(
+      port,
+      "GET /url HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Forwarded-Proto: evil://x/#\r\nConnection: close\r\n\r\n"
+    );
+    assert.match(res, /"url":"http:\/\/127\.0\.0\.1\/url"/);
   } finally {
     await handle.close();
   }
@@ -1276,6 +1409,229 @@ test("node adapter: with the parser cap disabled, the app-level guard still reje
     req += "\r\n";
     const statuses = await collectStatusLines(port, req);
     assert.deepEqual(statuses, [431]);
+  } finally {
+    await handle.close();
+  }
+});
+
+/**
+ * Strict RFC 9110 client: sends the headers, then the body only once an
+ * interim `100` arrives. Returns every status line seen within `waitMs`.
+ */
+function strictExpectClient(port: number, head: string, body: Buffer, waitMs = 2_000): Promise<number[]> {
+  return new Promise((resolve) => {
+    const sock = connect(port, "127.0.0.1", () => sock.write(head));
+    let buf = "";
+    let sent = false;
+    const done = () => {
+      sock.destroy();
+      resolve([...buf.matchAll(/HTTP\/\d\.\d (\d{3})/g)].map((m) => Number(m[1])));
+    };
+    const timer = setTimeout(done, waitMs);
+    sock.on("data", (d) => {
+      buf += d.toString("latin1");
+      if (!sent && buf.startsWith("HTTP/1.1 100")) {
+        sent = true;
+        sock.write(body);
+      }
+      if (/HTTP\/1\.1 [2-5]\d\d[\s\S]*\r\n\r\n/.test(buf)) {
+        clearTimeout(timer);
+        setTimeout(done, 50);
+      }
+    });
+    sock.on("error", () => undefined);
+  });
+}
+
+const chunked = (b: Buffer) =>
+  Buffer.concat([Buffer.from(b.length.toString(16) + "\r\n"), b, Buffer.from("\r\n0\r\n\r\n")]);
+
+test("node adapter: deferred Expect: 100-continue is answered for a raw-body route (chunked and large CL)", async () => {
+  // Regression: the solicit fired only from schema body parsing, so a handler
+  // reading `request.text()` itself never got a `100` and a strict client hung.
+  const app = new App({ logger: false });
+  app.route({
+    method: "POST",
+    path: "/webhook",
+    operationId: "webhook",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: async ({ request }: { request: Request }) => new Response(String((await request.text()).length)),
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    const body = Buffer.from("w".repeat(300_000));
+    const viaChunked = await strictExpectClient(
+      port,
+      "POST /webhook HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n",
+      chunked(body)
+    );
+    assert.deepEqual(viaChunked, [100, 200]);
+    const viaLength = await strictExpectClient(
+      port,
+      `POST /webhook HTTP/1.1\r\nHost: t\r\nContent-Length: ${body.length}\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n`,
+      body
+    );
+    assert.deepEqual(viaLength, [100, 200]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: deferred Expect: 100-continue is answered when requestDecompression reads the body", async () => {
+  const app = new App({ logger: false });
+  app.use(requestDecompression({ maxDecompressedBytes: 1024 * 1024 }));
+  app.route({
+    method: "POST",
+    path: "/echo",
+    operationId: "echoPost",
+    request: { body: z.object({ value: z.string() }) as any },
+    responses: { 200: { description: "ok", body: z.object({ value: z.string() }) as any } },
+    handler: async ({ body }) => ({ status: 200 as const, body: body as { value: string } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const statuses = await strictExpectClient(
+      port,
+      "POST /echo HTTP/1.1\r\nHost: t\r\nContent-Type: application/json\r\nContent-Encoding: gzip\r\n" +
+        "Transfer-Encoding: chunked\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n",
+      chunked(gzipSync(Buffer.from(JSON.stringify({ value: "hello" }))))
+    );
+    assert.deepEqual(statuses, [100, 200]);
+  } finally {
+    await handle.close();
+  }
+});
+
+test("[unhappy] node adapter: a chunked Expect body that no one reads is never solicited", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "POST",
+    path: "/ignores-body",
+    operationId: "ignoresBody",
+    responses: { 200: { description: "ok" } },
+    acknowledgeNoResponseBodySchema: true,
+    handler: () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  const { handle, port } = await startServer(app);
+  try {
+    const statuses = await collectStatusLines(
+      port,
+      "POST /ignores-body HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n"
+    );
+    assert.deepEqual(statuses, [200]);
+  } finally {
+    await handle.close();
+  }
+});
+
+async function waitFor(pred: () => boolean, ms = 2_000): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (pred()) return true;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  return pred();
+}
+
+/** Open a streaming GET, wait for the first body chunk, then hang up. */
+async function readFirstChunkThenDrop(port: number, path: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const req = httpRequest({ port, host: "127.0.0.1", path }, (res) => {
+      res.once("data", () => {
+        req.destroy();
+        resolve();
+      });
+    });
+    req.on("error", () => undefined);
+    req.setTimeout(2_000, () => reject(new Error("no first chunk")));
+    req.end();
+  });
+}
+
+test("[unhappy] node adapter: client disconnect cancels an SSE body (generator finalized)", async () => {
+  // Regression: `pipe()` never destroyed the source when the client hung up, so
+  // the web stream was never cancelled and the generator leaked forever.
+  let finalized = 0;
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/sse",
+    operationId: "sse",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: () =>
+      sseResponse(
+        async function* () {
+          try {
+            for (let i = 0; ; i++) {
+              yield { data: String(i) };
+              await new Promise((r) => setTimeout(r, 20));
+            }
+          } finally {
+            finalized++;
+          }
+        },
+        { keepAliveMs: 10 }
+      ),
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    await readFirstChunkThenDrop(port, "/sse");
+    assert.ok(await waitFor(() => finalized === 1), "generator finally must run after disconnect");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("[unhappy] node adapter: client disconnect destroys a raw Node Readable body", async () => {
+  let source: Readable | undefined;
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/raw",
+    operationId: "raw",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: () => {
+      let i = 0;
+      source = new Readable({
+        read() {
+          setTimeout(() => this.push(`chunk ${i++}\n`), 10);
+        },
+      });
+      const res = new Response(null, { status: 200, headers: { "content-type": "text/plain" } });
+      (res as any)[DALOY_RAW_STREAM] = source;
+      return res;
+    },
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    await readFirstChunkThenDrop(port, "/raw");
+    assert.ok(await waitFor(() => source?.destroyed === true), "source must be destroyed");
+  } finally {
+    await handle.close();
+  }
+});
+
+test("node adapter: a streamed SSE body that completes normally still ends cleanly (happy path)", async () => {
+  const app = new App({ logger: false });
+  app.route({
+    method: "GET",
+    path: "/sse-short",
+    operationId: "sseShort",
+    acknowledgeNoResponseBodySchema: true,
+    responses: { 200: { description: "ok" } },
+    handler: () =>
+      sseResponse(async function* () {
+        yield { event: "a", data: "1" };
+        yield { event: "b", data: "2" };
+      }),
+  } as any);
+  const { handle, port } = await startServer(app);
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/sse-short`);
+    assert.equal(await res.text(), "event: a\ndata: 1\n\nevent: b\ndata: 2\n\n");
   } finally {
     await handle.close();
   }

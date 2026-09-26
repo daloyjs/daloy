@@ -207,7 +207,7 @@ app.use(cors({                  // explicit allowlist; never * with credentials
   credentials: true,
   methods: ["GET", "POST"],
 }));
-app.use(rateLimit({             // global by default; add keyGenerator or trusted proxy headers for per-client limits
+app.use(rateLimit({             // per TCP peer by default; configure trustedProxies behind a proxy
   windowMs: 60_000,
   max: 120,
 }));
@@ -549,9 +549,10 @@ app.use(basicAuth({
         DaloyJS no longer trusts <code>X-Forwarded-For</code> or{" "}
         <code>X-Real-IP</code> by default when deriving a rate-limit key. Those
         headers are client-spoofable unless your reverse proxy strips and
-        rewrites them. The default limiter is therefore global until you provide
-        an explicit <code>keyGenerator</code> or opt in to{" "}
-        <code>trustProxyHeaders: true</code> / <code>trustedProxies</code>{" "}
+        rewrites them. The default limiter therefore keys on the unspoofable TCP
+        peer (since 1.3.7; one shared bucket only on runtimes that expose no
+        peer) until you provide an explicit <code>keyGenerator</code> or opt in
+        to <code>trustProxyHeaders: true</code> / <code>trustedProxies</code>{" "}
         behind a trusted proxy. When proxy headers are trusted, the key is the{" "}
         <strong>rightmost</strong> <code>X-Forwarded-For</code> entry (the one
         your proxy appended), never an attacker-prepended left entry. Multi-hop

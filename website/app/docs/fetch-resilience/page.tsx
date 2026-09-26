@@ -138,7 +138,10 @@ const res = await safeFetch("https://api.example.com/things");`}
         {". "}A timeout combines with any caller-supplied <code>signal</code>
         {": "}a caller-initiated abort surfaces as the caller&rsquo;s own{" "}
         <code>AbortError</code> and is <strong>never</strong> retried or counted
-        as an upstream failure.
+        as an upstream failure. The timeout also reaches{" "}
+        <code>fetchGuard()</code>&apos;s DNS-pinned <code>http:</code> path,
+        which honours the request&apos;s <code>AbortSignal</code> (since 1.3.7),
+        so a stalled pinned socket is torn down rather than left open.
       </p>
       <CodeBlock
         code={`import { resilientFetch, FetchTimeoutError } from "@daloyjs/core";
@@ -279,7 +282,10 @@ const rows = await breaker.execute(() => db.query("SELECT 1"));
           replaces <code>fetchGuard()</code>
           {", "}it wraps it. An <code>SsrfBlockedError</code> is a terminal
           refusal: it bubbles unchanged, is never retried, and never trips the
-          circuit breaker.
+          circuit breaker. That includes{" "}
+          <code>redirect-body-not-replayable</code> (a <code>307</code>/
+          <code>308</code> of a streamed body), since resending a consumed
+          stream cannot succeed.
         </li>
         <li>
           Bounded amplification. Retries are capped and scoped to idempotent

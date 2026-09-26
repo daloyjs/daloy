@@ -192,6 +192,34 @@ app.post(
         responses larger than <code>maxResponseBytes</code> (1&nbsp;MiB by
         default).
       </p>
+      <h3 id="raw-body-routes">Raw-body routes</h3>
+      <p>
+        On a route with a body schema the fingerprint hashes the parsed{" "}
+        <code>ctx.body</code>. A route with no body schema (a webhook, a text
+        or form handler, or one that calls <code>ctx.request.text()</code>)
+        has no parsed body, so the middleware reads the raw bytes from a clone
+        and hashes them together with the <code>Content-Type</code> (since
+        2.0.0). The handler can still consume the original body. Reusing a key
+        with different raw bytes gets the usual <code>422</code>. A body
+        larger than <code>maxFingerprintBodyBytes</code> (1&nbsp;MiB by
+        default, matching <code>bodyLimitBytes</code>) is refused with{" "}
+        <code>413</code> rather than fingerprinted without its payload, which
+        could replay a different request&apos;s response. The effective cap
+        is the smaller of <code>maxFingerprintBodyBytes</code> and the
+        App&apos;s <code>bodyLimitBytes</code>. If a hook mounted earlier has
+        already consumed a keyed request&apos;s raw body, the request fails
+        closed with <code>500</code>; mount <code>idempotency()</code> first
+        or declare a body schema.
+      </p>
+      <CodeBlock
+        code={`app.use(
+  idempotency({
+    // Raise alongside bodyLimitBytes when raw-body routes accept larger uploads.
+    maxFingerprintBodyBytes: 4 * 1024 * 1024,
+  }),
+);`}
+        language="ts"
+      />
 
       <h2 id="options">Options</h2>
       <CodeBlock
@@ -211,11 +239,15 @@ app.post(
     maxKeyLength: 255,
     // Largest response body buffered + stored. Default: 1 MiB.
     maxResponseBytes: 1_048_576,
+    // Largest raw request body read to fingerprint a route with no body
+    // schema; larger bodies get 413. Default: 1 MiB. (since 1.3.7)
+    maxFingerprintBodyBytes: 1_048_576,
     // Decide whether a response is cached. Default: status < 500.
     cacheableStatus: (status) => status < 500,
     // Share one in-memory store across mounts with the same id.
     groupId: "payments",
-    // Namespace keys by caller. Default: hash of the Authorization header.
+    // Namespace keys by caller. Default: hash of the Authorization header plus
+    // any clientCertAuth() / httpSignatureAuth() identity.
     scope: (ctx) => (ctx.state.session as { id?: string } | undefined)?.id,
   }),
 );`}
@@ -312,7 +344,12 @@ async function createChargeWithRetries(amount: number) {
           <code>Idempotency-Key</code> with the same body would receive that
           client&apos;s stored response. The store key is namespaced by the
           caller, defaulting to the <code>Authorization</code> header so the
-          common bearer- / API-key case is isolated automatically. For
+          common bearer- / API-key case is isolated automatically. The default
+          also folds in the identity recorded by <code>clientCertAuth()</code>{" "}
+          (the certificate) or <code>httpSignatureAuth()</code> (the signing
+          key), so mTLS and signed callers, which send no{" "}
+          <code>Authorization</code>, are scoped per peer without configuration
+          (since 1.3.7). For
           cookie-based sessions, pass a stable identity via <code>scope</code>
           {", "}
           e.g.{" "}

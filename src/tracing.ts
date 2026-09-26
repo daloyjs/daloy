@@ -31,6 +31,7 @@
  */
 
 import type { Hooks } from "./types.js";
+import { sanitizeUrlQueryForLog } from "./logger.js";
 
 /** OpenTelemetry `SpanKind.SERVER`. Hard-coded so we don't pull in `@opentelemetry/api`. */
 export const TRACING_SPAN_KIND_SERVER = 1;
@@ -103,6 +104,21 @@ export interface OtelTracingOptions {
   /** Run after span creation for custom span setup. */
   onSpanStart?: (req: Request, span: TracingSpan) => void;
   /**
+   * How the request query string is recorded as the `url.query` attribute.
+   *
+   * - omitted (default): redacted with the same rules the framework logger
+   *   applies to logged URLs (`sanitizeUrlForLog`) — values of sensitive keys
+   *   such as `code`, `access_token`, `id_token`, `X-Amz-Signature`, `sig`,
+   *   and JWT/credential-shaped values become `[REDACTED]`.
+   * - a function: receives the raw query (without `?`) and returns the value
+   *   to record, or `undefined` to omit the attribute. You own the redaction.
+   * - `false`: record the raw query verbatim. **Unsafe** — OAuth codes,
+   *   bearer tokens and presigned-URL signatures reach the tracing backend.
+   *
+   * @since 1.3.7
+   */
+  redactQuery?: false | ((query: string) => string | undefined);
+  /**
    * Key under which the active span is exposed on `ctx.state` for handlers.
    * Default: `"otelSpan"`.
    */
@@ -155,12 +171,21 @@ function endOnce(entry: TracingEntry, attrs?: TracingAttributes): void {
  *
  * @param opts Tracer plus optional span naming, attribute, and context
  *   extraction hooks; see {@link OtelTracingOptions}.
+ *   The `url.query` attribute is redacted by default (see
+ *   {@link OtelTracingOptions.redactQuery}).
  * @returns A {@link Hooks} object that starts a SERVER span per request,
  *   exposes it on `ctx.state[stateKey]`, records exceptions, marks 5xx
  *   responses as errors, and ends the span exactly once on send.
  */
 export function otelTracing(opts: OtelTracingOptions): Hooks {
   const stateKey = opts.stateKey ?? "otelSpan";
+  const redactQuery = opts.redactQuery;
+  const recordQuery = (search: string): string | undefined => {
+    const raw = search.slice(1);
+    if (redactQuery === false) return raw;
+    if (typeof redactQuery === "function") return redactQuery(raw);
+    return sanitizeUrlQueryForLog(raw);
+  };
 
   const startEntry = (req: Request): TracingEntry => {
     const existing = REQUEST_TO_ENTRY.get(req);
@@ -179,7 +204,10 @@ export function otelTracing(opts: OtelTracingOptions): Hooks {
       // `url.hostname`/`url.port` rather than `url.host` (which concatenates them).
       if (url.hostname) attrs["server.address"] = url.hostname;
       if (url.port) attrs["server.port"] = Number(url.port);
-      if (url.search) attrs["url.query"] = url.search.replace(/^\?/, "");
+      if (url.search) {
+        const query = recordQuery(url.search);
+        if (query !== undefined) attrs["url.query"] = query;
+      }
     }
     const ua = req.headers.get("user-agent");
     if (ua) attrs["user_agent.original"] = ua;

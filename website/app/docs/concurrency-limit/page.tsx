@@ -69,7 +69,11 @@ export default function Page() {
         </li>
         <li>
           releases its slot when the response is finalized: on success, error,
-          and short-circuit paths alike, so a slot is never leaked.
+          and short-circuit paths alike, so a slot is never leaked. The release
+          also runs as a per-request finalizer in the dispatcher&apos;s{" "}
+          <code>finally</code> block, so the slot comes back even when another
+          middleware&apos;s <code>onSend</code> or <code>onError</code> hook
+          throws, and it is never released twice (since 1.3.7).
         </li>
       </ul>
 
@@ -131,9 +135,17 @@ app.use(concurrencyLimit({
         </li>
         <li>
           <code>&quot;route&quot;</code>
-          {": "}a separate budget per <code>method + path</code>
-          {", "}so one hot endpoint can&apos;t starve the others mounted under
-          the same guard.
+          {": "}a separate budget per <code>method + matched route template</code>{" "}
+          (<code>ctx.routePath</code>, for example{" "}
+          <code>GET /reports/:id</code>), so one hot endpoint can&apos;t starve
+          the others mounted under the same guard. Because the key is the
+          template, not the concrete path, <code>/reports/1</code>
+          {", "}
+          <code>/reports/2</code>
+          {", "}and <code>/reports/1/</code> all share one budget: varying a
+          path parameter or a trailing slash cannot mint a fresh one (since
+          2.0.0). Requests that matched no route fall back to the concrete
+          pathname.
         </li>
         <li>
           <code>&quot;client&quot;</code>

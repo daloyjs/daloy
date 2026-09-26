@@ -95,7 +95,7 @@ test("fetchGuard: blocks loopback IPv4 by default", async () => {
 
 test("fetchGuard: blocks loopback IPv6 ::1 by default", async () => {
   const guarded = fetchGuard();
-  await assert.rejects(() => guarded("http://[::1]/admin"), SsrfBlockedError);
+  await assert.rejects(() => guarded("http://[::1]/admin"), (e: unknown) => e instanceof SsrfBlockedError && e.reason === "address-not-allowed");
 });
 
 test("fetchGuard: blocks RFC1918 ranges by default (10/8, 172.16/12, 192.168/16)", async () => {
@@ -112,12 +112,12 @@ test("fetchGuard: blocks RFC1918 ranges by default (10/8, 172.16/12, 192.168/16)
 
 test("fetchGuard: blocks IPv4-mapped IPv6 against the underlying v4 address", async () => {
   const guarded = fetchGuard();
-  await assert.rejects(() => guarded("http://[::ffff:169.254.169.254]/"), SsrfBlockedError);
+  await assert.rejects(() => guarded("http://[::ffff:169.254.169.254]/"), (e: unknown) => e instanceof SsrfBlockedError && e.reason === "address-not-allowed");
 });
 
 test("fetchGuard: blocks IPv6 link-local fe80::/10", async () => {
   const guarded = fetchGuard();
-  await assert.rejects(() => guarded("http://[fe80::1]/"), SsrfBlockedError);
+  await assert.rejects(() => guarded("http://[fe80::1]/"), (e: unknown) => e instanceof SsrfBlockedError && e.reason === "address-not-allowed");
 });
 
 test("fetchGuard: rejects non-http(s) protocols", async () => {
@@ -741,4 +741,361 @@ test("fetchGuard({ pinDns }): a 204 yields a null body, and multi-valued respons
   } finally {
     server.close();
   }
+});
+
+// ---------------------------------------------------------------------------
+// deepsec 2026-09-26 regressions
+// ---------------------------------------------------------------------------
+
+const isAddrBlock = (e: unknown) =>
+  e instanceof SsrfBlockedError && e.reason === "address-not-allowed";
+
+test("fetchGuard: IPv6 transition forms embedding a denied IPv4 are refused (DNS answers)", async () => {
+  const stub = recordingFetch();
+  const embedded = [
+    "64:ff9b::a9fe:a9fe", // NAT64 -> 169.254.169.254
+    "64:ff9b::a00:1", // NAT64 -> 10.0.0.1
+    "64:ff9b::7f00:1", // NAT64 -> 127.0.0.1
+    "64:ff9b:1::a00:1", // local-use NAT64
+    "2002:7f00:1::", // 6to4 -> 127.0.0.1
+    "2002:a9fe:a9fe::", // 6to4 -> 169.254.169.254
+    "::7f00:1", // IPv4-compatible -> 127.0.0.1
+    "::ffff:0:7f00:1", // SIIT -> 127.0.0.1
+    "::ffff:a00:1", // IPv4-mapped -> 10.0.0.1
+    "2001:0:4136:e378:8000:63bf:f5ff:fffe", // Teredo, client 10.0.0.1 (XOR)
+    "2001:0:a9fe:a9fe::1", // Teredo server 169.254.169.254
+  ];
+  for (const addr of embedded) {
+    const guard = fetchGuard({ fetch: stub.fn, resolve: async () => [addr] });
+    await assert.rejects(() => guard("http://evil.attacker.example/"), isAddrBlock, addr);
+  }
+  assert.equal(stub.calls.length, 0, "no transition address ever reaches the network");
+});
+
+test("fetchGuard: IPv6 transition forms embedding a denied IPv4 are refused (URL literals)", async () => {
+  const stub = recordingFetch();
+  const guard = fetchGuard({ fetch: stub.fn });
+  for (const u of [
+    "http://[64:ff9b::169.254.169.254]/",
+    "http://[64:ff9b::10.0.0.1]/",
+    "http://[2002:a9fe:a9fe::]/",
+    "http://[::127.0.0.1]/",
+    "http://[::ffff:0:127.0.0.1]/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://[64:ff9b:1::8.8.8.8]/", // local-use NAT64 is denied outright
+  ]) {
+    await assert.rejects(() => guard(u), isAddrBlock, u);
+  }
+  assert.equal(stub.calls.length, 0);
+});
+
+test("fetchGuard: embedded-IPv4 re-check fails closed even when the IPv6 range is allow-listed", async () => {
+  const stub = recordingFetch();
+  const guard = fetchGuard({
+    fetch: stub.fn,
+    allowAddresses: ["64:ff9b::/96", "64:ff9b:1::/48"],
+    resolve: async () => ["64:ff9b::a9fe:a9fe"],
+  });
+  await assert.rejects(() => guard("http://evil.attacker.example/"), isAddrBlock);
+  assert.equal(stub.calls.length, 0);
+});
+
+test("fetchGuard: NAT64 / 6to4 of a PUBLIC IPv4 stays reachable (DNS64 networks keep working)", async () => {
+  for (const addr of ["64:ff9b::5db8:d822", "2002:5db8:d822::1"]) {
+    const stub = recordingFetch();
+    const guard = fetchGuard({ fetch: stub.fn, resolve: async () => [addr] });
+    const res = await guard("http://example.com/");
+    assert.equal(res.status, 200, addr);
+    assert.equal(stub.calls.length, 1);
+  }
+  // Operator opt-in: allowAddresses + allowPrivate lift the local-use prefix
+  // and its (private) embedded IPv4.
+  const stub = recordingFetch();
+  const guard = fetchGuard({
+    fetch: stub.fn,
+    allowAddresses: ["64:ff9b:1::/48"],
+    allowPrivate: true,
+    resolve: async () => ["64:ff9b:1::a00:1"],
+  });
+  assert.equal((await guard("http://nat64.internal.example/")).status, 200);
+  // allowLoopback still re-enables ::1 (not mis-read as IPv4-compatible 0.0.0.1).
+  const loop = recordingFetch();
+  const lg = fetchGuard({ fetch: loop.fn, allowLoopback: true, pinDns: false });
+  assert.equal((await lg("http://[::1]/")).status, 200);
+});
+
+test("fetchGuard: bracketed IPv6 literals are classified by the deny list, public literals pass", async () => {
+  const resolved: string[] = [];
+  const stub = recordingFetch();
+  const guard = fetchGuard({
+    fetch: stub.fn,
+    resolve: async (h) => {
+      resolved.push(h);
+      return ["93.184.216.34"];
+    },
+  });
+  for (const u of ["http://[::1]/", "http://[fe80::1]/", "http://[fc00::1]/", "http://[::ffff:127.0.0.1]/"]) {
+    await assert.rejects(() => guard(u), isAddrBlock, u);
+  }
+  const ok = await guard("http://[2606:4700:4700::1111]/dns");
+  assert.equal(ok.status, 200);
+  assert.deepEqual(resolved, [], "IPv6 literals never reach the resolver");
+  // allowAddresses can now lift an IPv6 literal.
+  const allowed = fetchGuard({ fetch: recordingFetch().fn, allowAddresses: ["fc00::/7"] });
+  assert.equal((await allowed("http://[fc00::1]/")).status, 200);
+});
+
+async function startStallServer() {
+  const { createServer: createNetServer } = await import("node:net");
+  const sockets: import("node:net").Socket[] = [];
+  const server = createNetServer((s) => {
+    sockets.push(s);
+    s.on("data", () => { });
+    s.on("error", () => { });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = (server.address() as { port: number }).port;
+  return {
+    port,
+    close: () => {
+      for (const s of sockets) s.destroy();
+      server.close();
+    },
+  };
+}
+
+test("fetchGuard({ pinDns }): the request AbortSignal aborts a stalled pinned http: upstream", async () => {
+  const stall = await startStallServer();
+  try {
+    const guard = fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const t0 = Date.now();
+    await assert.rejects(
+      () => guard(`http://slow.invalid:${stall.port}/`, { signal: AbortSignal.timeout(100) }),
+      (e: unknown) => e instanceof Error && e.name === "TimeoutError"
+    );
+    assert.ok(Date.now() - t0 < 1000, "abort fired promptly");
+    // An already-aborted signal is refused before any dispatch.
+    const ac = new AbortController();
+    ac.abort();
+    await assert.rejects(
+      () => guard(`http://slow.invalid:${stall.port}/`, { signal: ac.signal }),
+      (e: unknown) => e instanceof Error && e.name === "AbortError"
+    );
+  } finally {
+    stall.close();
+  }
+});
+
+test("fetchGuard({ pinDns }): aborting mid-body errors the pinned response stream", async () => {
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.write("first-chunk");
+    // never ends
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = (server.address() as { port: number }).port;
+  try {
+    const ac = new AbortController();
+    const guard = fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const res = await guard(`http://stream.invalid:${port}/`, { signal: ac.signal });
+    assert.equal(res.status, 200);
+    const reader = res.body!.getReader();
+    await reader.read();
+    ac.abort();
+    await assert.rejects(() => reader.read(), (e: unknown) => e instanceof Error && e.name === "AbortError");
+    // Happy path: an un-aborted signal does not disturb a normal pinned fetch.
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+  const echo = await startEchoServer();
+  try {
+    const guard = fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    const res = await guard(`http://ok.invalid:${echo.port}/x`, { signal: AbortSignal.timeout(5000) });
+    assert.equal(((await res.json()) as { ok: boolean }).ok, true);
+  } finally {
+    echo.server.close();
+  }
+});
+
+async function start307Server() {
+  const seen: Array<{ url?: string; method?: string; body: string; auth?: string }> = [];
+  const server = createServer((req, res) => {
+    let b = "";
+    req.on("data", (c) => (b += c));
+    req.on("end", () => {
+      seen.push({ url: req.url, method: req.method, body: b, auth: req.headers.authorization });
+      if (req.url === "/hook") {
+        res.writeHead(307, { location: "/hook2" });
+        res.end();
+      } else if (req.url === "/perm") {
+        res.writeHead(308, { location: "/hook2" });
+        res.end();
+      } else {
+        res.writeHead(200);
+        res.end("ok");
+      }
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = (server.address() as { port: number }).port;
+  return { server, port, seen };
+}
+
+for (const pinned of [true, false]) {
+  test(`fetchGuard: 307/308 replays the request body on the re-validated hop (pinned=${pinned})`, async () => {
+    const up = await start307Server();
+    try {
+      const guard = fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+      const host = pinned ? `hooks.invalid:${up.port}` : `127.0.0.1:${up.port}`;
+      for (const path of ["/hook", "/perm"]) {
+        const res = await guard(`http://${host}${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ a: 1 }),
+        });
+        assert.equal(res.status, 200);
+        assert.equal(await res.text(), "ok");
+      }
+      assert.deepEqual(
+        up.seen.map((s) => `${s.method} ${s.url} ${s.body}`),
+        [
+          'POST /hook {"a":1}',
+          'POST /hook2 {"a":1}',
+          'POST /perm {"a":1}',
+          'POST /hook2 {"a":1}',
+        ]
+      );
+    } finally {
+      up.server.close();
+    }
+  });
+}
+
+test("fetchGuard: a 307 with a body is still re-validated — a redirect to metadata is refused", async () => {
+  const stub = recordingFetch([{ status: 307, headers: { location: "http://169.254.169.254/latest" } }]);
+  const guard = fetchGuard({ fetch: stub.fn, resolve: allowAllResolver("93.184.216.34") });
+  await assert.rejects(
+    () => guard("https://example.com/hook", { method: "POST", body: "payload" }),
+    isAddrBlock
+  );
+  assert.equal(stub.calls.length, 1);
+});
+
+test("fetchGuard: cross-origin 307 keeps the body but strips credentials", async () => {
+  const bodies: string[] = [];
+  const auths: Array<string | null> = [];
+  let n = 0;
+  const fn = (async (input: Request) => {
+    bodies.push(await input.text());
+    auths.push(input.headers.get("authorization"));
+    return n++ === 0
+      ? new Response(null, { status: 307, headers: { location: "https://other.example/in" } })
+      : new Response("ok");
+  }) as unknown as typeof fetch;
+  const guard = fetchGuard({ fetch: fn, resolve: allowAllResolver("93.184.216.34") });
+  const res = await guard("https://example.com/hook", {
+    method: "POST",
+    headers: { authorization: "Bearer test-token" },
+    body: "payload",
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(bodies, ["payload", "payload"]);
+  assert.deepEqual(auths, ["Bearer test-token", null]);
+});
+
+test("fetchGuard: 307 of a one-shot stream body is refused with a typed non-transient error", async () => {
+  const stub = recordingFetch([{ status: 307, headers: { location: "/again" } }]);
+  const guard = fetchGuard({ fetch: stub.fn, resolve: allowAllResolver("93.184.216.34") });
+  const body = new ReadableStream<Uint8Array>({
+    start(c) {
+      c.enqueue(new TextEncoder().encode("chunk"));
+      c.close();
+    },
+  });
+  await assert.rejects(
+    () => guard("https://example.com/upload", { method: "POST", body, duplex: "half" } as RequestInit),
+    (e: unknown) => e instanceof SsrfBlockedError && e.reason === "redirect-body-not-replayable"
+  );
+  assert.equal(stub.calls.length, 1);
+});
+
+// Review follow-up: stream bodies (init stream OR a Request input's body) are
+// never buffered; only in-memory bodies up to maxReplayBodyBytes replay.
+test("fetchGuard: a Request input's body is streamed, not buffered, and its 307 is refused", async () => {
+  const stub = recordingFetch([{ status: 307, headers: { location: "/again" } }]);
+  const guard = fetchGuard({ fetch: stub.fn, resolve: allowAllResolver("93.184.216.34") });
+  const proxied = new Request("https://example.com/upload", { method: "POST", body: "from-client" });
+  await assert.rejects(
+    () => guard(proxied),
+    (e: unknown) => e instanceof SsrfBlockedError && e.reason === "redirect-body-not-replayable"
+  );
+  assert.equal(stub.calls.length, 1);
+});
+
+test("fetchGuard({ pinDns }): a proxied Request stream body is piped through unbuffered", async () => {
+  const { server, port, received } = await startEchoServer();
+  try {
+    const guard = fetchGuard({ allowLoopback: true, resolve: async () => ["127.0.0.1"] });
+    let pulls = 0;
+    const enc = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulls++;
+        if (pulls > 3) c.close();
+        else c.enqueue(enc.encode(`part${pulls};`));
+      },
+    });
+    const incoming = new Request(`http://api.invalid:${port}/submit`, {
+      method: "POST",
+      body,
+      duplex: "half",
+    } as RequestInit);
+    const res = await guard(incoming);
+    assert.equal(res.status, 200);
+    assert.equal(received[0]?.body, "part1;part2;part3;");
+  } finally {
+    server.close();
+  }
+});
+
+test("fetchGuard: in-memory bodies above maxReplayBodyBytes are not buffered (307 refused), below replay", async () => {
+  const mk = () => recordingFetch([{ status: 307, headers: { location: "/again" } }, { status: 200 }]);
+  const big = mk();
+  const g1 = fetchGuard({ fetch: big.fn, resolve: allowAllResolver("93.184.216.34"), maxReplayBodyBytes: 16 });
+  await assert.rejects(
+    () => g1("https://example.com/u", { method: "POST", body: new Uint8Array(64) }),
+    (e: unknown) => e instanceof SsrfBlockedError && e.reason === "redirect-body-not-replayable"
+  );
+  for (const body of [new Uint8Array(8), "tiny", new Blob(["b"]), new URLSearchParams({ a: "1" })]) {
+    const small = mk();
+    const g2 = fetchGuard({ fetch: small.fn, resolve: allowAllResolver("93.184.216.34"), maxReplayBodyBytes: 16 });
+    const res = await g2("https://example.com/u", { method: "POST", body });
+    assert.equal(res.status, 200);
+    assert.equal(small.calls.length, 2);
+  }
+  assert.throws(() => fetchGuard({ maxReplayBodyBytes: -1 }), RangeError);
+});
+
+test("fetchGuard: multipart filenames count toward the redirect replay cap", async () => {
+  const responses = [{ status: 307, headers: { location: "/again" } }, { status: 200 }];
+  const large = new FormData();
+  large.append("file", new Blob(["x"]), "name".repeat(5_000));
+  const refused = recordingFetch(responses);
+  const guard = fetchGuard({ fetch: refused.fn, resolve: allowAllResolver("93.184.216.34"), maxReplayBodyBytes: 512 });
+  await assert.rejects(
+    () => guard("https://example.com/upload", { method: "POST", body: large }),
+    (error: unknown) => error instanceof SsrfBlockedError && error.reason === "redirect-body-not-replayable"
+  );
+  assert.equal(refused.calls.length, 1);
+
+  const small = new FormData();
+  small.append("file", new Blob(["x"]), "a.txt");
+  const replayed = recordingFetch(responses);
+  const replayGuard = fetchGuard({ fetch: replayed.fn, resolve: allowAllResolver("93.184.216.34"), maxReplayBodyBytes: 512 });
+  assert.equal((await replayGuard("https://example.com/upload", { method: "POST", body: small })).status, 200);
+  assert.equal(replayed.calls.length, 2);
 });

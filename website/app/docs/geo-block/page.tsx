@@ -233,6 +233,54 @@ geoBlock({ allow, resolveCountry: (c) => c.request.headers.get("fastly-geo-count
         Override either way with <code>allowUnknownCountry</code>.
       </p>
 
+      <h3 id="unresolved-client-ip">When the forwarded client IP cannot be resolved</h3>
+      <p>
+        With the built-in forwarded-IP resolver (<code>trustProxyHeaders</code>
+        {", "}
+        <code>trustedHops</code>
+        {", "}or <code>trustedProxies</code>), a request can arrive without a
+        usable client IP: the peer is not one of your trusted proxies, or the{" "}
+        <code>X-Forwarded-For</code> chain is missing or shorter than{" "}
+        <code>trustedHops</code>. That usually means someone skipped your CDN
+        and hit the origin directly. <code>onUnresolvedIp</code> (since 1.3.7)
+        decides what happens:
+      </p>
+      <ul>
+        <li>
+          <code>&quot;peer&quot;</code> (default): look up the immediate TCP
+          peer address instead. The peer cannot be spoofed, so a client in a
+          denied country cannot pass just by bypassing the CDN. A
+          peer-derived country can only <strong>block</strong>, never allow: if
+          it would be allowed, the request is still treated as an unknown
+          country (the peer may be your own proxy, whose country says nothing
+          about the client), so allow-lists stay fail-closed.
+        </li>
+        <li>
+          <code>&quot;unknown&quot;</code>: treat the country as unknown and let{" "}
+          <code>allowUnknownCountry</code> decide (deny-only configs let it
+          through). This was the behaviour before 1.3.7.
+        </li>
+      </ul>
+      <p>
+        On platforms with no socket peer the country is unknown either way.
+        The option is ignored when you supply <code>resolveCountry</code> or a
+        custom <code>resolveIp</code>. The cleanest fix is still to declare{" "}
+        <code>trustedProxies</code> and make the origin unreachable except
+        through your proxy.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`app.use(
+  geoBlock({
+    deny: ["KP", "IR"],
+    trustedProxies: ["10.0.0.0/8"], // your load balancer range
+    lookupCountry: (ip) => reader.get(ip)?.country?.iso_code,
+    // default "peer": a direct-to-origin request is geolocated by its socket peer
+    onUnresolvedIp: "peer",
+  }),
+);`}
+      />
+
       <h2 id="monitoring-before-enforcing">Monitoring before enforcing</h2>
       <p>
         Roll out safely with <code>mode: &quot;log&quot;</code>

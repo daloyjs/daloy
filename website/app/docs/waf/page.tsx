@@ -241,14 +241,63 @@ app.use(waf({ rules: { sqli: { score: 8 } } }));`}
   },
 }));`}
       />
+      <h2 id="scan-limits">Scan limits never fail open</h2>
       <p>
         Scanning is bounded so a hostile payload cannot turn inspection into
-        CPU-DoS: <code>maxValueLength</code> (default <code>8192</code>) caps
-        the length of any single scanned string, and <code>maxBodyNodes</code>{" "}
-        (default <code>10000</code>) caps how many body nodes are walked. Only
-        own enumerable properties are followed. Prototype keys are never
-        inspected.
+        CPU-DoS, but the bounds no longer leave anything uninspected (since
+        2.0.0). <code>maxValueLength</code> (default <code>8192</code>) is the
+        scan-window size: a longer string is scanned in overlapping windows
+        (plus a whitespace-collapsed form), not truncated to its prefix, so
+        padding a payload past the first 8 KB does not hide it. Total work
+        stays linear in the body-limited input. Only own enumerable properties
+        are followed. Prototype keys are never inspected.
       </p>
+      <p>
+        <code>maxBodyNodes</code> (default <code>10000</code>) caps how many
+        body nodes are walked. An attacker could hide a payload behind 10,000
+        junk nodes, so a walk that stops at the cap with nodes left over is
+        itself treated as an anomaly. <code>onLimitExceeded</code> (since
+        2.0.0) decides what happens:
+      </p>
+      <ul>
+        <li>
+          <code>&quot;block&quot;</code> (default): record a synthetic match
+          with <code>ruleId: &quot;limits&quot;</code> scoring{" "}
+          <code>blockThreshold</code>. The request is rejected in block mode
+          and reported through <code>onMatch</code> in log mode.
+        </li>
+        <li>
+          <code>&quot;log&quot;</code>: report through <code>onMatch</code>{" "}
+          (action <code>&quot;logged&quot;</code>) but never reject on this
+          ground alone. A real signature match still blocks.
+        </li>
+        <li>
+          <code>&quot;ignore&quot;</code>: inspect the first{" "}
+          <code>maxBodyNodes</code> nodes only (the pre-1.3.7 behaviour, which
+          fails open).
+        </li>
+      </ul>
+      <p>
+        This means a body with more than 10,000 nodes is now blocked by
+        default. Routes that legitimately accept large documents (bulk
+        imports, batch upserts) should raise <code>maxBodyNodes</code> or
+        switch to <code>&quot;log&quot;</code>:
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`// Bulk-import routes: a larger node budget, still blocking when exceeded.
+app.use(waf({ maxBodyNodes: 200_000 }));
+
+// Or keep the default budget but only report oversized bodies.
+app.use(waf({
+  onLimitExceeded: "log",
+  onMatch: (event) => {
+    if (event.matches.some((m) => m.ruleId === "limits")) {
+      logger.warn({ path: event.path }, "waf: body exceeded maxBodyNodes");
+    }
+  },
+}));`}
+      />
 
       <h2 id="security-notes">Security notes</h2>
       <ul>

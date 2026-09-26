@@ -10,6 +10,11 @@ import {
   type AutoBanRecord,
   type AutoBanEvent,
 } from "../src/index.js";
+import {
+  applyAutoBanStrike,
+  type AutoBanStrikePolicy,
+  type AutoBanStrikeResult,
+} from "../src/auto-ban.js";
 
 // ---------- helpers ----------
 
@@ -346,4 +351,169 @@ test("MemoryAutoBanStore expires entries past their TTL", async () => {
   assert.ok(await store.get("k"));
   await store.delete("k");
   assert.equal(await store.get("k"), undefined);
+});
+
+// ---------- atomic strike accounting + store outages (deepsec 2026-09-26) ----------
+
+/** A networked-style store (get/set only) with injected round-trip latency. */
+function laggyStore(): AutoBanStore & { mem: Map<string, AutoBanRecord> } {
+  const mem = new Map<string, AutoBanRecord>();
+  const rtt = () => new Promise((r) => setTimeout(r, 2));
+  return {
+    mem,
+    async get(k) {
+      await rtt();
+      const v = mem.get(k);
+      return v ? { ...v } : undefined;
+    },
+    async set(k, v) {
+      await rtt();
+      mem.set(k, { ...v });
+    },
+    async delete(k) {
+      mem.delete(k);
+    },
+  };
+}
+
+const POLICY: AutoBanStrikePolicy = {
+  windowMs: 60_000,
+  maxStrikes: 5,
+  banMs: 1_000,
+  maxBanMs: 10_000,
+  escalate: true,
+};
+
+test("concurrent failures against a get/set-only store are all counted", async () => {
+  const bans: AutoBanEvent[] = [];
+  let maxStrikes = 0;
+  const app = appWith({
+    keyGenerator: byHeader,
+    store: laggyStore(),
+    maxStrikes: 5,
+    onBan: (e) => bans.push(e),
+    onStrike: (e) => (maxStrikes = Math.max(maxStrikes, e.strikes)),
+  });
+  const statuses = await Promise.all(Array.from({ length: 20 }, () => app.fetch(req("/fail"))));
+  assert.ok(statuses.every((r) => r.status === 401));
+  // 20 strikes / 5 per ban = 4 bans with escalating counts (lost updates gave 1).
+  assert.equal(bans.length, 4);
+  assert.deepEqual(
+    bans.map((b) => b.banCount),
+    [1, 2, 3, 4]
+  );
+  assert.equal(maxStrikes, 5);
+  assert.equal((await app.fetch(req("/ok"))).status, 429);
+});
+
+test("a store's atomic strike() is preferred over get/set in onSend", async () => {
+  const inner = new MemoryAutoBanStore();
+  let strikeCalls = 0;
+  let sets = 0;
+  const store: AutoBanStore = {
+    get: (k) => inner.get(k),
+    set: async (k, r, t) => {
+      sets++;
+      await inner.set(k, r, t);
+    },
+    delete: (k) => inner.delete(k),
+    strike: async (k, p, now) => {
+      strikeCalls++;
+      await new Promise((r) => setTimeout(r, 2));
+      return inner.strike(k, p, now);
+    },
+  };
+  const app = appWith({ keyGenerator: byHeader, store, maxStrikes: 3 });
+  await Promise.all(Array.from({ length: 3 }, () => app.fetch(req("/fail"))));
+  assert.equal(strikeCalls, 3);
+  assert.equal(sets, 0);
+  assert.equal((await app.fetch(req("/ok"))).status, 429);
+});
+
+test("MemoryAutoBanStore.strike is atomic under concurrency", async () => {
+  const store = new MemoryAutoBanStore();
+  const now = Date.now();
+  const results: AutoBanStrikeResult[] = await Promise.all(
+    Array.from({ length: 50 }, () => store.strike("k", POLICY, now))
+  );
+  assert.equal(results.filter((r) => r.banned).length, 10);
+  assert.equal((await store.get("k"))?.banCount, 10);
+});
+
+test("applyAutoBanStrike: fresh record, window decay, ban and escalation cap", () => {
+  const now = 1_000_000;
+  const first = applyAutoBanStrike(undefined, POLICY, now);
+  assert.equal(first.result.strikes, 1);
+  assert.equal(first.result.banned, false);
+  assert.equal(first.ttlMs, POLICY.windowMs);
+  // An expired window resets the count.
+  const stale = { strikes: 4, strikeExpiresMs: now - 1, bannedUntilMs: 0, banCount: 0 };
+  assert.equal(applyAutoBanStrike(stale, POLICY, now).result.strikes, 1);
+  // Hitting maxStrikes bans and resets strikes; escalation is capped at maxBanMs.
+  const hot = { strikes: 4, strikeExpiresMs: now + 10, bannedUntilMs: 0, banCount: 9 };
+  const banned = applyAutoBanStrike(hot, POLICY, now);
+  assert.equal(banned.result.banned, true);
+  assert.equal(banned.result.banDurationMs, POLICY.maxBanMs);
+  assert.equal(banned.record.strikes, 0);
+  assert.equal(banned.record.banCount, 10);
+  assert.equal(banned.ttlMs, POLICY.windowMs);
+  const flat = applyAutoBanStrike(hot, { ...POLICY, escalate: false }, now);
+  assert.equal(flat.result.banDurationMs, POLICY.banMs);
+});
+
+test("a store outage while recording a strike does not turn into a 500", async () => {
+  let down = true;
+  const inner = new MemoryAutoBanStore();
+  const errors: string[] = [];
+  const store: AutoBanStore = {
+    get: (k) => inner.get(k),
+    set: (k, r, t) => inner.set(k, r, t),
+    delete: (k) => inner.delete(k),
+    strike: (k, p, now) =>
+      down ? Promise.reject(new Error("ECONNRESET")) : inner.strike(k, p, now),
+  };
+  const app = appWith({
+    keyGenerator: byHeader,
+    store,
+    maxStrikes: 2,
+    onStoreError: (_err, key) => errors.push(key),
+  });
+  const outage = await Promise.all([app.fetch(req("/fail")), app.fetch(req("/fail"))]);
+  assert.deepEqual(
+    outage.map((r) => r.status),
+    [401, 401]
+  );
+  assert.equal(errors.length, 2);
+  assert.equal((await app.fetch(req("/ok"))).status, 200);
+  // Store recovered: strikes resume and the ban arms.
+  down = false;
+  await app.fetch(req("/fail"));
+  await app.fetch(req("/fail"));
+  assert.equal((await app.fetch(req("/ok"))).status, 429);
+});
+
+test("a get/set store outage during a strike is also skipped, not a 500", async () => {
+  const errors: unknown[] = [];
+  const store: AutoBanStore = {
+    get: async () => undefined,
+    set: async () => {
+      throw new Error("down");
+    },
+    delete: async () => {},
+  };
+  const app = appWith({ keyGenerator: byHeader, store, onStoreError: (e) => errors.push(e) });
+  assert.equal((await app.fetch(req("/fail"))).status, 401);
+  assert.equal(errors.length, 1);
+});
+
+test("ban enforcement still fails closed when the store read errors", async () => {
+  const store: AutoBanStore = {
+    get: async () => {
+      throw new Error("down");
+    },
+    set: async () => {},
+    delete: async () => {},
+  };
+  const app = appWith({ keyGenerator: byHeader, store, onStoreError: () => {} });
+  assert.equal((await app.fetch(req("/ok"))).status, 500);
 });

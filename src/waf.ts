@@ -26,8 +26,12 @@
  * - Header inspection is **opt-in** (off by default) because header values
  *   (notably `User-Agent` / `Cookie`) carry parentheses and punctuation that can
  *   trip signatures; enable it with an explicit allowlist.
- * - Scanning is bounded: per-value length and total node-count caps keep a
- *   hostile or huge payload from turning inspection into CPU-DoS.
+ * - Scanning is bounded but never fails open: values longer than
+ *   {@link WafOptions.maxValueLength} are scanned in overlapping windows (cost
+ *   stays linear in the body-limited input), and a body walk truncated by
+ *   {@link WafOptions.maxBodyNodes} is itself flagged as an anomaly (see
+ *   {@link WafOptions.onLimitExceeded}), so padding cannot push a payload past
+ *   inspection.
  * - Signatures are curated for **high confidence / low false-positive rate**;
  *   this is a complement to, not a replacement for, input schemas and parameter
  *   binding. Start in `"log"` mode, watch `onMatch`, then switch to `"block"`.
@@ -71,6 +75,16 @@ const DEFAULT_MAX_VALUE_LENGTH = 8192;
 const DEFAULT_MAX_BODY_NODES = 10_000;
 
 /**
+ * Overlap between consecutive scan windows of an overlong value. Larger than
+ * any bounded signature span, so a match cannot straddle two windows.
+ */
+const WINDOW_OVERLAP = 512;
+
+/** Whitespace-run probe/collapser used only for overlong values. */
+const WS_RUN_PROBE = /\s\s/;
+const WS_RUN_GLOBAL = /\s+/g;
+
+/**
  * Where in the request a signature matched. Surfaced on {@link WafMatch} so
  * operators can see whether the hit came from the path, query string, an
  * inspected header, or the request body.
@@ -80,15 +94,28 @@ const DEFAULT_MAX_BODY_NODES = 10_000;
 export type WafInspectionLocation = "path" | "query" | "header" | "body";
 
 /**
+ * Longest word-character run any signature quantifier consumes. Every
+ * non-whitespace repetition is bounded by this (`{1,256}`), so, with
+ * whitespace collapsed, a match spans well under {@link WINDOW_OVERLAP} and can
+ * never straddle two scan windows unseen. Longer runs are shortened to this
+ * length in an extra inspection variant (see {@link capWordRuns}), so a
+ * `' OR <1000 digits>=<1000 digits>` tautology is still detected.
+ */
+const MAX_SIGNATURE_RUN = 256;
+
+/**
  * Curated, high-confidence signatures per rule. Patterns are deliberately
  * conservative (anchored on injection-specific tokens) to keep the
  * false-positive rate low; this is a defense-in-depth complement to schemas,
  * not an exhaustive ModSecurity CRS.
+ *
+ * Invariant (unit-tested): no unbounded `+` / `*` except on `\s`; other runs
+ * use `{1,256}` ({@link MAX_SIGNATURE_RUN}).
  */
 const SQLI_SIGNATURES: readonly RegExp[] = Object.freeze([
   /\bUNION\b[\s\S]{0,40}?\bSELECT\b/i,
-  /\b(?:OR|AND)\b\s+['"]?\d+['"]?\s*=\s*['"]?\d+/i,
-  /'\s*(?:OR|AND)\s+'?[\w]+'?\s*=\s*'?[\w]+/i,
+  /\b(?:OR|AND)\b\s+['"]?\d{1,256}['"]?\s*=\s*['"]?\d{1,256}/i,
+  /'\s*(?:OR|AND)\s+'?[\w]{1,256}'?\s*=\s*'?[\w]{1,256}/i,
   // Parenthesized subquery behind a boolean operator — `1 OR (SELECT 1)`. The
   // tautology patterns above anchor on `= <digit>`, so a subquery carrying no
   // comparison slipped through. Paired with the comment-stripped inspection
@@ -123,7 +150,7 @@ const XSS_SIGNATURES: readonly RegExp[] = Object.freeze([
 
 const NOSQLI_SIGNATURES: readonly RegExp[] = Object.freeze([
   /\$(?:ne|gt|gte|lt|lte|in|nin|where|regex|exists|elemMatch|expr|function|or|and|not)\b/i,
-  /\{\s*"?\$\w+/,
+  /\{\s*"?\$\w{1,256}/,
 ]);
 
 const CMDI_SIGNATURES: readonly RegExp[] = Object.freeze([
@@ -141,6 +168,52 @@ const SIGNATURES: Readonly<Record<WafRuleId, readonly RegExp[]>> = Object.freeze
   nosqli: NOSQLI_SIGNATURES,
   cmdi: CMDI_SIGNATURES,
 });
+
+/**
+ * Test-only view of the built-in signatures, used to assert the bounded-run
+ * invariant. Not part of the public API.
+ *
+ * @internal
+ */
+export const _WAF_SIGNATURES_FOR_TESTS = SIGNATURES;
+
+/** `true` for an ASCII word char (`[A-Za-z0-9_]`, i.e. regex `\w`). */
+function isWordCode(c: number): boolean {
+  return (
+    (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95
+  );
+}
+
+/**
+ * Shorten every word-character run longer than {@link MAX_SIGNATURE_RUN} to
+ * that length, or return `undefined` when no run is that long. Linear time (a
+ * char loop, not a regex probe, so benign long runs cost nothing quadratic).
+ */
+function capWordRuns(value: string): string | undefined {
+  let run = 0;
+  let parts: string[] | undefined;
+  let segStart = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (isWordCode(value.charCodeAt(i))) {
+      run++;
+      if (run === MAX_SIGNATURE_RUN + 1) {
+        // Drop this char and the rest of the run.
+        parts ??= [];
+        parts.push(value.slice(segStart, i));
+        let j = i + 1;
+        while (j < value.length && isWordCode(value.charCodeAt(j))) j++;
+        segStart = j;
+        i = j - 1;
+        run = 0;
+      }
+    } else {
+      run = 0;
+    }
+  }
+  if (!parts) return undefined;
+  parts.push(value.slice(segStart));
+  return parts.join("");
+}
 
 /**
  * Per-rule configuration. Pass a boolean to enable/disable a rule, or an object
@@ -162,8 +235,11 @@ export interface WafRuleConfig {
  * @since 0.37.0
  */
 export interface WafMatch {
-  /** Which rule category fired. */
-  ruleId: WafRuleId;
+  /**
+   * Which rule category fired. `"limits"` (since 1.3.7) is the synthetic
+   * anomaly recorded when the body walk hit {@link WafOptions.maxBodyNodes}.
+   */
+  ruleId: WafRuleId | "limits";
   /** The anomaly score this rule contributed. */
   score: number;
   /** Where the first matching value was found. */
@@ -182,7 +258,11 @@ export interface WafMatch {
 export interface WafEvent {
   /** The mode the middleware is running in. */
   mode: WafMode;
-  /** Whether the request was rejected (`"block"`) or allowed through (`"log"`). */
+  /**
+   * Whether the request was rejected or allowed through. `"logged"` in log
+   * mode, and in block mode for a limits-only flag under
+   * `onLimitExceeded: "log"`.
+   */
   action: "blocked" | "logged";
   /** The request method. */
   method: string;
@@ -256,16 +336,35 @@ export interface WafOptions {
   /** Which request parts to inspect. See {@link WafInspectConfig}. */
   inspect?: WafInspectConfig;
   /**
-   * Cap on the length of any single string value that is scanned. Longer values
-   * are truncated to this prefix before matching. Default: `8192`. Must be a
-   * positive integer.
+   * Scan-window size for a single string value. Values up to this length are
+   * scanned whole; longer values are scanned in overlapping windows of this
+   * size (plus a whitespace-collapsed form), so total work stays linear in the
+   * input and a payload padded past the first window is still inspected.
+   * Default: `8192`. Must be a positive integer.
    */
   maxValueLength?: number;
   /**
    * Cap on the number of nodes walked when inspecting the body, to bound CPU on
    * deeply nested or huge payloads. Default: `10000`. Must be a positive integer.
+   * Hitting the cap leaves part of the body uninspected; see
+   * {@link onLimitExceeded} for how that is handled.
    */
   maxBodyNodes?: number;
+  /**
+   * What to do when the body walk stops at {@link maxBodyNodes} with nodes left
+   * uninspected (an attacker can hide a payload behind junk nodes).
+   *
+   * - `"block"` (default) — record a synthetic `"limits"` match scoring
+   *   {@link blockThreshold}, so the request is flagged: rejected in `"block"`
+   *   mode, reported via `onMatch` in `"log"` mode.
+   * - `"log"` — report via `onMatch` (action `"logged"`) but never reject on
+   *   this ground alone.
+   * - `"ignore"` — inspect the first `maxBodyNodes` nodes only (pre-1.3.7
+   *   behaviour; fails open).
+   *
+   * @since 1.3.7
+   */
+  onLimitExceeded?: "block" | "log" | "ignore";
   /**
    * Observability callback invoked once per flagged request (in both modes),
    * before any `403` is thrown. Receives the structured {@link WafEvent}. Must
@@ -393,22 +492,20 @@ const NON_ASCII_PROBE = /[^\x00-\x7F]/;
  * anchor on. Closing each evasion only in isolation leaves the combination open.
  *
  * Scanning variants is pure defense-in-depth: the handler still receives
- * whatever the framework's single-decode path produced. Each variant is
- * truncated to `maxValueLength` and deduplicated so hostile inputs cannot
- * explode the scan set.
+ * whatever the framework's single-decode path produced. The variant set is
+ * bounded (a fixed number of linear transforms) and deduplicated; overlong
+ * variants are windowed by {@link scanValueVariants}, never truncated.
  *
  * @param value - Raw or already-decoded string from path/query/header/body.
- * @param maxValueLength - Cap applied to every variant before scanning.
  * @returns Deduplicated inspection variants in stable insertion order.
  */
-function inspectionVariants(value: string, maxValueLength: number): string[] {
+function inspectionVariants(value: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   const push = (v: string): void => {
-    const truncated = v.length > maxValueLength ? v.slice(0, maxValueLength) : v;
-    if (!seen.has(truncated)) {
-      seen.add(truncated);
-      out.push(truncated);
+    if (!seen.has(v)) {
+      seen.add(v);
+      out.push(v);
     }
   };
 
@@ -461,6 +558,16 @@ function inspectionVariants(value: string, maxValueLength: number): string[] {
       push(v.replace(CONTROL_CHAR_GLOBAL, " "));
     }
   }
+
+  // Signature runs are bounded ({@link MAX_SIGNATURE_RUN}); shorten longer word
+  // runs so `' OR <1000 digits>=<digits>` still matches. Only the tautology
+  // signatures (which all need `=`) depend on a run being fully consumed.
+  for (const v of out.slice()) {
+    if (v.length > MAX_SIGNATURE_RUN && v.includes("=")) {
+      const capped = capWordRuns(v);
+      if (capped !== undefined) push(capped);
+    }
+  }
   return out;
 }
 
@@ -492,39 +599,73 @@ function scanValueVariants(
   scored: Map<WafRuleId, WafMatch>,
   maxValueLength: number
 ): void {
-  for (const variant of inspectionVariants(value, maxValueLength)) {
-    scanValue(variant, location, rules, scored);
+  for (const variant of inspectionVariants(value)) {
+    if (variant.length <= maxValueLength) {
+      scanValue(variant, location, rules, scored);
+    } else {
+      // Overlong: scan every window, never just the prefix, so padding cannot
+      // push a payload out of view. Also scan a whitespace-collapsed form so a
+      // long `\s` run cannot stretch a match across a window boundary.
+      scanWindows(variant, location, rules, scored, maxValueLength);
+      if (scored.size === rules.length) return;
+      if (WS_RUN_PROBE.test(variant)) {
+        const collapsed = variant.replace(WS_RUN_GLOBAL, " ");
+        if (collapsed.length <= maxValueLength) scanValue(collapsed, location, rules, scored);
+        else scanWindows(collapsed, location, rules, scored, maxValueLength);
+      }
+    }
     // Early exit once every rule has already fired — no further variants needed.
     if (scored.size === rules.length) return;
   }
 }
 
 /**
- * Collect up to `maxNodes` string values from a parsed body value (object /
- * array / scalar), each truncated to `maxValueLength`. Depth and node count are
- * bounded so a hostile payload cannot turn inspection into CPU-DoS. Prototype
- * keys are never followed (only own enumerable properties are walked).
+ * Scan an overlong value in windows of `maxValueLength` that overlap by
+ * {@link WINDOW_OVERLAP} (or half a window, if smaller). Every character is
+ * covered and the total scanned length is at most ~2x the input.
  */
-function collectBodyStrings(root: unknown, maxNodes: number, maxValueLength: number): string[] {
-  const out: string[] = [];
+function scanWindows(
+  value: string,
+  location: WafInspectionLocation,
+  rules: readonly ResolvedRule[],
+  scored: Map<WafRuleId, WafMatch>,
+  maxValueLength: number
+): void {
+  const overlap = Math.min(WINDOW_OVERLAP, maxValueLength >> 1);
+  const stride = maxValueLength - overlap;
+  for (let start = 0; ; start += stride) {
+    scanValue(value.slice(start, start + maxValueLength), location, rules, scored);
+    if (scored.size === rules.length || start + maxValueLength >= value.length) return;
+  }
+}
+
+/**
+ * Collect string values (and own keys) from a parsed body value into `out`,
+ * walking at most `maxNodes` nodes so a hostile payload cannot turn inspection
+ * into CPU-DoS. Prototype keys are never followed (only own enumerable
+ * properties are walked).
+ *
+ * @returns `true` when the walk was truncated with nodes left uninspected.
+ */
+function collectBodyStrings(root: unknown, maxNodes: number, out: string[]): boolean {
   const stack: unknown[] = [root];
   let visited = 0;
   while (stack.length > 0 && visited < maxNodes) {
     const node = stack.pop();
     visited++;
     if (typeof node === "string") {
-      out.push(node.length > maxValueLength ? node.slice(0, maxValueLength) : node);
+      out.push(node);
     } else if (Array.isArray(node)) {
       for (let i = node.length - 1; i >= 0; i--) stack.push(node[i]);
     } else if (node && typeof node === "object") {
       // Also scan own string keys — an injected `$where` can hide in a key.
       for (const key of Object.keys(node as Record<string, unknown>)) {
-        out.push(key.length > maxValueLength ? key.slice(0, maxValueLength) : key);
+        out.push(key);
         stack.push((node as Record<string, unknown>)[key]);
       }
     }
   }
-  return out;
+  return stack.length > 0;
 }
 
 /**
@@ -596,6 +737,12 @@ export function waf(opts: WafOptions = {}): Hooks {
   assertPositiveInteger(maxValueLength, "maxValueLength");
   const maxBodyNodes = opts.maxBodyNodes ?? DEFAULT_MAX_BODY_NODES;
   assertPositiveInteger(maxBodyNodes, "maxBodyNodes");
+  const onLimitExceeded = opts.onLimitExceeded ?? "block";
+  if (onLimitExceeded !== "block" && onLimitExceeded !== "log" && onLimitExceeded !== "ignore") {
+    throw new TypeError(
+      `waf(): \`onLimitExceeded\` must be "block", "log" or "ignore", received ${String(onLimitExceeded)}`
+    );
+  }
 
   const rules = resolveRules(opts.rules);
   const nosqliRule = rules.find((r) => r.ruleId === "nosqli");
@@ -612,6 +759,7 @@ export function waf(opts: WafOptions = {}): Hooks {
       if (rules.length === 0) return;
 
       const scored = new Map<WafRuleId, WafMatch>();
+      let limitMatch: WafMatch | undefined;
       const url = new URL(ctx.request.url);
 
       if (inspectPath) {
@@ -661,23 +809,38 @@ export function waf(opts: WafOptions = {}): Hooks {
         if (typeof ctx.body === "string") {
           scanValueVariants(ctx.body, "body", rules, scored, maxValueLength);
         } else if (typeof ctx.body === "object") {
-          const strings = collectBodyStrings(ctx.body, maxBodyNodes, maxValueLength);
+          const strings: string[] = [];
+          const truncated = collectBodyStrings(ctx.body, maxBodyNodes, strings);
           for (const value of strings) {
             scanValueVariants(value, "body", rules, scored, maxValueLength);
+          }
+          if (truncated && onLimitExceeded !== "ignore") {
+            // Part of the body went uninspected; a payload may hide there.
+            limitMatch = {
+              ruleId: "limits",
+              score: blockThreshold,
+              location: "body",
+              sample: `body exceeded maxBodyNodes (${maxBodyNodes})`,
+            };
           }
         }
       }
 
-      if (scored.size === 0) return;
+      if (scored.size === 0 && limitMatch === undefined) return;
 
-      let total = 0;
-      for (const match of scored.values()) total += match.score;
+      let signatureTotal = 0;
+      for (const match of scored.values()) signatureTotal += match.score;
+      const total = signatureTotal + (limitMatch?.score ?? 0);
       if (total < blockThreshold) return;
 
-      const matches = Array.from(scored.values());
+      // A limits-only flag under `onLimitExceeded: "log"` never rejects.
+      const enforce =
+        mode === "block" && (signatureTotal >= blockThreshold || onLimitExceeded === "block");
+      const matches: WafMatch[] = Array.from(scored.values());
+      if (limitMatch) matches.push(limitMatch);
       const event: WafEvent = {
         mode,
-        action: mode === "block" ? "blocked" : "logged",
+        action: enforce ? "blocked" : "logged",
         method: ctx.request.method,
         path: url.pathname,
         clientIp: readRemoteAddress(ctx),
@@ -687,7 +850,7 @@ export function waf(opts: WafOptions = {}): Hooks {
       };
       onMatch?.(event);
 
-      if (mode === "block") {
+      if (enforce) {
         // Generic detail — never disclose which signature fired to the client.
         throw new ForbiddenError("Request blocked by security policy");
       }

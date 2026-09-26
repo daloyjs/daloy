@@ -104,7 +104,7 @@ check, run `pnpm contract`. If a change touches route shapes, also run
 
 ## OpenAPI & docs routes
 
-When `docs: true` is set on `new App({...})` (the default in this template),
+With `docs: "auto"` on `new App({...})` (the default in this template),
 three routes are auto-mounted off the spec generated from your route
 definitions:
 
@@ -114,8 +114,8 @@ definitions:
 - `GET /docs` — Scalar API reference UI that loads the spec.
 
 Customize via `docs: { openapiPath, openapiYamlPath, path, ui }`. Set
-`openapiYamlPath: false` to disable just the YAML route, `docs: "auto"` to
-mount only outside production, or `docs: false` to disable all three.
+`openapiYamlPath: false` to disable just the YAML route, `docs: true` to
+also mount them in production, or `docs: false` to disable all three.
 
 For hand-rolled mounting (when `docs: false`), the YAML serializer is
 exported from the openapi subpath:

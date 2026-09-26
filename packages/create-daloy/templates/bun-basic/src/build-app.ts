@@ -26,7 +26,7 @@ export function buildApp(): App {
       ? { behindProxy: { hops: Number(process.env.TRUST_PROXY_HOPS) } }
       : {}),
     // daloy-minimal:strip-start docs
-    // Auto-mounted docs (when `docs: true`):
+    // Auto-mounted docs, outside production only (`docs: "auto"`):
     //   GET /openapi.json — OpenAPI 3.1 spec (JSON)
     //   GET /openapi.yaml — OpenAPI 3.1 spec (YAML, served inline as text/yaml)
     //   GET /docs         — Scalar API reference UI that loads the spec
@@ -43,7 +43,7 @@ export function buildApp(): App {
       // to pin an absolute base URL (e.g. for client codegen).
       ...(process.env.PUBLIC_URL ? { servers: [{ url: process.env.PUBLIC_URL }] } : {}),
     },
-    docs: true,
+    docs: "auto",
     // daloy-minimal:strip-end docs
   });
 

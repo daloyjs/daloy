@@ -93,8 +93,9 @@ check, run `pnpm contract`.
 
 ## OpenAPI & docs routes
 
-This Worker starter sets `docs: true` in `new App({...})`, so three routes
-are auto-mounted off the spec generated from your route definitions.
+This Worker starter sets `docs: "auto"` in `new App({...})`. Because it also
+sets `production: true`, the three routes below stay off in the deployed
+Worker; set `docs: true` to publish them (or while developing).
 DaloyJS is dependency-free and the Scalar UI loads from a CDN, so the bundle
 cost is negligible; drop `docs` (and the `openapi` block) if you need the
 smallest possible Worker. The routes:
@@ -105,7 +106,7 @@ smallest possible Worker. The routes:
 - `GET /docs` — Scalar API reference UI that loads the spec.
 
 On Workers the Scalar UI adds the most weight; consider
-`docs: { ui: "swagger" }` or `docs: "auto"` (off in production), or pass
+`docs: { ui: "swagger" }`, or pass
 `docs: { openapiYamlPath: false }` to drop the YAML route only.
 For hand-rolled mounting, `openapiToYAML` is exported from
 `@daloyjs/core/openapi`.

@@ -17,6 +17,118 @@ For the forward-looking plan and the full thematic release log, see
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-09-26
+
+### Security
+
+- Make the router and every `new URL(request.url)` consumer (`except()`,
+  tenancy, HTTP message signatures, the WAF) see the same path. The Node
+  adapter now canonicalizes request-targets that WHATWG parsing would rewrite
+  (`%2e%2e`, `.%2e`, `\`, `.` segments) and refuses with 400 any `Host` /
+  trusted `X-Forwarded-Host` that is not a plain `host[:port]`. The Lambda
+  adapter applies the same Host rule. `getPathnameFast` falls back to a real
+  URL parse when the authority carries `\`, `?` or `#`, and router params and
+  wildcards never bind a `.` / `..` segment. Previously `GET /users/%2e%2e` or
+  `Host: h\health?` reached a protected handler while `except()` saw an
+  exempt path. Trusted `X-Forwarded-Proto` is honoured only as `http`/`https`.
+- `tenantFromClaim()` now reads the identity first-party auth actually writes
+  (`ctx.state.auth`, then `ctx.state.user` from `jwk()` / `basicAuth()`).
+  The documented `[tenantFromClaim("org"), tenantFromSubdomain(...)]` chain
+  used to fall through to the `Host` subdomain, so an `acme` token could read
+  `globex` data.
+- `fetchGuard()` checks the IPv4 address embedded in IPv6 transition forms
+  (NAT64 `64:ff9b::/96` and `64:ff9b:1::/48`, 6to4, IPv4-compatible, SIIT,
+  Teredo) against the IPv4 policy, classifies bracketed IPv6 literals by the
+  deny list, honours `AbortSignal` on the DNS-pinned `http:` path, and replays
+  a buffered in-memory body on 307/308 (new `maxReplayBodyBytes`, default
+  1 MiB). Stream bodies, forwarded `Request` bodies and bodies over the cap
+  are streamed unbuffered, and a 307/308 of one is refused with
+  `redirect-body-not-replayable`. Multipart filenames count toward the replay
+  cap, which is also checked against the serialized byte length.
+- `responseCache()` bypasses requests authenticated by `clientCertAuth()` or
+  `httpSignatureAuth()` unless `principal` is set or
+  `cacheAuthenticatedRequests: { clientIdentity: true }` is passed.
+  `idempotency()` scopes its default namespace by that identity and
+  fingerprints raw bodies on schema-less routes (new
+  `maxFingerprintBodyBytes`, default 1 MiB, never above the App
+  `bodyLimitBytes`). A keyed request whose raw body an earlier hook already
+  consumed fails closed.
+- `rateLimit()` / `loginThrottle()` registered before auth now count
+  rejections that are thrown, not only returned. `rateLimit()` and
+  `loginThrottle()` key on the TCP peer by default instead of one shared
+  bucket (runtimes that expose no peer still share `"global"`; behind a proxy
+  configure `trustedProxies`). New `ipv6Subnet` option
+  (default `64`) groups IPv6 clients per prefix and canonicalizes address
+  spellings.
+- Log redaction no longer writes the censor into caller-owned nested objects,
+  redacts `toJSON()` output, and writes cycles as `"[Circular]"`.
+  `otelTracing()` redacts credential-bearing `url.query` values by default
+  (new `redactQuery`). New export `sanitizeUrlQueryForLog()`.
+- `session()` cannot be resurrected by a request still in flight during
+  logout or `regenerate()`. Write-back of a loaded session now only updates a
+  record that still exists, via the new optional atomic
+  `SessionStore.update()` (e.g. Redis `SET ... XX`). Stores without it keep
+  working: the middleware re-reads the record before writing and remembers
+  ids this instance destroyed, and logs a one-time warning. Logout revocation
+  is then complete within one process; deployments where several instances
+  share a store should implement `update()` to close the remaining
+  cross-instance window.
+- MCP: internal error detail is exposed only for `NODE_ENV` `development` /
+  `test` or an explicit opt-in, and an App with `env: "production"` always
+  redacts. Resource URI templates are matched in linear time and
+  `resources/read` URIs are capped by `maxResourceUriLength` (default 8192).
+- WebSocket: a message split across more than 4096 frames is refused with
+  close code 1002, frame buffering is linear, and `wsRateLimit()` never
+  echoes store error text.
+- WAF: overlong values are scanned in overlapping windows with bounded
+  signature runs, and a body over `maxBodyNodes` is blocked by default (new
+  `onLimitExceeded`).
+- `geoBlock()` falls back to the socket peer when the forwarded IP cannot be
+  resolved (new `onUnresolvedIp`, default `"peer"`); a peer-derived country
+  can only block.
+- `autoBan()` counts concurrent strikes atomically (optional
+  `AutoBanStore.strike()`, new `applyAutoBanStrike()`, new
+  `redisAutoBanStore()`), and a store outage while recording a strike no
+  longer answers 500.
+- `concurrencyLimit({ scope: "route" })` keys on the matched route template,
+  and a slot is always released even when another `onSend` hook throws.
+- SSE: a lone `\r` in `data` / comment starts a new line, and CR, LF and NUL
+  are neutralised in `event` / `id`. The Node adapter cancels a streamed body
+  when the client disconnects.
+- `sanitizeFilename()` strips bidi / invisible format characters and C1
+  controls. New `contentDisposition()` builds an RFC 6266 / RFC 8187 header
+  value that is always a valid header.
+- The typed client refuses missing, empty, `.` and `..` path params and
+  substitutes by whole segment.
+
+### Fixed
+
+- `create-daloy` templates set `docs: "auto"`, so a deployed scaffold no
+  longer publishes `/docs`, `/openapi.json` and `/openapi.yaml`. Set
+  `docs: true` to publish them in production. The Cloudflare Worker template
+  runs with `production: true`, so its docs stay off unless set to `true`.
+- `redisAutoBanStore()` and `redisRateLimitStore()` Lua scripts are covered by
+  an opt-in live suite (`tests/rate-limit-redis-live.test.ts`, runs when
+  `DALOY_TEST_REDIS_URL` is set).
+
+- `etag()` no longer buffers SSE, NDJSON, unknown-length or oversized bodies
+  (new `maxBytes`, default 1 MiB); a raw `Response` without
+  `Content-Length` is now sent untagged. `compression()` passes streaming and
+  `Cache-Control: no-transform` responses through, so `sseResponse()` works
+  behind both.
+- The Node adapter answers a deferred `Expect: 100-continue` for every body
+  reader, including raw-body routes, `requestDecompression()` and MCP.
+- `subdomains({ baseDomain, production: true })` no longer throws on an old
+  Public Suffix List snapshot. The bundled snapshot is refreshed to
+  2026-09-24 (`netlify.com` removed, `render.com` corrected to
+  `app.render.com`).
+- Background jobs: a failing store heartbeat is logged instead of becoming an
+  unhandled rejection, a lease that expires on the final attempt dead-letters
+  instead of requeueing, and `heartbeat` / `complete` / `fail` accept an
+  optional `attempt` fencing argument. An optional `JobStore.takeReaped()`
+  lets the worker announce reaper dead-letters via `jobs.dead` and
+  `onDead`.
+
 ## [1.3.6] - 2026-09-21
 
 ### Security
@@ -3307,7 +3419,8 @@ source })`.
   publish with provenance, `pnpm create daloy` scaffolder (`node-basic`,
   `vercel`, `cloudflare-worker`), docs metadata + ORM guides.
 
-[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.3.6...HEAD
+[Unreleased]: https://github.com/daloyjs/daloy/compare/v1.3.7...HEAD
+[1.3.7]: https://github.com/daloyjs/daloy/compare/v1.3.6...v1.3.7
 [1.3.6]: https://github.com/daloyjs/daloy/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/daloyjs/daloy/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/daloyjs/daloy/compare/v1.3.3...v1.3.4

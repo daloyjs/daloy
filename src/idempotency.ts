@@ -32,10 +32,10 @@
  * @since 0.37.0
  */
 
-import { BadRequestError, ConflictError, HttpError } from "./errors.js";
+import { BadRequestError, ConflictError, HttpError, PayloadTooLargeError } from "./errors.js";
 import { markSchemaValidatedResponse } from "./internal-response.js";
 import { readResponseBodyUpTo } from "./internal-body.js";
-import { hasReplayScopes } from "./internal-replay.js";
+import { APP_BODY_LIMIT_HOOK, getAuthIdentity, hasReplayScopes } from "./internal-replay.js";
 import type { BaseContext, Hooks } from "./types.js";
 
 const enc = new TextEncoder();
@@ -171,6 +171,22 @@ export interface IdempotencyOptions {
    */
   maxResponseBytes?: number;
   /**
+   * Maximum raw request body size (bytes) read to fingerprint a key-bearing
+   * request on a route that declares no body schema (text, webhook, form or
+   * `ctx.request.text()` handlers), where there is no parsed `ctx.body` to hash.
+   * The bytes are read from a clone, so the handler can still consume the
+   * original. A larger body is refused with `413` rather than fingerprinted
+   * without its payload, which would replay a different request's response.
+   * The effective cap is the smaller of this and the app's `bodyLimitBytes`
+   * when the app reports it to the hook; set it explicitly at or below a
+   * lowered `bodyLimitBytes` otherwise. If an earlier hook consumed the raw
+   * body without the framework's buffered copy, the request is refused (500)
+   * rather than fingerprinted without its payload.
+   * Default: `1048576` (1 MiB, matching the default `bodyLimitBytes`).
+   * @since 1.3.7
+   */
+  maxFingerprintBodyBytes?: number;
+  /**
    * Decide whether a produced response should be cached for replay. Returning
    * `false` releases the reservation so the client may retry. Default: cache
    * any response with status `< 500` (server errors are retryable).
@@ -191,7 +207,9 @@ export interface IdempotencyOptions {
    *
    * Defaults to the request's `Authorization` header value, which scopes the
    * common bearer- / API-key-authenticated case (Stripe-style idempotency)
-   * out of the box. Override it when identity lives elsewhere, e.g.
+   * out of the box, combined with any identity recorded by `clientCertAuth()`
+   * (certificate) or `httpSignatureAuth()` (signing key), so mTLS and signed
+   * callers are scoped per peer without configuration. Override it when identity lives elsewhere, e.g.
    * `scope: (ctx) => ctx.state.session?.id` for cookie-based sessions, or
    * return `undefined` to opt a request out of scoping (e.g. truly public,
    * unauthenticated idempotent writes). Returning a stable per-user id is
@@ -415,9 +433,66 @@ function stableStringify(value: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
 }
 
-async function computeFingerprint(method: string, ctx: BaseContext<any, any>): Promise<string> {
+const RAW_BODY_SYMBOL = Symbol.for("daloyjs.request.rawBody");
+const BODY_SOLICIT_SYMBOL = Symbol.for("daloyjs.request.bodySolicit");
+
+/**
+ * Fingerprint material for the body. A parsed `ctx.body` is hashed as before;
+ * otherwise, when the request still carries an unread body (a route with no
+ * body schema), its raw bytes are read from a bounded clone and hashed
+ * together with the content type, so a reused key with a different payload is
+ * detected. Body-less requests keep the historical `"null"` material.
+ */
+async function bodyMaterial(ctx: BaseContext<any, any>, maxBytes: number): Promise<string> {
+  if (ctx.body !== undefined) return stableStringify(ctx.body);
+  const request = ctx.request;
+  const headers = request.headers;
+  const declared = headers.get("content-length");
+  if (declared !== null) {
+    const n = Number(declared);
+    if (Number.isFinite(n) && n > maxBytes) throw new PayloadTooLargeError(maxBytes);
+  }
+  let bytes: Uint8Array | null;
+  // The adapter's buffered copy survives a body read, so it is checked first.
+  const cached = (request as unknown as Record<symbol, unknown>)[RAW_BODY_SYMBOL];
+  if (cached instanceof Uint8Array) {
+    bytes = cached.byteLength > maxBytes ? null : cached;
+  } else if (declared === "0") {
+    // HTTP/2 and in-process `app.fetch()` requests may omit Content-Length, so
+    // only an explicit zero short-circuits; otherwise the body stream decides.
+    return "null";
+  } else if (request.body === null) {
+    // No body at all (e.g. a bodiless in-process `app.request()` POST).
+    return "null";
+  } else if (request.bodyUsed) {
+    // Something upstream read the body and left no copy: fingerprinting now
+    // would ignore the payload and replay a different request's response.
+    throw new Error(
+      "idempotency(): the request body was consumed before idempotency() could fingerprint it. " +
+        "Mount idempotency() ahead of the hook that reads ctx.request, or declare a request body " +
+        "schema so the parsed body is fingerprinted."
+    );
+  } else {
+    // Expect: 100-continue — invite the body we are about to read, exactly as
+    // the framework's own body read does.
+    (request as unknown as { [BODY_SOLICIT_SYMBOL]?: () => void })[BODY_SOLICIT_SYMBOL]?.();
+    const body = request.clone().body;
+    if (!body) return "null";
+    bytes = await readResponseBodyUpTo(new Response(body), maxBytes);
+  }
+  if (bytes === null) throw new PayloadTooLargeError(maxBytes);
+  if (bytes.byteLength === 0) return "null";
+  const digest = new Uint8Array(await getSubtle().digest("SHA-256", bytes as BufferSource));
+  return `raw:${JSON.stringify(headers.get("content-type") ?? "")}:${bytesToHex(digest)}`;
+}
+
+async function computeFingerprint(
+  method: string,
+  ctx: BaseContext<any, any>,
+  maxBodyBytes: number
+): Promise<string> {
   const url = new URL(ctx.request.url);
-  const material = `${method}\n${url.pathname}${url.search}\n${stableStringify(ctx.body)}`;
+  const material = `${method}\n${url.pathname}${url.search}\n${await bodyMaterial(ctx, maxBodyBytes)}`;
   return sha256Hex(material);
 }
 
@@ -587,6 +662,14 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
     throw new Error("idempotency(): maxResponseBytes must be a positive integer.");
   }
 
+  const maxFingerprintBodyBytes = opts.maxFingerprintBodyBytes ?? 1_048_576;
+  if (!Number.isInteger(maxFingerprintBodyBytes) || maxFingerprintBodyBytes <= 0) {
+    throw new Error("idempotency(): maxFingerprintBodyBytes must be a positive integer.");
+  }
+
+  // Lowered to the app's bodyLimitBytes via APP_BODY_LIMIT_HOOK; never raised.
+  let fingerprintCap = maxFingerprintBodyBytes;
+
   const headerName = (opts.headerName ?? "idempotency-key").toLowerCase();
   const replayHeaderName = (opts.replayHeaderName ?? "idempotency-replayed").toLowerCase();
   const methods = new Set(
@@ -629,13 +712,14 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
       const key = rawKey.trim();
       validateKey(key, headerName, maxKeyLength);
 
-      const fingerprint = await computeFingerprint(method, ctx);
+      const fingerprint = await computeFingerprint(method, ctx, fingerprintCap);
       // Namespace the key by the calling principal so client B can never
       // replay client A's stored response by reusing the same Idempotency-Key
-      // (CWE-524). Defaults to the Authorization header; `scope` overrides.
-      const scopeRaw = opts.scope
-        ? await opts.scope(ctx)
-        : (ctx.request.headers.get("authorization") ?? undefined);
+      // (CWE-524). Defaults to the Authorization header plus any mTLS /
+      // HTTP-signature identity a preBody auth hook recorded (those callers send
+      // no Authorization, so the namespace would otherwise collapse); `scope`
+      // overrides.
+      const scopeRaw = opts.scope ? await opts.scope(ctx) : defaultScope(ctx);
       // A credentialed request the default resolver cannot see is the dangerous
       // case: cookie-session auth sends no `Authorization`, so `scopeRaw` is
       // undefined, the namespace collapses to the shared one, and the retry
@@ -756,7 +840,20 @@ export function idempotency(opts: IdempotencyOptions = {}): Hooks {
     },
   };
   (hooks as Record<PropertyKey, unknown>)[IDEMPOTENCY_HOOK_MARKER] = true;
+  (hooks as Record<PropertyKey, unknown>)[APP_BODY_LIMIT_HOOK] = (limit: unknown): void => {
+    if (typeof limit === "number" && Number.isInteger(limit) && limit > 0 && limit < fingerprintCap) {
+      fingerprintCap = limit;
+    }
+  };
   return hooks;
+}
+
+/** Default scope: `Authorization` value, joined with a recorded auth identity. */
+function defaultScope(ctx: BaseContext<any, any>): string | undefined {
+  const authorization = ctx.request.headers.get("authorization") || undefined;
+  const identity = getAuthIdentity(ctx.state as Record<PropertyKey, unknown>);
+  if (identity === undefined) return authorization;
+  return authorization === undefined ? `id:${identity}` : `${authorization}\nid:${identity}`;
 }
 
 function isPromiseLike<T>(value: unknown): value is Promise<T> {

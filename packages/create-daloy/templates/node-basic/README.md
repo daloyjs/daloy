@@ -22,12 +22,12 @@ curl http://localhost:3000/books/1
 
 ## API documentation
 
-- API docs (Scalar): <http://localhost:3000/docs>
+- API docs (Scalar, development only): <http://localhost:3000/docs>
 - OpenAPI 3.1 JSON: <http://localhost:3000/openapi.json>
 - OpenAPI 3.1 YAML: <http://localhost:3000/openapi.yaml>
 
 The spec is generated live from your routes, so it stays in sync with what is actually deployed.
-To brand Scalar, change `docs: true` in `src/build-app.ts` to `docs: { scalar: { theme, customCss } }`.
+To brand Scalar, change `docs: "auto"` in `src/build-app.ts` to `docs: { scalar: { theme, customCss } }`.
 
 <!-- daloy-minimal:strip-end docs -->
 

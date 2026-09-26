@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel** on the **Node.js runtime**. **Contract-first**: routes use validation schemas (Zod here; DaloyJS also supports Standard Schema-compatible validators) and generate OpenAPI 3.1. `docs: true` auto-mounts `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
+A [DaloyJS](https://daloyjs.dev) REST API deployed to **Vercel** on the **Node.js runtime**. **Contract-first**: routes use validation schemas (Zod here; DaloyJS also supports Standard Schema-compatible validators) and generate OpenAPI 3.1. `docs: "auto"` auto-mounts `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI) outside production.
 
 - Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).
 - Runtime: Vercel Node.js Functions on Fluid Compute (Web Standard `Request`/`Response`).

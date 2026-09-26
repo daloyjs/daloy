@@ -136,6 +136,11 @@ export interface InProcessClientOptions {
  * @param app - The `App` instance whose routes drive the client surface.
  * @param opts - `baseUrl`, optional custom `fetch`, and default `headers`.
  * @returns A typed client object keyed by `operationId`.
+ * @throws TypeError (from a generated method, before any request is sent) when
+ * a path param is missing, empty, or `.` / `..`. Params are substituted by
+ * whole segment; `*name` wildcards accept `/`-separated values, each segment
+ * encoded and checked the same way. Dot segments are refused because URL
+ * parsing would resolve them (even as `%2E%2E`) and retarget another route.
  * @since 0.1.0
  */
 export function createClient<A extends App>(app: A, opts: ClientOptions): ClientFor<A> {
@@ -144,12 +149,9 @@ export function createClient<A extends App>(app: A, opts: ClientOptions): Client
 
   for (const route of app.routes) {
     if (!route.operationId) continue;
+    const template = compilePathTemplate(route.path as string);
     out[route.operationId] = async (input: any = {}) => {
-      let path = route.path as string;
-      const params = input.params ?? {};
-      for (const [k, v] of Object.entries(params)) {
-        path = path.replace(`:${k}`, encodeURIComponent(String(v)));
-      }
+      const path = buildPath(template, route.path as string, input.params);
       const url = new URL(path, opts.baseUrl);
       if (input.query) {
         for (const [k, v] of Object.entries(input.query)) {
@@ -205,6 +207,73 @@ export function createInProcessClient<A extends App>(
   };
   if (opts.headers) clientOptions.headers = opts.headers;
   return createClient(app, clientOptions);
+}
+
+/**
+ * A route path pre-split into literal segments and capture slots. Strings are
+ * emitted verbatim; `{ name, wildcard }` entries are filled from `params`.
+ */
+type PathTemplate = ReadonlyArray<string | { name: string; wildcard: boolean }>;
+
+/** Split a route path once, at client construction, into a {@link PathTemplate}. */
+function compilePathTemplate(path: string): PathTemplate {
+  return path.split("/").map((seg) => {
+    if (seg.startsWith(":")) return { name: seg.slice(1), wildcard: false };
+    if (seg.startsWith("*")) {
+      return { name: seg.length > 1 ? seg.slice(1) : "wildcard", wildcard: true };
+    }
+    return seg;
+  });
+}
+
+/**
+ * Fill a {@link PathTemplate} from `params`, substituting by whole segment so a
+ * `:id` capture can never match inside `:idx`.
+ *
+ * Security: each value is percent-encoded into its own segment. Empty values
+ * and `.` / `..` values are refused, because WHATWG URL parsing resolves `..`
+ * (and `%2E%2E`, `.%2E`, ...) as a parent-directory step, which would silently
+ * retarget the request at a different route (e.g. `DELETE /orgs/:org/members/..`
+ * becoming `DELETE /orgs/:org`). Wildcard values may span several `/`-separated
+ * segments; every one of them is checked the same way.
+ *
+ * @throws TypeError when a capture is missing, empty, or a dot segment.
+ */
+function buildPath(template: PathTemplate, routePath: string, params: any): string {
+  let out = "";
+  for (let i = 0; i < template.length; i++) {
+    const part = template[i]!;
+    if (i > 0) out += "/";
+    if (typeof part === "string") {
+      out += part;
+      continue;
+    }
+    const raw = params == null ? undefined : params[part.name];
+    if (raw === undefined || raw === null) {
+      throw new TypeError(`Missing path parameter "${part.name}" for ${routePath}`);
+    }
+    const value = String(raw);
+    if (!part.wildcard) {
+      out += encodeSegment(value, part.name, routePath);
+      continue;
+    }
+    const pieces = value.split("/");
+    for (let j = 0; j < pieces.length; j++) {
+      if (j > 0) out += "/";
+      out += encodeSegment(pieces[j]!, part.name, routePath);
+    }
+  }
+  return out;
+}
+
+/** Encode one path segment, refusing empty and `.` / `..` values. */
+function encodeSegment(value: string, name: string, routePath: string): string {
+  if (value === "" || value === "." || value === "..") {
+    throw new TypeError(
+      `Invalid path parameter "${name}" for ${routePath}: empty and "."/".." segments are not allowed`,
+    );
+  }
+  return encodeURIComponent(value);
 }
 
 function safeJson(text: string): unknown {

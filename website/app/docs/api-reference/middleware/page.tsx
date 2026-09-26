@@ -83,9 +83,9 @@ export default function Page() {
 secureHeaders(opts?: SecureHeadersOptions): Hooks
 cors(opts: CorsOptions): Hooks
 rateLimit(opts: RateLimitOptions): Hooks
-loginThrottle(opts?: LoginThrottleOptions): Hooks
+loginThrottle(opts?: LoginThrottleOptions): Hooks    // default key: TCP peer (IPv6 grouped by ipv6Subnet)
 timing(headerName?: string): Hooks
-compression(opts?: CompressionOptions): Hooks
+compression(opts?: CompressionOptions): Hooks        // skips SSE, NDJSON/JSON Lines/json-seq, Cache-Control: no-transform
 bearerAuth(opts: BearerAuthOptions): Hooks
 basicAuth(opts: BasicAuthOptions): Hooks
 markAuthHook(hooks: Hooks): Hooks
@@ -97,17 +97,27 @@ requireScopes(scopes: string | string[]
 ipRestriction(opts: IpRestrictionOptions): Hooks    // CIDR allow/deny
 loadShedding(opts?: LoadSheddingOptions): Hooks
 etag(opts?: ETagOptions): Hooks                      // 304 + Set-Cookie / Cache-Control skip
+  // SSE, NDJSON, unknown-length, and over-maxBytes bodies are sent untagged
 
 interface RateLimitOptions {
   windowMs: number;
   max: number;
   keyGenerator?: (ctx: RateLimitContext) => string; // may run on an early auth rejection
+  ipv6Subnet?: number;             // default: 64 (1-128); IPv6 prefix for the default IP key (since 1.3.7)
   store?: RateLimitStore;          // default in-memory; use redisRateLimitStore for clusters
   trustProxyHeaders?: boolean;     // rightmost XFF; spoofable if origin is reachable
   trustedHops?: number;            // multi-hop chain length (implies trust)
   trustedProxies?: readonly string[]; // CIDR allowlist of proxy peers (peer-verified trust)
   retryAfter?: boolean;
   groupId?: string;
+}
+// A limiter placed before preBody auth also counts requests that auth
+// rejects by throwing, so failed credential guesses consume the budget.
+
+interface ETagOptions {
+  weak?: boolean;
+  generator?: (body: Uint8Array) => string | Promise<string>;
+  maxBytes?: number;               // default: 1_048_576 (1 MiB); larger Content-Length goes untagged (since 1.3.7)
 }
 
 interface BearerAuthOptions {
@@ -126,7 +136,13 @@ except(when: ExceptPredicate, hooks: Hooks): Hooks  // exempt paths from preBody
 type ExceptPredicate =
   | string                            // path glob: "*" = one segment, "**" = any suffix
   | string[]                          // any-of globs
-  | ((ctx) => boolean | Promise<boolean>);`}
+  | ((ctx) => boolean | Promise<boolean>);
+
+// Globs match the canonical path the router dispatches on. The Node adapter
+// resolves raw %2e%2e dot segments and folds \\ to / before routing, and the
+// Node and Lambda adapters refuse (400) a Host containing \\ / ? # @ % or
+// whitespace, so a crafted target cannot slip past an except() glob. Route
+// params and wildcards never bind "." or "..".`}
       />
 
       <h2 id="dependencies-typed-di-chain">Dependencies (typed DI chain)</h2>
@@ -167,6 +183,9 @@ class ConfigValidationError extends Error {
 createLogger(opts?: ConsoleLoggerOptions): Logger;
 const noopLogger: Logger;
 const DEFAULT_REDACT_KEYS: ReadonlyArray<string>;  // password, token, secret, authorization, ...
+sanitizeUrlForLog(url: string): string;             // redacts sensitive query values
+sanitizeUrlQueryForLog(search: string): string;     // same rules for a bare query string (since 1.3.7)
+// Redaction copies on write: it never mutates the objects you pass to a log call.
 
 interface ConsoleLoggerOptions {
   level?: LogLevel;
@@ -231,15 +250,24 @@ resolveForwardedClientIp(req: Request, hops?: number): string | undefined;`}
       <CodeBlock
         code={`subdomains(hostname: string, opts?: SubdomainsOptions): SubdomainsResult;
 
+interface SubdomainsOptions {
+  baseDomain?: string;                 // pin the registrable base; skips the PSL entirely
+  extraSuffixes?: readonly string[];   // extra shared-hosting suffixes
+  production?: boolean;                // default: false; throws on a stale PSL snapshot
+}
+
 interface SubdomainsResult {
-  subdomain: string | undefined;       // e.g. "api" for "api.example.co.uk"
-  registrableDomain: string | undefined;
-  publicSuffix: string | undefined;
+  baseDomain: string;                  // e.g. "example.co.uk"
+  subdomain: string;                   // e.g. "api.tenant"; "" when none
+  labels: readonly string[];           // e.g. ["api", "tenant"]
 }
 
 const PSL_SNAPSHOT_DATE: string;       // ISO date of the bundled PSL snapshot
-const MAX_SNAPSHOT_AGE_DAYS: number;   // refuses to use a stale snapshot
-const PSL_PUBLIC_SUFFIXES: ReadonlySet<string>;`}
+const MAX_SNAPSHOT_AGE_DAYS: number;   // 90; refuses to use a stale snapshot
+const PSL_PUBLIC_SUFFIXES: readonly string[];
+
+// The staleness check applies only to the PSL path. A call with baseDomain
+// never reads the snapshot, so baseDomain + production: true always works.`}
       />
 
       <p>

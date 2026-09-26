@@ -188,7 +188,7 @@ console.log(res.status, await res.json());
   bodyLimitBytes: 64 * 1024,
   requestTimeoutMs: 5_000,
   openapi: { info: { title: "Hello", version: "1.0.0" } },
-  docs: true, // mounts GET /docs, GET /openapi.json, GET /openapi.yaml
+  docs: "auto", // GET /docs, /openapi.json, /openapi.yaml outside production
 });`}
       />
 
@@ -217,7 +217,7 @@ console.log(res.status, await res.json());
         code={`import { createApp } from "@daloyjs/core";
 
 const app = createApp({
-  docs: true,
+  docs: "auto", // use true to also publish the docs in production
   openapi: { info: { title: "My API", version: "1.0.0" } },
 });`}
       />

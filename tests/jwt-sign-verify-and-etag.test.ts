@@ -11,6 +11,8 @@ import {
   requireScopes,
   REQUIRE_SCOPES_AGGREGATE_KEY,
   etag,
+  sseStream,
+  ndjsonStream,
 } from "../src/index.js";
 
 // ============================================================
@@ -1046,4 +1048,114 @@ test("etag: HEAD returns 200 with no body and the GET representation ETag", asyn
   assert.equal(head.headers.get("etag"), get.headers.get("etag"));
   const body = await head.text();
   assert.equal(body, "");
+});
+
+test("etag: never buffers an unbounded SSE / NDJSON stream (first byte arrives, no tag)", async () => {
+  const app = new App({ env: "development" });
+  app.use(etag());
+  let produced = 0;
+  async function* ticks() {
+    for (;;) {
+      produced++;
+      yield { event: "tick", data: { n: produced } };
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+  const ac = new AbortController();
+  app.route({
+    method: "GET",
+    path: "/events",
+    responses: { 200: { description: "sse" } },
+    handler: () => ({
+      status: 200 as const,
+      headers: { "content-type": "text/event-stream" },
+      body: sseStream(ticks, { signal: ac.signal }) as any,
+    }),
+  } as any);
+  app.route({
+    method: "GET",
+    path: "/nd",
+    responses: { 200: { description: "ndjson" } },
+    handler: () => ({
+      status: 200 as const,
+      headers: { "content-type": "application/x-ndjson; charset=utf-8" },
+      body: ndjsonStream(ticks(), { signal: ac.signal }) as any,
+    }),
+  } as any);
+  try {
+    for (const path of ["/events", "/nd"]) {
+      const res = await Promise.race([
+        app.fetch(new Request(`http://x${path}`)),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${path} hung`)), 2000)),
+      ]);
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get("etag"), null, path);
+      const reader = res.body!.getReader();
+      const first = await reader.read();
+      assert.equal(first.done, false);
+      await reader.cancel();
+    }
+  } finally {
+    ac.abort();
+  }
+});
+
+test("etag: skips bodies larger than maxBytes and still tags bodies within it", async () => {
+  const build = (maxBytes?: number) => {
+    const app = new App({ env: "development" });
+    app.use(maxBytes === undefined ? etag() : etag({ maxBytes }));
+    app.route({
+      method: "GET",
+      path: "/",
+      responses: { 200: { description: "ok" } },
+      handler: () => ({ status: 200 as const, body: { pad: "x".repeat(2000) } }),
+    });
+    return app;
+  };
+  const small = await build(100).fetch(new Request("http://x/"));
+  assert.equal(small.status, 200);
+  assert.equal(small.headers.get("etag"), null);
+  assert.equal((await small.json()).pad.length, 2000);
+  const ok = await build(4096).fetch(new Request("http://x/"));
+  assert.match(ok.headers.get("etag") ?? "", /^"[0-9a-f]{40}"$/);
+  const dflt = await build().fetch(new Request("http://x/"));
+  assert.match(dflt.headers.get("etag") ?? "", /^"[0-9a-f]{40}"$/);
+});
+
+test("etag: rejects an invalid maxBytes", () => {
+  for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY, "10" as unknown as number]) {
+    assert.throws(() => etag({ maxBytes: bad }), TypeError);
+  }
+});
+
+test("etag: skips a body with no Content-Length (unknown length) but tags one that has it", async () => {
+  const app = new App({ env: "development" });
+  app.use({
+    onSend(res, ctx) {
+      if (new URL(ctx!.request.url).pathname !== "/nolen") return undefined;
+      // A stream body of unknown length (no Content-Length header).
+      const stream = new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new TextEncoder().encode("hello"));
+          c.close();
+        },
+      });
+      return new Response(stream, { status: res.status, headers: { "content-type": "text/plain" } });
+    },
+  });
+  app.use(etag());
+  for (const path of ["/nolen", "/len"]) {
+    app.route({
+      method: "GET",
+      path,
+      responses: { 200: { description: "ok" } },
+      handler: () => ({ status: 200 as const, body: "hello" }),
+    } as any);
+  }
+  const nolen = await app.fetch(new Request("http://x/nolen"));
+  assert.equal(nolen.headers.get("etag"), null);
+  assert.equal(await nolen.text(), "hello");
+  assert.equal(nolen.headers.get("content-length"), null);
+  const len = await app.fetch(new Request("http://x/len"));
+  assert.match(len.headers.get("etag") ?? "", /^"[0-9a-f]{40}"$/);
 });

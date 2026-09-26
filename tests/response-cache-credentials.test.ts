@@ -21,7 +21,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { App, bearerAuth, responseCache } from "../src/index.js";
+import {
+  App,
+  bearerAuth,
+  clientCertAuth,
+  httpSignatureAuth,
+  responseCache,
+  signMessage,
+  type ClientCertificate,
+} from "../src/index.js";
 
 /**
  * App whose handler echoes the caller's own bearer identity, so any reuse
@@ -159,4 +167,125 @@ test("the credential opt-in is per-dimension: enabling cookie does not enable au
   const c2 = await get({ cookie: "ga=2" });
   assert.equal(c1.cache, "MISS");
   assert.equal(c2.cache, "HIT", "the enabled cookie dimension caches");
+});
+
+// ---------- non-header identities (mTLS / HTTP signatures) ----------
+
+function peerCert(svc: string): ClientCertificate {
+  return {
+    subjectDN: `CN=${svc}`,
+    subjectCN: svc,
+    subjectAltNames: [`URI:spiffe://acme/${svc}`],
+    verified: true,
+  };
+}
+
+/** mTLS-guarded app whose handler echoes the peer's SAN. */
+function makeMtlsApp(cacheOpts: Record<string, unknown> = {}) {
+  const app = new App({ logger: false });
+  const state = { calls: 0 };
+  app.use(
+    clientCertAuth({
+      resolve: (ctx) => {
+        const svc = ctx.request.headers.get("x-test-peer");
+        return svc ? peerCert(svc) : undefined;
+      },
+    })
+  );
+  app.use(responseCache({ ttlSeconds: 60, ...cacheOpts } as never));
+  app.route({
+    method: "GET",
+    path: "/me/secrets",
+    operationId: "mtlsSecrets",
+    responses: { 200: { description: "ok", body: z.object({ owner: z.string() }) as any } },
+    handler: async (ctx: any) => {
+      state.calls++;
+      return { status: 200 as const, body: { owner: ctx.state.clientCertificate.subjectCN } };
+    },
+  });
+  const get = async (svc: string) => {
+    const res = await app.fetch(
+      new Request("http://t/me/secrets", { headers: { "x-test-peer": svc } })
+    );
+    return { status: res.status, cache: res.headers.get("x-cache"), body: await res.json() };
+  };
+  return { get, state };
+}
+
+test("responseCache never replays one mTLS peer's response to another peer", async () => {
+  const { get, state } = makeMtlsApp();
+  const a = await get("svc-a");
+  const b = await get("svc-b");
+  assert.deepEqual(a.body, { owner: "svc-a" });
+  assert.deepEqual(b.body, { owner: "svc-b" });
+  assert.equal(b.cache, null, "certificate-authenticated request must bypass the cache");
+  assert.equal(state.calls, 2);
+});
+
+test("responseCache caches mTLS callers per principal when principal is configured", async () => {
+  const { get, state } = makeMtlsApp({
+    principal: (ctx: any) => ctx.state.clientCertificate?.subjectCN ?? null,
+  });
+  assert.equal((await get("svc-a")).cache, "MISS");
+  const again = await get("svc-a");
+  assert.equal(again.cache, "HIT");
+  assert.deepEqual(again.body, { owner: "svc-a" });
+  const b = await get("svc-b");
+  assert.equal(b.cache, "MISS");
+  assert.deepEqual(b.body, { owner: "svc-b" });
+  assert.equal(state.calls, 2);
+});
+
+test("responseCache clientIdentity opt-in shares entries across mTLS peers", async () => {
+  const { get, state } = makeMtlsApp({ cacheAuthenticatedRequests: { clientIdentity: true } });
+  await get("svc-a");
+  const b = await get("svc-b");
+  assert.equal(b.cache, "HIT");
+  assert.equal(state.calls, 1);
+});
+
+test("responseCache bypasses requests authenticated by an HTTP message signature", async () => {
+  const secret = new Uint8Array(32).fill(7);
+  const app = new App({ logger: false });
+  let calls = 0;
+  app.use(httpSignatureAuth({ algorithms: ["hmac-sha256"], resolveKey: () => secret }));
+  app.use(responseCache({ ttlSeconds: 60 }));
+  app.route({
+    method: "GET",
+    path: "/signed",
+    operationId: "signedGet",
+    responses: { 200: { description: "ok", body: z.object({ keyid: z.string() }) as any } },
+    handler: async (ctx: any) => {
+      calls++;
+      return { status: 200 as const, body: { keyid: ctx.state.httpSignature.keyid } };
+    },
+  });
+  const signed = async (keyid: string) => {
+    const url = "http://t/signed";
+    const sig = await signMessage({ method: "GET", url, alg: "hmac-sha256", key: secret, keyid });
+    const res = await app.fetch(
+      new Request(url, {
+        headers: { "signature-input": sig.signatureInput, signature: sig.signature },
+      })
+    );
+    return { cache: res.headers.get("x-cache"), body: await res.json() };
+  };
+  assert.deepEqual((await signed("svc-a")).body, { keyid: "svc-a" });
+  const b = await signed("svc-b");
+  assert.deepEqual(b.body, { keyid: "svc-b" });
+  assert.equal(b.cache, null);
+  assert.equal(calls, 2);
+
+  // Unsigned public traffic on another cache is unaffected.
+  const pub = new App({ logger: false });
+  pub.use(responseCache({ ttlSeconds: 60 }));
+  pub.route({
+    method: "GET",
+    path: "/pub",
+    operationId: "pub",
+    responses: { 200: { description: "ok", body: z.object({ ok: z.boolean() }) as any } },
+    handler: async () => ({ status: 200 as const, body: { ok: true } }),
+  });
+  await pub.fetch(new Request("http://t/pub"));
+  assert.equal((await pub.fetch(new Request("http://t/pub"))).headers.get("x-cache"), "HIT");
 });

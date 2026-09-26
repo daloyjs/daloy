@@ -304,6 +304,35 @@ app.post(
         <code>setClientCertificate()</code> /{" "}
         <code>getClientCertificate()</code> for custom adapters.
       </p>
+
+      <h2 id="stored-response-isolation">Stored-response isolation</h2>
+      <p>
+        An accepted certificate is also recorded as the caller identity (since
+        2.0.0). mTLS callers usually send no <code>Authorization</code> or{" "}
+        <code>Cookie</code>, so without this a shared cache or idempotency
+        store could not tell two allow-listed peers apart.{" "}
+        <a href="/docs/response-cache#credentials-fail-closed">
+          <code>responseCache()</code>
+        </a>{" "}
+        therefore bypasses certificate-authenticated requests unless a{" "}
+        <code>principal</code> names the peer or{" "}
+        <code>cacheAuthenticatedRequests: {"{"} clientIdentity: true {"}"}</code>{" "}
+        declares the response shareable, and{" "}
+        <a href="/docs/idempotency#security-notes">
+          <code>idempotency()</code>
+        </a>{" "}
+        scopes keys per certificate by default.
+      </p>
+      <CodeBlock
+        language="ts"
+        code={`app.use(clientCertAuth({ allowSubjectCNs: ["svc-a", "svc-b"] }));
+app.use(
+  responseCache({
+    // Cache per peer instead of bypassing.
+    principal: (ctx) => ctx.state.clientCertificate?.fingerprint256 ?? null,
+  }),
+);`}
+      />
     </>
   );
 }

@@ -300,6 +300,15 @@ app.ws("/cli", {
         <code>rateLimit({`{ groupId }`})</code> bucket and preserves rate-limit
         headers on rejection.
       </p>
+      <p>
+        A limiter failure never leaks to the client (since 1.3.7). A store or{" "}
+        <code>keyGenerator</code> error that is not an <code>HttpError</code>{" "}
+        is rethrown, so the adapter logs it and answers with its own generic{" "}
+        <code>500</code>; the error message (which can carry connection
+        strings or hostnames) is never echoed. A 5xx <code>HttpError</code> has
+        its <code>detail</code> scrubbed, because some adapters return the
+        hook&apos;s response verbatim.
+      </p>
       <CodeBlock
         code={`import { wsRateLimit } from "@daloyjs/core";
 
@@ -308,7 +317,10 @@ app.ws("/session", {
     windowMs: 60_000,
     max: 10,
     groupId: "auth-entry",
-    keyGenerator: (ctx) => ctx.request.headers.get("x-user-key") ?? "global",
+    // Default key: the trusted forwarded client IP (with trustedProxies), or
+    // the TCP peer. Never key on a raw client header such as x-user-key: a
+    // client that rotates it gets a fresh budget on every attempt.
+    trustedProxies: ["10.0.0.0/8"],
   }),
   open(conn) {
     conn.send("ready");
@@ -328,6 +340,15 @@ app.ws("/session", {
         {", "}and <code>maxPayloadLength</code> must be positive integers. If
         your WebSocket handler declares a body schema with a maximum size, Daloy
         refuses a larger <code>maxPayloadLength</code> at registration time.
+      </p>
+      <p>
+        <code>maxPayloadLength</code> caps both a single frame and a
+        reassembled fragmented message. The Node adapter&apos;s frame parser
+        also refuses a message split across more than{" "}
+        <code>DEFAULT_WS_MAX_MESSAGE_FRAGMENTS</code> (4096) frames with close
+        code <code>1002</code> (protocol error), since 1.3.7. Without that cap a
+        peer could hold a message open forever with empty continuation frames,
+        which never trip the byte limit.
       </p>
       <CodeBlock
         code={`app.ws("/events", {

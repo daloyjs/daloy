@@ -179,3 +179,63 @@ function parseIPv6(input: string): ParsedIp | undefined {
   }
   return { bytes, family: 6 };
 }
+
+/**
+ * Canonical rate-limit identity for a client address.
+ *
+ * Textual variants of one address (`::1` vs `0:0::1`, `1.2.3.4` vs
+ * `::ffff:1.2.3.4`, leading-zero IPv4 octets) collapse to one key, and IPv6
+ * addresses are masked to `ipv6Prefix` bits (default `/64`, the block a single
+ * subscriber is normally assigned) so a client cannot mint a fresh bucket per
+ * address inside its own prefix.
+ *
+ * @param ip Address string from the socket or a trusted forwarding header.
+ * @param ipv6Prefix IPv6 prefix length to key on, `1`-`128`. Default `64`.
+ * @returns `a.b.c.d`, `xxxx:...:xxxx/<prefix>`, or the trimmed input
+ *   unchanged when it is not a parseable IP.
+ * @internal
+ */
+export function ipRateLimitIdentity(ip: string, ipv6Prefix = 64): string {
+  // Hot path (runs per rate-limited request): socket peers are already
+  // canonical dotted IPv4, or `::ffff:a.b.c.d` on a dual-stack listener.
+  if (isCanonicalDottedIPv4(ip)) return ip;
+  if (ip.length > 7 && ip.startsWith("::ffff:") && isCanonicalDottedIPv4(ip.slice(7))) {
+    return ip.slice(7);
+  }
+  let text = ip.trim();
+  if (text.charCodeAt(0) === 91 /* [ */ && text.endsWith("]")) text = text.slice(1, -1);
+  const parsed = parseIp(text);
+  if (parsed === undefined) return text;
+  const v4 = normalizeFamily(parsed, 4);
+  if (v4 !== undefined) return `${v4[0]}.${v4[1]}.${v4[2]}.${v4[3]}`;
+  const masked = applyPrefixMask(parsed.bytes, ipv6Prefix);
+  let out = "";
+  for (let i = 0; i < 16; i += 2) {
+    out += (i === 0 ? "" : ":") + ((masked[i]! << 8) | masked[i + 1]!).toString(16);
+  }
+  return `${out}/${ipv6Prefix}`;
+}
+
+/** `true` for `a.b.c.d` with each octet `0`-`255` and no leading zeros. */
+function isCanonicalDottedIPv4(s: string): boolean {
+  const len = s.length;
+  if (len < 7 || len > 15) return false;
+  let dots = 0;
+  let octet = 0;
+  let digits = 0;
+  for (let i = 0; i < len; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 46 /* . */) {
+      if (digits === 0 || ++dots > 3) return false;
+      octet = 0;
+      digits = 0;
+    } else if (c >= 48 && c <= 57) {
+      if (digits > 0 && octet === 0) return false; // leading zero
+      octet = octet * 10 + (c - 48);
+      if (++digits > 3 || octet > 255) return false;
+    } else {
+      return false;
+    }
+  }
+  return dots === 3 && digits > 0;
+}

@@ -4,7 +4,7 @@ A [DaloyJS](https://daloyjs.dev) Node.js REST API. **Contract-first**:
 routes are defined with validation schemas (Zod in this template; DaloyJS also
 supports Standard Schema-compatible validators) and OpenAPI 3.1 is generated
 from them.
-When `docs: true` is set in `new App({...})`, three routes are auto-mounted:
+With `docs: "auto"` in `new App({...})`, three routes are auto-mounted outside production:
 `GET /openapi.json`, `GET /openapi.yaml`, and `GET /docs` (Scalar UI).
 
 - Package manager: pnpm (use `pnpm` unless the project's `package.json` was rewritten for npm/yarn/bun).
