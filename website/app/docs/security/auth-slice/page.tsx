@@ -256,6 +256,16 @@ app.use(
         not the normal cache TTL; use a per-request revocation check when
         offboarding must take effect immediately.
       </p>
+      <p>
+        Every JWKS source (object, URL, or resolver function) is read per
+        verification, after the token header parses, so a malformed token never
+        triggers a JWKS fetch. Each key is imported into WebCrypto once for the
+        life of the middleware, cached by its full JWK content rather than its{" "}
+        <code>kid</code>. A resolver that rotates key material under the same{" "}
+        <code>kid</code> takes effect on the next request, and a resolver that
+        returns different key sets per request (for example per tenant) always
+        verifies each token against the set returned for that request.
+      </p>
 
       <h3 id="workload-identity-policy">Service-to-service policy</h3>
       <p>

@@ -267,6 +267,9 @@ function makeJwksLoader(
  * header `alg` against the JWK's own `alg` (when present).
  * URL sources are fetched with redirects disabled; redirecting refreshes
  * follow the existing last-good-key grace policy, never installing new keys.
+ * The JWKS is loaded per verification, after the token header parses, and
+ * each key is WebCrypto-imported once for the life of the middleware (cached
+ * by its full content, so same-`kid` rotations take effect immediately).
  * Set `maxLifetimeSeconds` to require expiry and cap accepted token lifetimes.
  *
  * @example
@@ -354,42 +357,40 @@ export function jwk(opts: JwkOptions): Hooks {
 
   const algorithms = [...opts.algorithms] as JwtAlgorithm[];
 
-  let cachedVerifier: { verify(token: string): Promise<JwtVerified> } | undefined;
-  let cachedJwksRef: JwkSet | undefined;
-
-  async function getVerifier(): Promise<{ verify(token: string): Promise<JwtVerified> }> {
-    const jwks = await loader();
-    if (cachedVerifier && cachedJwksRef === jwks) return cachedVerifier;
-    cachedJwksRef = jwks;
-    cachedVerifier = createJwtVerifier({
-      algorithms,
-      issuer: opts.issuer,
-      audience: opts.audience,
-      maxLifetimeSeconds: opts.maxLifetimeSeconds,
-      clockSkewSeconds: opts.clockSkewSeconds,
-      // Resolver picks the JWK by `kid` and enforces the alg cross-check.
-      key: async (header: Record<string, unknown>) => {
-        const kid = header.kid;
-        if (typeof kid !== "string" || kid.length === 0) {
-          throw new JwtError("missing_kid", "jwk(): token header is missing kid.");
-        }
-        const jwkMatch = findJwkByKid(jwks, kid);
-        if (!jwkMatch) {
-          throw new JwtError("kid_not_found", `jwk(): kid "${kid}" is not present in the JWKS.`);
-        }
-        const headerAlg = header.alg;
-        const jwkAlg = (jwkMatch as { alg?: unknown }).alg;
-        if (typeof jwkAlg === "string" && jwkAlg !== headerAlg) {
-          throw new JwtError(
-            "alg_mismatch",
-            `jwk(): token alg "${String(headerAlg)}" does not match JWK alg "${jwkAlg}".`
-          );
-        }
-        return jwkMatch as JwtKeyMaterial;
-      },
-    });
-    return cachedVerifier;
-  }
+  // One verifier per jwk() instance, so its import cache (keyed by alg + full
+  // JWK content, see createJwtVerifier) survives across requests: each key is
+  // imported once, not on every request. The JWKS is loaded INSIDE the key
+  // resolver, so every verification selects its key from the set that its own
+  // loader call returned. There is deliberately no shared "current JWKS"
+  // state: that would let a concurrent request's key set answer this token.
+  const verifier = createJwtVerifier({
+    algorithms,
+    issuer: opts.issuer,
+    audience: opts.audience,
+    maxLifetimeSeconds: opts.maxLifetimeSeconds,
+    clockSkewSeconds: opts.clockSkewSeconds,
+    // Resolver picks the JWK by `kid` and enforces the alg cross-check.
+    key: async (header: Record<string, unknown>) => {
+      const kid = header.kid;
+      if (typeof kid !== "string" || kid.length === 0) {
+        throw new JwtError("missing_kid", "jwk(): token header is missing kid.");
+      }
+      const jwks = await loader();
+      const jwkMatch = findJwkByKid(jwks, kid);
+      if (!jwkMatch) {
+        throw new JwtError("kid_not_found", `jwk(): kid "${kid}" is not present in the JWKS.`);
+      }
+      const headerAlg = header.alg;
+      const jwkAlg = (jwkMatch as { alg?: unknown }).alg;
+      if (typeof jwkAlg === "string" && jwkAlg !== headerAlg) {
+        throw new JwtError(
+          "alg_mismatch",
+          `jwk(): token alg "${String(headerAlg)}" does not match JWK alg "${jwkAlg}".`
+        );
+      }
+      return jwkMatch as JwtKeyMaterial;
+    },
+  });
 
   const authHooks: Hooks = {
     async preBody(ctx) {
@@ -400,7 +401,6 @@ export function jwk(opts: JwkOptions): Hooks {
       }
       let verified: JwtVerified;
       try {
-        const verifier = await getVerifier();
         verified = await verifier.verify(match[1]!);
       } catch (err) {
         const message = err instanceof JwtError ? err.message : "JWT verification failed";

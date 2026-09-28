@@ -363,6 +363,35 @@ async function importKey(
   throw new JwtError("invalid_key", "jwt(): unsupported key material.");
 }
 
+/** Bound on the per-verifier resolver-JWK import cache (LRU). */
+const MAX_JWK_MATERIAL_CACHE_ENTRIES = 64;
+/** JWKs whose canonical form exceeds this many characters are not cached. */
+const MAX_JWK_CACHE_ID_LENGTH = 16_384;
+
+/**
+ * Canonical cache id for a resolver-supplied JWK: the algorithm plus every
+ * JWK member (sorted keys), so any difference that could change the import
+ * result (key material, `key_ops`, `use`, `alg`, `ext`) yields a new id.
+ * Returns `undefined`, meaning "do not cache", for members that are not
+ * strings, booleans, or string arrays, or for oversized keys.
+ */
+function jwkMaterialCacheId(alg: JwtAlgorithm, jwk: JsonWebKey): string | undefined {
+  const record = jwk as Record<string, unknown>;
+  const entries: [string, unknown][] = [];
+  for (const name of Object.keys(record).sort()) {
+    const value = record[name];
+    if (value === undefined) continue;
+    const ok =
+      typeof value === "string" ||
+      typeof value === "boolean" ||
+      (Array.isArray(value) && value.every((item) => typeof item === "string"));
+    if (!ok) return undefined;
+    entries.push([name, value]);
+  }
+  const id = JSON.stringify([alg, entries]);
+  return id.length > MAX_JWK_CACHE_ID_LENGTH ? undefined : id;
+}
+
 function assertKeyPolicy(alg: JwtAlgorithm, key: CryptoKey): void {
   const params = algParams(alg);
   const algorithm = key.algorithm as KeyAlgorithm & {
@@ -595,6 +624,10 @@ function normalizeStringSet(value: string | string[] | undefined): ReadonlySet<s
  * a JWK / JWKS-shaped key source (the documented confused-deputy attack).
  * Imported keys must match the algorithm's family, hash and curve; HMAC and
  * RSA strength floors apply to CryptoKey and JWK inputs as well as raw bytes.
+ * JWKs returned by a `key` resolver are imported once and cached per verifier
+ * (bounded LRU, 64 entries) under their algorithm plus full JWK content, so a
+ * cached key is reused only when the resolver returns identical material;
+ * a rotated key under the same `kid` is always re-imported.
  *
  * @param opts - Allowlist, key source, and claim checks; see {@link JwtVerifierOptions}.
  * @returns An object whose `verify(token)` resolves to the decoded
@@ -678,6 +711,8 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
   const audiences = normalizeStringSet(opts.audience);
 
   const keyCache = new Map<string, CryptoKey>();
+  /** LRU of imported resolver JWKs; see {@link jwkMaterialCacheId}. */
+  const jwkMaterialCache = new Map<string, CryptoKey>();
   async function resolveKey(header: Record<string, unknown>): Promise<CryptoKey> {
     const algRaw = header.alg;
     if (typeof algRaw !== "string" || !allow.has(algRaw as JwtAlgorithm)) {
@@ -696,7 +731,24 @@ export function createJwtVerifier(opts: JwtVerifierOptions): {
       keyCache.set(cacheKey, imported);
       return imported;
     }
-    return importKey(alg, material, "verify");
+    // Resolver-supplied JWKs are cached by alg + their full canonical
+    // content, never by kid alone: a hit requires THIS call's resolver to have
+    // returned identical key material, so a same-kid rotation re-imports and
+    // one caller's lookup can never be answered with another caller's key.
+    const cacheId = isJsonWebKey(material) ? jwkMaterialCacheId(alg, material) : undefined;
+    if (cacheId === undefined) return importKey(alg, material, "verify");
+    const cached = jwkMaterialCache.get(cacheId);
+    if (cached) {
+      jwkMaterialCache.delete(cacheId);
+      jwkMaterialCache.set(cacheId, cached);
+      return cached;
+    }
+    const imported = await importKey(alg, material, "verify");
+    jwkMaterialCache.set(cacheId, imported);
+    if (jwkMaterialCache.size > MAX_JWK_MATERIAL_CACHE_ENTRIES) {
+      jwkMaterialCache.delete(jwkMaterialCache.keys().next().value as string);
+    }
+    return imported;
   }
 
   const resolved: ResolvedVerifier = {
